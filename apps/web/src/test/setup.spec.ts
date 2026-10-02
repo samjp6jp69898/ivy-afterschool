@@ -4,7 +4,7 @@ import { mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 
 const Probe = defineComponent({
-  name: 'Probe',
+  name: 'ProbeMarker',
   render: () => h('p', { class: 'probe' }, 'x'),
 })
 
