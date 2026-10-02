@@ -51,7 +51,7 @@
 - `ParentMe = {id, display_name, picture_url, phone, children: ChildSummary[]}`
 - `ChildSummary = {id, name, grade_level, class_name, school_name, photo_url, status}`
 - `ChildDetail = ChildSummary + {school_class, enrolled_on, my_guardian: {relation, is_primary, can_pickup, receives_notifications}}`
-- `ChildToday = {student_id, date, is_service_day, attendance: {status: expected|present|left|absent|leave|null, check_in_at, check_out_at}, on_leave, leave: {id, leave_type, leave_type_label, start_date, end_date}|null, homework: {item_count, done_count, overall_status, ready_eta, note}, pickup_request: {id, status, expected_arrival_at, reply_ready_eta, reply_message, reply_source: auto|staff|null, can_cancel, can_mark_arrived}|null}`（pickup_request 優先取今日非終態那筆，否則取今日最新一筆；營業日無出勤列時 status 為 expected）
+- `ChildToday = {student_id, date, is_service_day, attendance: {status: expected|present|left|absent|leave|null, check_in_at, check_out_at}, on_leave, leave: {id, leave_type, leave_type_label, start_date, end_date}|null, homework: {item_count, done_count, overall_status, ready_eta, note}, pickup_request: {id, status, expected_arrival_at, reply_ready_eta, reply_message, reply_source: auto|staff|null, completed_at, picked_up_by_name, can_cancel, can_mark_arrived}|null}`（pickup_request 優先取今日非終態那筆，否則取今日最新一筆；營業日無出勤列時 status 為 expected）
 
 ## 4. 後台：帳號 / 角色 / 稽核 / 設定（`/api/admin`）
 

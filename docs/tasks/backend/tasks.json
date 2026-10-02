@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 8,
-  "last_updated": "2026-10-02T06:37:49Z",
+  "version": 9,
+  "last_updated": "2026-10-02T06:40:22Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -6207,7 +6207,7 @@
     {
       "id": "BACKEND-181",
       "title": "建立家長端小孩 Pydantic schemas：ChildSummaryOut、ChildDetailOut、ParentMeOut",
-      "description": "建立 `apps/api/app/schemas/parent_children.py`。家長端**絕不**輸出敏感欄位（身分證、健康備註）與內部欄位（student_no 以外的管理欄位）。\n- `ChildSummaryOut`：id、name、grade_level、class_name、school_name（short_name 優先）、photo_url、status。\n- `ChildGuardianOut`：relation、is_primary、can_pickup、receives_notifications（家長自己那筆 guardian 的設定）。\n- `ChildDetailOut`：ChildSummaryOut 全部 + school_class、enrolled_on、my_guardian（ChildGuardianOut）。\n- `ParentMeOut`：id、display_name、picture_url、phone、children（list[ChildSummaryOut]）。\n- 今日狀態卡（BACKEND-525 / 526 使用）：\n  - `TodayAttendanceOut`：status（expected / present / left / absent / leave | None）、check_in_at、check_out_at。\n  - `TodayLeaveOut`：id、leave_type、leave_type_label、start_date、end_date。\n  - `TodayHomeworkOut`：item_count、done_count、overall_status（not_started / in_progress / done）、ready_eta（HH:MM | None）、note。\n  - `TodayPickupRequestOut`：id、status、expected_arrival_at（HH:MM | None）、reply_ready_eta（HH:MM | None）、reply_message、reply_source（auto / staff / None）、can_cancel、can_mark_arrived。\n  - `ChildTodayOut`：student_id、date、is_service_day、attendance（TodayAttendanceOut）、on_leave（bool）、leave（TodayLeaveOut | None）、homework（TodayHomeworkOut）、pickup_request（TodayPickupRequestOut | None）。\n\n**驗收標準**\n- 欄位集合固定；以 model_fields 斷言不存在 id_number / health_note / note 等欄位。\n- ChildTodayOut 與子 model 欄位集合固定，不含員工姓名。",
+      "description": "建立 `apps/api/app/schemas/parent_children.py`。家長端**絕不**輸出敏感欄位（身分證、健康備註）與內部欄位（student_no 以外的管理欄位）。\n- `ChildSummaryOut`：id、name、grade_level、class_name、school_name（short_name 優先）、photo_url、status。\n- `ChildGuardianOut`：relation、is_primary、can_pickup、receives_notifications（家長自己那筆 guardian 的設定）。\n- `ChildDetailOut`：ChildSummaryOut 全部 + school_class、enrolled_on、my_guardian（ChildGuardianOut）。\n- `ParentMeOut`：id、display_name、picture_url、phone、children（list[ChildSummaryOut]）。\n- 今日狀態卡（BACKEND-525 / 526 使用）：\n  - `TodayAttendanceOut`：status（expected / present / left / absent / leave | None）、check_in_at、check_out_at。\n  - `TodayLeaveOut`：id、leave_type、leave_type_label、start_date、end_date。\n  - `TodayHomeworkOut`：item_count、done_count、overall_status（not_started / in_progress / done）、ready_eta（HH:MM | None）、note。\n  - `TodayPickupRequestOut`：id、status、expected_arrival_at（HH:MM | None）、reply_ready_eta（HH:MM | None）、reply_message、reply_source（auto / staff / None）、completed_at、picked_up_by_name（監護人姓名或代理人姓名，主管強制完成且無對象時為「老師確認交付」；規則同 BACKEND-404 的家長版）、can_cancel、can_mark_arrived。\n  - `ChildTodayOut`：student_id、date、is_service_day、attendance（TodayAttendanceOut）、on_leave（bool）、leave（TodayLeaveOut | None）、homework（TodayHomeworkOut）、pickup_request（TodayPickupRequestOut | None）。\n\n**驗收標準**\n- 欄位集合固定；以 model_fields 斷言不存在 id_number / health_note / note 等欄位。\n- ChildTodayOut 與子 model 欄位集合固定，不含員工姓名。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/parent_children.py",
       "source_ref": null,
@@ -6227,7 +6227,7 @@
         "red_cases": [
           "test_parent_children_schemas_fields：set(ChildDetailOut.model_fields) == {'id','name','grade_level','class_name','school_name','photo_url','status','school_class','enrolled_on','my_guardian'}",
           "test_parent_children_schemas_no_sensitive：'id_number' not in ChildDetailOut.model_fields 且 'health_note' not in ChildDetailOut.model_fields 且 'note' not in ChildDetailOut.model_fields",
-          "test_parent_children_schemas_today_fields：set(ChildTodayOut.model_fields) == {'student_id','date','is_service_day','attendance','on_leave','leave','homework','pickup_request'}；set(TodayPickupRequestOut.model_fields) == {'id','status','expected_arrival_at','reply_ready_eta','reply_message','reply_source','can_cancel','can_mark_arrived'}"
+          "test_parent_children_schemas_today_fields：set(ChildTodayOut.model_fields) == {'student_id','date','is_service_day','attendance','on_leave','leave','homework','pickup_request'}；set(TodayPickupRequestOut.model_fields) == {'id','status','expected_arrival_at','reply_ready_eta','reply_message','reply_source','completed_at','picked_up_by_name','can_cancel','can_mark_arrived'}"
         ],
         "run": "just test apps/api/tests/unit/schemas/test_parent_children_schemas.py -k \"test_parent_children_schemas_\"",
         "notes": ""
@@ -14060,7 +14060,7 @@
     {
       "id": "BACKEND-525",
       "title": "實作 ParentTodayService.get_child_today：家長端小孩今日狀態聚合（出勤、請假、作業、接送）",
-      "description": "建立 `apps/api/app/services/parent_today_service.py`（domain_spec §4 家長端首頁：今日狀態卡）：\n```python\ndef get_child_today(session: Session, student_id: UUID, *, clock: Clock) -> ChildTodayOut: ...\n```\n- 呼叫端已以 `get_owned_student` 驗證所有權（BACKEND-526）。d = clock.today()；`is_service_day`（BACKEND-123）。\n- attendance：當日 student_attendances 列的 status / check_in_at / check_out_at；無列時——營業日回 status 'expected'（與後台虛擬列一致），非營業日回 None。\n- on_leave / leave：涵蓋今天的 active 請假（start_date ≤ d ≤ end_date）；不依賴出勤列是否存在。\n- homework：當日 homework_items 的 item_count、done_count（status='done'）；homework_daily_progress 的 overall_status、ready_eta（HH:MM）、note；無 progress 列 → not_started、None、None。\n- pickup_request：今日請求中優先取非終態（pending / acknowledged / arrived）那筆；沒有則取今日最新一筆終態請求；都沒有 → None。can_cancel / can_mark_arrived 規則同 BACKEND-402。\n- 不回傳員工姓名與內部備註（出勤 note、updated_by 等）。\n- 固定查詢數（≤ 6 條 SQL）。\n\n**驗收標準**\n- 四個區塊內容正確；無資料時的預設值正確（營業日 expected、非營業日 None、作業 not_started、接送 None）。\n- 有非終態請求時回非終態那筆；只有終態時回最新一筆。\n- 請假日 on_leave=True 且 leave 有值。\n- 不含員工姓名；查詢次數固定。",
+      "description": "建立 `apps/api/app/services/parent_today_service.py`（domain_spec §4 家長端首頁：今日狀態卡）：\n```python\ndef get_child_today(session: Session, student_id: UUID, *, clock: Clock) -> ChildTodayOut: ...\n```\n- 呼叫端已以 `get_owned_student` 驗證所有權（BACKEND-526）。d = clock.today()；`is_service_day`（BACKEND-123）。\n- attendance：當日 student_attendances 列的 status / check_in_at / check_out_at；無列時——營業日回 status 'expected'（與後台虛擬列一致），非營業日回 None。\n- on_leave / leave：涵蓋今天的 active 請假（start_date ≤ d ≤ end_date）；不依賴出勤列是否存在。\n- homework：當日 homework_items 的 item_count、done_count（status='done'）；homework_daily_progress 的 overall_status、ready_eta（HH:MM）、note；無 progress 列 → not_started、None、None。\n- pickup_request：今日請求中優先取非終態（pending / acknowledged / arrived）那筆；沒有則取今日最新一筆終態請求；都沒有 → None。can_cancel / can_mark_arrived 規則同 BACKEND-402；completed_at 與 picked_up_by_name 與 ws pickup 事件的家長版資料（BACKEND-404 `build_parent_request_views`）一致，可直接重用其名稱解析（家長端顯示「HH:MM 已由 X 接走」）。\n- 不回傳員工姓名與內部備註（出勤 note、updated_by 等）。\n- 固定查詢數（≤ 6 條 SQL）。\n\n**驗收標準**\n- 四個區塊內容正確；無資料時的預設值正確（營業日 expected、非營業日 None、作業 not_started、接送 None）。\n- 有非終態請求時回非終態那筆；只有終態時回最新一筆。\n- 請假日 on_leave=True 且 leave 有值。\n- 不含員工姓名；查詢次數固定。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_today_service.py",
       "source_ref": null,
@@ -14073,7 +14073,8 @@
         "BACKEND-370",
         "BACKEND-401",
         "BACKEND-123",
-        "BACKEND-002"
+        "BACKEND-002",
+        "BACKEND-404"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -14088,7 +14089,8 @@
           "test_child_today_defaults：營業日無任何資料 → attendance.status 'expected'、homework.overall_status 'not_started'、item_count 0、pickup_request None；週日 → is_service_day False、attendance.status None",
           "test_child_today_on_leave：請假 9/1~9/2（personal）→ on_leave True、leave.leave_type_label '事假'、attendance.status 'leave'",
           "test_child_today_pickup_pick：今日一筆 completed（10:00 建）與一筆 pending（11:00 建）→ 回 pending；只有 completed 與 cancelled 兩筆 → 回較新那筆",
-          "test_child_today_query_count：before_cursor_execute 計數 ≤ 6，且 model_dump_json() 不含 'replied_by_name'"
+          "test_child_today_query_count：before_cursor_execute 計數 ≤ 6，且 model_dump_json() 不含 'replied_by_name'",
+          "test_child_today_completed_pickup：今日唯一請求 completed（guardian 王爸爸、completed_at 台北 18:05）→ pickup_request.completed_at == datetime(2026,9,1,10,5,tzinfo=UTC)、picked_up_by_name == '王爸爸'；代理接送完成（proxy_name '李阿姨'）→ picked_up_by_name == '李阿姨'；非終態請求 → completed_at None、picked_up_by_name None"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_parent_today_service.py -k \"test_child_today_\"",
         "notes": ""
