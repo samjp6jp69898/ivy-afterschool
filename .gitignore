@@ -1,0 +1,41 @@
+# --- Python ---
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- Node / 前端 ---
+node_modules/
+apps/web/dist/
+apps/web/coverage/
+apps/web/test-results/
+apps/web/playwright-report/
+
+# --- 環境變數：真實 secret 不進 git，範本檔要進 ---
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# --- Supabase CLI 本地狀態 ---
+supabase/.temp/
+supabase/.branches/
+
+# --- 本地執行期資料 ---
+var/
+
+# --- 編輯器 / OS ---
+.DS_Store
+.vscode/
+.idea/
+
+# --- 本地探索產物 ---
+.playwright-mcp/
+.plan_*.md
