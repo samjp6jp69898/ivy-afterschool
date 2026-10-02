@@ -52,7 +52,8 @@
 **class_staff**：`class_id`、`staff_user_id`、`role`（`lead` / `assistant`）。僅作為後台篩選「我的班」與通知收件人，不是教師端。
 
 **students**：`student_no`（unique，人工可編）、`name`、`gender`（`male` / `female` / `other`）、`birthday`、`grade_level int`（1~6）、`school_id → schools`、`school_class text`（例如「三年二班」）、`class_id → classes`、`status`（`active` / `suspended` / `withdrawn`）、`enrolled_on`、`withdrawn_on`、`photo_path`、`id_number_enc bytea`、`id_number_hmac text`（查重用，not null 時 unique）、`health_note_enc bytea`、`note`、`archived_at`。敏感欄位以應用層 AES-256-GCM 加密，HMAC 與加密金鑰皆由 `APP_SECRET_KEY` 衍生。
-- 每年 8 月的升級（grade_level +1、六年級轉 withdrawn）由後台「學年升級」功能批次處理，不自動執行。
+- 每年 8 月的升級（grade_level +1、六年級轉 withdrawn）由後台「學年升級」功能批次處理，不自動執行；升級時保留原安親班班級，由員工手動調班。
+- 身分證字號與健康備註只有持 `students:sensitive` 的員工能檢視與寫入。
 
 **parent_accounts**：`line_user_id`（unique）、`display_name`、`picture_url`、`phone`、`status`（`active` / `disabled`）、`token_version`、`last_login_at`。
 **guardians**：`student_id`、`parent_account_id`（nullable，綁定後填入）、`name`、`relation`（`father` / `mother` / `grandparent` / `other`）、`phone`、`is_primary bool`、`can_pickup bool`、`receives_notifications bool`、`archived_at`。同一學生只能有一位 `is_primary`。
@@ -182,7 +183,7 @@ API `POST /api/device/punch`（裝置金鑰認證，卡號 → 學生 → 到班
 | GET | `/api/parent/me` | 家長資料 + 已綁定小孩清單 |
 
 ### 後台（`/api/admin`，皆需員工登入 + 權限碼）
-- 帳號：`GET/POST /staff-users`、`GET/PATCH /staff-users/{id}`、`POST /staff-users/{id}/reset-password`、`POST /staff-users/{id}/deactivate`
+- 帳號：`GET/POST /staff-users`、`GET/PATCH /staff-users/{id}`、`POST /staff-users/{id}/reset-password`、`POST /staff-users/{id}/deactivate`、`POST /staff-users/{id}/activate`（重新啟用，產生臨時密碼並要求改密碼）
 - 角色：`GET/POST /roles`、`PATCH/DELETE /roles/{id}`、`GET /permissions`（權限碼目錄，含分組與說明）
 - 設定：`GET /settings`、`PUT /settings/{key}`；`GET/POST/PATCH/DELETE /subjects`、`/exam-types`、`/schools`、`/closed-days`
 - 稽核：`GET /audit-logs`

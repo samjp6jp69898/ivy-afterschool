@@ -32,6 +32,7 @@
 | 套件管理 | 後端 uv（`apps/api/pyproject.toml` + `uv.lock`）；前端 pnpm | |
 | 指令入口 | root `justfile` | 所有 lint / test 指令都帶路徑參數 |
 | 部署 | Railway（api service + web service）+ Supabase 雲端 | api 不開 public domain，由 web 的 nginx 經 Railway private network 反代 `/api` 與 `/api/ws`，cookie 同源（避免 LINE webview 擋第三方 cookie）；api 固定單一實例、uvicorn 單 worker |
+| CI | GitHub Actions | push 到 main 時自動以 `supabase db push` 套用雲端 migration（套用前先過 dry-run / lint） |
 
 ## 3. Repo 結構
 
