@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 18,
-  "last_updated": "2026-10-02T08:38:38Z",
+  "version": 19,
+  "last_updated": "2026-10-02T08:40:19Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -6438,7 +6438,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/events.py",
       "source_ref": "BE:services/notification/event_types.py::STUDENT_LEAVE_SUBMITTED",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
