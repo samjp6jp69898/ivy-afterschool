@@ -5,6 +5,7 @@ import threading
 from collections.abc import Iterator
 
 import pytest
+
 from app.realtime.broadcaster import (
     Broadcaster,
     LocalBroadcaster,

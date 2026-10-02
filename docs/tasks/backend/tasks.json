@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 20,
-  "last_updated": "2026-10-02T08:41:06Z",
+  "version": 21,
+  "last_updated": "2026-10-02T08:43:20Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -7241,7 +7241,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/realtime/broadcaster.py",
       "source_ref": "BE:utils/broadcast/local.py::LocalBackend",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
