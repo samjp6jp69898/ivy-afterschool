@@ -62,12 +62,19 @@ def test_passwords_dummy_verify_runs_argon2(monkeypatch: pytest.MonkeyPatch) -> 
 
 @pytest.mark.parametrize(
     "hashed",
-    ["$argon2id$v=19$m=65536,t=3,p=4$broken", "$argon2id$"],
+    [
+        "$argon2id$v=19$m=65536,t=3,p=4$broken",
+        "$argon2id$",
+        # 非 ASCII：argon2-cffi 在 _ensure_bytes 階段拋 UnicodeEncodeError（ValueError 子類）；
+        # 全形字母就是要測混淆字元，不是打錯
+        "$argon2id$v=19$m=65536,t=3,p=4$ＡＢＣ$ＤＥＦ",  # noqa: RUF001
+        "$argon2id$é",
+    ],
 )
 def test_passwords_dummy_verify_runs_for_malformed_prefix(
     monkeypatch: pytest.MonkeyPatch, hashed: str
 ) -> None:
-    # 前綴正確但解碼失敗（argon2-cffi 拋 VerificationError）也要跑一次假 hash 驗證，
+    # 前綴正確但解碼失敗（VerificationError 或 ValueError）也要跑一次假 hash 驗證、不拋例外，
     # 不可 0 ms 就回 False（時間側通道）
     calls: list[str] = []
     original = PasswordHasher.verify
