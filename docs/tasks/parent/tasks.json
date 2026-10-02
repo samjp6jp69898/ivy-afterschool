@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 3,
-  "last_updated": "2026-10-02T06:40:45Z",
+  "version": 4,
+  "last_updated": "2026-10-02T07:06:14Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -34,7 +34,7 @@
     {
       "id": "PARENT-002",
       "title": "設定家長端 PWA manifest、圖示與 parent/index.html 行動裝置 meta",
-      "description": "新增 `apps/web/public/parent.webmanifest` 與三張圖示（`apps/web/public/parent-pwa-192x192.png`、`parent-pwa-512x512.png`、`parent-maskable-512x512.png`，先放純色佔位圖，品牌圖由使用者提供後替換），並修改 `apps/web/parent/index.html`（INFRA-005 建立的家長端入口）。\n\n**manifest**：`name` 「安親班家長端」、`short_name` 「家長端」、`start_url` `/parent/`、`scope` `/parent/`、`display` `standalone`、`orientation` `portrait`、`background_color` `#ffffff`、`theme_color` 與 PARENT-001 的 `--m3-primary` 同值、三張 icons（maskable 那張 `purpose: maskable`）。\n**index.html**：`<link rel=\"manifest\" href=\"/parent.webmanifest\">`、`<meta name=\"theme-color\">`、`<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">`、`<link rel=\"apple-touch-icon\" href=\"/parent-pwa-192x192.png\">`、`<meta name=\"apple-mobile-web-app-capable\" content=\"yes\">`、`<html lang=\"zh-Hant-TW\">`、`<title>家長端</title>`。\n\n移植 ivy `FE:public/parent.webmanifest` 的欄位結構；**去掉** `{{TB_*}}` 品牌 token 注入、vite-plugin-pwa 與 service worker（目前只做可安裝的 manifest，不做離線快取，見 open_design_questions）。\n\n**驗收標準**：\n- manifest 為合法 JSON，`start_url` / `scope` 皆為 `/parent/`，icons 三筆且檔案存在。\n- `pnpm exec vite build` 後 `dist/parent.webmanifest` 與三張圖示存在，`dist/parent/index.html` 含 manifest link 與 viewport-fit=cover。",
+      "description": "新增 `apps/web/public/parent.webmanifest` 與三張圖示（`apps/web/public/parent-pwa-192x192.png`、`parent-pwa-512x512.png`、`parent-maskable-512x512.png`，先放純色佔位圖，品牌圖由使用者提供後替換），並修改 `apps/web/parent/index.html`（INFRA-005 建立的家長端入口）。\n\n**manifest**：`name` 「安親班家長端」、`short_name` 「家長端」、`start_url` `/parent/`、`scope` `/parent/`、`display` `standalone`、`orientation` `portrait`、`background_color` `#ffffff`、`theme_color` 與 PARENT-001 的 `--m3-primary` 同值、三張 icons（maskable 那張 `purpose: maskable`）。\n**index.html**：`<link rel=\"manifest\" href=\"/parent.webmanifest\">`、`<meta name=\"theme-color\">`、`<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">`、`<link rel=\"apple-touch-icon\" href=\"/parent-pwa-192x192.png\">`、`<meta name=\"apple-mobile-web-app-capable\" content=\"yes\">`、`<html lang=\"zh-Hant-TW\">`、`<title>家長端</title>`。\n\n移植 ivy `FE:public/parent.webmanifest` 的欄位結構；**去掉** `{{TB_*}}` 品牌 token 注入、vite-plugin-pwa 與 service worker（不做離線快取：只有可加入主畫面的 manifest，每次開啟都抓最新版）。\n\n**驗收標準**：\n- manifest 為合法 JSON，`start_url` / `scope` 皆為 `/parent/`，icons 三筆且檔案存在。\n- `pnpm exec vite build` 後 `dist/parent.webmanifest` 與三張圖示存在，`dist/parent/index.html` 含 manifest link 與 viewport-fit=cover。",
       "granularity_unit": "config",
       "target_path": "apps/web/public/parent.webmanifest",
       "source_ref": "FE:public/parent.webmanifest::start_url",
@@ -46,9 +46,7 @@
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
-      "open_design_questions": [
-        "家長端是否需要 service worker 離線快取？A. 不做（目前預設：只有 manifest，可加入主畫面，每次開啟都抓最新版，避免舊快取卡版）；B. 做 app shell 快取（離線可開殼，但要處理升版自救，ivy 曾為此加 chunkSelfHeal）。"
-      ],
+      "open_design_questions": [],
       "tdd": {
         "test_path": null,
         "markers": [],
@@ -1367,7 +1365,7 @@
     {
       "id": "PARENT-052",
       "title": "實作 useTodayStatus composable：以 /children/{id}/today 取得選中小孩今日狀態並以 ws 即時更新",
-      "description": "建立 `apps/web/src/parent/composables/useTodayStatus.ts`：\n```ts\nexport type TodayPickup = NonNullable<ChildToday['pickup_request']> & Partial<Pick<ParentPickupRequest, 'replied_at' | 'arrived_at'>>\nexport type TodayState = Omit<ChildToday, 'pickup_request'> & { pickup_request: TodayPickup | null }\nexport function useTodayStatus(childId: Ref<string | null>): {\n  today: Ref<TodayState | null>\n  loading: Ref<boolean>; error: Ref<string | null>\n  refresh: () => Promise<void>\n}\n```\n- `refresh()`：單一請求 PARENT-006 `getChildToday(childId)`（BACKEND-526）。失敗 → `error = '今日狀態載入失敗'`，保留既有 today。childId 為 null 時 today = null、不送請求。\n- childId 變更（切換小孩）→ 立即清空 today 並 refresh；以序號丟棄切換前請求的晚到回應。\n- 即時（PARENT-173 `parentWs.on`，只處理 `student_id === childId` 且日期為 `today.date` 的事件；unmount 時全部解除）：\n  - `attendance.updated` `{student_id, service_date, status, check_in_at, check_out_at}` → 取代 `today.attendance`。\n  - `homework.progress_updated` `{student_id, date, items, overall_status, ready_eta, note}` → `homework = { item_count: items.length, done_count: items 中 status 為 done 的數量, overall_status, ready_eta, note }`。\n  - `pickup.request_updated`（ParentPickupRequest）→ 若目前 pickup_request 為 null、同 id、目前為終態，或新資料為非終態 → 以新資料（取 TodayPickup 欄位，含 completed_at / picked_up_by_name）取代；目前是另一筆非終態而新資料為終態 → 忽略（與後端「優先取非終態」規則一致）。\n- `parentWs.registerPoller(refresh)`（斷線補齊）；`document.visibilitychange` 轉為 visible 時 refresh。\n\n新寫功能（ivy 的 `useTodayStatusCache` 依賴幼稚園 today-status endpoint，不移植）。\n\n**驗收標準**：每一條對應 red_case（mountWithApp 包一個使用此 composable 的測試元件，axios-mock-adapter，假 WebSocket 派發事件）。",
+      "description": "建立 `apps/web/src/parent/composables/useTodayStatus.ts`：\n```ts\nexport type TodayPickup = NonNullable<ChildToday['pickup_request']> & Partial<Pick<ParentPickupRequest, 'replied_at' | 'arrived_at'>>\nexport type TodayState = Omit<ChildToday, 'pickup_request'> & { pickup_request: TodayPickup | null }\nexport function useTodayStatus(childId: Ref<string | null>): {\n  today: Ref<TodayState | null>\n  loading: Ref<boolean>; error: Ref<string | null>\n  refresh: () => Promise<void>\n  applyPickup: (request: ParentPickupRequest) => void   // 以使用者操作的回應立即更新（同 ws 合併規則），不必等 ws\n}\n```\n- `refresh()`：單一請求 PARENT-006 `getChildToday(childId)`（BACKEND-526）。失敗 → `error = '今日狀態載入失敗'`，保留既有 today。childId 為 null 時 today = null、不送請求。\n- childId 變更（切換小孩）→ 立即清空 today 並 refresh；以序號丟棄切換前請求的晚到回應。\n- 即時（PARENT-173 `parentWs.on`，只處理 `student_id === childId` 且日期為 `today.date` 的事件；unmount 時全部解除）：\n  - `attendance.updated` `{student_id, service_date, status, check_in_at, check_out_at}` → 取代 `today.attendance`。\n  - `homework.progress_updated` `{student_id, date, items, overall_status, ready_eta, note}` → `homework = { item_count: items.length, done_count: items 中 status 為 done 的數量, overall_status, ready_eta, note }`。\n  - `pickup.request_updated`（ParentPickupRequest）→ 若目前 pickup_request 為 null、同 id、目前為終態，或新資料為非終態 → 以新資料（取 TodayPickup 欄位，含 completed_at / picked_up_by_name）取代；目前是另一筆非終態而新資料為終態 → 忽略（與後端「優先取非終態」規則一致）。\n- `parentWs.registerPoller(refresh)`（斷線補齊）；`document.visibilitychange` 轉為 visible 時 refresh。\n\n新寫功能（ivy 的 `useTodayStatusCache` 依賴幼稚園 today-status endpoint，不移植）。\n\n**驗收標準**：每一條對應 red_case（mountWithApp 包一個使用此 composable 的測試元件，axios-mock-adapter，假 WebSocket 派發事件）。",
       "granularity_unit": "composable",
       "target_path": "apps/web/src/parent/composables/useTodayStatus.ts",
       "source_ref": null,
@@ -1396,7 +1394,8 @@
           "useTodayStatus pickup ws prefers open request：目前 pickup_request 為 r1 pending；派發 r0 completed（另一筆）→ 仍為 r1；派發 r1 acknowledged、reply_source 'staff' → pickup_request.status === 'acknowledged' 且 reply_source === 'staff'；目前為 null 時派發 r2 pending → 變為 r2",
           "useTodayStatus error keeps previous data：已載入後 refresh() 回 500 → error === '今日狀態載入失敗' 且 today 仍為先前資料",
           "useTodayStatus poller refreshes：觸發 parentWs 註冊的 poller → GET '/parent/children/s1/today' 再送出 1 次",
-          "useTodayStatus keeps completed pickup info from api：GET today 回 pickup_request {id:'r1', status:'completed', completed_at:'2026-10-02T09:40:00Z', picked_up_by_name:'王媽媽'} → today.pickup_request.picked_up_by_name === '王媽媽' 且 completed_at 原樣；之後派發 r1 的 pickup.request_updated（picked_up_by_name '王爸爸'）→ 變為 '王爸爸'"
+          "useTodayStatus keeps completed pickup info from api：GET today 回 pickup_request {id:'r1', status:'completed', completed_at:'2026-10-02T09:40:00Z', picked_up_by_name:'王媽媽'} → today.pickup_request.picked_up_by_name === '王媽媽' 且 completed_at 原樣；之後派發 r1 的 pickup.request_updated（picked_up_by_name '王爸爸'）→ 變為 '王爸爸'",
+          "useTodayStatus applyPickup merges response：pickup_request 為 null 時 applyPickup({id:'r8', student_id:'s1', status:'arrived', reply_source:'auto', ...}) → today.pickup_request.status === 'arrived'；student_id 為 's2' 的回應 → 不變"
         ],
         "run": "just web-test src/parent/composables/useTodayStatus.spec.ts -t \"useTodayStatus\"",
         "notes": ""
@@ -1410,7 +1409,7 @@
     {
       "id": "PARENT-053",
       "title": "建立 TodayStatusCard 元件：今日出勤、作業進度、預計可接送時間與接送狀態",
-      "description": "建立 `apps/web/src/parent/components/home/TodayStatusCard.vue`：\n```ts\nprops: { today: TodayState | null /* PARENT-052 */ }\nemits: { 'request-pickup': []; 'open-homework': []; 'open-pickup': [] }\n```\n**區塊**（狀態文字與 tone 一律取 FRONTEND-005 statusMeta，時間一律以 FRONTEND-003 轉台北 HH:MM）：\n1. `today === null`：顯示佔位（由頁面決定是否改顯示骨架）。非營業日（`is_service_day === false`）：整張卡只顯示「今天安親班休息」，不顯示其他區塊與按鈕。\n2. 出勤：StatusPill（PARENT-051）+ 說明：`on_leave` 為 true →「今日請假（{leave.leave_type_label}）」與請假期間；否則 `present` →「15:40 到班」；`left` →「17:20 離班」；`absent` →「今日缺席」；`expected` →「尚未到班」；null →「尚無出勤紀錄」。\n3. 作業：「作業進度 {done_count}/{item_count}」+ 進度條 + 整體狀態 StatusPill；`item_count === 0` 且 overall 非 done →「今天尚無作業項目」；整個區塊可點 emit `open-homework`。\n4. 預計可接送：overall `done` →「作業已完成，可以來接送了」；否則 `ready_eta` 有值 →「預計 HH:MM 可接送」，無值 →「老師尚未提供預計時間」；`note` 有值另起一行「老師說明：{note}」。\n5. 接送：`pickup_request` 為 null 或 cancelled / expired →「我要來接」按鈕 emit `request-pickup`；`on_leave` 或出勤為 absent / left 時按鈕停用並顯示原因（「今日請假」/「今日缺席」/「已離班」）。（接送權限 `can_pickup` 由 PickupView 檢查，首頁不另外請求。）pending / acknowledged / arrived → StatusPill 狀態 + PARENT-094 PickupReplyMessage（compact，含「系統自動回覆 / 老師回覆」標示）+「查看接送」按鈕 emit `open-pickup`；completed →「HH:MM 已由 {picked_up_by_name} 接走」（`completed_at` / `picked_up_by_name` 由 `/today` 首次載入即提供，ws 更新同樣帶入）；兩者任一為 null 時退回「今天已接走」。\n\n新寫元件（ivy 首頁為幼稚園聯絡簿 / 娃娃車卡片，不適用）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-today-status-card.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：非營業日；出勤 expected / present / left / absent / 請假（含假別與期間）；作業 0 項 / 進行中 1/3 / 全部完成；ready_eta 有 / 無、含老師說明；接送無請求（可按 / 因請假或離班停用）、pending 系統自動回覆、acknowledged 老師回覆、arrived、completed（含接走時間與接走人；欄位缺漏時的退回文案）；today 為 null 的佔位。可併入 `parent-page-child-hub.html`。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/home/TodayStatusCard.vue`：\n```ts\nprops: { today: TodayState | null /* PARENT-052 */ }\nemits: { 'request-pickup': []; 'arrive-now': []; 'open-homework': []; 'open-pickup': [] }\n```\n**區塊**（狀態文字與 tone 一律取 FRONTEND-005 statusMeta，時間一律以 FRONTEND-003 轉台北 HH:MM）：\n1. `today === null`：顯示佔位（由頁面決定是否改顯示骨架）。非營業日（`is_service_day === false`）：整張卡只顯示「今天安親班休息」，不顯示其他區塊與按鈕。\n2. 出勤：StatusPill（PARENT-051）+ 說明：`on_leave` 為 true →「今日請假（{leave.leave_type_label}）」與請假期間；否則 `present` →「15:40 到班」；`left` →「17:20 離班」；`absent` →「今日缺席」；`expected` →「尚未到班」；null →「尚無出勤紀錄」。\n3. 作業：「作業進度 {done_count}/{item_count}」+ 進度條 + 整體狀態 StatusPill；`item_count === 0` 且 overall 非 done →「今天尚無作業項目」；整個區塊可點 emit `open-homework`。\n4. 預計可接送：overall `done` →「作業已完成，可以來接送了」；否則 `ready_eta` 有值 →「預計 HH:MM 可接送」，無值 →「老師尚未提供預計時間」；`note` 有值另起一行「老師說明：{note}」。\n5. 接送：`pickup_request` 為 null 或 cancelled / expired → 主要按鈕「我要來接」emit `request-pickup`，旁邊次要按鈕（outlined）「我已經到了」emit `arrive-now`；`on_leave` 或出勤為 absent / left 時兩個按鈕都停用並顯示原因（「今日請假」/「今日缺席」/「已離班」）。（接送權限 `can_pickup` 由 PickupView 檢查，首頁不另外請求。）pending / acknowledged / arrived → StatusPill 狀態 + PARENT-094 PickupReplyMessage（compact，含「系統自動回覆 / 老師回覆」標示）+「查看接送」按鈕 emit `open-pickup`；`can_mark_arrived` 為 true 時另顯示主要按鈕「我到了」emit `arrive-now`；completed →「HH:MM 已由 {picked_up_by_name} 接走」（`completed_at` / `picked_up_by_name` 由 `/today` 首次載入即提供，ws 更新同樣帶入）；兩者任一為 null 時退回「今天已接走」。\n\n新寫元件（ivy 首頁為幼稚園聯絡簿 / 娃娃車卡片，不適用）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-today-status-card.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：非營業日；出勤 expected / present / left / absent / 請假（含假別與期間）；作業 0 項 / 進行中 1/3 / 全部完成；ready_eta 有 / 無、含老師說明；接送無請求（「我要來接」+「我已經到了」可按 / 因請假或離班停用）、進行中且可按「我到了」、pending 系統自動回覆、acknowledged 老師回覆、arrived、completed（含接走時間與接走人；欄位缺漏時的退回文案）；today 為 null 的佔位。可併入 `parent-page-child-hub.html`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/home/TodayStatusCard.vue",
       "source_ref": null,
@@ -1442,7 +1441,9 @@
           "TodayStatusCard shows open request reply：pickup_request {id:'r1', status:'pending', reply_ready_eta:'17:30', reply_message:'預計 17:30 可接送', reply_source:'auto'} → 不顯示「我要來接」，含 '預計 17:30 可接送'、'系統自動回覆' 與「查看接送」，點擊 emit open-pickup",
           "TodayStatusCard completed shows picker on first load：pickup_request {status:'completed', completed_at:'2026-10-02T09:40:00Z', picked_up_by_name:'王媽媽'}（直接來自 /today 回應）→ 含 '17:40 已由 王媽媽 接走'，且不顯示「查看接送」與「我要來接」按鈕；picked_up_by_name 為 null → 含 '今天已接走'",
           "TodayStatusCard closed day：is_service_day=false → 只含 '今天安親班休息'，無任何 button",
-          "TodayStatusCard empty homework：homework.item_count=0、overall 'not_started' → 含 '今天尚無作業項目'；ready_eta=null → 含 '老師尚未提供預計時間'"
+          "TodayStatusCard empty homework：homework.item_count=0、overall 'not_started' → 含 '今天尚無作業項目'；ready_eta=null → 含 '老師尚未提供預計時間'",
+          "TodayStatusCard arrive now entry without request：pickup_request=null、attendance present → 存在「我已經到了」按鈕，點擊 → emitted('arrive-now').length === 1；on_leave=true → 「我已經到了」disabled",
+          "TodayStatusCard arrived button for open request：pickup_request {status:'acknowledged', can_mark_arrived:true} → 含「我到了」，點擊 emit arrive-now；can_mark_arrived=false（status arrived）→ 無「我到了」與「我已經到了」"
         ],
         "run": "just web-test src/parent/components/home/TodayStatusCard.spec.ts -t \"TodayStatusCard\"",
         "notes": ""
@@ -1456,7 +1457,7 @@
     {
       "id": "PARENT-054",
       "title": "移植 ChildHubView：首頁（小孩切換 + 今日狀態卡 + 快捷入口）",
-      "description": "建立 `apps/web/src/parent/views/ChildHubView.vue`（路由 `/`）。\n\n- 掛載時 `children.load()`（PARENT-010）；清單為空 → PARENT-029 ParentEmptyState（title「尚未綁定小孩」、description「請輸入安親班提供的綁定碼」、actionLabel「輸入綁定碼」→ `/bind`）。清單載入失敗 → error 變體，重試呼叫 `children.load(true)`。\n- 頂部 PARENT-050 ChildContextHeader，select → `children.select(id)`。\n- PARENT-052 `useTodayStatus(toRef(children, 'selectedId'))` 驅動 PARENT-053 TodayStatusCard；首次載入顯示 PARENT-028 SkeletonBlock（card），`error` 時卡片上方顯示錯誤列與「重試」。今日狀態只打 `GET /parent/children/{id}/today` 一支，之後由 ws 即時更新。整頁包在 PARENT-027 PullToRefresh（onRefresh = `refresh`）。\n- 卡片事件：`request-pickup` / `open-pickup` → `router.push('/pickup')`；`open-homework` → `router.push('/homework')`。\n- 快捷入口一列：請假 `/leaves`、出勤 `/attendance`、代理接送 `/pickup/proxy`。\n\n參考 ivy `FE:src/parent/views/ChildHubView.vue` 的「以選中小孩為操作對象、無小孩時入口停用」；內容改為本專案今日狀態，**去掉** 聯絡簿 / 照片 / 成長報告 / 健康紀錄入口。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-child-hub.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：單一小孩 / 多位小孩切換、今日狀態卡各主要狀態（引用 TodayStatusCard 稿）、首次載入骨架、今日狀態載入失敗錯誤列、無綁定小孩空狀態、小孩清單載入失敗、下拉重新整理中、快捷入口。\n\n**驗收標準**：每一條對應 red_case（mountWithApp + axios-mock-adapter mock `/parent/children` 與 `/parent/children/{id}/today`）。",
+      "description": "建立 `apps/web/src/parent/views/ChildHubView.vue`（路由 `/`）。\n\n- 掛載時 `children.load()`（PARENT-010）；清單為空 → PARENT-029 ParentEmptyState（title「尚未綁定小孩」、description「請輸入安親班提供的綁定碼」、actionLabel「輸入綁定碼」→ `/bind`）。清單載入失敗 → error 變體，重試呼叫 `children.load(true)`。\n- 頂部 PARENT-050 ChildContextHeader，select → `children.select(id)`。\n- PARENT-052 `useTodayStatus(toRef(children, 'selectedId'))` 驅動 PARENT-053 TodayStatusCard；首次載入顯示 PARENT-028 SkeletonBlock（card），`error` 時卡片上方顯示錯誤列與「重試」。今日狀態只打 `GET /parent/children/{id}/today` 一支，之後由 ws 即時更新。整頁包在 PARENT-027 PullToRefresh（onRefresh = `refresh`）。\n- 卡片事件：`request-pickup` / `open-pickup` → `router.push('/pickup')`；`open-homework` → `router.push('/homework')`；`arrive-now` → PARENT-105 `useArriveNow().request(selectedId, 非終態的 today.pickup_request?.id ?? null)`，頁面掛 PARENT-026 ConfirmDialog 綁 `confirmOpen` / `skipNextTime`；`confirm()` 回傳非 null 時呼叫 PARENT-052 `applyPickup(回應)`，卡片立即顯示 arrived 與自動回覆（留在首頁，不導頁）。\n- 快捷入口一列：請假 `/leaves`、出勤 `/attendance`、代理接送 `/pickup/proxy`。\n\n參考 ivy `FE:src/parent/views/ChildHubView.vue` 的「以選中小孩為操作對象、無小孩時入口停用」；內容改為本專案今日狀態，**去掉** 聯絡簿 / 照片 / 成長報告 / 健康紀錄入口。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-child-hub.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：單一小孩 / 多位小孩切換、今日狀態卡各主要狀態（引用 TodayStatusCard 稿）、「我已經到了」確認對話框、首次載入骨架、今日狀態載入失敗錯誤列、無綁定小孩空狀態、小孩清單載入失敗、下拉重新整理中、快捷入口。\n\n**驗收標準**：每一條對應 red_case（mountWithApp + axios-mock-adapter mock `/parent/children` 與 `/parent/children/{id}/today`）。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/ChildHubView.vue",
       "source_ref": "FE:src/parent/views/ChildHubView.vue::targetId",
@@ -1470,7 +1471,9 @@
         "PARENT-050",
         "PARENT-052",
         "PARENT-053",
-        "INFRA-013"
+        "INFRA-013",
+        "PARENT-026",
+        "PARENT-105"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -1488,7 +1491,8 @@
           "ChildHubView today error row：today 回 500 → 含「今日狀態載入失敗」與「重試」，點重試後 today 再送出 1 次",
           "ChildHubView pickup button navigates：pickup_request null，點「我要來接」→ currentRoute.path === '/pickup'",
           "ChildHubView shows skeleton while loading：today 請求未回應前 → 存在 aria-busy='true' 的骨架；回應後骨架消失",
-          "ChildHubView updates attendance from ws：載入後 parentWs 派發 attendance.updated（s2、今日、status 'left'、check_out_at '..T09:50:00Z'）→ 不重新請求即顯示 '17:50 離班'"
+          "ChildHubView updates attendance from ws：載入後 parentWs 派發 attendance.updated（s2、今日、status 'left'、check_out_at '..T09:50:00Z'）→ 不重新請求即顯示 '17:50 離班'",
+          "ChildHubView arrive now from home card：today.pickup_request=null → 點「我已經到了」→ 出現「確認已抵達安親班？」；確認 → POST /parent/pickup/requests body 深等於 {student_id:'s2', arrived:true}，回 arrived + reply_message '預計 17:30 可接送' → 仍在 '/'，卡片含 '預計 17:30 可接送' 且不再顯示「我已經到了」"
         ],
         "run": "just web-test src/parent/views/ChildHubView.spec.ts -t \"ChildHubView\"",
         "notes": ""
@@ -1658,7 +1662,7 @@
     {
       "id": "PARENT-090",
       "title": "實作家長端 api client parent/api/pickupRequests.ts（我要來接、今日請求、我到了、取消）",
-      "description": "建立 `apps/web/src/parent/api/pickupRequests.ts`（型別依 `docs/tasks/api_index.md` §14）：\n```ts\n// PickupRequestStatus / HHMM / ISODateTime 由 FRONTEND-002 import\nexport interface ParentPickupRequest { id: string; student_id: string; student_name: string; service_date: string; status: PickupRequestStatus; expected_arrival_at: string | null; reply_ready_eta: string | null; reply_message: string | null; reply_source: 'auto' | 'staff' | null; replied_at: string | null; arrived_at: string | null; completed_at: string | null; picked_up_by_name: string | null; cancelled_at: string | null; created_at: string; can_cancel: boolean; can_mark_arrived: boolean }\nexport function createPickupRequest(body: { student_id: string; expected_arrival_at?: string }): Promise<ParentPickupRequest> // POST /parent/pickup/requests（BACKEND-440）\nexport function listTodayPickupRequests(): Promise<ParentPickupRequest[]>  // GET /parent/pickup/requests/today（BACKEND-441）\nexport function markPickupArrived(id: string): Promise<ParentPickupRequest> // POST /parent/pickup/requests/{id}/arrived（BACKEND-442）\nexport function cancelPickupRequest(id: string, reason?: string): Promise<ParentPickupRequest> // POST /parent/pickup/requests/{id}/cancel（BACKEND-443）\n```\n`expected_arrival_at` 為 null / undefined 時 body 不帶此欄位；cancel 無 reason 時 body 為 `{}`。走 PARENT-004 `parentHttp`。\n\n參考 ivy `FE:src/parent/api/dismissalCalls.ts::createDismissalNotice` 的用途；**去掉** `eta_minutes`、`note`、`client_request_id`（本專案以 DB partial unique index 防重複，見 BACKEND-406）。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/api/pickupRequests.ts`（型別依 `docs/tasks/api_index.md` §14）：\n```ts\n// PickupRequestStatus / HHMM / ISODateTime 由 FRONTEND-002 import\nexport interface ParentPickupRequest { id: string; student_id: string; student_name: string; service_date: string; status: PickupRequestStatus; expected_arrival_at: string | null; reply_ready_eta: string | null; reply_message: string | null; reply_source: 'auto' | 'staff' | null; replied_at: string | null; arrived_at: string | null; completed_at: string | null; picked_up_by_name: string | null; cancelled_at: string | null; created_at: string; can_cancel: boolean; can_mark_arrived: boolean }\nexport type PickupRequestCreateInput = { student_id: string; expected_arrival_at?: string } | { student_id: string; arrived: true }\nexport function createPickupRequest(body: PickupRequestCreateInput): Promise<ParentPickupRequest> // POST /parent/pickup/requests（BACKEND-440）；arrived: true 為「我已經到了」捷徑，直接建立 arrived 狀態的請求\nexport function listTodayPickupRequests(): Promise<ParentPickupRequest[]>  // GET /parent/pickup/requests/today（BACKEND-441）\nexport function markPickupArrived(id: string): Promise<ParentPickupRequest> // POST /parent/pickup/requests/{id}/arrived（BACKEND-442）\nexport function cancelPickupRequest(id: string, reason?: string): Promise<ParentPickupRequest> // POST /parent/pickup/requests/{id}/cancel（BACKEND-443）\n```\n`expected_arrival_at` 為 null / undefined 時 body 不帶此欄位；`arrived` 與 `expected_arrival_at` 不可同時出現（型別層以聯集保證）；409 `pickup_request_exists` 的 `error.details.request_id` 為既有進行中請求 id；cancel 無 reason 時 body 為 `{}`。走 PARENT-004 `parentHttp`。\n\n參考 ivy `FE:src/parent/api/dismissalCalls.ts::createDismissalNotice` 的用途；**去掉** `eta_minutes`、`note`、`client_request_id`（本專案以 DB partial unique index 防重複，見 BACKEND-406）。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/pickupRequests.ts",
       "source_ref": "FE:src/parent/api/dismissalCalls.ts::createDismissalNotice",
@@ -1684,7 +1688,8 @@
           "pickupRequestsApi create omits empty arrival：createPickupRequest({student_id:'s1'}) → body 深等於 {student_id:'s1'}；createPickupRequest({student_id:'s1', expected_arrival_at:'17:40'}) → body 深等於 {student_id:'s1', expected_arrival_at:'17:40'}",
           "pickupRequestsApi create surfaces business error：回 409 {error:{code:'pickup_window_closed', message:'目前不在可發起接送的時段'}} → reject，code === 'pickup_window_closed'、message 原樣",
           "pickupRequestsApi arrived and cancel paths：markPickupArrived('r1') → POST '/parent/pickup/requests/r1/arrived'；cancelPickupRequest('r1') → POST '/parent/pickup/requests/r1/cancel' body 深等於 {}；cancelPickupRequest('r1','臨時有事') → body {reason:'臨時有事'}",
-          "pickupRequestsApi lists today：GET '/parent/pickup/requests/today' 回兩筆 → resolve 長度 2"
+          "pickupRequestsApi lists today：GET '/parent/pickup/requests/today' 回兩筆 → resolve 長度 2",
+          "pickupRequestsApi arrive now body：createPickupRequest({student_id:'s1', arrived:true}) → body 深等於 {student_id:'s1', arrived:true}；回 409 {error:{code:'pickup_request_exists', details:{request_id:'r7', status:'pending'}}} → reject 且 error.details.request_id === 'r7'"
         ],
         "run": "just web-test src/parent/api/pickupRequests.spec.ts -t \"pickupRequestsApi\"",
         "notes": ""
@@ -1776,7 +1781,7 @@
     {
       "id": "PARENT-093",
       "title": "實作 parent/stores/pickupRequests.ts：今日接送請求（全部小孩）、操作與 ws 即時套用",
-      "description": "建立 `apps/web/src/parent/stores/pickupRequests.ts`（Pinia setup store，id `parentPickupRequests`）：\n- state：`items: ParentPickupRequest[]`、`loaded`、`loading`、`error: string | null`。\n- getters：`openFor(childId)`：該小孩 status ∈ {pending, acknowledged, arrived} 中 created_at 最新的一筆，無則 null；`latestFor(childId)`：該小孩 created_at 最新的一筆（含終態）；`historyFor(childId)`：該小孩終態請求，created_at 由新到舊。\n- actions：`load(force = false)`（PARENT-090 `listTodayPickupRequests`，並發共用 promise，失敗 `error = '接送狀態載入失敗'`、保留舊資料）；`create(childId, expectedArrivalAt: string | null)`；`markArrived(id)`；`cancel(id, reason?)`。三個寫入動作成功後以回應 upsert（依 id 取代或加入）並回傳該筆。錯誤：`pickup_request_exists` 或 `invalid_pickup_status` → 先 `load(true)` 同步最新狀態再 rethrow 原錯誤（移植 ivy PickupNoticeView「409 時先 refresh」）。寫入進行中以 `pendingAction: string | null` 標示，同時只允許一個寫入（重複呼叫直接回傳進行中的 promise，防連點）。\n- ws：向 PARENT-173 `parentWs.on('pickup.request_updated', data => upsert(data))`；向 `parentWs.registerPoller(() => load(true))`。只保留 service_date 為台北今日的資料（FRONTEND-003），跨日事件忽略。\n- `clear()`。\n\n移植 ivy `FE:src/parent/views/PickupNoticeView.vue::refresh` 的 listSeq 過期回應保護與 409 同步邏輯（從 view 抽到 store）。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/stores/pickupRequests.ts`（Pinia setup store，id `parentPickupRequests`）：\n- state：`items: ParentPickupRequest[]`、`loaded`、`loading`、`error: string | null`。\n- getters：`openFor(childId)`：該小孩 status ∈ {pending, acknowledged, arrived} 中 created_at 最新的一筆，無則 null；`latestFor(childId)`：該小孩 created_at 最新的一筆（含終態）；`historyFor(childId)`：該小孩終態請求，created_at 由新到舊。\n- actions：`load(force = false)`（PARENT-090 `listTodayPickupRequests`，並發共用 promise，失敗 `error = '接送狀態載入失敗'`、保留舊資料）；`create(childId, expectedArrivalAt: string | null)`；`markArrived(id)`；`cancel(id, reason?)`；`arriveNow(childId)`：「我已經到了」捷徑，POST `{student_id, arrived: true}`；回 409 `pickup_request_exists` 且 `error.details.request_id` 有值 → 改對該 id 呼叫 PARENT-090 `markPickupArrived`（BACKEND-442）並以其結果作為回傳（不先 rethrow）；該次 arrived 再回 409 `invalid_pickup_status`（例如已被接走）→ `load(true)` 後 rethrow。四個寫入動作成功後以回應 upsert（依 id 取代或加入）並回傳該筆。錯誤：`pickup_request_exists` 或 `invalid_pickup_status` → 先 `load(true)` 同步最新狀態再 rethrow 原錯誤（移植 ivy PickupNoticeView「409 時先 refresh」）。寫入進行中以 `pendingAction: string | null` 標示，同時只允許一個寫入（重複呼叫直接回傳進行中的 promise，防連點）。\n- ws：向 PARENT-173 `parentWs.on('pickup.request_updated', data => upsert(data))`；向 `parentWs.registerPoller(() => load(true))`。只保留 service_date 為台北今日的資料（FRONTEND-003），跨日事件忽略。\n- `clear()`。\n\n移植 ivy `FE:src/parent/views/PickupNoticeView.vue::refresh` 的 listSeq 過期回應保護與 409 同步邏輯（從 view 抽到 store）。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "store",
       "target_path": "apps/web/src/parent/stores/pickupRequests.ts",
       "source_ref": "FE:src/parent/views/PickupNoticeView.vue::refresh",
@@ -1802,7 +1807,10 @@
           "pickupRequestsStore syncs on conflict：POST 回 409 {error:{code:'pickup_request_exists'}}、GET today 回含 r9 pending → create reject 且 error.code === 'pickup_request_exists'，之後 openFor('s1').id === 'r9'",
           "pickupRequestsStore applies ws update：parentWs 派發 {type:'pickup.request_updated', data:{id:'r2', student_id:'s1', status:'acknowledged', reply_ready_eta:'17:45', service_date:今日}} → openFor('s1').status === 'acknowledged' 且 reply_ready_eta === '17:45'",
           "pickupRequestsStore blocks concurrent writes：markArrived('r2') 未回應時再呼叫 markArrived('r2') → POST arrived 只送出 1 次，兩個 promise resolve 同一筆",
-          "pickupRequestsStore ignores other day event：派發 service_date 為昨日的事件 → items 不變"
+          "pickupRequestsStore ignores other day event：派發 service_date 為昨日的事件 → items 不變",
+          "pickupRequestsStore arriveNow creates arrived request：POST 回 201 {id:'r8', student_id:'s1', status:'arrived', reply_message:'作業已完成，可以接送', reply_source:'auto'} → arriveNow('s1') resolve 該筆，POST body 深等於 {student_id:'s1', arrived:true}，openFor('s1').status === 'arrived'",
+          "pickupRequestsStore arriveNow falls back to existing request：POST 回 409 {error:{code:'pickup_request_exists', details:{request_id:'r7'}}}、POST '/parent/pickup/requests/r7/arrived' 回 {id:'r7', status:'arrived'} → arriveNow('s1') resolve 的 id === 'r7'，openFor('s1').status === 'arrived'，不 reject",
+          "pickupRequestsStore arriveNow fallback conflict syncs：409 pickup_request_exists 後對 r7 arrived 回 409 invalid_pickup_status、GET today 回 r7 completed → arriveNow reject 且 error.code === 'invalid_pickup_status'，之後 latestFor('s1').status === 'completed'"
         ],
         "run": "just web-test src/parent/stores/pickupRequests.spec.ts -t \"pickupRequestsStore\"",
         "notes": ""
@@ -1893,7 +1901,7 @@
     {
       "id": "PARENT-096",
       "title": "建立 ArrivalTimePicker 元件：選擇預計抵達時間（可不指定）",
-      "description": "建立 `apps/web/src/parent/components/pickup/ArrivalTimePicker.vue`：\n```ts\nprops: { modelValue: string | null /* 'HH:MM' 台北時間 */; now?: Date /* 測試注入，預設 new Date() */ }\nemits: { 'update:modelValue': [string | null] }\n```\n- 選項（PARENT-019 M3Chip filter，單選）：「不指定」（null，預設）、「約 10 分鐘後」、「約 20 分鐘後」、「約 30 分鐘後」、「自選時間」。相對選項以 now（台北時間，FRONTEND-003）加分鐘、秒數無條件進位到分鐘，轉成 'HH:MM'，chip 旁顯示換算結果（例如「約 10 分鐘後 · 17:42」）。\n- 「自選時間」展開 `type=\"time\"` 欄位（PARENT-018）；早於 now → 欄位錯誤「預計抵達時間不能早於現在」且 emit null；最晚時間由後端 `pickup.window` 判斷（錯誤 `expected_arrival_too_late` 由 PARENT-097 顯示）。\n- 跨午夜（now + 分鐘超過 23:59）的相對選項停用。\n\n參考 ivy `FE:src/parent/views/PickupNoticeView.vue::selectPreset` 的快捷分鐘選項；本專案後端收絕對時間 HH:MM，因此改為前端換算；**去掉** 滾輪選擇器。選項組合待使用者確認（見 open_design_questions）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-arrival-time-picker.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：預設不指定、選相對時間（顯示換算時刻）、自選時間展開、自選早於現在的錯誤、接近午夜時相對選項停用。可併入 `parent-page-pickup.html`。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/pickup/ArrivalTimePicker.vue`：\n```ts\nprops: { modelValue: string | null /* 'HH:MM' 台北時間 */; now?: Date /* 測試注入，預設 new Date() */ }\nemits: { 'update:modelValue': [string | null] }\n```\n- 選項（PARENT-019 M3Chip filter，單選）：「不指定」（null，預設）、「約 10 分鐘後」、「約 20 分鐘後」、「約 30 分鐘後」、「自選時間」。相對選項以 now（台北時間，FRONTEND-003）加分鐘、秒數無條件進位到分鐘，轉成 'HH:MM'，chip 旁顯示換算結果（例如「約 10 分鐘後 · 17:42」）。\n- 「自選時間」展開 `type=\"time\"` 欄位（PARENT-018）；早於 now → 欄位錯誤「預計抵達時間不能早於現在」且 emit null；最晚時間由後端 `pickup.window` 判斷（錯誤 `expected_arrival_too_late` 由 PARENT-097 顯示）。\n- 跨午夜（now + 分鐘超過 23:59）的相對選項停用。\n\n參考 ivy `FE:src/parent/views/PickupNoticeView.vue::selectPreset` 的快捷分鐘選項；本專案後端收絕對時間 HH:MM，因此改為前端換算；**去掉** 滾輪選擇器。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-arrival-time-picker.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：預設不指定、選相對時間（顯示換算時刻）、自選時間展開、自選早於現在的錯誤、接近午夜時相對選項停用。可併入 `parent-page-pickup.html`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/ArrivalTimePicker.vue",
       "source_ref": "FE:src/parent/views/PickupNoticeView.vue::selectPreset",
@@ -1907,9 +1915,7 @@
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
-      "open_design_questions": [
-        "「我要來接」的預計抵達時間要怎麼選？A. 快捷「不指定 / 約 10 / 20 / 30 分鐘後」+ 自選時間（目前預設）；B. 只有時間選擇器（必填）；C. 不提供時間，只發送「我要來接」。"
-      ],
+      "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/components/pickup/ArrivalTimePicker.spec.ts",
         "markers": [
@@ -1933,7 +1939,7 @@
     {
       "id": "PARENT-097",
       "title": "移植 PickupView：我要來接 / 回覆訊息 / 我到了 / 取消 / 完成",
-      "description": "建立 `apps/web/src/parent/views/PickupView.vue`（路由 `/pickup`，底部導覽「接送」）。\n\n**資料**：掛載時 `children.load()`、`pickupRequests.load(true)`（PARENT-093）、選中小孩的 `getChild(id)`（PARENT-006，取 `my_guardian.can_pickup`）與 `homeworkToday.load(id)`（PARENT-071）；切換小孩重抓 child 與作業；`document.visibilitychange` 轉 visible 時 `pickupRequests.load(true)`。ws 更新由 store 自動反映。\n\n**畫面**（PARENT-050 ChildContextHeader 下方）：\n1. 作業提示列：「作業進度 {done}/{total} · 預計 HH:MM 可接送」或「作業已完成」（無資料時不顯示）。\n2. 無進行中請求（`openFor(id)` 為 null）：\n   - `can_pickup === false` → ParentEmptyState「您沒有這位小孩的接送權限」/「如需接送請聯絡安親班」，不顯示表單。\n   - 否則表單卡：標題「我要來接」、PARENT-096 ArrivalTimePicker、送出鈕「通知安親班」（loading 防連點）→ `pickupRequests.create(id, eta)`；成功 snackbar「已通知安親班」，畫面切到進行中（自動回覆立即顯示）。\n3. 有進行中請求：PARENT-094 PickupReplyMessage、PARENT-095 PickupProgressSteps、`expected_arrival_at` 有值時「您預計 HH:MM 抵達」；動作：\n   - 「我到了」（`can_mark_arrived`）：開 PARENT-026 ConfirmDialog「確認已抵達安親班？」（含「下次不再提醒」勾選，存 localStorage `parent_pickup_arrive_skip_confirm=1`，已設定則直接送出）→ `markArrived`；成功 snackbar「已通知老師您到了」。\n   - 「取消接送」（`can_cancel`）：ConfirmDialog destructive「取消這次接送？」→ `cancel(id)`；成功 snackbar「已取消接送」。\n4. `latestFor(id)` 為 completed 且無進行中請求：成功卡「HH:MM 已由 {picked_up_by_name} 接走」，下方仍可再次發起（表單）。\n5. 今日紀錄：`historyFor(id)` 精簡列表（狀態 pill + 時間）。\n6. 底部連結「代理接送與常用接送人」→ `/pickup/proxy`。\n\n**錯誤**（`ApiError.code`）：`pickup_request_exists` → snackbar「今天已有接送請求，已更新狀態」（store 已同步）；`invalid_pickup_status` → snackbar「狀態已更新，請確認後再操作」；`pickup_not_allowed` → 「您沒有這位小孩的接送權限」；`pickup_window_closed` / `student_not_available` / `not_service_day` / `expected_arrival_in_past` / `expected_arrival_too_late` / `student_not_active` → 在表單卡內以 error 樣式顯示後端 `error.message`（繁中）；其他 → snackbar error「送出失敗，請稍後再試」。載入失敗（store.error 且無資料）→ ParentEmptyState error + 重試。\n\n移植 ivy `FE:src/parent/views/PickupNoticeView.vue` 的 submit / arrive 確認（含不再提醒）/ cancel 確認 / 30 秒內 visibility refresh 概念；**去掉** 滾輪、note、client_request_id、30 秒定時輪詢（改由 ws + parentWs poller）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-pickup.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：無請求表單（含作業提示）、無接送權限、送出中、pending 自動回覆（作業完成 / 有 ETA / 等待老師）、acknowledged 老師回覆、arrived、completed 成功卡、我到了確認對話框（含不再提醒）、取消確認、表單內業務錯誤（不在時段 / 請假中 / 非營業日 / 時間太晚）、載入失敗、今日紀錄列表、多位小孩切換。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/views/PickupView.vue`（路由 `/pickup`，底部導覽「接送」）。\n\n**資料**：掛載時 `children.load()`、`pickupRequests.load(true)`（PARENT-093）、選中小孩的 `getChild(id)`（PARENT-006，取 `my_guardian.can_pickup`）與 `homeworkToday.load(id)`（PARENT-071）；切換小孩重抓 child 與作業；`document.visibilitychange` 轉 visible 時 `pickupRequests.load(true)`。ws 更新由 store 自動反映。\n\n**畫面**（PARENT-050 ChildContextHeader 下方）：\n1. 作業提示列：「作業進度 {done}/{total} · 預計 HH:MM 可接送」或「作業已完成」（無資料時不顯示）。\n2. 無進行中請求（`openFor(id)` 為 null）：\n   - `can_pickup === false` → ParentEmptyState「您沒有這位小孩的接送權限」/「如需接送請聯絡安親班」，不顯示表單。\n   - 否則表單卡：標題「我要來接」、PARENT-096 ArrivalTimePicker、送出鈕「通知安親班」（loading 防連點）→ `pickupRequests.create(id, eta)`；成功 snackbar「已通知安親班」，畫面切到進行中（自動回覆立即顯示）。\n   - 表單卡下方分隔線後放次要按鈕（outlined）「我已經到了」與說明「人已在安親班門口時使用，不必先通知」→ PARENT-105 `useArriveNow().request(id, null)`（確認對話框與「我到了」共用）；成功後畫面切到進行中（arrived，含自動回覆）。\n3. 有進行中請求：PARENT-094 PickupReplyMessage、PARENT-095 PickupProgressSteps、`expected_arrival_at` 有值時「您預計 HH:MM 抵達」；動作：\n   - 「我到了」（`can_mark_arrived`）：PARENT-105 `useArriveNow().request(id, 該請求 id)`，以 PARENT-026 ConfirmDialog 呈現確認（含「下次不再提醒」，localStorage `parent_pickup_arrive_skip_confirm=1` 時直接送出）；成功 snackbar「已通知老師您到了」。\n   - 「取消接送」（`can_cancel`）：ConfirmDialog destructive「取消這次接送？」→ `cancel(id)`；成功 snackbar「已取消接送」。\n4. `latestFor(id)` 為 completed 且無進行中請求：成功卡「HH:MM 已由 {picked_up_by_name} 接走」，下方仍可再次發起（表單）。\n5. 今日紀錄：`historyFor(id)` 精簡列表（狀態 pill + 時間）。\n6. 底部連結「代理接送與常用接送人」→ `/pickup/proxy`。\n\n**錯誤**（`ApiError.code`）：`pickup_request_exists` → snackbar「今天已有接送請求，已更新狀態」（store 已同步）；`invalid_pickup_status` → snackbar「狀態已更新，請確認後再操作」；`pickup_not_allowed` → 「您沒有這位小孩的接送權限」；`pickup_window_closed` / `student_not_available` / `not_service_day` / `expected_arrival_in_past` / `expected_arrival_too_late` / `student_not_active` → 在表單卡內以 error 樣式顯示後端 `error.message`（繁中）；其他 → snackbar error「送出失敗，請稍後再試」。載入失敗（store.error 且無資料）→ ParentEmptyState error + 重試。\n\n移植 ivy `FE:src/parent/views/PickupNoticeView.vue` 的 submit / arrive-now 捷徑 / arrive 確認（含不再提醒）/ cancel 確認 / 30 秒內 visibility refresh 概念；**去掉** 滾輪、note、client_request_id、30 秒定時輪詢（改由 ws + parentWs poller）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-pickup.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：無請求表單（含作業提示）、無接送權限、送出中、pending 自動回覆（作業完成 / 有 ETA / 等待老師）、acknowledged 老師回覆、arrived、completed 成功卡、「我已經到了」次要按鈕（無請求時）、我到了確認對話框（含不再提醒）、取消確認、表單內業務錯誤（不在時段 / 請假中 / 非營業日 / 時間太晚）、載入失敗、今日紀錄列表、多位小孩切換。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/PickupView.vue",
       "source_ref": "FE:src/parent/views/PickupNoticeView.vue::submit",
@@ -1953,13 +1959,12 @@
         "PARENT-094",
         "PARENT-095",
         "PARENT-096",
-        "INFRA-013"
+        "INFRA-013",
+        "PARENT-105"
       ],
       "suggested_model": "opus-5",
       "risk_notes": "",
-      "open_design_questions": [
-        "家長未先按「我要來接」、人已到門口時，是否提供「我已經到了」捷徑（一次建立請求並標記到達）？A. 不提供（目前預設，需先送出再按我到了）；B. 提供（沿用 ivy 的 arrive-now：建立請求後立即呼叫 arrived）。"
-      ],
+      "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/views/PickupView.spec.ts",
         "markers": [
@@ -1973,7 +1978,9 @@
           "PickupView cancel requires confirm：點「取消接送」→ 對話框；按對話框「取消」→ 無 POST；再點並確認 → POST '/parent/pickup/requests/r1/cancel'，snackbar「已取消接送」，畫面回到表單",
           "PickupView shows window closed error in form：POST 回 409 {error:{code:'pickup_window_closed', message:'目前不在可發起接送的時段（15:00~19:00）'}} → 表單卡內含該訊息，仍顯示「通知安親班」按鈕",
           "PickupView existing request conflict syncs：POST 回 409 pickup_request_exists、GET today 回 r9 acknowledged reply_ready_eta '17:45' → snackbar「今天已有接送請求，已更新狀態」，畫面含 '預計 17:45 可接送'",
-          "PickupView completed card：today 只有 r1 completed、picked_up_by_name '王媽媽'、completed_at '..T09:40:00Z' → 含 '17:40 已由 王媽媽 接走'，且仍顯示「通知安親班」表單"
+          "PickupView completed card：today 只有 r1 completed、picked_up_by_name '王媽媽'、completed_at '..T09:40:00Z' → 含 '17:40 已由 王媽媽 接走'，且仍顯示「通知安親班」表單",
+          "PickupView arrive now shortcut without request：無進行中請求、can_pickup=true → 點「我已經到了」→ 出現「確認已抵達安親班？」；確認 → POST /parent/pickup/requests body 深等於 {student_id:'s1', arrived:true}，回 {id:'r8', status:'arrived', reply_message:'作業已完成，可以接送', reply_source:'auto', can_cancel:true, can_mark_arrived:false} → 畫面含 '作業已完成，可以接送'、'系統自動回覆'，不再顯示表單與「我到了」",
+          "PickupView arrive now falls back on existing request：其他裝置已建立 r7 但本頁尚未同步，點「我已經到了」並確認 → POST 回 409 {error:{code:'pickup_request_exists', details:{request_id:'r7'}}} → 接著 POST '/parent/pickup/requests/r7/arrived'，畫面顯示 r7 的 arrived 狀態，snackbar「已通知老師您到了」"
         ],
         "run": "just web-test src/parent/views/PickupView.spec.ts -t \"PickupView\"",
         "notes": ""
@@ -2258,6 +2265,45 @@
           "PickupProxyView expired authorization error refreshes：regenerate 回 409 authorization_expired → snackbar「這筆授權已失效」且 GET 授權重抓"
         ],
         "run": "just web-test src/parent/views/PickupProxyView.spec.ts -t \"PickupProxyView\"",
+        "notes": ""
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "PARENT-105",
+      "title": "實作 useArriveNow composable：「我到了 / 我已經到了」確認流程（首頁與接送頁共用）",
+      "description": "建立 `apps/web/src/parent/composables/useArriveNow.ts`：\n```ts\nexport function useArriveNow(): {\n  confirmOpen: Ref<boolean>; skipNextTime: Ref<boolean>; busy: Readonly<Ref<boolean>>\n  request(childId: string, openRequestId: string | null): void   // 使用者按下按鈕\n  confirm(): Promise<ParentPickupRequest | null>                 // ConfirmDialog 的確認\n  dismiss(): void                                                 // ConfirmDialog 的取消\n  lastResult: Ref<ParentPickupRequest | null>\n}\n```\n- `request`：記下目標（有進行中請求 → 對該 id「我到了」；沒有 → 「我已經到了」捷徑）。localStorage `parent_pickup_arrive_skip_confirm === '1'` 時直接執行，否則 `confirmOpen = true`（頁面以 PARENT-026 ConfirmDialog 呈現：標題「確認已抵達安親班？」、說明「老師會收到通知並準備帶孩子出來」、default slot 放「下次不再提醒」勾選綁 `skipNextTime`）。\n- `confirm`：`skipNextTime` 為 true 時寫入 localStorage（storage 不可用時忽略）→ 關閉對話框 → 執行：有 openRequestId → PARENT-093 `pickupRequests.markArrived(id)`；否則 `pickupRequests.arriveNow(childId)`（含 409 改呼叫「我到了」的後援）。成功 → `lastResult = 回應`、snackbar「已通知老師您到了」（PARENT-011）。\n- 錯誤 → snackbar error：`pickup_not_allowed` →「您沒有這位小孩的接送權限」；`invalid_pickup_status` →「狀態已更新，請確認後再操作」；`pickup_window_closed` / `student_not_available` / `not_service_day` / `student_not_active` → 後端 `error.message`；其他 →「送出失敗，請稍後再試」。回傳 null。\n- `busy` 期間再次 `request` / `confirm` 直接忽略（防連點）。\n\n移植 ivy `FE:src/parent/views/PickupNoticeView.vue::onArriveNowClick` / `onArriveConfirm` / `performArriveNow` 的「不再提醒」與「沒有進行中預告時先建立再到達」概念；本專案改由後端 `arrived: true` 一次完成，409 時才對既有請求呼叫「我到了」。\n\n**驗收標準**：每一條對應 red_case（mountWithApp 包測試元件，axios-mock-adapter）。",
+      "granularity_unit": "composable",
+      "target_path": "apps/web/src/parent/composables/useArriveNow.ts",
+      "source_ref": "FE:src/parent/views/PickupNoticeView.vue::performArriveNow",
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "PARENT-011",
+        "PARENT-093",
+        "INFRA-013"
+      ],
+      "suggested_model": "opus-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/web/src/parent/composables/useArriveNow.spec.ts",
+        "markers": [
+          "vitest"
+        ],
+        "red_cases": [
+          "useArriveNow shortcut without open request：request('s1', null) → confirmOpen === true；confirm() → POST /parent/pickup/requests body 深等於 {student_id:'s1', arrived:true}，回 arrived 的 r8 → lastResult.id === 'r8'，snackbar 第一則「已通知老師您到了」",
+          "useArriveNow uses existing open request：request('s1', 'r1') 後 confirm() → POST '/parent/pickup/requests/r1/arrived'，未送出 POST /parent/pickup/requests",
+          "useArriveNow remembers skip confirm：skipNextTime=true 後 confirm() → localStorage 'parent_pickup_arrive_skip_confirm' === '1'；之後 request('s1', null) → 不開對話框、直接送出 POST",
+          "useArriveNow dismiss sends nothing：request('s1', null) 後 dismiss() → confirmOpen === false 且 mock.history.post.length === 0",
+          "useArriveNow error message：POST 回 403 {error:{code:'pickup_not_allowed'}} → confirm() resolve null，snackbar 第一則「您沒有這位小孩的接送權限」",
+          "useArriveNow ignores double confirm：confirm() 未回應時再呼叫 confirm() → POST 只送出 1 次"
+        ],
+        "run": "just web-test src/parent/composables/useArriveNow.spec.ts -t \"useArriveNow\"",
         "notes": ""
       },
       "review": {
@@ -3184,7 +3230,8 @@
         "PARENT-031",
         "PARENT-054",
         "PARENT-097",
-        "PARENT-173"
+        "PARENT-173",
+        "PARENT-105"
       ],
       "suggested_model": "opus-5",
       "risk_notes": "",
@@ -3198,7 +3245,8 @@
           "parent flow first bind lands on home：goto '/parent/#/'（/parent/me 401、refresh 401）→ 自動走 LIFF 替身 → liff-login 回 needs_binding（name_hint '王媽媽'）→ 頁面 URL hash 為 '#/bind' 且可見「您好，王媽媽」；輸入 'abcd2345' 送出 → bind 請求 body 為 {code:'ABCD2345'}；之後 hash 為 '#/' 且可見 '王小明' 與「作業進度 1/3」",
           "parent flow bind expired code shows guidance：bind 回 400 binding_code_expired → 可見「綁定碼已過期」與「請向安親班索取新的綁定碼」，URL 仍為 '#/bind'",
           "parent flow request pickup shows auto reply：已登入狀態（/parent/me 200）於首頁點「我要來接」→ hash '#/pickup'；選「不指定」點「通知安親班」→ POST /api/parent/pickup/requests body 為 {student_id:'s1'}，回 pending 且 reply_message '預計 17:30 可接送' → 可見 '預計 17:30 可接送' 與「我到了」按鈕",
-          "parent flow receives staff reply via websocket：承上，routeWebSocket 推送 {type:'pickup.request_updated', data:{id:'r1', student_id:'s1', status:'acknowledged', reply_ready_eta:'17:45', reply_message:'數學訂正完就可以接', service_date:今日, can_cancel:true, can_mark_arrived:true}} → 不重新整理頁面即可見 '預計 17:45 可接送' 與 '數學訂正完就可以接'"
+          "parent flow receives staff reply via websocket：承上，routeWebSocket 推送 {type:'pickup.request_updated', data:{id:'r1', student_id:'s1', status:'acknowledged', reply_ready_eta:'17:45', reply_message:'數學訂正完就可以接', service_date:今日, can_cancel:true, can_mark_arrived:true}} → 不重新整理頁面即可見 '預計 17:45 可接送' 與 '數學訂正完就可以接'",
+          "parent flow arrive now from home：已登入於首頁點「我已經到了」→ 確認對話框按確認 → POST /api/parent/pickup/requests body 為 {student_id:'s1', arrived:true}，回 arrived 且 reply_message '作業已完成，可以接送' → 首頁卡片可見 '作業已完成，可以接送'，URL hash 仍為 '#/'"
         ],
         "run": "just e2e e2e/parent/login-bind-pickup.spec.ts -g \"parent flow\"",
         "notes": "執行前 `just up`（或 `just web`）讓 5341 提供 vite dev 服務；production build 會忽略 LIFF 替身，因此不可對 vite preview / docker 映像執行。"
