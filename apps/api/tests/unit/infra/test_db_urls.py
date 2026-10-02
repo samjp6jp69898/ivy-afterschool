@@ -35,11 +35,13 @@ def test_db_urls_normalization(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_db_urls_rejects_remote(monkeypatch: pytest.MonkeyPatch) -> None:
-    with pytest.raises(ValueError, match="db.example.com"):
+    with pytest.raises(ValueError, match=r"db\.example\.com"):
         db_urls.assert_loopback("postgresql+psycopg://u:p@db.example.com:5432/postgres")
 
-    monkeypatch.setenv("TEST_DB_OWNER_URL", "postgresql+psycopg://postgres:x@10.0.0.5:5432/postgres")
-    with pytest.raises(ValueError, match="10.0.0.5"):
+    monkeypatch.setenv(
+        "TEST_DB_OWNER_URL", "postgresql+psycopg://postgres:x@10.0.0.5:5432/postgres"
+    )
+    with pytest.raises(ValueError, match=r"10\.0\.0\.5"):
         db_urls.owner_url()
 
 
@@ -78,7 +80,7 @@ def test_db_urls_rejects_libpq_overrides(
 def test_db_urls_rejects_libpq_overrides_via_backend_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TEST_DB_BACKEND_URL", LOCAL_URL + "?hostaddr=10.0.0.7")
 
-    with pytest.raises(ValueError, match="hostaddr=10.0.0.7"):
+    with pytest.raises(ValueError, match=r"hostaddr=10\.0\.0\.7"):
         db_urls.backend_url()
 
 
@@ -100,7 +102,7 @@ def test_db_urls_assert_connected_loopback() -> None:
     db_urls.assert_connected_loopback("127.0.0.1")
     db_urls.assert_connected_loopback("::1")
 
-    with pytest.raises(ValueError, match="10.0.0.11"):
+    with pytest.raises(ValueError, match=r"10\.0\.0\.11"):
         db_urls.assert_connected_loopback("10.0.0.11")
     with pytest.raises(ValueError, match="只允許本機 loopback DB"):
         db_urls.assert_connected_loopback("")
