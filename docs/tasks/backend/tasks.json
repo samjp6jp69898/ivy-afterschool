@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 9,
-  "last_updated": "2026-10-02T06:40:22Z",
+  "version": 11,
+  "last_updated": "2026-10-02T07:04:24Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2895,7 +2895,7 @@
     {
       "id": "BACKEND-086",
       "title": "建立員工帳號模組 Pydantic schemas",
-      "description": "建立 `apps/api/app/schemas/staff_users.py`（request `extra='forbid'`、`str_strip_whitespace=True`）。\n\n- `StaffUserCreateIn`：username（`^[A-Za-z0-9][A-Za-z0-9._-]{2,31}$`，service 轉小寫）、display_name（1~50）、phone（≤20，可空）、email（EmailStr，可空）、role_id（UUID）、extra_permissions（list[str]，預設 []）、revoked_permissions（list[str]，預設 []）。\n- `StaffUserUpdateIn`：display_name / phone / email / role_id / extra_permissions / revoked_permissions 皆 optional，全部未給 → 422。username 不可改。\n- `StaffUserListQuery`：q（≤50）、role_id、is_active（bool | None）。\n- `StaffUserOut`：id、username、display_name、phone、email、role（RoleBrief）、extra_permissions、revoked_permissions、effective_permissions（排序）、is_active、must_change_password、last_login_at、created_at。\n- `StaffUserCreatedOut`：user（StaffUserOut）、temp_password（str，只在建立時回傳一次）。\n- `TempPasswordOut`：temp_password。\n\n**驗收標準**\n- username 格式、display_name 長度、email 格式、extra 欄位受限。\n- Update 空 body 被拒；送 username 被拒。",
+      "description": "建立 `apps/api/app/schemas/staff_users.py`（request `extra='forbid'`、`str_strip_whitespace=True`）。\n\n- `StaffUserCreateIn`：username（`^[A-Za-z0-9][A-Za-z0-9._-]{2,31}$`，service 轉小寫）、display_name（1~50）、phone（≤20，可空）、email（EmailStr，可空）、role_id（UUID）、extra_permissions（list[str]，預設 []）、revoked_permissions（list[str]，預設 []）。\n- `StaffUserUpdateIn`：display_name / phone / email / role_id / extra_permissions / revoked_permissions 皆 optional，全部未給 → 422。username 不可改。\n- `StaffUserListQuery`：q（≤50）、role_id、is_active（bool | None）。\n- `StaffUserOut`：id、username、display_name、phone、email、role（RoleBrief）、extra_permissions、revoked_permissions、effective_permissions（排序）、is_active、must_change_password、last_login_at、created_at。\n- `StaffUserCreatedOut`：user（StaffUserOut）、temp_password（str，只在建立時回傳一次）。\n- `TempPasswordOut`：temp_password。\n- `StaffOptionOut`：id、display_name（班級負責員工指派下拉用，不含帳號與權限資訊）。\n\n**驗收標準**\n- username 格式、display_name 長度、email 格式、extra 欄位受限。\n- Update 空 body 被拒；送 username 被拒。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/staff_users.py",
       "source_ref": "BE:api/auth.py::CreateUserRequest",
@@ -3601,7 +3601,7 @@
     {
       "id": "BACKEND-106",
       "title": "實作 app/core/settings_registry.py：首批 7 個 system_settings key 的 schema、預設值、secret 與分組",
-      "description": "建立 `apps/api/app/core/settings_registry.py`（architecture_decisions §4、domain_spec M2、DB-038 預設值是本 task 的介面）。\n\n**介面**\n```python\n@dataclass(frozen=True)\nclass SettingDef(Generic[M]):\n    key: str\n    schema: type[M]                  # Pydantic model，extra='forbid'\n    default: M\n    is_secret: bool\n    secret_fields: tuple[str, ...]   # 加密存放、回傳遮罩的欄位\n    group: Literal[\"org\", \"pickup\", \"homework\", \"notification\", \"line\"]\n    label: str                        # 繁中顯示名稱\n    public_fields: tuple[str, ...] = ()   # 可經 GET /api/parent/config 公開的欄位\n\nclass SettingKey(Generic[M]): ...     # 型別化 handle，例如 ORG_PROFILE: SettingKey[OrgProfile]\nREGISTRY: Mapping[str, SettingDef[Any]]\n```\n**schema（時間一律 `HH:MM` 字串，Asia/Taipei；以 `TimeHM = Annotated[str, StringConstraints(pattern=r'^([01]\\d|2[0-3]):[0-5]\\d$')]`）**\n| key | model | 欄位與規則 | 預設（與 DB-038 一致） |\n|---|---|---|---|\n| `org.profile` | OrgProfile | name ≤50、address ≤200、phone ≤20、logo_url（HttpUrl \\| None）；public: name、phone、logo_url | `{\"name\":\"\",\"address\":\"\",\"phone\":\"\",\"logo_url\":null}` |\n| `org.service_hours` | ServiceHours | mon~sat 各為 DayHours(open: bool, start: TimeHM, end: TimeHM；open 時 start < end) | 週一~五 open 12:00-19:00；sat open=false 08:00-12:00 |\n| `pickup.window` | PickupWindow | request_start < request_end、latest_expected_arrival ≥ request_end、auto_expire_minutes 10~600 | request_start 12:00 / request_end 19:00 / latest_expected_arrival 19:00 / auto_expire_minutes 120（接送時段同營業時段） |\n| `homework.defaults` | HomeworkDefaults | auto_reply_without_eta: bool、no_eta_reply_text 1~100 | true / 「已通知老師，稍後回覆預計時間」 |\n| `notification.toggles` | NotificationToggles | RootModel[dict[str, bool]]，key 集合必須恰為 BACKEND-201 的 13 個事件 | 全部 true |\n| `line.liff` | LineLiff | liff_id：空字串或 `^\\d+-[A-Za-z0-9]+$`；channel_id（LINE Login channel ID，後端驗證 id_token 的 aud）：空字串或 `^\\d{6,20}$`；public: liff_id（channel_id 不公開） | `{\"liff_id\":\"\",\"channel_id\":\"\"}` |\n| `line.messaging` | LineMessaging | channel_access_token、channel_secret（str \\| None，≤500）；is_secret、secret_fields 兩者 | 兩者 null |\n\n- 新增設定項：先在此註冊，再以 migration seed 預設值（architecture_decisions §4）；不得為業務參數新增 env。\n- `notification.toggles` 依賴 BACKEND-201 的事件清單；為避免 import 循環，events 模組不 import registry。\n\n**驗收標準**\n- REGISTRY 恰含 7 個 key，default 通過自身 schema 驗證。\n- 各 schema 的驗證規則逐條生效（時間格式、start<end、範圍、事件 key 集合）。\n- 只有 line.messaging is_secret；public_fields 如表（line.liff 只公開 liff_id）。\n- LineLiff 的 channel_id 格式驗證；預設值含 channel_id 空字串（DB-038 seed 需一致）。",
+      "description": "建立 `apps/api/app/core/settings_registry.py`（architecture_decisions §4、domain_spec M2、DB-038 預設值是本 task 的介面）。\n\n**介面**\n```python\n@dataclass(frozen=True)\nclass SettingDef(Generic[M]):\n    key: str\n    schema: type[M]                  # Pydantic model，extra='forbid'\n    default: M\n    is_secret: bool\n    secret_fields: tuple[str, ...]   # 加密存放、回傳遮罩的欄位\n    group: Literal[\"org\", \"pickup\", \"homework\", \"notification\", \"line\"]\n    label: str                        # 繁中顯示名稱\n    public_fields: tuple[str, ...] = ()   # 可經 GET /api/parent/config 公開的欄位\n\nclass SettingKey(Generic[M]): ...     # 型別化 handle，例如 ORG_PROFILE: SettingKey[OrgProfile]\nREGISTRY: Mapping[str, SettingDef[Any]]\n```\n**schema（時間一律 `HH:MM` 字串，Asia/Taipei；以 `TimeHM = Annotated[str, StringConstraints(pattern=r'^([01]\\d|2[0-3]):[0-5]\\d$')]`）**\n| key | model | 欄位與規則 | 預設（與 DB-038 一致） |\n|---|---|---|---|\n| `org.profile` | OrgProfile | name ≤50、address ≤200、phone ≤20、logo_url（HttpUrl \\| None）；public: name、phone、logo_url | `{\"name\":\"\",\"address\":\"\",\"phone\":\"\",\"logo_url\":null}` |\n| `org.service_hours` | ServiceHours | mon~sat 各為 DayHours(open: bool, start: TimeHM, end: TimeHM；open 時 start < end) | 週一~五 open 12:00-19:00；sat open=false 08:00-12:00 |\n| `pickup.window` | PickupWindow | request_start < request_end、latest_expected_arrival ≥ request_end、auto_expire_minutes 10~600 | request_start 12:00 / request_end 19:00 / latest_expected_arrival 19:00 / auto_expire_minutes 120（接送時段同營業時段） |\n| `homework.defaults` | HomeworkDefaults | auto_reply_without_eta: bool、no_eta_reply_text 1~100 | true / 「已通知老師，稍後回覆預計時間」 |\n| `notification.toggles` | NotificationToggles | RootModel[dict[str, bool]]，key 集合必須恰為 BACKEND-201 的 13 個事件 | 全部 true |\n| `line.liff` | LineLiff | liff_id：空字串或 `^\\d+-[A-Za-z0-9]+$`；channel_id（LINE Login channel ID，後端驗證 id_token 的 aud）：空字串或 `^\\d{6,20}$`；public: liff_id（channel_id 不公開） | `{\"liff_id\":\"\",\"channel_id\":\"\"}` |\n| `line.messaging` | LineMessaging | channel_access_token、channel_secret（str \\| None，≤500）；is_secret、secret_fields 兩者 | 兩者 null |\n\n- **表單標籤**：每個 schema（含巢狀的 DayHours）的每個欄位都以 `Field(title=<繁中標題>, description=<繁中說明>)` 宣告，model 本身以 `model_config = ConfigDict(title=<繁中>)` 設定標題，讓 GET /api/admin/settings 回傳的 `json_schema`（BACKEND-109）可直接當表單標籤。標題：\n  - OrgProfile：name「安親班名稱」、address「地址」、phone「聯絡電話」、logo_url「Logo 圖片網址」。\n  - ServiceHours：mon~sat「週一」~「週六」；DayHours：open「是否營業」、start「開始時間」、end「結束時間」。\n  - PickupWindow：request_start「可發起接送開始時間」、request_end「可發起接送結束時間」、latest_expected_arrival「最晚預計抵達時間」、auto_expire_minutes「接送請求自動過期分鐘數」。\n  - HomeworkDefaults：auto_reply_without_eta「未設定預計時間時自動回覆」、no_eta_reply_text「自動回覆文案」。\n  - NotificationToggles（RootModel）：title「通知開關」，並以 `json_schema_extra={'x-labels': {event: EventDef.label}}` 附上各事件的中文名稱（取自 BACKEND-201，registry 可 import events，反向不可）。\n  - LineLiff：liff_id「LIFF 應用程式 ID」、channel_id「LINE 登入 Channel ID」；LineMessaging：channel_access_token「LINE 訊息 Channel Access Token」、channel_secret「LINE 訊息 Channel Secret」。\n  - description 為一句繁中說明（例如 auto_expire_minutes「家長發起後超過此分鐘數仍未完成即自動過期」）。\n- 新增設定項：先在此註冊，再以 migration seed 預設值（architecture_decisions §4）；不得為業務參數新增 env。\n- `notification.toggles` 依賴 BACKEND-201 的事件清單；為避免 import 循環，events 模組不 import registry。\n\n**驗收標準**\n- REGISTRY 恰含 7 個 key，default 通過自身 schema 驗證。\n- 各 schema 的驗證規則逐條生效（時間格式、start<end、範圍、事件 key 集合）。\n- 只有 line.messaging is_secret；public_fields 如表（line.liff 只公開 liff_id）。\n- LineLiff 的 channel_id 格式驗證；預設值含 channel_id 空字串（DB-038 seed 需一致）。\n- 每個 schema 的 json_schema 中，所有欄位（含 $defs 內的 DayHours）都有含中文的 title 與非空 description。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/settings_registry.py",
       "source_ref": null,
@@ -3627,7 +3627,8 @@
           "test_settings_registry_secret_and_public：[k for k,d in REGISTRY.items() if d.is_secret] == ['line.messaging']，REGISTRY['line.messaging'].secret_fields == ('channel_access_token','channel_secret')；REGISTRY['org.profile'].public_fields == ('name','phone','logo_url')",
           "test_settings_registry_extra_forbid：OrgProfile.model_validate({'name':'x','address':'','phone':'','logo_url':None,'fax':'1'}) → ValidationError",
           "test_settings_registry_line_liff_channel_id：LineLiff.model_validate({'liff_id':'1657000000-AbcdEfgh','channel_id':'1657000000'}) 通過；channel_id='abc' → ValidationError；缺 channel_id → ValidationError；REGISTRY['line.liff'].public_fields == ('liff_id',)；REGISTRY['line.liff'].default.channel_id == ''",
-          "test_settings_registry_defaults_match_seed：REGISTRY['org.service_hours'].default.mon == DayHours(open=True, start='12:00', end='19:00')、.sat.open is False；REGISTRY['pickup.window'].default.model_dump() == {'request_start':'12:00','request_end':'19:00','latest_expected_arrival':'19:00','auto_expire_minutes':120}"
+          "test_settings_registry_defaults_match_seed：REGISTRY['org.service_hours'].default.mon == DayHours(open=True, start='12:00', end='19:00')、.sat.open is False；REGISTRY['pickup.window'].default.model_dump() == {'request_start':'12:00','request_end':'19:00','latest_expected_arrival':'19:00','auto_expire_minutes':120}",
+          "test_settings_registry_field_titles_chinese：對 REGISTRY 每個 d.schema.model_json_schema()，遞迴走訪 properties（含 $defs）→ 每個欄位 title 符合 re.search(r'[\\u4e00-\\u9fff]', title) 且 description 非空；REGISTRY['pickup.window'].schema.model_json_schema()['properties']['auto_expire_minutes']['title'] == '接送請求自動過期分鐘數'；notification.toggles 的 json_schema['x-labels']['homework.done'] == EVENTS[Event.HOMEWORK_DONE].label"
         ],
         "run": "just test apps/api/tests/unit/core/test_settings_registry.py -k \"test_settings_registry_\"",
         "notes": ""
@@ -5249,7 +5250,7 @@
     {
       "id": "BACKEND-155",
       "title": "實作 StudentImportService.preview：解析 Excel 並逐列驗證（不寫入）",
-      "description": "建立 `apps/api/app/services/student_import_service.py`（domain_spec §2 `POST /students/import`：Excel 匯入，預覽 + 執行兩段）。移植 ivy `utils/excel_io.py::parse_excel` 與 `assert_xlsx_not_zip_bomb` 的防護（解壓縮大小與 sheet 格數上限）；欄位改為本專案學生欄位。\n\n```python\nIMPORT_COLUMNS = [\"學號*\", \"姓名*\", \"性別\", \"生日\", \"年級*\", \"就讀國小\", \"學校班級\", \"安親班班級\", \"狀態\", \"入學日\", \"備註\", \"身分證字號\", \"健康備註\"]\nMAX_IMPORT_ROWS = 500\n\n@dataclass(frozen=True)\nclass ImportRowResult:\n    row_number: int                     # Excel 列號（標題為第 1 列）\n    data: StudentCreateIn | None        # 驗證通過時的正規化資料\n    display: dict[str, str]             # 原始儲存格字串（敏感欄位遮罩），供前端呈現\n    errors: list[str]                   # 繁中錯誤訊息\n\n@dataclass(frozen=True)\nclass ImportPreview:\n    rows: list[ImportRowResult]\n    total: int\n    valid: int\n    invalid: int\n\ndef preview(session: Session, upload: ValidatedUpload, *, academic_year: int, actor: CurrentStaff) -> ImportPreview: ...\n```\n**規則**\n- 第一個工作表；標題列必須包含全部必填欄（帶 `*`）→ 否則 422 `import_invalid_header`，details 列出缺少的欄。資料列 > 500 → 422 `import_too_many_rows`；0 列 → 422 `import_empty`。\n- 性別：男 / 女 / 其他 → male / female / other；狀態：在學 / 暫停 / 退班（預設在學）→ active / suspended / withdrawn。\n- 日期接受 Excel 日期儲存格或 `YYYY-MM-DD` / `YYYY/MM/DD` 字串。\n- 就讀國小：以 name 或 short_name 比對啟用中的 schools（不分大小寫）；找不到 → 錯誤「找不到國小：X」。\n- 安親班班級：以名稱比對 `academic_year` 學年度未封存的班；找不到 → 錯誤。\n- 身分證：正規化 + 檢查（BACKEND-147）；actor 無 `students:sensitive` 而該列有身分證或健康備註 → 錯誤「沒有權限匯入敏感欄位」。\n- 重複：學號已存在於 DB、學號在檔案中重複、身分證 HMAC 已存在於 DB（含封存）、身分證在檔案中重複 → 各自錯誤訊息（檔內重複時兩列都標）。\n- 每列以 `StudentCreateIn` 驗證，Pydantic 錯誤轉成繁中訊息。\n- 不寫入 DB、不 flush。\n\n**驗收標準**\n- 合法檔案全數 valid，資料正規化正確。\n- 標題缺欄、超過 500 列、空檔各回 422。\n- 各類列錯誤（國小 / 班級找不到、學號 / 身分證重複含檔內重複、格式錯、無敏感權限）正確標示且不影響其他列。\n- display 中的身分證被遮罩。",
+      "description": "建立 `apps/api/app/services/student_import_service.py`（domain_spec §2 `POST /students/import`：Excel 匯入，預覽 + 執行兩段）。移植 ivy `utils/excel_io.py::parse_excel` 與 `assert_xlsx_not_zip_bomb` 的防護（解壓縮大小與 sheet 格數上限）；欄位改為本專案學生欄位。\n\n```python\nIMPORT_COLUMNS = [\"學號*\", \"姓名*\", \"性別\", \"生日\", \"年級*\", \"就讀國小\", \"學校班級\", \"安親班班級\", \"狀態\", \"入學日\", \"備註\", \"身分證字號\", \"健康備註\"]\nMAX_IMPORT_ROWS = 500\n\n@dataclass(frozen=True)\nclass ImportRowResult:\n    row_number: int                     # Excel 列號（標題為第 1 列）\n    data: StudentCreateIn | None        # 驗證通過時的正規化資料\n    display: dict[str, str]             # 原始儲存格字串（敏感欄位遮罩），供前端呈現\n    errors: list[str]                   # 繁中錯誤訊息\n\n@dataclass(frozen=True)\nclass ImportPreview:\n    rows: list[ImportRowResult]\n    total: int\n    valid: int\n    invalid: int\n\ndef preview(session: Session, upload: ValidatedUpload, *, academic_year: int, actor: CurrentStaff) -> ImportPreview: ...\n```\n**規則**\n- 第一個工作表；標題列檢查：缺少必填欄（帶 `*`）或出現不在 IMPORT_COLUMNS 的欄名（非空白標題，比對時去頭尾空白）→ 422 `import_invalid_header`，details 固定為 `{\"missing\": [缺少的必填欄名...], \"unexpected\": [無法辨識的欄名...]}`（兩個 key 都一定存在，依標題列順序；選填欄缺少不算錯）。資料列 > 500 → 422 `import_too_many_rows`；0 列 → 422 `import_empty`。\n- 性別：男 / 女 / 其他 → male / female / other；狀態：在學 / 暫停 / 退班（預設在學）→ active / suspended / withdrawn。\n- 日期接受 Excel 日期儲存格或 `YYYY-MM-DD` / `YYYY/MM/DD` 字串。\n- 就讀國小：以 name 或 short_name 比對啟用中的 schools（不分大小寫）；找不到 → 錯誤「找不到國小：X」。\n- 安親班班級：以名稱比對 `academic_year` 學年度未封存的班；找不到 → 錯誤。\n- 身分證：正規化 + 檢查（BACKEND-147）；actor 無 `students:sensitive` 而該列有身分證或健康備註 → 錯誤「沒有權限匯入敏感欄位」。\n- 重複：學號已存在於 DB、學號在檔案中重複、身分證 HMAC 已存在於 DB（含封存）、身分證在檔案中重複 → 各自錯誤訊息（檔內重複時兩列都標）。\n- 每列以 `StudentCreateIn` 驗證，Pydantic 錯誤轉成繁中訊息。\n- 不寫入 DB、不 flush。\n\n**驗收標準**\n- 合法檔案全數 valid，資料正規化正確。\n- 標題缺必填欄或有無法辨識的欄名 → 422，details 為 `{missing, unexpected}`；超過 500 列、空檔各回 422。\n- 各類列錯誤（國小 / 班級找不到、學號 / 身分證重複含檔內重複、格式錯、無敏感權限）正確標示且不影響其他列。\n- display 中的身分證被遮罩。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_import_service.py",
       "source_ref": "BE:utils/excel_io.py::parse_excel",
@@ -5271,7 +5272,7 @@
         ],
         "red_cases": [
           "test_import_preview_valid：openpyxl 產生 3 列合法資料（含『低年級 A 班』『新生』）→ total 3、valid 3；rows[0].data.gender == 'male'、class_id == A.id、school_id == 新生.id",
-          "test_import_preview_header_and_limits：缺『姓名*』欄 → AppError 422 'import_invalid_header'，details.missing == ['姓名*']；501 列 → 422 'import_too_many_rows'；只有標題 → 422 'import_empty'",
+          "test_import_preview_header_and_limits：缺『姓名*』欄 → AppError 422 'import_invalid_header'，details == {'missing': ['姓名*'], 'unexpected': []}；多一欄『座號』→ details == {'missing': [], 'unexpected': ['座號']}；501 列 → 422 'import_too_many_rows'；只有標題 → 422 'import_empty'",
           "test_import_preview_lookup_errors：國小 '不存在國小' → 該列 errors 含 '找不到國小：不存在國小'；班名不存在 → 含 '找不到安親班班級'；其他列仍 valid",
           "test_import_preview_duplicates：學號與 DB 重複 → errors 含 '學號已存在'；檔內兩列同學號 → 兩列都含 '學號在檔案中重複'；身分證與封存學生相同 → 含 '身分證字號已存在'",
           "test_import_preview_sensitive_permission：actor 無 students:sensitive、某列有身分證 → 該列 errors 含 '沒有權限匯入敏感欄位'；display['身分證字號'] == 'A12****789'",
@@ -5678,7 +5679,7 @@
         "red_cases": [
           "test_admin_import_preview：上傳 3 列合法 xlsx、academic_year=115 → 200 valid == 3，students 筆數不變",
           "test_admin_import_execute：dry_run=false → 200 created == 3",
-          "test_admin_import_422：不帶 academic_year → 422；標題缺『學號*』→ 422 import_invalid_header",
+          "test_admin_import_422：不帶 academic_year → 422；標題缺『學號*』→ 422 import_invalid_header 且 error.details == {'missing': ['學號*'], 'unexpected': []}",
           "test_admin_import_401_403：無 cookie → 401；staff_client(permissions=['students:read']) → 403",
           "test_admin_import_business：上傳 PNG → 415；含錯誤列 dry_run=false → 409 import_has_errors"
         ],
@@ -9999,7 +10000,7 @@
     {
       "id": "BACKEND-402",
       "title": "建立接送模組 Pydantic schemas",
-      "description": "建立 `apps/api/app/schemas/pickup.py`（request `extra='forbid'`、strip；時間 `TimeHM` 同 BACKEND-371；時間點輸出 ISO8601 UTC，`HH:MM` 欄位為台北當地時間）。\n\n**請求（接送佇列）**\n- `ParentPickupRequestCreateIn`：student_id、expected_arrival_at（TimeHM | None）。\n- `StaffPickupRequestCreateIn`：student_id、expected_arrival_at（TimeHM | None）。\n- `PickupReplyIn`：reply_ready_eta（TimeHM | None）、reply_message（1~200 | None）；兩者至少一個。\n- `PickupCompleteIn`：method（`Literal['guardian','override']`）、guardian_id（method=guardian 時必填）、note（1~200，method=override 時必填）。代理接送的完成走 authorizations 端點。\n- `PickupCancelIn`：reason（≤200 | None）；body 可省略。\n- `PickupQueueQuery`：date（可空）；`RosterQuery`：date（可空）、class_id（可空）。\n\n**回應（接送佇列）**\n- `PickupStudentOut`：id、student_no、name、grade_level、class_id、class_name。\n- `PickupRequestOut`（後台）：id、student（PickupStudentOut）、service_date、source、requested_by_type、requested_by_name、expected_arrival_at（HH:MM | None）、status、homework_status_at_request、current_homework_status、current_ready_eta、reply_ready_eta（HH:MM | None）、reply_message、reply_source、replied_at、replied_by_name、needs_reply（bool：非終態且 reply_source 為 null 或 auto 且無 ETA 的「已通知老師」回覆）、arrived_at、completed_at、completed_by_name、completion_method、picked_up_by_name、cancelled_at、cancel_reason、created_at。\n- `ParentPickupRequestOut`：id、student_id、student_name、service_date、status、expected_arrival_at、reply_ready_eta、reply_message、reply_source（`'auto' | 'staff' | None`：系統自動回覆或老師回覆）、replied_at、arrived_at、completed_at、picked_up_by_name、cancelled_at、created_at、can_cancel（非終態）、can_mark_arrived（pending / acknowledged）。不含員工姓名。\n- `PickupQueueCountsOut`：pending、acknowledged、arrived、needs_reply；`PickupQueueOut`：date、open（list）、closed（list）、counts。\n- `RosterOpenRequestOut`：id、status、expected_arrival_at、needs_reply；`RosterStudentOut`：student_id、student_no、name、grade_level、attendance_status、check_in_at、check_out_at、leave_type、homework_status、ready_eta、open_request（RosterOpenRequestOut | None）、active_authorization_count；`RosterClassOut`：class_id（None 為未分班）、class_name、students；`RosterOut`：date、classes。\n\n**接送人 / 代理授權**\n- `PickupPersonCreateIn`（multipart form 欄位）：name（1~50）、relation（1~20）、phone（`^[0-9+\\-() ]{8,20}$`）；`PickupPersonOut`：id、student_id、name、relation、phone、photo_url、created_at。\n- `PickupAuthorizationCreateIn`：service_date、pickup_person_id（可空）、proxy_name（1~50 | None）、proxy_phone（同 phone 格式 | None）；model_validator：恰好一種模式（給 pickup_person_id 時不可給 proxy_*；不給時 proxy_name 與 proxy_phone 皆必填）。\n- `PickupAuthorizationOut`（家長）：id、student_id、service_date、pickup_person_id、proxy_name、proxy_phone、code_last4、status、effective_status（active 且 service_date < 今天 → 'expired'）、verified_at、verification_method、created_at。\n- `PickupAuthorizationCreatedOut`：authorization（PickupAuthorizationOut）、code（6 位明碼，只在建立時回傳一次）。\n- `StaffAuthorizationListQuery`：date（可空）、status（可空）。\n- `StaffAuthorizationOut`：PickupAuthorizationOut 欄位 + student（PickupStudentOut）、photo_url（常用接送人照片短效 URL | None）、code_attempts、locked（bool）、verified_by_name。\n- `VerifyCodeIn`：code（4~20，允許空白與連字號，正規化在 service）。\n- `OverrideCompleteIn`：note（1~200）。\n- `VisualMatchIn`（body 可省略）：note（≤200 | None，例如「已核對身分證」）。\n- `AuthorizationCompleteOut`：authorization（StaffAuthorizationOut）、request（PickupRequestOut）。\n\n**驗收標準**\n- PickupReplyIn 兩者皆空 → 422；PickupCompleteIn 條件必填生效。\n- PickupAuthorizationCreateIn 兩種模式互斥與必填生效；phone 格式。\n- extra 被拒。",
+      "description": "建立 `apps/api/app/schemas/pickup.py`（request `extra='forbid'`、strip；時間 `TimeHM` 同 BACKEND-371；時間點輸出 ISO8601 UTC，`HH:MM` 欄位為台北當地時間）。\n\n**請求（接送佇列）**\n- `ParentPickupRequestCreateIn`：student_id、expected_arrival_at（TimeHM | None）、arrived（bool，預設 false：「我已經到了」捷徑，建立後直接為 arrived）；arrived=true 時不可同時給 expected_arrival_at（422）。\n- `StaffPickupRequestCreateIn`：student_id、expected_arrival_at（TimeHM | None）。\n- `PickupReplyIn`：reply_ready_eta（TimeHM | None）、reply_message（1~200 | None）；兩者至少一個。\n- `PickupCompleteIn`：method（`Literal['guardian','override']`）、guardian_id（method=guardian 時必填）、note（1~200，method=override 時必填）。代理接送的完成走 authorizations 端點。\n- `PickupCancelIn`：reason（≤200 | None）；body 可省略。\n- `PickupQueueQuery`：date（可空）；`RosterQuery`：date（可空）、class_id（可空）。\n\n**回應（接送佇列）**\n- `PickupStudentOut`：id、student_no、name、grade_level、class_id、class_name。\n- `PickupRequestOut`（後台）：id、student（PickupStudentOut）、service_date、source、requested_by_type、requested_by_name、expected_arrival_at（HH:MM | None）、status、homework_status_at_request、current_homework_status、current_ready_eta、reply_ready_eta（HH:MM | None）、reply_message、reply_source、replied_at、replied_by_name、needs_reply（bool：非終態且 reply_source 為 null 或 auto 且無 ETA 的「已通知老師」回覆）、arrived_at、completed_at、completed_by_name、completion_method、picked_up_by_name、cancelled_at、cancel_reason、created_at。\n- `ParentPickupRequestOut`：id、student_id、student_name、service_date、status、expected_arrival_at、reply_ready_eta、reply_message、reply_source（`'auto' | 'staff' | None`：系統自動回覆或老師回覆）、replied_at、arrived_at、completed_at、picked_up_by_name、cancelled_at、created_at、can_cancel（非終態）、can_mark_arrived（pending / acknowledged）。不含員工姓名。\n- `PickupQueueCountsOut`：pending、acknowledged、arrived、needs_reply；`PickupQueueOut`：date、open（list）、closed（list）、counts。\n- `RosterOpenRequestOut`：id、status、expected_arrival_at、needs_reply；`RosterStudentOut`：student_id、student_no、name、grade_level、attendance_status、check_in_at、check_out_at、leave_type、homework_status、ready_eta、open_request（RosterOpenRequestOut | None）、active_authorization_count；`RosterClassOut`：class_id（None 為未分班）、class_name、students；`RosterOut`：date、classes。\n\n**接送人 / 代理授權**\n- `PickupPersonCreateIn`（multipart form 欄位）：name（1~50）、relation（1~20）、phone（`^[0-9+\\-() ]{8,20}$`）；`PickupPersonOut`：id、student_id、name、relation、phone、photo_url、created_at。\n- `PickupAuthorizationCreateIn`：service_date、pickup_person_id（可空）、proxy_name（1~50 | None）、proxy_phone（同 phone 格式 | None）；model_validator：恰好一種模式（給 pickup_person_id 時不可給 proxy_*；不給時 proxy_name 與 proxy_phone 皆必填）。\n- `PickupAuthorizationOut`（家長）：id、student_id、service_date、pickup_person_id、proxy_name、proxy_phone、code_last4、status、effective_status（active 且 service_date < 今天 → 'expired'）、verified_at、verification_method、created_at。\n- `PickupAuthorizationCreatedOut`：authorization（PickupAuthorizationOut）、code（6 位明碼，只在建立時回傳一次）。\n- `StaffAuthorizationListQuery`：date（可空）、status（可空）。\n- `StaffAuthorizationOut`：PickupAuthorizationOut 欄位 + student（PickupStudentOut）、photo_url（常用接送人照片短效 URL | None）、code_attempts、locked（bool）、verified_by_name。\n- `VerifyCodeIn`：code（4~20，允許空白與連字號，正規化在 service）。\n- `OverrideCompleteIn`：note（1~200）。\n- `VisualMatchIn`（body 可省略）：note（≤200 | None，例如「已核對身分證」）。\n- `AuthorizationCompleteOut`：authorization（StaffAuthorizationOut）、request（PickupRequestOut）。\n\n**驗收標準**\n- PickupReplyIn 兩者皆空 → 422；PickupCompleteIn 條件必填生效。\n- PickupAuthorizationCreateIn 兩種模式互斥與必填生效；phone 格式。\n- extra 被拒。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/pickup.py",
       "source_ref": "BE:api/dismissal_calls.py::DismissalCallOut",
@@ -10022,7 +10023,8 @@
           "test_pickup_schemas_reply_requires_one：PickupReplyIn.model_validate({}) → ValidationError；{'reply_ready_eta':'17:30'} 通過；reply_message='x'*201 → ValidationError",
           "test_pickup_schemas_complete_conditional：PickupCompleteIn(method='guardian') → ValidationError（缺 guardian_id）；PickupCompleteIn(method='override') → ValidationError（缺 note）；method='code' → ValidationError",
           "test_pickup_schemas_authorization_modes：{'service_date':'2026-09-01','pickup_person_id':u,'proxy_name':'李阿姨'} → ValidationError；{'service_date':..., 'proxy_name':'李阿姨'}（缺 phone）→ ValidationError；proxy_phone='abc' → ValidationError；只給 pickup_person_id → 通過",
-          "test_pickup_schemas_extra：ParentPickupRequestCreateIn.model_validate({'student_id':u,'note':'x'}) → ValidationError"
+          "test_pickup_schemas_extra：ParentPickupRequestCreateIn.model_validate({'student_id':u,'note':'x'}) → ValidationError",
+          "test_pickup_schemas_arrived_shortcut：ParentPickupRequestCreateIn(student_id=u, arrived=True).arrived is True；同時給 expected_arrival_at='17:30' → ValidationError；StaffPickupRequestCreateIn.model_validate({'student_id':u,'arrived':True}) → ValidationError"
         ],
         "run": "just test apps/api/tests/unit/schemas/test_pickup_schemas.py -k \"test_pickup_schemas_\"",
         "notes": ""
@@ -10149,7 +10151,7 @@
     {
       "id": "BACKEND-406",
       "title": "實作 PickupRequestService.create_request：家長「我要來接」/ 員工代建（自動回覆、同日唯一）",
-      "description": "在 `apps/api/app/services/pickup/requests.py` 實作（domain_spec M7 流程 2、7）：\n```python\ndef create_request(session: Session, data: ParentPickupRequestCreateIn | StaffPickupRequestCreateIn, *, actor: Actor, clock: Clock) -> PickupRequest: ...\n```\n1. 學生與資格：\n   - 家長：`assert_parent_owns_student(..., for_write=True)`（404 / 409 `student_not_active`）；該家長對此學生的 guardian `can_pickup = false` → 403 `pickup_not_allowed`。\n   - 員工：`get_student_or_404`；`status != 'active'` → 409 `student_not_active`。\n2. d = today；`is_service_day` 為 False → 409 `not_service_day`。\n3. 家長限定：現在台北時間不在 `pickup.window` 的 `request_start`~`request_end`（BACKEND-108 `get_setting(PICKUP_WINDOW)`）→ 409 `pickup_window_closed`，details 帶時段。員工代建不受時段限制。\n4. expected_arrival_at（HH:MM）→ `combine_taipei(d, t)`：早於 now − 5 分鐘 → 422 `expected_arrival_in_past`；晚於 `latest_expected_arrival` → 422 `expected_arrival_too_late`。\n5. 當日出勤狀態為 leave / absent / left → 409 `student_not_available`（details.attendance_status）；expected / present / 無列皆可（家長可在孩子到班前預告）。\n6. 自動回覆：讀當日 `homework_daily_progress` → `compute_auto_reply(snapshot, get_setting(HOMEWORK_DEFAULTS))`（BACKEND-403）；寫入 homework_status_at_request、reply_ready_eta、reply_message、reply_source；reply_source='auto' 時 replied_at=now。\n7. 寫入：source / requested_by_type = parent 或 staff、requested_by_id = actor.id、status='pending'；`with session.begin_nested()` 內 add + flush；`IntegrityError` 且 constraint 為 `uq_pickup_requests_one_open` → 查出既有非終態請求 → 409 `pickup_request_exists`，details `{'request_id','status'}`。\n8. `enqueue(Event.PICKUP_REQUESTED, recipients=staff_recipients(permission=Permission.PICKUP_OPERATE), payload={'student_id','student_name','request_id','expected_arrival_at'(有值時 HH:MM)})`：每一筆新請求都通知員工（in_app + ws）；`needs_staff_reply` 時員工端以 needs_reply 標示待回覆。\n9. `publish_request_change`（BACKEND-404）。自動回覆直接放在回應中給家長，不另發 pickup.replied。\n- **並發**：家長連點或家長與員工同時建立 → partial unique index `uq_pickup_requests_one_open` 讓後到者在前者 commit 後拋 23505 → 409；以 savepoint 包住，不污染外層交易。ivy 的 advisory lock 與 client_request_id 因此不需要。\n- 移植 ivy `api/parent_portal/dismissal_calls.py::create_dismissal_notice` 的資格檢查（can_pickup）與「伺服器計算時間、不信任 client 絕對時間」；`api/dismissal_calls.py::_db_create_dismissal_call` 的員工代建；去掉 classroom_id、LINE 群組推播、client_request_id。\n\n**驗收標準**\n- 三種自動回覆情境寫入正確（done / 有 ETA / 無 ETA）；無 ETA 時 needs_reply。\n- 每筆新請求員工收到 pickup.requested。\n- 同日已有非終態請求 → 409 pickup_request_exists；前一筆完成後可再建。\n- 家長：can_pickup=false 403、時段外 409、他人小孩 404；員工代建不受時段限制。\n- 抵達時間過去 / 太晚 422；請假或缺席 409；非營業日 409。\n- 並發兩次建立 → 一筆成功、一筆 409。",
+      "description": "在 `apps/api/app/services/pickup/requests.py` 實作（domain_spec M7 流程 2、7）：\n```python\ndef create_request(session: Session, data: ParentPickupRequestCreateIn | StaffPickupRequestCreateIn, *, actor: Actor, clock: Clock) -> PickupRequest: ...\n```\n1. 學生與資格：\n   - 家長：`assert_parent_owns_student(..., for_write=True)`（404 / 409 `student_not_active`）；該家長對此學生的 guardian `can_pickup = false` → 403 `pickup_not_allowed`。\n   - 員工：`get_student_or_404`；`status != 'active'` → 409 `student_not_active`。\n2. d = today；`is_service_day` 為 False → 409 `not_service_day`。\n3. 家長限定：現在台北時間不在 `pickup.window` 的 `request_start`~`request_end`（BACKEND-108 `get_setting(PICKUP_WINDOW)`）→ 409 `pickup_window_closed`，details 帶時段。員工代建不受時段限制。\n4. 「我已經到了」捷徑（只有家長，`data.arrived == True`）：略過抵達時間檢查，expected_arrival_at 為 null；其餘檢查（資格、營業日、時段、出勤）照常。\n   一般情況 expected_arrival_at（HH:MM）→ `combine_taipei(d, t)`：早於 now − 5 分鐘 → 422 `expected_arrival_in_past`；晚於 `latest_expected_arrival` → 422 `expected_arrival_too_late`。\n5. 當日出勤狀態為 leave / absent / left → 409 `student_not_available`（details.attendance_status）；expected / present / 無列皆可（家長可在孩子到班前預告）。\n6. 自動回覆：讀當日 `homework_daily_progress` → `compute_auto_reply(snapshot, get_setting(HOMEWORK_DEFAULTS))`（BACKEND-403）；寫入 homework_status_at_request、reply_ready_eta、reply_message、reply_source；reply_source='auto' 時 replied_at=now。\n7. 寫入：source / requested_by_type = parent 或 staff、requested_by_id = actor.id、status='pending'（arrived 捷徑時 status='arrived'、arrived_at=now，滿足 DB-025 ck_pickup_requests_arrived）；`with session.begin_nested()` 內 add + flush；`IntegrityError` 且 constraint 為 `uq_pickup_requests_one_open` → 查出既有非終態請求 → 409 `pickup_request_exists`，details `{'request_id','status'}`。\n8. `enqueue(Event.PICKUP_REQUESTED, recipients=staff_recipients(permission=Permission.PICKUP_OPERATE), payload={'student_id','student_name','request_id','expected_arrival_at'(有值時 HH:MM)})`：每一筆新請求都通知員工（in_app + ws）；`needs_staff_reply` 時員工端以 needs_reply 標示待回覆。arrived 捷徑時另發 `enqueue(Event.PICKUP_ARRIVED, recipients=staff_recipients(permission=Permission.PICKUP_OPERATE), payload={'student_id','student_name','request_id'})`（ws transient，員工端提示音），與 BACKEND-409「我到了」相同。\n9. `publish_request_change`（BACKEND-404）。自動回覆直接放在回應中給家長，不另發 pickup.replied。\n- **並發**：家長連點或家長與員工同時建立 → partial unique index `uq_pickup_requests_one_open` 讓後到者在前者 commit 後拋 23505 → 409；以 savepoint 包住，不污染外層交易。ivy 的 advisory lock 與 client_request_id 因此不需要。\n- 移植 ivy `api/parent_portal/dismissal_calls.py::create_dismissal_notice` 的資格檢查（can_pickup）與「伺服器計算時間、不信任 client 絕對時間」；`api/dismissal_calls.py::_db_create_dismissal_call` 的員工代建；去掉 classroom_id、LINE 群組推播、client_request_id。\n\n**驗收標準**\n- 三種自動回覆情境寫入正確（done / 有 ETA / 無 ETA）；無 ETA 時 needs_reply。\n- 每筆新請求員工收到 pickup.requested。\n- 同日已有非終態請求 → 409 pickup_request_exists（details 帶既有 request_id 與 status，家長端改對既有請求按「我到了」）；前一筆完成後可再建。\n- arrived 捷徑：直接 arrived、arrived_at=now、自動回覆照常計算；員工收到 pickup.requested 與 pickup.arrived（transient）。\n- 家長：can_pickup=false 403、時段外 409、他人小孩 404；員工代建不受時段限制。\n- 抵達時間過去 / 太晚 422；請假或缺席 409；非營業日 409。\n- 並發兩次建立 → 一筆成功、一筆 409。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": "BE:api/parent_portal/dismissal_calls.py::create_dismissal_notice",
@@ -10166,7 +10168,8 @@
         "BACKEND-206",
         "BACKEND-205",
         "BACKEND-102",
-        "BACKEND-002"
+        "BACKEND-002",
+        "BACKEND-224"
       ],
       "suggested_model": "fable-5",
       "risk_notes": "",
@@ -10184,7 +10187,9 @@
           "test_create_pickup_request_parent_rules：guardian can_pickup=False → 403 'pickup_not_allowed'；台北 10:00（request_start 12:00 前）→ 409 'pickup_window_closed'；staff actor 同時間 → 成功；他人小孩 → 404 'student_not_found'",
           "test_create_pickup_request_arrival_validation：expected_arrival_at='15:00'（now 16:00）→ 422 'expected_arrival_in_past'；'19:30'（latest_expected_arrival 19:00）→ 422 'expected_arrival_too_late'",
           "test_create_pickup_request_attendance：今日出勤 leave → 409 'student_not_available'；ClosedDay(today) → 409 'not_service_day'",
-          "test_create_pickup_request_concurrent：committing session 家長與員工兩條連線同時建立同一學生 → 一個成功、另一個 AppError 409 'pickup_request_exists'，最終非終態請求 1 筆"
+          "test_create_pickup_request_concurrent：committing session 家長與員工兩條連線同時建立同一學生 → 一個成功、另一個 AppError 409 'pickup_request_exists'，最終非終態請求 1 筆",
+          "test_create_pickup_request_arrived_shortcut：家長 create(arrived=True)、progress in_progress ETA 17:30 → status 'arrived'、arrived_at == fake_clock.now()、expected_arrival_at is None、reply_message 以 '預計 17:30 可接送' 開頭；monkeypatch push_to_recipient_after_commit，commit 後 pickup:operate 員工收到 type 'notification.transient' 且 data.event == 'pickup.arrived'；notifications(event='pickup.requested') ≥ 1 列",
+          "test_create_pickup_request_arrived_shortcut_existing：已有 acknowledged 請求 → create(arrived=True) → 409 'pickup_request_exists'，details == {'request_id': 既有 id, 'status': 'acknowledged'}，既有請求狀態不變"
         ],
         "run": "just test-int apps/api/tests/integration/services/pickup/test_pickup_requests.py -k \"test_create_pickup_request_\"",
         "notes": ""
@@ -10198,7 +10203,7 @@
     {
       "id": "BACKEND-407",
       "title": "實作 PickupRequestService.reply_request：員工覆寫回覆（通知家長 pickup.replied）",
-      "description": "在 `apps/api/app/services/pickup/requests.py` 實作（domain_spec M7 流程 3：員工可覆寫回覆，`reply_source = staff`）：\n```python\ndef reply_request(session: Session, request_id: UUID, data: PickupReplyIn, *, actor: CurrentStaff, clock: Clock) -> PickupRequest: ...\n```\n1. reply_message 未給 → 以 `f\"預計 {HH:MM} 可接送\"` 組出；兩者都給則照用。\n2. `transition_request(from=OPEN_STATUSES, to_status=None, values={reply_ready_eta, reply_message, reply_source:'staff', replied_by: actor.id, replied_at: now})`（BACKEND-405；不改變狀態）。\n3. requested_by_type == 'parent' → `enqueue(Event.PICKUP_REPLIED, recipients=[Recipient('parent', requested_by_id)], payload={'student_id','student_name','request_id','reply_message'})`；員工代建的請求沒有發起家長，不通知。\n4. `publish_request_change`。\n\n**驗收標準**\n- 回覆欄位寫入、reply_source staff、狀態不變。\n- 只給 ETA 時自動組訊息。\n- 家長發起的請求通知發起家長；員工代建不通知。\n- 終態請求 409；不存在 404。",
+      "description": "在 `apps/api/app/services/pickup/requests.py` 實作（domain_spec M7 流程 3：員工可覆寫回覆，`reply_source = staff`）：\n```python\ndef reply_request(session: Session, request_id: UUID, data: PickupReplyIn, *, actor: CurrentStaff, clock: Clock) -> PickupRequest: ...\n```\n1. reply_message 未給 → 以 `f\"預計 {HH:MM} 可接送\"` 組出；兩者都給則照用。\n2. `transition_request(from=OPEN_STATUSES, to_status=None, values={reply_ready_eta, reply_message, reply_source:'staff', replied_by: actor.id, replied_at: now})`（BACKEND-405；不改變狀態）。\n3. **同步寫回作業進度**：data.reply_ready_eta 有值時，於同一交易 `lock_progress_row(session, student_id, request.service_date)`（BACKEND-373）→ `ready_eta = reply_ready_eta`、`eta_updated_by = actor.id`、`eta_updated_at = now`（值相同時不改），再 `broadcast_homework_snapshot`（BACKEND-374）讓作業看板與家長端作業卡同步。**不**發 `homework.eta_updated`（家長已收到下一步的 pickup.replied，避免重複通知），也不呼叫 sync_open_request_reply（本請求已是 staff 回覆）。只給 reply_message 時不動作業進度。\n4. requested_by_type == 'parent' → `enqueue(Event.PICKUP_REPLIED, recipients=[Recipient('parent', requested_by_id)], payload={'student_id','student_name','request_id','reply_message'})`；員工代建的請求沒有發起家長，不通知。\n5. `publish_request_change`。\n\n**驗收標準**\n- 回覆欄位寫入、reply_source staff、狀態不變。\n- 只給 ETA 時自動組訊息。\n- 回覆的 ETA 同交易寫回 homework_daily_progress.ready_eta 並推作業看板 ws；不產生 homework.eta_updated；只給訊息時作業進度不變。\n- 家長發起的請求通知發起家長；員工代建不通知。\n- 終態請求 409；不存在 404。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": null,
@@ -10208,7 +10213,9 @@
         "BACKEND-405",
         "BACKEND-404",
         "BACKEND-206",
-        "BACKEND-402"
+        "BACKEND-402",
+        "BACKEND-373",
+        "BACKEND-374"
       ],
       "suggested_model": "opus-5",
       "risk_notes": "",
@@ -10221,7 +10228,10 @@
         "red_cases": [
           "test_reply_pickup_request_success：pending（家長 p 發起）→ reply(reply_ready_eta=time(18,0)) → reply_message == '預計 18:00 可接送'、reply_source == 'staff'、replied_by == actor.id、status 仍 'pending'；notifications(event='pickup.replied', recipient_id=p.id) 1 列",
           "test_reply_pickup_request_staff_created_no_notify：source staff 的請求 → 回覆成功，notifications(event='pickup.replied') 0 列",
-          "test_reply_pickup_request_terminal：completed → 409 'invalid_pickup_status'；uuid4() → 404 'pickup_request_not_found'"
+          "test_reply_pickup_request_terminal：completed → 409 'invalid_pickup_status'；uuid4() → 404 'pickup_request_not_found'",
+          "test_reply_pickup_request_writes_back_eta：王小明今日 progress ready_eta 17:00 → reply(reply_ready_eta=time(18,0)) → homework_daily_progress.ready_eta == time(18,0)、eta_updated_by == actor.id；notifications(event='homework.eta_updated') 0 列、pickup.replied 1 列；monkeypatch publish_threadsafe，commit 後 admin:homework 收到 type 'homework.progress_updated' 且 progress.ready_eta == '18:00'",
+          "test_reply_pickup_request_message_only_keeps_progress：reply(reply_message='稍等十分鐘') → progress.ready_eta 仍 17:00、eta_updated_at 不變；無 progress 列時 reply(reply_ready_eta=18:00) → 建立 progress 列 ready_eta 18:00、overall_status 'not_started'",
+          "test_reply_pickup_request_rollback_atomic：reply 後 db_session.rollback() → 請求 reply_source 與 progress.ready_eta 皆回原值"
         ],
         "run": "just test-int apps/api/tests/integration/services/pickup/test_pickup_requests.py -k \"test_reply_pickup_request_\"",
         "notes": ""
@@ -11458,7 +11468,7 @@
     {
       "id": "BACKEND-440",
       "title": "實作 POST /api/parent/pickup/requests endpoint（我要來接）",
-      "description": "建立 / 沿用 `apps/api/app/api/parent/pickup.py`（`router = APIRouter(tags=['parent-pickup'])`，掛到 parent_router）。寫入型 handler 呼叫 service 後自行 `db.commit()`。\n- `POST /api/parent/pickup/requests`，`Depends(get_current_parent)`，body `ParentPickupRequestCreateIn`（student_id 由 service 以 assert_parent_owns_student for_write 驗證） → BACKEND-406 → commit → 201 `ParentPickupRequestOut`（含自動回覆）。\n\n**驗收標準**\n- 成功；422；401（無 cookie / 員工 cookie）；IDOR：他人小孩或他人資源與不存在 id 回相同 404；業務錯誤碼如 red_cases。",
+      "description": "建立 / 沿用 `apps/api/app/api/parent/pickup.py`（`router = APIRouter(tags=['parent-pickup'])`，掛到 parent_router）。寫入型 handler 呼叫 service 後自行 `db.commit()`。\n- `POST /api/parent/pickup/requests`，`Depends(get_current_parent)`，body `ParentPickupRequestCreateIn`（student_id 由 service 以 assert_parent_owns_student for_write 驗證） → BACKEND-406 → commit → 201 `ParentPickupRequestOut`（含自動回覆）。body 帶 `arrived: true` 時為「我已經到了」捷徑：建立後直接 arrived，員工端提示音；已有進行中請求時 409 `pickup_request_exists`，error.details.request_id 為既有請求，家長端改呼叫 BACKEND-442「我到了」。\n\n**驗收標準**\n- 成功；422；401（無 cookie / 員工 cookie）；IDOR：他人小孩或他人資源與不存在 id 回相同 404；業務錯誤碼如 red_cases。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/dismissal_calls.py::create_dismissal_notice",
@@ -11480,11 +11490,11 @@
           "integration"
         ],
         "red_cases": [
-          "test_parent_pickup_create_success：作業已 done → 201 reply_message == '作業已完成，可以接送'、can_mark_arrived True",
-          "test_parent_pickup_create_422：expected_arrival_at='17:3' → 422；多帶 source → 422",
+          "test_parent_pickup_create_success：作業已 done → 201 reply_message == '作業已完成，可以接送'、can_mark_arrived True；另一學生帶 {'student_id':..., 'arrived': true} → 201 status == 'arrived'、can_mark_arrived False",
+          "test_parent_pickup_create_422：expected_arrival_at='17:3' → 422；多帶 source → 422；arrived=true 且給 expected_arrival_at → 422",
           "test_parent_pickup_create_401：無 cookie → 401；staff cookie → 401",
           "test_parent_pickup_create_idor：student_id 為他人小孩 → 404 student_not_found，pickup_requests 筆數不變",
-          "test_parent_pickup_create_business：同日已有 → 409 pickup_request_exists；can_pickup=false → 403 pickup_not_allowed；時段外 → 409 pickup_window_closed"
+          "test_parent_pickup_create_business：同日已有 pending 時帶 arrived=true → 409 pickup_request_exists 且 error.details.request_id == 既有 id；can_pickup=false → 403 pickup_not_allowed；時段外 → 409 pickup_window_closed"
         ],
         "run": "just test-int apps/api/tests/integration/api/parent/test_pickup_endpoints.py -k \"test_parent_pickup_create_\"",
         "notes": "家長端無權限碼，403 以 IDOR 404 取代（業務上的 403 pickup_not_allowed 另測）。"
@@ -14134,6 +14144,81 @@
         ],
         "run": "just test-int apps/api/tests/integration/api/parent/test_children_endpoints.py -k \"test_parent_child_today_\"",
         "notes": "家長端無權限碼，403 以 IDOR 404 取代。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-527",
+      "title": "實作 StaffUserService.list_staff_options：啟用員工下拉選項（id、display_name）",
+      "description": "在 `apps/api/app/services/staff_user_service.py` 實作（後台班級管理頁指派負責老師用；行政 clerk 沒有 staff:read 也要能指派）：\n```python\ndef list_staff_options(session: Session) -> list[StaffOptionOut]: ...\n```\n- 只回 `is_active = true` 的員工，依 display_name、username 排序；不分頁（安親班員工數量小）。\n- 只回 id、display_name；不回 username、角色、權限、聯絡資料（避免繞過 staff:read 取得帳號資訊）。\n\n**驗收標準**\n- 停用帳號不出現；排序正確。\n- 回傳物件只有 id 與 display_name 兩個欄位。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/services/staff_user_service.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "BACKEND-086",
+        "BACKEND-030",
+        "BACKEND-022"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/services/test_staff_user_service.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_list_staff_options：建立 林老師（啟用）、陳行政（啟用）、王老師（停用）→ 回傳 display_name 依序含 '林老師'、'陳行政'（以排序斷言），不含 '王老師'",
+          "test_list_staff_options_fields：每筆 model_dump() 的 keys == {'id','display_name'}"
+        ],
+        "run": "just test-int apps/api/tests/integration/services/test_staff_user_service.py -k \"test_list_staff_options\"",
+        "notes": ""
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-528",
+      "title": "實作 GET /api/admin/staff-users/options endpoint（班級老師指派下拉）",
+      "description": "在 `apps/api/app/api/admin/staff_users.py`（BACKEND-093 建立的 router）新增：\n- `GET /api/admin/staff-users/options`，`Depends(require_any_permission(Permission.CLASSES_WRITE, Permission.STAFF_READ))` → BACKEND-527 → 200 `list[StaffOptionOut]`。\n- **路由順序**：必須註冊在 `GET /staff-users/{staff_id}`（BACKEND-095）之前，否則 `options` 會被當成 staff_id 而回 422。\n- 掛的是 require_any_permission，BACKEND-073 的 route audit（`admin_routes_without_permission`）會自動涵蓋；本 task 的測試再以 create_app() 斷言此路由不在未守衛清單中。\n\n**驗收標準**\n- 有 classes:write 或 staff:read 任一即可 200；回 `[{id, display_name}]` 且只含啟用員工。\n- 兩者皆無 → 403；401；路由不被 `/{staff_id}` 攔截；route audit 通過。",
+      "granularity_unit": "endpoint",
+      "target_path": "apps/api/app/api/admin/staff_users.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "BACKEND-527",
+        "BACKEND-093",
+        "BACKEND-095",
+        "BACKEND-073",
+        "BACKEND-023"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/api/admin/test_staff_users_endpoints.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_admin_staff_options_success：staff_client(permissions=['classes:write']) GET /api/admin/staff-users/options → 200，每筆 keys == {'id','display_name'}，不含停用員工；staff_client(permissions=['staff:read']) → 200",
+          "test_admin_staff_options_route_order：GET /api/admin/staff-users/options 不回 422（未被 /{staff_id} 攔截）；GET /api/admin/staff-users/abc → 422",
+          "test_admin_staff_options_401：無 cookie → 401",
+          "test_admin_staff_options_403：staff_client(permissions=['classes:read']) → 403 permission_denied，details.required == ['classes:write','staff:read']",
+          "test_admin_staff_options_route_audit：'/api/admin/staff-users/options' not in admin_routes_without_permission(create_app())"
+        ],
+        "run": "just test-int apps/api/tests/integration/api/admin/test_staff_users_endpoints.py -k \"test_admin_staff_options_\"",
+        "notes": "無 query / body 參數，422 不適用；以路由順序案例確認 path 不被 /{staff_id} 的 UUID 驗證攔截。"
       },
       "review": {
         "status": "pending",

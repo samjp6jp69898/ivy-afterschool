@@ -64,6 +64,7 @@
 | B085 | GET | `/permissions` | roles:read 或 staff:read | → `{groups: [{key, label, permissions: [{code, label}]}]}` |
 | B093 | GET | `/staff-users?q&role_id&is_active` | staff:read | → `Page[StaffUser]` |
 | B094 | POST | `/staff-users` | staff:write | `{username, display_name, phone?, email?, role_id, extra_permissions[], revoked_permissions[]}` → 201 `{user: StaffUser, temp_password}` |
+| B528 | GET | `/staff-users/options` | classes:write 或 staff:read | → `[{id, display_name}]`（只含啟用員工；班級負責老師指派下拉） |
 | B095 | GET | `/staff-users/{id}` | staff:read | → `StaffUser` |
 | B096 | PATCH | `/staff-users/{id}` | staff:write | `{display_name?, phone?, email?, role_id?, extra_permissions?, revoked_permissions?}` → `StaffUser` |
 | B097 | POST | `/staff-users/{id}/reset-password` | staff:write | → `{temp_password}` |
@@ -75,7 +76,7 @@
 
 - `Role = {id, code, name, description, is_system, permissions[], effective_permissions[], staff_count, created_at, updated_at}`
 - `StaffUser = {id, username, display_name, phone, email, role: {id, code, name}, extra_permissions[], revoked_permissions[], effective_permissions[], is_active, must_change_password, last_login_at, created_at}`
-- 設定 key：`org.profile`、`org.service_hours`、`pickup.window`、`homework.defaults`、`notification.toggles`、`line.liff`（`{liff_id, channel_id}`）、`line.messaging`（secret）。表單依 `json_schema` 渲染。
+- 設定 key：`org.profile`、`org.service_hours`、`pickup.window`、`homework.defaults`、`notification.toggles`、`line.liff`（`{liff_id, channel_id}`）、`line.messaging`（secret）。表單依 `json_schema` 渲染：每個欄位都有中文 `title`（標籤）與 `description`（說明），`notification.toggles` 的各事件中文名稱在 `json_schema['x-labels']`。
 
 ## 5. 後台：參考資料（`/api/admin/{resource}`，resource = `subjects` / `exam-types` / `schools` / `closed-days`）
 
@@ -105,7 +106,7 @@
 | B163 | POST | `/students/{id}/archive` | students:write | → `StudentDetail` |
 | B164 | POST | `/students/{id}/photo` | students:write | multipart `file` → `{photo_url}` |
 | B165 | POST | `/students/promote-grade` | students:write | `{from_academic_year, dry_run, expected_total?, withdrawn_on?}` → 預覽 `{from_academic_year, to_academic_year, promote[], graduate[], total, already_promoted}` 或結果 `{promoted, graduated}`（班級不變） |
-| B166 | POST | `/students/import` | students:write | multipart `file`(xlsx)、`academic_year`、`dry_run` → 預覽 `{rows: [{row_number, display, errors[]}], total, valid, invalid}` 或結果 `{created, student_ids[]}` |
+| B166 | POST | `/students/import` | students:write | multipart `file`(xlsx)、`academic_year`、`dry_run` → 預覽 `{rows: [{row_number, display, errors[]}], total, valid, invalid}` 或結果 `{created, student_ids[]}`；標題錯誤 422 `import_invalid_header`，details `{missing: [缺少的必填欄名], unexpected: [無法辨識的欄名]}`；有錯誤列時 dry_run=false 回 409 `import_has_errors` |
 | B173 | GET | `/students/{id}/guardians` | students:read | → `Guardian[]` |
 | B174 | POST | `/students/{id}/guardians` | guardians:write | `{name, relation, phone?, is_primary, can_pickup, receives_notifications}` → 201 `Guardian` |
 | B175 | PATCH | `/guardians/{id}` | guardians:write | 部分欄位 → `Guardian` |
@@ -167,7 +168,7 @@
 |---|---|---|---|---|
 | B429 | GET | `/pickup/queue?date` | pickup:read | → `{date, open: PickupRequest[], closed: PickupRequest[], counts: {pending, acknowledged, arrived, needs_reply}}` |
 | B430 | POST | `/pickup/requests` | pickup:operate | `{student_id, expected_arrival_at?: "HH:MM"}` → 201 `PickupRequest`（source=staff）；409 `pickup_request_exists` / `student_not_available` / `not_service_day` |
-| B431 | POST | `/pickup/requests/{id}/reply` | pickup:operate | `{reply_ready_eta?: "HH:MM", reply_message?}`（至少一個）→ `PickupRequest` |
+| B431 | POST | `/pickup/requests/{id}/reply` | pickup:operate | `{reply_ready_eta?: "HH:MM", reply_message?}`（至少一個）→ `PickupRequest`；有 reply_ready_eta 時同步寫回該生作業進度的 ready_eta（作業看板經 ws `homework.progress_updated` 更新，不另發 homework.eta_updated） |
 | B432 | POST | `/pickup/requests/{id}/acknowledge` | pickup:operate | → `PickupRequest`（pending → acknowledged） |
 | B433 | POST | `/pickup/requests/{id}/complete` | pickup:operate（method=override 另需 pickup:override） | `{method: "guardian"\|"override", guardian_id?, note?}` → `PickupRequest`；422 `invalid_guardian`；409 `guardian_cannot_pickup` |
 | B434 | POST | `/pickup/requests/{id}/cancel` | pickup:operate | `{reason?}` → `PickupRequest` |
@@ -240,7 +241,7 @@
 | B357 | POST | `/leaves/{id}/cancel` | → `ParentLeave`：未開始（含今天開始）整筆 cancelled；已開始則取消今天起的日子（end_date 改為昨天、status 仍 active）；409 `leave_already_ended` / `leave_not_active` |
 | B358 | POST | `/leaves/{id}/attachments` | multipart `file`（jpg/png/webp/heic/pdf，≤10 MB，每筆最多 3 個）→ 201 `{id, mime_type, size_bytes, created_at, url}`；413 / 415 / 409 `attachment_limit_reached` |
 | B391 | GET | `/children/{id}/homework?date` | → `{student_id, date, items: [{title, subject_name, status}], overall_status, ready_eta, note, updated_at}` |
-| B440 | POST | `/pickup/requests` | `{student_id, expected_arrival_at?: "HH:MM"}` → 201 `ParentPickupRequest`（含自動回覆）；403 `pickup_not_allowed`；409 `pickup_request_exists` / `pickup_window_closed` / `student_not_available` / `not_service_day`；422 `expected_arrival_in_past` / `expected_arrival_too_late` |
+| B440 | POST | `/pickup/requests` | `{student_id, expected_arrival_at?: "HH:MM", arrived?: bool}` → 201 `ParentPickupRequest`（含自動回覆；`arrived: true` 為「我已經到了」捷徑，直接進 arrived，不可同時給 expected_arrival_at）；已有進行中請求 → 409 `pickup_request_exists`（details.request_id 為既有請求，改呼叫 B442）；403 `pickup_not_allowed`；409 `pickup_request_exists` / `pickup_window_closed` / `student_not_available` / `not_service_day`；422 `expected_arrival_in_past` / `expected_arrival_too_late` |
 | B441 | GET | `/pickup/requests/today` | → `ParentPickupRequest[]`（所有小孩今日，含終態） |
 | B442 | POST | `/pickup/requests/{id}/arrived` | → `ParentPickupRequest`（我到了） |
 | B443 | POST | `/pickup/requests/{id}/cancel` | `{reason?}` → `ParentPickupRequest` |
