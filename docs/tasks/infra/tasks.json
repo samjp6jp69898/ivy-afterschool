@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 21,
-  "last_updated": "2026-10-02T08:25:45Z",
+  "version": 22,
+  "last_updated": "2026-10-02T08:26:18Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -343,7 +343,8 @@
           "test_db_fixtures_rejects_remote_url：pytester 以 TEST_DB_BACKEND_URL='postgresql+psycopg://u:p@db.example.com:5432/postgres' 執行任一使用 db_session 的測試 → ret == 2，輸出含 '只允許本機 loopback DB'",
           "test_db_fixtures_db_down_exits_once：pytester 以 TEST_DB_BACKEND_URL='postgresql+psycopg://app_backend:app_backend_local@127.0.0.1:1/postgres' 執行兩個使用 db_session 的測試 → ret == 2，輸出含 'just db-start' 恰好一次，且沒有任何測試改以 owner 連線執行（passed == 0）",
           "test_db_fixtures_refuses_owner_role：pytester 以 TEST_DB_BACKEND_URL 設為 owner URL（postgres:postgres@127.0.0.1:54342）執行一個使用 db_session 的測試 → ret == 2，輸出含 '禁止以 owner 角色繞過 RLS' 與 'postgres'",
-          "test_db_fixtures_session_is_app_backend：db_session.execute(text('select current_user')).scalar() → 'app_backend'"
+          "test_db_fixtures_session_is_app_backend：db_session.execute(text('select current_user')).scalar() → 'app_backend'",
+          "test_db_fixtures_rejects_connected_non_loopback：pytester 以 loopback 的 TEST_DB_BACKEND_URL（通過連線前 assert_loopback）執行一個使用 db_session 的測試，並在子行程 conftest 以 monkeypatch 讓連線後取得的 driver_connection.info.hostaddr 回 '10.0.0.11' → ret == 2，輸出含 '10.0.0.11'，passed == 0（驗證 assert_connected_loopback 確實接在連線之後、查角色之前）"
         ],
         "run": "just test-int apps/api/tests/integration/infra/test_db_fixtures.py -k db_fixtures",
         "notes": ""

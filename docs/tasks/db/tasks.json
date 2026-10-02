@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 9,
-  "last_updated": "2026-10-02T08:22:30Z",
+  "version": 10,
+  "last_updated": "2026-10-02T08:26:18Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -72,7 +72,8 @@
           "test_fixture_pg_error_matches_sqlstate：在 pg_error('23505') 內對同一 unique 值插入兩次 → 通過；在 pg_error('23514') 內觸發 unique violation → pytest 判定失敗（以 pytest.raises(AssertionError) 包住斷言）",
           "test_fixture_as_role_switches_and_resets：with as_role(owner_conn, 'anon') 內 select current_user → 'anon'；離開後 → 'postgres'",
           "test_fixture_as_role_rejects_unknown_role：as_role(owner_conn, 'postgres; drop') → ValueError",
-          "test_fixture_refuses_remote_host：monkeypatch TEST_DB_OWNER_URL='postgresql://x@db.example.com/postgres' 後呼叫本 conftest 的連線建構函式 → 觸發 pytest.exit（以 pytest.raises(pytest.exit.Exception) 斷言），訊息含 '只允許本機 loopback DB'"
+          "test_fixture_refuses_remote_host：monkeypatch TEST_DB_OWNER_URL='postgresql://x@db.example.com/postgres' 後呼叫本 conftest 的連線建構函式 → 觸發 pytest.exit（以 pytest.raises(pytest.exit.Exception) 斷言），訊息含 '只允許本機 loopback DB'",
+          "test_fixture_rejects_connected_non_loopback：monkeypatch psycopg.connect 回傳 info.hostaddr='10.0.0.11' 的假連線後呼叫 backend 連線建構函式 → 觸發 pytest.exit（以 pytest.raises(pytest.exit.Exception) 斷言），訊息含 '10.0.0.11'，且該假連線已被 close（驗證 assert_connected_loopback 確實接在連線之後）"
         ],
         "run": "just test-int apps/api/tests/integration/db/test_fixtures.py -k fixture",
         "notes": ""
