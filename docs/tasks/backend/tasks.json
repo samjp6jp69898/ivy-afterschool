@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 28,
-  "last_updated": "2026-10-02T09:19:04Z",
+  "version": 29,
+  "last_updated": "2026-10-02T09:19:39Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -960,7 +960,7 @@
         "INFRA-004"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "【review-r2 打回】verify_password 對 $argon2id$ 前綴正確但內容非法的 hash（例如 '$argon2id$v=19$m=65536,t=3,p=4$broken'、'$argon2id$'）走 except VerificationError 直接回 False，沒有先 dummy_verify（argon2-cffi 25.1 的 PasswordHasher.verify 對解碼失敗拋 VerificationError，不會拋 InvalidHashError），回應 0 ms vs 正常 ~33 ms，違反 description「hashed 格式非法時先呼叫 dummy_verify 再回 False」。修法：VerifyMismatchError 以外的 VerificationError（含 InvalidHashError）一律視為格式非法 → dummy_verify 後回 False；並在 test_passwords_dummy_verify_runs_argon2 或新測試中以 monkeypatch 計數斷言上述兩個輸入各觸發恰好一次對 $argon2id$ 假 hash 的 verify。\n【review-r2 第二次打回】hash 含非 ASCII 字元（例如 '$argon2id$v=19$m=65536,t=3,p=4$ＡＢＣ$ＤＥＦ'、'$argon2id$é'）時 argon2-cffi 拋 UnicodeEncodeError（ValueError 子類，不是 VerificationError），verify_password 把例外往上拋且 0 ms，違反「非法 hash 字串 False 且不拋例外」與 dummy_verify 規則。另 InvalidHashError 是 ValueError 子類、不是 VerificationError 子類，except VerificationError 接不到它（目前 argon2-cffi 25.1 的 verify 不拋，但文件允許）。修法：verify 路徑把 VerifyMismatchError 以外的 VerificationError 與 ValueError（涵蓋 UnicodeEncodeError、InvalidHashError）一律視為格式非法 → dummy_verify 後回 False（或在 verify 前以 hashed.isascii() 守門走同一條 dummy 路徑）；test_passwords_dummy_verify_runs_for_malformed_prefix 的 parametrize 加上上述兩個非 ASCII 輸入，斷言回 False、不拋例外、且各恰好一次對 $argon2id$ 假 hash 的 verify。",
+      "risk_notes": "argon2-cffi 的例外階層：PasswordHasher.verify 對格式錯誤的 hash 拋 VerificationError 或 ValueError 子類（InvalidHashError、非 ASCII 時的 UnicodeEncodeError），兩者不互為子類；verify_password 以 isascii() 守門並接 (VerificationError, ValueError) 走 dummy_verify，升級 argon2-cffi 時需重跑本 task 測試確認例外型別未變。已知且接受的殘留：hash 內嵌參數決定運算成本，被竄改成極大 m 的 hash 會讓 verify 長時間佔用（DB 竄改不在威脅模型）；舊的弱參數 hash（如 t=1）驗證時間可與現行參數區分，登入成功後由 needs_rehash 升級；非 str 輸入會拋型別錯誤（型別標註已限定 str）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/core/security/test_passwords.py",

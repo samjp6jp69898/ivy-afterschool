@@ -15,19 +15,26 @@
 ## 目前狀態
 
 - 共 700 個 task（INFRA 41、DB 40、BACKEND 383、FRONTEND 152、PARENT 84），NFC 相關 27 個 `blocked`。
-- 已 done：INFRA-001~005、008、009（repo 骨架、justfile、Supabase config、apps/api 與 apps/web 專案、scripts/tests 與 apps/api/tests 測試基礎）。其餘 `pending`，沒有 `in_progress` / `in_review` 殘留。
-- 工具版本基準：Python 3.13（uv）、TypeScript 鎖 `~6.0`（typescript-eslint 8 不支援 TS 7）、vite 8、vitest 5、pinia 4、vue-router 5、eslint 10；Supabase CLI 2.98.2；本機沒有 `psql`，DB 驗證用 `docker exec supabase_db_afterschool psql` 或 psycopg。
-- 測試 DB 的 loopback 守衛依 libpq 規則判斷（URL 的 host / hostaddr、`PGHOST` / `PGHOSTADDR`、拒絕 service），連線後再以實際 hostaddr 複驗；INFRA-041 / INFRA-010 / DB-002 實作時沿用同一套規則（規格已寫明）。
+- 已 done（24）：
+  - INFRA-001~009、011~014、041：repo 骨架、justfile、Supabase config、apps/api 與 apps/web 專案、.env.example、check_rls（已接進 `just db-reset`）、scripts/tests 與 apps/api/tests 測試基礎、FakeClock、db_urls loopback 守衛、vitest setup / helpers、Playwright 設定。
+  - DB-001（extensions、set_updated_at、app_backend、secure_table、預設權限）、DB-039（本機 seed.sql）。
+  - BACKEND-003（errors）、007（models base）、031（passwords）、070（Permission enum）、201（通知事件）、223（broadcaster）、372（derive_overall_status）。
+  - PARENT-001（M3 token / 基底樣式）。
+- 其餘 `pending`，沒有 `in_progress` / `in_review` 殘留。本機 Supabase 已停止。
+- 工具版本基準：Python 3.13（uv）、TypeScript 鎖 `~6.0`（typescript-eslint 8 不支援 TS 7）、vite 8、vitest 5、pinia 4、vue-router 5、eslint 10、@playwright/test 1.63（本機已裝 chromium）；Supabase CLI 2.98.2，本機 PG 17.6；本機沒有 `psql`，DB 驗證用 `docker exec supabase_db_afterschool psql` 或 psycopg。
+- 測試 DB 的 loopback 守衛依 libpq 規則判斷（URL 的 host / hostaddr、`PGHOST` / `PGHOSTADDR`、拒絕 service），連線後再以實際 hostaddr 複驗；正式模組是 `apps/api/tests/support/db_urls.py`。目前另有三份同規則副本（`scripts/tests/conftest.py`、DB-001 的 `test_base.py::_owner_dsn`、DB-039 的 `test_seed_local.py::_backend_dsn`），DB-002 接線時收斂成只用 `db_urls`。
+- async 測試目前用 anyio 內建 pytest plugin（`@pytest.mark.anyio` + 模組級 `anyio_backend`），專案沒有 pytest-asyncio。
 
 ## 下一輪建議順序
 
-依賴都已寫進 `depends_on`，一律用 `python3 scripts/validate_tasks.py . --ready [AREA]` 查，不要憑感覺挑。下一輪（第 2 輪）可四區平行：
+依賴都已寫進 `depends_on`，一律用 `python3 scripts/validate_tasks.py . --ready [AREA]` 查，不要憑感覺挑。下一輪（第 3 輪）可五區平行：
 
-1. **INFRA 後段**：INFRA-041（loopback 守衛）→ 011（FakeClock）→ 006（.env.example）→ 007（check_rls，fable）；前端測試基礎 012 → 013、014。INFRA-010 等 DB-001 / DB-039 完成後再開。
-2. **DB 地基**：DB-001（fable）→ DB-039（本機 app_backend 登入）；DB-002 需 INFRA-041 done，排在 INFRA-041 審過之後。之後各表 migration。
-3. **BACKEND 框架**：不依賴 DB 的先做——BACKEND-003（errors）、007（models base）、031（passwords）、070（Permission enum）、372 等純函式；BACKEND-001 等 INFRA-006、BACKEND-002 等 INFRA-011；BACKEND-005（db session）等 INFRA-010 與 DB-001/039。各模組 Pydantic schemas（076、104、111…）雖已 ready，建議等對應 model / service 規格穩定後再成批做。
-4. **FRONTEND / PARENT**：共用模組 FRONTEND-001~009 與 app shell 依 `--ready` 開；PARENT-001（M3 token）已 ready。頁面 task 在對應 BACKEND endpoint 完成、且設計稿核可後開工。
-5. 部署段（INFRA-031~040）排在後端可跑之後；部署時要實測的事項見「已知待驗證」。
+1. **INFRA**：INFRA-010（整合測試 db_session，BACKEND-005 等它）優先；另派三件設定補強（第 2 輪 BACKEND 回報、尚未處理）：ruff isort `known-first-party = ["app"]`、TestClient 的 StarletteDeprecationWarning（httpx2 / filterwarnings 擇一）、在 `apps/api/tests/conftest.py` 統一提供 `anyio_backend = "asyncio"`。之後 INFRA-021（justfile 回歸測試，順帶評估全量防護可被繞過的殘留）、018（doctor）、019（pre-commit）、022（CI）。
+2. **DB**：DB-002（整合測試 fixture，收斂 loopback 副本）→ DB-003（roles）→ DB-004（staff_users），以及只依賴 DB-001/002 的參考表 DB-008~012。
+3. **BACKEND**：BACKEND-001（config）、002（clock）、012（rate_limit）、016（uploads）、032（密碼強度 / 臨時密碼）、072（有效權限）、106（settings_registry）、202 / 203（通知頻道與文案）。BACKEND-005（db session）等 INFRA-010。各模組 Pydantic schemas 雖已 ready，建議等對應 model / service 規格穩定後再成批做。
+4. **FRONTEND**：先做非 UI 的共用模組——FRONTEND-002（shared types）、006（upload）、007（download）、008（permissions 常數 + 與後端一致性測試）、046（useFormDirty）、186（useSwipeReveal）。`components/` 底下的（039 PageHeader、041、042、056、066、196、236、238）是 UI task，要先走 ui-design-preview 出稿、使用者核可後才能開工。
+5. **PARENT**：非 UI 的 PARENT-002（PWA manifest）、003（safeRedirect）、011（snackbar store）；M3 元件移植（014、017、018、025、027、028、175）在 `parent/components/`，同樣要先出稿核可。
+6. 部署段（INFRA-031~040）排在後端可跑之後；部署時要實測的事項見「已知待驗證」。
 
 ## 派工方式（每一輪都照做）
 
@@ -36,7 +43,7 @@
 3. **以區域為單位派實作 agent**（`Agent` 工具，`subagent_type: general-purpose`，`name` 用 `impl-<area>-r<輪次>`）。跨區域可平行；**同一區域同一時間只有一個實作 agent**。模型可依 task 的 `suggested_model` 指定（sonnet / opus / fable）。
 4. 實作 agent 做完一批只能改 `in_review` 並回報；**不可以自己標 done**。
 5. 收到回報、確認 commit 已落地（附 hash）後，派**一個全新的 reviewer**（不是實作 agent 的延續或 fork，`name` 用 `review-r<輪次>`），負責本輪所有 `in_review` 的 task。reviewer 與該區域的實作 agent 不並行。
-6. 通過 → reviewer 寫 `done` + `review.status = pass`；打回 → `in_progress` + `review.status = concern`，問題追加進 `risk_notes`，協調者轉給原實作 agent（`SendMessage`）修正後再送審。複審可沿用同一位 reviewer，只核對打回項。
+6. 通過 → reviewer 寫 `done` + `review.status = pass`；打回 → `in_progress` + `review.status = concern`，問題追加進 `risk_notes`，協調者轉給原實作 agent（`SendMessage`）修正後再送審。複審可沿用同一位 reviewer，只核對打回項。複審通過後，協調者把該 task `risk_notes` 中的打回紀錄改寫成目前仍成立的風險（文件只記最終狀態）。
 7. 一輪結束：`python3 scripts/validate_tasks.py .` 零 ERROR、`--in-review` 沒有殘留；更新本檔「目前狀態」「下一輪建議順序」並 commit；向使用者回報本輪完成的 task、打回次數、新的待決問題。
 
 ### 實作 agent 派工訊息範本
@@ -96,6 +103,8 @@ UI task（`apps/web/src/{views,components}/`、`apps/web/src/parent/{views,compo
 7. 含反引號的內容不要用 bash heredoc 包 Python 寫入（會被當成指令替換），改寫成獨立 `.py` 檔執行。
 8. commit message 用繁體中文、說明動了哪些 task id，結尾加 `Co-Authored-By` 行（與既有歷史一致）。
 9. 不要把真實個資（姓名、電話、身分證）寫進測試、fixture、commit 或回報；用擬真假資料（王小明、0912-000-123）。
+10. 判斷 lint / typecheck / test 是否通過一律看指令本身的 exit code；不要把它們接 `| tail` / `| head` 後再判斷（pipe 會吃掉 exit code），需要截斷輸出時先 `set -o pipefail` 或另外印出 `$?`。
+11. 本機 Supabase 共用：`just db-start` / `just db-reset` / integration 測試一律包在 `flock /tmp/afterschool_supabase.lock` 內；實作與 review agent 不執行 `just db-stop`，由協調者收尾時關。
 
 ## 協調者要注意的事
 
@@ -113,6 +122,7 @@ UI task（`apps/web/src/{views,components}/`、`apps/web/src/parent/{views,compo
 
 - **NFC 打卡**：27 個 task blocked（DB-032/033、BACKEND-500~518、FRONTEND-270~275），機型、通訊方式、刷卡判斷規則、離線佇列、一生一卡等待機器到貨後決定。`python3 scripts/validate_tasks.py . --blocked` 列出全部問題。解除時 DB migration 用當下時間戳（不可沿用規劃時的檔名），`nfc:manage` 權限由 BACKEND-510 加入。
 - **部署時實測**：Railway edge 的來源 IP 範圍與標頭（INFRA-031 / 033，決定 `TRUSTED_EDGE_CIDRS` 與 `FORWARDED_ALLOW_IPS`，實測前寧窄勿寬）；Supabase 連線池是否接受 `app_backend` 自訂角色（DB-001，不接受時依使用者裁定改用 postgres 角色，步驟見 INFRA-040）。
-- **測試基礎設施的已知殘留**（不擋實作，INFRA-021 或相關 task 時評估）：justfile 的全量執行防護可被刻意構造的路徑繞過（`apps/api/tests/unit/..`、`apps/api//tests`），`just web-test` 的位置參數是 vitest filter（多帶 `src` 會跑全部 spec）；unit 測試明示 `enable_socket` 仍可連本機 DB；loopback 守衛不檢查 port（127.0.0.1 上其他專案的 Supabase 仍可被指到）；只把 `local_db_url` 交給非 libpq 客戶端（如 supabase CLI 的 pgx）時沒有連線後複驗。
+- **測試基礎設施的已知殘留**（不擋實作，INFRA-021 或相關 task 時評估）：justfile 的全量執行防護可被刻意構造的路徑繞過（`apps/api/tests/unit/..`、`apps/api//tests`），`just web-test` 的位置參數是 vitest filter（多帶 `src` 會跑全部 spec）；unit 測試明示 `enable_socket` 仍可連本機 DB；loopback 守衛不檢查 port（127.0.0.1 上其他專案的 Supabase 仍可被指到）；只把 `local_db_url` 交給非 libpq 客戶端（如 supabase CLI 的 pgx）時沒有連線後複驗；`scripts/check_rls.py` 的 loopback 判斷不看 PGHOSTADDR / PGSERVICE / ?service=（唯讀工具、要連遠端需顯式 --allow-remote，之後可改用 db_urls 的判斷）。
+- **DB function 的 EXECUTE 權限**：DB-001 以全域 default privileges 收回 postgres 新建 function 對 PUBLIC 的 EXECUTE。trigger function 不受影響；但若 function 被 CHECK 約束、DEFAULT 運算式或後端 SQL 直接呼叫，migration 必須明確 `grant execute on function ... to app_backend`，否則 app_backend 寫入 / 呼叫會 42501。`app_backend` 對 `extensions` schema 沒有 USAGE（目前沒有 task 從 SQL 呼叫 pgcrypto；DB-018 的 btree_gist exclusion constraint 實作時要實測 app_backend 寫入）。`grant ... with set true` 為 PG16+ 語法，雲端 Supabase 專案需 PG16 以上。
 - **macOS bash 3.2**：`$var` 後緊接全形字元會被當成變數名的一部分（unbound variable），bash 腳本 / justfile 一律寫 `${var}`。
 - **規劃 review 留下的 low 項目**（不擋實作，可在相關 task 實作時順手處理或之後開票）：沒有跨家長端與後台、走真實後端的接送核心流程 e2e（目前兩端各自 mock）；少數後端工具模組 task 一次包多個函式（BACKEND-223、224、013、038、404 等）。
