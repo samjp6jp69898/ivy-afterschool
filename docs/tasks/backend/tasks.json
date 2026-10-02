@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 6,
-  "last_updated": "2026-10-02T06:13:32Z",
+  "version": 7,
+  "last_updated": "2026-10-02T06:13:56Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3621,8 +3621,8 @@
         ],
         "red_cases": [
           "test_settings_registry_keys：set(REGISTRY) == {'org.profile','org.service_hours','pickup.window','homework.defaults','notification.toggles','line.liff','line.messaging'}，且每個 d.schema.model_validate(d.default.model_dump(by_alias=True)) 成功",
-          "test_settings_registry_service_hours_rules：DayHours(open=True, start='19:30', end='11:30') → ValidationError；start='25:00' → ValidationError；open=False 時 start > end 也允許",
-          "test_settings_registry_pickup_window_rules：auto_expire_minutes=5 → ValidationError；latest_expected_arrival='19:00' 而 request_end='19:30' → ValidationError",
+          "test_settings_registry_service_hours_rules：DayHours(open=True, start='19:00', end='12:00') → ValidationError；start='25:00' → ValidationError；open=False 時 start > end 也允許",
+          "test_settings_registry_pickup_window_rules：auto_expire_minutes=5 → ValidationError；latest_expected_arrival='18:30' 而 request_end='19:00' → ValidationError",
           "test_settings_registry_toggles_exact_keys：缺 'exam.published' → ValidationError；多 'foo.bar' → ValidationError",
           "test_settings_registry_secret_and_public：[k for k,d in REGISTRY.items() if d.is_secret] == ['line.messaging']，REGISTRY['line.messaging'].secret_fields == ('channel_access_token','channel_secret')；REGISTRY['org.profile'].public_fields == ('name','logo_url')",
           "test_settings_registry_extra_forbid：OrgProfile.model_validate({'name':'x','address':'','phone':'','logo_url':None,'fax':'1'}) → ValidationError",
@@ -3641,7 +3641,7 @@
     {
       "id": "BACKEND-107",
       "title": "建立 settings registry 預設值與 DB seed 的一致性整合測試",
-      "description": "建立 `apps/api/tests/integration/test_settings_seed_consistency.py`（DB-038：「BACKEND 另有測試比對 registry 預設值與 DB seed」）。\n\n- 對 REGISTRY 每個 key：DB `system_settings` 必須存在該列；`is_secret` 與 registry 一致；DB value 通過 registry schema 驗證；DB value == `default.model_dump(mode='json', by_alias=True)`（只在乾淨 `just db-reset` 後比對；以 owner 連線讀取，不依賴 cache）。\n- DB 中不得有 registry 未註冊的 key。\n\n**驗收標準**\n- 全部通過；故意改測試中的預設值時失敗並列出差異的 key。",
+      "description": "建立 `apps/api/tests/integration/test_settings_seed_consistency.py`（DB-038：「BACKEND 另有測試比對 registry 預設值與 DB seed」）。\n\n- 對 REGISTRY 每個 key：DB `system_settings` 必須存在該列；`is_secret` 與 registry 一致；DB value 通過 registry schema 驗證；DB value == `default.model_dump(mode='json', by_alias=True)`（只在乾淨 `just db-reset` 後比對；以 owner 連線讀取，不依賴 cache）。\n- DB 中不得有 registry 未註冊的 key。\n- 營業與接送時段的預設值（DB-038）：`org.service_hours` 週一~五 open 12:00–19:00、週六 open=false（08:00–12:00）、週日不列；`pickup.window` request_start 12:00、request_end 19:00、latest_expected_arrival 19:00、auto_expire_minutes 120（接送時段同營業時段）。\n\n**驗收標準**\n- 全部通過；故意改測試中的預設值時失敗並列出差異的 key。",
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/test_settings_seed_consistency.py",
       "source_ref": null,
@@ -3663,7 +3663,9 @@
         "red_cases": [
           "test_settings_seed_all_keys_present：select key from system_settings → 集合 == set(REGISTRY)",
           "test_settings_seed_values_match_defaults：每個 key 的 DB value == REGISTRY[key].default.model_dump(mode='json', by_alias=True)",
-          "test_settings_seed_secret_flags：DB is_secret 為 true 的 key 集合 == {'line.messaging'}"
+          "test_settings_seed_secret_flags：DB is_secret 為 true 的 key 集合 == {'line.messaging'}",
+          "test_settings_seed_service_hours_values：DB org.service_hours value == {'mon':{'open':True,'start':'12:00','end':'19:00'}, 'tue':同, 'wed':同, 'thu':同, 'fri':同, 'sat':{'open':False,'start':'08:00','end':'12:00'}}，且等於 REGISTRY['org.service_hours'].default 的 JSON",
+          "test_settings_seed_pickup_window_values：DB pickup.window value == {'request_start':'12:00','request_end':'19:00','latest_expected_arrival':'19:00','auto_expire_minutes':120}，且等於 REGISTRY['pickup.window'].default 的 JSON"
         ],
         "run": "just test-int apps/api/tests/integration/test_settings_seed_consistency.py -k \"test_settings_seed_\"",
         "notes": ""
