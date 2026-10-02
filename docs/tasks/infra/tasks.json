@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 26,
-  "last_updated": "2026-10-02T08:38:41Z",
+  "version": 27,
+  "last_updated": "2026-10-02T08:42:35Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -190,11 +190,11 @@
     {
       "id": "INFRA-007",
       "title": "實作 scripts/check_rls.py：找出未開 RLS 或對 anon / authenticated 開放的表",
-      "description": "新增 `scripts/check_rls.py`，連線到 Postgres，檢查指定 schema（預設 `public`）是否符合 `docs/architecture_decisions.md` §5「RLS 一律開啟且不給 anon / authenticated 任何 policy」。可參考 `/Users/user/land/land_house_scraper/scripts/check_rls.py` 的 DB 端檢查部分（本專案不做 migration 靜態掃描）。用 `apps/api/.venv` 的 python 執行（需要 psycopg），只跑 `select`，完全唯讀。\n\n**函式介面**（供測試直接呼叫）：\n```python\n@dataclass(frozen=True)\nclass Violation:\n    relation: str      # schema.name\n    kind: str          # 'rls_disabled' | 'policy' | 'grant'\n    detail: str        # 例如 'policy p_read to anon'、'SELECT to authenticated'\n\ndef find_violations(conn: psycopg.Connection, schema: str = \"public\") -> list[Violation]: ...\ndef main(argv: list[str] | None = None) -> int: ...\n```\n\n**檢查規則**（受檢集合一律從 `pg_catalog` 動態列舉，不寫死表名）：\n1. schema 內每一張 `relkind in ('r', 'p')` 的表：`relrowsecurity = false` → `rls_disabled`。\n2. 上述表在 `pg_policies` 中，`roles` 含 `anon`、`authenticated`、`service_role` 或 `public` 的 policy → `policy`。\n3. schema 內任何 relation（表、view、materialized view、sequence）對 `anon`、`authenticated` 或 `service_role` 有任何 privilege（查 `information_schema.role_table_grants` 或 `aclexplode(relacl)`）→ `grant`。\n結果依 relation、kind 排序。\n\n**CLI**：`python scripts/check_rls.py [--db-url URL] [--schema public] [--allow-empty] [--allow-remote]`。\n- `--db-url` 預設 `postgresql://postgres:postgres@127.0.0.1:54342/postgres`。host 不是 `127.0.0.1` / `localhost` / `::1` 時，沒帶 `--allow-remote` 就 exit 2（供 INFRA-038 對雲端驗證時明確開啟）。\n- schema 內沒有任何表：沒帶 `--allow-empty` 時 exit 2，訊息「schema public 沒有任何表，檢查結果無意義」（空集合上的「全部合格」是恆真）。\n- 有違規：逐行印 `relation  kind  detail`，exit 1；沒有違規：印受檢表數量，exit 0。\n- 連線失敗：exit 2，訊息提示 `just db-start`。\n\n**justfile**：新增 `check-rls *ARGS` recipe（`{{root}}/apps/api/.venv/bin/python {{root}}/scripts/check_rls.py \"$@\"`）；`db-reset` 在 `supabase db reset` 成功後執行 `check-rls --allow-empty`，違規時 db-reset exit 非 0。\n\n**驗收標準**：每一條對應下列 red_case。測試在本機 DB 開一個 transaction、建立唯一名稱的暫存 schema（例如 `rls_probe_<uuid8>`）並在其中建表，`find_violations(conn, schema=...)` 檢查後整個 rollback，不留下任何物件。",
+      "description": "新增 `scripts/check_rls.py`，連線到 Postgres，檢查指定 schema（預設 `public`）是否符合 `docs/architecture_decisions.md` §5「RLS 一律開啟且不給 anon / authenticated 任何 policy」。可參考 `/Users/user/land/land_house_scraper/scripts/check_rls.py` 的 DB 端檢查部分（本專案不做 migration 靜態掃描）。用 `apps/api/.venv` 的 python 執行（需要 psycopg），只跑 `select`，完全唯讀。\n\n**函式介面**（供測試直接呼叫）：\n```python\n@dataclass(frozen=True)\nclass Violation:\n    relation: str      # schema.name\n    kind: str          # 'rls_disabled' | 'policy' | 'grant'\n    detail: str        # 例如 'policy p_read to anon'、'SELECT to authenticated'\n\ndef find_violations(conn: psycopg.Connection, schema: str = \"public\") -> list[Violation]: ...\ndef main(argv: list[str] | None = None) -> int: ...\n```\n\n**檢查規則**（受檢集合一律從 `pg_catalog` 動態列舉，不寫死表名）：\n1. schema 內每一張 `relkind in ('r', 'p')` 的表：`relrowsecurity = false` → `rls_disabled`。\n2. 上述表在 `pg_policies` 中，`roles` 含 `anon`、`authenticated`、`service_role` 或 `public` 的 policy → `policy`。\n3. schema 內任何 relation（表、view、materialized view、sequence）對 `anon`、`authenticated`、`service_role` 或 `PUBLIC`（`aclexplode(relacl)` 的 grantee 0，等同授給 anon）有任何 privilege → `grant`，detail 為 `<PRIVILEGE> to <role>`（PUBLIC 顯示為 `public`）。\n結果依 relation、kind 排序。\n\n**CLI**：`python scripts/check_rls.py [--db-url URL] [--schema public] [--allow-empty] [--allow-remote]`。\n- `--db-url` 預設 `postgresql://postgres:postgres@127.0.0.1:54342/postgres`。host 不是 `127.0.0.1` / `localhost` / `::1` 時，沒帶 `--allow-remote` 就 exit 2（供 INFRA-038 對雲端驗證時明確開啟）。\n- schema 內沒有任何表：沒帶 `--allow-empty` 時 exit 2，訊息「schema public 沒有任何表，檢查結果無意義」（空集合上的「全部合格」是恆真）。\n- 有違規：逐行印 `relation  kind  detail`，exit 1；沒有違規：印受檢表數量，exit 0。\n- 連線失敗：exit 2，訊息提示 `just db-start`。\n\n**justfile**：新增 `check-rls *ARGS` recipe（`{{root}}/apps/api/.venv/bin/python {{root}}/scripts/check_rls.py \"$@\"`）；`db-reset` 在 `supabase db reset` 成功後執行 `check-rls --allow-empty`，違規時 db-reset exit 非 0。\n\n**驗收標準**：每一條對應下列 red_case。測試在本機 DB 開一個 transaction、建立唯一名稱的暫存 schema（例如 `rls_probe_<uuid8>`）並在其中建表，`find_violations(conn, schema=...)` 檢查後整個 rollback，不留下任何物件。",
       "granularity_unit": "script",
       "target_path": "scripts/check_rls.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r2",
       "depends_on": [
         "INFRA-003",
