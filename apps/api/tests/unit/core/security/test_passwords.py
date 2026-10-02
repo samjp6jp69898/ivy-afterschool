@@ -60,6 +60,31 @@ def test_passwords_dummy_verify_runs_argon2(monkeypatch: pytest.MonkeyPatch) -> 
     assert calls[0][1] == "x"
 
 
+@pytest.mark.parametrize(
+    "hashed",
+    ["$argon2id$v=19$m=65536,t=3,p=4$broken", "$argon2id$"],
+)
+def test_passwords_dummy_verify_runs_for_malformed_prefix(
+    monkeypatch: pytest.MonkeyPatch, hashed: str
+) -> None:
+    # 前綴正確但解碼失敗（argon2-cffi 拋 VerificationError）也要跑一次假 hash 驗證，
+    # 不可 0 ms 就回 False（時間側通道）
+    calls: list[str] = []
+    original = PasswordHasher.verify
+
+    def counting(self: PasswordHasher, h: str | bytes, password: str | bytes) -> bool:
+        calls.append(str(h))
+        return original(self, h, password)
+
+    monkeypatch.setattr(PasswordHasher, "verify", counting)
+
+    assert verify_password("x", hashed) is False
+
+    dummy_calls = [h for h in calls if h != hashed]
+    assert len(dummy_calls) == 1
+    assert dummy_calls[0].startswith("$argon2id$")
+
+
 def test_passwords_dummy_verify_swallows_mismatch() -> None:
     # 假 hash 一定對不上任何明文，verify 的 mismatch 不可外洩成例外
     dummy_verify("whatever")

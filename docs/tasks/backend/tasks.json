@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 22,
-  "last_updated": "2026-10-02T09:00:04Z",
+  "version": 23,
+  "last_updated": "2026-10-02T09:02:12Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -972,7 +972,8 @@
           "test_passwords_verify：h = hash_password('Passw0rd-Test1') → verify_password('Passw0rd-Test1', h) is True；verify_password('passw0rd-test1', h) is False",
           "test_passwords_verify_invalid_hash：verify_password('x', 'not-a-hash') is False；verify_password('x', '') is False（皆不拋例外）",
           "test_passwords_needs_rehash：PasswordHasher(time_cost=1).hash('x') → needs_rehash(...) is True；hash_password('x') → needs_rehash(...) is False",
-          "test_passwords_dummy_verify_runs_argon2：monkeypatch PasswordHasher.verify 計數 → verify_password('x', 'not-a-hash') 之後計數 == 1"
+          "test_passwords_dummy_verify_runs_argon2：monkeypatch PasswordHasher.verify 計數 → verify_password('x', 'not-a-hash') 之後計數 == 1",
+          "test_passwords_dummy_verify_runs_for_malformed_prefix：monkeypatch PasswordHasher.verify 計數 → verify_password('x', '$argon2id$v=19$m=65536,t=3,p=4$broken') 與 verify_password('x', '$argon2id$') 各回 False，且各恰好觸發一次對 $argon2id$ 假 hash 的 verify（VerifyMismatchError 以外的 VerificationError 一律先 dummy_verify）"
         ],
         "run": "just test apps/api/tests/unit/core/security/test_passwords.py -k \"test_passwords_\"",
         "notes": ""
