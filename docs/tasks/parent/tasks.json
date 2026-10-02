@@ -1,12 +1,12 @@
 {
   "area": "parent",
-  "version": 7,
-  "last_updated": "2026-10-02T08:30:07Z",
+  "version": 8,
+  "last_updated": "2026-10-02T08:30:35Z",
   "tasks": [
     {
       "id": "PARENT-001",
       "title": "建立家長端 M3 色彩 / 字級 token 與全域基底樣式",
-      "description": "建立 `apps/web/src/parent/styles/m3-tokens.css`（`:root` 定義 `--m3-*` 色彩、字級、圓角、elevation、motion token）與 `apps/web/src/parent/styles/base.css`（box-sizing、`body` 背景 `var(--m3-background)`、字型堆疊、`-webkit-tap-highlight-color: transparent`、`env(safe-area-inset-*)` 工具 class、`prefers-reduced-motion` 時關閉動畫）。\n\n移植 ivy `FE:src/parent/styles/m3-tokens.css` 的 token 名稱與數值（色票沿用 ivy 由 source color 產生的結果，不移植產生器腳本）；`typography.css` 的字級 token 併入 m3-tokens.css。**去掉**：IvyKids 舊 token（`--pt-*`、`--brand-*`）、`patterns.css`、`a11y.css`、design-tokens.css 的跨 app 共用層、品牌覆寫。\n\n家長端所有元件只能使用 `--m3-*` 變數，不得寫死 hex（設計稿模板 `preview-template-parent.html` 也使用同一組名稱，兩邊名稱必須一致）。兩個檔案由 PARENT-013 的 `main.ts` import。\n\n**驗收標準**：\n- m3-tokens.css 至少定義 primary / on-primary / primary-container / secondary(-container) / tertiary(-container) / error(-container) / surface / surface-container(-low/-high) / on-surface / on-surface-variant / outline / inverse-surface / inverse-on-surface，以及 `--m3-shape-corner-*`、`--m3-elevation-*`、`--m3-motion-*`。\n- 設計稿模板 `.claude/skills/ui-design-preview/references/preview-template-parent.html` 用到的每一個 `--m3-*` 名稱都在 m3-tokens.css 中有定義。\n- base.css 不含任何 hex 色碼。",
+      "description": "建立 `apps/web/src/parent/styles/m3-tokens.css`（`:root` 定義 `--m3-*` 色彩、字級、圓角、elevation、motion token，含 `:root[data-theme='dark']` 色票；dark 切換機制不在本 task 範圍）與 `apps/web/src/parent/styles/base.css`（box-sizing、`body` 背景 `var(--m3-background)`、字型堆疊、`-webkit-tap-highlight-color: transparent`、`env(safe-area-inset-*)` 工具 class、`prefers-reduced-motion` 時關閉動畫）。\n\n移植 ivy `FE:src/parent/styles/m3-tokens.css` 的 token 名稱與數值（色票沿用 ivy 由 source color 產生的結果，不移植產生器腳本）；`typography.css` 的字級 token 併入 m3-tokens.css。**去掉**：IvyKids 舊 token（`--pt-*`、`--brand-*`）、`patterns.css`、`a11y.css`、design-tokens.css 的跨 app 共用層、品牌覆寫。\n\n家長端所有元件只能使用 `--m3-*` 變數，不得寫死 hex（設計稿模板 `preview-template-parent.html` 也使用同一組名稱，兩邊名稱必須一致）。兩個檔案由 PARENT-013 的 `main.ts` import。\n\n**驗收標準**：\n- m3-tokens.css 至少定義 primary / on-primary / primary-container / secondary(-container) / tertiary(-container) / error(-container) / surface / surface-container(-low/-high) / on-surface / on-surface-variant / outline / inverse-surface / inverse-on-surface，以及 `--m3-shape-*`、`--m3-elev-*`、`--m3-dur-*` / `--m3-easing-*`、`--m3-font`。\n- 設計稿模板 `.claude/skills/ui-design-preview/references/preview-template-parent.html` 用到的每一個 `--m3-*` 名稱都在 m3-tokens.css 中有定義。\n- base.css 不含任何 hex 色碼。",
       "granularity_unit": "config",
       "target_path": "apps/web/src/parent/styles/m3-tokens.css",
       "source_ref": "FE:src/parent/styles/m3-tokens.css::--m3-primary",

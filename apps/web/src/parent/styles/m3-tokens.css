@@ -95,13 +95,6 @@
   --m3-shape-large: 16px;
   --m3-shape-extra-large: 28px;
   --m3-shape-full: 9999px;
-  --m3-shape-corner-none: var(--m3-shape-none);
-  --m3-shape-corner-extra-small: var(--m3-shape-extra-small);
-  --m3-shape-corner-small: var(--m3-shape-small);
-  --m3-shape-corner-medium: var(--m3-shape-medium);
-  --m3-shape-corner-large: var(--m3-shape-large);
-  --m3-shape-corner-extra-large: var(--m3-shape-extra-large);
-  --m3-shape-corner-full: var(--m3-shape-full);
 
   /* Elevation level 0-5（dual-layer shadow） */
   --m3-elev-0: none;
@@ -110,12 +103,6 @@
   --m3-elev-3: 0px 1px 3px 0px rgba(0, 0, 0, 0.3), 0px 4px 8px 3px rgba(0, 0, 0, 0.15);
   --m3-elev-4: 0px 2px 3px 0px rgba(0, 0, 0, 0.3), 0px 6px 10px 4px rgba(0, 0, 0, 0.15);
   --m3-elev-5: 0px 4px 4px 0px rgba(0, 0, 0, 0.3), 0px 8px 12px 6px rgba(0, 0, 0, 0.15);
-  --m3-elevation-0: var(--m3-elev-0);
-  --m3-elevation-1: var(--m3-elev-1);
-  --m3-elevation-2: var(--m3-elev-2);
-  --m3-elevation-3: var(--m3-elev-3);
-  --m3-elevation-4: var(--m3-elev-4);
-  --m3-elevation-5: var(--m3-elev-5);
 
   /* Motion：easing + duration */
   --m3-easing-standard: cubic-bezier(0.2, 0, 0, 1);
@@ -134,11 +121,6 @@
   --m3-dur-medium-4: 400ms;
   --m3-dur-long-1: 450ms;
   --m3-dur-long-2: 500ms;
-  --m3-motion-easing-standard: var(--m3-easing-standard);
-  --m3-motion-easing-emphasized: var(--m3-easing-emphasized);
-  --m3-motion-duration-short: var(--m3-dur-short-2);
-  --m3-motion-duration-medium: var(--m3-dur-medium-2);
-  --m3-motion-duration-long: var(--m3-dur-long-2);
 
   /* 字型堆疊（Roboto + Noto Sans TC） */
   --m3-font: 'Roboto', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Helvetica Neue', sans-serif;
