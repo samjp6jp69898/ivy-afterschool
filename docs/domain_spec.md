@@ -33,7 +33,7 @@
 
 | key | 內容 |
 |---|---|
-| `org.profile` | 安親班名稱、地址、電話、Logo URL |
+| `org.profile` | 安親班名稱、地址、電話、Logo URL（名稱、電話、Logo 會經 `/api/parent/config` 公開給家長端） |
 | `org.service_hours` | 每週營業時段（週一~週五 開始/結束、週六是否營業） |
 | `pickup.window` | 可發起接送的時段、`我要來接` 可選的最晚時間、接送請求自動過期分鐘數 |
 | `homework.defaults` | 未設定預計完成時間時是否自動回覆、預設提示文案 |
@@ -104,7 +104,7 @@ expected ──到班──▶ present ──離班/接送完成──▶ left
 
 流程（家長發起 + 員工主動更新兩者都要）：
 1. 員工在「作業進度看板」持續更新 items 與 `ready_eta`（M6），家長隨時可在家長端看到。
-2. 家長在家長端按「我要來接」（可選預計抵達時間）→ 建立 `pickup_request(pending)`，系統**立即自動回覆**：
+2. 家長在家長端按「我要來接」（可選預計抵達時間）→ 建立 `pickup_request(pending)`，系統**立即自動回覆**（家長端會標示回覆來自系統或老師）：
    - 作業整體 `done` → 回覆「作業已完成，可以接送」，`reply_source = auto`。
    - 未完成且有 `ready_eta` → 回覆「預計 HH:MM 可接送」+ 員工說明，`reply_source = auto`。
    - 未完成且沒有 `ready_eta` → 回覆「已通知老師，稍後回覆預計時間」，並通知員工（ws + in_app）待回覆。
@@ -201,7 +201,7 @@ API `POST /api/device/punch`（裝置金鑰認證，卡號 → 學生 → 到班
 - 儀表板：`GET /dashboard/today`
 
 ### 家長端（`/api/parent`，需家長登入，所有 `student_id` 參數都過 `assert_parent_owns_student`）
-- `GET /children`、`GET /children/{id}`
+- `GET /children`、`GET /children/{id}`、`GET /children/{id}/today`（首頁今日狀態聚合：出勤、作業進度與預計可接送時間、今日接送請求含 `reply_source`、是否請假）
 - 出勤：`GET /children/{id}/attendance?month=`
 - 請假：`GET /children/{id}/leaves`、`POST /leaves`、`POST /leaves/{id}/cancel`、`POST /leaves/{id}/attachments`
 - 作業：`GET /children/{id}/homework?date=`（items + overall + ready_eta + note）
@@ -209,11 +209,11 @@ API `POST /api/device/punch`（裝置金鑰認證，卡號 → 學生 → 到班
 - 接送人：`GET/POST /children/{id}/pickup-persons`、`DELETE /pickup-persons/{id}`；代理：`GET/POST /children/{id}/pickup-authorizations`、`POST /pickup-authorizations/{id}/cancel`、`POST /pickup-authorizations/{id}/regenerate-code`
 - 成績：`GET /children/{id}/exams`、`GET /children/{id}/exams/{exam_id}`
 - 通知：`GET /notifications`、`POST /notifications/{id}/read`、`POST /notifications/read-all`、`GET/PUT /notification-preferences`
-- 公開設定：`GET /config`（LIFF ID、安親班名稱/Logo，不需登入）
+- 公開設定：`GET /config`（LIFF ID、安親班名稱 / Logo / 電話，不需登入）
 
 ### WebSocket
 - `/api/ws/admin`（cookie 認證，員工）：訂閱頻道 `pickup`、`homework`、`attendance`、`notifications`
-- `/api/ws/parent`（cookie 認證，家長）：只收自己小孩相關的 `homework`、`pickup`、`notifications` 事件
+- `/api/ws/parent`（cookie 認證，家長）：只收自己小孩相關的 `attendance`、`homework`、`pickup`、`notifications` 事件
 
 ### 打卡機（blocked）
 - `POST /api/device/punch`、`GET /api/device/roster`
@@ -276,13 +276,14 @@ NFC 管理權限碼 `nfc:manage`（預設只有 admin）在 NFC 解除 blocked �
 | `/login` | LIFF 登入 | `FE:src/parent/views/LoginView.vue` |
 | `/bind` | 綁定碼綁定 / 加綁 | `FE:src/parent/views/BindView.vue`、`BindAdditionalView.vue` |
 | `/` | 首頁：小孩切換 + 今日狀態卡（出勤、作業進度、預計可接送時間、接送按鈕） | `FE:src/parent/views/ChildHubView.vue` |
+| `/more` | 更多（通知、出勤、請假、接送人、登出入口） | — |
 | `/homework` | 今日作業明細 | 新做 |
 | `/pickup` | 我要來接 / 我到了 / 回覆訊息 / 取消 | `FE:src/parent/views/PickupNoticeView.vue` |
 | `/pickup/proxy` | 常用接送人 + 代理接送碼 | `FE:src/parent/views/PickupView.vue`、`PickupCreateView.vue` |
 | `/attendance` | 月出勤日曆 | `FE:src/parent/views/AttendanceView.vue` |
 | `/leaves` | 請假申請 / 紀錄 / 取消 | `FE:src/parent/views/LeavesView.vue`、`components/leaves/*` |
-| `/exams` | 成績列表 + 單次明細 | 新做 |
-| `/notifications` | 通知收件匣 + 偏好設定 | `FE:src/parent/views/NotificationPrefsView.vue` |
+| `/exams`、`/exams/:examId` | 成績列表、單次明細 | 新做 |
+| `/notifications`、`/notifications/preferences` | 通知收件匣、偏好設定 | `FE:src/parent/views/NotificationPrefsView.vue` |
 
 ## 5. Open questions（尚未決定，已記錄在對應 task 的 `open_design_questions`）
 
