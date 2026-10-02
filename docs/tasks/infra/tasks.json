@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 16,
-  "last_updated": "2026-10-02T08:09:29Z",
+  "version": 17,
+  "last_updated": "2026-10-02T08:17:51Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -10,7 +10,7 @@
       "granularity_unit": "config",
       "target_path": "README.md",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r1",
       "depends_on": [],
       "suggested_model": "sonnet-5",
@@ -24,9 +24,9 @@
         "notes": "驗收指令（repo root 執行，全部要成功）：\ntest -d apps/api && test -d apps/web && test -d supabase && test -d scripts\nfor p in apps/api/.env apps/web/.env.local apps/api/.venv/x apps/web/node_modules/x var/run/api.pid; do git check-ignore -q \"$p\" || { echo \"未忽略 $p\"; exit 1; }; done\nfor p in apps/api/.env.example apps/web/src/auto-imports.d.ts; do ! git check-ignore -q \"$p\" || { echo \"不該忽略 $p\"; exit 1; }; done\ngrep -A2 '^\\[justfile\\]' .editorconfig | grep -q 'indent_size = 4'\ngrep -q '54341' README.md && grep -q '54342' README.md && grep -q '8341' README.md && grep -q '5341' README.md"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r1",
+        "notes": "通過（HEAD 0699586 實跑 tdd.notes 全部指令成功）。四個頂層目錄已被追蹤；README 6 節齊全、port 與 supabase/config.toml 一致；git check-ignore 另抽驗 supabase/.temp、blob-report、*.tsbuildinfo、apps/web/.vite、e2e/.auth、.env.production 皆忽略，.env.example、auto-imports.d.ts、components.d.ts 不忽略；.editorconfig 已補 [justfile]/[*.sh]=4、[*.toml]=2 並刪 [Makefile]。無殘留。"
       }
     },
     {
@@ -36,7 +36,7 @@
       "granularity_unit": "config",
       "target_path": "justfile",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r1",
       "depends_on": [
         "INFRA-001"
@@ -52,9 +52,9 @@
         "notes": "驗收指令（repo root 執行）：\njust --list\nfor r in test test-int lint typecheck web-test web-lint db-new-migration; do just $r 2>err.txt; test $? -eq 1 && grep -q '用法' err.txt || { echo \"$r 未擋無參數\"; exit 1; }; done\njust test apps/api/tests 2>err.txt; test $? -eq 1 && grep -q '禁止全量' err.txt\njust test scripts/tests/ 2>err.txt; test $? -eq 1 && grep -q '禁止全量' err.txt\njust test foo/bar.py 2>err.txt; test $? -eq 1 && grep -q '只支援' err.txt\njust db-reset --linked; test $? -eq 1\njust db-new-migration Bad-Name; test $? -eq 1\nrm -f err.txt\n自動化回歸測試由 INFRA-021 補上。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r1",
+        "notes": "通過。實跑 tdd.notes：just --list 每個 recipe 皆有說明；7 個 ★ recipe 無參數 exit 1 且 stderr 含「用法」；apps/api/tests、scripts/tests/、apps/api/tests/unit/、./apps/api、絕對路徑 .../tests/integration/、apps/api/tests::x、lint scripts、typecheck apps/api 皆拒絕；foo/bar.py 報「只支援」；混用 apps/api 與 scripts 路徑拒絕。以假 supabase 驗證 db-reset --linked / --db-url / --yes --linked / --debug 皆 exit 1 且未呼叫 supabase，非 TTY 無 --yes 拒絕，--yes 才呼叫 `supabase db reset`；db-new-migration Bad-Name、1abc、兩個參數皆拒絕，create_students 正確轉發；54342 未監聽時 test-int 報「just db-start」。偏離判斷：_pyroute.sh 屬「共用一段 bash 函式」的實作方式；JUST_TEST_INT_DB_PORT 已寫在 INFRA-021 red_case，非業務參數；web-test / web-lint 拒絕 . 與 src 是加嚴。殘留（不擋）：(1) description 未同步記載 JUST_TEST_INT_DB_PORT 與 web-* 拒絕 ./src，建議順手補進 INFRA-002 description；(2) 全量守衛可被刻意繞過：`just test apps/api/tests/unit/..`、`apps/api//tests`、`apps/api/tests/./unit` 等未正規化的路徑，以及 vitest 位置參數是 filter，`just web-test spec` 或在檔案後再帶 `src` 會跑全部 spec；皆需刻意構造，可在 INFRA-021 一併評估。"
       }
     },
     {
@@ -64,7 +64,7 @@
       "granularity_unit": "config",
       "target_path": "supabase/config.toml",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r1",
       "depends_on": [
         "INFRA-001"
@@ -80,9 +80,9 @@
         "notes": "驗收指令（repo root，Docker 需在執行中）：\n! grep -nE '= 543[23][0-9]$' supabase/config.toml\njust db-start\nsupabase status | grep -q '54341' && supabase status | grep -q '54342' && supabase status | grep -q '54343'\npsql postgresql://postgres:postgres@127.0.0.1:54342/postgres -tAc 'select 1' | grep -qx 1\n! docker ps --format '{{.Names}}' | grep -q supabase_realtime_afterschool\ntest \"$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:54341/storage/v1/version)\" = 200\npsql postgresql://postgres:postgres@127.0.0.1:54342/postgres -tAc \"select to_regclass('storage.buckets') is not null\" | grep -qx t\n! grep -q '^\\[storage.buckets\\.' supabase/config.toml\njust db-reset --yes"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r1",
+        "notes": "通過。實跑：config.toml 無 5432x/5433x；just db-start 成功，supabase status 顯示 54341/54342/54343；DB select 1 回 1、server_version 17.6；容器清單無 supabase_realtime_afterschool；storage/v1/version 回 200、storage.buckets 存在；無 [storage.buckets.*]；無 migration 下 just db-reset --yes exit 0；驗完 just db-stop。auth enabled=false 下 storage 正常，不需 fallback。殘留（不擋）：本機沒有 psql，tdd.notes 的 psql 指令改以 docker exec supabase_db_afterschool psql 與 psycopg 驗證，結果相同；supabase start 會產生未追蹤的空目錄 supabase/snippets。"
       }
     },
     {
@@ -92,7 +92,7 @@
       "granularity_unit": "config",
       "target_path": "apps/api/pyproject.toml",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r1",
       "depends_on": [
         "INFRA-001"
@@ -116,9 +116,9 @@
         "notes": "另跑：cd apps/api && uv sync --frozen && uv run pytest --markers | grep -E '^@pytest.mark.(unit|integration)'；just lint apps/api/app；just typecheck apps/api/app"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r1",
+        "notes": "通過。tdd.run 5 passed，--collect-only 帶/不帶 -k 皆 5 條且一一對應 red_cases；commit ea6e02b（紅）先於 8dd261a。uv sync --frozen 成功、.venv 為 3.13.8；pytest --markers 列出 unit/integration；暫存專案驗證未註冊 marker 報錯；just lint / typecheck apps/api/app 乾淨；另驗 datetime.utcnow、date.today 皆報 TID251，app/core/clock.py 豁免生效。偏離判斷：例外改收 SocketBlockedError 或 SocketConnectBlockedError 屬實（pytest_socket 兩者皆直接繼承 RuntimeError），仍斷言「被 pytest-socket 擋下」，非放寬；python_multipart 為正式模組名；allowed-confusables 與 S101 檔名樣式已寫回 description。殘留（不擋）：test_project_setup_runtime_dependencies_importable 執行時有某個依賴在 import 期間嘗試開 socket（pytest-socket UserWarning），被吞掉不影響結果。"
       }
     },
     {
@@ -128,7 +128,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/vite.config.ts",
       "source_ref": "FE:vite.config.js::build.rollupOptions.input",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r1",
       "depends_on": [
         "INFRA-001"
@@ -144,9 +144,9 @@
         "notes": "驗收指令：\ncd apps/web && pnpm install --frozen-lockfile && pnpm exec vite build && test -f dist/index.html && test -f dist/parent/index.html && test -f dist/.vite/manifest.json\njust web-typecheck\njust web-lint src/main.ts src/parent/main.ts\n規則驗證：在 apps/web/src/__lint_probe__.ts 寫 `export const x: any = 1; export const d = new Date().toISOString().slice(0, 10)`，在 apps/web/src/parent/__lint_probe__.ts 寫 `import 'element-plus'`；`just web-lint src/__lint_probe__.ts src/parent/__lint_probe__.ts` 必須 exit 非 0 且輸出含 no-explicit-any、no-restricted-syntax、no-restricted-imports；驗完刪除兩個探針檔。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r1",
+        "notes": "通過。pnpm install --frozen-lockfile 成功；vite build 產出 dist/index.html、dist/parent/index.html、dist/.vite/manifest.json（main/parent 兩個 entry）；just web-typecheck 與 just web-lint src/main.ts src/parent/main.ts 皆通過；探針驗證 no-explicit-any、toISOString().slice / .split 的 no-restricted-syntax、src/parent 的 .ts 與 .vue import element-plus / @element-plus/* / @/views / @/stores 報 no-restricted-imports、後台 import @/parent 報錯、@ts-ignore 報 ban-ts-comment；dev server（自用 port 5391）/ 與 /parent/ 皆 200；臨時 spec 驗證 vitest happy-dom + globals 可用；探針已刪、工作區乾淨。版本皆不低於 ivy 下限、vue-router 同主版 5；typescript 鎖 ~6.0 理由已寫回 description。無殘留。"
       }
     },
     {
@@ -238,14 +238,14 @@
       "granularity_unit": "test",
       "target_path": "scripts/tests/conftest.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-infra-r1",
       "depends_on": [
         "INFRA-002",
         "INFRA-004"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "【review-r1 打回】local_db_url 的 loopback 守衛可被繞過，違反驗收「local_db_url 拒絕非 loopback host」。psycopg（libpq）不經過 Python socket 模組，pytest-socket 的 --allow-hosts 擋不到，守衛是唯一防線。已實測下列 SCRIPTS_TEST_DATABASE_URL / 環境皆通過守衛，conn.info.hostaddr 卻是非 loopback 位址：(1) postgresql://postgres:postgres@127.0.0.1:54342/postgres?host=<遠端>（query 的 host 覆寫 authority）；(2) 同上改 ?hostaddr=<遠端>（libpq 以 hostaddr 連線，host 只用於驗證）；(3) URL 不帶 hostaddr、環境變數 PGHOSTADDR=<遠端>（libpq 以環境變數補未指定參數）。同類尚未實測但應一併處理：?service= / PGSERVICE（service file 可帶 hostaddr）。修正驗收：上述每一條都要有 red_case 斷言被拒（錯誤訊息含實際位址），原有 10.0.0.5 與 loopback 正常案例不變；建議以 psycopg.conninfo.conninfo_to_dict 解析後檢查 host 與 hostaddr、拒絕 service，並在 local_db_conn 連線後以 conn.info.hostaddr 再驗一次（不是 loopback 就立即關閉並 pytest.fail）。INFRA-041 的 assert_loopback 規格有同樣缺口（INFRA-010 / DB-002 共用），依 README「牽動其他區域」一併修正其 description 與 red_cases。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "scripts/tests/test_scripts_conftest.py",
@@ -265,9 +265,9 @@
         "notes": "pytester 需在 conftest 宣告 pytest_plugins = ['pytester']；pytester 案例用 pytester.makeini / makeconftest 複製真實檔案內容。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r1",
+        "notes": "打回（1 項）。tdd.run 7 passed、--collect-only 帶/不帶 -k 皆 7 條對應 red_cases，commit 0e03525（紅）先於 0699586，lint / typecheck 乾淨；errors=1 的 red_case 修正屬實（fixture setup 階段 fail 計 error）且多斷言 10.0.0.5，非放寬。問題：local_db_url 只用 urlsplit 的 authority host 判斷 loopback，libpq 實際連線位址可被 URL query 或環境變數覆寫，且 pytest-socket 攔不到 libpq 的 C socket，此守衛是唯一防線。已實測三個反例皆通過守衛卻連到非 loopback 位址（本機 LAN IP）。詳見 risk_notes。"
       }
     },
     {
@@ -277,7 +277,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/conftest.py",
       "source_ref": "BE:tests/conftest.py::_install_ambient_db_guard",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r1",
       "depends_on": [
         "INFRA-004"
@@ -302,9 +302,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r1",
+        "notes": "通過。tdd.run 8 passed，--collect-only 帶/不帶 -k 皆 8 條，涵蓋 6 條 red_case（含 parametrize 補的 tests/support 與 integration 標 unit 反向案例）；commit 731603b（紅）先於 beeda50；lint / typecheck 乾淨。另在暫存專案驗證 module 層級 pytestmark = integration 放在 tests/unit 也會報錯、asyncio.run 在 unit 可用（unix socket 放行）。偏離判斷：integration 對非 loopback 拋 SocketConnectBlockedError 屬實，red_case 改斷言該例外與目標位址是加嚴。殘留（不擋）：unit 測試仍可用 @pytest.mark.enable_socket、socket_enabled fixture 或 --force-enable-socket 明示開網並連上 127.0.0.1:54342（pytest-socket 以 enable 優先）；屬刻意繞過，若要封住可在 conftest 對 tests/unit 的 item 偵測這兩者並報 collection error。"
       }
     },
     {
