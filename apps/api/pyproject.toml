@@ -45,6 +45,9 @@ allowed-confusables = ["，", "：", "；", "（", "）", "！", "？", "～"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
+# scripts/tests 以 --config 共用本設定，路徑樣式以 apps/api 為根對不到，改用檔名樣式
+"test_*.py" = ["S101"]
+"conftest.py" = ["S101"]
 # 唯一允許直接取系統時間的地方
 "app/core/clock.py" = ["TID251", "DTZ"]
 
