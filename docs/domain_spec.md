@@ -165,6 +165,9 @@ API `POST /api/device/punch`（裝置金鑰認證，卡號 → 學生 → 到班
 
 路徑前綴 `/api`。所有回應錯誤格式：`{"error": {"code": "...", "message": "...", "details": ...}}`。列表分頁：`?page=&page_size=`，回 `{"items": [...], "total": n}`。
 
+### 健康檢查
+- `GET /api/health`：不需登入，回 `{"status": "ok", "app_name": ..., "db": "ok"}`（DB 連不上回 503）。供 Railway healthcheck 與部署後 smoke 測試使用。
+
 ### 認證
 | Method | Path | 說明 |
 |---|---|---|
