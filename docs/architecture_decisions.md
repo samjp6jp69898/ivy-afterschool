@@ -31,7 +31,7 @@
 | 測試 | pytest（unit / integration）、Vitest + @vue/test-utils、Playwright（e2e，少量關鍵流程） | 見 `docs/testing_conventions.md` |
 | 套件管理 | 後端 uv（`apps/api/pyproject.toml` + `uv.lock`）；前端 pnpm | |
 | 指令入口 | root `justfile` | 所有 lint / test 指令都帶路徑參數 |
-| 部署 | Railway（api service + web 靜態 service）+ Supabase 雲端 | 同 ivy 現行做法 |
+| 部署 | Railway（api service + web service）+ Supabase 雲端 | api 不開 public domain，由 web 的 nginx 經 Railway private network 反代 `/api` 與 `/api/ws`，cookie 同源（避免 LINE webview 擋第三方 cookie）；api 固定單一實例、uvicorn 單 worker |
 
 ## 3. Repo 結構
 
