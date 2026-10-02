@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 4,
-  "last_updated": "2026-10-02T07:06:14Z",
+  "version": 5,
+  "last_updated": "2026-10-02T07:30:15Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -109,7 +109,8 @@
       "depends_on": [
         "FRONTEND-001",
         "FRONTEND-002",
-        "INFRA-013"
+        "INFRA-013",
+        "BACKEND-059"
       ],
       "suggested_model": "opus-5",
       "risk_notes": "",
@@ -138,7 +139,7 @@
     {
       "id": "PARENT-005",
       "title": "實作家長端 api client parent/api/config.ts（公開設定，記憶化）",
-      "description": "建立 `apps/web/src/parent/api/config.ts`：\n```ts\nexport interface PublicConfig { liff_id: string; org_name: string; org_phone: string | null; logo_url: string | null }\nexport function getPublicConfig(): Promise<PublicConfig>\nexport function _resetPublicConfigForTests(): void\n```\n- `GET /api/parent/config`（BACKEND-125，不需登入）。同一頁面生命週期只打一次：in-flight 與成功結果共用同一個 promise；失敗時清除快取，下次呼叫重新請求（ivy liff.ts 的「失敗即清空讓重試可用」）。\n- 使用者：PARENT-008（LIFF ID）、PARENT-024 / PARENT-030 / PARENT-031（安親班名稱與 Logo；BindView 另取 `org_phone` 給「聯絡安親班」按鈕）。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/api/config.ts`：\n```ts\nexport interface ParentLimits { leave_past_days: number; leave_future_days: number; leave_max_attachments: number; leave_max_attachment_mb: number; authorization_max_days_ahead: number; persons_max: number }\nexport interface PublicConfig { liff_id: string; org_name: string; org_phone: string | null; logo_url: string | null; add_friend_url: string | null; limits: ParentLimits }\nexport const DEFAULT_PARENT_LIMITS: ParentLimits  // { leave_past_days: 30, leave_future_days: 60, leave_max_attachments: 3, leave_max_attachment_mb: 10, authorization_max_days_ahead: 14, persons_max: 10 }\nexport function getPublicConfig(): Promise<PublicConfig>\nexport function getParentLimits(): Promise<ParentLimits>  // config 取得失敗時回 DEFAULT_PARENT_LIMITS（後端仍會驗證，前端上限只用於提示）\nexport function _resetPublicConfigForTests(): void\n```\n- `GET /api/parent/config`（BACKEND-125，不需登入）。同一頁面生命週期只打一次：in-flight 與成功結果共用同一個 promise；失敗時清除快取，下次呼叫重新請求（ivy liff.ts 的「失敗即清空讓重試可用」）。\n- 使用者：PARENT-008（LIFF ID）、PARENT-024 / PARENT-030 / PARENT-031（安親班名稱與 Logo；BindView 另取 `org_phone` 給「聯絡安親班」按鈕；`add_friend_url` 給 PARENT-035 加好友引導；`limits` 給請假表單、代理授權表單、常用接送人上限（PARENT-102 / PARENT-104 / PARENT-134 / PARENT-135 / PARENT-137 / PARENT-138），取代寫死的數值）。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/config.ts",
       "source_ref": null,
@@ -157,8 +158,9 @@
           "vitest"
         ],
         "red_cases": [
-          "publicConfig fetches once：mock GET /parent/config 回 {liff_id:'1650000000-abc', org_name:'快樂安親班', org_phone:'02-2345-6789', logo_url:null}，連續呼叫兩次 getPublicConfig() → 兩次都回該物件，mock.history.get.length === 1",
-          "publicConfig retries after failure：第一次 GET 回 503 → reject；第二次 GET 回 200 → resolve 且 org_name === '快樂安親班'，history.get.length === 2"
+          "publicConfig fetches once：mock GET /parent/config 回 {liff_id:'1650000000-abc', org_name:'快樂安親班', org_phone:'02-2345-6789', logo_url:null, add_friend_url:'https://line.me/R/ti/p/@happy', limits:{leave_past_days:30, leave_future_days:60, leave_max_attachments:3, leave_max_attachment_mb:10, authorization_max_days_ahead:14, persons_max:10}}，連續呼叫兩次 getPublicConfig() → 兩次都回該物件，mock.history.get.length === 1",
+          "publicConfig retries after failure：第一次 GET 回 503 → reject；第二次 GET 回 200 → resolve 且 org_name === '快樂安親班'，history.get.length === 2",
+          "publicConfig limits fall back to defaults：GET 回 500 → getParentLimits() resolve 深等於 DEFAULT_PARENT_LIMITS；GET 回 limits {leave_future_days:90, ...} → getParentLimits().leave_future_days === 90"
         ],
         "run": "just web-test src/parent/api/config.spec.ts -t \"publicConfig\"",
         "notes": ""
@@ -399,7 +401,7 @@
     {
       "id": "PARENT-012",
       "title": "移植 parent/router.ts：家長端路由表與登入 / 綁定守衛",
-      "description": "建立 `apps/web/src/parent/router.ts`：\n```ts\nexport const parentRoutes: RouteRecordRaw[]\nexport function installParentGuards(router: Router): void\nexport function createParentRouter(history?: RouterHistory): Router  // 預設 createWebHashHistory()，並呼叫 installParentGuards\n```\n**路由**（view 一律 lazy import；meta：`title`、`tab`、`public`、`showBack`、`hideTabBar`）：\n| path | view | meta |\n|---|---|---|\n| `/login` | LoginView（PARENT-030） | public, hideTabBar, title 登入 |\n| `/bind` | BindView（PARENT-031） | bindable, hideTabBar, title 綁定小孩 |\n| `/` | ChildHubView（PARENT-054） | tab home, title 首頁 |\n| `/homework` | HomeworkView（PARENT-073） | tab homework, title 今日作業 |\n| `/pickup` | PickupView（PARENT-097） | tab pickup, title 接送 |\n| `/pickup/proxy` | PickupProxyView（PARENT-104） | tab pickup, showBack, title 代理接送 |\n| `/exams` | ExamsView（PARENT-153） | tab exams, title 成績 |\n| `/exams/:examId` | ExamDetailView（PARENT-154） | tab exams, showBack, title 成績明細 |\n| `/more` | MoreView（PARENT-034） | tab more, title 更多 |\n| `/attendance` | AttendanceView（PARENT-132） | tab more, showBack, title 出勤紀錄 |\n| `/leaves` | LeavesView（PARENT-138） | tab more, showBack, title 請假 |\n| `/notifications` | NotificationsView（PARENT-177） | tab more, showBack, title 通知 |\n| `/notifications/preferences` | NotificationPrefsView（PARENT-178） | tab more, showBack, title 通知設定 |\n| `/:pathMatch(.*)*` | redirect `/` | |\n\n**守衛**（`installParentGuards`，使用 PARENT-009 parentAuth store）：\n1. `meta.public`：`/login` 在已登入（`ensureSession()` 為 true）時導向 `resolveSafeRedirect(to.query.redirect)`（PARENT-003），否則放行。\n2. `/bind`（meta `bindable`）：`ensureSession()` 為 true → 放行（加綁模式）；否則 `bindPending` 存在 → 放行（首綁模式）；兩者皆無 → `{ path: '/login', replace: true }`。\n3. 其他：`await ensureSession()`；false → `{ path: '/login', replace: true, query: { redirect: to.fullPath } }`。\n4. `afterEach` 設定 `document.title = \\`${meta.title}｜家長端\\``。\n\n移植 ivy `FE:src/parent/router.ts::router` 的 hash history 與 meta 設計、`FE:src/parent/main.ts::ensureSessionProbed` 的首次探測；**去掉** device-login、maintenance、聯絡簿 / 娃娃車 / 用藥 / 費用 / 簽署 / 調查等幼稚園路由與舊路徑 redirect。\n\n**驗收標準**：每一條對應 red_case（以 `createMemoryHistory()` 建立 router，`parentRoutes` 的 component 換成 stub，mock `/parent/me`）。",
+      "description": "建立 `apps/web/src/parent/router.ts`：\n```ts\nexport const parentRoutes: RouteRecordRaw[]\nexport function installParentGuards(router: Router): void\nexport function createParentRouter(history?: RouterHistory): Router  // 預設 createWebHashHistory()，並呼叫 installParentGuards\n```\n**路由**（view 一律 lazy import；meta：`title`、`tab`、`public`、`showBack`、`hideTabBar`）：\n| path | view | meta |\n|---|---|---|\n| `/login` | LoginView（PARENT-030） | public, hideTabBar, title 登入 |\n| `/bind` | BindView（PARENT-031） | bindable, hideTabBar, title 綁定小孩 |\n| `/` | ChildHubView（PARENT-054） | tab home, title 首頁 |\n| `/homework` | HomeworkView（PARENT-073） | tab homework, title 今日作業 |\n| `/pickup` | PickupView（PARENT-097） | tab pickup, title 接送 |\n| `/pickup/proxy` | PickupProxyView（PARENT-104） | tab pickup, showBack, title 代理接送 |\n| `/exams` | ExamsView（PARENT-153） | tab exams, title 成績 |\n| `/exams/:examId` | ExamDetailView（PARENT-154） | tab exams, showBack, title 成績明細 |\n| `/more` | MoreView（PARENT-034） | tab more, title 更多 |\n| `/attendance` | AttendanceView（PARENT-132） | tab more, showBack, title 出勤紀錄 |\n| `/leaves` | LeavesView（PARENT-138） | tab more, showBack, title 請假 |\n| `/notifications` | NotificationsView（PARENT-177） | tab more, showBack, title 通知 |\n| `/notifications/preferences` | NotificationPrefsView（PARENT-178） | tab more, showBack, title 通知設定 |\n| `/:pathMatch(.*)*` | redirect `/` | |\n\n**佔位 view**：本 task 為上表 13 個 view 各建立最小佔位檔 `apps/web/src/parent/views/<Name>.vue`（`<template><main data-placeholder=\"<Name>\"><h1>{meta.title}</h1></main></template>`，不含業務邏輯），讓 router / main / layout 可以先建置、typecheck 與手動瀏覽；各 view task 實作時直接覆寫該檔。佔位檔不是 UI 實作，不需設計稿。已存在的 view 檔不得覆蓋。\n\n**守衛**（`installParentGuards`，使用 PARENT-009 parentAuth store）：\n1. `meta.public`：`/login` 在已登入（`ensureSession()` 為 true）時導向 `resolveSafeRedirect(to.query.redirect)`（PARENT-003），否則放行。\n2. `/bind`（meta `bindable`）：`ensureSession()` 為 true → 放行（加綁模式）；否則 `bindPending` 存在 → 放行（首綁模式）；兩者皆無 → `{ path: '/login', replace: true }`。\n3. 其他：`await ensureSession()`；false → `{ path: '/login', replace: true, query: { redirect: to.fullPath } }`。\n4. `afterEach` 設定 `document.title = \\`${meta.title}｜家長端\\``。\n\n移植 ivy `FE:src/parent/router.ts::router` 的 hash history 與 meta 設計、`FE:src/parent/main.ts::ensureSessionProbed` 的首次探測；**去掉** device-login、maintenance、聯絡簿 / 娃娃車 / 用藥 / 費用 / 簽署 / 調查等幼稚園路由與舊路徑 redirect。\n\n**驗收標準**：每一條對應 red_case（以 `createMemoryHistory()` 建立 router，`parentRoutes` 的 component 換成 stub，mock `/parent/me`；測試不 import 任何真實 view）。",
       "granularity_unit": "method",
       "target_path": "apps/web/src/parent/router.ts",
       "source_ref": "FE:src/parent/router.ts::router",
@@ -408,20 +410,7 @@
       "depends_on": [
         "PARENT-003",
         "PARENT-009",
-        "INFRA-013",
-        "PARENT-030",
-        "PARENT-031",
-        "PARENT-034",
-        "PARENT-054",
-        "PARENT-073",
-        "PARENT-097",
-        "PARENT-104",
-        "PARENT-132",
-        "PARENT-138",
-        "PARENT-153",
-        "PARENT-154",
-        "PARENT-177",
-        "PARENT-178"
+        "INFRA-013"
       ],
       "suggested_model": "fable-5",
       "risk_notes": "",
@@ -437,7 +426,8 @@
           "parentRouter bind requires bind pending or session：未登入且無 bindPending → push('/bind') 導到 '/login'；markBindPending('王媽媽') 後 push('/bind') → path === '/bind'",
           "parentRouter bind allowed for authed parent：GET /parent/me 200 → push('/bind') → path === '/bind'",
           "parentRouter login redirects authed user safely：已登入 → push('/login?redirect=/exams') → path === '/exams'；push('/login?redirect=//evil.com') → path === '/'",
-          "parentRouter probes me only once：未登入狀態連續 push('/') 與 push('/homework') 都被導回 login，mock.history.get 中 /parent/me 恰 1 次（第二次因探測失敗後 ensureSession 回快取結果）"
+          "parentRouter probes me only once：未登入狀態連續 push('/') 與 push('/homework') 都被導回 login，mock.history.get 中 /parent/me 恰 1 次（第二次因探測失敗後 ensureSession 回快取結果）",
+          "parentRouter lazy routes resolve placeholder views：對 parentRoutes 中每一筆有 component 的路由呼叫其 lazy loader → 全部 resolve 出 default export（佔位或已實作的 view），共 13 個"
         ],
         "run": "just web-test src/parent/router.spec.ts -t \"parentRouter\"",
         "notes": ""
@@ -451,7 +441,7 @@
     {
       "id": "PARENT-013",
       "title": "實作 parent/main.ts：建立家長端 app（Pinia、Router、樣式、401 導回登入）",
-      "description": "取代 INFRA-005 的佔位檔 `apps/web/src/parent/main.ts`：\n```ts\nexport function createParentApp(): { app: App; router: Router; pinia: Pinia }\n// 檔尾：if (!import.meta.env.VITEST) createParentApp().app.mount('#app')\n```\n- import `./styles/m3-tokens.css`、`./styles/base.css`、`./styles/icons.css`（PARENT-001、PARENT-014）。\n- `createApp(ParentLayout)`（PARENT-024）、`createPinia()`、`createParentRouter()`（PARENT-012）。\n- `setUnauthenticatedHandler`（PARENT-004）：`parentAuth.clear()`、`children.clear()`（PARENT-010）、`parentWs.disconnect()`（PARENT-173）；目前路由非 public 時 `router.replace({ path: '/login', query: { redirect: currentRoute.fullPath } })`。\n- 不得 import element-plus 或後台目錄（INFRA-005 eslint、INFRA-029 bundle 檢查）。\n\n移植 ivy `FE:src/parent/main.ts` 的掛載順序；**去掉** tenant boot、Sentry、theme / a11y 初始化、離線佇列 flush、chunkSelfHeal、publicLiffTarget 跳轉。\n\n**驗收標準**：每一條對應 red_case；另外 `pnpm exec vite build && node scripts/check_parent_bundle.mjs` 通過（INFRA-029）。",
+      "description": "取代 INFRA-005 的佔位檔 `apps/web/src/parent/main.ts`：\n```ts\nexport function createParentApp(): { app: App; router: Router; pinia: Pinia }\n// 檔尾：if (!import.meta.env.VITEST) createParentApp().app.mount('#app')\n```\n- import `./styles/m3-tokens.css`、`./styles/base.css`、`./styles/icons.css`（PARENT-001、PARENT-014）。\n- `createApp(ParentLayout)`（PARENT-024）、`createPinia()`、`createParentRouter()`（PARENT-012；view 尚未實作時載入其佔位檔，app shell 可先跑起來）。\n- `setUnauthenticatedHandler`（PARENT-004）：`parentAuth.clear()`、`children.clear()`（PARENT-010）、`parentWs.disconnect()`（PARENT-173）；目前路由非 public 時 `router.replace({ path: '/login', query: { redirect: currentRoute.fullPath } })`。\n- 不得 import element-plus 或後台目錄（INFRA-005 eslint、INFRA-029 bundle 檢查）。\n\n移植 ivy `FE:src/parent/main.ts` 的掛載順序；**去掉** tenant boot、Sentry、theme / a11y 初始化、離線佇列 flush、chunkSelfHeal、publicLiffTarget 跳轉。\n\n**驗收標準**：每一條對應 red_case；另外 `pnpm exec vite build && node scripts/check_parent_bundle.mjs` 通過（INFRA-029）。",
       "granularity_unit": "method",
       "target_path": "apps/web/src/parent/main.ts",
       "source_ref": "FE:src/parent/main.ts::ensureSessionProbed",
@@ -1073,7 +1063,7 @@
     {
       "id": "PARENT-030",
       "title": "移植 LoginView：LIFF 登入流程（已綁定直接進入、未綁定導向綁定頁、錯誤態）",
-      "description": "建立 `apps/web/src/parent/views/LoginView.vue`（路由 `/login`，public）。\n\n**流程** `startLogin({ forceFresh = false })`（掛載時自動執行，除非 query `logged_out=1`）：\n1. 狀態 `init`（「正在連線 LINE…」）→ `await initLiff()`（PARENT-008）；失敗 → `error`，`LiffNotConfiguredError` 顯示其 message，其他顯示「LINE 登入初始化失敗，請稍後再試」。\n2. `forceFresh` → `clearLiffTokenRefreshMarker()` 後 `forceLiffReloginOnce({ redirectUri: location.href, nowMs })`，結束。\n3. `!liff.isLoggedIn()`：在 LINE 內（`isInClient()`）直接 `liff.login({ redirectUri: location.href })`；外部瀏覽器 → 狀態 `choice`，顯示「使用 LINE 登入」按鈕。query `logged_out=1` 時一律停在 `choice`（剛登出不自動再登入）。\n4. 已登入 LINE：`idTokenNeedsRefresh(liff.getDecodedIDToken(), now)` 為 true 且 `forceLiffReloginOnce` 回 true → 結束（等待 LINE 轉址回來）；否則狀態 `loading`（「登入中…」）→ `liffLogin(liff.getIDToken())`（PARENT-007）。\n5. `status: 'ok'` → `clearLiffTokenRefreshMarker()`、`parentAuth.setParent(parent)`、`children.seed(parent.children)`（PARENT-009、PARENT-010）、`router.replace(resolveSafeRedirect(route.query.redirect))`（PARENT-003）。\n6. `status: 'needs_binding'` → `parentAuth.markBindPending(name_hint)`、`router.replace({ path: '/bind', query: redirect 有值時保留 })`。\n7. 錯誤（`ApiError.code`）：`invalid_id_token` / `id_token_replayed` → 先試 `forceLiffReloginOnce`，回 false 才顯示「LINE 登入已逾時，請關閉後重新開啟」；`parent_disabled` →「您的家長帳號已停用，請聯絡安親班」；`line_unavailable` →「LINE 驗證服務暫時無法連線，請稍後再試」；`line_login_not_configured` →「安親班尚未設定 LINE 登入，請聯絡安親班」；`too_many_attempts` →「嘗試次數過多，請稍後再試」；其他 → `error.message` 或「登入失敗，請稍後再試」。\n8. `error` 狀態的「重試」按鈕呼叫 `startLogin({ forceFresh: true })`（ivy `manualRetry`）。\n\n畫面頂部顯示 `getPublicConfig()`（PARENT-005）的 Logo 與安親班名稱（取不到時顯示「家長端」）。\n\n移植 ivy `FE:src/parent/views/LoginView.vue::startLogin`；**去掉** consent modal、device-login 設定碼、staff session 偵測、clientEvents 回報、品牌 composable。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-login.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：init 轉圈、loading（登入中）、choice（外部瀏覽器 / 剛登出，顯示「使用 LINE 登入」按鈕）、error（每種錯誤訊息擇一示意 + 重試按鈕）、Logo 與安親班名稱、無 Logo 時的文字版。\n\n**驗收標準**：每一條對應 red_case（mock PARENT-008 的 liff 模組回傳 fake LiffClient，axios-mock-adapter mock API）。",
+      "description": "建立 `apps/web/src/parent/views/LoginView.vue`（路由 `/login`，public）。\n\n**流程** `startLogin({ forceFresh = false })`（掛載時自動執行，除非 query `logged_out=1`）：\n1. 狀態 `init`（「正在連線 LINE…」）→ `await initLiff()`（PARENT-008）；失敗 → `error`，`LiffNotConfiguredError` 顯示其 message，其他顯示「LINE 登入初始化失敗，請稍後再試」。\n2. `forceFresh` → `clearLiffTokenRefreshMarker()` 後 `forceLiffReloginOnce({ redirectUri: location.href, nowMs })`，結束。\n3. `!liff.isLoggedIn()`：在 LINE 內（`isInClient()`）直接 `liff.login({ redirectUri: location.href })`；外部瀏覽器 → 狀態 `choice`，顯示「使用 LINE 登入」按鈕。query `logged_out=1` 時一律停在 `choice`（剛登出不自動再登入）。\n4. 已登入 LINE：`idTokenNeedsRefresh(liff.getDecodedIDToken(), now)` 為 true 且 `forceLiffReloginOnce` 回 true → 結束（等待 LINE 轉址回來）；否則狀態 `loading`（「登入中…」）→ `liffLogin(liff.getIDToken())`（PARENT-007）。\n5. `status: 'ok'` → `clearLiffTokenRefreshMarker()`、`parentAuth.setParent(parent)`、`children.seed(parent.children)`（PARENT-009、PARENT-010）、`router.replace(resolveSafeRedirect(route.query.redirect))`（PARENT-003）。\n6. `status: 'needs_binding'` → `parentAuth.markBindPending(name_hint)`、`router.replace({ path: '/bind', query: redirect 有值時保留 })`。\n7. 錯誤（`ApiError.code`）：`invalid_id_token` / `id_token_replayed` → 先試 `forceLiffReloginOnce`，回 false 才顯示「LINE 登入已逾時，請關閉後重新開啟」；`parent_disabled` →「您的家長帳號已停用，請聯絡安親班」；`line_unavailable` →「LINE 驗證服務暫時無法連線，請稍後再試」；`line_login_not_configured` →「安親班尚未設定 LINE 登入，請聯絡安親班」；`too_many_attempts` →「嘗試次數過多，請稍後再試」；其他 → `error.message` 或「登入失敗，請稍後再試」。\n8. `error` 狀態的「重試」按鈕呼叫 `startLogin({ forceFresh: true })`（ivy `manualRetry`）。\n\n畫面頂部顯示 `getPublicConfig()`（PARENT-005）的 Logo 與安親班名稱（取不到時顯示「家長端」）。\n\n移植 ivy `FE:src/parent/views/LoginView.vue::startLogin`；**去掉** consent modal、device-login 設定碼、staff session 偵測、clientEvents 回報、品牌 composable。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-login.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：init 轉圈、loading（登入中）、choice（外部瀏覽器 / 剛登出，顯示「使用 LINE 登入」按鈕）、error（每種錯誤訊息擇一示意 + 重試按鈕）、Logo 與安親班名稱、無 Logo 時的文字版。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `LoginView.vue`。\n\n**驗收標準**：每一條對應 red_case（mock PARENT-008 的 liff 模組回傳 fake LiffClient，axios-mock-adapter mock API）。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/LoginView.vue",
       "source_ref": "FE:src/parent/views/LoginView.vue::startLogin",
@@ -1121,7 +1111,7 @@
     {
       "id": "PARENT-031",
       "title": "移植 BindView：綁定碼綁定（首綁與加綁同一頁，依登入狀態切換）",
-      "description": "建立 `apps/web/src/parent/views/BindView.vue`（路由 `/bind`，PARENT-012 守衛已保證「已登入」或「bindPending」其一成立）。\n\n**模式**：`parentAuth.isAuthed` 為 true → 加綁模式（標題「加綁其他小孩」，列出目前已綁定小孩姓名，左上「返回」回 `/more`）；否則首綁模式（小標「第一次使用」、標題「綁定小孩」，`bindPending.nameHint` 有值時顯示「您好，{nameHint}」）。瀏覽器讀不到 httpOnly cookie，因此以 store 狀態代表 cookie 狀態：已登入 = 持有 `parent_access`，bindPending = 持有 `parent_bind`。\n\n**表單**：M3TextField（label「綁定碼」、`autocapitalize=characters`、`autocomplete=one-time-code`）。送出前正規化（去頭尾與中間空白、去 `-`、轉大寫），不符合 `/^[A-Z0-9]{8}$/` → 欄位錯誤「綁定碼為 8 碼英文或數字」，不送出。說明文字：「請輸入安親班提供的 8 碼綁定碼。綁定碼只能使用一次，過期或已使用請向安親班索取新的綁定碼。」\n\n**送出** `bind(code)`（PARENT-007），送出中按鈕 loading 防連點：\n- 成功（首綁）：`parentAuth.setParent(parent)`、`children.seed(parent.children)`、`router.replace(resolveSafeRedirect(route.query.redirect))`。\n- 成功（加綁）：`setParent(parent)`、`children.seed(parent.children)` 並 `children.select(新出現的小孩 id)`、snackbar「已加綁 {姓名}」、`router.replace('/')`。\n- 業務錯誤 → PARENT-032 `BindCodeErrorNotice` 依 `error.code` 顯示（`orgPhone` 取 PARENT-005 `getPublicConfig().org_phone`，取不到時傳 null），欄位保留輸入值；「重新輸入」清空欄位與錯誤。\n- 首綁模式 401（bind token 過期或遺失）→ 顯示「綁定時間已逾時，請重新以 LINE 登入」與「重新登入」按鈕：`parentAuth.clearBindPending()` 後 `router.replace('/login')`。\n\n移植 ivy `FE:src/parent/views/BindView.vue::submit` 與 `FE:src/parent/views/BindAdditionalView.vue::submit`（合併為單一頁）；保留 ivy 的「聯絡安親班」撥號（電話改取公開設定 `org_phone`）；**去掉** toast（改用 PARENT-011 snackbar）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-bind.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：首綁模式（含 nameHint 問候）、加綁模式（列出已綁定小孩 + 返回）、格式錯誤欄位提示、送出中、各錯誤態（由 BindCodeErrorNotice 呈現：錯誤 / 過期 / 已使用 / 已被他人綁定 / 已綁定過 / 嘗試過多，含「聯絡安親班」撥號按鈕）、首綁逾時需重新登入。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/views/BindView.vue`（路由 `/bind`，PARENT-012 守衛已保證「已登入」或「bindPending」其一成立）。\n\n**模式**：`parentAuth.isAuthed` 為 true → 加綁模式（標題「加綁其他小孩」，列出目前已綁定小孩姓名，左上「返回」回 `/more`）；否則首綁模式（小標「第一次使用」、標題「綁定小孩」，`bindPending.nameHint` 有值時顯示「您好，{nameHint}」）。瀏覽器讀不到 httpOnly cookie，因此以 store 狀態代表 cookie 狀態：已登入 = 持有 `parent_access`，bindPending = 持有 `parent_bind`。\n\n**表單**：M3TextField（label「綁定碼」、`autocapitalize=characters`、`autocomplete=one-time-code`）。送出前正規化（去頭尾與中間空白、去 `-`、轉大寫），不符合 `/^[A-Z0-9]{8}$/` → 欄位錯誤「綁定碼為 8 碼英文或數字」，不送出。說明文字：「請輸入安親班提供的 8 碼綁定碼。綁定碼只能使用一次，過期或已使用請向安親班索取新的綁定碼。」\n\n**送出** `bind(code)`（PARENT-007），送出中按鈕 loading 防連點：\n- 成功（首綁）：`parentAuth.setParent(parent)`、`children.seed(parent.children)`；`getPublicConfig().add_friend_url` 有值 → 切到成功畫面（「綁定完成」、已綁定的小孩姓名、PARENT-035 AddFriendCard、主要按鈕「開始使用」→ `router.replace(resolveSafeRedirect(route.query.redirect))`）；無值或 config 取得失敗 → 直接 `router.replace(resolveSafeRedirect(route.query.redirect))`。\n- 成功（加綁）：`setParent(parent)`、`children.seed(parent.children)` 並 `children.select(新出現的小孩 id)`、snackbar「已加綁 {姓名}」、`router.replace('/')`。\n- 業務錯誤 → PARENT-032 `BindCodeErrorNotice` 依 `error.code` 顯示（`orgPhone` 取 PARENT-005 `getPublicConfig().org_phone`，取不到時傳 null），欄位保留輸入值；「重新輸入」清空欄位與錯誤。\n- 首綁模式 401（bind token 過期或遺失）→ 顯示「綁定時間已逾時，請重新以 LINE 登入」與「重新登入」按鈕：`parentAuth.clearBindPending()` 後 `router.replace('/login')`。\n\n移植 ivy `FE:src/parent/views/BindView.vue::submit` 與 `FE:src/parent/views/BindAdditionalView.vue::submit`（合併為單一頁）；保留 ivy 的「聯絡安親班」撥號（電話改取公開設定 `org_phone`）；**去掉** toast（改用 PARENT-011 snackbar）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-bind.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：首綁模式（含 nameHint 問候）、加綁模式（列出已綁定小孩 + 返回）、格式錯誤欄位提示、送出中、各錯誤態（由 BindCodeErrorNotice 呈現：錯誤 / 過期 / 已使用 / 已被他人綁定 / 已綁定過 / 嘗試過多，含「聯絡安親班」撥號按鈕）、首綁逾時需重新登入、首綁成功畫面（含加好友卡）。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `BindView.vue`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/BindView.vue",
       "source_ref": "FE:src/parent/views/BindView.vue::submit",
@@ -1137,7 +1127,8 @@
         "PARENT-018",
         "PARENT-032",
         "INFRA-013",
-        "PARENT-005"
+        "PARENT-005",
+        "PARENT-035"
       ],
       "suggested_model": "fable-5",
       "risk_notes": "",
@@ -1148,12 +1139,13 @@
           "vitest"
         ],
         "red_cases": [
-          "BindView first bind normalizes and redirects：bindPending={nameHint:'王媽媽'}、initialRoute='/bind?redirect=/homework'；輸入 ' abcd-2345 ' 送出 → POST body 深等於 {code:'ABCD2345'}；回 {parent:{id:'p1', children:[{id:'s1',name:'王小明'}]}} → currentRoute.path === '/homework'，parentAuth.isAuthed === true，bindPending === null，畫面曾顯示「您好，王媽媽」",
+          "BindView first bind normalizes and redirects：bindPending={nameHint:'王媽媽'}、initialRoute='/bind?redirect=/homework'、GET /parent/config 回 add_friend_url null；輸入 ' abcd-2345 ' 送出 → POST body 深等於 {code:'ABCD2345'}；回 {parent:{id:'p1', children:[{id:'s1',name:'王小明'}]}} → currentRoute.path === '/homework'，parentAuth.isAuthed === true，bindPending === null，畫面曾顯示「您好，王媽媽」",
           "BindView rejects malformed code locally：輸入 'ABC12' 送出 → 畫面含「綁定碼為 8 碼英文或數字」，mock.history.post.length === 0",
           "BindView additional bind selects new child：parentAuth.parent 已設定（children [s1]）、children.items=[s1] → 標題「加綁其他小孩」；送出回 children [s1, s2(王小華)] → children.selectedId === 's2'，snackbar 第一則為「已加綁 王小華」，currentRoute.path === '/'",
           "BindView shows expired code error：回 400 {error:{code:'binding_code_expired'}} （GET /parent/config 回 org_phone '02-2345-6789'）→ 畫面含「綁定碼已過期」與 href 'tel:0223456789' 的「聯絡安親班」連結，輸入框仍為 'ABCD2345'；點「重新輸入」→ 輸入框為空且錯誤消失",
           "BindView first bind timeout requires relogin：首綁模式回 401 {error:{code:'unauthenticated'}} → 畫面含「綁定時間已逾時，請重新以 LINE 登入」；點「重新登入」→ bindPending === null 且 currentRoute.path === '/login'",
-          "BindView prevents double submit：POST 尚未回應時再點送出 → mock.history.post.length === 1"
+          "BindView prevents double submit：POST 尚未回應時再點送出 → mock.history.post.length === 1",
+          "BindView first bind shows add friend step：GET /parent/config 回 add_friend_url 'https://line.me/R/ti/p/@happy'；首綁成功 → 仍在 '/bind' 並顯示「綁定完成」、'王小明'、「加入官方帳號好友」（href 為該 url）；點「開始使用」→ currentRoute.path === '/homework'"
         ],
         "run": "just web-test src/parent/views/BindView.spec.ts -t \"BindView\"",
         "notes": ""
@@ -1249,7 +1241,7 @@
     {
       "id": "PARENT-034",
       "title": "建立 MoreView：家長資料、小孩清單、功能入口與登出",
-      "description": "建立 `apps/web/src/parent/views/MoreView.vue`（路由 `/more`，底部導覽「更多」）。\n\n- 頂部：家長頭像（`parentAuth.parent.picture_url`，無則顯示 `display_name` 首字圓形）與名稱。\n- 「我的小孩」：`children.items` 每位一列（姓名、`grade_level` 年級、`class_name`），目前選中者標示「目前查看」；點擊 → `children.select(id)` 後 `router.push('/')`。\n- 功能入口（PARENT-020 M3ListItem，`to` 導頁）：出勤紀錄 `/attendance`、請假 `/leaves`、代理接送 `/pickup/proxy`、通知 `/notifications`（trailing 顯示 PARENT-172 `unreadCount`，0 不顯示）、通知設定 `/notifications/preferences`、加綁其他小孩 `/bind`。\n- 「登出」：開 PARENT-026 ConfirmDialog（標題「確定要登出？」、說明「登出後需重新以 LINE 登入」、destructive）→ 確認呼叫 PARENT-033 `logout()`，進行中確認鈕 loading。\n- 底部顯示安親班名稱（PARENT-005）。\n\n參考 ivy `FE:src/parent/views/MeView.vue` 的「我的」頁資訊架構；**去掉** 個資匯出、外觀設定、FAQ、個資權利專區。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-more.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：有頭像 / 無頭像、單一小孩 / 多位小孩（標示目前查看）、通知未讀數、登出確認對話框（含 loading）。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/views/MoreView.vue`（路由 `/more`，底部導覽「更多」）。\n\n- 頂部：家長頭像（`parentAuth.parent.picture_url`，無則顯示 `display_name` 首字圓形）與名稱。\n- 「我的小孩」：`children.items` 每位一列（姓名、`grade_level` 年級、`class_name`），目前選中者標示「目前查看」；點擊 → `children.select(id)` 後 `router.push('/')`。\n- 功能入口（PARENT-020 M3ListItem，`to` 導頁）：出勤紀錄 `/attendance`、請假 `/leaves`、代理接送 `/pickup/proxy`、通知 `/notifications`（trailing 顯示 PARENT-172 `unreadCount`，0 不顯示）、通知設定 `/notifications/preferences`、加綁其他小孩 `/bind`。\n- 「登出」：開 PARENT-026 ConfirmDialog（標題「確定要登出？」、說明「登出後需重新以 LINE 登入」、destructive）→ 確認呼叫 PARENT-033 `logout()`，進行中確認鈕 loading。\n- 功能入口上方放 PARENT-035 AddFriendCard（url 取 `getPublicConfig().add_friend_url`，空值時不顯示）。\n- 底部顯示安親班名稱（PARENT-005）。\n\n參考 ivy `FE:src/parent/views/MeView.vue` 的「我的」頁資訊架構；**去掉** 個資匯出、外觀設定、FAQ、個資權利專區。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-more.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：有頭像 / 無頭像、單一小孩 / 多位小孩（標示目前查看）、通知未讀數、加好友卡（有 / 無 URL）、登出確認對話框（含 loading）。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `MoreView.vue`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/MoreView.vue",
       "source_ref": "FE:src/parent/views/MeView.vue::doLogout",
@@ -1263,7 +1255,8 @@
         "PARENT-026",
         "PARENT-033",
         "PARENT-172",
-        "INFRA-013"
+        "INFRA-013",
+        "PARENT-035"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -1277,9 +1270,46 @@
           "MoreView lists children and switches：children.items=[{id:'s1',name:'王小明',grade_level:3},{id:'s2',name:'王小華',grade_level:1}]、selectedId='s1' → 王小明 列含「目前查看」；點王小華 → children.selectedId === 's2' 且 currentRoute.path === '/'",
           "MoreView shows unread badge on notifications：notifications.unreadCount=5 → 「通知」列含 '5'；unreadCount=0 → 「通知」列不含數字徽章",
           "MoreView logout requires confirm：點「登出」→ 出現「確定要登出？」；點取消 → 對話框關閉且 POST /parent/auth/logout 未送出；再點登出並確認 → 送出 logout 且 currentRoute.fullPath === '/login?logged_out=1'",
-          "MoreView avatar fallback：parent.picture_url=null、display_name='王媽媽' → 頭像區文字為 '王'"
+          "MoreView avatar fallback：parent.picture_url=null、display_name='王媽媽' → 頭像區文字為 '王'",
+          "MoreView shows add friend card from config：GET /parent/config 回 add_friend_url 'https://line.me/R/ti/p/@happy' → 含「加入官方帳號好友」；回 add_friend_url null → 不含該文字"
         ],
         "run": "just web-test src/parent/views/MoreView.spec.ts -t \"MoreView\"",
+        "notes": ""
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "PARENT-035",
+      "title": "建立 AddFriendCard 元件：加入官方帳號好友引導（綁定成功頁與更多頁）",
+      "description": "建立 `apps/web/src/parent/components/AddFriendCard.vue`：\n```ts\nprops: { url: string | null }\n```\n- `url` 為 null 或空字串 → 不渲染任何內容。\n- 否則顯示卡片：LINE 綠以外不寫死顏色（用 `--m3-*`），標題「加入官方帳號好友」、說明「加入後才能收到 LINE 通知（到班、作業完成、接送回覆等）」、按鈕「加入好友」為 `<a :href=\"url\" target=\"_blank\" rel=\"noopener noreferrer\">`（LINE 內建瀏覽器會直接開啟官方帳號加好友頁）。\n- 只接受 `https://` 開頭的 url，其他（例如 `javascript:`）視同空值不渲染。\n- 用於 PARENT-031 首綁成功畫面與 PARENT-034 MoreView；LIFF 登入時的 `bot_prompt` 屬 LIFF app 設定（INFRA 部署文件），前端不處理。\n\n新寫元件（domain_spec M9：LINE 推播的前提是家長已加官方帳號好友）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-add-friend-card.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：有 URL 時的卡片（綁定成功頁與更多頁兩種位置示意）；無 URL 時不顯示。可併入 `parent-page-bind.html`。\n\n**驗收標準**：每一條對應 red_case。",
+      "granularity_unit": "component",
+      "target_path": "apps/web/src/parent/components/AddFriendCard.vue",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "PARENT-001",
+        "PARENT-014",
+        "PARENT-015",
+        "INFRA-012"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/web/src/parent/components/AddFriendCard.spec.ts",
+        "markers": [
+          "vitest"
+        ],
+        "red_cases": [
+          "AddFriendCard renders link：url 'https://line.me/R/ti/p/@happy' → 含「加入官方帳號好友」與「加入後才能收到 LINE 通知」，「加入好友」a 的 href 為該 url、target '_blank'、rel 含 'noopener'",
+          "AddFriendCard hidden without valid url：url null、'' 或 'javascript:alert(1)' → 不渲染任何元素（wrapper 無 a 元素且無文字）"
+        ],
+        "run": "just web-test src/parent/components/AddFriendCard.spec.ts -t \"AddFriendCard\"",
         "notes": ""
       },
       "review": {
@@ -1457,7 +1487,7 @@
     {
       "id": "PARENT-054",
       "title": "移植 ChildHubView：首頁（小孩切換 + 今日狀態卡 + 快捷入口）",
-      "description": "建立 `apps/web/src/parent/views/ChildHubView.vue`（路由 `/`）。\n\n- 掛載時 `children.load()`（PARENT-010）；清單為空 → PARENT-029 ParentEmptyState（title「尚未綁定小孩」、description「請輸入安親班提供的綁定碼」、actionLabel「輸入綁定碼」→ `/bind`）。清單載入失敗 → error 變體，重試呼叫 `children.load(true)`。\n- 頂部 PARENT-050 ChildContextHeader，select → `children.select(id)`。\n- PARENT-052 `useTodayStatus(toRef(children, 'selectedId'))` 驅動 PARENT-053 TodayStatusCard；首次載入顯示 PARENT-028 SkeletonBlock（card），`error` 時卡片上方顯示錯誤列與「重試」。今日狀態只打 `GET /parent/children/{id}/today` 一支，之後由 ws 即時更新。整頁包在 PARENT-027 PullToRefresh（onRefresh = `refresh`）。\n- 卡片事件：`request-pickup` / `open-pickup` → `router.push('/pickup')`；`open-homework` → `router.push('/homework')`；`arrive-now` → PARENT-105 `useArriveNow().request(selectedId, 非終態的 today.pickup_request?.id ?? null)`，頁面掛 PARENT-026 ConfirmDialog 綁 `confirmOpen` / `skipNextTime`；`confirm()` 回傳非 null 時呼叫 PARENT-052 `applyPickup(回應)`，卡片立即顯示 arrived 與自動回覆（留在首頁，不導頁）。\n- 快捷入口一列：請假 `/leaves`、出勤 `/attendance`、代理接送 `/pickup/proxy`。\n\n參考 ivy `FE:src/parent/views/ChildHubView.vue` 的「以選中小孩為操作對象、無小孩時入口停用」；內容改為本專案今日狀態，**去掉** 聯絡簿 / 照片 / 成長報告 / 健康紀錄入口。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-child-hub.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：單一小孩 / 多位小孩切換、今日狀態卡各主要狀態（引用 TodayStatusCard 稿）、「我已經到了」確認對話框、首次載入骨架、今日狀態載入失敗錯誤列、無綁定小孩空狀態、小孩清單載入失敗、下拉重新整理中、快捷入口。\n\n**驗收標準**：每一條對應 red_case（mountWithApp + axios-mock-adapter mock `/parent/children` 與 `/parent/children/{id}/today`）。",
+      "description": "建立 `apps/web/src/parent/views/ChildHubView.vue`（路由 `/`）。\n\n- 掛載時 `children.load()`（PARENT-010）；清單為空 → PARENT-029 ParentEmptyState（title「尚未綁定小孩」、description「請輸入安親班提供的綁定碼」、actionLabel「輸入綁定碼」→ `/bind`）。清單載入失敗 → error 變體，重試呼叫 `children.load(true)`。\n- 頂部 PARENT-050 ChildContextHeader，select → `children.select(id)`。\n- PARENT-052 `useTodayStatus(toRef(children, 'selectedId'))` 驅動 PARENT-053 TodayStatusCard；首次載入顯示 PARENT-028 SkeletonBlock（card），`error` 時卡片上方顯示錯誤列與「重試」。今日狀態只打 `GET /parent/children/{id}/today` 一支，之後由 ws 即時更新。整頁包在 PARENT-027 PullToRefresh（onRefresh = `refresh`）。\n- 卡片事件：`request-pickup` / `open-pickup` → `router.push('/pickup')`；`open-homework` → `router.push('/homework')`；`arrive-now` → PARENT-105 `useArriveNow().request(selectedId, 非終態的 today.pickup_request?.id ?? null)`，頁面掛 PARENT-026 ConfirmDialog 綁 `confirmOpen` / `skipNextTime`；`confirm()` 回傳非 null 時呼叫 PARENT-052 `applyPickup(回應)`，卡片立即顯示 arrived 與自動回覆（留在首頁，不導頁）。\n- 快捷入口一列：請假 `/leaves`、出勤 `/attendance`、代理接送 `/pickup/proxy`。\n\n參考 ivy `FE:src/parent/views/ChildHubView.vue` 的「以選中小孩為操作對象、無小孩時入口停用」；內容改為本專案今日狀態，**去掉** 聯絡簿 / 照片 / 成長報告 / 健康紀錄入口。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-child-hub.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：單一小孩 / 多位小孩切換、今日狀態卡各主要狀態（引用 TodayStatusCard 稿）、「我已經到了」確認對話框、首次載入骨架、今日狀態載入失敗錯誤列、無綁定小孩空狀態、小孩清單載入失敗、下拉重新整理中、快捷入口。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `ChildHubView.vue`。\n\n**驗收標準**：每一條對應 red_case（mountWithApp + axios-mock-adapter mock `/parent/children` 與 `/parent/children/{id}/today`）。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/ChildHubView.vue",
       "source_ref": "FE:src/parent/views/ChildHubView.vue::targetId",
@@ -1616,7 +1646,7 @@
     {
       "id": "PARENT-073",
       "title": "建立 HomeworkView：今日作業明細（每項狀態、整體狀態、預計可接送時間、老師說明）",
-      "description": "建立 `apps/web/src/parent/views/HomeworkView.vue`（路由 `/homework`，底部導覽「作業」）。\n\n- 頂部 PARENT-050 ChildContextHeader（切換 → `children.select`）。\n- 依 `children.selectedId` 呼叫 PARENT-071 `homeworkToday.load(id, { force: true })`（掛載與切換時），畫面讀 `get(id)`，ws 更新自動反映。\n- 摘要卡（PARENT-017）：整體狀態 StatusPill、「已完成 {done}/{total} 項」、預計可接送（overall done →「作業已完成，可以來接送了」；`ready_eta` 有值 →「預計 HH:MM 可接送」；否則「老師尚未提供預計時間」）、`note` 有值 →「老師說明：{note}」、`updated_at` 有值 →「最後更新 HH:MM」（FRONTEND-003）。\n- 項目清單：`<ul role=\"list\">` + PARENT-072 HomeworkItemRow，依後端順序。\n- 空狀態：items 為空且 overall 非 done → ParentEmptyState「今天還沒有作業項目」/「老師登記作業後會顯示在這裡」；items 為空且 overall done →「老師已標記今日作業完成」。\n- 首次載入 SkeletonBlock（row × 3）；載入失敗（`errorByChild` 有值且無資料）→ ParentEmptyState error「作業進度載入失敗」+ 重試；有舊資料時只在頂部顯示錯誤列。PullToRefresh 重新載入。\n\n新寫頁面（domain_spec §4 家長端 `/homework`）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-homework.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：進行中（多項不同狀態 + ready_eta + 老師說明 + 最後更新）、全部完成、無項目、老師標記完成但無項目、首次載入骨架、載入失敗、有舊資料時的錯誤列、多位小孩切換。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/views/HomeworkView.vue`（路由 `/homework`，底部導覽「作業」）。\n\n- 頂部 PARENT-050 ChildContextHeader（切換 → `children.select`）。\n- 依 `children.selectedId` 呼叫 PARENT-071 `homeworkToday.load(id, { force: true })`（掛載與切換時），畫面讀 `get(id)`，ws 更新自動反映。\n- 摘要卡（PARENT-017）：整體狀態 StatusPill、「已完成 {done}/{total} 項」、預計可接送（overall done →「作業已完成，可以來接送了」；`ready_eta` 有值 →「預計 HH:MM 可接送」；否則「老師尚未提供預計時間」）、`note` 有值 →「老師說明：{note}」、`updated_at` 有值 →「最後更新 HH:MM」（FRONTEND-003）。\n- 項目清單：`<ul role=\"list\">` + PARENT-072 HomeworkItemRow，依後端順序。\n- 空狀態：items 為空且 overall 非 done → ParentEmptyState「今天還沒有作業項目」/「老師登記作業後會顯示在這裡」；items 為空且 overall done →「老師已標記今日作業完成」。\n- 首次載入 SkeletonBlock（row × 3）；載入失敗（`errorByChild` 有值且無資料）→ ParentEmptyState error「作業進度載入失敗」+ 重試；有舊資料時只在頂部顯示錯誤列。PullToRefresh 重新載入。\n\n新寫頁面（domain_spec §4 家長端 `/homework`）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-homework.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：進行中（多項不同狀態 + ready_eta + 老師說明 + 最後更新）、全部完成、無項目、老師標記完成但無項目、首次載入骨架、載入失敗、有舊資料時的錯誤列、多位小孩切換。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `HomeworkView.vue`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/HomeworkView.vue",
       "source_ref": null,
@@ -1781,7 +1811,7 @@
     {
       "id": "PARENT-093",
       "title": "實作 parent/stores/pickupRequests.ts：今日接送請求（全部小孩）、操作與 ws 即時套用",
-      "description": "建立 `apps/web/src/parent/stores/pickupRequests.ts`（Pinia setup store，id `parentPickupRequests`）：\n- state：`items: ParentPickupRequest[]`、`loaded`、`loading`、`error: string | null`。\n- getters：`openFor(childId)`：該小孩 status ∈ {pending, acknowledged, arrived} 中 created_at 最新的一筆，無則 null；`latestFor(childId)`：該小孩 created_at 最新的一筆（含終態）；`historyFor(childId)`：該小孩終態請求，created_at 由新到舊。\n- actions：`load(force = false)`（PARENT-090 `listTodayPickupRequests`，並發共用 promise，失敗 `error = '接送狀態載入失敗'`、保留舊資料）；`create(childId, expectedArrivalAt: string | null)`；`markArrived(id)`；`cancel(id, reason?)`；`arriveNow(childId)`：「我已經到了」捷徑，POST `{student_id, arrived: true}`；回 409 `pickup_request_exists` 且 `error.details.request_id` 有值 → 改對該 id 呼叫 PARENT-090 `markPickupArrived`（BACKEND-442）並以其結果作為回傳（不先 rethrow）；該次 arrived 再回 409 `invalid_pickup_status`（例如已被接走）→ `load(true)` 後 rethrow。四個寫入動作成功後以回應 upsert（依 id 取代或加入）並回傳該筆。錯誤：`pickup_request_exists` 或 `invalid_pickup_status` → 先 `load(true)` 同步最新狀態再 rethrow 原錯誤（移植 ivy PickupNoticeView「409 時先 refresh」）。寫入進行中以 `pendingAction: string | null` 標示，同時只允許一個寫入（重複呼叫直接回傳進行中的 promise，防連點）。\n- ws：向 PARENT-173 `parentWs.on('pickup.request_updated', data => upsert(data))`；向 `parentWs.registerPoller(() => load(true))`。只保留 service_date 為台北今日的資料（FRONTEND-003），跨日事件忽略。\n- `clear()`。\n\n移植 ivy `FE:src/parent/views/PickupNoticeView.vue::refresh` 的 listSeq 過期回應保護與 409 同步邏輯（從 view 抽到 store）。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/stores/pickupRequests.ts`（Pinia setup store，id `parentPickupRequests`）：\n- state：`items: ParentPickupRequest[]`、`loaded`、`loading`、`error: string | null`。\n- getters：`openFor(childId)`：該小孩 status ∈ {pending, acknowledged, arrived} 中 created_at 最新的一筆，無則 null；`latestFor(childId)`：該小孩 created_at 最新的一筆（含終態）；`historyFor(childId)`：該小孩終態請求，created_at 由新到舊。\n- actions：`load(force = false)`（PARENT-090 `listTodayPickupRequests`，並發共用 promise，失敗 `error = '接送狀態載入失敗'`、保留舊資料）；`create(childId, expectedArrivalAt: string | null)`；`markArrived(id)`；`cancel(id, reason?)`；`arriveNow(childId)`：「我已經到了」捷徑，POST `{student_id, arrived: true}`；回 409 `pickup_request_exists` 且 `error.details.request_id` 有值 → 改對該 id 呼叫 PARENT-090 `markPickupArrived`（BACKEND-442）並以其結果作為回傳（不先 rethrow）；該次 arrived 再回 409 `invalid_pickup_status`（例如已被接走）→ `load(true)` 後 rethrow。四個寫入動作成功後以回應 upsert（依 id 取代或加入）並回傳該筆。錯誤：`pickup_request_exists`、`invalid_pickup_status` 或 404 `pickup_request_not_found`（請求已不存在或已不屬於自己，例如解除綁定）→ 先 `load(true)` 同步最新狀態再 rethrow 原錯誤（移植 ivy PickupNoticeView「409 時先 refresh」）。寫入進行中以 `pendingAction: string | null` 標示，同時只允許一個寫入（重複呼叫直接回傳進行中的 promise，防連點）。\n- ws：向 PARENT-173 `parentWs.on('pickup.request_updated', data => upsert(data))`；向 `parentWs.registerPoller(() => load(true))`。只保留 service_date 為台北今日的資料（FRONTEND-003），跨日事件忽略。\n- `clear()`。\n\n移植 ivy `FE:src/parent/views/PickupNoticeView.vue::refresh` 的 listSeq 過期回應保護與 409 同步邏輯（從 view 抽到 store）。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "store",
       "target_path": "apps/web/src/parent/stores/pickupRequests.ts",
       "source_ref": "FE:src/parent/views/PickupNoticeView.vue::refresh",
@@ -1810,7 +1840,8 @@
           "pickupRequestsStore ignores other day event：派發 service_date 為昨日的事件 → items 不變",
           "pickupRequestsStore arriveNow creates arrived request：POST 回 201 {id:'r8', student_id:'s1', status:'arrived', reply_message:'作業已完成，可以接送', reply_source:'auto'} → arriveNow('s1') resolve 該筆，POST body 深等於 {student_id:'s1', arrived:true}，openFor('s1').status === 'arrived'",
           "pickupRequestsStore arriveNow falls back to existing request：POST 回 409 {error:{code:'pickup_request_exists', details:{request_id:'r7'}}}、POST '/parent/pickup/requests/r7/arrived' 回 {id:'r7', status:'arrived'} → arriveNow('s1') resolve 的 id === 'r7'，openFor('s1').status === 'arrived'，不 reject",
-          "pickupRequestsStore arriveNow fallback conflict syncs：409 pickup_request_exists 後對 r7 arrived 回 409 invalid_pickup_status、GET today 回 r7 completed → arriveNow reject 且 error.code === 'invalid_pickup_status'，之後 latestFor('s1').status === 'completed'"
+          "pickupRequestsStore arriveNow fallback conflict syncs：409 pickup_request_exists 後對 r7 arrived 回 409 invalid_pickup_status、GET today 回 r7 completed → arriveNow reject 且 error.code === 'invalid_pickup_status'，之後 latestFor('s1').status === 'completed'",
+          "pickupRequestsStore handles not found：markArrived('r2') 回 404 {error:{code:'pickup_request_not_found'}}、GET today 回 [] → reject 且 error.code === 'pickup_request_not_found'，之後 openFor('s1') === null"
         ],
         "run": "just web-test src/parent/stores/pickupRequests.spec.ts -t \"pickupRequestsStore\"",
         "notes": ""
@@ -1939,7 +1970,7 @@
     {
       "id": "PARENT-097",
       "title": "移植 PickupView：我要來接 / 回覆訊息 / 我到了 / 取消 / 完成",
-      "description": "建立 `apps/web/src/parent/views/PickupView.vue`（路由 `/pickup`，底部導覽「接送」）。\n\n**資料**：掛載時 `children.load()`、`pickupRequests.load(true)`（PARENT-093）、選中小孩的 `getChild(id)`（PARENT-006，取 `my_guardian.can_pickup`）與 `homeworkToday.load(id)`（PARENT-071）；切換小孩重抓 child 與作業；`document.visibilitychange` 轉 visible 時 `pickupRequests.load(true)`。ws 更新由 store 自動反映。\n\n**畫面**（PARENT-050 ChildContextHeader 下方）：\n1. 作業提示列：「作業進度 {done}/{total} · 預計 HH:MM 可接送」或「作業已完成」（無資料時不顯示）。\n2. 無進行中請求（`openFor(id)` 為 null）：\n   - `can_pickup === false` → ParentEmptyState「您沒有這位小孩的接送權限」/「如需接送請聯絡安親班」，不顯示表單。\n   - 否則表單卡：標題「我要來接」、PARENT-096 ArrivalTimePicker、送出鈕「通知安親班」（loading 防連點）→ `pickupRequests.create(id, eta)`；成功 snackbar「已通知安親班」，畫面切到進行中（自動回覆立即顯示）。\n   - 表單卡下方分隔線後放次要按鈕（outlined）「我已經到了」與說明「人已在安親班門口時使用，不必先通知」→ PARENT-105 `useArriveNow().request(id, null)`（確認對話框與「我到了」共用）；成功後畫面切到進行中（arrived，含自動回覆）。\n3. 有進行中請求：PARENT-094 PickupReplyMessage、PARENT-095 PickupProgressSteps、`expected_arrival_at` 有值時「您預計 HH:MM 抵達」；動作：\n   - 「我到了」（`can_mark_arrived`）：PARENT-105 `useArriveNow().request(id, 該請求 id)`，以 PARENT-026 ConfirmDialog 呈現確認（含「下次不再提醒」，localStorage `parent_pickup_arrive_skip_confirm=1` 時直接送出）；成功 snackbar「已通知老師您到了」。\n   - 「取消接送」（`can_cancel`）：ConfirmDialog destructive「取消這次接送？」→ `cancel(id)`；成功 snackbar「已取消接送」。\n4. `latestFor(id)` 為 completed 且無進行中請求：成功卡「HH:MM 已由 {picked_up_by_name} 接走」，下方仍可再次發起（表單）。\n5. 今日紀錄：`historyFor(id)` 精簡列表（狀態 pill + 時間）。\n6. 底部連結「代理接送與常用接送人」→ `/pickup/proxy`。\n\n**錯誤**（`ApiError.code`）：`pickup_request_exists` → snackbar「今天已有接送請求，已更新狀態」（store 已同步）；`invalid_pickup_status` → snackbar「狀態已更新，請確認後再操作」；`pickup_not_allowed` → 「您沒有這位小孩的接送權限」；`pickup_window_closed` / `student_not_available` / `not_service_day` / `expected_arrival_in_past` / `expected_arrival_too_late` / `student_not_active` → 在表單卡內以 error 樣式顯示後端 `error.message`（繁中）；其他 → snackbar error「送出失敗，請稍後再試」。載入失敗（store.error 且無資料）→ ParentEmptyState error + 重試。\n\n移植 ivy `FE:src/parent/views/PickupNoticeView.vue` 的 submit / arrive-now 捷徑 / arrive 確認（含不再提醒）/ cancel 確認 / 30 秒內 visibility refresh 概念；**去掉** 滾輪、note、client_request_id、30 秒定時輪詢（改由 ws + parentWs poller）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-pickup.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：無請求表單（含作業提示）、無接送權限、送出中、pending 自動回覆（作業完成 / 有 ETA / 等待老師）、acknowledged 老師回覆、arrived、completed 成功卡、「我已經到了」次要按鈕（無請求時）、我到了確認對話框（含不再提醒）、取消確認、表單內業務錯誤（不在時段 / 請假中 / 非營業日 / 時間太晚）、載入失敗、今日紀錄列表、多位小孩切換。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/views/PickupView.vue`（路由 `/pickup`，底部導覽「接送」）。\n\n**資料**：掛載時 `children.load()`、`pickupRequests.load(true)`（PARENT-093）、選中小孩的 `getChild(id)`（PARENT-006，取 `my_guardian.can_pickup`）與 `homeworkToday.load(id)`（PARENT-071）；切換小孩重抓 child 與作業；`document.visibilitychange` 轉 visible 時 `pickupRequests.load(true)`。ws 更新由 store 自動反映。\n\n**畫面**（PARENT-050 ChildContextHeader 下方）：\n1. 作業提示列：「作業進度 {done}/{total} · 預計 HH:MM 可接送」或「作業已完成」（無資料時不顯示）。\n2. 無進行中請求（`openFor(id)` 為 null）：\n   - `can_pickup === false` → ParentEmptyState「您沒有這位小孩的接送權限」/「如需接送請聯絡安親班」，不顯示表單。\n   - 否則表單卡：標題「我要來接」、PARENT-096 ArrivalTimePicker、送出鈕「通知安親班」（loading 防連點）→ `pickupRequests.create(id, eta)`；成功 snackbar「已通知安親班」，畫面切到進行中（自動回覆立即顯示）。\n   - 表單卡下方分隔線後放次要按鈕（outlined）「我已經到了」與說明「人已在安親班門口時使用，不必先通知」→ PARENT-105 `useArriveNow().request(id, null)`（確認對話框與「我到了」共用）；成功後畫面切到進行中（arrived，含自動回覆）。\n3. 有進行中請求：PARENT-094 PickupReplyMessage、PARENT-095 PickupProgressSteps、`expected_arrival_at` 有值時「您預計 HH:MM 抵達」；動作：\n   - 「我到了」（`can_mark_arrived`）：PARENT-105 `useArriveNow().request(id, 該請求 id)`，以 PARENT-026 ConfirmDialog 呈現確認（含「下次不再提醒」，localStorage `parent_pickup_arrive_skip_confirm=1` 時直接送出）；成功 snackbar「已通知老師您到了」。\n   - 「取消接送」（`can_cancel`）：ConfirmDialog destructive「取消這次接送？」→ `cancel(id)`；成功 snackbar「已取消接送」。\n4. `latestFor(id)` 為 completed 且無進行中請求：成功卡「HH:MM 已由 {picked_up_by_name} 接走」，下方仍可再次發起（表單）。\n5. 今日紀錄：`historyFor(id)` 精簡列表（狀態 pill + 時間）。\n6. 底部連結「代理接送與常用接送人」→ `/pickup/proxy`。\n\n**錯誤**（`ApiError.code`）：`pickup_request_exists` → snackbar「今天已有接送請求，已更新狀態」（store 已同步）；`invalid_pickup_status` → snackbar「狀態已更新，請確認後再操作」；`pickup_request_not_found` → snackbar「找不到這筆接送請求，已重新整理」（store 已同步）；`pickup_not_allowed` → 「您沒有這位小孩的接送權限」；`pickup_window_closed` / `student_not_available` / `not_service_day` / `expected_arrival_in_past` / `expected_arrival_too_late` / `student_not_active` → 在表單卡內以 error 樣式顯示後端 `error.message`（繁中）；其他 → snackbar error「送出失敗，請稍後再試」。載入失敗（store.error 且無資料）→ ParentEmptyState error + 重試。\n\n移植 ivy `FE:src/parent/views/PickupNoticeView.vue` 的 submit / arrive-now 捷徑 / arrive 確認（含不再提醒）/ cancel 確認 / 30 秒內 visibility refresh 概念；**去掉** 滾輪、note、client_request_id、30 秒定時輪詢（改由 ws + parentWs poller）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-pickup.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：無請求表單（含作業提示）、無接送權限、送出中、pending 自動回覆（作業完成 / 有 ETA / 等待老師）、acknowledged 老師回覆、arrived、completed 成功卡、「我已經到了」次要按鈕（無請求時）、我到了確認對話框（含不再提醒）、取消確認、表單內業務錯誤（不在時段 / 請假中 / 非營業日 / 時間太晚）、載入失敗、今日紀錄列表、多位小孩切換。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `PickupView.vue`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/PickupView.vue",
       "source_ref": "FE:src/parent/views/PickupNoticeView.vue::submit",
@@ -1980,7 +2011,8 @@
           "PickupView existing request conflict syncs：POST 回 409 pickup_request_exists、GET today 回 r9 acknowledged reply_ready_eta '17:45' → snackbar「今天已有接送請求，已更新狀態」，畫面含 '預計 17:45 可接送'",
           "PickupView completed card：today 只有 r1 completed、picked_up_by_name '王媽媽'、completed_at '..T09:40:00Z' → 含 '17:40 已由 王媽媽 接走'，且仍顯示「通知安親班」表單",
           "PickupView arrive now shortcut without request：無進行中請求、can_pickup=true → 點「我已經到了」→ 出現「確認已抵達安親班？」；確認 → POST /parent/pickup/requests body 深等於 {student_id:'s1', arrived:true}，回 {id:'r8', status:'arrived', reply_message:'作業已完成，可以接送', reply_source:'auto', can_cancel:true, can_mark_arrived:false} → 畫面含 '作業已完成，可以接送'、'系統自動回覆'，不再顯示表單與「我到了」",
-          "PickupView arrive now falls back on existing request：其他裝置已建立 r7 但本頁尚未同步，點「我已經到了」並確認 → POST 回 409 {error:{code:'pickup_request_exists', details:{request_id:'r7'}}} → 接著 POST '/parent/pickup/requests/r7/arrived'，畫面顯示 r7 的 arrived 狀態，snackbar「已通知老師您到了」"
+          "PickupView arrive now falls back on existing request：其他裝置已建立 r7 但本頁尚未同步，點「我已經到了」並確認 → POST 回 409 {error:{code:'pickup_request_exists', details:{request_id:'r7'}}} → 接著 POST '/parent/pickup/requests/r7/arrived'，畫面顯示 r7 的 arrived 狀態，snackbar「已通知老師您到了」",
+          "PickupView request not found refreshes：進行中 r1，取消並確認 → POST cancel 回 404 {error:{code:'pickup_request_not_found'}}、GET today 回 [] → snackbar「找不到這筆接送請求，已重新整理」，畫面回到「我要來接」表單"
         ],
         "run": "just web-test src/parent/views/PickupView.spec.ts -t \"PickupView\"",
         "notes": ""
@@ -2141,7 +2173,7 @@
     {
       "id": "PARENT-102",
       "title": "建立 AuthorizationForm 元件：建立單日代理接送授權（常用接送人或臨時填寫）",
-      "description": "建立 `apps/web/src/parent/components/pickup/AuthorizationForm.vue`：\n```ts\nprops: { persons: PickupPerson[]; submitting?: boolean; today: string /* YYYY-MM-DD 台北 */ }\nemits: { submit: [input: AuthorizationCreateInput]; cancel: [] }\n```\n- 接送日期：`type=\"date\"`，min = today、max = today + 14 天（FRONTEND-003 日期加減，不用 toISOString），預設 today；超出範圍 →「日期需在今天起 14 天內」。\n- 方式：PARENT-098 M3SegmentedButton「常用接送人 / 臨時填寫」；persons 為空時「常用接送人」段停用並預設臨時填寫。常用接送人：單選清單（姓名、關係、電話），未選 →「請選擇接送人」，送出 `{service_date, pickup_person_id}`；臨時填寫：姓名（必填 ≤ 50）、電話（同 PARENT-099 規則與正規化），送出 `{service_date, proxy_name, proxy_phone}`。\n- 說明：「代理人到場時出示接送碼，或由老師核對身分後交付。」\n\n移植 ivy `FE:src/parent/views/PickupCreateView.vue::canSubmit` 的 saved / manual 兩種模式與日期上限（`maxDateStr` +14 天）；**去掉** 一次多個小孩、「同時存成常用接送人」、臨時填寫的照片。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-authorization-form.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：常用接送人模式（已選 / 未選錯誤）、無常用接送人時只能臨時填寫、臨時填寫含電話錯誤、日期超出範圍、送出中。可併入 `parent-page-pickup-proxy.html`。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/pickup/AuthorizationForm.vue`：\n```ts\nprops: { persons: PickupPerson[]; submitting?: boolean; today: string /* YYYY-MM-DD 台北 */; maxDaysAhead: number /* PARENT-005 limits.authorization_max_days_ahead */ }\nemits: { submit: [input: AuthorizationCreateInput]; cancel: [] }\n```\n- 接送日期：`type=\"date\"`，min = today、max = today + `maxDaysAhead` 天（FRONTEND-003 日期加減，不用 toISOString），預設 today；超出範圍 →「日期需在今天起 {maxDaysAhead} 天內」。\n- 方式：PARENT-098 M3SegmentedButton「常用接送人 / 臨時填寫」；persons 為空時「常用接送人」段停用並預設臨時填寫。常用接送人：單選清單（姓名、關係、電話），未選 →「請選擇接送人」，送出 `{service_date, pickup_person_id}`；臨時填寫：姓名（必填 ≤ 50）、電話（同 PARENT-099 規則與正規化），送出 `{service_date, proxy_name, proxy_phone}`。\n- 說明：「代理人到場時出示接送碼，或由老師核對身分後交付。」\n\n移植 ivy `FE:src/parent/views/PickupCreateView.vue::canSubmit` 的 saved / manual 兩種模式與日期上限（`maxDateStr`；天數改由設定提供）；**去掉** 一次多個小孩、「同時存成常用接送人」、臨時填寫的照片。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-authorization-form.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：常用接送人模式（已選 / 未選錯誤）、無常用接送人時只能臨時填寫、臨時填寫含電話錯誤、日期超出範圍、送出中。可併入 `parent-page-pickup-proxy.html`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/AuthorizationForm.vue",
       "source_ref": "FE:src/parent/views/PickupCreateView.vue::canSubmit",
@@ -2154,7 +2186,8 @@
         "PARENT-092",
         "PARENT-098",
         "PARENT-015",
-        "INFRA-012"
+        "INFRA-012",
+        "PARENT-005"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -2167,9 +2200,10 @@
         "red_cases": [
           "AuthorizationForm submits saved person：persons=[{id:'pp1',name:'李阿姨'}]、today '2026-10-02'；選「常用接送人」→ 選李阿姨 → 送出 → emitted('submit')[0][0] 深等於 {service_date:'2026-10-02', pickup_person_id:'pp1'}",
           "AuthorizationForm submits manual proxy：選「臨時填寫」、姓名 '陳叔叔'、電話 '0922 000 456'、日期 '2026-10-05' → payload 深等於 {service_date:'2026-10-05', proxy_name:'陳叔叔', proxy_phone:'0922000456'}",
-          "AuthorizationForm date range validation：date input 的 min === '2026-10-02'、max === '2026-10-16'；輸入 '2026-10-17' 送出 → 含「日期需在今天起 14 天內」且無 submit",
+          "AuthorizationForm date range validation：maxDaysAhead=14 → date input 的 min === '2026-10-02'、max === '2026-10-16'；輸入 '2026-10-17' 送出 → 含「日期需在今天起 14 天內」且無 submit",
           "AuthorizationForm no persons forces manual：persons=[] → 「常用接送人」段 disabled、預設顯示姓名與電話欄位",
-          "AuthorizationForm requires person selection：常用模式未選人送出 → 含「請選擇接送人」"
+          "AuthorizationForm requires person selection：常用模式未選人送出 → 含「請選擇接送人」",
+          "AuthorizationForm follows configured days ahead：maxDaysAhead=7 → max === '2026-10-09'；輸入 '2026-10-10' 送出 → 含「日期需在今天起 7 天內」"
         ],
         "run": "just web-test src/parent/components/pickup/AuthorizationForm.spec.ts -t \"AuthorizationForm\"",
         "notes": ""
@@ -2221,7 +2255,7 @@
     {
       "id": "PARENT-104",
       "title": "移植 PickupProxyView：常用接送人管理與代理接送授權（接送碼只顯示一次、取消、重新產生）",
-      "description": "建立 `apps/web/src/parent/views/PickupProxyView.vue`（路由 `/pickup/proxy`）。頂部 PARENT-050 ChildContextHeader；依 `children.selectedId` 並行載入 `listPickupPersons(id)`（PARENT-091）與 `listPickupAuthorizations(id)`（PARENT-092），切換小孩時以序號丟棄舊回應並重抓。\n\n**常用接送人區**：標題含「{n}/10」；清單 PARENT-100；空 → ParentEmptyState「尚未新增常用接送人」/「新增後可快速建立代理接送」。「新增接送人」（n ≥ 10 時停用並顯示「最多 10 位」）→ PARENT-025 ParentBottomSheet + PARENT-099 PickupPersonForm → `createPickupPerson` → 關閉、重抓清單、snackbar「已新增接送人」。刪除 → PARENT-026 ConfirmDialog destructive「刪除 {name}？」/「已建立的代理接送授權不受影響」→ `deletePickupPerson` → 重抓。錯誤：`pickup_person_limit_reached` →「常用接送人最多 10 位」；HTTP 413 →「照片檔案過大」；415 →「照片格式不支援，請使用 JPG、PNG、WEBP 或 HEIC」；`storage_unavailable` →「照片上傳失敗，請稍後再試」（表單保持開啟、保留輸入）。\n\n**代理接送授權區**：有效授權（effective_status active，依 service_date 由近到遠）用 PARENT-103 列出；其他狀態收在「過去的授權」可展開區；皆無 → ParentEmptyState「目前沒有代理接送授權」。「新增代理接送」→ BottomSheet + PARENT-102 AuthorizationForm（persons 帶入、today 取台北今日）→ `createPickupAuthorization` → 關閉表單、開啟**不可關閉**（`dismissible=false`）的 BottomSheet 顯示 PARENT-101 PickupCodeCard；`done` 後關閉、把暫存 code 設回 null、重抓清單。重新產生 → ConfirmDialog「重新產生接送碼？」/「舊的接送碼會立即失效，請把新碼重新傳給接送人」→ `regeneratePickupCode` → 同樣以接送碼卡顯示。取消 → ConfirmDialog destructive「取消這筆代理接送？」→ `cancelPickupAuthorization` → 以回應更新該列。錯誤：`authorization_limit_reached` →「同一天最多 3 筆代理接送」；`invalid_service_date` →「日期需在今天起 14 天內」；`pickup_person_not_found` →「接送人已不存在」並重抓接送人；`authorization_not_active` / `authorization_expired` →「這筆授權已失效」並重抓授權。\n\n**接送碼保護**：code 只存在本元件的區域 ref（不進 store、不寫 storage、不出現在 URL），code 卡開啟期間離開頁面（onBeforeRouteLeave）先以 ConfirmDialog「確定已記下接送碼？」確認。\n\n載入失敗 → 各區 ParentEmptyState error + 重試；首次載入 SkeletonBlock；PullToRefresh 重抓兩區。\n\n移植 ivy `FE:src/parent/views/PickupView.vue::askRegenerate` / `doCancel` / `submitPerson` 與 `FE:src/parent/views/PickupCreateView.vue` 的建立後顯示碼流程（合併為單頁 + bottom sheet）；**去掉** 編輯接送人、跨小孩授權列表、一次多孩授權。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-pickup-proxy.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：兩區皆有資料、兩區皆空、接送人已達 10 位、新增接送人 sheet（含錯誤）、刪除確認、新增授權 sheet、接送碼卡（不可滑動關閉）、重新產生確認、取消確認、過去的授權展開、載入失敗、首次載入骨架、離開頁面確認已記下。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/views/PickupProxyView.vue`（路由 `/pickup/proxy`）。頂部 PARENT-050 ChildContextHeader；依 `children.selectedId` 並行載入 `listPickupPersons(id)`（PARENT-091）與 `listPickupAuthorizations(id)`（PARENT-092），切換小孩時以序號丟棄舊回應並重抓。掛載時 `getParentLimits()`（PARENT-005）取得 `persons_max` 與 `authorization_max_days_ahead`。\n\n**常用接送人區**：標題含「{n}/{persons_max}」；清單 PARENT-100；空 → ParentEmptyState「尚未新增常用接送人」/「新增後可快速建立代理接送」。「新增接送人」（n ≥ persons_max 時停用並顯示「最多 {persons_max} 位」）→ PARENT-025 ParentBottomSheet + PARENT-099 PickupPersonForm → `createPickupPerson` → 關閉、重抓清單、snackbar「已新增接送人」。刪除 → PARENT-026 ConfirmDialog destructive「刪除 {name}？」/「已建立的代理接送授權不受影響」→ `deletePickupPerson` → 重抓。錯誤：`pickup_person_limit_reached` →「常用接送人最多 {persons_max} 位」；HTTP 413 →「照片檔案過大」；415 →「照片格式不支援，請使用 JPG、PNG、WEBP 或 HEIC」；`storage_unavailable` →「照片上傳失敗，請稍後再試」（表單保持開啟、保留輸入）。\n\n**代理接送授權區**：有效授權（effective_status active，依 service_date 由近到遠）用 PARENT-103 列出；其他狀態收在「過去的授權」可展開區；皆無 → ParentEmptyState「目前沒有代理接送授權」。「新增代理接送」→ BottomSheet + PARENT-102 AuthorizationForm（persons 帶入、today 取台北今日、maxDaysAhead = authorization_max_days_ahead）→ `createPickupAuthorization` → 關閉表單、開啟**不可關閉**（`dismissible=false`）的 BottomSheet 顯示 PARENT-101 PickupCodeCard；`done` 後關閉、把暫存 code 設回 null、重抓清單。重新產生 → ConfirmDialog「重新產生接送碼？」/「舊的接送碼會立即失效，請把新碼重新傳給接送人」→ `regeneratePickupCode` → 同樣以接送碼卡顯示。取消 → ConfirmDialog destructive「取消這筆代理接送？」→ `cancelPickupAuthorization` → 以回應更新該列。錯誤：`authorization_limit_reached` →「同一天最多 3 筆代理接送」；`invalid_service_date` →「日期需在今天起 {authorization_max_days_ahead} 天內」；`pickup_person_not_found` →「接送人已不存在」並重抓接送人；`authorization_not_active` / `authorization_expired` →「這筆授權已失效」並重抓授權。\n\n**接送碼保護**：code 只存在本元件的區域 ref（不進 store、不寫 storage、不出現在 URL），code 卡開啟期間離開頁面（onBeforeRouteLeave）先以 ConfirmDialog「確定已記下接送碼？」確認。\n\n載入失敗 → 各區 ParentEmptyState error + 重試；首次載入 SkeletonBlock；PullToRefresh 重抓兩區。\n\n移植 ivy `FE:src/parent/views/PickupView.vue::askRegenerate` / `doCancel` / `submitPerson` 與 `FE:src/parent/views/PickupCreateView.vue` 的建立後顯示碼流程（合併為單頁 + bottom sheet）；**去掉** 編輯接送人、跨小孩授權列表、一次多孩授權。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-pickup-proxy.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：兩區皆有資料、兩區皆空、接送人已達上限、新增接送人 sheet（含錯誤）、刪除確認、新增授權 sheet、接送碼卡（不可滑動關閉）、重新產生確認、取消確認、過去的授權展開、載入失敗、首次載入骨架、離開頁面確認已記下。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `PickupProxyView.vue`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/PickupProxyView.vue",
       "source_ref": "FE:src/parent/views/PickupView.vue::askRegenerate",
@@ -2244,7 +2278,8 @@
         "PARENT-101",
         "PARENT-102",
         "PARENT-103",
-        "INFRA-013"
+        "INFRA-013",
+        "PARENT-005"
       ],
       "suggested_model": "opus-5",
       "risk_notes": "",
@@ -2259,10 +2294,11 @@
           "PickupProxyView create authorization shows code once：送出表單、POST 回 {authorization:{id:'a2', code_last4:'8213', effective_status:'active', ...}, code:'048213'} → 不可關閉的 dialog 內含 '048213'；點 scrim 不關閉；點「我已記下」→ dialog 關閉、畫面不再含 '048213'，GET 授權重抓 1 次",
           "PickupProxyView regenerate requires confirm and shows new code：點某列「重新產生接送碼」→ 出現「舊的接送碼會立即失效」；確認 → POST '/parent/pickup-authorizations/a1/regenerate-code'，回 code '771100' → 接送碼卡顯示 '771100'",
           "PickupProxyView cancel authorization updates row：確認取消 → POST '/parent/pickup-authorizations/a1/cancel' 回 effective_status 'cancelled' → 該筆移到「過去的授權」，有效區顯示「目前沒有代理接送授權」",
-          "PickupProxyView add person limit and errors：清單已有 10 位 → 「新增接送人」disabled 並含「最多 10 位」；9 位時新增、POST 回 413 → 表單仍開啟且含「照片檔案過大」",
+          "PickupProxyView add person limit and errors：config limits.persons_max=10 且清單已有 10 位 → 「新增接送人」disabled 並含「最多 10 位」；9 位時新增、POST 回 413 → 表單仍開啟且含「照片檔案過大」",
           "PickupProxyView delete person with confirm：點「刪除 李阿姨」→ 出現「刪除 李阿姨？」；確認 → DELETE '/parent/pickup-persons/pp1'，之後清單重抓",
           "PickupProxyView empty states：兩個 GET 皆回 [] → 含「尚未新增常用接送人」與「目前沒有代理接送授權」",
-          "PickupProxyView expired authorization error refreshes：regenerate 回 409 authorization_expired → snackbar「這筆授權已失效」且 GET 授權重抓"
+          "PickupProxyView expired authorization error refreshes：regenerate 回 409 authorization_expired → snackbar「這筆授權已失效」且 GET 授權重抓",
+          "PickupProxyView follows configured limits：config limits {persons_max:3, authorization_max_days_ahead:7} 且 3 位接送人 → 標題含 '3/3'、「新增接送人」disabled、含「最多 3 位」；開啟新增代理接送表單 → 日期 input max 為今天 +7 天"
         ],
         "run": "just web-test src/parent/views/PickupProxyView.spec.ts -t \"PickupProxyView\"",
         "notes": ""
@@ -2276,7 +2312,7 @@
     {
       "id": "PARENT-105",
       "title": "實作 useArriveNow composable：「我到了 / 我已經到了」確認流程（首頁與接送頁共用）",
-      "description": "建立 `apps/web/src/parent/composables/useArriveNow.ts`：\n```ts\nexport function useArriveNow(): {\n  confirmOpen: Ref<boolean>; skipNextTime: Ref<boolean>; busy: Readonly<Ref<boolean>>\n  request(childId: string, openRequestId: string | null): void   // 使用者按下按鈕\n  confirm(): Promise<ParentPickupRequest | null>                 // ConfirmDialog 的確認\n  dismiss(): void                                                 // ConfirmDialog 的取消\n  lastResult: Ref<ParentPickupRequest | null>\n}\n```\n- `request`：記下目標（有進行中請求 → 對該 id「我到了」；沒有 → 「我已經到了」捷徑）。localStorage `parent_pickup_arrive_skip_confirm === '1'` 時直接執行，否則 `confirmOpen = true`（頁面以 PARENT-026 ConfirmDialog 呈現：標題「確認已抵達安親班？」、說明「老師會收到通知並準備帶孩子出來」、default slot 放「下次不再提醒」勾選綁 `skipNextTime`）。\n- `confirm`：`skipNextTime` 為 true 時寫入 localStorage（storage 不可用時忽略）→ 關閉對話框 → 執行：有 openRequestId → PARENT-093 `pickupRequests.markArrived(id)`；否則 `pickupRequests.arriveNow(childId)`（含 409 改呼叫「我到了」的後援）。成功 → `lastResult = 回應`、snackbar「已通知老師您到了」（PARENT-011）。\n- 錯誤 → snackbar error：`pickup_not_allowed` →「您沒有這位小孩的接送權限」；`invalid_pickup_status` →「狀態已更新，請確認後再操作」；`pickup_window_closed` / `student_not_available` / `not_service_day` / `student_not_active` → 後端 `error.message`；其他 →「送出失敗，請稍後再試」。回傳 null。\n- `busy` 期間再次 `request` / `confirm` 直接忽略（防連點）。\n\n移植 ivy `FE:src/parent/views/PickupNoticeView.vue::onArriveNowClick` / `onArriveConfirm` / `performArriveNow` 的「不再提醒」與「沒有進行中預告時先建立再到達」概念；本專案改由後端 `arrived: true` 一次完成，409 時才對既有請求呼叫「我到了」。\n\n**驗收標準**：每一條對應 red_case（mountWithApp 包測試元件，axios-mock-adapter）。",
+      "description": "建立 `apps/web/src/parent/composables/useArriveNow.ts`：\n```ts\nexport function useArriveNow(): {\n  confirmOpen: Ref<boolean>; skipNextTime: Ref<boolean>; busy: Readonly<Ref<boolean>>\n  request(childId: string, openRequestId: string | null): void   // 使用者按下按鈕\n  confirm(): Promise<ParentPickupRequest | null>                 // ConfirmDialog 的確認\n  dismiss(): void                                                 // ConfirmDialog 的取消\n  lastResult: Ref<ParentPickupRequest | null>\n}\n```\n- `request`：記下目標（有進行中請求 → 對該 id「我到了」；沒有 → 「我已經到了」捷徑）。localStorage `parent_pickup_arrive_skip_confirm === '1'` 時直接執行，否則 `confirmOpen = true`（頁面以 PARENT-026 ConfirmDialog 呈現：標題「確認已抵達安親班？」、說明「老師會收到通知並準備帶孩子出來」、default slot 放「下次不再提醒」勾選綁 `skipNextTime`）。\n- `confirm`：`skipNextTime` 為 true 時寫入 localStorage（storage 不可用時忽略）→ 關閉對話框 → 執行：有 openRequestId → PARENT-093 `pickupRequests.markArrived(id)`；否則 `pickupRequests.arriveNow(childId)`（含 409 改呼叫「我到了」的後援）。成功 → `lastResult = 回應`、snackbar「已通知老師您到了」（PARENT-011）。\n- 錯誤 → snackbar error：`pickup_not_allowed` →「您沒有這位小孩的接送權限」；`invalid_pickup_status` →「狀態已更新，請確認後再操作」；`pickup_request_not_found` →「找不到這筆接送請求，已重新整理」；`pickup_window_closed` / `student_not_available` / `not_service_day` / `student_not_active` → 後端 `error.message`；其他 →「送出失敗，請稍後再試」。回傳 null。\n- `busy` 期間再次 `request` / `confirm` 直接忽略（防連點）。\n\n移植 ivy `FE:src/parent/views/PickupNoticeView.vue::onArriveNowClick` / `onArriveConfirm` / `performArriveNow` 的「不再提醒」與「沒有進行中預告時先建立再到達」概念；本專案改由後端 `arrived: true` 一次完成，409 時才對既有請求呼叫「我到了」。\n\n**驗收標準**：每一條對應 red_case（mountWithApp 包測試元件，axios-mock-adapter）。",
       "granularity_unit": "composable",
       "target_path": "apps/web/src/parent/composables/useArriveNow.ts",
       "source_ref": "FE:src/parent/views/PickupNoticeView.vue::performArriveNow",
@@ -2301,7 +2337,8 @@
           "useArriveNow remembers skip confirm：skipNextTime=true 後 confirm() → localStorage 'parent_pickup_arrive_skip_confirm' === '1'；之後 request('s1', null) → 不開對話框、直接送出 POST",
           "useArriveNow dismiss sends nothing：request('s1', null) 後 dismiss() → confirmOpen === false 且 mock.history.post.length === 0",
           "useArriveNow error message：POST 回 403 {error:{code:'pickup_not_allowed'}} → confirm() resolve null，snackbar 第一則「您沒有這位小孩的接送權限」",
-          "useArriveNow ignores double confirm：confirm() 未回應時再呼叫 confirm() → POST 只送出 1 次"
+          "useArriveNow ignores double confirm：confirm() 未回應時再呼叫 confirm() → POST 只送出 1 次",
+          "useArriveNow not found message：request('s1','r1') 後 confirm()，POST arrived 回 404 {error:{code:'pickup_request_not_found'}} → resolve null，snackbar 第一則「找不到這筆接送請求，已重新整理」"
         ],
         "run": "just web-test src/parent/composables/useArriveNow.spec.ts -t \"useArriveNow\"",
         "notes": ""
@@ -2388,7 +2425,7 @@
     {
       "id": "PARENT-132",
       "title": "移植 AttendanceView：月出勤日曆、統計與單日明細",
-      "description": "建立 `apps/web/src/parent/views/AttendanceView.vue`（路由 `/attendance`）。\n\n- 頂部 PARENT-050 ChildContextHeader；月份列：「‹」上個月、`YYYY 年 M 月`、「›」下個月（不可超過台北本月，超過時停用）、「本月」。\n- 依 `children.selectedId` + month 呼叫 PARENT-130；切換小孩或月份以序號丟棄過期回應。\n- 統計列：上課日 `service_days`、出席 `attended`、請假 `leave`、缺席 `absent`、未登記 `unrecorded`。\n- PARENT-131 AttendanceCalendar；預設選中今天（在當月時），否則不選。\n- 單日明細卡：日期「MM/DD（X）」、狀態、到班 HH:MM / 離班 HH:MM（FRONTEND-003，null 顯示「—」）、請假類別；非營業日「安親班休息」；無紀錄「這天沒有出勤紀錄」。\n- 「申請請假」按鈕 → `/leaves`。\n- 首次載入 SkeletonBlock（card）；失敗 → ParentEmptyState error「出勤紀錄載入失敗」+ 重試；PullToRefresh。\n\n移植 ivy `FE:src/parent/views/AttendanceView.vue::prevMonth` / `nextMonth` / `goToday` 的月份切換與 `selectCell` 單日明細；**去掉** 遲到等 ivy 狀態、remark 欄位。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-attendance.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：本月（含今天選中與明細）、上個月、各種單日明細（到班+離班 / 請假 / 缺席 / 休息 / 無紀錄）、下個月按鈕停用、首次載入、載入失敗、多位小孩切換。\n\n**驗收標準**：每一條對應 red_case（系統時間固定 2026-10-02 台北）。",
+      "description": "建立 `apps/web/src/parent/views/AttendanceView.vue`（路由 `/attendance`）。\n\n- 頂部 PARENT-050 ChildContextHeader；月份列：「‹」上個月、`YYYY 年 M 月`、「›」下個月（不可超過台北本月，超過時停用）、「本月」。\n- 依 `children.selectedId` + month 呼叫 PARENT-130；切換小孩或月份以序號丟棄過期回應。\n- 統計列：上課日 `service_days`、出席 `attended`、請假 `leave`、缺席 `absent`、未登記 `unrecorded`。\n- PARENT-131 AttendanceCalendar；預設選中今天（在當月時），否則不選。\n- 單日明細卡：日期「MM/DD（X）」、狀態、到班 HH:MM / 離班 HH:MM（FRONTEND-003，null 顯示「—」）、請假類別；非營業日「安親班休息」；無紀錄「這天沒有出勤紀錄」。\n- 「申請請假」按鈕 → `/leaves`。\n- 首次載入 SkeletonBlock（card）；失敗 → ParentEmptyState error「出勤紀錄載入失敗」+ 重試；PullToRefresh。\n\n移植 ivy `FE:src/parent/views/AttendanceView.vue::prevMonth` / `nextMonth` / `goToday` 的月份切換與 `selectCell` 單日明細；**去掉** 遲到等 ivy 狀態、remark 欄位。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-attendance.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：本月（含今天選中與明細）、上個月、各種單日明細（到班+離班 / 請假 / 缺席 / 休息 / 無紀錄）、下個月按鈕停用、首次載入、載入失敗、多位小孩切換。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `AttendanceView.vue`。\n\n**驗收標準**：每一條對應 red_case（系統時間固定 2026-10-02 台北）。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/AttendanceView.vue",
       "source_ref": "FE:src/parent/views/AttendanceView.vue::prevMonth",
@@ -2472,7 +2509,7 @@
     {
       "id": "PARENT-134",
       "title": "移植 LeaveForm 元件：請假申請表單（假別、日期、事由、附件）",
-      "description": "建立 `apps/web/src/parent/components/leaves/LeaveForm.vue`：\n```ts\nprops: { today: string /* YYYY-MM-DD 台北 */; submitting?: boolean }\nemits: { submit: [input: { leave_type: LeaveType; start_date: string; end_date: string; reason: string; files: File[] }]; cancel: [] }\n```\n- 假別：PARENT-098 M3SegmentedButton（病假 sick / 事假 personal / 其他 other），預設 sick。\n- 開始 / 結束日期：`type=\"date\"`，min = today − 30 天、max = today + 60 天（FRONTEND-003 日期加減），預設皆為 today；改開始日晚於結束日時結束日自動跟著設為開始日；送出時再檢查：超出範圍 →「請假日期需在今天前 30 天到後 60 天內」、結束早於開始 →「結束日期不可早於開始日期」。\n- 事由：PARENT-018 textarea，選填，最多 200 字（計數）。\n- 附件：選填，最多 3 個；`accept=\"image/jpeg,image/png,image/webp,image/heic,application/pdf\"`；單檔 > 10 MB →「{檔名} 超過 10 MB」；格式不符 →「{檔名} 格式不支援」；已選檔案列出檔名、大小（KB / MB）與移除鈕；滿 3 個時隱藏新增。\n- 送出鈕在 submitting 時 loading。\n\n移植 ivy `FE:src/parent/components/leaves/LeaveForm.vue` 的 pastLimit / futureLimit 日期限制概念；**改為** 元件內部狀態、單一小孩（由頁面的選中小孩決定，不在表單選小孩）、附件併入表單（建立後由頁面依序上傳）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-leave-form.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：預設狀態、三種假別、日期錯誤、事由字數、已選 1~3 個附件、檔案過大 / 格式錯誤、送出中。可併入 `parent-page-leaves.html`。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/leaves/LeaveForm.vue`：\n```ts\nprops: { today: string /* YYYY-MM-DD 台北 */; limits: ParentLimits /* PARENT-005，由 LeavesView 傳入 */; submitting?: boolean }\nemits: { submit: [input: { leave_type: LeaveType; start_date: string; end_date: string; reason: string; files: File[] }]; cancel: [] }\n```\n- 假別：PARENT-098 M3SegmentedButton（病假 sick / 事假 personal / 其他 other），預設 sick。\n- 開始 / 結束日期：`type=\"date\"`，min = today − `limits.leave_past_days` 天、max = today + `limits.leave_future_days` 天（FRONTEND-003 日期加減），預設皆為 today；改開始日晚於結束日時結束日自動跟著設為開始日；送出時再檢查：超出範圍 →「請假日期需在今天前 {leave_past_days} 天到後 {leave_future_days} 天內」、結束早於開始 →「結束日期不可早於開始日期」。\n- 事由：PARENT-018 textarea，選填，最多 200 字（計數）。\n- 附件：選填，最多 `limits.leave_max_attachments` 個；`accept=\"image/jpeg,image/png,image/webp,image/heic,application/pdf\"`；單檔 > `limits.leave_max_attachment_mb` MB →「{檔名} 超過 {leave_max_attachment_mb} MB」；格式不符 →「{檔名} 格式不支援」；已選檔案列出檔名、大小（KB / MB）與移除鈕；達上限時隱藏新增。數值一律來自 `limits` prop，元件內不寫死。\n- 送出鈕在 submitting 時 loading。\n\n移植 ivy `FE:src/parent/components/leaves/LeaveForm.vue` 的 pastLimit / futureLimit 日期限制概念；**改為** 元件內部狀態、單一小孩（由頁面的選中小孩決定，不在表單選小孩）、附件併入表單（建立後由頁面依序上傳）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-leave-form.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：預設狀態、三種假別、日期錯誤、事由字數、已選 1~3 個附件、檔案過大 / 格式錯誤、送出中。可併入 `parent-page-leaves.html`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/leaves/LeaveForm.vue",
       "source_ref": "FE:src/parent/components/leaves/LeaveForm.vue::update",
@@ -2484,7 +2521,8 @@
         "PARENT-018",
         "PARENT-098",
         "PARENT-133",
-        "INFRA-012"
+        "INFRA-012",
+        "PARENT-005"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -2496,10 +2534,11 @@
         ],
         "red_cases": [
           "LeaveForm emits payload with files：today '2026-10-02'；選事假、開始 '2026-10-05'、結束 '2026-10-06'、事由 '家庭旅遊'、加 1 個 PDF → 送出 → emitted('submit')[0][0] 的 leave_type 'personal'、start_date '2026-10-05'、end_date '2026-10-06'、reason '家庭旅遊'、files.length 1",
-          "LeaveForm date limits：開始日 input min === '2026-09-02'、max === '2026-12-01'；輸入開始 '2026-12-05' 送出 → 含「請假日期需在今天前 30 天到後 60 天內」且無 submit",
+          "LeaveForm date limits：today '2026-10-02'、limits {leave_past_days:30, leave_future_days:60, leave_max_attachments:3, leave_max_attachment_mb:10, ...} → 開始日 input min === '2026-09-02'、max === '2026-12-01'；輸入開始 '2026-12-05' 送出 → 含「請假日期需在今天前 30 天到後 60 天內」且無 submit",
           "LeaveForm end follows start：結束 '2026-10-03' 時把開始改為 '2026-10-08' → 結束欄位值變為 '2026-10-08'",
           "LeaveForm attachment validation：加入 11 MB 的 photo.jpg → 含「photo.jpg 超過 10 MB」且列表不含該檔；加入 text/plain 檔 → 含「格式不支援」；加滿 3 個後新增附件的 input 不存在",
-          "LeaveForm defaults：初始假別病假 aria-checked true，開始與結束皆為 '2026-10-02'，直接送出 → payload.reason === '' 且 files 為 []"
+          "LeaveForm defaults：初始假別病假 aria-checked true，開始與結束皆為 '2026-10-02'，直接送出 → payload.reason === '' 且 files 為 []",
+          "LeaveForm follows configured limits：limits {leave_past_days:7, leave_future_days:90, leave_max_attachments:1, leave_max_attachment_mb:5} → min === '2026-09-25'、max === '2026-12-31'；加入 6 MB 圖片 → 含「超過 5 MB」；加入 1 個合格檔後新增附件 input 不存在；輸入開始 '2026-09-20' 送出 → 含「請假日期需在今天前 7 天到後 90 天內」"
         ],
         "run": "just web-test src/parent/components/leaves/LeaveForm.spec.ts -t \"LeaveForm\"",
         "notes": ""
@@ -2513,7 +2552,7 @@
     {
       "id": "PARENT-135",
       "title": "移植 LeaveAttachmentList 元件：請假附件縮圖 / 檔案列與補上傳",
-      "description": "建立 `apps/web/src/parent/components/leaves/LeaveAttachmentList.vue`：\n```ts\nprops: { attachments: LeaveAttachment[]; editable?: boolean; uploading?: boolean; max?: number /* 預設 3 */ }\nemits: { upload: [file: File] }\n```\n- 圖片類（mime_type 開頭 image/）顯示縮圖（`url`，`loading=\"lazy\"`）；PDF 顯示文件圖示與「PDF 文件 · {大小}」。每項以 `<a target=\"_blank\" rel=\"noopener noreferrer\">` 開啟 `url`（後端簽發短效網址，不快取）。\n- `editable` 且數量 < max 時顯示「新增附件」file input（同 PARENT-134 的格式 / 10 MB 驗證，錯誤訊息相同），驗證通過 emit upload；`uploading` 時顯示轉圈並停用新增。\n- 空清單且不可編輯時顯示「沒有附件」。\n\n移植 ivy `FE:src/parent/components/leaves/LeaveAttachments.vue::onFileChange`（input 清空重選技巧）；**去掉** 刪除附件（本專案無 endpoint）與 urlResolver（後端已回 url）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-leave-attachment-list.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：圖片 + PDF 混合、可補上傳、上傳中、已滿 3 個、無附件。可併入 `parent-page-leaves.html`。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/leaves/LeaveAttachmentList.vue`：\n```ts\nprops: { attachments: LeaveAttachment[]; editable?: boolean; uploading?: boolean; max: number; maxMb: number /* 由頁面以 PARENT-005 limits 的 leave_max_attachments / leave_max_attachment_mb 傳入 */ }\nemits: { upload: [file: File] }\n```\n- 圖片類（mime_type 開頭 image/）顯示縮圖（`url`，`loading=\"lazy\"`）；PDF 顯示文件圖示與「PDF 文件 · {大小}」。每項以 `<a target=\"_blank\" rel=\"noopener noreferrer\">` 開啟 `url`（後端簽發短效網址，不快取）。\n- `editable` 且數量 < max 時顯示「新增附件」file input（同 PARENT-134 的格式驗證；單檔 > maxMb MB →「{檔名} 超過 {maxMb} MB」），驗證通過 emit upload；`uploading` 時顯示轉圈並停用新增。\n- 空清單且不可編輯時顯示「沒有附件」。\n\n移植 ivy `FE:src/parent/components/leaves/LeaveAttachments.vue::onFileChange`（input 清空重選技巧）；**去掉** 刪除附件（本專案無 endpoint）與 urlResolver（後端已回 url）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-leave-attachment-list.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：圖片 + PDF 混合、可補上傳、上傳中、已達上限、無附件。可併入 `parent-page-leaves.html`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/leaves/LeaveAttachmentList.vue",
       "source_ref": "FE:src/parent/components/leaves/LeaveAttachments.vue::onFileChange",
@@ -2535,7 +2574,8 @@
         "red_cases": [
           "LeaveAttachmentList renders image and pdf：attachments [{mime_type:'image/jpeg', url:'https://x/a.jpg', size_bytes:2048}, {mime_type:'application/pdf', url:'https://x/b.pdf', size_bytes:1258291}] → 有 img src 'https://x/a.jpg'，含 'PDF 文件 · 1.2 MB'，兩個 a 皆 target '_blank' 且 rel 含 'noopener'",
           "LeaveAttachmentList emits valid upload：editable=true、1 個附件 → 選擇 500 KB image/png → emitted('upload')[0][0].name 為該檔名",
-          "LeaveAttachmentList hides add when full or readonly：editable=true 且 3 個附件 → 無 file input；editable=false 且 attachments [] → 含「沒有附件」"
+          "LeaveAttachmentList hides add when full or readonly：editable=true、max=3 且 3 個附件 → 無 file input；editable=false 且 attachments [] → 含「沒有附件」",
+          "LeaveAttachmentList follows max props：editable=true、max=5、maxMb=2、3 個附件 → 有 file input；選擇 3 MB 圖片 → 含「超過 2 MB」且無 upload emit"
         ],
         "run": "just web-test src/parent/components/leaves/LeaveAttachmentList.spec.ts -t \"LeaveAttachmentList\"",
         "notes": ""
@@ -2549,7 +2589,7 @@
     {
       "id": "PARENT-136",
       "title": "移植 LeaveListItem 元件：請假紀錄列（假別、期間、狀態、取消入口）",
-      "description": "建立 `apps/web/src/parent/components/leaves/LeaveListItem.vue`：\n```ts\nprops: { leave: ParentLeave; today: string }\nemits: { open: [leave: ParentLeave]; cancel: [leave: ParentLeave] }\n```\n- 根元素 `<li>`，整列可點 emit open。顯示 `leave_type_label`、期間（同一天「10/05（一）」，多天「10/05（一）～10/07（三）」，FRONTEND-003）、事由首行截斷、附件數圖示（> 0 時）。\n- 狀態 StatusPill：`cancelled` →「已取消」；`active` 且 `end_date < today` →「已結束」；`active` 且 `start_date > today` →「已排定」；其餘 active →「請假中」。\n- 取消按鈕只在 `can_cancel` 為 true 時顯示（點擊 emit cancel、不觸發 open）：`start_date >= today` 文字「取消請假」（整筆取消）；`start_date < today` 文字「取消剩餘日子」（後端把 end_date 改為昨天，BACKEND-357）。\n\n移植 ivy `FE:src/parent/components/leaves/LeaveListCard.vue` 的 click / cancel 雙事件；**去掉** review_note 與審核狀態色（本專案送出即生效）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-leave-list-item.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：已排定（取消請假）、請假中（取消剩餘日子）、已結束、已取消、單日 / 多日、有附件。可併入 `parent-page-leaves.html`。\n\n**驗收標準**：每一條對應 red_case（today 固定 '2026-10-02'）。",
+      "description": "建立 `apps/web/src/parent/components/leaves/LeaveListItem.vue`：\n```ts\nprops: { leave: ParentLeave; today: string }\nemits: { open: [leave: ParentLeave]; cancel: [leave: ParentLeave] }\n```\n- 根元素 `<li>`，整列可點 emit open。顯示 `leave_type_label`、期間（同一天「10/05（一）」，多天「10/05（一）～10/07（三）」，FRONTEND-003）、事由首行截斷、附件數圖示（> 0 時）。\n- 狀態 StatusPill（`cancelled` 優先於日期判斷：員工可能從後台整筆取消已結束的請假）：`cancelled` →「已取消」；`active` 且 `end_date < today` →「已結束」；`active` 且 `start_date > today` →「已排定」；其餘 active →「請假中」。\n- 取消按鈕只在 `can_cancel` 為 true 時顯示（點擊 emit cancel、不觸發 open）：`start_date >= today` 文字「取消請假」（整筆取消）；`start_date < today` 文字「取消剩餘日子」（後端把 end_date 改為昨天，BACKEND-357）。\n\n移植 ivy `FE:src/parent/components/leaves/LeaveListCard.vue` 的 click / cancel 雙事件；**去掉** review_note 與審核狀態色（本專案送出即生效）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-leave-list-item.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：已排定（取消請假）、請假中（取消剩餘日子）、已結束、已取消、單日 / 多日、有附件。可併入 `parent-page-leaves.html`。\n\n**驗收標準**：每一條對應 red_case（today 固定 '2026-10-02'）。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/leaves/LeaveListItem.vue",
       "source_ref": "FE:src/parent/components/leaves/LeaveListCard.vue::emit",
@@ -2573,7 +2613,8 @@
           "LeaveListItem future leave cancels whole：leave {leave_type_label:'病假', start_date:'2026-10-05', end_date:'2026-10-07', status:'active', can_cancel:true} → 含 '10/05（一）～10/07（三）'、'已排定'、按鈕「取消請假」；點按鈕 → emitted('cancel').length === 1 且 emitted('open') 為 undefined",
           "LeaveListItem ongoing leave cancels remaining：start '2026-09-30'、end '2026-10-03'、can_cancel true → 含 '請假中' 與「取消剩餘日子」",
           "LeaveListItem no cancel when not allowed：status 'cancelled'、can_cancel false → 含 '已取消'，無取消按鈕；active 且 end '2026-10-01' → 含 '已結束'",
-          "LeaveListItem single day and open：start=end='2026-10-02' → 期間文字 '10/02（五）'（無「～」）；點整列 → emitted('open').length === 1"
+          "LeaveListItem single day and open：start=end='2026-10-02' → 期間文字 '10/02（五）'（無「～」）；點整列 → emitted('open').length === 1",
+          "LeaveListItem staff cancelled ended leave shows cancelled：status 'cancelled'、start '2026-09-20'、end '2026-09-22'、cancelled_at '2026-10-01T02:00:00Z'、can_cancel false → 含 '已取消'、不含 '已結束'，無取消按鈕"
         ],
         "run": "just web-test src/parent/components/leaves/LeaveListItem.spec.ts -t \"LeaveListItem\"",
         "notes": ""
@@ -2587,7 +2628,7 @@
     {
       "id": "PARENT-137",
       "title": "移植 LeaveDetailSheet 元件：請假詳情（附件補上傳、依 can_cancel 呈現取消）",
-      "description": "建立 `apps/web/src/parent/components/leaves/LeaveDetailSheet.vue`：\n```ts\nprops: { modelValue: boolean; leave: ParentLeave | null; studentName: string; today: string; uploading?: boolean }\nemits: { 'update:modelValue': [boolean]; cancel: [leave: ParentLeave]; upload: [file: File] }\n```\n- PARENT-025 ParentBottomSheet，標題「請假詳情」。內容：小孩姓名、假別、期間與天數（含首尾日曆天）、事由（無則「未填寫」）、申請者（`created_by_type` parent →「家長申請」、staff →「安親班代為登記」）、申請時間、取消時間（有值時）、狀態（同 PARENT-136 規則）。\n- 附件：PARENT-135，`editable` = status active 且 attachments < 3，upload 事件往上 emit。\n- `can_cancel` 為 true 時底部顯示取消按鈕（文字規則同 PARENT-136）；`start_date < today` 時按鈕上方說明「將取消今天（MM/DD）起的請假，之前的日子仍保留為請假」。\n\n移植 ivy `FE:src/parent/components/leaves/LeaveDetailSheet.vue` 的 sheet + 附件版面；**去掉** timelineSteps 審核流程、review_note、刪除附件。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-leave-detail-sheet.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：未開始可整筆取消、進行中可取消剩餘（含說明）、已結束 / 已取消（無按鈕）、安親班代登記、附件可補上傳 / 已滿。可併入 `parent-page-leaves.html`。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/leaves/LeaveDetailSheet.vue`：\n```ts\nprops: { modelValue: boolean; leave: ParentLeave | null; studentName: string; today: string; limits: ParentLimits; uploading?: boolean }\nemits: { 'update:modelValue': [boolean]; cancel: [leave: ParentLeave]; upload: [file: File] }\n```\n- PARENT-025 ParentBottomSheet，標題「請假詳情」。內容：小孩姓名、假別、期間與天數（含首尾日曆天）、事由（無則「未填寫」）、申請者（`created_by_type` parent →「家長申請」、staff →「安親班代為登記」）、申請時間、取消時間（有值時）、狀態（同 PARENT-136 規則）。\n- 附件：PARENT-135，`editable` = status active 且 attachments < `limits.leave_max_attachments`，`max` / `maxMb` 取自 limits，upload 事件往上 emit。\n- `can_cancel` 為 true 時底部顯示取消按鈕（文字規則同 PARENT-136）；`start_date < today` 時按鈕上方說明「將取消今天（MM/DD）起的請假，之前的日子仍保留為請假」。\n\n移植 ivy `FE:src/parent/components/leaves/LeaveDetailSheet.vue` 的 sheet + 附件版面；**去掉** timelineSteps 審核流程、review_note、刪除附件。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-leave-detail-sheet.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：未開始可整筆取消、進行中可取消剩餘（含說明）、已結束 / 已取消（無按鈕）、安親班代登記、附件可補上傳 / 已滿。可併入 `parent-page-leaves.html`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/leaves/LeaveDetailSheet.vue",
       "source_ref": "FE:src/parent/components/leaves/LeaveDetailSheet.vue::emit",
@@ -2599,7 +2640,8 @@
         "PARENT-051",
         "PARENT-133",
         "PARENT-135",
-        "INFRA-012"
+        "INFRA-012",
+        "PARENT-005"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -2612,7 +2654,7 @@
         "red_cases": [
           "LeaveDetailSheet shows details：modelValue true、leave {leave_type_label:'事假', start_date:'2026-10-05', end_date:'2026-10-07', reason:null, created_by_type:'staff'}、studentName '王小明' → dialog 內含 '王小明'、'事假'、'共 3 天'、'未填寫'、'安親班代為登記'",
           "LeaveDetailSheet remaining cancel explanation：today '2026-10-02'、start '2026-09-30'、can_cancel true → 含「取消剩餘日子」與「將取消今天（10/02）起的請假，之前的日子仍保留為請假」；點按鈕 → emitted('cancel')[0][0].id === leave.id",
-          "LeaveDetailSheet attachments editable rule：status active 且 2 個附件 → 有新增附件 input，選檔後 emitted('upload') 長度 1；status cancelled → 無 input、無取消按鈕"
+          "LeaveDetailSheet attachments editable rule：limits.leave_max_attachments=3、status active 且 2 個附件 → 有新增附件 input，選檔後 emitted('upload') 長度 1；limits.leave_max_attachments=2 同一筆 → 無 input；status cancelled → 無 input、無取消按鈕"
         ],
         "run": "just web-test src/parent/components/leaves/LeaveDetailSheet.spec.ts -t \"LeaveDetailSheet\"",
         "notes": ""
@@ -2626,7 +2668,7 @@
     {
       "id": "PARENT-138",
       "title": "移植 LeavesView：請假申請、紀錄列表、詳情與取消（剩餘日子 / 整筆依 can_cancel）",
-      "description": "建立 `apps/web/src/parent/views/LeavesView.vue`（路由 `/leaves`）。\n\n- 頂部 PARENT-050 ChildContextHeader；依 `children.selectedId` 呼叫 `listChildLeaves(id, 1)`（PARENT-133），`items.length < total` 時底部「載入更多」取下一頁並附加；切換小孩重置分頁並以序號丟棄過期回應。\n- 清單：`<ul role=\"list\">` + PARENT-136（today = 台北今日）；空 → ParentEmptyState「還沒有請假紀錄」/「需要請假時按「申請請假」」。\n- 「申請請假」→ PARENT-025 BottomSheet + PARENT-134 LeaveForm → `createLeave({student_id: selectedId, ...})`；成功後依序 `uploadLeaveAttachment`（一次一個）；全部成功 snackbar「請假已送出」；有附件失敗 → snackbar「請假已送出，但有 {n} 個附件上傳失敗，可在請假詳情重新上傳」（請假本身保留）；關閉表單並把新請假加到清單最前面（附件以上傳成功者更新）。\n- 建立錯誤（表單保持開啟、顯示於表單上方）：`leave_overlap` →「這段期間已有請假（{details.start_date}～{details.end_date}）」；`leave_date_out_of_window` →「請假日期需在今天前 30 天到後 60 天內」；`no_service_days_in_range` →「選擇的日期都不是上課日」；其他 → `error.message`。\n- 點列 → PARENT-137 LeaveDetailSheet；補上傳 → `uploadLeaveAttachment` 成功後更新該筆；錯誤：413 →「檔案超過 10 MB」、415 →「檔案格式不支援」、`attachment_limit_reached` →「每筆請假最多 3 個附件」。\n- 取消（列或詳情）→ PARENT-026 ConfirmDialog：`start_date >= today` 標題「取消這筆請假？」/「整筆請假將取消，出勤恢復為預計到班」；否則標題「取消剩餘日子？」/「今天起的請假會取消，之前的日子保留」→ `cancelLeave(id)` → 以回應取代該筆、snackbar「已取消請假」；`leave_already_ended` / `leave_not_active` → snackbar「這筆請假已無法取消」並重抓第一頁。\n- 首次載入 SkeletonBlock（row × 3）；載入失敗 → ParentEmptyState error「請假紀錄載入失敗」+ 重試；PullToRefresh 重抓第一頁。\n\n移植 ivy `FE:src/parent/views/LeavesView.vue` 的列表 + 表單 sheet + 取消確認流程（`cancelTarget` / `cancelTitle`）；**去掉** 跨小孩混合列表與篩選、LeaveHero 學期統計、刪除附件、審核狀態。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-leaves.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：有紀錄（各狀態）、空清單、載入更多、申請表單 sheet（含建立錯誤）、附件部分上傳失敗提示、詳情 sheet、整筆取消確認、取消剩餘日子確認、首次載入、載入失敗、多位小孩切換。\n\n**驗收標準**：每一條對應 red_case（today 固定 2026-10-02）。",
+      "description": "建立 `apps/web/src/parent/views/LeavesView.vue`（路由 `/leaves`）。\n\n- 掛載時 `getParentLimits()`（PARENT-005）取得 limits，傳給 LeaveForm / LeaveDetailSheet，錯誤訊息中的數字也取自 limits。\n- 頂部 PARENT-050 ChildContextHeader；依 `children.selectedId` 呼叫 `listChildLeaves(id, 1)`（PARENT-133），`items.length < total` 時底部「載入更多」取下一頁並附加；切換小孩重置分頁並以序號丟棄過期回應。\n- 清單：`<ul role=\"list\">` + PARENT-136（today = 台北今日）；空 → ParentEmptyState「還沒有請假紀錄」/「需要請假時按「申請請假」」。\n- 「申請請假」→ PARENT-025 BottomSheet + PARENT-134 LeaveForm → `createLeave({student_id: selectedId, ...})`；成功後依序 `uploadLeaveAttachment`（一次一個）；全部成功 snackbar「請假已送出」；有附件失敗 → snackbar「請假已送出，但有 {n} 個附件上傳失敗，可在請假詳情重新上傳」（請假本身保留）；關閉表單並把新請假加到清單最前面（附件以上傳成功者更新）。\n- 建立錯誤（表單保持開啟、顯示於表單上方）：`leave_overlap` →「這段期間已有請假（{details.start_date}～{details.end_date}）」；`leave_date_out_of_window` →「請假日期需在今天前 {leave_past_days} 天到後 {leave_future_days} 天內」；`no_service_days_in_range` →「選擇的日期都不是上課日」；其他 → `error.message`。\n- 點列 → PARENT-137 LeaveDetailSheet；補上傳 → `uploadLeaveAttachment` 成功後更新該筆；錯誤：413 →「檔案超過 {leave_max_attachment_mb} MB」、415 →「檔案格式不支援」、`attachment_limit_reached` →「每筆請假最多 {leave_max_attachments} 個附件」。\n- 取消（列或詳情）→ PARENT-026 ConfirmDialog：`start_date >= today` 標題「取消這筆請假？」/「整筆請假將取消，出勤恢復為預計到班」；否則標題「取消剩餘日子？」/「今天起的請假會取消，之前的日子保留」→ `cancelLeave(id)` → 以回應取代該筆、snackbar「已取消請假」；`leave_already_ended` / `leave_not_active` → snackbar「這筆請假已無法取消」並重抓第一頁。\n- 首次載入 SkeletonBlock（row × 3）；載入失敗 → ParentEmptyState error「請假紀錄載入失敗」+ 重試；PullToRefresh 重抓第一頁。\n\n移植 ivy `FE:src/parent/views/LeavesView.vue` 的列表 + 表單 sheet + 取消確認流程（`cancelTarget` / `cancelTitle`）；**去掉** 跨小孩混合列表與篩選、LeaveHero 學期統計、刪除附件、審核狀態。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-leaves.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：有紀錄（各狀態）、空清單、載入更多、申請表單 sheet（含建立錯誤）、附件部分上傳失敗提示、詳情 sheet、整筆取消確認、取消剩餘日子確認、首次載入、載入失敗、多位小孩切換。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `LeavesView.vue`。\n\n**驗收標準**：每一條對應 red_case（today 固定 2026-10-02）。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/LeavesView.vue",
       "source_ref": "FE:src/parent/views/LeavesView.vue::cancelTitle",
@@ -2646,7 +2688,8 @@
         "PARENT-134",
         "PARENT-136",
         "PARENT-137",
-        "INFRA-013"
+        "INFRA-013",
+        "PARENT-005"
       ],
       "suggested_model": "opus-5",
       "risk_notes": "",
@@ -2663,7 +2706,9 @@
           "LeavesView create overlap error keeps form：POST 回 409 {error:{code:'leave_overlap', details:{start_date:'2026-10-05', end_date:'2026-10-07'}}} → 表單仍開啟，含「這段期間已有請假（2026-10-05～2026-10-07）」",
           "LeavesView cancel remaining days：列 start '2026-09-30' can_cancel true → 點「取消剩餘日子」→ 對話框標題「取消剩餘日子？」；確認 → POST '/parent/leaves/l1/cancel'，回 end_date '2026-10-01'、can_cancel false → 該列顯示 '已結束' 且無取消按鈕，snackbar「已取消請假」",
           "LeavesView cancel conflict refreshes：cancel 回 409 leave_already_ended → snackbar「這筆請假已無法取消」且 GET 第一頁再送出 1 次",
-          "LeavesView empty and error states：GET 回 {items:[], total:0} → 含「還沒有請假紀錄」；GET 回 500 → 含「請假紀錄載入失敗」與「重試」"
+          "LeavesView empty and error states：GET 回 {items:[], total:0} → 含「還沒有請假紀錄」；GET 回 500 → 含「請假紀錄載入失敗」與「重試」",
+          "LeavesView passes configured limits：GET /parent/config 回 limits.leave_future_days 90、leave_max_attachments 1 → 開啟申請表單後結束日 input max 為今天 +90 天（'2026-12-31'），且加入 1 個附件後無新增附件 input",
+          "LeavesView shows staff cancelled past leave：GET 回一筆 status 'cancelled'、created_by_type 'parent'、end_date '2026-09-22'、can_cancel false → 該列含 '已取消'、無取消按鈕；點開詳情含取消時間"
         ],
         "run": "just web-test src/parent/views/LeavesView.spec.ts -t \"LeavesView\"",
         "notes": ""
@@ -2785,7 +2830,7 @@
     {
       "id": "PARENT-153",
       "title": "建立 ExamsView：成績列表（只有已發布的考試）",
-      "description": "建立 `apps/web/src/parent/views/ExamsView.vue`（路由 `/exams`，底部導覽「成績」）。\n\n- 頂部 PARENT-050 ChildContextHeader；依 `children.selectedId` 呼叫 `listChildExams(id, 1)`（PARENT-150），依後端順序（考試日期新到舊）以 PARENT-151 列出；`items.length < total` 顯示「載入更多」；切換小孩重置分頁並以序號丟棄過期回應。\n- 空 → ParentEmptyState「目前沒有已公布的成績」/「安親班公布考試成績後會通知您」。\n- 首次載入 SkeletonBlock（row × 4）；失敗 → ParentEmptyState error「成績載入失敗」+ 重試；PullToRefresh。\n\n新寫頁面（domain_spec §4 家長端 `/exams`）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-exams.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：有多筆考試、載入更多、空清單、首次載入、載入失敗、多位小孩切換。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/views/ExamsView.vue`（路由 `/exams`，底部導覽「成績」）。\n\n- 頂部 PARENT-050 ChildContextHeader；依 `children.selectedId` 呼叫 `listChildExams(id, 1)`（PARENT-150），依後端順序（考試日期新到舊）以 PARENT-151 列出；`items.length < total` 顯示「載入更多」；切換小孩重置分頁並以序號丟棄過期回應。\n- 空 → ParentEmptyState「目前沒有已公布的成績」/「安親班公布考試成績後會通知您」。\n- 首次載入 SkeletonBlock（row × 4）；失敗 → ParentEmptyState error「成績載入失敗」+ 重試；PullToRefresh。\n\n新寫頁面（domain_spec §4 家長端 `/exams`）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-exams.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：有多筆考試、載入更多、空清單、首次載入、載入失敗、多位小孩切換。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `ExamsView.vue`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/ExamsView.vue",
       "source_ref": null,
@@ -2827,7 +2872,7 @@
     {
       "id": "PARENT-154",
       "title": "建立 ExamDetailView：單次考試成績明細",
-      "description": "建立 `apps/web/src/parent/views/ExamDetailView.vue`（路由 `/exams/:examId`）。\n\n- 以 `children.selectedId` 與 route param `examId` 呼叫 `getChildExam(childId, examId)`（PARENT-150）。\n- 標頭卡：考試名稱、類型、日期「YYYY/MM/DD（X）」、`note`（有值時「備註：{note}」）；下方 PARENT-152 ExamScoreTable。\n- 404（未發布、不屬於該小孩或不存在）→ ParentEmptyState「找不到這次考試的成績」/「可能尚未公布或不屬於目前選擇的小孩」+「回成績列表」→ `/exams`。其他錯誤 → error 變體 + 重試。\n- 在本頁切換小孩（ChildContextHeader）→ `router.replace('/exams')`（考試屬於特定小孩，切換後回列表）。\n- 載入中 SkeletonBlock（card + row × 4）。\n\n新寫頁面。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-exam-detail.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：一般成績（含缺考 / 備註）、考試備註、找不到（404）、載入失敗、載入中。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/views/ExamDetailView.vue`（路由 `/exams/:examId`）。\n\n- 以 `children.selectedId` 與 route param `examId` 呼叫 `getChildExam(childId, examId)`（PARENT-150）。\n- 標頭卡：考試名稱、類型、日期「YYYY/MM/DD（X）」、`note`（有值時「備註：{note}」）；下方 PARENT-152 ExamScoreTable。\n- 404（未發布、不屬於該小孩或不存在）→ ParentEmptyState「找不到這次考試的成績」/「可能尚未公布或不屬於目前選擇的小孩」+「回成績列表」→ `/exams`。其他錯誤 → error 變體 + 重試。\n- 在本頁切換小孩（ChildContextHeader）→ `router.replace('/exams')`（考試屬於特定小孩，切換後回列表）。\n- 載入中 SkeletonBlock（card + row × 4）。\n\n新寫頁面。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-exam-detail.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：一般成績（含缺考 / 備註）、考試備註、找不到（404）、載入失敗、載入中。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `ExamDetailView.vue`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/ExamDetailView.vue",
       "source_ref": null,
@@ -2990,7 +3035,8 @@
         "FRONTEND-002",
         "FRONTEND-004",
         "INFRA-013",
-        "PARENT-010"
+        "PARENT-010",
+        "BACKEND-227"
       ],
       "suggested_model": "opus-5",
       "risk_notes": "",
@@ -3129,7 +3175,7 @@
     {
       "id": "PARENT-177",
       "title": "建立 NotificationsView：通知收件匣（全部 / 未讀、已讀、全部已讀、依 deep_link 導頁）",
-      "description": "建立 `apps/web/src/parent/views/NotificationsView.vue`（路由 `/notifications`）。\n\n- 頂部 PARENT-098 M3SegmentedButton「全部 / 未讀」→ PARENT-172 `load({ unreadOnly })`；右上「全部標為已讀」（`unreadCount === 0` 時停用）→ `markAllRead()`，成功 snackbar「已全部標為已讀」；「通知設定」連結 → `/notifications/preferences`。\n- 清單 `<ul role=\"list\">` + PARENT-176；`items.length < total` 顯示「載入更多」→ `loadMore()`；ws 新通知自動出現在最前面。\n- 點通知：未讀先 `markRead(id)`（失敗不阻擋導頁）；`payload.student_id` 是目前小孩清單中的 id → `children.select(該 id)`；`deep_link` 通過 PARENT-003 `isSafeRedirectPath` → `router.push(deep_link)`，否則留在本頁。\n- 空：全部模式「目前沒有通知」；未讀模式「沒有未讀通知」。首次載入 SkeletonBlock；失敗 → ParentEmptyState error「通知載入失敗」+ 重試；PullToRefresh。\n\n新寫頁面（domain_spec §4 家長端 `/notifications` 收件匣）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-notifications.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：全部（未讀 + 已讀混合）、未讀篩選、全部已讀停用、載入更多、空狀態兩種文案、首次載入、載入失敗。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/views/NotificationsView.vue`（路由 `/notifications`）。\n\n- 頂部 PARENT-098 M3SegmentedButton「全部 / 未讀」→ PARENT-172 `load({ unreadOnly })`；右上「全部標為已讀」（`unreadCount === 0` 時停用）→ `markAllRead()`，成功 snackbar「已全部標為已讀」；「通知設定」連結 → `/notifications/preferences`。\n- 清單 `<ul role=\"list\">` + PARENT-176；`items.length < total` 顯示「載入更多」→ `loadMore()`；ws 新通知自動出現在最前面。\n- 點通知：未讀先 `markRead(id)`（失敗不阻擋導頁）；`payload.student_id` 是目前小孩清單中的 id → `children.select(該 id)`；`deep_link` 通過 PARENT-003 `isSafeRedirectPath` → `router.push(deep_link)`，否則留在本頁。\n- 空：全部模式「目前沒有通知」；未讀模式「沒有未讀通知」。首次載入 SkeletonBlock；失敗 → ParentEmptyState error「通知載入失敗」+ 重試；PullToRefresh。\n\n新寫頁面（domain_spec §4 家長端 `/notifications` 收件匣）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-notifications.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：全部（未讀 + 已讀混合）、未讀篩選、全部已讀停用、載入更多、空狀態兩種文案、首次載入、載入失敗。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `NotificationsView.vue`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/NotificationsView.vue",
       "source_ref": null,
@@ -3174,7 +3220,7 @@
     {
       "id": "PARENT-178",
       "title": "移植 NotificationPrefsView：7 個事件的 LINE 推播開關",
-      "description": "建立 `apps/web/src/parent/views/NotificationPrefsView.vue`（路由 `/notifications/preferences`）。\n\n- 掛載時 `getNotificationPreferences()`（PARENT-171），依後端順序列出 7 項（`label` 為後端提供的中文名稱），每項右側 PARENT-175 M3Switch（`line_enabled`）。\n- 說明文字：「關閉後仍會在 App 的通知中看到，只是不會傳 LINE 訊息。」\n- 切換：樂觀更新 → `updateNotificationPreferences([{ event, line_enabled }])`（只送該項）→ 成功以回應覆蓋全部項目；失敗回滾該項並 snackbar error「儲存失敗，請稍後再試」。同一項儲存中 `busy`、再點忽略；不同項可同時儲存。\n- 載入中 SkeletonBlock（row × 7）；載入失敗 → ParentEmptyState error「通知設定載入失敗」+ 重試。\n\n移植 ivy `FE:src/parent/views/NotificationPrefsView.vue::toggle` 的樂觀更新、失敗回滾與同 key 儲存鎖；**去掉** 前端寫死的事件名稱 / 說明對照（label 改由後端提供）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-notification-prefs.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：7 項開關（部分關閉）、某項儲存中、儲存失敗回滾提示、載入中、載入失敗。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/views/NotificationPrefsView.vue`（路由 `/notifications/preferences`）。\n\n- 掛載時 `getNotificationPreferences()`（PARENT-171），依後端順序列出 7 項（`label` 為後端提供的中文名稱），每項右側 PARENT-175 M3Switch（`line_enabled`）。\n- 說明文字：「關閉後仍會在 App 的通知中看到，只是不會傳 LINE 訊息。」\n- 切換：樂觀更新 → `updateNotificationPreferences([{ event, line_enabled }])`（只送該項）→ 成功以回應覆蓋全部項目；失敗回滾該項並 snackbar error「儲存失敗，請稍後再試」。同一項儲存中 `busy`、再點忽略；不同項可同時儲存。\n- 載入中 SkeletonBlock（row × 7）；載入失敗 → ParentEmptyState error「通知設定載入失敗」+ 重試。\n\n移植 ivy `FE:src/parent/views/NotificationPrefsView.vue::toggle` 的樂觀更新、失敗回滾與同 key 儲存鎖；**去掉** 前端寫死的事件名稱 / 說明對照（label 改由後端提供）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-notification-prefs.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：7 項開關（部分關閉）、某項儲存中、儲存失敗回滾提示、載入中、載入失敗。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `NotificationPrefsView.vue`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/NotificationPrefsView.vue",
       "source_ref": "FE:src/parent/views/NotificationPrefsView.vue::toggle",
