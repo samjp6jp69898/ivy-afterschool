@@ -14,7 +14,7 @@
 | frontend | `FRONTEND-` | 一個元件 / view / composable / store / api client 模組 | `apps/web/src/`（後台與共用，不含 `src/parent/`） |
 | parent | `PARENT-` | 一個元件 / view / composable / store / api client 模組 | `apps/web/src/parent/`（家長端） |
 
-撰寫或新增 task 的準則見 `docs/tasks/authoring_guide.md`。規格依據：`docs/architecture_decisions.md`（架構）、`docs/domain_spec.md`（資料模型、API、權限碼、事件、頁面）、`docs/testing_conventions.md`（測試規則）。功能從 ivy 移植時，task 的 `source_ref` 指出 ivy 的來源檔案與方法——**移植是「讀懂後依本專案規格改寫」，不是整檔複製**：去掉多租戶、教師端、幼稚園特有邏輯，DB 存取改成本專案的 repository 層。
+撰寫或新增 task 的準則見 `docs/tasks/authoring_guide.md`。新 session 要推進實作時，從 `docs/tasks/kickoff_prompt.md` 開始（協調者流程、派工與 review 訊息範本、目前狀態）。規格依據：`docs/architecture_decisions.md`（架構）、`docs/domain_spec.md`（資料模型、API、權限碼、事件、頁面）、`docs/testing_conventions.md`（測試規則）。功能從 ivy 移植時，task 的 `source_ref` 指出 ivy 的來源檔案與方法——**移植是「讀懂後依本專案規格改寫」，不是整檔複製**：去掉多租戶、教師端、幼稚園特有邏輯，DB 存取改成本專案的 repository 層。
 
 ## 建議順序
 

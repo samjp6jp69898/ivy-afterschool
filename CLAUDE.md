@@ -12,6 +12,7 @@
 - 功能 / 資料模型 / API / 權限碼 / 通知事件 / 頁面：`docs/domain_spec.md`
 - 測試慣例：`docs/testing_conventions.md`
 - 實作規格：`docs/tasks/<area>/tasks.json`（infra / db / backend / frontend / parent），使用規則見 `docs/tasks/README.md`（每次實作 task 前必讀）
+- 新 session 啟動實作：讀 `docs/tasks/kickoff_prompt.md`（協調者流程、派工 / review 訊息範本、目前狀態與下一輪順序）
 
 ## 開發規範：TDD 是硬性規定
 
