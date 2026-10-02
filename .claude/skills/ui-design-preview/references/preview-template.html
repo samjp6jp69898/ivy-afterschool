@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+
+<!-- ============================================================
+     設計稿中繼資料（gate 用，四個都必填，值不可猜）
+     preview-status : draft | approved | superseded
+     preview-tasks  : 這張稿涵蓋的 FRONTEND task id，逗號分隔
+     preview-route  : 對應的路由 path；元件稿寫 component:<相對路徑>
+     preview-updated: 最後更新日期 YYYY-MM-DD
+     ============================================================ -->
+<meta name="preview-status" content="draft">
+<meta name="preview-tasks" content="FRONTEND-000">
+<meta name="preview-route" content="/students">
+<meta name="preview-updated" content="2026-01-01">
+
+<title>設計稿：【換成頁面名稱】</title>
+
+<!-- Element Plus 真元件；版號鎖定 apps/web/package.json 的實際版本，
+     改版時同步這四行與 package.json，不要用 @latest。 -->
+<link rel="stylesheet" href="https://unpkg.com/element-plus@2.14.5/dist/index.css">
+<script src="https://unpkg.com/vue@3.5.42/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.5/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.5/dist/locale/zh-tw.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue@2.3.2/dist/index.iife.min.js"></script>
+
+<style>
+/* 設計稿只允許在這裡寫版型與稿件框架的樣式。
+   顏色一律用 Element Plus 的 --el-* 變數，不要落地 hex——
+   設計稿寫死的 hex 會被當成「設計指定色」複製進 src/，那是錯的。 */
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+#app { display: flex; flex-direction: column; height: 100%; }
+body { font-family: var(--el-font-family); background: var(--el-bg-color-page); }
+
+/* ---- 稿件狀態列：只存在於設計稿，實作時不會有 ---- */
+.preview-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 6px 16px; font-size: 12px;
+  color: var(--el-color-info-dark-2);
+  background: var(--el-color-info-light-9);
+  border-bottom: 1px dashed var(--el-border-color);
+}
+.preview-bar__spacer { flex: 1; }
+.preview-bar code { font-size: 12px; }
+
+/* ---- App shell：骨架對照 apps/web/src/components/layout/AdminLayout.vue ----
+   aside 220px / 收合 64px、header 與 aside 各有一條 border、只有 main 捲動。 */
+.app-layout { flex: 1; min-height: 0; }
+.app-layout__aside {
+  overflow: hidden auto;
+  border-right: 1px solid var(--el-border-color-light);
+  transition: width 0.2s ease;
+  background: var(--el-bg-color);
+}
+.app-layout__aside .el-menu { border-right: none; }
+.app-layout__body { min-width: 0; }
+.app-layout__header {
+  display: flex; align-items: center; gap: 12px;
+  border-bottom: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
+}
+.app-layout__main { overflow: auto; }
+
+.sidebar-brand {
+  display: flex; align-items: center; gap: 8px;
+  height: 56px; padding: 0 20px; white-space: nowrap; overflow: hidden;
+  font-weight: 600; color: var(--el-text-color-primary);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.header-bar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; width: 100%; }
+.header-bar__name { color: var(--el-text-color-regular); }
+
+/* ---- 頁面內容常用排版 ---- */
+.page { display: flex; flex-direction: column; gap: 16px; }
+.page__title { margin: 0; font-size: 18px; font-weight: 600; color: var(--el-text-color-primary); }
+.page__toolbar { display: flex; align-items: center; gap: 8px; }
+.page__toolbar-spacer { flex: 1; }
+.page__footer { display: flex; justify-content: flex-end; }
+.text-secondary { color: var(--el-text-color-secondary); font-size: 13px; }
+
+/* ---- 設計註記：標在畫面上、指向具體元素的說明 ---- */
+.note {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; margin-left: 6px; border-radius: 50%;
+  font-size: 11px; font-weight: 700; line-height: 1; cursor: help;
+  color: var(--el-color-warning); background: var(--el-color-warning-light-9);
+  border: 1px solid var(--el-color-warning-light-5);
+}
+</style>
+</head>
+
+<body>
+<div id="app">
+
+  <!-- 稿件狀態列 -->
+  <div class="preview-bar">
+    <el-tag :type="meta.status === 'approved' ? 'success' : 'warning'" size="small" effect="dark" disable-transitions>
+      {{ meta.status === 'approved' ? '已核可' : '待核可' }}
+    </el-tag>
+    <span>{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <!-- 權限差異必畫：切身分看側欄 / 按鈕 / 欄位的變化。只存在於設計稿。 -->
+    <span>以身分檢視</span>
+    <el-select v-model="viewAs" size="small" style="width: 110px">
+      <el-option v-for="(r, key) in roles" :key="key" :label="r.label" :value="key"></el-option>
+    </el-select>
+    <span class="preview-bar__spacer"></span>
+    <span>更新 {{ meta.updated }}</span>
+    <el-button size="small" text type="primary" @click="notesOpen = true">
+      設計說明 / 待裁定（{{ openQuestions.length }}）
+    </el-button>
+  </div>
+
+  <!-- ============================================================
+       App shell —— 只在頁面本身就是 shell 的一部分時才需要保留。
+       純元件稿（Dialog / Drawer / Table / Select）刪掉整個 el-container，
+       直接把元件放在一個 el-card 裡展示各種狀態。
+       ============================================================ -->
+  <el-container class="app-layout">
+
+    <el-aside class="app-layout__aside" :width="collapsed ? '64px' : '220px'">
+      <div class="sidebar-brand">
+        <el-icon><icon-school></icon-school></el-icon>
+        <span v-show="!collapsed">安親班管理系統</span>
+      </div>
+      <!-- 導覽項目與 docs/domain_spec.md §4 後台路由表一一對應（apps/web 建立後以
+           src/router 為準）；每一項都以權限碼控制顯示，缺權限時整項不出現，
+           整組子項都看不到時連群組一起隱藏。 -->
+      <el-menu :default-active="meta.route" :default-openeds="['students']" :collapse="collapsed" :collapse-transition="false" router>
+        <el-menu-item v-if="can('dashboard:read')" index="/">
+          <el-icon><icon-odometer></icon-odometer></el-icon><span>首頁</span>
+        </el-menu-item>
+
+        <el-sub-menu v-if="can('students:read') || can('classes:read')" index="students">
+          <template #title><el-icon><icon-user></icon-user></el-icon><span>學生與班級</span></template>
+          <el-menu-item v-if="can('students:read')" index="/students">學生工作台</el-menu-item>
+          <el-menu-item v-if="can('classes:read')" index="/classes">班級管理</el-menu-item>
+        </el-sub-menu>
+
+        <el-sub-menu v-if="can('attendance:read') || can('leaves:read') || can('homework:read') || can('pickup:read')" index="daily">
+          <template #title><el-icon><icon-calendar></icon-calendar></el-icon><span>每日營運</span></template>
+          <el-menu-item-group v-if="can('attendance:read')" title="出勤">
+            <el-menu-item index="/attendance">今日出勤</el-menu-item>
+            <el-menu-item index="/attendance/monthly">月出勤報表</el-menu-item>
+          </el-menu-item-group>
+          <el-menu-item-group v-if="can('leaves:read')" title="請假">
+            <el-menu-item index="/leaves">請假列表</el-menu-item>
+          </el-menu-item-group>
+          <el-menu-item-group v-if="can('homework:read')" title="作業進度">
+            <el-menu-item index="/homework">作業進度看板</el-menu-item>
+          </el-menu-item-group>
+          <el-menu-item-group v-if="can('pickup:read')" title="接送">
+            <el-menu-item index="/pickup">接送 POS</el-menu-item>
+            <el-menu-item index="/pickup/authorizations">代理接送核驗</el-menu-item>
+          </el-menu-item-group>
+        </el-sub-menu>
+
+        <el-sub-menu v-if="can('exams:read')" index="exams">
+          <template #title><el-icon><icon-trophy></icon-trophy></el-icon><span>成績</span></template>
+          <el-menu-item index="/exams">考試列表</el-menu-item>
+        </el-sub-menu>
+
+        <el-sub-menu v-if="can('settings:read') || can('staff:read') || can('roles:read') || can('audit:read')" index="settings">
+          <template #title><el-icon><icon-setting></icon-setting></el-icon><span>設定</span></template>
+          <el-menu-item v-if="can('settings:read')" index="/settings/system">系統設定</el-menu-item>
+          <el-menu-item v-if="can('settings:read')" index="/settings/reference">參考資料</el-menu-item>
+          <el-menu-item v-if="can('staff:read')" index="/settings/accounts">員工帳號</el-menu-item>
+          <el-menu-item v-if="can('roles:read')" index="/settings/roles">角色權限</el-menu-item>
+          <el-menu-item v-if="can('audit:read')" index="/settings/audit">稽核紀錄</el-menu-item>
+        </el-sub-menu>
+      </el-menu>
+    </el-aside>
+
+    <el-container class="app-layout__body">
+      <el-header class="app-layout__header" height="56px">
+        <el-button text :aria-label="collapsed ? '展開側欄' : '收合側欄'" @click="collapsed = !collapsed">
+          <el-icon><icon-expand v-if="collapsed"></icon-expand><icon-fold v-else></icon-fold></el-icon>
+        </el-button>
+        <!-- AdminHeader：通知鈴 + 姓名 + 角色 tag + 登出，對照 layout/AdminHeader.vue -->
+        <div class="header-bar">
+          <el-badge :value="3" :max="99">
+            <el-button text circle aria-label="通知"><el-icon><icon-bell></icon-bell></el-icon></el-button>
+          </el-badge>
+          <span class="header-bar__name">{{ currentUser.name }}</span>
+          <el-tag type="info" effect="light" disable-transitions>{{ roles[viewAs].label }}</el-tag>
+          <el-button text><el-icon><icon-switch-button></icon-switch-button></el-icon>登出</el-button>
+        </div>
+      </el-header>
+
+      <el-main class="app-layout__main">
+        <!-- ============================================================
+             PAGE CONTENT —— 從這裡開始換成本頁的實際內容。
+             下面是這個後台最常見的「篩選 + 表格 + 分頁」骨架（以學生列表示範），
+             不適用的頁面（登入頁、設定頁、表單頁、看板）整段刪掉重寫。
+             ============================================================ -->
+        <div class="page">
+          <div class="page__toolbar">
+            <h1 class="page__title">學生列表</h1>
+            <span class="page__toolbar-spacer"></span>
+            <!-- 缺 students:write 時隱藏，不是 disabled -->
+            <el-button v-if="can('students:write')" type="primary">
+              <el-icon><icon-plus></icon-plus></el-icon>新增學生
+            </el-button>
+          </div>
+
+          <el-card shadow="never">
+            <el-form :inline="true" :model="filters">
+              <el-form-item label="關鍵字">
+                <el-input v-model="filters.keyword" placeholder="姓名或學號" clearable style="width: 180px">
+                  <template #prefix><el-icon><icon-search></icon-search></el-icon></template>
+                </el-input>
+              </el-form-item>
+              <el-form-item label="班級">
+                <el-select v-model="filters.classId" placeholder="全部班級" clearable style="width: 160px">
+                  <el-option v-for="c in classes" :key="c.id" :label="c.name" :value="c.id"></el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item label="狀態">
+                <el-select v-model="filters.status" placeholder="全部狀態" clearable style="width: 130px">
+                  <el-option v-for="(v, k) in studentStatus" :key="k" :label="v.label" :value="k"></el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary">查詢</el-button>
+                <el-button>重設</el-button>
+              </el-form-item>
+            </el-form>
+          </el-card>
+
+          <el-card shadow="never">
+            <!-- 三態一定要都畫到：有資料 / 空清單 / 載入中（有錯誤態的再加第四態）。
+                 切 state 看得到每種樣子，核可時才不會漏掉空狀態文案。 -->
+            <el-radio-group v-model="state" size="small" style="margin-bottom: 12px">
+              <el-radio-button value="data">有資料</el-radio-button>
+              <el-radio-button value="empty">空清單</el-radio-button>
+              <el-radio-button value="loading">載入中</el-radio-button>
+            </el-radio-group>
+
+            <el-table v-loading="state === 'loading'" :data="state === 'data' ? rows : []" border stripe
+                      :default-sort="{ prop: 'student_no', order: 'ascending' }">
+              <el-table-column prop="student_no" label="學號" width="110" sortable></el-table-column>
+              <el-table-column prop="name" label="姓名" width="110"></el-table-column>
+              <el-table-column prop="grade_level" label="年級" width="90" sortable>
+                <template #default="{ row }">{{ row.grade_level }} 年級</template>
+              </el-table-column>
+              <el-table-column label="就讀學校 / 班級" min-width="180" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.school_name }} {{ row.school_class }}</template>
+              </el-table-column>
+              <el-table-column prop="class_name" label="安親班級" width="130"></el-table-column>
+              <el-table-column label="主要監護人" min-width="160">
+                <template #default="{ row }">
+                  {{ row.guardian_name }}<span class="text-secondary">（{{ row.guardian_relation }}）</span>
+                  <div class="text-secondary">{{ row.guardian_phone }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column label="狀態" width="100">
+                <template #default="{ row }">
+                  <status-badge :status="row.status"></status-badge>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="90" fixed="right">
+                <template #default="{ row }">
+                  <el-button link type="primary" @click="openDetail(row)">詳情</el-button>
+                </template>
+              </el-table-column>
+              <template #empty>
+                <el-empty description="目前沒有符合條件的學生"></el-empty>
+              </template>
+            </el-table>
+
+            <div class="page__footer" style="margin-top: 12px">
+              <el-pagination
+                v-model:current-page="page"
+                :page-size="20"
+                :total="state === 'data' ? 48 : 0"
+                layout="total, prev, pager, next, jumper"
+                background></el-pagination>
+            </div>
+          </el-card>
+        </div>
+
+        <!-- 子元件（Dialog / Drawer）畫在所屬頁面的稿裡，並且要能實際打開來看。 -->
+        <el-drawer v-model="detailOpen" :title="selected.name + ' 的資料'" size="42%">
+          <el-descriptions :column="1" border>
+            <el-descriptions-item label="學號">{{ selected.student_no }}</el-descriptions-item>
+            <el-descriptions-item label="就讀學校 / 班級">{{ selected.school_name }} {{ selected.school_class }}</el-descriptions-item>
+            <el-descriptions-item label="安親班級">{{ selected.class_name }}</el-descriptions-item>
+            <el-descriptions-item label="狀態"><status-badge :status="selected.status"></status-badge></el-descriptions-item>
+            <!-- 敏感欄位：缺 students:sensitive 時不顯示值，只顯示無權限提示 -->
+            <el-descriptions-item label="身分證字號">
+              <span v-if="can('students:sensitive')">{{ selected.id_number }}</span>
+              <span v-else class="text-secondary"><el-icon><icon-lock></icon-lock></el-icon> 無權限檢視</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="健康備註">
+              <span v-if="can('students:sensitive')">{{ selected.health_note || '—' }}</span>
+              <span v-else class="text-secondary"><el-icon><icon-lock></icon-lock></el-icon> 無權限檢視</span>
+            </el-descriptions-item>
+          </el-descriptions>
+        </el-drawer>
+        <!-- ============ PAGE CONTENT 結束 ============ -->
+      </el-main>
+    </el-container>
+  </el-container>
+
+  <!-- 設計說明抽屜：這張稿做了哪些決定、還有什麼要使用者裁定 -->
+  <el-drawer v-model="notesOpen" title="設計說明 / 待裁定" size="440px">
+    <el-alert
+      v-if="openQuestions.length"
+      title="以下項目需要你裁定，未回覆前這張稿不會進入實作"
+      type="warning" :closable="false" show-icon style="margin-bottom: 16px"></el-alert>
+    <h4>設計決策</h4>
+    <ol>
+      <li v-for="(d, i) in decisions" :key="i">{{ d }}</li>
+    </ol>
+    <h4 v-if="openQuestions.length">待裁定</h4>
+    <ol>
+      <li v-for="(q, i) in openQuestions" :key="i" style="margin-bottom: 8px">
+        <div>{{ q.question }}</div>
+        <div style="color: var(--el-text-color-secondary); font-size: 13px">
+          A. {{ q.optionA }}<br>B. {{ q.optionB }}
+        </div>
+      </li>
+    </ol>
+  </el-drawer>
+</div>
+
+<script>
+const { createApp, ref, reactive } = Vue
+
+/** 狀態標籤樣式。apps/web 建立後與 src/components/common/StatusBadge.vue 逐字一致——
+    原檔是權威，這是複本；改這裡之前先確認原檔沒有先變過。 */
+const STUDENT_STATUS = {
+  active:    { type: 'success', effect: 'light', label: '在學' },
+  suspended: { type: 'warning', effect: 'light', label: '暫停' },
+  withdrawn: { type: 'info',    effect: 'plain', label: '已退班' },
+}
+
+const StatusBadge = {
+  props: { status: { type: String, required: true }, label: { type: String, default: null } },
+  computed: {
+    style() { return STUDENT_STATUS[this.status] ?? { type: 'info', effect: 'light', label: this.status } },
+    text() { return this.label ?? this.style.label },
+  },
+  template: `<el-tag :type="style.type" :effect="style.effect" disable-transitions>{{ text }}</el-tag>`,
+}
+
+/** 各角色預設權限碼，與 docs/domain_spec.md §3「預設授予」一致（admin 擁有全部）。
+    只用來在稿裡切身分看權限差異；權限碼不可自創。 */
+const ALL_STAFF = [
+  'dashboard:read', 'classes:read', 'students:read',
+  'attendance:read', 'attendance:operate', 'leaves:read',
+  'homework:read', 'homework:write', 'pickup:read', 'pickup:operate', 'exams:read',
+]
+const ROLES = {
+  director: {
+    label: '主任',
+    permissions: [...ALL_STAFF,
+      'staff:read', 'roles:read', 'settings:read', 'settings:write', 'audit:read',
+      'classes:write', 'students:write', 'students:sensitive', 'guardians:write',
+      'attendance:amend', 'leaves:write', 'pickup:override', 'exams:write', 'exams:publish'],
+  },
+  clerk: {
+    label: '行政',
+    permissions: [...ALL_STAFF,
+      'settings:read', 'classes:write', 'students:write', 'guardians:write',
+      'leaves:write', 'exams:write', 'exams:publish'],
+  },
+  tutor: {
+    label: '課輔老師',
+    permissions: [...ALL_STAFF, 'exams:write'],
+  },
+}
+
+/** 安親班內部班級（不是國小的班級）。 */
+const CLASSES = [
+  { id: 1, name: '低年級 A 班' },
+  { id: 2, name: '低年級 B 班' },
+  { id: 3, name: '中年級班' },
+  { id: 4, name: '高年級班' },
+]
+
+const app = createApp({
+  components: { StatusBadge },
+  setup() {
+    /** 讀 <head> 的中繼資料，狀態列與稿件內容永遠一致，不用手動同步兩份。 */
+    const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
+    const meta = {
+      status: readMeta('preview-status'),
+      tasks: readMeta('preview-tasks'),
+      route: readMeta('preview-route'),
+      updated: readMeta('preview-updated'),
+    }
+
+    const viewAs = ref('director')
+    const can = (code) => ROLES[viewAs.value].permissions.includes(code)
+
+    // 這張稿已經定下來的設計決定，逐條寫，實作時照這個做。
+    const decisions = [
+      '範例：表格預設依學號由小到大排序，變更篩選條件時重設回第一頁。',
+      '範例：缺 students:write 時隱藏「新增學生」；缺 students:sensitive 時詳情不顯示身分證與健康備註。',
+    ]
+    // 需要使用者選的項目；每題兩個具體選項，不要寫成開放式問題。空陣列代表沒有待裁定。
+    const openQuestions = [
+      // { question: '範例：已退班學生要不要預設顯示？', optionA: '預設只顯示在學與暫停', optionB: '全部顯示，已退班排在最後' },
+    ]
+
+    // 擬真但非真實個資的假資料；姓名 / 電話 / 學校用得出來的範例，不要用 foo / bar。
+    const rows = [
+      { student_no: 'S11301', name: '王小明', grade_level: 3, school_name: '某某國小', school_class: '三年二班', class_name: '中年級班',
+        guardian_name: '王大華', guardian_relation: '父親', guardian_phone: '0912-000-123', status: 'active',
+        id_number: 'A1******89', health_note: '花生過敏' },
+      { student_no: 'S11302', name: '陳小美', grade_level: 1, school_name: '某某國小', school_class: '一年五班', class_name: '低年級 A 班',
+        guardian_name: '林淑芬', guardian_relation: '母親', guardian_phone: '0922-000-456', status: 'active',
+        id_number: 'B2******34', health_note: '' },
+      { student_no: 'S11305', name: '李承恩', grade_level: 5, school_name: '另一國小', school_class: '五年一班', class_name: '高年級班',
+        guardian_name: '李爺爺', guardian_relation: '祖父母', guardian_phone: '0933-000-789', status: 'suspended',
+        id_number: 'F1******56', health_note: '氣喘，隨身攜帶吸入器' },
+    ]
+
+    const selected = ref(rows[0])
+    const detailOpen = ref(false)
+    const openDetail = (row) => { selected.value = row; detailOpen.value = true }
+
+    return {
+      meta, decisions, openQuestions,
+      roles: ROLES, viewAs, can,
+      classes: CLASSES, studentStatus: STUDENT_STATUS,
+      currentUser: { name: '張主任' },
+      collapsed: ref(false),
+      notesOpen: ref(false),
+      detailOpen, selected, openDetail,
+      state: ref('data'),
+      page: ref(1),
+      filters: reactive({ keyword: '', classId: null, status: '' }),
+      rows,
+    }
+  },
+})
+
+app.use(ElementPlus, { locale: ElementPlusLocaleZhTw })
+app.component('StatusBadge', StatusBadge)
+
+// icons-vue 沒有 install()，不能 app.use()，要逐一註冊。
+// icons 一律加 `icon-` 前綴註冊：Filter / View / Menu / Link / Select / Picture
+// 等 icon 的 kebab 名稱與原生 HTML/SVG 標籤撞名，直接註冊會被 Vue 當成原生元素
+// 而渲染不出來。加前綴後永遠不會撞。
+// 用法：<el-icon><icon-video-play></icon-video-play></el-icon>
+// **不可自閉合**：<icon-video-play /> 會被 HTML parser 當成開始標籤，
+// 後續兄弟節點全部變成它的子節點（見 SKILL.md「in-DOM template 的四個坑」）。
+const toKebab = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+for (const [name, component] of Object.entries(ElementPlusIconsVue)) {
+  app.component(`icon-${toKebab(name)}`, component)
+}
+
+app.mount('#app')
+</script>
+</body>
+</html>
