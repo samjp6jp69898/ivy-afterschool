@@ -1,6 +1,7 @@
 """BACKEND-372：由作業項目狀態推導整體進度（domain_spec M6）。"""
 
 import pytest
+
 from app.services.homework_rules import derive_overall_status
 
 
