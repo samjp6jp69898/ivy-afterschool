@@ -33,7 +33,9 @@ def dummy_verify(plain: str) -> None:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    if not hashed.startswith(_HASH_PREFIX):
+    # 前綴不對或含非 ASCII（argon2 編碼只允許 ASCII，argon2-cffi 會在 _ensure_bytes 拋
+    # UnicodeEncodeError）都是格式非法：先 dummy 再 False，不讓 argon2-cffi 拋例外
+    if not hashed.startswith(_HASH_PREFIX) or not hashed.isascii():
         dummy_verify(plain)
         return False
     try:
@@ -41,9 +43,10 @@ def verify_password(plain: str, hashed: str) -> bool:
     except VerifyMismatchError:
         # 真的跑過 argon2 運算，只是密碼不對
         return False
-    except VerificationError:
-        # VerifyMismatchError 以外的 VerificationError（含 InvalidHashError）：
-        # 前綴正確但內容壞掉，argon2-cffi 在解碼階段就失敗、沒跑到運算，補一次 dummy 維持時間一致
+    except (VerificationError, ValueError):
+        # 前綴正確但內容壞掉：argon2-cffi 解碼失敗拋 VerificationError（25.1）或 ValueError
+        # （InvalidHashError 是 ValueError 子類、不是 VerificationError 子類），沒跑到運算，
+        # 補一次 dummy 維持時間一致
         dummy_verify(plain)
         return False
 
