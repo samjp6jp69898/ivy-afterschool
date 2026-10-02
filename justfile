@@ -114,6 +114,18 @@ web-typecheck:
     cd "{{ root }}/apps/web"
     pnpm exec vue-tsc --noEmit -p tsconfig.app.json
 
+# ★ Playwright e2e：just e2e SPEC [playwright 參數...]（SPEC 相對 apps/web；服務先 just up，首次先 pnpm exec playwright install chromium）
+e2e *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ $# -eq 0 ] || [ "${1#-}" != "$1" ]; then
+        echo "用法: just e2e SPEC [playwright 參數...]（SPEC 相對 apps/web，例如 e2e/smoke.spec.ts -g smoke）" >&2
+        echo "e2e 只打本機服務（E2E_BASE_URL 預設 http://127.0.0.1:5341），執行前先 just up 或 just web。" >&2
+        exit 1
+    fi
+    cd "{{ root }}/apps/web"
+    pnpm exec playwright test "$@"
+
 # ---------------------------------------------------------------------------
 # 本機 Supabase
 # ---------------------------------------------------------------------------

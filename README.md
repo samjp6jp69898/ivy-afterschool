@@ -28,6 +28,8 @@ just web              # 啟動 Vite dev server（http://127.0.0.1:5341）
 
 `just api` 與 `just web` 也可以改用 `just up` 一次啟動全套（Supabase + API + Web）。
 
+端對端測試（Playwright，預設不執行、只打本機）：首次先 `cd apps/web && pnpm exec playwright install chromium` 安裝瀏覽器，服務啟動後以 `just e2e e2e/smoke.spec.ts` 指定檔案執行；`E2E_BASE_URL` 不是本機時設定載入即失敗。
+
 ## 本機 port
 
 | 服務 | port |
