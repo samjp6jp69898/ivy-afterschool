@@ -42,8 +42,8 @@ def verify_password(plain: str, hashed: str) -> bool:
         # 真的跑過 argon2 運算，只是密碼不對
         return False
     except VerificationError:
-        # VerifyMismatchError 以外的 VerificationError（含 InvalidHashError）＝前綴正確但內容壞掉：
-        # argon2-cffi 在解碼階段就失敗、沒跑到運算，補一次 dummy 維持時間一致
+        # VerifyMismatchError 以外的 VerificationError（含 InvalidHashError）：
+        # 前綴正確但內容壞掉，argon2-cffi 在解碼階段就失敗、沒跑到運算，補一次 dummy 維持時間一致
         dummy_verify(plain)
         return False
 
