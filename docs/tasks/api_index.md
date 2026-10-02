@@ -21,7 +21,7 @@
 | task | method | path | 權限 | request → response |
 |---|---|---|---|---|
 | B021 | GET | `/api/health` | — | → `{status: "ok"\|"degraded", app_name, db: "ok"\|"error"}`（DB 失敗 503） |
-| B125 | GET | `/api/parent/config` | 不需登入 | → `{liff_id, org_name, logo_url}` |
+| B125 | GET | `/api/parent/config` | 不需登入 | → `{liff_id, org_name, org_phone, logo_url}` |
 
 ## 2. 後台認證（`/api/admin/auth`）
 
@@ -46,10 +46,12 @@
 | B064 | GET | `/me` | 家長 | → `ParentMe` |
 | B184 | GET | `/children` | 家長 | → `ChildSummary[]` |
 | B185 | GET | `/children/{student_id}` | 家長 | → `ChildDetail` |
+| B526 | GET | `/children/{student_id}/today` | 家長 | → `ChildToday`（首頁今日狀態卡） |
 
 - `ParentMe = {id, display_name, picture_url, phone, children: ChildSummary[]}`
 - `ChildSummary = {id, name, grade_level, class_name, school_name, photo_url, status}`
 - `ChildDetail = ChildSummary + {school_class, enrolled_on, my_guardian: {relation, is_primary, can_pickup, receives_notifications}}`
+- `ChildToday = {student_id, date, is_service_day, attendance: {status: expected|present|left|absent|leave|null, check_in_at, check_out_at}, on_leave, leave: {id, leave_type, leave_type_label, start_date, end_date}|null, homework: {item_count, done_count, overall_status, ready_eta, note}, pickup_request: {id, status, expected_arrival_at, reply_ready_eta, reply_message, reply_source: auto|staff|null, can_cancel, can_mark_arrived}|null}`（pickup_request 優先取今日非終態那筆，否則取今日最新一筆；營業日無出勤列時 status 為 expected）
 
 ## 4. 後台：帳號 / 角色 / 稽核 / 設定（`/api/admin`）
 
@@ -258,7 +260,7 @@
 | B222 | PUT | `/notification-preferences` | `{items: [{event, line_enabled}]}` → 同上 |
 
 - `ParentLeave = {id, student_id, leave_type, leave_type_label, start_date, end_date, reason, status, created_by_type, created_at, cancelled_at, can_cancel（active 且 end_date ≥ 今天）, attachments: [{id, mime_type, size_bytes, created_at, url}]}`
-- `ParentPickupRequest = {id, student_id, student_name, service_date, status, expected_arrival_at, reply_ready_eta, reply_message, replied_at, arrived_at, completed_at, picked_up_by_name, cancelled_at, created_at, can_cancel, can_mark_arrived}`
+- `ParentPickupRequest = {id, student_id, student_name, service_date, status, expected_arrival_at, reply_ready_eta, reply_message, reply_source: auto|staff|null（系統自動回覆 / 老師回覆）, replied_at, arrived_at, completed_at, picked_up_by_name, cancelled_at, created_at, can_cancel, can_mark_arrived}`
 - `PickupPerson = {id, student_id, name, relation, phone, photo_url, created_at}`
 - `ParentAuthorization = {id, student_id, service_date, pickup_person_id, proxy_name, proxy_phone, code_last4, status, effective_status（過期日的 active 顯示 expired）, verified_at, verification_method, created_at}`
 
@@ -285,10 +287,11 @@
 | 個人 | `notification.transient` | `{event, title, body, payload}`（不進收件匣，例如 `pickup.arrived` 提示音） |
 
 ### `/api/ws/parent`（B227，家長 cookie）
-- 連線後 `{"type":"ready","children":[student_id...]}`；家長不能 subscribe（回 `{"type":"error","code":"not_allowed"}`）。綁定變動時 `{"type":"children_changed","children":[...]}`。
+- 連線後自動訂閱每個小孩的 attendance / homework / pickup 事件與個人通知，收到 `{"type":"ready","children":[student_id...]}`；家長不能 subscribe（回 `{"type":"error","code":"not_allowed"}`）。綁定變動時 `{"type":"children_changed","children":[...]}`。
 
 | type | data |
 |---|---|
+| `attendance.updated` | `{student_id, service_date, status, check_in_at, check_out_at}`（到班、離班、接送完成離班、標缺席、改判時推送） |
 | `homework.progress_updated` | `{student_id, date, items: [{title, subject_name, status}], overall_status, ready_eta, note}` |
 | `pickup.request_updated` | `ParentPickupRequest` |
 | `notification.created` | `Notification` |

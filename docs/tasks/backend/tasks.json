@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 7,
-  "last_updated": "2026-10-02T06:13:56Z",
+  "version": 8,
+  "last_updated": "2026-10-02T06:37:49Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3601,7 +3601,7 @@
     {
       "id": "BACKEND-106",
       "title": "實作 app/core/settings_registry.py：首批 7 個 system_settings key 的 schema、預設值、secret 與分組",
-      "description": "建立 `apps/api/app/core/settings_registry.py`（architecture_decisions §4、domain_spec M2、DB-038 預設值是本 task 的介面）。\n\n**介面**\n```python\n@dataclass(frozen=True)\nclass SettingDef(Generic[M]):\n    key: str\n    schema: type[M]                  # Pydantic model，extra='forbid'\n    default: M\n    is_secret: bool\n    secret_fields: tuple[str, ...]   # 加密存放、回傳遮罩的欄位\n    group: Literal[\"org\", \"pickup\", \"homework\", \"notification\", \"line\"]\n    label: str                        # 繁中顯示名稱\n    public_fields: tuple[str, ...] = ()   # 可經 GET /api/parent/config 公開的欄位\n\nclass SettingKey(Generic[M]): ...     # 型別化 handle，例如 ORG_PROFILE: SettingKey[OrgProfile]\nREGISTRY: Mapping[str, SettingDef[Any]]\n```\n**schema（時間一律 `HH:MM` 字串，Asia/Taipei；以 `TimeHM = Annotated[str, StringConstraints(pattern=r'^([01]\\d|2[0-3]):[0-5]\\d$')]`）**\n| key | model | 欄位與規則 | 預設（與 DB-038 一致） |\n|---|---|---|---|\n| `org.profile` | OrgProfile | name ≤50、address ≤200、phone ≤20、logo_url（HttpUrl \\| None）；public: name、logo_url | `{\"name\":\"\",\"address\":\"\",\"phone\":\"\",\"logo_url\":null}` |\n| `org.service_hours` | ServiceHours | mon~sat 各為 DayHours(open: bool, start: TimeHM, end: TimeHM；open 時 start < end) | 週一~五 open 12:00-19:00；sat open=false 08:00-12:00 |\n| `pickup.window` | PickupWindow | request_start < request_end、latest_expected_arrival ≥ request_end、auto_expire_minutes 10~600 | request_start 12:00 / request_end 19:00 / latest_expected_arrival 19:00 / auto_expire_minutes 120（接送時段同營業時段） |\n| `homework.defaults` | HomeworkDefaults | auto_reply_without_eta: bool、no_eta_reply_text 1~100 | true / 「已通知老師，稍後回覆預計時間」 |\n| `notification.toggles` | NotificationToggles | RootModel[dict[str, bool]]，key 集合必須恰為 BACKEND-201 的 13 個事件 | 全部 true |\n| `line.liff` | LineLiff | liff_id：空字串或 `^\\d+-[A-Za-z0-9]+$`；channel_id（LINE Login channel ID，後端驗證 id_token 的 aud）：空字串或 `^\\d{6,20}$`；public: liff_id（channel_id 不公開） | `{\"liff_id\":\"\",\"channel_id\":\"\"}` |\n| `line.messaging` | LineMessaging | channel_access_token、channel_secret（str \\| None，≤500）；is_secret、secret_fields 兩者 | 兩者 null |\n\n- 新增設定項：先在此註冊，再以 migration seed 預設值（architecture_decisions §4）；不得為業務參數新增 env。\n- `notification.toggles` 依賴 BACKEND-201 的事件清單；為避免 import 循環，events 模組不 import registry。\n\n**驗收標準**\n- REGISTRY 恰含 7 個 key，default 通過自身 schema 驗證。\n- 各 schema 的驗證規則逐條生效（時間格式、start<end、範圍、事件 key 集合）。\n- 只有 line.messaging is_secret；public_fields 如表（line.liff 只公開 liff_id）。\n- LineLiff 的 channel_id 格式驗證；預設值含 channel_id 空字串（DB-038 seed 需一致）。",
+      "description": "建立 `apps/api/app/core/settings_registry.py`（architecture_decisions §4、domain_spec M2、DB-038 預設值是本 task 的介面）。\n\n**介面**\n```python\n@dataclass(frozen=True)\nclass SettingDef(Generic[M]):\n    key: str\n    schema: type[M]                  # Pydantic model，extra='forbid'\n    default: M\n    is_secret: bool\n    secret_fields: tuple[str, ...]   # 加密存放、回傳遮罩的欄位\n    group: Literal[\"org\", \"pickup\", \"homework\", \"notification\", \"line\"]\n    label: str                        # 繁中顯示名稱\n    public_fields: tuple[str, ...] = ()   # 可經 GET /api/parent/config 公開的欄位\n\nclass SettingKey(Generic[M]): ...     # 型別化 handle，例如 ORG_PROFILE: SettingKey[OrgProfile]\nREGISTRY: Mapping[str, SettingDef[Any]]\n```\n**schema（時間一律 `HH:MM` 字串，Asia/Taipei；以 `TimeHM = Annotated[str, StringConstraints(pattern=r'^([01]\\d|2[0-3]):[0-5]\\d$')]`）**\n| key | model | 欄位與規則 | 預設（與 DB-038 一致） |\n|---|---|---|---|\n| `org.profile` | OrgProfile | name ≤50、address ≤200、phone ≤20、logo_url（HttpUrl \\| None）；public: name、phone、logo_url | `{\"name\":\"\",\"address\":\"\",\"phone\":\"\",\"logo_url\":null}` |\n| `org.service_hours` | ServiceHours | mon~sat 各為 DayHours(open: bool, start: TimeHM, end: TimeHM；open 時 start < end) | 週一~五 open 12:00-19:00；sat open=false 08:00-12:00 |\n| `pickup.window` | PickupWindow | request_start < request_end、latest_expected_arrival ≥ request_end、auto_expire_minutes 10~600 | request_start 12:00 / request_end 19:00 / latest_expected_arrival 19:00 / auto_expire_minutes 120（接送時段同營業時段） |\n| `homework.defaults` | HomeworkDefaults | auto_reply_without_eta: bool、no_eta_reply_text 1~100 | true / 「已通知老師，稍後回覆預計時間」 |\n| `notification.toggles` | NotificationToggles | RootModel[dict[str, bool]]，key 集合必須恰為 BACKEND-201 的 13 個事件 | 全部 true |\n| `line.liff` | LineLiff | liff_id：空字串或 `^\\d+-[A-Za-z0-9]+$`；channel_id（LINE Login channel ID，後端驗證 id_token 的 aud）：空字串或 `^\\d{6,20}$`；public: liff_id（channel_id 不公開） | `{\"liff_id\":\"\",\"channel_id\":\"\"}` |\n| `line.messaging` | LineMessaging | channel_access_token、channel_secret（str \\| None，≤500）；is_secret、secret_fields 兩者 | 兩者 null |\n\n- 新增設定項：先在此註冊，再以 migration seed 預設值（architecture_decisions §4）；不得為業務參數新增 env。\n- `notification.toggles` 依賴 BACKEND-201 的事件清單；為避免 import 循環，events 模組不 import registry。\n\n**驗收標準**\n- REGISTRY 恰含 7 個 key，default 通過自身 schema 驗證。\n- 各 schema 的驗證規則逐條生效（時間格式、start<end、範圍、事件 key 集合）。\n- 只有 line.messaging is_secret；public_fields 如表（line.liff 只公開 liff_id）。\n- LineLiff 的 channel_id 格式驗證；預設值含 channel_id 空字串（DB-038 seed 需一致）。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/settings_registry.py",
       "source_ref": null,
@@ -3624,7 +3624,7 @@
           "test_settings_registry_service_hours_rules：DayHours(open=True, start='19:00', end='12:00') → ValidationError；start='25:00' → ValidationError；open=False 時 start > end 也允許",
           "test_settings_registry_pickup_window_rules：auto_expire_minutes=5 → ValidationError；latest_expected_arrival='18:30' 而 request_end='19:00' → ValidationError",
           "test_settings_registry_toggles_exact_keys：缺 'exam.published' → ValidationError；多 'foo.bar' → ValidationError",
-          "test_settings_registry_secret_and_public：[k for k,d in REGISTRY.items() if d.is_secret] == ['line.messaging']，REGISTRY['line.messaging'].secret_fields == ('channel_access_token','channel_secret')；REGISTRY['org.profile'].public_fields == ('name','logo_url')",
+          "test_settings_registry_secret_and_public：[k for k,d in REGISTRY.items() if d.is_secret] == ['line.messaging']，REGISTRY['line.messaging'].secret_fields == ('channel_access_token','channel_secret')；REGISTRY['org.profile'].public_fields == ('name','phone','logo_url')",
           "test_settings_registry_extra_forbid：OrgProfile.model_validate({'name':'x','address':'','phone':'','logo_url':None,'fax':'1'}) → ValidationError",
           "test_settings_registry_line_liff_channel_id：LineLiff.model_validate({'liff_id':'1657000000-AbcdEfgh','channel_id':'1657000000'}) 通過；channel_id='abc' → ValidationError；缺 channel_id → ValidationError；REGISTRY['line.liff'].public_fields == ('liff_id',)；REGISTRY['line.liff'].default.channel_id == ''",
           "test_settings_registry_defaults_match_seed：REGISTRY['org.service_hours'].default.mon == DayHours(open=True, start='12:00', end='19:00')、.sat.open is False；REGISTRY['pickup.window'].default.model_dump() == {'request_start':'12:00','request_end':'19:00','latest_expected_arrival':'19:00','auto_expire_minutes':120}"
@@ -4256,8 +4256,8 @@
     },
     {
       "id": "BACKEND-124",
-      "title": "實作 PublicConfigService.get_public_config：家長端公開設定（LIFF ID、安親班名稱 / Logo）",
-      "description": "建立 `apps/api/app/services/public_config_service.py`：\n```python\nclass PublicConfigOut(BaseModel):\n    liff_id: str\n    org_name: str\n    logo_url: str | None\n\ndef get_public_config(session: Session) -> PublicConfigOut: ...\n```\n- 只讀 registry `public_fields` 標記的欄位（org.profile 的 name / logo_url、line.liff 的 liff_id），透過 BACKEND-108 `get_setting`（走 cache）。\n- 絕不包含任何 secret 欄位；以測試確保即使日後在 registry 誤把 secret 欄位標成 public 也會失敗（PublicConfigOut 欄位固定）。\n\n**驗收標準**\n- 回正確值；設定更新並失效 cache 後立即反映。\n- 輸出不含 line.messaging 任何內容。",
+      "title": "實作 PublicConfigService.get_public_config：家長端公開設定（LIFF ID、安親班名稱 / 電話 / Logo）",
+      "description": "建立 `apps/api/app/services/public_config_service.py`：\n```python\nclass PublicConfigOut(BaseModel):\n    liff_id: str\n    org_name: str\n    org_phone: str\n    logo_url: str | None\n\ndef get_public_config(session: Session) -> PublicConfigOut: ...\n```\n- 只讀 registry `public_fields` 標記的欄位（org.profile 的 name / phone / logo_url、line.liff 的 liff_id），透過 BACKEND-108 `get_setting`（走 cache）。\n- 絕不包含任何 secret 欄位；以測試確保即使日後在 registry 誤把 secret 欄位標成 public 也會失敗（PublicConfigOut 欄位固定）。\n\n**驗收標準**\n- 回正確值；設定更新並失效 cache 後立即反映。\n- 輸出不含 line.messaging 任何內容。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/public_config_service.py",
       "source_ref": null,
@@ -4275,7 +4275,7 @@
           "integration"
         ],
         "red_cases": [
-          "test_public_config_values：put org.profile name='快樂安親班'、line.liff liff_id='1657000000-Abc' 後 invalidate → get_public_config == PublicConfigOut(liff_id='1657000000-Abc', org_name='快樂安親班', logo_url=None)",
+          "test_public_config_values：put org.profile name='快樂安親班'、phone='02-2345-0000'、line.liff liff_id='1657000000-Abc' 後 invalidate → get_public_config == PublicConfigOut(liff_id='1657000000-Abc', org_name='快樂安親班', org_phone='02-2345-0000', logo_url=None)",
           "test_public_config_no_secret：line.messaging token 存 'tok-123' 的密文 → json.dumps(get_public_config().model_dump()) 不含 'tok-123' 與 'v1:'"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_public_config_service.py -k \"test_public_config_\"",
@@ -4290,7 +4290,7 @@
     {
       "id": "BACKEND-125",
       "title": "實作 GET /api/parent/config endpoint（公開設定，不需登入）",
-      "description": "建立 `apps/api/app/api/parent/config.py`，`GET /api/parent/config`（domain_spec §2：LIFF ID、安親班名稱 / Logo，不需登入）→ BACKEND-124 → 200 `PublicConfigOut`。回應加 `Cache-Control: public, max-age=60`（覆寫 BACKEND-019 的 no-store）。\n\n**驗收標準**\n- 無 cookie 200 並回三個欄位。\n- 帶任意（含無效）cookie 仍 200。\n- 回應不含 secret。\n- Cache-Control 為 public, max-age=60。",
+      "description": "建立 `apps/api/app/api/parent/config.py`，`GET /api/parent/config`（domain_spec §2：LIFF ID、安親班名稱 / 電話 / Logo，不需登入）→ BACKEND-124 → 200 `PublicConfigOut`。回應加 `Cache-Control: public, max-age=60`（覆寫 BACKEND-019 的 no-store）。\n\n**驗收標準**\n- 無 cookie 200 並回四個欄位（liff_id、org_name、org_phone、logo_url）。\n- 帶任意（含無效）cookie 仍 200。\n- 回應不含 secret。\n- Cache-Control 為 public, max-age=60。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/config.py",
       "source_ref": null,
@@ -4309,7 +4309,7 @@
           "integration"
         ],
         "red_cases": [
-          "test_parent_config_success：GET /api/parent/config（無 cookie）→ 200，set(JSON) == {'liff_id','org_name','logo_url'}",
+          "test_parent_config_success：GET /api/parent/config（無 cookie）→ 200，set(JSON) == {'liff_id','org_name','org_phone','logo_url'}",
           "test_parent_config_garbage_cookie：帶 parent_access='garbage' → 200",
           "test_parent_config_cache_header：headers['cache-control'] == 'public, max-age=60'",
           "test_parent_config_no_secret：line.messaging 有值時回應文字不含 token 明文與 '****'",
@@ -6207,7 +6207,7 @@
     {
       "id": "BACKEND-181",
       "title": "建立家長端小孩 Pydantic schemas：ChildSummaryOut、ChildDetailOut、ParentMeOut",
-      "description": "建立 `apps/api/app/schemas/parent_children.py`。家長端**絕不**輸出敏感欄位（身分證、健康備註）與內部欄位（student_no 以外的管理欄位）。\n- `ChildSummaryOut`：id、name、grade_level、class_name、school_name（short_name 優先）、photo_url、status。\n- `ChildGuardianOut`：relation、is_primary、can_pickup、receives_notifications（家長自己那筆 guardian 的設定）。\n- `ChildDetailOut`：ChildSummaryOut 全部 + school_class、enrolled_on、my_guardian（ChildGuardianOut）。\n- `ParentMeOut`：id、display_name、picture_url、phone、children（list[ChildSummaryOut]）。\n\n**驗收標準**\n- 欄位集合固定；以 model_fields 斷言不存在 id_number / health_note / note 等欄位。",
+      "description": "建立 `apps/api/app/schemas/parent_children.py`。家長端**絕不**輸出敏感欄位（身分證、健康備註）與內部欄位（student_no 以外的管理欄位）。\n- `ChildSummaryOut`：id、name、grade_level、class_name、school_name（short_name 優先）、photo_url、status。\n- `ChildGuardianOut`：relation、is_primary、can_pickup、receives_notifications（家長自己那筆 guardian 的設定）。\n- `ChildDetailOut`：ChildSummaryOut 全部 + school_class、enrolled_on、my_guardian（ChildGuardianOut）。\n- `ParentMeOut`：id、display_name、picture_url、phone、children（list[ChildSummaryOut]）。\n- 今日狀態卡（BACKEND-525 / 526 使用）：\n  - `TodayAttendanceOut`：status（expected / present / left / absent / leave | None）、check_in_at、check_out_at。\n  - `TodayLeaveOut`：id、leave_type、leave_type_label、start_date、end_date。\n  - `TodayHomeworkOut`：item_count、done_count、overall_status（not_started / in_progress / done）、ready_eta（HH:MM | None）、note。\n  - `TodayPickupRequestOut`：id、status、expected_arrival_at（HH:MM | None）、reply_ready_eta（HH:MM | None）、reply_message、reply_source（auto / staff / None）、can_cancel、can_mark_arrived。\n  - `ChildTodayOut`：student_id、date、is_service_day、attendance（TodayAttendanceOut）、on_leave（bool）、leave（TodayLeaveOut | None）、homework（TodayHomeworkOut）、pickup_request（TodayPickupRequestOut | None）。\n\n**驗收標準**\n- 欄位集合固定；以 model_fields 斷言不存在 id_number / health_note / note 等欄位。\n- ChildTodayOut 與子 model 欄位集合固定，不含員工姓名。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/parent_children.py",
       "source_ref": null,
@@ -6226,7 +6226,8 @@
         ],
         "red_cases": [
           "test_parent_children_schemas_fields：set(ChildDetailOut.model_fields) == {'id','name','grade_level','class_name','school_name','photo_url','status','school_class','enrolled_on','my_guardian'}",
-          "test_parent_children_schemas_no_sensitive：'id_number' not in ChildDetailOut.model_fields 且 'health_note' not in ChildDetailOut.model_fields 且 'note' not in ChildDetailOut.model_fields"
+          "test_parent_children_schemas_no_sensitive：'id_number' not in ChildDetailOut.model_fields 且 'health_note' not in ChildDetailOut.model_fields 且 'note' not in ChildDetailOut.model_fields",
+          "test_parent_children_schemas_today_fields：set(ChildTodayOut.model_fields) == {'student_id','date','is_service_day','attendance','on_leave','leave','homework','pickup_request'}；set(TodayPickupRequestOut.model_fields) == {'id','status','expected_arrival_at','reply_ready_eta','reply_message','reply_source','can_cancel','can_mark_arrived'}"
         ],
         "run": "just test apps/api/tests/unit/schemas/test_parent_children_schemas.py -k \"test_parent_children_schemas_\"",
         "notes": ""
@@ -7262,7 +7263,7 @@
     {
       "id": "BACKEND-224",
       "title": "實作 app/realtime/publish.py：頻道命名、訊息信封與 broadcast_after_commit helper",
-      "description": "建立 `apps/api/app/realtime/publish.py`，營運模組推送即時更新的唯一入口（domain_spec M7：接送佇列與作業進度看板透過 WebSocket 推送，頻道 `pickup`、`homework`；§2 WebSocket）。\n\n```python\nTopic = Literal[\"pickup\", \"homework\", \"attendance\"]\nPARENT_VISIBLE_TOPICS: Final = frozenset({\"pickup\", \"homework\"})\n\ndef admin_topic_channel(topic: Topic) -> str: ...      # 'admin:pickup'\ndef staff_channel(staff_id: UUID) -> str: ...          # 'staff:<id>'（個人通知）\ndef parent_channel(parent_id: UUID) -> str: ...        # 'parent:<id>'（個人通知）\ndef student_channel(student_id: UUID) -> str: ...      # 'student:<id>'（家長端該小孩的 pickup / homework 事件）\ndef envelope(type: str, data: Mapping[str, Any], *, clock: Clock) -> dict[str, Any]: ...   # {\"type\", \"data\", \"sent_at\": ISO8601 UTC}；data 轉 JSON 相容\n\ndef broadcast_after_commit(session: Session, *, topic: Topic, type: str, data: Mapping[str, Any], clock: Clock,\n                           student_id: UUID | None = None, parent_data: Mapping[str, Any] | None = None) -> None: ...\ndef push_to_recipient_after_commit(session: Session, recipient: Recipient, type: str, data: Mapping[str, Any], *, clock: Clock) -> None: ...\n```\n**規則**\n- `type` 必須以 `f\"{topic}.\"` 開頭（例如 `pickup.request_updated`、`homework.progress_updated`），否則 ValueError。\n- broadcast：commit 後 `publish_threadsafe([admin_topic_channel(topic)], envelope(type, data))`；若 `student_id` 與 `parent_data` 皆有值 → 另送 `student_channel(student_id)` 一份以 parent_data 組成的信封（家長只收到為家長裁切過的欄位，例如不含員工姓名、內部備註）。\n- `parent_data` 給了但 topic 不在 PARENT_VISIBLE_TOPICS → ValueError（attendance 不推家長；家長的到 / 離班透過通知事件）。\n- 全部透過 BACKEND-006 `run_after_commit` 註冊；rollback 不送。\n- 盡力而為：送不到不重試，前端斷線時以輪詢補齊（domain_spec M7）。\n\n**驗收標準**\n- 頻道命名與信封格式正確。\n- commit 後才送；rollback 不送。\n- 家長裁切資料只送到 student channel，admin channel 收到完整 data。\n- type 前綴與 attendance + parent_data 的檢查。",
+      "description": "建立 `apps/api/app/realtime/publish.py`，營運模組推送即時更新的唯一入口（domain_spec M7：接送佇列與作業進度看板透過 WebSocket 推送，頻道 `pickup`、`homework`；§2 WebSocket）。\n\n```python\nTopic = Literal[\"pickup\", \"homework\", \"attendance\"]\nPARENT_VISIBLE_TOPICS: Final = frozenset({\"pickup\", \"homework\", \"attendance\"})\n\ndef admin_topic_channel(topic: Topic) -> str: ...      # 'admin:pickup'\ndef staff_channel(staff_id: UUID) -> str: ...          # 'staff:<id>'（個人通知）\ndef parent_channel(parent_id: UUID) -> str: ...        # 'parent:<id>'（個人通知）\ndef student_channel(student_id: UUID) -> str: ...      # 'student:<id>'（家長端該小孩的 pickup / homework / attendance 事件）\ndef envelope(type: str, data: Mapping[str, Any], *, clock: Clock) -> dict[str, Any]: ...   # {\"type\", \"data\", \"sent_at\": ISO8601 UTC}；data 轉 JSON 相容\n\ndef broadcast_after_commit(session: Session, *, topic: Topic, type: str, data: Mapping[str, Any], clock: Clock,\n                           student_id: UUID | None = None, parent_data: Mapping[str, Any] | None = None) -> None: ...\ndef push_to_recipient_after_commit(session: Session, recipient: Recipient, type: str, data: Mapping[str, Any], *, clock: Clock) -> None: ...\ndef push_to_student_after_commit(session: Session, student_id: UUID, *, topic: Topic, type: str, data: Mapping[str, Any], clock: Clock) -> None: ...   # 只送 student channel（批次操作：admin 端另以一則彙總訊息廣播，家長端逐生推送）\n```\n**規則**\n- `type` 必須以 `f\"{topic}.\"` 開頭（例如 `pickup.request_updated`、`homework.progress_updated`），否則 ValueError。\n- broadcast：commit 後 `publish_threadsafe([admin_topic_channel(topic)], envelope(type, data))`；若 `student_id` 與 `parent_data` 皆有值 → 另送 `student_channel(student_id)` 一份以 parent_data 組成的信封（家長只收到為家長裁切過的欄位，例如不含員工姓名、內部備註）。\n- `parent_data` 給了（或呼叫 push_to_student_after_commit）但 topic 不在 PARENT_VISIBLE_TOPICS → ValueError。pickup、homework、attendance 三個 topic 都可推家長；家長版資料一律由呼叫端裁切（attendance 只含 student_id、service_date、status、check_in_at、check_out_at）。\n- 全部透過 BACKEND-006 `run_after_commit` 註冊；rollback 不送。\n- 盡力而為：送不到不重試，前端斷線時以輪詢補齊（domain_spec M7）。\n\n**驗收標準**\n- 頻道命名與信封格式正確。\n- commit 後才送；rollback 不送。\n- 家長裁切資料只送到 student channel，admin channel 收到完整 data。\n- type 前綴檢查；push_to_student_after_commit 只送 student channel。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/realtime/publish.py",
       "source_ref": "BE:services/ws/dismissal.py::schedule_broadcast_threadsafe",
@@ -7287,8 +7288,9 @@
           "test_publish_envelope：envelope('pickup.request_updated', {'id': UUID(int=2)}, clock=fake_clock) == {'type':'pickup.request_updated','data':{'id':'00000000-0000-0000-0000-000000000002'},'sent_at':'2026-09-01T01:00:00Z'}",
           "test_publish_after_commit_only：monkeypatch publish_threadsafe 記錄 → broadcast_after_commit(db, topic='homework', type='homework.progress_updated', data={'x':1}, clock=fake_clock) 後未 commit → 記錄空；commit 後 → [(['admin:homework'], envelope)]；另一次 rollback → 不增加",
           "test_publish_parent_split：student_id=s、parent_data={'overall':'done'} → commit 後記錄兩筆：admin:homework 的 data == 完整 data、student:<s> 的 data == {'overall':'done'}",
-          "test_publish_validation：type='attendance.checked_in' 搭配 topic='pickup' → ValueError；topic='attendance' 且給 parent_data → ValueError",
-          "test_publish_push_to_recipient：push_to_recipient_after_commit(db, Recipient('parent', p), 'notification.created', {...}) commit 後 → 記錄 channel == ['parent:<p>']"
+          "test_publish_validation：type='attendance.checked_in' 搭配 topic='pickup' → ValueError；topic='attendance' 搭配 type='attendance.updated'、student_id=s、parent_data={'status':'present'} → commit 後記錄 admin:attendance 與 student:<s> 兩筆",
+          "test_publish_push_to_recipient：push_to_recipient_after_commit(db, Recipient('parent', p), 'notification.created', {...}) commit 後 → 記錄 channel == ['parent:<p>']",
+          "test_publish_push_to_student：push_to_student_after_commit(db, s, topic='attendance', type='attendance.updated', data={'status':'present'}, clock=fake_clock) commit 後 → 記錄只有 [student_channel(s)] 一筆；type='pickup.x' 搭配 topic='attendance' → ValueError"
         ],
         "run": "just test-int apps/api/tests/integration/realtime/test_publish.py -k \"test_publish_\"",
         "notes": ""
@@ -7382,8 +7384,8 @@
     },
     {
       "id": "BACKEND-227",
-      "title": "實作 /api/ws/parent：家長 WebSocket（只收自己小孩的 pickup / homework 與個人通知）",
-      "description": "建立 `apps/api/app/api/ws/parent.py`，`@router.websocket(\"/api/ws/parent\")`，掛到 ws_router（domain_spec §2：cookie 認證，只收自己小孩相關的 homework、pickup、notifications 事件）。\n\n**流程**\n1. `ws_load_parent` 失敗 → close 4401。\n2. accept；訂閱 `parent_channel(parent.id)` 與每個 `student_channel(sid)`（sid ∈ BACKEND-179 `get_parent_student_ids`）；回 `{\"type\":\"ready\",\"children\":[...student ids]}`。\n3. 家長端不能自選頻道：任何 subscribe / unsubscribe action → `{\"type\":\"error\",\"code\":\"not_allowed\"}`；只接受 ping。\n4. 每 60 秒重驗：token / 帳號狀態失效 → 4401；重新計算小孩清單，解除綁定或封存的學生 → 取消該 student channel 並回 `{\"type\":\"children_changed\",\"children\":[...]}`；新綁定的學生 → 新增訂閱並同樣通知。\n5. 斷線時取消全部訂閱。\n\n**驗收標準**\n- 只收到自己小孩 student channel 與自己 parent channel 的訊息；別人小孩的訊息收不到（IDOR）。\n- client 嘗試訂閱任意頻道被拒。\n- 解除綁定後於下一次重驗取消訂閱，之後收不到該學生訊息。\n- 無 cookie / 員工 cookie 4401；外站 Origin 4403。",
+      "title": "實作 /api/ws/parent：家長 WebSocket（只收自己小孩的 pickup / homework / attendance 與個人通知）",
+      "description": "建立 `apps/api/app/api/ws/parent.py`，`@router.websocket(\"/api/ws/parent\")`，掛到 ws_router（domain_spec §2：cookie 認證，只收自己小孩相關的 homework、pickup、attendance、notifications 事件）。\n\n**流程**\n1. `ws_load_parent` 失敗 → close 4401。\n2. accept；訂閱 `parent_channel(parent.id)` 與每個 `student_channel(sid)`（sid ∈ BACKEND-179 `get_parent_student_ids`）；回 `{\"type\":\"ready\",\"children\":[...student ids]}`。\n3. 家長端不能自選頻道：任何 subscribe / unsubscribe action → `{\"type\":\"error\",\"code\":\"not_allowed\"}`；只接受 ping。\n4. 每 60 秒重驗：token / 帳號狀態失效 → 4401；重新計算小孩清單，解除綁定或封存的學生 → 取消該 student channel 並回 `{\"type\":\"children_changed\",\"children\":[...]}`；新綁定的學生 → 新增訂閱並同樣通知。\n5. 斷線時取消全部訂閱。\n\n**驗收標準**\n- 只收到自己小孩 student channel 與自己 parent channel 的訊息；別人小孩的訊息收不到（IDOR）。\n- student channel 會收到 `pickup.request_updated`、`homework.progress_updated`、`attendance.updated`（家長裁切版，BACKEND-224），本 endpoint 原樣轉送、不再過濾 topic。\n- client 嘗試訂閱任意頻道被拒。\n- 解除綁定後於下一次重驗取消訂閱，之後收不到該學生訊息。\n- 無 cookie / 員工 cookie 4401；外站 Origin 4403。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/ws/parent.py",
       "source_ref": "BE:api/inbox_ws.py::employee_inbox_ws",
@@ -7410,7 +7412,8 @@
           "test_ws_parent_receives_own_child_only：publish 到 student_channel(王小明) → 收到；publish 到 student_channel(陳小華，他人小孩) → 收不到；publish 到 parent_channel(自己) → 收到",
           "test_ws_parent_cannot_subscribe：送 {'action':'subscribe','topics':['pickup']} → 收到 {'type':'error','code':'not_allowed'}；publish 到 'admin:pickup' → 收不到",
           "test_ws_parent_unbind_revalidate：REVALIDATE_SECONDS=0.1；連線後解除王小明的綁定並 commit → 收到 {'type':'children_changed','children':[]}；之後 publish 到 student_channel(王小明) → 收不到",
-          "test_ws_parent_unauthenticated：無 cookie → 4401；staff_access cookie → 4401；Origin https://evil.test → 4403"
+          "test_ws_parent_unauthenticated：無 cookie → 4401；staff_access cookie → 4401；Origin https://evil.test → 4403",
+          "test_ws_parent_receives_attendance：committing session，員工對王小明 check_in（BACKEND-305）並 commit → 家長 ws 收到 type 'attendance.updated'，data == {'student_id': str(王小明.id), 'service_date': ..., 'status': 'present', 'check_in_at': ..., 'check_out_at': None}；對陳小華（他人小孩）check_in → 收不到"
         ],
         "run": "just test-int apps/api/tests/integration/api/ws/test_ws_endpoints.py -k \"test_ws_parent_\"",
         "notes": ""
@@ -7467,7 +7470,7 @@
     {
       "id": "BACKEND-301",
       "title": "建立出勤模組 Pydantic schemas",
-      "description": "建立 `apps/api/app/schemas/attendance.py`（request `extra='forbid'`、`str_strip_whitespace=True`；Out `from_attributes=True`）。時間欄位一律輸出 ISO8601 UTC（前端自行轉台北時間）。\n\n- `AttendanceStatus = Literal['expected','present','left','absent','leave']`；`STATUS_LABELS`：預計到班 / 已到班 / 已離班 / 缺席 / 請假。\n- `LeaveBriefOut`：id、leave_type、leave_type_label、start_date、end_date。\n- `AttendanceRowOut`：id（`UUID | None`：營業日尚未建立紀錄的學生以虛擬列呈現，id 為 null）、student_id、student_no、student_name、grade_level、class_id、class_name、service_date、status、check_in_at、check_in_source、check_out_at、check_out_source、leave（LeaveBriefOut | None）、note、updated_at。\n- `DailyAttendanceQuery`（query）：date（date | None，service 以 clock.today() 補）、class_id、status（AttendanceStatus | None）。\n- `DailySummaryOut`：total、expected、present、left、absent、leave。\n- `DailyAttendanceOut`：date、is_service_day、summary、items（list[AttendanceRowOut]）。\n- `CheckInIn` / `CheckOutIn` / `MarkAbsentIn`：note（≤200，可空）。body 整個可省略。**不接受 client 指定時間**，一律以伺服器時間；補登或更正走改判（BACKEND-309）。\n- `BatchCheckInIn`：student_ids（1~200，不可重複）。\n- `BatchSkipOut`：student_id、code、message；`BatchCheckInOut`：succeeded（list[AttendanceRowOut]）、skipped（list[BatchSkipOut]）。\n- `AttendanceAmendIn`：status（`Literal['expected','present','left','absent']`，可空）、check_in_at、check_out_at（aware datetime，可給 null）、note（≤200，可給 null）、reason（1~200，必填）；除 reason 外至少給一個欄位（以 `model_fields_set` 判斷，空 → 422）；naive datetime → 422。\n- `MonthlyAttendanceQuery`：month（`^\\d{4}-(0[1-9]|1[0-2])$`）、class_id（可空）。\n- `MonthDayOut`：date、weekday（0=週一）、is_service_day。\n- `MonthlyStatsOut`：service_days、attended（present + left）、absent、leave、unrecorded。\n- `MonthlyStudentRowOut`：student_id、student_no、name、class_name、statuses（list[AttendanceStatus | None]，與 days 等長、同順序）、stats（MonthlyStatsOut）。\n- `MonthlyAttendanceOut`：month、class_id、class_name、days（list[MonthDayOut]）、students（list[MonthlyStudentRowOut]）、totals（MonthlyStatsOut）。\n- `ParentAttendanceDayOut`：date、is_service_day、status（AttendanceStatus | None）、check_in_at、check_out_at、leave_type（str | None）。\n- `ParentMonthlyAttendanceOut`：student_id、month、days（list[ParentAttendanceDayOut]）、stats（MonthlyStatsOut）。\n\n**驗收標準**\n- BatchCheckInIn 重複 id / 空清單 / 超過 200 → ValidationError。\n- AttendanceAmendIn：只給 reason → ValidationError；status='leave' → ValidationError；naive datetime → ValidationError；能區分未給與給 null。\n- MonthlyAttendanceQuery month='2026-13' → ValidationError。\n- extra 欄位被拒。",
+      "description": "建立 `apps/api/app/schemas/attendance.py`（request `extra='forbid'`、`str_strip_whitespace=True`；Out `from_attributes=True`）。時間欄位一律輸出 ISO8601 UTC（前端自行轉台北時間）。\n\n- `AttendanceStatus = Literal['expected','present','left','absent','leave']`；`STATUS_LABELS`：預計到班 / 已到班 / 已離班 / 缺席 / 請假。\n- `LeaveBriefOut`：id、leave_type、leave_type_label、start_date、end_date。\n- `AttendanceRowOut`：id（`UUID | None`：營業日尚未建立紀錄的學生以虛擬列呈現，id 為 null）、student_id、student_no、student_name、grade_level、class_id、class_name、service_date、status、check_in_at、check_in_source、check_out_at、check_out_source、leave（LeaveBriefOut | None）、note、updated_at。\n- `DailyAttendanceQuery`（query）：date（date | None，service 以 clock.today() 補）、class_id、status（AttendanceStatus | None）。\n- `DailySummaryOut`：total、expected、present、left、absent、leave。\n- `DailyAttendanceOut`：date、is_service_day、summary、items（list[AttendanceRowOut]）。\n- `CheckInIn` / `CheckOutIn` / `MarkAbsentIn`：note（≤200，可空）。body 整個可省略。**不接受 client 指定時間**，一律以伺服器時間；補登或更正走改判（BACKEND-309）。\n- `BatchCheckInIn`：student_ids（1~200，不可重複）。\n- `BatchSkipOut`：student_id、code、message；`BatchCheckInOut`：succeeded（list[AttendanceRowOut]）、skipped（list[BatchSkipOut]）。\n- `AttendanceAmendIn`：status（`Literal['expected','present','left','absent']`，可空）、check_in_at、check_out_at（aware datetime，可給 null）、note（≤200，可給 null）、reason（1~200，必填）；除 reason 外至少給一個欄位（以 `model_fields_set` 判斷，空 → 422）；naive datetime → 422。\n- `MonthlyAttendanceQuery`：month（`^\\d{4}-(0[1-9]|1[0-2])$`）、class_id（可空）。\n- `MonthDayOut`：date、weekday（0=週一）、is_service_day。\n- `MonthlyStatsOut`：service_days、attended（present + left）、absent、leave、unrecorded。\n- `MonthlyStudentRowOut`：student_id、student_no、name、class_name、statuses（list[AttendanceStatus | None]，與 days 等長、同順序）、stats（MonthlyStatsOut）。\n- `MonthlyAttendanceOut`：month、class_id、class_name、days（list[MonthDayOut]）、students（list[MonthlyStudentRowOut]）、totals（MonthlyStatsOut）。\n- `ParentAttendanceDayOut`：date、is_service_day、status（AttendanceStatus | None）、check_in_at、check_out_at、leave_type（str | None）。\n- `ParentMonthlyAttendanceOut`：student_id、month、days（list[ParentAttendanceDayOut]）、stats（MonthlyStatsOut）。\n- `ParentAttendanceEventOut`（推給家長 ws 的裁切資料）：student_id、service_date、status、check_in_at、check_out_at；`to_parent_attendance_event(row) -> dict` 由出勤 service 共用。\n\n**驗收標準**\n- BatchCheckInIn 重複 id / 空清單 / 超過 200 → ValidationError。\n- AttendanceAmendIn：只給 reason → ValidationError；status='leave' → ValidationError；naive datetime → ValidationError；能區分未給與給 null。\n- MonthlyAttendanceQuery month='2026-13' → ValidationError。\n- extra 欄位被拒。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/attendance.py",
       "source_ref": null,
@@ -7615,7 +7618,7 @@
     {
       "id": "BACKEND-305",
       "title": "實作 AttendanceService.check_in：到班登記（條件式更新、通知家長、ws 推播）",
-      "description": "在 `apps/api/app/services/attendance_service.py` 實作：\n```python\ndef check_in(session: Session, student_id: UUID, *, actor: CurrentStaff, note: str | None, clock: Clock) -> AttendanceRowOut: ...\n```\n1. `get_student_or_404`（BACKEND-133）；`status != 'active'` → 409 `student_not_active`。\n2. `d = clock.today()`；`is_service_day` 為 False → 409 `not_service_day`。\n3. `ensure_attendance_row(session, student_id, d)`（BACKEND-302）。\n4. **條件式更新**（防兩位員工同時按造成重複通知）：`UPDATE student_attendances SET status='present', check_in_at=:now, check_in_source='manual', updated_by=:staff_id, note=coalesce(:note, note) WHERE id=:id AND status IN ('expected','absent') RETURNING *`。\n   0 列 → 依目前狀態：present → 409 `already_checked_in`；left → 409 `already_checked_out`；leave → 409 `student_on_leave`。\n   缺席（absent）的學生後來到班可直接登記到班（遲到情境）。\n5. `enqueue(session, Event.ATTENDANCE_CHECKED_IN, recipients=parent_recipients(session, student_id), payload={'student_id', 'student_name', 'time': 台北 HH:MM}, clock=clock)`（BACKEND-206 / 204）。\n6. `broadcast_after_commit(session, topic='attendance', type='attendance.updated', data=AttendanceRowOut, clock=clock)`（BACKEND-224；attendance 不推家長頻道）。\n- 不 commit。移植 ivy `api/student_attendance.py::batch_save_attendance` 的單筆寫入邏輯；去掉教師端班級權限、中文狀態值、tenant。\n\n**驗收標準**\n- expected / absent → present，check_in_at = now、source manual、updated_by 為操作者。\n- 已到班 / 已離班 / 請假 → 409 對應 code，且不發通知。\n- 非營業日 409、非在學學生 409、不存在 404。\n- 家長收到 attendance.checked_in（time 為台北時間）；commit 後才廣播。\n- 兩個交易同時 check_in 同一學生 → 一個成功、一個 409，通知只有一筆。",
+      "description": "在 `apps/api/app/services/attendance_service.py` 實作：\n```python\ndef check_in(session: Session, student_id: UUID, *, actor: CurrentStaff, note: str | None, clock: Clock) -> AttendanceRowOut: ...\n```\n1. `get_student_or_404`（BACKEND-133）；`status != 'active'` → 409 `student_not_active`。\n2. `d = clock.today()`；`is_service_day` 為 False → 409 `not_service_day`。\n3. `ensure_attendance_row(session, student_id, d)`（BACKEND-302）。\n4. **條件式更新**（防兩位員工同時按造成重複通知）：`UPDATE student_attendances SET status='present', check_in_at=:now, check_in_source='manual', updated_by=:staff_id, note=coalesce(:note, note) WHERE id=:id AND status IN ('expected','absent') RETURNING *`。\n   0 列 → 依目前狀態：present → 409 `already_checked_in`；left → 409 `already_checked_out`；leave → 409 `student_on_leave`。\n   缺席（absent）的學生後來到班可直接登記到班（遲到情境）。\n5. `enqueue(session, Event.ATTENDANCE_CHECKED_IN, recipients=parent_recipients(session, student_id), payload={'student_id', 'student_name', 'time': 台北 HH:MM}, clock=clock)`（BACKEND-206 / 204）。\n6. `broadcast_after_commit(session, topic='attendance', type='attendance.updated', data=AttendanceRowOut, student_id=student_id, parent_data=ParentAttendanceEventOut, clock=clock)`（BACKEND-224；家長端只收自己小孩的裁切資料）。\n- 不 commit。移植 ivy `api/student_attendance.py::batch_save_attendance` 的單筆寫入邏輯；去掉教師端班級權限、中文狀態值、tenant。\n\n**驗收標準**\n- expected / absent → present，check_in_at = now、source manual、updated_by 為操作者。\n- 已到班 / 已離班 / 請假 → 409 對應 code，且不發通知。\n- 非營業日 409、非在學學生 409、不存在 404。\n- 家長收到 attendance.checked_in（time 為台北時間）；commit 後才廣播。\n- 兩個交易同時 check_in 同一學生 → 一個成功、一個 409，通知只有一筆。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:api/student_attendance.py::batch_save_attendance",
@@ -7645,7 +7648,8 @@
           "test_check_in_conflicts：present → AppError 409 'already_checked_in'；left → 409 'already_checked_out'；leave → 409 'student_on_leave'；三者 notifications 筆數皆為 0",
           "test_check_in_not_service_day：ClosedDay(today) → 409 'not_service_day'；學生 suspended → 409 'student_not_active'；uuid4() → 404 'student_not_found'",
           "test_check_in_creates_missing_row：今日尚無出勤列（新入班）→ check_in 成功且該日只有 1 列",
-          "test_check_in_concurrent_single_notification：committing session 兩條連線同時 check_in 同一學生 → 一個回 present、另一個 AppError 409 'already_checked_in'；commit 後 notifications(event='attendance.checked_in') 共 1 列"
+          "test_check_in_concurrent_single_notification：committing session 兩條連線同時 check_in 同一學生 → 一個回 present、另一個 AppError 409 'already_checked_in'；commit 後 notifications(event='attendance.checked_in') 共 1 列",
+          "test_check_in_parent_ws_payload：monkeypatch publish_threadsafe；committing session check_in 並 commit → student_channel(王小明) 收到 type 'attendance.updated'，data keys == {'student_id','service_date','status','check_in_at','check_out_at'} 且 status == 'present'"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_attendance_service.py -k \"test_check_in_\"",
         "notes": ""
@@ -7659,7 +7663,7 @@
     {
       "id": "BACKEND-306",
       "title": "實作 AttendanceService.check_out：離班登記（條件式更新、通知家長、ws 推播）",
-      "description": "在 `apps/api/app/services/attendance_service.py` 實作：\n```python\ndef check_out(session: Session, student_id: UUID, *, actor: CurrentStaff, note: str | None, clock: Clock) -> AttendanceRowOut: ...\n```\n1. `get_student_or_404`；`d = clock.today()`；當日沒有出勤列 → 409 `not_checked_in`（不建立列）。\n2. 條件式更新：`UPDATE ... SET status='left', check_out_at=:now, check_out_source='manual', updated_by, note=coalesce(:note, note) WHERE id=:id AND status='present' AND check_in_at <= :now RETURNING *`。\n   0 列 → expected / absent → 409 `not_checked_in`；left → 409 `already_checked_out`；leave → 409 `student_on_leave`；present 但 now < check_in_at（時鐘異常）→ 409 `invalid_check_out_time`。\n3. enqueue `attendance.checked_out`（payload 同 check_in，time 為離班台北 HH:MM）。\n4. broadcast `attendance.updated`。\n\n**驗收標準**\n- present → left，check_out_at = now、source manual。\n- 未到班 / 已離班 / 請假 / 無列 → 409 對應 code，不發通知。\n- 家長收到 attendance.checked_out。\n- 同時兩次 check_out → 一成功一 409，通知一筆。",
+      "description": "在 `apps/api/app/services/attendance_service.py` 實作：\n```python\ndef check_out(session: Session, student_id: UUID, *, actor: CurrentStaff, note: str | None, clock: Clock) -> AttendanceRowOut: ...\n```\n1. `get_student_or_404`；`d = clock.today()`；當日沒有出勤列 → 409 `not_checked_in`（不建立列）。\n2. 條件式更新：`UPDATE ... SET status='left', check_out_at=:now, check_out_source='manual', updated_by, note=coalesce(:note, note) WHERE id=:id AND status='present' AND check_in_at <= :now RETURNING *`。\n   0 列 → expected / absent → 409 `not_checked_in`；left → 409 `already_checked_out`；leave → 409 `student_on_leave`；present 但 now < check_in_at（時鐘異常）→ 409 `invalid_check_out_time`。\n3. enqueue `attendance.checked_out`（payload 同 check_in，time 為離班台北 HH:MM）。\n4. `broadcast_after_commit(session, topic='attendance', type='attendance.updated', data=AttendanceRowOut, student_id=student_id, parent_data=ParentAttendanceEventOut, clock=clock)`（BACKEND-224；家長端只收自己小孩的裁切資料）。\n\n**驗收標準**\n- present → left，check_out_at = now、source manual。\n- 未到班 / 已離班 / 請假 / 無列 → 409 對應 code，不發通知。\n- 家長收到 attendance.checked_out。\n- 同時兩次 check_out → 一成功一 409，通知一筆。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:api/student_attendance.py::batch_save_attendance",
@@ -7680,7 +7684,8 @@
           "test_check_out_success：王小明 present（check_in 15:00 台北）、FakeClock 2026-09-01T10:30Z → status == 'left'、check_out_at == fake_clock.now()、notifications event 'attendance.checked_out' payload.time == '18:30'",
           "test_check_out_conflicts：expected → 409 'not_checked_in'；無出勤列 → 409 'not_checked_in'；left → 409 'already_checked_out'；leave → 409 'student_on_leave'",
           "test_check_out_before_check_in_time：check_in_at 設為 fake_clock.now() + 1 分鐘 → 409 'invalid_check_out_time'，status 仍 present",
-          "test_check_out_concurrent：committing session 兩條連線同時 check_out → 一個成功一個 409 'already_checked_out'，notifications(event='attendance.checked_out') 1 列"
+          "test_check_out_concurrent：committing session 兩條連線同時 check_out → 一個成功一個 409 'already_checked_out'，notifications(event='attendance.checked_out') 1 列",
+          "test_check_out_parent_ws_payload：commit 後 student_channel 收到 data.status == 'left' 且 check_out_at == fake_clock.now() 的 ISO 字串"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_attendance_service.py -k \"test_check_out_\"",
         "notes": ""
@@ -7694,7 +7699,7 @@
     {
       "id": "BACKEND-307",
       "title": "實作 mark_left_by_pickup：接送完成時把出勤改為 left（source=pickup）",
-      "description": "在 `apps/api/app/services/attendance_service.py` 實作接送模組（BACKEND-410、BACKEND-425）呼叫的出勤離班方法（domain_spec M4：接送完成自動把出勤改為 left、`check_out_source = pickup`）。\n\n```python\ndef mark_left_by_pickup(session: Session, student_id: UUID, service_date: date, *, at: datetime, clock: Clock) -> bool: ...\n```\n- 條件式更新：`UPDATE ... SET status='left', check_out_at=:at, check_out_source='pickup' WHERE student_id AND service_date AND status='present' AND check_in_at <= :at RETURNING id`。\n- 有更新 → broadcast `attendance.updated` 並回 True；狀態不是 present（尚未登記到班、請假、已離班）→ 不改、回 False、`logger.info` 記錄（接送完成本身不因出勤狀態失敗）。\n- **不**發 `attendance.checked_out`：接送完成已發 `pickup.completed` 給家長，避免同一事件兩則通知。\n- updated_by 不填（接送模組已記錄 completed_by）。\n\n**驗收標準**\n- present → left、check_out_source == 'pickup'，回 True。\n- expected / leave / left → 不變並回 False。\n- 不產生 attendance.checked_out 通知。",
+      "description": "在 `apps/api/app/services/attendance_service.py` 實作接送模組（BACKEND-410、BACKEND-425）呼叫的出勤離班方法（domain_spec M4：接送完成自動把出勤改為 left、`check_out_source = pickup`）。\n\n```python\ndef mark_left_by_pickup(session: Session, student_id: UUID, service_date: date, *, at: datetime, clock: Clock) -> bool: ...\n```\n- 條件式更新：`UPDATE ... SET status='left', check_out_at=:at, check_out_source='pickup' WHERE student_id AND service_date AND status='present' AND check_in_at <= :at RETURNING id`。\n- 有更新 → `broadcast_after_commit(session, topic='attendance', type='attendance.updated', data=AttendanceRowOut, student_id=student_id, parent_data=ParentAttendanceEventOut, clock=clock)`（BACKEND-224；家長端只收自己小孩的裁切資料） 並回 True；狀態不是 present（尚未登記到班、請假、已離班）→ 不改、回 False、`logger.info` 記錄（接送完成本身不因出勤狀態失敗）。\n- **不**發 `attendance.checked_out`：接送完成已發 `pickup.completed` 給家長，避免同一事件兩則通知。\n- updated_by 不填（接送模組已記錄 completed_by）。\n\n**驗收標準**\n- present → left、check_out_source == 'pickup'，回 True。\n- expected / leave / left → 不變並回 False。\n- 不產生 attendance.checked_out 通知。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": null,
@@ -7727,7 +7732,7 @@
     {
       "id": "BACKEND-308",
       "title": "實作 AttendanceService.batch_check_in：批次到班（逐生條件式更新、回報略過原因）",
-      "description": "在 `apps/api/app/services/attendance_service.py` 實作：\n```python\ndef batch_check_in(session: Session, student_ids: Sequence[UUID], *, actor: CurrentStaff, clock: Clock) -> BatchCheckInOut: ...\n```\n1. 非營業日 → 整批 409 `not_service_day`。\n2. 一次查出全部學生（含封存），依輸入順序逐一處理，與 BACKEND-305 相同的 ensure + 條件式更新；失敗不中斷，收進 skipped：`student_not_found`、`student_not_active`、`already_checked_in`、`already_checked_out`、`student_on_leave`（message 為繁中）。\n3. 每位成功學生各 enqueue 一則 `attendance.checked_in`；家長收件人以 `parent_recipients_bulk` 一次查詢。\n4. 成功列表非空時只 broadcast 一次 `attendance.batch_updated`（data: {items: [...AttendanceRowOut]}）。\n- 移植 ivy `api/student_attendance.py::batch_save_attendance` 的「整批送出、逐筆寫入」；去掉缺席警示背景工作與教師端。\n\n**驗收標準**\n- 混合情境下 succeeded / skipped 分類與 code 正確、順序與輸入一致。\n- 成功者各一則通知；收件人查詢只發一次 SQL。\n- 只廣播一次。\n- 非營業日整批 409 且不寫入。",
+      "description": "在 `apps/api/app/services/attendance_service.py` 實作：\n```python\ndef batch_check_in(session: Session, student_ids: Sequence[UUID], *, actor: CurrentStaff, clock: Clock) -> BatchCheckInOut: ...\n```\n1. 非營業日 → 整批 409 `not_service_day`。\n2. 一次查出全部學生（含封存），依輸入順序逐一處理，與 BACKEND-305 相同的 ensure + 條件式更新；失敗不中斷，收進 skipped：`student_not_found`、`student_not_active`、`already_checked_in`、`already_checked_out`、`student_on_leave`（message 為繁中）。\n3. 每位成功學生各 enqueue 一則 `attendance.checked_in`；家長收件人以 `parent_recipients_bulk` 一次查詢。\n4. 成功列表非空時只 broadcast 一次 `attendance.batch_updated`（data: {items: [...AttendanceRowOut]}，只送 admin）；另對每位成功學生 `push_to_student_after_commit(topic='attendance', type='attendance.updated', data=ParentAttendanceEventOut)`（家長逐生收到）。\n- 移植 ivy `api/student_attendance.py::batch_save_attendance` 的「整批送出、逐筆寫入」；去掉缺席警示背景工作與教師端。\n\n**驗收標準**\n- 混合情境下 succeeded / skipped 分類與 code 正確、順序與輸入一致。\n- 成功者各一則通知；收件人查詢只發一次 SQL。\n- 只廣播一次。\n- 非營業日整批 409 且不寫入。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:api/student_attendance.py::batch_save_attendance",
@@ -7748,7 +7753,8 @@
           "test_batch_check_in_mixed：[王小明(expected), 陳小華(present), 林小安(suspended), uuid4(), 張小美(leave)] → succeeded 只有王小明；skipped codes 依序 == ['already_checked_in','student_not_active','student_not_found','student_on_leave']",
           "test_batch_check_in_notifications：三位 expected 學生各有一位綁定家長 → notifications(event='attendance.checked_in') 3 列；以 before_cursor_execute 計數 guardians 查詢次數 == 1",
           "test_batch_check_in_single_broadcast：monkeypatch publish_threadsafe 記錄，committing session commit 後 admin:attendance 收到 1 則 type == 'attendance.batch_updated'，data.items 長度 3",
-          "test_batch_check_in_not_service_day：ClosedDay(today) → AppError 409 'not_service_day'，student_attendances 筆數 0"
+          "test_batch_check_in_not_service_day：ClosedDay(today) → AppError 409 'not_service_day'，student_attendances 筆數 0",
+          "test_batch_check_in_parent_ws：三位成功學生 → commit 後 student_channel 各收到 1 則 'attendance.updated'，admin:attendance 只收到 1 則 'attendance.batch_updated'"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_attendance_service.py -k \"test_batch_check_in_\"",
         "notes": ""
@@ -7762,7 +7768,7 @@
     {
       "id": "BACKEND-309",
       "title": "實作 AttendanceService.mark_absent：標記缺席",
-      "description": "在 `apps/api/app/services/attendance_service.py` 實作：\n```python\ndef mark_absent(session: Session, student_id: UUID, *, actor: CurrentStaff, note: str | None, clock: Clock) -> AttendanceRowOut: ...\n```\n1. 學生存在且 active（404 / 409 `student_not_active`）；今日為營業日（409 `not_service_day`）。\n2. ensure_attendance_row；條件式更新 `status='absent', updated_by, note=coalesce(:note, note) WHERE id AND status='expected'`。\n3. 0 列：已是 absent → 原樣回傳（冪等）；present / left → 409 `already_checked_in`（已登記到班者要改判請走 BACKEND-310）；leave → 409 `student_on_leave`。\n4. broadcast `attendance.updated`。M9 沒有缺席事件，不發通知。\n\n**驗收標準**\n- expected → absent；重複呼叫冪等。\n- present / left / leave → 409。\n- 不產生 notifications 列。",
+      "description": "在 `apps/api/app/services/attendance_service.py` 實作：\n```python\ndef mark_absent(session: Session, student_id: UUID, *, actor: CurrentStaff, note: str | None, clock: Clock) -> AttendanceRowOut: ...\n```\n1. 學生存在且 active（404 / 409 `student_not_active`）；今日為營業日（409 `not_service_day`）。\n2. ensure_attendance_row；條件式更新 `status='absent', updated_by, note=coalesce(:note, note) WHERE id AND status='expected'`。\n3. 0 列：已是 absent → 原樣回傳（冪等）；present / left → 409 `already_checked_in`（已登記到班者要改判請走 BACKEND-310）；leave → 409 `student_on_leave`。\n4. `broadcast_after_commit(session, topic='attendance', type='attendance.updated', data=AttendanceRowOut, student_id=student_id, parent_data=ParentAttendanceEventOut, clock=clock)`（BACKEND-224；家長端只收自己小孩的裁切資料）。M9 沒有缺席事件，不發通知。\n\n**驗收標準**\n- expected → absent；重複呼叫冪等。\n- present / left / leave → 409。\n- 不產生 notifications 列。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": null,
@@ -7800,7 +7806,7 @@
     {
       "id": "BACKEND-310",
       "title": "實作 AttendanceService.amend_attendance：改判已登記出勤（attendance:amend、寫 audit）",
-      "description": "在 `apps/api/app/services/attendance_service.py` 實作（domain_spec M4：誤刷可由有權限者改回，寫 audit；M1 audit 範圍含「出勤手動改判」）：\n```python\ndef amend_attendance(session: Session, attendance_id: UUID, data: AttendanceAmendIn, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> AttendanceRowOut: ...\n```\n1. `select ... FOR UPDATE`；不存在 → 404 `attendance_not_found`。\n2. 目前 status 為 leave → 409 `attendance_managed_by_leave`（請假狀態只能由請假的建立 / 取消改變）。\n3. 計算新狀態（未給的欄位沿用原值）：\n   - expected / absent：清空 check_in / check_out 時間與來源。\n   - present：需有 check_in_at（給定或原值），清空 check_out；沒有 → 422 `check_in_required`。\n   - left：需 check_in_at 與 check_out_at；缺 → 422 `check_out_required`。\n   - check_out_at < check_in_at → 422 `invalid_times`；時間的台北日期必須等於 service_date → 422 `time_not_on_service_date`。\n   - 時間有變動的那一側 source 設為 'manual'，未變動者保留原 source。\n4. 與原值完全相同 → 422 `no_changes`。\n5. 更新 updated_by；`record(session, actor=Actor.staff(actor), action='attendance.amend', entity_type='student_attendance', entity_id=row.id, before={status, check_in_at, check_out_at, note}, after={...新值, 'reason': data.reason}, meta=meta)`（BACKEND-102）。\n6. broadcast `attendance.updated`。改判不通知家長。\n\n**驗收標準**\n- present → expected 時清空時間，audit before/after 與 reason 正確。\n- left 改 present 清空離班時間；補登 left 需兩個時間。\n- 請假列 409；不存在 404；時間順序錯誤或日期不符 422；無變動 422。\n- 改判與 audit 同交易（rollback 後兩者皆不存在）。",
+      "description": "在 `apps/api/app/services/attendance_service.py` 實作（domain_spec M4：誤刷可由有權限者改回，寫 audit；M1 audit 範圍含「出勤手動改判」）：\n```python\ndef amend_attendance(session: Session, attendance_id: UUID, data: AttendanceAmendIn, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> AttendanceRowOut: ...\n```\n1. `select ... FOR UPDATE`；不存在 → 404 `attendance_not_found`。\n2. 目前 status 為 leave → 409 `attendance_managed_by_leave`（請假狀態只能由請假的建立 / 取消改變）。\n3. 計算新狀態（未給的欄位沿用原值）：\n   - expected / absent：清空 check_in / check_out 時間與來源。\n   - present：需有 check_in_at（給定或原值），清空 check_out；沒有 → 422 `check_in_required`。\n   - left：需 check_in_at 與 check_out_at；缺 → 422 `check_out_required`。\n   - check_out_at < check_in_at → 422 `invalid_times`；時間的台北日期必須等於 service_date → 422 `time_not_on_service_date`。\n   - 時間有變動的那一側 source 設為 'manual'，未變動者保留原 source。\n4. 與原值完全相同 → 422 `no_changes`。\n5. 更新 updated_by；`record(session, actor=Actor.staff(actor), action='attendance.amend', entity_type='student_attendance', entity_id=row.id, before={status, check_in_at, check_out_at, note}, after={...新值, 'reason': data.reason}, meta=meta)`（BACKEND-102）。\n6. `broadcast_after_commit(session, topic='attendance', type='attendance.updated', data=AttendanceRowOut, student_id=student_id, parent_data=ParentAttendanceEventOut, clock=clock)`（BACKEND-224；家長端只收自己小孩的裁切資料）。改判不發通知事件，但家長端畫面經 ws 即時更新。\n\n**驗收標準**\n- present → expected 時清空時間，audit before/after 與 reason 正確。\n- left 改 present 清空離班時間；補登 left 需兩個時間。\n- 請假列 409；不存在 404；時間順序錯誤或日期不符 422；無變動 422。\n- 改判與 audit 同交易（rollback 後兩者皆不存在）。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": null,
@@ -7827,7 +7833,8 @@
           "test_amend_leave_row_rejected：leave 列 → 409 'attendance_managed_by_leave'；uuid4() → 404 'attendance_not_found'",
           "test_amend_time_wrong_date：service_date 2026-09-01、check_in_at=台北 2026-09-02 15:00 → 422 'time_not_on_service_date'",
           "test_amend_no_changes：amend(status=原值, reason='x') → 422 'no_changes'",
-          "test_amend_rollback_atomic：amend 成功後 db_session.rollback() → status 回原值且 audit_logs(action='attendance.amend') 0 筆"
+          "test_amend_rollback_atomic：amend 成功後 db_session.rollback() → status 回原值且 audit_logs(action='attendance.amend') 0 筆",
+          "test_amend_parent_ws_payload：amend 為 expected 並 commit → student_channel 收到 data == {'student_id':..., 'service_date':..., 'status':'expected','check_in_at':None,'check_out_at':None}"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_attendance_service.py -k \"test_amend_\"",
         "notes": ""
@@ -9992,7 +9999,7 @@
     {
       "id": "BACKEND-402",
       "title": "建立接送模組 Pydantic schemas",
-      "description": "建立 `apps/api/app/schemas/pickup.py`（request `extra='forbid'`、strip；時間 `TimeHM` 同 BACKEND-371；時間點輸出 ISO8601 UTC，`HH:MM` 欄位為台北當地時間）。\n\n**請求（接送佇列）**\n- `ParentPickupRequestCreateIn`：student_id、expected_arrival_at（TimeHM | None）。\n- `StaffPickupRequestCreateIn`：student_id、expected_arrival_at（TimeHM | None）。\n- `PickupReplyIn`：reply_ready_eta（TimeHM | None）、reply_message（1~200 | None）；兩者至少一個。\n- `PickupCompleteIn`：method（`Literal['guardian','override']`）、guardian_id（method=guardian 時必填）、note（1~200，method=override 時必填）。代理接送的完成走 authorizations 端點。\n- `PickupCancelIn`：reason（≤200 | None）；body 可省略。\n- `PickupQueueQuery`：date（可空）；`RosterQuery`：date（可空）、class_id（可空）。\n\n**回應（接送佇列）**\n- `PickupStudentOut`：id、student_no、name、grade_level、class_id、class_name。\n- `PickupRequestOut`（後台）：id、student（PickupStudentOut）、service_date、source、requested_by_type、requested_by_name、expected_arrival_at（HH:MM | None）、status、homework_status_at_request、current_homework_status、current_ready_eta、reply_ready_eta（HH:MM | None）、reply_message、reply_source、replied_at、replied_by_name、needs_reply（bool：非終態且 reply_source 為 null 或 auto 且無 ETA 的「已通知老師」回覆）、arrived_at、completed_at、completed_by_name、completion_method、picked_up_by_name、cancelled_at、cancel_reason、created_at。\n- `ParentPickupRequestOut`：id、student_id、student_name、service_date、status、expected_arrival_at、reply_ready_eta、reply_message、replied_at、arrived_at、completed_at、picked_up_by_name、cancelled_at、created_at、can_cancel（非終態）、can_mark_arrived（pending / acknowledged）。不含員工姓名。\n- `PickupQueueCountsOut`：pending、acknowledged、arrived、needs_reply；`PickupQueueOut`：date、open（list）、closed（list）、counts。\n- `RosterOpenRequestOut`：id、status、expected_arrival_at、needs_reply；`RosterStudentOut`：student_id、student_no、name、grade_level、attendance_status、check_in_at、check_out_at、leave_type、homework_status、ready_eta、open_request（RosterOpenRequestOut | None）、active_authorization_count；`RosterClassOut`：class_id（None 為未分班）、class_name、students；`RosterOut`：date、classes。\n\n**接送人 / 代理授權**\n- `PickupPersonCreateIn`（multipart form 欄位）：name（1~50）、relation（1~20）、phone（`^[0-9+\\-() ]{8,20}$`）；`PickupPersonOut`：id、student_id、name、relation、phone、photo_url、created_at。\n- `PickupAuthorizationCreateIn`：service_date、pickup_person_id（可空）、proxy_name（1~50 | None）、proxy_phone（同 phone 格式 | None）；model_validator：恰好一種模式（給 pickup_person_id 時不可給 proxy_*；不給時 proxy_name 與 proxy_phone 皆必填）。\n- `PickupAuthorizationOut`（家長）：id、student_id、service_date、pickup_person_id、proxy_name、proxy_phone、code_last4、status、effective_status（active 且 service_date < 今天 → 'expired'）、verified_at、verification_method、created_at。\n- `PickupAuthorizationCreatedOut`：authorization（PickupAuthorizationOut）、code（6 位明碼，只在建立時回傳一次）。\n- `StaffAuthorizationListQuery`：date（可空）、status（可空）。\n- `StaffAuthorizationOut`：PickupAuthorizationOut 欄位 + student（PickupStudentOut）、photo_url（常用接送人照片短效 URL | None）、code_attempts、locked（bool）、verified_by_name。\n- `VerifyCodeIn`：code（4~20，允許空白與連字號，正規化在 service）。\n- `OverrideCompleteIn`：note（1~200）。\n- `VisualMatchIn`（body 可省略）：note（≤200 | None，例如「已核對身分證」）。\n- `AuthorizationCompleteOut`：authorization（StaffAuthorizationOut）、request（PickupRequestOut）。\n\n**驗收標準**\n- PickupReplyIn 兩者皆空 → 422；PickupCompleteIn 條件必填生效。\n- PickupAuthorizationCreateIn 兩種模式互斥與必填生效；phone 格式。\n- extra 被拒。",
+      "description": "建立 `apps/api/app/schemas/pickup.py`（request `extra='forbid'`、strip；時間 `TimeHM` 同 BACKEND-371；時間點輸出 ISO8601 UTC，`HH:MM` 欄位為台北當地時間）。\n\n**請求（接送佇列）**\n- `ParentPickupRequestCreateIn`：student_id、expected_arrival_at（TimeHM | None）。\n- `StaffPickupRequestCreateIn`：student_id、expected_arrival_at（TimeHM | None）。\n- `PickupReplyIn`：reply_ready_eta（TimeHM | None）、reply_message（1~200 | None）；兩者至少一個。\n- `PickupCompleteIn`：method（`Literal['guardian','override']`）、guardian_id（method=guardian 時必填）、note（1~200，method=override 時必填）。代理接送的完成走 authorizations 端點。\n- `PickupCancelIn`：reason（≤200 | None）；body 可省略。\n- `PickupQueueQuery`：date（可空）；`RosterQuery`：date（可空）、class_id（可空）。\n\n**回應（接送佇列）**\n- `PickupStudentOut`：id、student_no、name、grade_level、class_id、class_name。\n- `PickupRequestOut`（後台）：id、student（PickupStudentOut）、service_date、source、requested_by_type、requested_by_name、expected_arrival_at（HH:MM | None）、status、homework_status_at_request、current_homework_status、current_ready_eta、reply_ready_eta（HH:MM | None）、reply_message、reply_source、replied_at、replied_by_name、needs_reply（bool：非終態且 reply_source 為 null 或 auto 且無 ETA 的「已通知老師」回覆）、arrived_at、completed_at、completed_by_name、completion_method、picked_up_by_name、cancelled_at、cancel_reason、created_at。\n- `ParentPickupRequestOut`：id、student_id、student_name、service_date、status、expected_arrival_at、reply_ready_eta、reply_message、reply_source（`'auto' | 'staff' | None`：系統自動回覆或老師回覆）、replied_at、arrived_at、completed_at、picked_up_by_name、cancelled_at、created_at、can_cancel（非終態）、can_mark_arrived（pending / acknowledged）。不含員工姓名。\n- `PickupQueueCountsOut`：pending、acknowledged、arrived、needs_reply；`PickupQueueOut`：date、open（list）、closed（list）、counts。\n- `RosterOpenRequestOut`：id、status、expected_arrival_at、needs_reply；`RosterStudentOut`：student_id、student_no、name、grade_level、attendance_status、check_in_at、check_out_at、leave_type、homework_status、ready_eta、open_request（RosterOpenRequestOut | None）、active_authorization_count；`RosterClassOut`：class_id（None 為未分班）、class_name、students；`RosterOut`：date、classes。\n\n**接送人 / 代理授權**\n- `PickupPersonCreateIn`（multipart form 欄位）：name（1~50）、relation（1~20）、phone（`^[0-9+\\-() ]{8,20}$`）；`PickupPersonOut`：id、student_id、name、relation、phone、photo_url、created_at。\n- `PickupAuthorizationCreateIn`：service_date、pickup_person_id（可空）、proxy_name（1~50 | None）、proxy_phone（同 phone 格式 | None）；model_validator：恰好一種模式（給 pickup_person_id 時不可給 proxy_*；不給時 proxy_name 與 proxy_phone 皆必填）。\n- `PickupAuthorizationOut`（家長）：id、student_id、service_date、pickup_person_id、proxy_name、proxy_phone、code_last4、status、effective_status（active 且 service_date < 今天 → 'expired'）、verified_at、verification_method、created_at。\n- `PickupAuthorizationCreatedOut`：authorization（PickupAuthorizationOut）、code（6 位明碼，只在建立時回傳一次）。\n- `StaffAuthorizationListQuery`：date（可空）、status（可空）。\n- `StaffAuthorizationOut`：PickupAuthorizationOut 欄位 + student（PickupStudentOut）、photo_url（常用接送人照片短效 URL | None）、code_attempts、locked（bool）、verified_by_name。\n- `VerifyCodeIn`：code（4~20，允許空白與連字號，正規化在 service）。\n- `OverrideCompleteIn`：note（1~200）。\n- `VisualMatchIn`（body 可省略）：note（≤200 | None，例如「已核對身分證」）。\n- `AuthorizationCompleteOut`：authorization（StaffAuthorizationOut）、request（PickupRequestOut）。\n\n**驗收標準**\n- PickupReplyIn 兩者皆空 → 422；PickupCompleteIn 條件必填生效。\n- PickupAuthorizationCreateIn 兩種模式互斥與必填生效；phone 格式。\n- extra 被拒。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/pickup.py",
       "source_ref": "BE:api/dismissal_calls.py::DismissalCallOut",
@@ -10090,7 +10097,8 @@
           "test_pickup_views_names：家長 p（guardian 名稱 '王媽媽'）發起、員工 '林老師' 回覆的請求 → requested_by_name == '王媽媽'、replied_by_name == '林老師'；completed 且 picked_up_by_guardian='王爸爸' → picked_up_by_name == '王爸爸'",
           "test_pickup_views_flags：pending 且 reply_source None → needs_reply True、can_mark_arrived True；arrived → can_mark_arrived False、can_cancel True；completed → can_cancel False",
           "test_pickup_views_query_count：20 筆不同學生的請求 → build_request_views 的 SQL 次數 ≤ 6",
-          "test_pickup_views_publish_split：monkeypatch publish_threadsafe；committing session 呼叫 publish_request_change 兩次後 commit → admin:pickup 1 筆、student:<id> 1 筆且 data 不含 'replied_by_name'"
+          "test_pickup_views_publish_split：monkeypatch publish_threadsafe；committing session 呼叫 publish_request_change 兩次後 commit → admin:pickup 1 筆、student:<id> 1 筆且 data 不含 'replied_by_name'",
+          "test_pickup_views_parent_reply_source：reply_source 'staff' 的請求 → build_parent_request_views(...)[0].reply_source == 'staff' 且不含 replied_by_name；auto → 'auto'"
         ],
         "run": "just test-int apps/api/tests/integration/services/pickup/test_pickup_views.py -k \"test_pickup_views_\"",
         "notes": ""
@@ -14041,6 +14049,88 @@
           "test_parent_pickup_auth_regenerate_409：completed → 409 authorization_not_active；昨天的授權 → 409 authorization_expired"
         ],
         "run": "just test-int apps/api/tests/integration/api/parent/test_pickup_endpoints.py -k \"test_parent_pickup_auth_regenerate_\"",
+        "notes": "家長端無權限碼，403 以 IDOR 404 取代。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-525",
+      "title": "實作 ParentTodayService.get_child_today：家長端小孩今日狀態聚合（出勤、請假、作業、接送）",
+      "description": "建立 `apps/api/app/services/parent_today_service.py`（domain_spec §4 家長端首頁：今日狀態卡）：\n```python\ndef get_child_today(session: Session, student_id: UUID, *, clock: Clock) -> ChildTodayOut: ...\n```\n- 呼叫端已以 `get_owned_student` 驗證所有權（BACKEND-526）。d = clock.today()；`is_service_day`（BACKEND-123）。\n- attendance：當日 student_attendances 列的 status / check_in_at / check_out_at；無列時——營業日回 status 'expected'（與後台虛擬列一致），非營業日回 None。\n- on_leave / leave：涵蓋今天的 active 請假（start_date ≤ d ≤ end_date）；不依賴出勤列是否存在。\n- homework：當日 homework_items 的 item_count、done_count（status='done'）；homework_daily_progress 的 overall_status、ready_eta（HH:MM）、note；無 progress 列 → not_started、None、None。\n- pickup_request：今日請求中優先取非終態（pending / acknowledged / arrived）那筆；沒有則取今日最新一筆終態請求；都沒有 → None。can_cancel / can_mark_arrived 規則同 BACKEND-402。\n- 不回傳員工姓名與內部備註（出勤 note、updated_by 等）。\n- 固定查詢數（≤ 6 條 SQL）。\n\n**驗收標準**\n- 四個區塊內容正確；無資料時的預設值正確（營業日 expected、非營業日 None、作業 not_started、接送 None）。\n- 有非終態請求時回非終態那筆；只有終態時回最新一筆。\n- 請假日 on_leave=True 且 leave 有值。\n- 不含員工姓名；查詢次數固定。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/services/parent_today_service.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "BACKEND-181",
+        "BACKEND-300",
+        "BACKEND-340",
+        "BACKEND-370",
+        "BACKEND-401",
+        "BACKEND-123",
+        "BACKEND-002"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/services/test_parent_today_service.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_child_today_full：FakeClock 2026-09-01（週二）；王小明 present（check_in 15:00 台北）、作業 3 項其中 2 項 done、progress in_progress ETA 17:30 note '剩數學訂正'、pending 請求 reply_source 'auto' → attendance.status 'present'、homework == {'item_count':3,'done_count':2,'overall_status':'in_progress','ready_eta':'17:30','note':'剩數學訂正'}、pickup_request.status 'pending'、pickup_request.reply_source 'auto'、on_leave False",
+          "test_child_today_defaults：營業日無任何資料 → attendance.status 'expected'、homework.overall_status 'not_started'、item_count 0、pickup_request None；週日 → is_service_day False、attendance.status None",
+          "test_child_today_on_leave：請假 9/1~9/2（personal）→ on_leave True、leave.leave_type_label '事假'、attendance.status 'leave'",
+          "test_child_today_pickup_pick：今日一筆 completed（10:00 建）與一筆 pending（11:00 建）→ 回 pending；只有 completed 與 cancelled 兩筆 → 回較新那筆",
+          "test_child_today_query_count：before_cursor_execute 計數 ≤ 6，且 model_dump_json() 不含 'replied_by_name'"
+        ],
+        "run": "just test-int apps/api/tests/integration/services/test_parent_today_service.py -k \"test_child_today_\"",
+        "notes": ""
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-526",
+      "title": "實作 GET /api/parent/children/{id}/today endpoint",
+      "description": "在 `apps/api/app/api/parent/children.py`（BACKEND-184 建立的 router）新增：\n- `GET /api/parent/children/{student_id}/today`，`Depends(get_owned_student)`（BACKEND-180：他人小孩與不存在 → 相同 404）→ BACKEND-525 → 200 `ChildTodayOut`。\n- 家長端首頁每個小孩的今日狀態卡以此單一請求取得；之後的即時變化由 `/api/ws/parent` 的 attendance / homework / pickup 事件更新，斷線時重新呼叫本 endpoint 補齊。\n\n**驗收標準**\n- 自己小孩 200；他人小孩與 uuid4() 相同 404；非 uuid 422；401（無 cookie / 員工 cookie）；封存學生 404。",
+      "granularity_unit": "endpoint",
+      "target_path": "apps/api/app/api/parent/children.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "BACKEND-525",
+        "BACKEND-180",
+        "BACKEND-184",
+        "BACKEND-062",
+        "BACKEND-023"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/api/parent/test_children_endpoints.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_parent_child_today_success：GET /api/parent/children/{王小明.id}/today → 200，attendance.status == 'present'、homework.done_count == 2、pickup_request.reply_source == 'auto'",
+          "test_parent_child_today_422：GET /api/parent/children/abc/today → 422",
+          "test_parent_child_today_401：無 cookie → 401；staff cookie → 401",
+          "test_parent_child_today_idor：家長 A 查家長 B 小孩 → 404 student_not_found，body 與 uuid4() 的 404 body 完全相同",
+          "test_parent_child_today_archived：學生封存後 → 404"
+        ],
+        "run": "just test-int apps/api/tests/integration/api/parent/test_children_endpoints.py -k \"test_parent_child_today_\"",
         "notes": "家長端無權限碼，403 以 IDOR 404 取代。"
       },
       "review": {
