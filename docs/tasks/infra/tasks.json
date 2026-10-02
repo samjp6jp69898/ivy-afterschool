@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 7,
-  "last_updated": "2026-10-02T07:54:02Z",
+  "version": 8,
+  "last_updated": "2026-10-02T07:55:16Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -10,7 +10,7 @@
       "granularity_unit": "config",
       "target_path": "README.md",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r1",
       "depends_on": [],
       "suggested_model": "sonnet-5",

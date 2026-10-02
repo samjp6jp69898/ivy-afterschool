@@ -17,6 +17,10 @@ apps/web/dist/
 apps/web/coverage/
 apps/web/test-results/
 apps/web/playwright-report/
+apps/web/blob-report/
+apps/web/.vite/
+apps/web/e2e/.auth/
+*.tsbuildinfo
 
 # --- 環境變數：真實 secret 不進 git，範本檔要進 ---
 .env
