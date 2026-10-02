@@ -45,9 +45,10 @@ EXPECTED_CODES = {
 def test_permissions_enum_exact() -> None:
     assert {p.value for p in Permission} == EXPECTED_CODES
     assert len(Permission) == 28
-    assert ALL_PERMISSIONS == frozenset(EXPECTED_CODES)
-    # StrEnum：成員可直接當字串用
-    assert Permission.PICKUP_OPERATE == "pickup:operate"
+    assert frozenset(EXPECTED_CODES) == ALL_PERMISSIONS
+    # StrEnum：成員可直接當字串用（例如與 DB 的 text[] 比對）
+    assert str(Permission.PICKUP_OPERATE) == "pickup:operate"
+    assert Permission.PICKUP_OPERATE in {"pickup:operate"}
     assert "nfc:manage" not in ALL_PERMISSIONS
 
 

@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 17,
-  "last_updated": "2026-10-02T08:37:11Z",
+  "version": 18,
+  "last_updated": "2026-10-02T08:38:38Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2314,7 +2314,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/permissions.py",
       "source_ref": "BE:utils/permissions.py::Permission",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
