@@ -61,7 +61,7 @@
 - 每年 8 月的升級（grade_level +1、六年級轉 withdrawn）由後台「學年升級」功能批次處理，不自動執行；升級時保留原安親班班級，由員工手動調班。
 - 身分證字號與健康備註只有持 `students:sensitive` 的員工能檢視與寫入。
 - 學生狀態改為 `suspended` 或 `withdrawn` 時，同一交易內自動收尾：取消進行中的接送請求與 active 代理授權、刪除今天起尚未登記（`expected`）的出勤列、取消未來的請假（已開始的截到昨天）；已發生的紀錄保留。
-- 個資保存：退班學生資料封存保留；admin（權限 `students:purge`）可對已封存且 `withdrawn` 的學生執行「永久刪除」——匿名化姓名、清除身分證 / 健康備註 / 照片 / 監護人聯絡資料與綁定，出勤、成績等統計紀錄保留但不再可識別，寫 audit。
+- 個資保存：退班學生資料封存保留；admin（權限 `students:purge`）可對已封存且 `withdrawn` 的學生執行「永久刪除」——匿名化姓名、清除身分證 / 健康備註 / 照片 / 監護人聯絡資料與綁定，出勤、成績等統計紀錄保留但不再可識別（自由文字備註與含學生資訊的站內通知一併清除），寫 audit。`audit_logs` 為 append-only，既有稽核紀錄不改寫（敏感欄位本來就遮罩）。退班 / 暫停的自動收尾只推 ws 更新畫面，不另發通知。
 - Excel 匯入只支援後台提供的範本（範本由後端依匯入欄位定義產生下載）。
 
 **parent_accounts**：`line_user_id`（unique）、`display_name`、`picture_url`、`phone`、`status`（`active` / `disabled`）、`token_version`、`last_login_at`。

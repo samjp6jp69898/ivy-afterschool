@@ -21,7 +21,7 @@
 | task | method | path | 權限 | request → response |
 |---|---|---|---|---|
 | B021 | GET | `/api/health` | — | → `{status: "ok"\|"degraded", app_name, db: "ok"\|"error"}`（DB 失敗 503） |
-| B125 | GET | `/api/parent/config` | 不需登入 | → `{liff_id, org_name, org_phone, logo_url}` |
+| B125 | GET | `/api/parent/config` | 不需登入 | → `{liff_id, add_friend_url（官方帳號加好友網址，未設定為 null）, org_name, org_phone, logo_url, limits: {leave_past_days, leave_future_days, leave_max_attachments, leave_max_attachment_mb, authorization_max_days_ahead, persons_max}}`（家長端表單上限一律取自 limits，不寫死） |
 
 ## 2. 後台認證（`/api/admin/auth`）
 
@@ -76,7 +76,7 @@
 
 - `Role = {id, code, name, description, is_system, permissions[], effective_permissions[], staff_count, created_at, updated_at}`
 - `StaffUser = {id, username, display_name, phone, email, role: {id, code, name}, extra_permissions[], revoked_permissions[], effective_permissions[], is_active, must_change_password, last_login_at, created_at}`
-- 設定 key：`org.profile`、`org.service_hours`、`pickup.window`、`homework.defaults`、`notification.toggles`、`line.liff`（`{liff_id, channel_id}`）、`line.messaging`（secret）。表單依 `json_schema` 渲染：每個欄位都有中文 `title`（標籤）與 `description`（說明），`notification.toggles` 的各事件中文名稱在 `json_schema['x-labels']`。
+- 設定 key（11 個）：`org.profile`、`org.service_hours`、`pickup.window`、`homework.defaults`、`notification.toggles`、`line.liff`（`{liff_id, channel_id, add_friend_url}`）、`line.messaging`（secret）、`leave.window`（`{past_days, future_days, max_attachments, max_attachment_mb}`）、`pickup.authorization`（`{max_days_ahead, max_active_per_day}`）、`pickup.persons`（`{max_per_student}`）、`homework.window`（`{past_days, future_days}`）。表單依 `json_schema` 渲染：每個欄位都有中文 `title`（標籤）與 `description`（說明），`notification.toggles` 的各事件中文名稱在 `json_schema['x-labels']`。
 
 ## 5. 後台：參考資料（`/api/admin/{resource}`，resource = `subjects` / `exam-types` / `schools` / `closed-days`）
 
@@ -102,10 +102,12 @@
 | B159 | GET | `/students?q&class_id&grade_level&status&school_id&include_archived` | students:read | → `Page[StudentListItem]` |
 | B160 | POST | `/students` | students:write（敏感欄位另需 students:sensitive） | `StudentCreate` → 201 `StudentDetail` |
 | B161 | GET | `/students/{id}` | students:read | → `StudentDetail` |
-| B162 | PATCH | `/students/{id}` | students:write（敏感欄位另需 students:sensitive） | 部分欄位（id_number / health_note 給 null = 清除）→ `StudentDetail` |
+| B162 | PATCH | `/students/{id}` | students:write（敏感欄位另需 students:sensitive） | 部分欄位（id_number / health_note 給 null = 清除）→ `StudentDetail`；status 改為 suspended / withdrawn 時自動收尾（取消進行中接送請求與今天起的代理授權、刪除今天起未登記出勤、取消未來請假 / 已開始截到昨天） |
 | B163 | POST | `/students/{id}/archive` | students:write | → `StudentDetail` |
 | B164 | POST | `/students/{id}/photo` | students:write | multipart `file` → `{photo_url}` |
 | B165 | POST | `/students/promote-grade` | students:write | `{from_academic_year, dry_run, expected_total?, withdrawn_on?}` → 預覽 `{from_academic_year, to_academic_year, promote[], graduate[], total, already_promoted}` 或結果 `{promoted, graduated}`（班級不變） |
+| B533 | GET | `/students/import-template` | students:write | → xlsx 範本（第 1 列為匯入欄位，含下拉驗證與說明工作表） |
+| B531 | POST | `/students/{id}/purge` | students:purge（只有 admin） | `{confirm_student_no}`（須等於目前學號）→ `{student_id, purged_at, anonymized_student_no}`；只限已封存且 withdrawn；422 `purge_confirmation_mismatch`；409 `student_not_purgeable` / `student_already_purged` |
 | B166 | POST | `/students/import` | students:write | multipart `file`(xlsx)、`academic_year`、`dry_run` → 預覽 `{rows: [{row_number, display, errors[]}], total, valid, invalid}` 或結果 `{created, student_ids[]}`；標題錯誤 422 `import_invalid_header`，details `{missing: [缺少的必填欄名], unexpected: [無法辨識的欄名]}`；有錯誤列時 dry_run=false 回 409 `import_has_errors` |
 | B173 | GET | `/students/{id}/guardians` | students:read | → `Guardian[]` |
 | B174 | POST | `/students/{id}/guardians` | guardians:write | `{name, relation, phone?, is_primary, can_pickup, receives_notifications}` → 201 `Guardian` |
@@ -142,7 +144,7 @@
 |---|---|---|---|---|
 | B351 | GET | `/leaves?student_id&class_id&status&leave_type&created_by_type&date_from&date_to` | leaves:read | → `Page[Leave]` |
 | B352 | POST | `/leaves` | leaves:write | `{student_id, leave_type: sick\|personal\|other, start_date, end_date, reason?}` → 201 `Leave`；409 `leave_overlap`（details: leave_id, start_date, end_date）/ `student_not_active`；422 `no_service_days_in_range` |
-| B353 | POST | `/leaves/{id}/cancel` | leaves:write | `{scope?: "remaining"\|"all"}`（預設 remaining）→ `Leave`。remaining：未開始整筆 cancelled、已開始則 end_date 改為昨天（status 仍 active），今天起出勤回 expected；all：整筆取消。409 `leave_not_active` / `leave_already_ended`（remaining 且已全部過去） |
+| B353 | POST | `/leaves/{id}/cancel` | leaves:write | `{scope?: "remaining"\|"all"}`（預設 remaining）→ `Leave`。remaining：未開始整筆 cancelled、已開始則 end_date 改為昨天（status 仍 active），今天起出勤回 expected；all：整筆取消（含已開始或已結束的請假，事後更正，出勤自動還原）。409 `leave_not_active` / `leave_already_ended`（remaining 且已全部過去） |
 | B354 | GET | `/leaves/{id}/attachments/{attachment_id}` | leaves:read | → `{url, expires_in}`（短效，勿快取） |
 
 - `Leave = {id, student: {id, student_no, name, class_name}, leave_type, leave_type_label, start_date, end_date, reason, status: active|cancelled, created_by_type: parent|staff, created_by_name, created_at, cancelled_at, cancelled_by_type, cancelled_by_name, attachments: [{id, mime_type, size_bytes, created_at}]}`
@@ -160,7 +162,7 @@
 
 - `HomeworkItem = {id, student_id, service_date, subject_id, subject_name, title, status: todo|doing|correcting|done, sort_order, updated_at}`
 - `Progress = {student_id, service_date, overall_status: not_started|in_progress|done, ready_eta: "HH:MM"|null, note, eta_updated_at, eta_updated_by_name}`
-- service_date 範圍：今天 −30 ~ +7 天，否則 422 `invalid_service_date`。
+- service_date 範圍取自設定 `homework.window`（預設今天 −30 ~ +7 天），否則 422 `invalid_service_date`。
 
 ## 10. 後台：接送（`/api/admin/pickup`）
 
@@ -216,7 +218,7 @@
 
 ## 13. 後台：NFC（blocked，路徑暫定、尚未實作）
 
-權限 `nfc:manage`（預設只有 admin；NFC 解除 blocked 時才加入 Permission enum 與前端常數）。
+權限 `nfc:manage`（預設只有 admin；NFC 解除 blocked 時由 BACKEND-510 加入 Permission enum，前端常數同步）。目前 Permission enum 共 28 碼（含只授予 admin 的 `students:purge`）。
 
 | task | method | path | request → response |
 |---|---|---|---|
@@ -237,19 +239,19 @@
 |---|---|---|---|
 | B323 | GET | `/children/{id}/attendance?month=YYYY-MM` | → `{student_id, month, days: [{date, is_service_day, status, check_in_at, check_out_at, leave_type}], stats: {service_days, attended, absent, leave, unrecorded}}` |
 | B355 | GET | `/children/{id}/leaves` | → `Page[ParentLeave]` |
-| B356 | POST | `/leaves` | `{student_id, leave_type, start_date, end_date, reason?}` → 201 `ParentLeave`；422 `leave_date_out_of_window`（今天 −30 ~ +60 天）/ `no_service_days_in_range`；409 `leave_overlap` / `student_not_active` |
+| B356 | POST | `/leaves` | `{student_id, leave_type, start_date, end_date, reason?}` → 201 `ParentLeave`；422 `leave_date_out_of_window`（範圍取自 config.limits.leave_past_days / leave_future_days）/ `no_service_days_in_range`；409 `leave_overlap` / `student_not_active` |
 | B357 | POST | `/leaves/{id}/cancel` | → `ParentLeave`：未開始（含今天開始）整筆 cancelled；已開始則取消今天起的日子（end_date 改為昨天、status 仍 active）；409 `leave_already_ended` / `leave_not_active` |
-| B358 | POST | `/leaves/{id}/attachments` | multipart `file`（jpg/png/webp/heic/pdf，≤10 MB，每筆最多 3 個）→ 201 `{id, mime_type, size_bytes, created_at, url}`；413 / 415 / 409 `attachment_limit_reached` |
+| B358 | POST | `/leaves/{id}/attachments` | multipart `file`（jpg/png/webp/heic/pdf；大小與數量上限取自 config.limits.leave_max_attachment_mb / leave_max_attachments）→ 201 `{id, mime_type, size_bytes, created_at, url}`；413 / 415 / 409 `attachment_limit_reached` |
 | B391 | GET | `/children/{id}/homework?date` | → `{student_id, date, items: [{title, subject_name, status}], overall_status, ready_eta, note, updated_at}` |
 | B440 | POST | `/pickup/requests` | `{student_id, expected_arrival_at?: "HH:MM", arrived?: bool}` → 201 `ParentPickupRequest`（含自動回覆；`arrived: true` 為「我已經到了」捷徑，直接進 arrived，不可同時給 expected_arrival_at）；已有進行中請求 → 409 `pickup_request_exists`（details.request_id 為既有請求，改呼叫 B442）；403 `pickup_not_allowed`；409 `pickup_request_exists` / `pickup_window_closed` / `student_not_available` / `not_service_day`；422 `expected_arrival_in_past` / `expected_arrival_too_late` |
 | B441 | GET | `/pickup/requests/today` | → `ParentPickupRequest[]`（所有小孩今日，含終態） |
 | B442 | POST | `/pickup/requests/{id}/arrived` | → `ParentPickupRequest`（我到了） |
 | B443 | POST | `/pickup/requests/{id}/cancel` | `{reason?}` → `ParentPickupRequest` |
 | B444 | GET | `/children/{id}/pickup-persons` | → `PickupPerson[]` |
-| B445 | POST | `/children/{id}/pickup-persons` | multipart：`name`、`relation`、`phone`、`photo?` → 201 `PickupPerson`；409 `pickup_person_limit_reached`（上限 10） |
+| B445 | POST | `/children/{id}/pickup-persons` | multipart：`name`、`relation`、`phone`、`photo?` → 201 `PickupPerson`；409 `pickup_person_limit_reached`（上限取自 config.limits.persons_max） |
 | B446 | DELETE | `/pickup-persons/{id}` | → 204 |
 | B447 | GET | `/children/{id}/pickup-authorizations` | → `ParentAuthorization[]`（近 30 天起） |
-| B448 | POST | `/children/{id}/pickup-authorizations` | `{service_date (今天~+14 天), pickup_person_id}` 或 `{service_date, proxy_name, proxy_phone}` → 201 `{authorization: ParentAuthorization, code}`（6 位接送碼只回一次）；409 `authorization_limit_reached`（同日 3 筆） |
+| B448 | POST | `/children/{id}/pickup-authorizations` | `{service_date（今天 ~ +config.limits.authorization_max_days_ahead 天）, pickup_person_id}` 或 `{service_date, proxy_name, proxy_phone}` → 201 `{authorization: ParentAuthorization, code}`（6 位接送碼只回一次）；409 `authorization_limit_reached`（同日上限為後台設定 pickup.authorization.max_active_per_day） |
 | B449 | POST | `/pickup-authorizations/{id}/cancel` | → `ParentAuthorization`；409 `authorization_not_active` |
 | B524 | POST | `/pickup-authorizations/{id}/regenerate-code` | → `{authorization: ParentAuthorization, code}`（新碼只回一次，舊碼立即失效、連錯次數與鎖定重設）；409 `authorization_not_active` / `authorization_expired` |
 | B479 | GET | `/children/{id}/exams` | → `Page[{exam_id, name, exam_type_name, exam_date, published_at, subject_count}]`（只含已發布） |

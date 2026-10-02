@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 11,
-  "last_updated": "2026-10-02T07:04:24Z",
+  "version": 13,
+  "last_updated": "2026-10-02T07:33:03Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -158,7 +158,7 @@
     {
       "id": "BACKEND-005",
       "title": "實作 app/core/db.py：engine、SessionLocal 與 request-scoped get_db dependency",
-      "description": "建立 `apps/api/app/core/db.py`（SQLAlchemy 2 sync + psycopg 3，architecture_decisions §2）。\n\n**介面**\n```python\ndef build_engine(database_url: str) -> Engine: ...   # pool_pre_ping=True、pool_size=5、max_overflow=5、pool_recycle=1800；connect_args={'options': '-c timezone=UTC'}\ndef get_engine() -> Engine: ...                      # 以 get_settings().database_url 建立的 module 單例（lazy）\nSessionLocal: sessionmaker[Session]                  # expire_on_commit=False、autoflush=True；bind 由 get_engine() lazy 設定\ndef get_db() -> Iterator[Session]: ...               # FastAPI dependency\n@contextmanager\ndef session_scope() -> Iterator[Session]: ...        # 給背景工作 / CLI：成功 commit、例外 rollback 後 re-raise、最後 close\n```\n\n**交易約定（全後端遵守，營運模組也依此寫）**\n- service 方法只 `session.add` / `flush`，**不 commit**；寫入型 endpoint handler 在呼叫完 service 後自行 `db.commit()`，再組回應。\n- `get_db`：yield session；handler 拋例外時 rollback；最後一律 close。handler 沒 commit 的變更在 close 時丟棄（防止 GET 意外寫入）。\n- commit 後才要做的事（通知派送、ws 廣播、刪除 Storage 舊檔）一律走 BACKEND-006 的 `run_after_commit`，不得在 commit 前呼叫外部服務。\n- 連線一律使用 `app_backend` 角色（DB-001），不得在程式中 `set role`。\n\n**驗收標準**\n- get_db 在 handler 例外時 rollback，資料不落地。\n- handler 未 commit 的寫入在請求結束後不存在。\n- session_scope 成功時 commit、例外時 rollback 並重新拋出。\n- 連線 session 的 timezone 為 UTC。",
+      "description": "建立 `apps/api/app/core/db.py`（SQLAlchemy 2 sync + psycopg 3，architecture_decisions §2）。\n\n**介面**\n```python\ndef build_engine(database_url: str) -> Engine: ...   # pool_pre_ping=True、pool_size=5、max_overflow=5、pool_recycle=1800；connect_args={'options': '-c timezone=UTC'}\ndef get_engine() -> Engine: ...                      # 以 get_settings().database_url 建立的 module 單例（lazy）\nSessionLocal: sessionmaker[Session]                  # expire_on_commit=False、autoflush=True；bind 由 get_engine() lazy 設定\ndef get_db() -> Iterator[Session]: ...               # FastAPI dependency\n@contextmanager\ndef session_scope() -> Iterator[Session]: ...        # 給背景工作 / CLI：成功 commit、例外 rollback 後 re-raise、最後 close\n```\n\n**交易約定（全後端遵守，營運模組也依此寫）**\n- service 方法只 `session.add` / `flush`，**不 commit**；寫入型 endpoint handler 在呼叫完 service 後自行 `db.commit()`，再組回應。\n- `get_db`：yield session；handler 拋例外時 rollback；最後一律 close。handler 沒 commit 的變更在 close 時丟棄（防止 GET 意外寫入）。\n- commit 後才要做的事（通知派送、ws 廣播、刪除 Storage 舊檔）一律走 BACKEND-006 的 `run_after_commit`，不得在 commit 前呼叫外部服務。\n- 連線一律使用 `app_backend` 角色（DB-001；本機登入設定由 DB-039 提供），不得在程式中 `set role`。整合測試同樣一律以 app_backend 連線，**禁止 fallback 到 owner / postgres**（連不上就讓測試失敗，才能驗證 RLS 與權限設定）；只有讀 information_schema 的 schema drift 測試與測試清理可用 owner_url()。\n\n**驗收標準**\n- get_db 在 handler 例外時 rollback，資料不落地。\n- handler 未 commit 的寫入在請求結束後不存在。\n- session_scope 成功時 commit、例外時 rollback 並重新拋出。\n- 連線 session 的 timezone 為 UTC。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/db.py",
       "source_ref": null,
@@ -167,7 +167,8 @@
       "depends_on": [
         "BACKEND-001",
         "INFRA-010",
-        "DB-001"
+        "DB-001",
+        "DB-039"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -447,7 +448,7 @@
     {
       "id": "BACKEND-013",
       "title": "實作 app/core/storage.py：SupabaseStorage.upload、get_storage dependency 與 FakeStorage",
-      "description": "建立 `apps/api/app/core/storage.py`，以 httpx 呼叫 Supabase Storage REST API（DB-034：三個私有 bucket，後端用 `SUPABASE_SERVICE_ROLE_KEY` 操作）。\n\n**介面**\n```python\nBucket = Literal[\"leave-attachments\", \"student-photos\", \"pickup-person-photos\"]\n\nclass StorageError(Exception): ...          # 上游非 2xx / 連線失敗；訊息不含 service key\n\nclass Storage(Protocol):\n    def upload(self, bucket: Bucket, path: str, content: bytes, content_type: str) -> None: ...\n    def create_signed_url(self, bucket: Bucket, path: str, expires_in: int = 300) -> str: ...\n    def delete(self, bucket: Bucket, paths: Sequence[str]) -> None: ...\n\nclass SupabaseStorage:\n    def __init__(self, base_url: str, service_role_key: str, *, transport: httpx.BaseTransport | None = None, timeout: float = 10.0) -> None: ...\n\ndef build_object_path(owner_id: UUID, ext: str) -> str: ...   # f\"{owner_id}/{uuid4().hex}.{ext}\"；ext 只接受 jpg/png/webp/heic/pdf\ndef get_storage() -> Storage: ...                              # FastAPI dependency；以 Settings 建立單例\n```\n**本 task 實作 `upload` 與 `build_object_path`**（signed URL 與 delete 見 BACKEND-014 / 015）：\n- `POST {SUPABASE_URL}/storage/v1/object/{bucket}/{path}`，headers：`Authorization: Bearer <key>`、`apikey: <key>`、`Content-Type`、`x-upsert: false`。\n- path 必須符合 `^[0-9a-f-]{36}/[0-9a-f]{32}\\.(jpg|png|webp|heic|pdf)$`（DB-034 物件路徑慣例，不使用使用者提供的檔名），否則 ValueError。\n- 409（已存在）、4xx、5xx、連線錯誤 → StorageError（含 status，不含 key）。\n\n**測試替身**：`apps/api/tests/support/fake_storage.py` 的 `FakeStorage`：記憶體 dict 實作同一 Protocol，`create_signed_url` 回 `https://storage.test/{bucket}/{path}?exp={expires_in}`，`objects` 屬性可供斷言。整合測試以 `app.dependency_overrides[get_storage]` 換掉（BACKEND-023）。\n\n**驗收標準**\n- upload 送出的 URL、method、header 正確。\n- 非法 path 被拒且不發送請求。\n- 上游錯誤轉 StorageError，訊息不含 service key。\n- FakeStorage 符合 Storage Protocol。",
+      "description": "建立 `apps/api/app/core/storage.py`，以 httpx 呼叫 Supabase Storage REST API（DB-034：三個私有 bucket，後端用 `SUPABASE_SERVICE_ROLE_KEY` 操作）。\n\n**介面**\n```python\nBucket = Literal[\"leave-attachments\", \"student-photos\", \"pickup-person-photos\"]\n\nclass StorageError(Exception): ...          # 上游非 2xx / 連線失敗；訊息不含 service key\n\nclass Storage(Protocol):\n    def upload(self, bucket: Bucket, path: str, content: bytes, content_type: str) -> None: ...\n    def create_signed_url(self, bucket: Bucket, path: str, expires_in: int = 300) -> str: ...\n    def delete(self, bucket: Bucket, paths: Sequence[str]) -> None: ...\n\nclass SupabaseStorage:\n    def __init__(self, base_url: str, service_role_key: str, *, transport: httpx.BaseTransport | None = None, timeout: float = 10.0) -> None: ...\n\ndef build_object_path(owner_id: UUID, ext: str) -> str: ...   # f\"{owner_id}/{uuid4().hex}.{ext}\"；ext 只接受 jpg/png/webp/heic/pdf\ndef get_storage() -> Storage: ...                              # FastAPI dependency；以 Settings 建立單例\n```\n**本 task 實作 `upload` 與 `build_object_path`**（signed URL 與 delete 見 BACKEND-014 / 015）：\n- `POST {SUPABASE_URL}/storage/v1/object/{bucket}/{path}`，headers：`Authorization: Bearer <key>`、`apikey: <key>`、`Content-Type`、`x-upsert: false`。\n- path 必須符合 `^[0-9a-f-]{36}/[0-9a-f]{32}\\.(jpg|png|webp|heic|pdf)$`（DB-034 物件路徑慣例，不使用使用者提供的檔名），否則 ValueError。\n- 409（已存在）、4xx、5xx、連線錯誤 → StorageError（含 status，不含 key）。\n\n**測試替身**：`apps/api/tests/support/fake_storage.py` 的 `FakeStorage`：記憶體 dict 實作同一 Protocol，`create_signed_url` 回 `https://storage.test/{bucket}/{path}?exp={expires_in}`，`objects` 屬性可供斷言。整合測試以 `app.dependency_overrides[get_storage]` 換掉（BACKEND-023）。\n\n**測試範圍**：本 task 與 BACKEND-014 / 015 只做 unit 測試（httpx.MockTransport），不連本機 Supabase Storage；其他 task 的整合測試一律以 FakeStorage 取代。bucket 本身（DB-034）由部署後 smoke 驗證，因此不依賴 DB-034。\n\n**驗收標準**\n- upload 送出的 URL、method、header 正確。\n- 非法 path 被拒且不發送請求。\n- 上游錯誤轉 StorageError，訊息不含 service key。\n- FakeStorage 符合 Storage Protocol。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/storage.py",
       "source_ref": null,
@@ -780,7 +781,7 @@
     {
       "id": "BACKEND-022",
       "title": "建立 tests/support/factories.py：整合測試用 SQLAlchemy 測資 factory",
-      "description": "建立 `apps/api/tests/support/factories.py`，BACKEND 整合測試（含營運模組）建立測資的唯一入口。與 DB-002 的 `apps/api/tests/integration/db/factories.py`（psycopg、給 migration 測試）分工：本檔用 ORM、給 service / endpoint 測試。\n\n**介面**（皆 `session.add` + `flush` 後回傳 ORM 物件，不 commit；預設值擬真但非真實個資）\n```python\ndef make_role(session, *, code: str | None = None, permissions: Sequence[str] = (), name: str | None = None, is_system: bool = False) -> Role\ndef make_staff(session, *, permissions: Sequence[str] | None = None, role_code: str | None = None, username: str | None = None,\n               password: str = \"Passw0rd-Test1\", display_name: str = \"林老師\", is_active: bool = True,\n               must_change_password: bool = False, extra_permissions: Sequence[str] = (), revoked_permissions: Sequence[str] = ()) -> StaffUser\n    # permissions 給值 → 建一個只含這些權限碼的自訂角色；role_code 給值（'admin'/'director'/'clerk'/'tutor'）→ 使用 seed 系統角色；兩者皆無 → 空權限角色\n    # password 以 BACKEND-031 hash_password 雜湊（測試加速：模組層 cache 同一明文的 hash）\ndef make_parent(session, *, line_user_id: str | None = None, display_name: str = \"王媽媽\", status: str = \"active\") -> ParentAccount   # line_user_id 預設 'U' + uuid4().hex\ndef make_school(session, *, name: str | None = None) -> School\ndef make_class(session, *, name: str | None = None, grade_levels: Sequence[int] = (1, 2), academic_year: int = 115, archived: bool = False) -> SchoolClass\ndef make_student(session, *, name: str = \"王小明\", student_no: str | None = None, grade_level: int = 3, class_: SchoolClass | None = None,\n                 status: str = \"active\", archived: bool = False, school: School | None = None) -> Student\ndef make_guardian(session, student: Student, *, parent: ParentAccount | None = None, name: str = \"王媽媽\", relation: str = \"mother\",\n                  is_primary: bool = False, can_pickup: bool = True, receives_notifications: bool = True, archived: bool = False) -> Guardian\ndef make_class_staff(session, class_: SchoolClass, staff: StaffUser, *, role: str = \"lead\") -> ClassStaff\n```\n- 唯一欄位（username、student_no、班名、校名）預設以遞增序號產生，避免同一測試多次呼叫衝突。\n- 營運模組新增自己的 factory 時加在本檔（`make_leave`、`make_attendance` 等）。\n\n**驗收標準**\n- 每個 factory 在 db_session 中建立的列可被查回，預設值如上。\n- make_staff(permissions=[...]) 產生的帳號經 BACKEND-072 計算出的有效權限恰為給定集合。\n- 連續呼叫兩次 make_student 不違反 student_no unique。",
+      "description": "建立 `apps/api/tests/support/factories.py`，BACKEND 整合測試（含營運模組）建立測資的唯一入口。與 DB-002 的 `apps/api/tests/integration/db/factories.py`（psycopg、給 migration 測試）分工：本檔用 ORM、給 service / endpoint 測試。\n\nfactory 透過 INFRA-010 的 `db_session` 寫入，該連線一律為 app_backend 角色（DB-039 的本機登入設定），**禁止 fallback 到 owner**：factory 能寫入即代表 RLS 對 app_backend 放行正確。\n\n**介面**（皆 `session.add` + `flush` 後回傳 ORM 物件，不 commit；預設值擬真但非真實個資）\n```python\ndef make_role(session, *, code: str | None = None, permissions: Sequence[str] = (), name: str | None = None, is_system: bool = False) -> Role\ndef make_staff(session, *, permissions: Sequence[str] | None = None, role_code: str | None = None, username: str | None = None,\n               password: str = \"Passw0rd-Test1\", display_name: str = \"林老師\", is_active: bool = True,\n               must_change_password: bool = False, extra_permissions: Sequence[str] = (), revoked_permissions: Sequence[str] = ()) -> StaffUser\n    # permissions 給值 → 建一個只含這些權限碼的自訂角色；role_code 給值（'admin'/'director'/'clerk'/'tutor'）→ 使用 seed 系統角色；兩者皆無 → 空權限角色\n    # password 以 BACKEND-031 hash_password 雜湊（測試加速：模組層 cache 同一明文的 hash）\ndef make_parent(session, *, line_user_id: str | None = None, display_name: str = \"王媽媽\", status: str = \"active\") -> ParentAccount   # line_user_id 預設 'U' + uuid4().hex\ndef make_school(session, *, name: str | None = None) -> School\ndef make_class(session, *, name: str | None = None, grade_levels: Sequence[int] = (1, 2), academic_year: int = 115, archived: bool = False) -> SchoolClass\ndef make_student(session, *, name: str = \"王小明\", student_no: str | None = None, grade_level: int = 3, class_: SchoolClass | None = None,\n                 status: str = \"active\", archived: bool = False, school: School | None = None) -> Student\ndef make_guardian(session, student: Student, *, parent: ParentAccount | None = None, name: str = \"王媽媽\", relation: str = \"mother\",\n                  is_primary: bool = False, can_pickup: bool = True, receives_notifications: bool = True, archived: bool = False) -> Guardian\ndef make_class_staff(session, class_: SchoolClass, staff: StaffUser, *, role: str = \"lead\") -> ClassStaff\n```\n- 唯一欄位（username、student_no、班名、校名）預設以遞增序號產生，避免同一測試多次呼叫衝突。\n- 營運模組新增自己的 factory 時加在本檔（`make_leave`、`make_attendance` 等）。\n\n**驗收標準**\n- 每個 factory 在 db_session 中建立的列可被查回，預設值如上。\n- make_staff(permissions=[...]) 產生的帳號經 BACKEND-072 計算出的有效權限恰為給定集合。\n- 連續呼叫兩次 make_student 不違反 student_no unique。",
       "granularity_unit": "test",
       "target_path": "apps/api/tests/support/factories.py",
       "source_ref": null,
@@ -795,7 +796,8 @@
         "BACKEND-132",
         "BACKEND-072",
         "INFRA-010",
-        "DB-035"
+        "DB-035",
+        "DB-039"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -2307,8 +2309,8 @@
     },
     {
       "id": "BACKEND-070",
-      "title": "實作 app/core/permissions.py：Permission enum（domain_spec §3 全部 27 碼）、分組與說明",
-      "description": "建立 `apps/api/app/core/permissions.py`（architecture_decisions §6、domain_spec §3）。移植 ivy `utils/permissions.py` 的 `Permission(str, Enum)` + `PERMISSION_LABELS` + `PERMISSION_GROUPS` 結構；去掉 legacy bit、scope（own_class）、role flag、platform 相關內容。\n\n**介面**\n```python\nWILDCARD: Final = \"*\"\n\nclass Permission(StrEnum):\n    DASHBOARD_READ = \"dashboard:read\"\n    STAFF_READ = \"staff:read\"; STAFF_WRITE = \"staff:write\"\n    ROLES_READ = \"roles:read\"; ROLES_WRITE = \"roles:write\"\n    SETTINGS_READ = \"settings:read\"; SETTINGS_WRITE = \"settings:write\"\n    AUDIT_READ = \"audit:read\"\n    CLASSES_READ = \"classes:read\"; CLASSES_WRITE = \"classes:write\"\n    STUDENTS_READ = \"students:read\"; STUDENTS_WRITE = \"students:write\"; STUDENTS_SENSITIVE = \"students:sensitive\"\n    GUARDIANS_WRITE = \"guardians:write\"\n    ATTENDANCE_READ = \"attendance:read\"; ATTENDANCE_OPERATE = \"attendance:operate\"; ATTENDANCE_AMEND = \"attendance:amend\"\n    LEAVES_READ = \"leaves:read\"; LEAVES_WRITE = \"leaves:write\"\n    HOMEWORK_READ = \"homework:read\"; HOMEWORK_WRITE = \"homework:write\"\n    PICKUP_READ = \"pickup:read\"; PICKUP_OPERATE = \"pickup:operate\"; PICKUP_OVERRIDE = \"pickup:override\"\n    EXAMS_READ = \"exams:read\"; EXAMS_WRITE = \"exams:write\"; EXAMS_PUBLISH = \"exams:publish\"\n\nALL_PERMISSIONS: Final[frozenset[str]]                 # 全部 value\nPERMISSION_LABELS: Final[dict[Permission, str]]        # 繁中說明，取自 domain_spec §3「說明」欄（例如 students:sensitive →「查看身分證、健康備註」）\nPERMISSION_GROUPS: Final[list[PermissionGroup]]        # 依序：儀表板、帳號與權限（staff/roles/audit）、系統設定、班級與學生（classes/students/guardians）、出勤、請假、作業進度、接送、考試成績\n\n@dataclass(frozen=True)\nclass PermissionGroup:\n    key: str            # dashboard / accounts / settings / students / attendance / leaves / homework / pickup / exams\n    label: str\n    permissions: tuple[Permission, ...]\n\ndef is_valid_permission(code: str) -> bool: ...\n```\n- 前端 `apps/web/src/constants/permissions.ts` 有同步一致性測試（FRONTEND 區域負責）。\n- 新增權限碼時：改本 enum、domain_spec §3、DB seed（需要預設授予時）、前端常數。\n\n**驗收標準**\n- enum 恰好 27 個值，與 domain_spec §3 完全一致。\n- 每個權限都有 label，且恰好出現在一個 group 中。\n- `*` 不是合法權限碼（is_valid_permission('*') is False）。",
+      "title": "實作 app/core/permissions.py：Permission enum（domain_spec §3 全部 28 碼）、分組與說明",
+      "description": "建立 `apps/api/app/core/permissions.py`（architecture_decisions §6、domain_spec §3，共 28 碼）。移植 ivy `utils/permissions.py` 的 `Permission(str, Enum)` + `PERMISSION_LABELS` + `PERMISSION_GROUPS` 結構；去掉 legacy bit、scope（own_class）、role flag、platform 相關內容。\n\n**介面**\n```python\nWILDCARD: Final = \"*\"\n\nclass Permission(StrEnum):\n    DASHBOARD_READ = \"dashboard:read\"\n    STAFF_READ = \"staff:read\"; STAFF_WRITE = \"staff:write\"\n    ROLES_READ = \"roles:read\"; ROLES_WRITE = \"roles:write\"\n    SETTINGS_READ = \"settings:read\"; SETTINGS_WRITE = \"settings:write\"\n    AUDIT_READ = \"audit:read\"\n    CLASSES_READ = \"classes:read\"; CLASSES_WRITE = \"classes:write\"\n    STUDENTS_READ = \"students:read\"; STUDENTS_WRITE = \"students:write\"; STUDENTS_SENSITIVE = \"students:sensitive\"; STUDENTS_PURGE = \"students:purge\"\n    GUARDIANS_WRITE = \"guardians:write\"\n    ATTENDANCE_READ = \"attendance:read\"; ATTENDANCE_OPERATE = \"attendance:operate\"; ATTENDANCE_AMEND = \"attendance:amend\"\n    LEAVES_READ = \"leaves:read\"; LEAVES_WRITE = \"leaves:write\"\n    HOMEWORK_READ = \"homework:read\"; HOMEWORK_WRITE = \"homework:write\"\n    PICKUP_READ = \"pickup:read\"; PICKUP_OPERATE = \"pickup:operate\"; PICKUP_OVERRIDE = \"pickup:override\"\n    EXAMS_READ = \"exams:read\"; EXAMS_WRITE = \"exams:write\"; EXAMS_PUBLISH = \"exams:publish\"\n\nALL_PERMISSIONS: Final[frozenset[str]]                 # 全部 value\nPERMISSION_LABELS: Final[dict[Permission, str]]        # 繁中說明，取自 domain_spec §3「說明」欄（例如 students:sensitive →「查看與寫入身分證、健康備註」、students:purge →「永久刪除（匿名化）退班學生」）\nPERMISSION_GROUPS: Final[list[PermissionGroup]]        # 依序：儀表板、帳號與權限（staff/roles/audit）、系統設定、班級與學生（classes/students/guardians）、出勤、請假、作業進度、接送、考試成績\n\n@dataclass(frozen=True)\nclass PermissionGroup:\n    key: str            # dashboard / accounts / settings / students / attendance / leaves / homework / pickup / exams\n    label: str\n    permissions: tuple[Permission, ...]\n\ndef is_valid_permission(code: str) -> bool: ...\n```\n- 前端 `apps/web/src/constants/permissions.ts` 有同步一致性測試（FRONTEND 區域負責）。\n- 新增權限碼時：改本 enum、domain_spec §3、DB seed（需要預設授予時）、前端常數。\n\n**驗收標準**\n- enum 恰好 28 個值，與 domain_spec §3 完全一致（`nfc:manage` 不在其中，由 BACKEND-510 在 NFC 解除 blocked 時加入）。\n- 每個權限都有 label，且恰好出現在一個 group 中。\n- `*` 不是合法權限碼（is_valid_permission('*') is False）。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/permissions.py",
       "source_ref": "BE:utils/permissions.py::Permission",
@@ -2326,9 +2328,9 @@
           "unit"
         ],
         "red_cases": [
-          "test_permissions_enum_exact：{p.value for p in Permission} == {'attendance:amend', 'roles:read', 'pickup:override', 'settings:write', 'roles:write', 'classes:read', 'exams:write', 'students:read', 'attendance:read', 'classes:write', 'leaves:read', 'pickup:operate', 'leaves:write', 'settings:read', 'homework:read', 'students:sensitive', 'attendance:operate', 'homework:write', 'students:write', 'dashboard:read', 'guardians:write', 'exams:publish', 'exams:read', 'staff:read', 'pickup:read', 'staff:write', 'audit:read'}",
-          "test_permissions_labels_complete：set(PERMISSION_LABELS) == set(Permission)，PERMISSION_LABELS[Permission.STUDENTS_SENSITIVE] == '查看身分證、健康備註'",
-          "test_permissions_groups_partition：所有 group.permissions 串接後長度 == 27 且無重複，group key 順序 == ['dashboard','accounts','settings','students','attendance','leaves','homework','pickup','exams']",
+          "test_permissions_enum_exact：{p.value for p in Permission} == {'attendance:amend', 'roles:read', 'pickup:override', 'settings:write', 'roles:write', 'classes:read', 'exams:write', 'students:read', 'attendance:read', 'classes:write', 'leaves:read', 'pickup:operate', 'leaves:write', 'settings:read', 'homework:read', 'students:sensitive', 'attendance:operate', 'homework:write', 'students:write', 'dashboard:read', 'guardians:write', 'exams:publish', 'exams:read', 'staff:read', 'pickup:read', 'staff:write', 'audit:read', 'students:purge'}",
+          "test_permissions_labels_complete：set(PERMISSION_LABELS) == set(Permission)，PERMISSION_LABELS[Permission.STUDENTS_SENSITIVE] == '查看與寫入身分證、健康備註'、PERMISSION_LABELS[Permission.STUDENTS_PURGE] == '永久刪除（匿名化）退班學生'",
+          "test_permissions_groups_partition：所有 group.permissions 串接後長度 == 28 且無重複，group key 順序 == ['dashboard','accounts','settings','students','attendance','leaves','homework','pickup','exams']",
           "test_permissions_is_valid：is_valid_permission('pickup:operate') is True；is_valid_permission('*') is False；is_valid_permission('pickup:fly') is False"
         ],
         "run": "just test apps/api/tests/unit/core/test_permissions.py -k \"test_permissions_\"",
@@ -2343,7 +2345,7 @@
     {
       "id": "BACKEND-071",
       "title": "建立權限碼與 DB 系統角色 seed 的一致性整合測試",
-      "description": "建立 `apps/api/tests/integration/test_permission_seed_consistency.py`（DB-035 描述的「BACKEND 另有一致性測試比對 enum 與 seed」）。\n\n- 讀本機 DB `roles` 表的四個系統角色。\n- admin 的 permissions 必須恰為 `['*']`。\n- director / clerk / tutor 的每一個權限碼都必須 `is_valid_permission`（防止 seed 拼錯或 enum 改名後 seed 殘留）。\n- director 恰為 `ALL_PERMISSIONS - {'staff:write', 'roles:write'}`；clerk、tutor 與 domain_spec §3 預設授予欄一致（以測試內常數比對，常數直接抄 §3）。\n\n**驗收標準**\n- 上述四項全部通過；故意在測試常數中拿掉一碼時測試失敗並指出差異。",
+      "description": "建立 `apps/api/tests/integration/test_permission_seed_consistency.py`（DB-035 描述的「BACKEND 另有一致性測試比對 enum 與 seed」）。\n\n- 讀本機 DB `roles` 表的四個系統角色。\n- admin 的 permissions 必須恰為 `['*']`。\n- director / clerk / tutor 的每一個權限碼都必須 `is_valid_permission`（防止 seed 拼錯或 enum 改名後 seed 殘留）。\n- director 恰為 `ALL_PERMISSIONS - {'staff:write', 'roles:write', 'students:purge'}`（students:purge 只有 admin，以 `*` 涵蓋）；clerk、tutor 與 domain_spec §3 預設授予欄一致（以測試內常數比對，常數直接抄 §3）。\n\n**驗收標準**\n- 上述四項全部通過；故意在測試常數中拿掉一碼時測試失敗並指出差異。",
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/test_permission_seed_consistency.py",
       "source_ref": null,
@@ -2365,7 +2367,7 @@
         "red_cases": [
           "test_permission_seed_admin_wildcard：select permissions from roles where code='admin' → ['*']",
           "test_permission_seed_all_codes_valid：director/clerk/tutor 的 permissions 中 not is_valid_permission(c) 的集合 → set()",
-          "test_permission_seed_director_exact：set(director.permissions) == ALL_PERMISSIONS - {'staff:write','roles:write'}",
+          "test_permission_seed_director_exact：set(director.permissions) == ALL_PERMISSIONS - {'staff:write','roles:write','students:purge'}（25 碼）；len(ALL_PERMISSIONS) == 28",
           "test_permission_seed_clerk_tutor_match_spec：set(clerk.permissions) == CLERK_SPEC（18 碼）且 set(tutor.permissions) == TUTOR_SPEC（12 碼）"
         ],
         "run": "just test-int apps/api/tests/integration/test_permission_seed_consistency.py -k \"test_permission_seed_\"",
@@ -2442,7 +2444,7 @@
           "test_require_permission_type_check：require_permission('students:read') → TypeError；require_permission() → TypeError",
           "test_require_permission_route_audit：迷你 app 一個 /api/admin/x 有守衛、一個 /api/admin/y 沒有、一個 /api/admin/auth/me 沒有、一個 /api/admin/notifications 沒有 → admin_routes_without_permission(app) == ['/api/admin/y']；以 create_app() 執行 → []"
         ],
-        "run": "just test-int apps/api/tests/integration/api/test_deps_require_permission.py -k \"test_require_permission_\"",
+        "run": "just test-int apps/api/tests/integration/api/test_deps_require_permission.py -k \"test_require_permission_ or test_require_any_permission\"",
         "notes": ""
       },
       "review": {
@@ -2454,7 +2456,7 @@
     {
       "id": "BACKEND-074",
       "title": "實作 assert_can_grant：防止授出超過自身持有的權限（自我提權防護）",
-      "description": "建立 `apps/api/app/services/rbac_guards.py`。移植 ivy `api/permissions_admin.py::_assert_can_grant` 與 `api/auth.py::_assert_can_manage_user` 的精神；去掉 scope 判斷。\n\n```python\ndef assert_valid_permission_codes(codes: Iterable[str]) -> list[str]: ...\n    # 去重排序後回傳；含 '*' 或不合法碼 → AppError('unknown_permission', '包含無效的權限碼', status=422, details={'invalid': [...]})\ndef assert_can_grant(actor: CurrentStaff, codes: Iterable[str]) -> None: ...\n    # codes ⊄ actor.permissions → ForbiddenError(code='cannot_grant_permissions', details={'permissions': [...超出的碼]})\ndef assert_can_manage_staff(actor: CurrentStaff, target_effective: frozenset[str]) -> None: ...\n    # 目標帳號的有效權限 ⊄ actor.permissions → ForbiddenError(code='cannot_manage_staff')（主任不能重設 / 停用 / 修改 admin 帳號）\n```\n- actor 持有 admin 角色（有效權限 == ALL_PERMISSIONS）時自然通過。\n\n**驗收標準**\n- 合法碼去重排序；`*` 與未知碼回 422 並列出。\n- 授出自己沒有的碼 → 403 並列出超出的碼；子集合通過。\n- 管理權限較大的帳號 → 403 cannot_manage_staff。",
+      "description": "建立 `apps/api/app/services/rbac_guards.py`。移植 ivy `api/permissions_admin.py::_assert_can_grant` 的精神；去掉 scope 判斷。管理員工帳號的守衛 `assert_can_manage_staff` 在同檔案，由 BACKEND-534 負責。\n\n```python\ndef assert_valid_permission_codes(codes: Iterable[str]) -> list[str]: ...\n    # 去重排序後回傳；含 '*' 或不合法碼 → AppError('unknown_permission', '包含無效的權限碼', status=422, details={'invalid': [...]})\ndef assert_can_grant(actor: CurrentStaff, codes: Iterable[str]) -> None: ...\n    # codes ⊄ actor.permissions → ForbiddenError(code='cannot_grant_permissions', details={'permissions': [...超出的碼]})\n```\n- actor 持有 admin 角色（有效權限 == ALL_PERMISSIONS）時自然通過。\n\n**驗收標準**\n- 合法碼去重排序；`*` 與未知碼回 422 並列出。\n- 授出自己沒有的碼 → 403 並列出超出的碼；子集合通過。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/rbac_guards.py",
       "source_ref": "BE:api/permissions_admin.py::_assert_can_grant",
@@ -2475,10 +2477,9 @@
         "red_cases": [
           "test_rbac_valid_codes：assert_valid_permission_codes(['students:read','classes:read','students:read']) == ['classes:read','students:read']；['*'] → AppError 422 'unknown_permission' details.invalid == ['*']；['x:y'] → details.invalid == ['x:y']",
           "test_rbac_can_grant_subset：actor permissions {'students:read','students:write','roles:write'}，assert_can_grant(actor, ['students:read']) 不拋",
-          "test_rbac_cannot_grant_beyond：assert_can_grant(actor, ['students:read','pickup:override']) → ForbiddenError code 'cannot_grant_permissions'、details.permissions == ['pickup:override']",
-          "test_rbac_cannot_manage_stronger_staff：actor = director 有效權限（25 碼），target_effective = ALL_PERMISSIONS → ForbiddenError 'cannot_manage_staff'；target = tutor 權限 → 不拋"
+          "test_rbac_cannot_grant_beyond：assert_can_grant(actor, ['students:read','pickup:override']) → ForbiddenError code 'cannot_grant_permissions'、details.permissions == ['pickup:override']"
         ],
-        "run": "just test apps/api/tests/unit/services/test_rbac_guards.py -k \"test_rbac_\"",
+        "run": "just test apps/api/tests/unit/services/test_rbac_guards.py -k \"test_rbac_valid_codes or test_rbac_can_grant or test_rbac_cannot_grant\"",
         "notes": ""
       },
       "review": {
@@ -3038,7 +3039,7 @@
     {
       "id": "BACKEND-090",
       "title": "實作 StaffUserService.update_staff_user：修改基本資料、角色與個別權限",
-      "description": "在 `apps/api/app/services/staff_user_service.py` 實作：\n```python\ndef update_staff_user(session: Session, staff_id: UUID, data: StaffUserUpdateIn, *, actor: CurrentStaff, meta: RequestMeta) -> StaffUserOut: ...\n```\n- 不存在 → 404。\n- `assert_can_manage_staff(actor, 目標目前有效權限)`（BACKEND-074）→ 403 `cannot_manage_staff`。\n- 修改自己的 role_id / extra / revoked → 409 `cannot_modify_self_permissions`（自己的基本資料可改）。\n- role_id 不存在 → 422 `invalid_role`；權限碼驗證 422。\n- 新有效權限中「原本沒有的碼」必須 ⊆ actor.permissions → 403 `cannot_grant_permissions`。\n- 變更後 `assert_admin_capabilities_retained`（BACKEND-075）。\n- 稽核 `staff_user.update`，before / after 只含有變動的欄位。\n\n**驗收標準**\n- 改姓名、電話、角色、個別權限成功並寫 audit。\n- 管理比自己權限大的帳號 403；改自己的權限 409。\n- 授出自己沒有的碼 403。\n- 導致無人可管理角色 / 帳號 → 409。",
+      "description": "在 `apps/api/app/services/staff_user_service.py` 實作：\n```python\ndef update_staff_user(session: Session, staff_id: UUID, data: StaffUserUpdateIn, *, actor: CurrentStaff, meta: RequestMeta) -> StaffUserOut: ...\n```\n- 不存在 → 404。\n- `assert_can_manage_staff(actor, 目標目前有效權限)`（BACKEND-534）→ 403 `cannot_manage_staff`。\n- 修改自己的 role_id / extra / revoked → 409 `cannot_modify_self_permissions`（自己的基本資料可改）。\n- role_id 不存在 → 422 `invalid_role`；權限碼驗證 422。\n- 新有效權限中「原本沒有的碼」必須 ⊆ actor.permissions → 403 `cannot_grant_permissions`。\n- 變更後 `assert_admin_capabilities_retained`（BACKEND-075）。\n- 稽核 `staff_user.update`，before / after 只含有變動的欄位。\n\n**驗收標準**\n- 改姓名、電話、角色、個別權限成功並寫 audit。\n- 管理比自己權限大的帳號 403；改自己的權限 409。\n- 授出自己沒有的碼 403。\n- 導致無人可管理角色 / 帳號 → 409。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": "BE:api/auth.py::update_user",
@@ -3048,7 +3049,8 @@
         "BACKEND-088",
         "BACKEND-074",
         "BACKEND-075",
-        "BACKEND-102"
+        "BACKEND-102",
+        "BACKEND-534"
       ],
       "suggested_model": "fable-5",
       "risk_notes": "",
@@ -3088,7 +3090,8 @@
         "BACKEND-074",
         "BACKEND-032",
         "BACKEND-038",
-        "BACKEND-102"
+        "BACKEND-102",
+        "BACKEND-534"
       ],
       "suggested_model": "fable-5",
       "risk_notes": "",
@@ -3127,7 +3130,8 @@
         "BACKEND-074",
         "BACKEND-075",
         "BACKEND-038",
-        "BACKEND-102"
+        "BACKEND-102",
+        "BACKEND-534"
       ],
       "suggested_model": "fable-5",
       "risk_notes": "",
@@ -3600,8 +3604,8 @@
     },
     {
       "id": "BACKEND-106",
-      "title": "實作 app/core/settings_registry.py：首批 7 個 system_settings key 的 schema、預設值、secret 與分組",
-      "description": "建立 `apps/api/app/core/settings_registry.py`（architecture_decisions §4、domain_spec M2、DB-038 預設值是本 task 的介面）。\n\n**介面**\n```python\n@dataclass(frozen=True)\nclass SettingDef(Generic[M]):\n    key: str\n    schema: type[M]                  # Pydantic model，extra='forbid'\n    default: M\n    is_secret: bool\n    secret_fields: tuple[str, ...]   # 加密存放、回傳遮罩的欄位\n    group: Literal[\"org\", \"pickup\", \"homework\", \"notification\", \"line\"]\n    label: str                        # 繁中顯示名稱\n    public_fields: tuple[str, ...] = ()   # 可經 GET /api/parent/config 公開的欄位\n\nclass SettingKey(Generic[M]): ...     # 型別化 handle，例如 ORG_PROFILE: SettingKey[OrgProfile]\nREGISTRY: Mapping[str, SettingDef[Any]]\n```\n**schema（時間一律 `HH:MM` 字串，Asia/Taipei；以 `TimeHM = Annotated[str, StringConstraints(pattern=r'^([01]\\d|2[0-3]):[0-5]\\d$')]`）**\n| key | model | 欄位與規則 | 預設（與 DB-038 一致） |\n|---|---|---|---|\n| `org.profile` | OrgProfile | name ≤50、address ≤200、phone ≤20、logo_url（HttpUrl \\| None）；public: name、phone、logo_url | `{\"name\":\"\",\"address\":\"\",\"phone\":\"\",\"logo_url\":null}` |\n| `org.service_hours` | ServiceHours | mon~sat 各為 DayHours(open: bool, start: TimeHM, end: TimeHM；open 時 start < end) | 週一~五 open 12:00-19:00；sat open=false 08:00-12:00 |\n| `pickup.window` | PickupWindow | request_start < request_end、latest_expected_arrival ≥ request_end、auto_expire_minutes 10~600 | request_start 12:00 / request_end 19:00 / latest_expected_arrival 19:00 / auto_expire_minutes 120（接送時段同營業時段） |\n| `homework.defaults` | HomeworkDefaults | auto_reply_without_eta: bool、no_eta_reply_text 1~100 | true / 「已通知老師，稍後回覆預計時間」 |\n| `notification.toggles` | NotificationToggles | RootModel[dict[str, bool]]，key 集合必須恰為 BACKEND-201 的 13 個事件 | 全部 true |\n| `line.liff` | LineLiff | liff_id：空字串或 `^\\d+-[A-Za-z0-9]+$`；channel_id（LINE Login channel ID，後端驗證 id_token 的 aud）：空字串或 `^\\d{6,20}$`；public: liff_id（channel_id 不公開） | `{\"liff_id\":\"\",\"channel_id\":\"\"}` |\n| `line.messaging` | LineMessaging | channel_access_token、channel_secret（str \\| None，≤500）；is_secret、secret_fields 兩者 | 兩者 null |\n\n- **表單標籤**：每個 schema（含巢狀的 DayHours）的每個欄位都以 `Field(title=<繁中標題>, description=<繁中說明>)` 宣告，model 本身以 `model_config = ConfigDict(title=<繁中>)` 設定標題，讓 GET /api/admin/settings 回傳的 `json_schema`（BACKEND-109）可直接當表單標籤。標題：\n  - OrgProfile：name「安親班名稱」、address「地址」、phone「聯絡電話」、logo_url「Logo 圖片網址」。\n  - ServiceHours：mon~sat「週一」~「週六」；DayHours：open「是否營業」、start「開始時間」、end「結束時間」。\n  - PickupWindow：request_start「可發起接送開始時間」、request_end「可發起接送結束時間」、latest_expected_arrival「最晚預計抵達時間」、auto_expire_minutes「接送請求自動過期分鐘數」。\n  - HomeworkDefaults：auto_reply_without_eta「未設定預計時間時自動回覆」、no_eta_reply_text「自動回覆文案」。\n  - NotificationToggles（RootModel）：title「通知開關」，並以 `json_schema_extra={'x-labels': {event: EventDef.label}}` 附上各事件的中文名稱（取自 BACKEND-201，registry 可 import events，反向不可）。\n  - LineLiff：liff_id「LIFF 應用程式 ID」、channel_id「LINE 登入 Channel ID」；LineMessaging：channel_access_token「LINE 訊息 Channel Access Token」、channel_secret「LINE 訊息 Channel Secret」。\n  - description 為一句繁中說明（例如 auto_expire_minutes「家長發起後超過此分鐘數仍未完成即自動過期」）。\n- 新增設定項：先在此註冊，再以 migration seed 預設值（architecture_decisions §4）；不得為業務參數新增 env。\n- `notification.toggles` 依賴 BACKEND-201 的事件清單；為避免 import 循環，events 模組不 import registry。\n\n**驗收標準**\n- REGISTRY 恰含 7 個 key，default 通過自身 schema 驗證。\n- 各 schema 的驗證規則逐條生效（時間格式、start<end、範圍、事件 key 集合）。\n- 只有 line.messaging is_secret；public_fields 如表（line.liff 只公開 liff_id）。\n- LineLiff 的 channel_id 格式驗證；預設值含 channel_id 空字串（DB-038 seed 需一致）。\n- 每個 schema 的 json_schema 中，所有欄位（含 $defs 內的 DayHours）都有含中文的 title 與非空 description。",
+      "title": "實作 app/core/settings_registry.py：11 個 system_settings key 的 schema、預設值、secret、公開欄位、中文標籤與分組",
+      "description": "建立 `apps/api/app/core/settings_registry.py`（architecture_decisions §4、domain_spec M2、DB-038 預設值是本 task 的介面）。\n\n**介面**\n```python\n@dataclass(frozen=True)\nclass SettingDef(Generic[M]):\n    key: str\n    schema: type[M]                  # Pydantic model，extra='forbid'\n    default: M\n    is_secret: bool\n    secret_fields: tuple[str, ...]   # 加密存放、回傳遮罩的欄位\n    group: Literal[\"org\", \"pickup\", \"homework\", \"leave\", \"notification\", \"line\"]\n    label: str                        # 繁中顯示名稱\n# GROUP_LABELS: Mapping[str, str]：group → 繁中分組名稱（見下方「分組」）\n    public_fields: tuple[str, ...] = ()   # 可經 GET /api/parent/config 公開的欄位\n\nclass SettingKey(Generic[M]): ...     # 型別化 handle，例如 ORG_PROFILE: SettingKey[OrgProfile]\nREGISTRY: Mapping[str, SettingDef[Any]]\n```\n**schema（時間一律 `HH:MM` 字串，Asia/Taipei；以 `TimeHM = Annotated[str, StringConstraints(pattern=r'^([01]\\d|2[0-3]):[0-5]\\d$')]`）**\n| key | model | 欄位與規則 | 預設（與 DB-038 一致） |\n|---|---|---|---|\n| `org.profile` | OrgProfile | name ≤50、address ≤200、phone ≤20、logo_url（HttpUrl \\| None）；public: name、phone、logo_url | `{\"name\":\"\",\"address\":\"\",\"phone\":\"\",\"logo_url\":null}` |\n| `org.service_hours` | ServiceHours | mon~sat 各為 DayHours(open: bool, start: TimeHM, end: TimeHM；open 時 start < end) | 週一~五 open 12:00-19:00；sat open=false 08:00-12:00 |\n| `pickup.window` | PickupWindow | request_start < request_end、latest_expected_arrival ≥ request_end、auto_expire_minutes 10~600 | request_start 12:00 / request_end 19:00 / latest_expected_arrival 19:00 / auto_expire_minutes 120（接送時段同營業時段） |\n| `homework.defaults` | HomeworkDefaults | auto_reply_without_eta: bool、no_eta_reply_text 1~100 | true / 「已通知老師，稍後回覆預計時間」 |\n| `notification.toggles` | NotificationToggles | RootModel[dict[str, bool]]，key 集合必須恰為 BACKEND-201 的 13 個事件 | 全部 true |\n| `leave.window` | LeaveWindow | past_days 0~365、future_days 1~365、max_attachments 0~10、max_attachment_mb 1~10（不超過 DB-034 bucket 上限 10 MB）；public: 全部 | `{\"past_days\":30,\"future_days\":60,\"max_attachments\":3,\"max_attachment_mb\":10}` |\n| `pickup.authorization` | PickupAuthorizationSettings | max_days_ahead 0~60、max_active_per_day 1~10；public: max_days_ahead | `{\"max_days_ahead\":14,\"max_active_per_day\":3}` |\n| `pickup.persons` | PickupPersonsSettings | max_per_student 1~50；public: max_per_student | `{\"max_per_student\":10}` |\n| `homework.window` | HomeworkWindow | past_days 0~365、future_days 0~60 | `{\"past_days\":30,\"future_days\":7}` |\n| `line.liff` | LineLiff | liff_id：空字串或 `^\\d+-[A-Za-z0-9]+$`；channel_id（LINE Login channel ID，後端驗證 id_token 的 aud）：空字串或 `^\\d{6,20}$`；add_friend_url（官方帳號加好友 URL）：空字串或 `^https://` 開頭、≤300；public: liff_id、add_friend_url（channel_id 不公開） | `{\"liff_id\":\"\",\"channel_id\":\"\",\"add_friend_url\":\"\"}` |\n| `line.messaging` | LineMessaging | channel_access_token、channel_secret（str \\| None，≤500）；is_secret、secret_fields 兩者 | 兩者 null |\n\n- **表單標籤**：每個 schema（含巢狀的 DayHours）的每個欄位都以 `Field(title=<繁中標題>, description=<繁中說明>)` 宣告，model 本身以 `model_config = ConfigDict(title=<繁中>)` 設定標題，讓 GET /api/admin/settings 回傳的 `json_schema`（BACKEND-109）可直接當表單標籤。標題：\n  - OrgProfile：name「安親班名稱」、address「地址」、phone「聯絡電話」、logo_url「Logo 圖片網址」。\n  - ServiceHours：mon~sat「週一」~「週六」；DayHours：open「是否營業」、start「開始時間」、end「結束時間」。\n  - PickupWindow：request_start「可發起接送開始時間」、request_end「可發起接送結束時間」、latest_expected_arrival「最晚預計抵達時間」、auto_expire_minutes「接送請求自動過期分鐘數」。\n  - HomeworkDefaults：auto_reply_without_eta「未設定預計時間時自動回覆」、no_eta_reply_text「自動回覆文案」。\n  - NotificationToggles（RootModel）：title「通知開關」，並以 `json_schema_extra={'x-labels': {event: EventDef.label}}` 附上各事件的中文名稱（取自 BACKEND-201，registry 可 import events，反向不可）。\n  - LeaveWindow：past_days「家長可申請的過去天數」、future_days「家長可申請的未來天數」、max_attachments「每筆請假附件數上限」、max_attachment_mb「單一附件大小上限（MB）」。\n  - PickupAuthorizationSettings：max_days_ahead「代理授權最多可提前天數」、max_active_per_day「同一學生同日代理授權上限」；PickupPersonsSettings：max_per_student「每位學生常用接送人上限」。\n  - HomeworkWindow：past_days「作業可編輯的過去天數」、future_days「作業可預先新增的天數」。\n  - LineLiff：liff_id「LIFF 應用程式 ID」、channel_id「LINE 登入 Channel ID」、add_friend_url「官方帳號加好友網址」；LineMessaging：channel_access_token「LINE 訊息 Channel Access Token」、channel_secret「LINE 訊息 Channel Secret」。\n  - description 為一句繁中說明（例如 auto_expire_minutes「家長發起後超過此分鐘數仍未完成即自動過期」）。\n- **分組**（group，後台系統設定頁依此分頁；中文標籤 org「安親班資訊」、pickup「接送」、homework「作業」、leave「請假」、notification「通知」、line「LINE」）：org.profile / org.service_hours → org；pickup.window / pickup.authorization / pickup.persons → pickup；homework.defaults / homework.window → homework；leave.window → leave；notification.toggles → notification；line.liff / line.messaging → line。\n- 固定業務規則不進 registry（domain_spec M2）：員工密碼規則、預計抵達時間可早於現在 5 分鐘、綁定碼效期 7 天、接送碼連錯 5 次鎖定。\n- 新增設定項：先在此註冊，再以 migration seed 預設值（architecture_decisions §4）；不得為業務參數新增 env。\n- `notification.toggles` 依賴 BACKEND-201 的事件清單；為避免 import 循環，events 模組不 import registry。\n\n**驗收標準**\n- REGISTRY 恰含 11 個 key，default 通過自身 schema 驗證，且與 DB-038 seed 一致。\n- 各 schema 的驗證規則逐條生效（時間格式、start<end、範圍、事件 key 集合）。\n- 只有 line.messaging is_secret；public_fields 如表（line.liff 公開 liff_id 與 add_friend_url，不公開 channel_id）。\n- LineLiff 的 channel_id 格式驗證；預設值含 channel_id 空字串（DB-038 seed 需一致）。\n- 每個 schema 的 json_schema 中，所有欄位（含 $defs 內的 DayHours）都有含中文的 title 與非空 description。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/settings_registry.py",
       "source_ref": null,
@@ -3620,15 +3624,17 @@
           "unit"
         ],
         "red_cases": [
-          "test_settings_registry_keys：set(REGISTRY) == {'org.profile','org.service_hours','pickup.window','homework.defaults','notification.toggles','line.liff','line.messaging'}，且每個 d.schema.model_validate(d.default.model_dump(by_alias=True)) 成功",
+          "test_settings_registry_keys：set(REGISTRY) == {'org.profile','org.service_hours','pickup.window','homework.defaults','notification.toggles','line.liff','line.messaging','leave.window','pickup.authorization','pickup.persons','homework.window'}，且每個 d.schema.model_validate(d.default.model_dump(by_alias=True)) 成功",
           "test_settings_registry_service_hours_rules：DayHours(open=True, start='19:00', end='12:00') → ValidationError；start='25:00' → ValidationError；open=False 時 start > end 也允許",
           "test_settings_registry_pickup_window_rules：auto_expire_minutes=5 → ValidationError；latest_expected_arrival='18:30' 而 request_end='19:00' → ValidationError",
           "test_settings_registry_toggles_exact_keys：缺 'exam.published' → ValidationError；多 'foo.bar' → ValidationError",
           "test_settings_registry_secret_and_public：[k for k,d in REGISTRY.items() if d.is_secret] == ['line.messaging']，REGISTRY['line.messaging'].secret_fields == ('channel_access_token','channel_secret')；REGISTRY['org.profile'].public_fields == ('name','phone','logo_url')",
           "test_settings_registry_extra_forbid：OrgProfile.model_validate({'name':'x','address':'','phone':'','logo_url':None,'fax':'1'}) → ValidationError",
-          "test_settings_registry_line_liff_channel_id：LineLiff.model_validate({'liff_id':'1657000000-AbcdEfgh','channel_id':'1657000000'}) 通過；channel_id='abc' → ValidationError；缺 channel_id → ValidationError；REGISTRY['line.liff'].public_fields == ('liff_id',)；REGISTRY['line.liff'].default.channel_id == ''",
+          "test_settings_registry_line_liff_channel_id：LineLiff.model_validate({'liff_id':'1657000000-AbcdEfgh','channel_id':'1657000000'}) 通過；channel_id='abc' → ValidationError；缺 channel_id → ValidationError；REGISTRY['line.liff'].public_fields == ('liff_id','add_friend_url')；REGISTRY['line.liff'].default.channel_id == ''；add_friend_url='http://x' → ValidationError、'https://lin.ee/abc' 通過",
           "test_settings_registry_defaults_match_seed：REGISTRY['org.service_hours'].default.mon == DayHours(open=True, start='12:00', end='19:00')、.sat.open is False；REGISTRY['pickup.window'].default.model_dump() == {'request_start':'12:00','request_end':'19:00','latest_expected_arrival':'19:00','auto_expire_minutes':120}",
-          "test_settings_registry_field_titles_chinese：對 REGISTRY 每個 d.schema.model_json_schema()，遞迴走訪 properties（含 $defs）→ 每個欄位 title 符合 re.search(r'[\\u4e00-\\u9fff]', title) 且 description 非空；REGISTRY['pickup.window'].schema.model_json_schema()['properties']['auto_expire_minutes']['title'] == '接送請求自動過期分鐘數'；notification.toggles 的 json_schema['x-labels']['homework.done'] == EVENTS[Event.HOMEWORK_DONE].label"
+          "test_settings_registry_field_titles_chinese：對 REGISTRY 每個 d.schema.model_json_schema()，遞迴走訪 properties（含 $defs）→ 每個欄位 title 符合 re.search(r'[\\u4e00-\\u9fff]', title) 且 description 非空；REGISTRY['pickup.window'].schema.model_json_schema()['properties']['auto_expire_minutes']['title'] == '接送請求自動過期分鐘數'；notification.toggles 的 json_schema['x-labels']['homework.done'] == EVENTS[Event.HOMEWORK_DONE].label",
+          "test_settings_registry_limits_defaults：REGISTRY['leave.window'].default.model_dump() == {'past_days':30,'future_days':60,'max_attachments':3,'max_attachment_mb':10}；PickupAuthorizationSettings(max_days_ahead=14, max_active_per_day=0) → ValidationError；LeaveWindow(max_attachment_mb=11, ...) → ValidationError；REGISTRY['homework.window'].default.future_days == 7；REGISTRY['pickup.persons'].public_fields == ('max_per_student',)",
+          "test_settings_registry_groups：{k: d.group for k, d in REGISTRY.items()} 中 'leave.window' == 'leave'、'pickup.authorization' == 'pickup'、'pickup.persons' == 'pickup'、'homework.window' == 'homework'；GROUP_LABELS['leave'] == '請假'"
         ],
         "run": "just test apps/api/tests/unit/core/test_settings_registry.py -k \"test_settings_registry_\"",
         "notes": ""
@@ -4257,8 +4263,8 @@
     },
     {
       "id": "BACKEND-124",
-      "title": "實作 PublicConfigService.get_public_config：家長端公開設定（LIFF ID、安親班名稱 / 電話 / Logo）",
-      "description": "建立 `apps/api/app/services/public_config_service.py`：\n```python\nclass PublicConfigOut(BaseModel):\n    liff_id: str\n    org_name: str\n    org_phone: str\n    logo_url: str | None\n\ndef get_public_config(session: Session) -> PublicConfigOut: ...\n```\n- 只讀 registry `public_fields` 標記的欄位（org.profile 的 name / phone / logo_url、line.liff 的 liff_id），透過 BACKEND-108 `get_setting`（走 cache）。\n- 絕不包含任何 secret 欄位；以測試確保即使日後在 registry 誤把 secret 欄位標成 public 也會失敗（PublicConfigOut 欄位固定）。\n\n**驗收標準**\n- 回正確值；設定更新並失效 cache 後立即反映。\n- 輸出不含 line.messaging 任何內容。",
+      "title": "實作 PublicConfigService.get_public_config：家長端公開設定（LIFF、加好友網址、安親班資訊、表單上限）",
+      "description": "建立 `apps/api/app/services/public_config_service.py`：\n```python\nclass PublicLimitsOut(BaseModel):\n    leave_past_days: int\n    leave_future_days: int\n    leave_max_attachments: int\n    leave_max_attachment_mb: int\n    authorization_max_days_ahead: int\n    persons_max: int\n\nclass PublicConfigOut(BaseModel):\n    liff_id: str\n    add_friend_url: str | None          # 空字串轉 None\n    org_name: str\n    org_phone: str\n    logo_url: str | None\n    limits: PublicLimitsOut\n\ndef get_public_config(session: Session) -> PublicConfigOut: ...\n```\n- 只讀 registry `public_fields` 標記的欄位（org.profile 的 name / phone / logo_url；line.liff 的 liff_id / add_friend_url；leave.window 全部；pickup.authorization 的 max_days_ahead；pickup.persons 的 max_per_student），透過 BACKEND-108 `get_setting`（走 cache）。\n- 絕不包含任何 secret 欄位；以測試確保即使日後在 registry 誤把 secret 欄位標成 public 也會失敗（PublicConfigOut 欄位固定）。\n\n**驗收標準**\n- 回正確值；設定更新並失效 cache 後立即反映。\n- 輸出不含 line.messaging 任何內容，也不含 line.liff.channel_id。\n- limits 反映 leave.window / pickup.authorization / pickup.persons 的目前設定。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/public_config_service.py",
       "source_ref": null,
@@ -4276,8 +4282,9 @@
           "integration"
         ],
         "red_cases": [
-          "test_public_config_values：put org.profile name='快樂安親班'、phone='02-2345-0000'、line.liff liff_id='1657000000-Abc' 後 invalidate → get_public_config == PublicConfigOut(liff_id='1657000000-Abc', org_name='快樂安親班', org_phone='02-2345-0000', logo_url=None)",
-          "test_public_config_no_secret：line.messaging token 存 'tok-123' 的密文 → json.dumps(get_public_config().model_dump()) 不含 'tok-123' 與 'v1:'"
+          "test_public_config_values：put org.profile name='快樂安親班'、phone='02-2345-0000'、line.liff liff_id='1657000000-Abc' 後 invalidate → get_public_config == PublicConfigOut(liff_id='1657000000-Abc', add_friend_url=None, org_name='快樂安親班', org_phone='02-2345-0000', logo_url=None, limits=PublicLimitsOut(leave_past_days=30, leave_future_days=60, leave_max_attachments=3, leave_max_attachment_mb=10, authorization_max_days_ahead=14, persons_max=10))",
+          "test_public_config_no_secret：line.messaging token 存 'tok-123' 的密文 → json.dumps(get_public_config().model_dump()) 不含 'tok-123' 與 'v1:'",
+          "test_public_config_limits_follow_settings：put leave.window max_attachments=5、pickup.persons max_per_student=4、line.liff add_friend_url='https://lin.ee/abc' 後 invalidate → limits.leave_max_attachments == 5、limits.persons_max == 4、add_friend_url == 'https://lin.ee/abc'；回應不含 channel_id"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_public_config_service.py -k \"test_public_config_\"",
         "notes": ""
@@ -4291,7 +4298,7 @@
     {
       "id": "BACKEND-125",
       "title": "實作 GET /api/parent/config endpoint（公開設定，不需登入）",
-      "description": "建立 `apps/api/app/api/parent/config.py`，`GET /api/parent/config`（domain_spec §2：LIFF ID、安親班名稱 / 電話 / Logo，不需登入）→ BACKEND-124 → 200 `PublicConfigOut`。回應加 `Cache-Control: public, max-age=60`（覆寫 BACKEND-019 的 no-store）。\n\n**驗收標準**\n- 無 cookie 200 並回四個欄位（liff_id、org_name、org_phone、logo_url）。\n- 帶任意（含無效）cookie 仍 200。\n- 回應不含 secret。\n- Cache-Control 為 public, max-age=60。",
+      "description": "建立 `apps/api/app/api/parent/config.py`，`GET /api/parent/config`（domain_spec §2：LIFF ID、安親班名稱 / 電話 / Logo，不需登入）→ BACKEND-124 → 200 `PublicConfigOut`。回應加 `Cache-Control: public, max-age=60`（覆寫 BACKEND-019 的 no-store）。\n\n**驗收標準**\n- 無 cookie 200 並回 liff_id、add_friend_url、org_name、org_phone、logo_url、limits。\n- 帶任意（含無效）cookie 仍 200。\n- 回應不含 secret。\n- Cache-Control 為 public, max-age=60。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/config.py",
       "source_ref": null,
@@ -4310,7 +4317,7 @@
           "integration"
         ],
         "red_cases": [
-          "test_parent_config_success：GET /api/parent/config（無 cookie）→ 200，set(JSON) == {'liff_id','org_name','org_phone','logo_url'}",
+          "test_parent_config_success：GET /api/parent/config（無 cookie）→ 200，set(JSON) == {'liff_id','add_friend_url','org_name','org_phone','logo_url','limits'}，set(JSON['limits']) == {'leave_past_days','leave_future_days','leave_max_attachments','leave_max_attachment_mb','authorization_max_days_ahead','persons_max'}",
           "test_parent_config_garbage_cookie：帶 parent_access='garbage' → 200",
           "test_parent_config_cache_header：headers['cache-control'] == 'public, max-age=60'",
           "test_parent_config_no_secret：line.messaging 有值時回應文字不含 token 明文與 '****'",
@@ -4820,7 +4827,7 @@
           "integration"
         ],
         "red_cases": [
-          "test_admin_classes_get_success：GET 班 A → 200 name 正確",
+          "test_admin_classes_get_success：make_class(name='低年級A班', grade_levels=[1,2], academic_year=115) → GET → 200，name == '低年級A班'、grade_levels == [1,2]、academic_year == 115、student_count == 0、staff == []",
           "test_admin_classes_get_422：path abc → 422",
           "test_admin_classes_get_401：無 cookie → 401",
           "test_admin_classes_get_403：無 classes:read → 403",
@@ -4989,7 +4996,7 @@
     {
       "id": "BACKEND-148",
       "title": "建立學生模組 Pydantic schemas（含敏感欄位與條件輸出）",
-      "description": "建立 `apps/api/app/schemas/students.py`（request extra='forbid'、strip）。\n\n- `StudentCreateIn`：student_no（`^[A-Za-z0-9-]{1,20}$`）、name 1~50、gender（male / female / other / None）、birthday、grade_level 1~6、school_id、school_class ≤20、class_id、status（預設 active）、enrolled_on、withdrawn_on、note ≤500、id_number（≤20，可空）、health_note（≤1000，可空）。\n- `StudentUpdateIn`：全 optional；空 body 422；id_number / health_note 明確給 null 代表清除（以 `model_fields_set` 區分未給與給 null）。\n- `StudentListQuery`：q（≤50）、class_id、grade_level、status、school_id、include_archived（預設 false）。\n- `SchoolBrief`：id、name、short_name；`ClassBrief`：id、name。\n- `StudentListItemOut`：id、student_no、name、gender、grade_level、school（SchoolBrief | None）、school_class、class_（ClassBrief | None，序列化名 `class`）、status、archived_at。\n- `StudentSensitiveOut`：id_number（明文）、health_note。\n- `StudentDetailOut`：ListItem 全部欄位 + birthday、enrolled_on、withdrawn_on、note、photo_url（短效簽名 URL | None）、has_id_number（bool）、has_health_note（bool）、sensitive（StudentSensitiveOut | None：只有 students:sensitive 時才有值）、guardians（list[GuardianOut]，BACKEND-167）。\n- `PhotoUploadOut`：photo_url。\n\n**驗收標準**\n- 格式 / 長度 / extra 限制生效。\n- StudentUpdateIn 能區分「未給」與「給 null」。\n- StudentDetailOut 以 `class` 為 JSON key 輸出班級。",
+      "description": "建立 `apps/api/app/schemas/students.py`（request extra='forbid'、strip）。\n\n- `StudentCreateIn`：student_no（`^[A-Za-z0-9-]{1,20}$`）、name 1~50、gender（male / female / other / None）、birthday、grade_level 1~6、school_id、school_class ≤20、class_id、status（預設 active）、enrolled_on、withdrawn_on、note ≤500、id_number（≤20，可空）、health_note（≤1000，可空）。\n- `StudentUpdateIn`：全 optional；空 body 422；id_number / health_note 明確給 null 代表清除（以 `model_fields_set` 區分未給與給 null）。\n- `StudentListQuery`：q（≤50）、class_id、grade_level、status、school_id、include_archived（預設 false）。\n- `SchoolBrief`：id、name、short_name；`ClassBrief`：id、name。\n- `StudentListItemOut`：id、student_no、name、gender、grade_level、school（SchoolBrief | None）、school_class、class_（ClassBrief | None，序列化名 `class`）、status、archived_at。\n- `StudentSensitiveOut`：id_number（明文）、health_note。\n- `StudentDetailOut`：ListItem 全部欄位 + birthday、enrolled_on、withdrawn_on、note、photo_url（短效簽名 URL | None）、has_id_number（bool）、has_health_note（bool）、sensitive（StudentSensitiveOut | None：只有 students:sensitive 時才有值）、guardians（list[GuardianOut]，BACKEND-167）。\n- `PhotoUploadOut`：photo_url。\n- `StudentPurgeIn`：confirm_student_no（1~20，必須等於目前學號，service 比對）。`StudentPurgeOut`：student_id、purged_at、anonymized_student_no。\n\n**驗收標準**\n- 格式 / 長度 / extra 限制生效。\n- StudentUpdateIn 能區分「未給」與「給 null」。\n- StudentDetailOut 以 `class` 為 JSON key 輸出班級。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/students.py",
       "source_ref": "BE:api/students.py::StudentCreate",
@@ -5139,14 +5146,15 @@
     {
       "id": "BACKEND-152",
       "title": "實作 StudentService.update_student：部分更新（狀態、班級、敏感欄位）",
-      "description": "在 `apps/api/app/services/student_service.py` 實作：\n```python\ndef update_student(session: Session, student_id: UUID, data: StudentUpdateIn, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> StudentDetailOut: ...\n```\n- 不存在或已封存 → 404（封存學生不可編輯）；`get_student_or_404(for_update=True)`。\n- 只處理 `model_fields_set` 中的欄位；敏感欄位規則同 BACKEND-151（含 403、422、409：沒有 students:sensitive 不可寫入或清除身分證與健康備註）；給 null → 同時清除 enc 與 hmac。\n- 狀態轉換：→ withdrawn 未給 withdrawn_on 時預設 today；withdrawn → active / suspended 時清除 withdrawn_on。\n- student_no 改為既有值 → 409；class_id 改為封存班 → 422。\n- 敏感欄位有變動時稽核 `student.sensitive_update`（after：`set` / `cleared`）。\n- 退班連帶處理（取消當日接送請求等）屬營運模組，於該模組自行實作。\n\n**驗收標準**\n- 部分更新只動給定欄位。\n- 狀態轉換的 withdrawn_on 處理。\n- 敏感欄位清除 / 修改與權限檢查。\n- 封存學生 404；學號衝突 409。",
+      "description": "在 `apps/api/app/services/student_service.py` 實作：\n```python\ndef update_student(session: Session, student_id: UUID, data: StudentUpdateIn, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> StudentDetailOut: ...\n```\n- 不存在或已封存 → 404（封存學生不可編輯）；`get_student_or_404(for_update=True)`。\n- 只處理 `model_fields_set` 中的欄位；敏感欄位規則同 BACKEND-151（含 403、422、409：沒有 students:sensitive 不可寫入或清除身分證與健康備註）；給 null → 同時清除 enc 與 hmac。\n- 狀態轉換：→ withdrawn 未給 withdrawn_on 時預設 today；withdrawn → active / suspended 時清除 withdrawn_on。\n- student_no 改為既有值 → 409；class_id 改為封存班 → 422。\n- 敏感欄位有變動時稽核 `student.sensitive_update`（after：`set` / `cleared`）。\n- **停讀 / 退班自動收尾**：status 由其他值改為 `suspended` 或 `withdrawn` 時，同一交易內呼叫 `close_out_inactive_student(session, student, actor=actor, clock=clock)`（BACKEND-529：取消進行中接送請求與 active 代理授權、刪除今天起 expected 出勤、取消未來請假 / 已開始的截到昨天）。\n\n**驗收標準**\n- 部分更新只動給定欄位。\n- 狀態轉換的 withdrawn_on 處理。\n- 敏感欄位清除 / 修改與權限檢查。\n- 封存學生 404；學號衝突 409。\n- 改為 suspended / withdrawn 時觸發 BACKEND-529 收尾；改回 active 或其他欄位變更不觸發。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": "BE:api/students.py::update_student",
       "status": "pending",
       "assignee_session": null,
       "depends_on": [
-        "BACKEND-151"
+        "BACKEND-151",
+        "BACKEND-529"
       ],
       "suggested_model": "fable-5",
       "risk_notes": "",
@@ -5161,7 +5169,8 @@
           "test_update_student_withdraw_and_reactivate：status='withdrawn' → withdrawn_on == fake_clock.today()；再改 status='active' → withdrawn_on is None",
           "test_update_student_clear_sensitive：actor 有 sensitive，StudentUpdateIn.model_validate({'id_number': None}) → id_number_enc 與 id_number_hmac 皆 None；audit after == {'id_number':'cleared'}",
           "test_update_student_sensitive_forbidden：actor 無 sensitive 改 health_note → 403 'sensitive_permission_required'",
-          "test_update_student_archived_404_and_conflict：封存學生 → 404 'student_not_found'；student_no 改為他人學號 → 409 'student_no_taken'"
+          "test_update_student_archived_404_and_conflict：封存學生 → 404 'student_not_found'；student_no 改為他人學號 → 409 'student_no_taken'",
+          "test_update_student_triggers_close_out：王小明今日有 pending 接送請求 → update status='withdrawn' → 請求 status 'cancelled'；另一位學生只改 note → close_out 未被呼叫（monkeypatch 計數 0）"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_student_service.py -k \"test_update_student_\"",
         "notes": ""
@@ -5250,7 +5259,7 @@
     {
       "id": "BACKEND-155",
       "title": "實作 StudentImportService.preview：解析 Excel 並逐列驗證（不寫入）",
-      "description": "建立 `apps/api/app/services/student_import_service.py`（domain_spec §2 `POST /students/import`：Excel 匯入，預覽 + 執行兩段）。移植 ivy `utils/excel_io.py::parse_excel` 與 `assert_xlsx_not_zip_bomb` 的防護（解壓縮大小與 sheet 格數上限）；欄位改為本專案學生欄位。\n\n```python\nIMPORT_COLUMNS = [\"學號*\", \"姓名*\", \"性別\", \"生日\", \"年級*\", \"就讀國小\", \"學校班級\", \"安親班班級\", \"狀態\", \"入學日\", \"備註\", \"身分證字號\", \"健康備註\"]\nMAX_IMPORT_ROWS = 500\n\n@dataclass(frozen=True)\nclass ImportRowResult:\n    row_number: int                     # Excel 列號（標題為第 1 列）\n    data: StudentCreateIn | None        # 驗證通過時的正規化資料\n    display: dict[str, str]             # 原始儲存格字串（敏感欄位遮罩），供前端呈現\n    errors: list[str]                   # 繁中錯誤訊息\n\n@dataclass(frozen=True)\nclass ImportPreview:\n    rows: list[ImportRowResult]\n    total: int\n    valid: int\n    invalid: int\n\ndef preview(session: Session, upload: ValidatedUpload, *, academic_year: int, actor: CurrentStaff) -> ImportPreview: ...\n```\n**規則**\n- 第一個工作表；標題列檢查：缺少必填欄（帶 `*`）或出現不在 IMPORT_COLUMNS 的欄名（非空白標題，比對時去頭尾空白）→ 422 `import_invalid_header`，details 固定為 `{\"missing\": [缺少的必填欄名...], \"unexpected\": [無法辨識的欄名...]}`（兩個 key 都一定存在，依標題列順序；選填欄缺少不算錯）。資料列 > 500 → 422 `import_too_many_rows`；0 列 → 422 `import_empty`。\n- 性別：男 / 女 / 其他 → male / female / other；狀態：在學 / 暫停 / 退班（預設在學）→ active / suspended / withdrawn。\n- 日期接受 Excel 日期儲存格或 `YYYY-MM-DD` / `YYYY/MM/DD` 字串。\n- 就讀國小：以 name 或 short_name 比對啟用中的 schools（不分大小寫）；找不到 → 錯誤「找不到國小：X」。\n- 安親班班級：以名稱比對 `academic_year` 學年度未封存的班；找不到 → 錯誤。\n- 身分證：正規化 + 檢查（BACKEND-147）；actor 無 `students:sensitive` 而該列有身分證或健康備註 → 錯誤「沒有權限匯入敏感欄位」。\n- 重複：學號已存在於 DB、學號在檔案中重複、身分證 HMAC 已存在於 DB（含封存）、身分證在檔案中重複 → 各自錯誤訊息（檔內重複時兩列都標）。\n- 每列以 `StudentCreateIn` 驗證，Pydantic 錯誤轉成繁中訊息。\n- 不寫入 DB、不 flush。\n\n**驗收標準**\n- 合法檔案全數 valid，資料正規化正確。\n- 標題缺必填欄或有無法辨識的欄名 → 422，details 為 `{missing, unexpected}`；超過 500 列、空檔各回 422。\n- 各類列錯誤（國小 / 班級找不到、學號 / 身分證重複含檔內重複、格式錯、無敏感權限）正確標示且不影響其他列。\n- display 中的身分證被遮罩。",
+      "description": "建立 `apps/api/app/services/student_import_service.py`（domain_spec §2 `POST /students/import`：Excel 匯入，預覽 + 執行兩段）。移植 ivy `utils/excel_io.py::parse_excel` 與 `assert_xlsx_not_zip_bomb` 的防護（解壓縮大小與 sheet 格數上限）；欄位改為本專案學生欄位。\n\n```python\nIMPORT_COLUMNS = [\"學號*\", \"姓名*\", \"性別\", \"生日\", \"年級*\", \"就讀國小\", \"學校班級\", \"安親班班級\", \"狀態\", \"入學日\", \"備註\", \"身分證字號\", \"健康備註\"]\nMAX_IMPORT_ROWS = 500\n\n@dataclass(frozen=True)\nclass ImportRowResult:\n    row_number: int                     # Excel 列號（標題為第 1 列）\n    data: StudentCreateIn | None        # 驗證通過時的正規化資料\n    display: dict[str, str]             # 原始儲存格字串（敏感欄位遮罩），供前端呈現\n    errors: list[str]                   # 繁中錯誤訊息\n\n@dataclass(frozen=True)\nclass ImportPreview:\n    rows: list[ImportRowResult]\n    total: int\n    valid: int\n    invalid: int\n\ndef preview(session: Session, upload: ValidatedUpload, *, academic_year: int, actor: CurrentStaff) -> ImportPreview: ...\n```\n**規則**\n- 第一個工作表；標題列檢查：缺少必填欄（帶 `*`）或出現不在 IMPORT_COLUMNS 的欄名（非空白標題，比對時去頭尾空白）→ 422 `import_invalid_header`，details 固定為 `{\"missing\": [缺少的必填欄名...], \"unexpected\": [無法辨識的欄名...]}`（兩個 key 都一定存在，依標題列順序；選填欄缺少不算錯）。資料列 > 500 → 422 `import_too_many_rows`；0 列 → 422 `import_empty`。\n- 標題檢查抽成純函式 `check_header(header_cells: Sequence[str | None]) -> tuple[list[str], list[str]]`（回 missing、unexpected），供 preview 與 BACKEND-532 範本測試共用。\n- 性別：男 / 女 / 其他 → male / female / other；狀態：在學 / 暫停 / 退班（預設在學）→ active / suspended / withdrawn。\n- 日期接受 Excel 日期儲存格或 `YYYY-MM-DD` / `YYYY/MM/DD` 字串。\n- 就讀國小：以 name 或 short_name 比對啟用中的 schools（不分大小寫）；找不到 → 錯誤「找不到國小：X」。\n- 安親班班級：以名稱比對 `academic_year` 學年度未封存的班；找不到 → 錯誤。\n- 身分證：正規化 + 檢查（BACKEND-147）；actor 無 `students:sensitive` 而該列有身分證或健康備註 → 錯誤「沒有權限匯入敏感欄位」。\n- 重複：學號已存在於 DB、學號在檔案中重複、身分證 HMAC 已存在於 DB（含封存）、身分證在檔案中重複 → 各自錯誤訊息（檔內重複時兩列都標）。\n- 每列以 `StudentCreateIn` 驗證，Pydantic 錯誤轉成繁中訊息。\n- 不寫入 DB、不 flush。\n\n**驗收標準**\n- 合法檔案全數 valid，資料正規化正確。\n- 標題缺必填欄或有無法辨識的欄名 → 422，details 為 `{missing, unexpected}`；超過 500 列、空檔各回 422。\n- 各類列錯誤（國小 / 班級找不到、學號 / 身分證重複含檔內重複、格式錯、無敏感權限）正確標示且不影響其他列。\n- display 中的身分證被遮罩。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_import_service.py",
       "source_ref": "BE:utils/excel_io.py::parse_excel",
@@ -5309,9 +5318,9 @@
           "integration"
         ],
         "red_cases": [
-          "test_import_execute_success：3 列合法 → ImportResult.created == 3；students 新增 3 筆；audit 'student.import' after == {'created': 3, 'academic_year': 115}",
-          "test_import_execute_has_errors：其中一列國小不存在 → AppError 409 'import_has_errors'，details.rows 長度 1；students 筆數不變",
-          "test_import_execute_encrypts：含身分證的列 → DB id_number_enc 可解密為原值、id_number_hmac 正確"
+          "test_import_execute_success：3 列合法（學號 S115101、S115102、S115103）→ ImportResult.created == 3、len(student_ids) == 3；students where student_no in ('S115101','S115102','S115103') 筆數 3；audit 'student.import' after == {'created': 3, 'academic_year': 115}",
+          "test_import_execute_has_errors：第 2 筆資料列（Excel 第 3 列）就讀國小填 '不存在國小' → AppError 409 'import_has_errors'，details.rows == [{'row_number': 3, 'errors': ['找不到國小：不存在國小'], ...}]（只含錯誤列）；students 筆數不變",
+          "test_import_execute_encrypts：第 1 列身分證 'A123456789' → 該生 decrypt_bytes(id_number_enc) == 'A123456789'、id_number_hmac == id_number_hmac('A123456789')"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_student_import_service.py -k \"test_import_execute_\"",
         "notes": ""
@@ -5359,7 +5368,7 @@
     {
       "id": "BACKEND-158",
       "title": "實作 GradePromotionService.execute：執行學年升級（冪等、互斥、稽核）",
-      "description": "在 `apps/api/app/services/grade_promotion_service.py` 實作：\n```python\ndef execute(session: Session, *, from_academic_year: int, expected_total: int, withdrawn_on: date | None, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> PromotionResult: ...   # promoted、graduated 數\n```\n1. `advisory_xact_lock(session, 'students:promote_grade', str(from_academic_year))`（BACKEND-017，同時按兩次的第二個請求等待後走到步驟 2）。\n2. 已有 audit `student.promote_grade` / entity_id = from_academic_year → 409 `already_promoted`。\n3. 重新計算 preview；`total != expected_total` → 409 `preview_stale`（預覽後名單有變，請重新預覽）。\n4. 以兩條 bulk update：grade 1~5 `grade_level = grade_level + 1`；grade 6 → `status='withdrawn'`、`withdrawn_on = withdrawn_on or clock.today()`（先更新六年級再更新其他，避免剛升上六年級的被誤判）。\n5. 稽核 `student.promote_grade`（entity_type `academic_year`、entity_id `str(from_academic_year)`、after `{promoted, graduated, to_academic_year}`）。\n- class_id 不變：學生保留原安親班班級（BACKEND-157）。\n\n**驗收標準**\n- 升級與退班結果正確；五年級變六年級但不會被同一次執行轉為退班。\n- 第二次執行 409 already_promoted。\n- expected_total 不符 409 preview_stale。\n- 寫一筆 audit。",
+      "description": "在 `apps/api/app/services/grade_promotion_service.py` 實作：\n```python\ndef execute(session: Session, *, from_academic_year: int, expected_total: int, withdrawn_on: date | None, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> PromotionResult: ...   # promoted、graduated 數\n```\n1. `advisory_xact_lock(session, 'students:promote_grade', str(from_academic_year))`（BACKEND-017，同時按兩次的第二個請求等待後走到步驟 2）。\n2. 已有 audit `student.promote_grade` / entity_id = from_academic_year → 409 `already_promoted`。\n3. 重新計算 preview；`total != expected_total` → 409 `preview_stale`（預覽後名單有變，請重新預覽）。\n4. 以兩條 bulk update：grade 1~5 `grade_level = grade_level + 1`；grade 6 → `status='withdrawn'`、`withdrawn_on = withdrawn_on or clock.today()`（先更新六年級再更新其他，避免剛升上六年級的被誤判）。\n5. 轉為 withdrawn 的六年級學生逐一呼叫 `close_out_inactive_student`（BACKEND-529），收尾其未來請假、代理授權與出勤。\n6. 稽核 `student.promote_grade`（entity_type `academic_year`、entity_id `str(from_academic_year)`、after `{promoted, graduated, to_academic_year}`）。\n- class_id 不變：學生保留原安親班班級（BACKEND-157）。\n\n**驗收標準**\n- 升級與退班結果正確；五年級變六年級但不會被同一次執行轉為退班。\n- 第二次執行 409 already_promoted。\n- expected_total 不符 409 preview_stale。\n- 寫一筆 audit。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/grade_promotion_service.py",
       "source_ref": null,
@@ -5368,7 +5377,8 @@
       "depends_on": [
         "BACKEND-157",
         "BACKEND-017",
-        "BACKEND-102"
+        "BACKEND-102",
+        "BACKEND-529"
       ],
       "suggested_model": "fable-5",
       "risk_notes": "",
@@ -8538,7 +8548,7 @@
     {
       "id": "BACKEND-345",
       "title": "實作 LeaveService.create_leave：家長 / 員工建立請假（重疊 409、套用出勤、通知）",
-      "description": "在 `apps/api/app/services/leave_service.py` 實作（domain_spec M5：家長送出即生效；員工可代登記）：\n```python\ndef create_leave(session: Session, data: LeaveCreateIn | ParentLeaveCreateIn, *, actor: Actor, clock: Clock) -> StudentLeave: ...\n```\n1. 學生：\n   - `actor.type == 'parent'` → `assert_parent_owns_student(session, actor.id, data.student_id, for_write=True)`（BACKEND-180：別人小孩 404、退班 409 `student_not_active`）。\n   - staff → `get_student_or_404`；`status != 'active'` → 409 `student_not_active`。\n2. 家長日期窗：`today - 30 ≤ start_date ≤ today + 60`，否則 422 `leave_date_out_of_window`（移植 ivy `_PAST_LIMIT_DAYS=30` / `_FUTURE_LIMIT_DAYS=60`）；員工不受此限。\n3. `list_service_days(start, end)` 為空 → 422 `no_service_days_in_range`。\n4. 寫入：`with session.begin_nested(): session.add(leave); session.flush()`；捕捉 `IntegrityError` 且 `orig.sqlstate == '23P01'`、constraint 為 `ex_student_leaves_no_overlap` → 查出重疊的 active 請假 → 409 `leave_overlap`，details `{'leave_id', 'start_date', 'end_date'}`。其他 IntegrityError 原樣拋出。\n   created_by_type / created_by_id = actor.type / actor.id。\n5. `apply_attendance_for_leave(session, leave, actor_staff_id=actor.id if staff else None, clock=clock)`（BACKEND-342）。\n6. `notify_leave_event(session, leave, Event.LEAVE_CREATED, clock=clock)`（BACKEND-344）。\n- **並發 / 重複送出**：同一請假被連點兩次或兩位家長同時送出重疊期間，DB exclusion constraint 讓後到的交易在前者 commit 後拋 23P01 → 409，不需應用層鎖；ivy 的 client_request_id 冪等鍵因此不移植。\n- 去掉 ivy 的審核流程、娃娃車同步、報表快取失效。\n\n**驗收標準**\n- 家長建立：created_by_type='parent'，期間內出勤套用 leave，員工收到 leave.created。\n- 員工代登記可建立過去日期（超過 30 天）；家長超出日期窗 422。\n- 重疊 409 leave_overlap 並帶既有請假資訊；已取消的請假不擋。\n- 期間全為非營業日 422。\n- 別人小孩 404（家長）；退班學生 409。",
+      "description": "在 `apps/api/app/services/leave_service.py` 實作（domain_spec M5：家長送出即生效；員工可代登記）：\n```python\ndef create_leave(session: Session, data: LeaveCreateIn | ParentLeaveCreateIn, *, actor: Actor, clock: Clock) -> StudentLeave: ...\n```\n1. 學生：\n   - `actor.type == 'parent'` → `assert_parent_owns_student(session, actor.id, data.student_id, for_write=True)`（BACKEND-180：別人小孩 404、退班 409 `student_not_active`）。\n   - staff → `get_student_or_404`；`status != 'active'` → 409 `student_not_active`。\n2. 家長日期窗：`w = get_setting(session, LEAVE_WINDOW)`（BACKEND-108 / 106）→ `today - w.past_days ≤ start_date ≤ today + w.future_days`，否則 422 `leave_date_out_of_window`（details 帶 past_days、future_days；預設 30 / 60 承襲 ivy）；員工不受此限。\n3. `list_service_days(start, end)` 為空 → 422 `no_service_days_in_range`。\n4. 寫入：`with session.begin_nested(): session.add(leave); session.flush()`；捕捉 `IntegrityError` 且 `orig.sqlstate == '23P01'`、constraint 為 `ex_student_leaves_no_overlap` → 查出重疊的 active 請假 → 409 `leave_overlap`，details `{'leave_id', 'start_date', 'end_date'}`。其他 IntegrityError 原樣拋出。\n   created_by_type / created_by_id = actor.type / actor.id。\n5. `apply_attendance_for_leave(session, leave, actor_staff_id=actor.id if staff else None, clock=clock)`（BACKEND-342）。\n6. `notify_leave_event(session, leave, Event.LEAVE_CREATED, clock=clock)`（BACKEND-344）。\n- **並發 / 重複送出**：同一請假被連點兩次或兩位家長同時送出重疊期間，DB exclusion constraint 讓後到的交易在前者 commit 後拋 23P01 → 409，不需應用層鎖；ivy 的 client_request_id 冪等鍵因此不移植。\n- 去掉 ivy 的審核流程、娃娃車同步、報表快取失效。\n\n**驗收標準**\n- 家長建立：created_by_type='parent'，期間內出勤套用 leave，員工收到 leave.created。\n- 員工代登記可建立過去日期（超過日期窗）；家長超出 leave.window 設定的日期窗 422，設定變更後立即依新值判斷。\n- 重疊 409 leave_overlap 並帶既有請假資訊；已取消的請假不擋。\n- 期間全為非營業日 422。\n- 別人小孩 404（家長）；退班學生 409。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_service.py",
       "source_ref": "BE:api/parent_portal/leaves.py::create_leave",
@@ -8552,7 +8562,9 @@
         "BACKEND-180",
         "BACKEND-133",
         "BACKEND-123",
-        "BACKEND-102"
+        "BACKEND-102",
+        "BACKEND-108",
+        "BACKEND-106"
       ],
       "suggested_model": "opus-5",
       "risk_notes": "",
@@ -8565,7 +8577,7 @@
         "red_cases": [
           "test_create_leave_by_parent：FakeClock 2026-09-01、家長 p 綁王小明 → create_leave(ParentLeaveCreateIn(student_id, 'sick', 9/1, 9/2), actor=Actor(type='parent', id=p.id)) → created_by_type == 'parent'；9/1 出勤 status 'leave'；notifications(event='leave.created') ≥ 1 列",
           "test_create_leave_overlap_409：既有 active 9/2~9/4 → 新 9/4~9/5 → AppError 409 'leave_overlap'，details.leave_id == 既有 id；既有改 cancelled 後 → 建立成功",
-          "test_create_leave_parent_window：今天 9/1、家長 start_date=2026-07-31 → 422 'leave_date_out_of_window'；start_date=2026-11-01 → 422；staff actor 同樣 7/31 → 成功",
+          "test_create_leave_parent_window：今天 9/1、leave.window 設為 past_days=30、future_days=60 → 家長 start_date=2026-07-31 → 422 'leave_date_out_of_window'、2026-11-01 → 422、2026-08-02 → 成功；leave.window 改為 past_days=0 並 invalidate → 2026-08-31 → 422；staff actor 7/31 → 成功",
           "test_create_leave_no_service_days：9/5~9/6（週六日）→ 422 'no_service_days_in_range'",
           "test_create_leave_parent_idor：家長 p 對他人小孩 → AppError 404 'student_not_found'；自己小孩 withdrawn → 409 'student_not_active'",
           "test_create_leave_concurrent_duplicate：committing session 兩條連線同時送出同一學生 9/1~9/1 → 一個成功、另一個 AppError 409 'leave_overlap'，最終 active 請假 1 筆"
@@ -8695,7 +8707,7 @@
     {
       "id": "BACKEND-349",
       "title": "實作 LeaveService.upload_leave_attachment：家長上傳請假附件",
-      "description": "在 `apps/api/app/services/leave_service.py` 實作（domain_spec M5：附件存私有 bucket `leave-attachments`）：\n```python\nMAX_ATTACHMENTS_PER_LEAVE = 3\ndef upload_leave_attachment(session: Session, leave_id: UUID, file: UploadFile, *, parent: CurrentParent, storage: Storage, clock: Clock) -> ParentLeaveAttachmentOut: ...\n```\n1. 請假不存在或學生不屬於該家長 → 404 `leave_not_found`（不洩漏）。\n2. `status != 'active'` → 409 `leave_not_active`；附件數已達 3 → 409 `attachment_limit_reached`。\n3. `read_validated_upload(file, allowed=ATTACHMENT_TYPES, max_bytes=10 MiB)`（BACKEND-016：413 / 415 / 422）。\n4. `path = build_object_path(leave.id, ext)`（BACKEND-013；即 DB-019 的路徑格式 `<leave_id>/<32 碼 hex>.<ext>`）→ `storage.upload('leave-attachments', path, content, mime)`；StorageError → 502 `storage_unavailable`。\n5. 新增 StudentLeaveAttachment（storage_path、mime_type、size_bytes），flush；flush 失敗 → `storage.delete` 剛上傳的物件後重新拋出。\n6. 回傳附件與短效 URL。\n- 物件路徑不使用使用者檔名。移植 ivy `api/parent_portal/leaves.py::upload_leave_attachment` 的大小 / 類型檢查與失敗時清除孤兒檔；去掉 portfolio Attachment 模型。\n\n**驗收標準**\n- 成功：FakeStorage 有物件、附件列建立、回傳 url。\n- 非本人請假 404；已取消 409；超過 3 個 409。\n- 非允許類型 415、超過 10 MB 413。\n- Storage 失敗 502 且無附件列。",
+      "description": "在 `apps/api/app/services/leave_service.py` 實作（domain_spec M5：附件存私有 bucket `leave-attachments`）：\n```python\ndef upload_leave_attachment(session: Session, leave_id: UUID, file: UploadFile, *, parent: CurrentParent, storage: Storage, clock: Clock) -> ParentLeaveAttachmentOut: ...\n```\n1. 請假不存在或學生不屬於該家長 → 404 `leave_not_found`（不洩漏）。\n2. `status != 'active'` → 409 `leave_not_active`；`w = get_setting(session, LEAVE_WINDOW)`；附件數已達 `w.max_attachments` → 409 `attachment_limit_reached`（details.max_attachments）。\n3. `read_validated_upload(file, allowed=ATTACHMENT_TYPES, max_bytes=w.max_attachment_mb * 1024 * 1024)`（BACKEND-016：413 / 415 / 422）。\n4. `path = build_object_path(leave.id, ext)`（BACKEND-013；即 DB-019 的路徑格式 `<leave_id>/<32 碼 hex>.<ext>`）→ `storage.upload('leave-attachments', path, content, mime)`；StorageError → 502 `storage_unavailable`。\n5. 新增 StudentLeaveAttachment（storage_path、mime_type、size_bytes），flush；flush 失敗 → `storage.delete` 剛上傳的物件後重新拋出。\n6. 回傳附件與短效 URL。\n- 物件路徑不使用使用者檔名。移植 ivy `api/parent_portal/leaves.py::upload_leave_attachment` 的大小 / 類型檢查與失敗時清除孤兒檔；去掉 portfolio Attachment 模型。\n\n**驗收標準**\n- 成功：FakeStorage 有物件、附件列建立、回傳 url。\n- 非本人請假 404；已取消 409；達到 leave.window.max_attachments 時 409。\n- 非允許類型 415、超過 leave.window.max_attachment_mb 413。\n- Storage 失敗 502 且無附件列。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_service.py",
       "source_ref": "BE:api/parent_portal/leaves.py::upload_leave_attachment",
@@ -8707,7 +8719,8 @@
         "BACKEND-014",
         "BACKEND-015",
         "BACKEND-016",
-        "BACKEND-179"
+        "BACKEND-179",
+        "BACKEND-108"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "Storage 上傳成功但交易後續 rollback 時會留下孤兒物件，目前接受，由日後排程清理。",
@@ -8719,8 +8732,8 @@
         ],
         "red_cases": [
           "test_upload_leave_attachment_success：PDF 檔 → 回傳 mime_type 'application/pdf'、url 以 'https://storage.test/leave-attachments/' 開頭；fake_storage.objects 有 1 個物件、附件列 storage_path 以 f'{leave.id}/' 開頭",
-          "test_upload_leave_attachment_rules：他人請假 → 404 'leave_not_found'；已 cancelled → 409 'leave_not_active'；已有 3 個附件 → 409 'attachment_limit_reached'",
-          "test_upload_leave_attachment_file_checks：內容為 zip → 415 'unsupported_file_type'；11 MiB JPEG → 413 'file_too_large'",
+          "test_upload_leave_attachment_rules：他人請假 → 404 'leave_not_found'；已 cancelled → 409 'leave_not_active'；leave.window max_attachments 設為 2 且已有 2 個附件 → 409 'attachment_limit_reached'",
+          "test_upload_leave_attachment_file_checks：內容為 zip → 415 'unsupported_file_type'；max_attachment_mb 設為 1 時上傳 2 MiB JPEG → 413 'file_too_large'",
           "test_upload_leave_attachment_storage_error：FakeStorage.upload 拋 StorageError → 502 'storage_unavailable'，附件列 0 筆"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_leave_service.py -k \"test_upload_leave_attachment_\"",
@@ -8873,7 +8886,8 @@
           "test_admin_leaves_cancel_422：path 'abc' → 422；{'scope':'past'} → 422",
           "test_admin_leaves_cancel_401：無 cookie → 401",
           "test_admin_leaves_cancel_403：只有 leaves:read → 403",
-          "test_admin_leaves_cancel_409：已取消 → 409 leave_not_active；已結束的請假不帶 body → 409 leave_already_ended；uuid4() → 404 leave_not_found"
+          "test_admin_leaves_cancel_409：已取消 → 409 leave_not_active；已結束的請假不帶 body → 409 leave_already_ended；uuid4() → 404 leave_not_found",
+          "test_admin_leaves_cancel_ended_all：今天 9/10、已結束的請假 9/7~9/8 帶 {'scope':'all'} → 200 status == 'cancelled'，9/7、9/8 出勤回 expected"
         ],
         "run": "just test-int apps/api/tests/integration/api/admin/test_leaves_endpoints.py -k \"test_admin_leaves_cancel_\"",
         "notes": ""
@@ -8991,7 +9005,7 @@
         ],
         "red_cases": [
           "test_parent_leaves_create_success：POST {'student_id': 王小明, 'leave_type':'sick','start_date':today,'end_date':today} → 201 status == 'active'、can_cancel True",
-          "test_parent_leaves_create_422：leave_type='annual' → 422；start_date 超出日期窗 → 422 leave_date_out_of_window",
+          "test_parent_leaves_create_422：leave_type='annual' → 422；leave.window future_days 設為 7 時 start_date=today+8 → 422 leave_date_out_of_window",
           "test_parent_leaves_create_401：無 cookie → 401",
           "test_parent_leaves_create_idor：student_id 為他人小孩 → 404 student_not_found，且 student_leaves 筆數不變",
           "test_parent_leaves_create_409：重疊 → 409 leave_overlap；退班小孩 → 409 student_not_active"
@@ -9075,7 +9089,7 @@
           "test_parent_leave_attachment_422：缺 file 欄位 → 422；空檔 → 422 file_empty",
           "test_parent_leave_attachment_401：無 cookie → 401",
           "test_parent_leave_attachment_idor：上傳到他人請假 → 404 leave_not_found，fake_storage.objects 為空",
-          "test_parent_leave_attachment_business：exe 內容 → 415 unsupported_file_type；第 4 個附件 → 409 attachment_limit_reached"
+          "test_parent_leave_attachment_business：exe 內容 → 415 unsupported_file_type；leave.window max_attachments 設為 3 時第 4 個附件 → 409 attachment_limit_reached"
         ],
         "run": "just test-int apps/api/tests/integration/api/parent/test_leaves_endpoints.py -k \"test_parent_leave_attachment_\"",
         "notes": "家長端無權限碼，403 以 IDOR 404 取代。"
@@ -9347,7 +9361,7 @@
     {
       "id": "BACKEND-377",
       "title": "實作 HomeworkService.create_item：新增單一學生作業項目",
-      "description": "在 `apps/api/app/services/homework_service.py` 實作：\n```python\ndef create_item(session: Session, data: HomeworkItemCreateIn, *, actor: CurrentStaff, clock: Clock) -> HomeworkMutationOut: ...\n```\n1. 學生：`get_student_or_404`；`status != 'active'` → 409 `student_not_active`。\n2. subject_id 給值：不存在或停用 → 422 `invalid_subject`。\n3. service_date = data.service_date or today；必須介於 `today - 30` ~ `today + 7` → 否則 422 `invalid_service_date`。\n4. 新增 item（updated_by=actor.id），flush。\n5. `recompute_progress`（BACKEND-375）。\n6. 回傳 item 與 progress。\n\n**驗收標準**\n- 建立成功並回傳最新 progress（例如原本 done 變 in_progress）。\n- 學生不存在 404、非在學 409、科目無效 422、日期超出範圍 422。",
+      "description": "在 `apps/api/app/services/homework_service.py` 實作：\n```python\ndef create_item(session: Session, data: HomeworkItemCreateIn, *, actor: CurrentStaff, clock: Clock) -> HomeworkMutationOut: ...\n```\n1. 學生：`get_student_or_404`；`status != 'active'` → 409 `student_not_active`。\n2. subject_id 給值：不存在或停用 → 422 `invalid_subject`。\n3. service_date = data.service_date or today；`w = get_setting(session, HOMEWORK_WINDOW)` → 必須介於 `today - w.past_days` ~ `today + w.future_days`（預設 30 / 7）→ 否則 422 `invalid_service_date`（details 帶範圍）。\n4. 新增 item（updated_by=actor.id），flush。\n5. `recompute_progress`（BACKEND-375）。\n6. 回傳 item 與 progress。\n\n**驗收標準**\n- 建立成功並回傳最新 progress（例如原本 done 變 in_progress）。\n- 學生不存在 404、非在學 409、科目無效 422、日期超出範圍 422。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
@@ -9357,7 +9371,8 @@
         "BACKEND-375",
         "BACKEND-371",
         "BACKEND-133",
-        "BACKEND-100"
+        "BACKEND-100",
+        "BACKEND-108"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -9370,7 +9385,7 @@
         "red_cases": [
           "test_create_homework_item_success：王小明今日無作業 → create_item(title='國語習作 p.5', subject=國語) → item.status == 'todo'、item.subject_name == '國語'、progress.overall_status == 'not_started'",
           "test_create_homework_item_resets_done：progress 已 done（全部項目 done）→ 新增 todo → progress.overall_status == 'in_progress'",
-          "test_create_homework_item_validation：uuid4() 學生 → 404 'student_not_found'；withdrawn → 409 'student_not_active'；停用科目 → 422 'invalid_subject'；service_date=today+8 → 422 'invalid_service_date'"
+          "test_create_homework_item_validation：uuid4() 學生 → 404 'student_not_found'；withdrawn → 409 'student_not_active'；停用科目 → 422 'invalid_subject'；homework.window future_days 設為 7 時 service_date=today+8 → 422 'invalid_service_date'；改為 future_days=10 並 invalidate → today+8 成功"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_homework_service.py -k \"test_create_homework_item_\"",
         "notes": ""
@@ -9709,7 +9724,7 @@
           "test_admin_homework_item_create_422：title='' → 422；多帶 'foo' → 422",
           "test_admin_homework_item_create_401：無 cookie → 401",
           "test_admin_homework_item_create_403：只有 homework:read → 403",
-          "test_admin_homework_item_create_business：withdrawn 學生 → 409 student_not_active；停用科目 → 422 invalid_subject"
+          "test_admin_homework_item_create_business：withdrawn 學生 → 409 student_not_active；停用科目 → 422 invalid_subject；homework.window past_days 設為 0 時 service_date=昨天 → 422 invalid_service_date"
         ],
         "run": "just test-int apps/api/tests/integration/api/admin/test_homework_endpoints.py -k \"test_admin_homework_item_create_\"",
         "notes": ""
@@ -10624,7 +10639,7 @@
     {
       "id": "BACKEND-418",
       "title": "實作 PickupPersonService.create_pickup_person：家長新增常用接送人（可附照片）",
-      "description": "在 `apps/api/app/services/pickup/persons.py` 實作：\n```python\nMAX_PICKUP_PERSONS_PER_STUDENT = 10\ndef create_pickup_person(session: Session, student_id: UUID, data: PickupPersonCreateIn, photo: UploadFile | None, *, parent: CurrentParent, storage: Storage) -> PickupPersonOut: ...\n```\n1. 呼叫端已以 `get_owned_student_for_write` 驗證（他人小孩 404、退班 409）。\n2. 未封存接送人已達 10 位 → 409 `pickup_person_limit_reached`。\n3. 先產生 `person_id = uuid4()`；有照片 → `read_validated_upload(photo, allowed=IMAGE_TYPES, max_bytes=5 MiB)` → `build_object_path(person_id, ext)` → `storage.upload('pickup-person-photos', ...)`；StorageError → 502 `storage_unavailable`。\n4. 新增 PickupPerson（id=person_id、created_by_parent_id=parent.id），flush；失敗 → 刪除剛上傳的照片後重新拋出。\n- 移植 ivy `api/parent_portal/pickup.py::create_pickup_person` 與 `services/pickup_photo.py::store_pickup_photo`；去掉一次為多個小孩建立。\n\n**驗收標準**\n- 無照片 / 有照片皆可建立，照片路徑以 person id 為前綴。\n- 超過 10 位 409；非圖片 415；過大 413；Storage 失敗 502 且無資料列。",
+      "description": "在 `apps/api/app/services/pickup/persons.py` 實作：\n```python\ndef create_pickup_person(session: Session, student_id: UUID, data: PickupPersonCreateIn, photo: UploadFile | None, *, parent: CurrentParent, storage: Storage) -> PickupPersonOut: ...\n```\n1. 呼叫端已以 `get_owned_student_for_write` 驗證（他人小孩 404、退班 409）。\n2. 未封存接送人已達 `get_setting(session, PICKUP_PERSONS).max_per_student`（預設 10）→ 409 `pickup_person_limit_reached`（details.max_per_student）。\n3. 先產生 `person_id = uuid4()`；有照片 → `read_validated_upload(photo, allowed=IMAGE_TYPES, max_bytes=5 MiB)` → `build_object_path(person_id, ext)` → `storage.upload('pickup-person-photos', ...)`；StorageError → 502 `storage_unavailable`。\n4. 新增 PickupPerson（id=person_id、created_by_parent_id=parent.id），flush；失敗 → 刪除剛上傳的照片後重新拋出。\n- 移植 ivy `api/parent_portal/pickup.py::create_pickup_person` 與 `services/pickup_photo.py::store_pickup_photo`；去掉一次為多個小孩建立。\n\n**驗收標準**\n- 無照片 / 有照片皆可建立，照片路徑以 person id 為前綴。\n- 達到 pickup.persons.max_per_student 時 409；非圖片 415；過大 413；Storage 失敗 502 且無資料列。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/persons.py",
       "source_ref": "BE:api/parent_portal/pickup.py::create_pickup_person",
@@ -10635,7 +10650,8 @@
         "BACKEND-402",
         "BACKEND-013",
         "BACKEND-015",
-        "BACKEND-016"
+        "BACKEND-016",
+        "BACKEND-108"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -10648,7 +10664,7 @@
         "red_cases": [
           "test_create_pickup_person_with_photo：JPEG 照片 → 回傳 photo_url 非 null；PickupPerson.photo_path 以 f'{person.id}/' 開頭、created_by_parent_id == parent.id",
           "test_create_pickup_person_without_photo：photo=None → photo_url is None",
-          "test_create_pickup_person_limit：已有 10 位 → 409 'pickup_person_limit_reached'",
+          "test_create_pickup_person_limit：pickup.persons max_per_student 設為 2 且已有 2 位 → 409 'pickup_person_limit_reached'，details.max_per_student == 2",
           "test_create_pickup_person_file_errors：PDF 照片 → 415 'unsupported_file_type'；FakeStorage.upload 拋 StorageError → 502 'storage_unavailable' 且 pickup_persons 筆數不變"
         ],
         "run": "just test-int apps/api/tests/integration/services/pickup/test_pickup_persons.py -k \"test_create_pickup_person_\"",
@@ -10697,7 +10713,7 @@
     {
       "id": "BACKEND-420",
       "title": "實作 PickupAuthorizationService.create_authorization：家長建立單日代理接送授權（產生接送碼）",
-      "description": "在 `apps/api/app/services/pickup/authorizations.py` 實作（domain_spec M7：單日代理接送授權）：\n```python\nPICKUP_AUTH_MAX_FUTURE_DAYS = 14\nMAX_ACTIVE_AUTHORIZATIONS_PER_DAY = 3\ndef create_authorization(session: Session, student_id: UUID, data: PickupAuthorizationCreateIn, *, parent: CurrentParent, clock: Clock) -> PickupAuthorizationCreatedOut: ...\n```\n1. 呼叫端已以 `get_owned_student_for_write` 驗證。\n2. `today ≤ service_date ≤ today + 14` → 否則 422 `invalid_service_date`（移植 ivy `_MAX_FUTURE_DAYS = 14`）。\n3. pickup_person_id 模式：接送人存在、未封存、`student_id` 相同 → 否則 404 `pickup_person_not_found`；proxy_name / proxy_phone 由接送人快照。\n4. 同學生同日 active 授權已有 3 筆 → 409 `authorization_limit_reached`。\n5. `code = generate_pickup_code()` → code_hash、code_last4（BACKEND-400）；status active、created_by_parent_id。\n6. broadcast `pickup.authorization_updated`（topic pickup，admin 完整資料；不含 code）。\n7. 回傳 `PickupAuthorizationCreatedOut(authorization, code)`：**明碼只在這個回應出現一次**，DB 與 log 都不保存明碼。家長遺失接送碼時以 BACKEND-523 重新產生。\n- 移植 ivy `api/parent_portal/pickup.py::create_authorizations` 的日期範圍、接送人快照；去掉一次多孩、batch_key、可逆加密、連動建立 dismissal_call、儲存為常用接送人選項。\n\n**驗收標準**\n- 兩種模式建立成功，code 為 6 位數字且 `pickup_code_matches(code, code_hash)`；code_last4 正確。\n- DB 中找不到明碼（code_hash 欄位不等於明碼、無其他欄位含明碼）。\n- 日期超出範圍 422；他人 / 已封存接送人 404；超過上限 409。",
+      "description": "在 `apps/api/app/services/pickup/authorizations.py` 實作（domain_spec M7：單日代理接送授權）：\n```python\ndef create_authorization(session: Session, student_id: UUID, data: PickupAuthorizationCreateIn, *, parent: CurrentParent, clock: Clock) -> PickupAuthorizationCreatedOut: ...\n```\n1. 呼叫端已以 `get_owned_student_for_write` 驗證。\n2. `s = get_setting(session, PICKUP_AUTHORIZATION)`；`today ≤ service_date ≤ today + s.max_days_ahead`（預設 14，承襲 ivy `_MAX_FUTURE_DAYS`）→ 否則 422 `invalid_service_date`。\n3. pickup_person_id 模式：接送人存在、未封存、`student_id` 相同 → 否則 404 `pickup_person_not_found`；proxy_name / proxy_phone 由接送人快照。\n4. 同學生同日 active 授權已達 `s.max_active_per_day`（預設 3）→ 409 `authorization_limit_reached`。\n5. `code = generate_pickup_code()` → code_hash、code_last4（BACKEND-400）；status active、created_by_parent_id。\n6. broadcast `pickup.authorization_updated`（topic pickup，admin 完整資料；不含 code）。\n7. 回傳 `PickupAuthorizationCreatedOut(authorization, code)`：**明碼只在這個回應出現一次**，DB 與 log 都不保存明碼。家長遺失接送碼時以 BACKEND-523 重新產生。\n- 移植 ivy `api/parent_portal/pickup.py::create_authorizations` 的日期範圍、接送人快照；去掉一次多孩、batch_key、可逆加密、連動建立 dismissal_call、儲存為常用接送人選項。\n\n**驗收標準**\n- 兩種模式建立成功，code 為 6 位數字且 `pickup_code_matches(code, code_hash)`；code_last4 正確。\n- DB 中找不到明碼（code_hash 欄位不等於明碼、無其他欄位含明碼）。\n- 日期超出 pickup.authorization 設定範圍 422；他人 / 已封存接送人 404；達到設定上限 409。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:api/parent_portal/pickup.py::create_authorizations",
@@ -10708,7 +10724,8 @@
         "BACKEND-401",
         "BACKEND-402",
         "BACKEND-224",
-        "BACKEND-002"
+        "BACKEND-002",
+        "BACKEND-108"
       ],
       "suggested_model": "fable-5",
       "risk_notes": "",
@@ -10722,7 +10739,7 @@
           "test_create_authorization_proxy：proxy_name '李阿姨'、proxy_phone '0912-000-101'、service_date today → 回傳 code 符合 ^\\d{6}$、authorization.code_last4 == code[-4:]、status 'active'；pickup_code_matches(code, row.code_hash) is True",
           "test_create_authorization_from_person：pickup_person_id=李阿姨 → proxy_name == '李阿姨'、pickup_person_id 已填",
           "test_create_authorization_no_plaintext_stored：建立後以 SQL 查 pickup_authorizations 該列所有欄位的字串表示 → 皆不等於明碼",
-          "test_create_authorization_validation：service_date=today+15 → 422 'invalid_service_date'；昨天 → 422；他人小孩的接送人 → 404 'pickup_person_not_found'；同日已有 3 筆 active → 409 'authorization_limit_reached'"
+          "test_create_authorization_validation：pickup.authorization max_days_ahead 設為 14 時 service_date=today+15 → 422 'invalid_service_date'、today+14 → 成功；昨天 → 422；他人小孩的接送人 → 404 'pickup_person_not_found'；max_active_per_day 設為 1 且同日已有 1 筆 active → 409 'authorization_limit_reached'"
         ],
         "run": "just test-int apps/api/tests/integration/services/pickup/test_pickup_authorizations.py -k \"test_create_authorization_\"",
         "notes": ""
@@ -11696,7 +11713,7 @@
           "test_parent_pickup_person_create_422：phone='abc' → 422；缺 name → 422",
           "test_parent_pickup_person_create_401：無 cookie → 401",
           "test_parent_pickup_person_create_idor：他人小孩 → 404 student_not_found，fake_storage.objects 為空",
-          "test_parent_pickup_person_create_business：退班小孩 → 409 student_not_active；PDF 照片 → 415 unsupported_file_type；第 11 位 → 409 pickup_person_limit_reached"
+          "test_parent_pickup_person_create_business：退班小孩 → 409 student_not_active；PDF 照片 → 415 unsupported_file_type；max_per_student 設為 10 時第 11 位 → 409 pickup_person_limit_reached"
         ],
         "run": "just test-int apps/api/tests/integration/api/parent/test_pickup_endpoints.py -k \"test_parent_pickup_person_create_\"",
         "notes": "家長端無權限碼，403 以 IDOR 404 取代（業務上的 403 pickup_not_allowed 另測）。"
@@ -11813,10 +11830,10 @@
         ],
         "red_cases": [
           "test_parent_pickup_auth_create_success：proxy 模式 → 201 code 符合 ^\\d{6}$、authorization.code_last4 == code[-4:]、cache-control == 'no-store'",
-          "test_parent_pickup_auth_create_422：同時給 pickup_person_id 與 proxy_name → 422；service_date=today+15 → 422 invalid_service_date",
+          "test_parent_pickup_auth_create_422：同時給 pickup_person_id 與 proxy_name → 422；max_days_ahead 設為 14 時 service_date=today+15 → 422 invalid_service_date",
           "test_parent_pickup_auth_create_401：無 cookie → 401",
           "test_parent_pickup_auth_create_idor：他人小孩 → 404 student_not_found；他人小孩的接送人 id → 404 pickup_person_not_found",
-          "test_parent_pickup_auth_create_409：同日已有 3 筆 active → 409 authorization_limit_reached；退班小孩 → 409 student_not_active"
+          "test_parent_pickup_auth_create_409：max_active_per_day 設為 3 且同日已有 3 筆 active → 409 authorization_limit_reached；退班小孩 → 409 student_not_active"
         ],
         "run": "just test-int apps/api/tests/integration/api/parent/test_pickup_endpoints.py -k \"test_parent_pickup_auth_create_\"",
         "notes": "家長端無權限碼，403 以 IDOR 404 取代（業務上的 403 pickup_not_allowed 另測）。"
@@ -12110,8 +12127,8 @@
           "integration"
         ],
         "red_cases": [
-          "test_update_exam_draft：draft 改 grade_level 4 → 成功；改 name → 成功",
-          "test_update_exam_published_scope_locked：published 改 class_id → 409 'exam_published'；改 note → 成功",
+          "test_update_exam_draft：draft（grade_level=3）PATCH grade_level=4 → ExamOut.grade_level == 4；PATCH name='第一次段考（補考）' → name == '第一次段考（補考）'",
+          "test_update_exam_published_scope_locked：published（class_id=班A）PATCH class_id=班B → 409 'exam_published' 且 DB class_id 仍為班A；PATCH note='延後一週' → note == '延後一週'",
           "test_update_exam_scope_required：只有 grade_level 的考試 PATCH grade_level=None → 422 'exam_scope_required'"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_exam_service.py -k \"test_update_exam_\"",
@@ -13362,7 +13379,7 @@
           "integration"
         ],
         "red_cases": [
-          "test_nfc_device_roster：兩位 active（一位 present）→ items 長度 2、attendance_status 正確",
+          "test_nfc_device_roster：班A 王小明（S001，present）、陳小華（S002，expected 列）→ items == [{'student_id': 王小明.id, 'name':'王小明','class_name':'低年級A班','attendance_status':'present'}, {'student_id': 陳小華.id, 'name':'陳小華','class_name':'低年級A班','attendance_status':'expected'}]（依 student_no 排序）",
           "test_nfc_device_roster_no_sensitive：model_dump_json() 不含 'id_number' 與 'health_note'"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_nfc_punch_service.py -k \"test_nfc_device_roster\"",
@@ -13524,7 +13541,7 @@
     {
       "id": "BACKEND-510",
       "title": "實作 GET /api/admin/nfc/cards endpoint（blocked）",
-      "description": "建立 / 沿用 `apps/api/app/api/admin/nfc.py`（`router = APIRouter(prefix='/nfc', tags=['admin-nfc'])`，掛到 admin_router；路徑待決）。\n- 權限碼 `nfc:manage`（預設只授予 admin，admin 的 `*` 自動涵蓋）。**BACKEND-070 的 Permission enum 與 DB-035 角色 seed 目前不加入此碼**，NFC 解除 blocked 時再一併加入 enum（`Permission.NFC_MANAGE`）、前端常數與一致性測試。端點掛 `Depends(require_permission(Permission.NFC_MANAGE))`。\n- `GET /api/admin/nfc/cards?student_id=&status=&page=&page_size=` → BACKEND-507 → 200 `Page[NfcCardOut]`。\n\n**驗收標準**\n- 成功；422；401；403（缺 nfc:manage）；業務錯誤碼如 red_cases；route audit 通過。",
+      "description": "建立 / 沿用 `apps/api/app/api/admin/nfc.py`（`router = APIRouter(prefix='/nfc', tags=['admin-nfc'])`，掛到 admin_router；路徑待決）。\n- 權限碼 `nfc:manage`（預設只授予 admin，admin 的 `*` 自動涵蓋）。**BACKEND-070 的 Permission enum 與 DB-035 角色 seed 目前不加入此碼**，NFC 解除 blocked 時再一併加入 enum（`Permission.NFC_MANAGE`）、前端常數與一致性測試。端點掛 `Depends(require_permission(Permission.NFC_MANAGE))`。\n- **本 task 負責在解除 blocked 時新增 `Permission.NFC_MANAGE = \"nfc:manage\"`**：更新 BACKEND-070 的 enum、label、group（新增 `nfc` 分組）與計數測試（28 → 29），BACKEND-071 的 director 期望集合同步排除 nfc:manage，並通知 FRONTEND 更新權限常數。\n- `GET /api/admin/nfc/cards?student_id=&status=&page=&page_size=` → BACKEND-507 → 200 `Page[NfcCardOut]`。\n\n**驗收標準**\n- 成功；422；401；403（缺 nfc:manage）；業務錯誤碼如 red_cases；route audit 通過。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/nfc.py",
       "source_ref": null,
@@ -13550,7 +13567,8 @@
           "test_admin_nfc_cards_list_422：status=gone → 422",
           "test_admin_nfc_cards_list_401：無 cookie → 401",
           "test_admin_nfc_cards_list_403：staff_client(permissions=['students:write']) 缺 nfc:manage → 403 permission_denied",
-          "test_admin_nfc_cards_list_empty：student_id=uuid4() → 200 total 0"
+          "test_admin_nfc_cards_list_empty：student_id=uuid4() → 200 total 0",
+          "test_admin_nfc_permission_enum：'nfc:manage' in {p.value for p in Permission} 且 len(ALL_PERMISSIONS) == 29；PERMISSION_GROUPS 中 key 'nfc' 的 permissions == (Permission.NFC_MANAGE,)"
         ],
         "run": "just test-int apps/api/tests/integration/api/admin/test_nfc_endpoints.py -k \"test_admin_nfc_cards_list_\"",
         "notes": ""
@@ -13911,7 +13929,7 @@
     {
       "id": "BACKEND-521",
       "title": "實作 StaffUserService.activate：重新啟用已停用的員工帳號（臨時密碼、強制改密碼、稽核）",
-      "description": "在 `apps/api/app/services/staff_user_service.py` 實作停用帳號的重新啟用（使用者裁定：停用的員工帳號可以重新啟用）：\n```python\ndef activate(session: Session, staff_id: UUID, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> StaffUserCreatedOut: ...\n```\n1. `select ... FOR UPDATE`；不存在 → 404 `staff_user_not_found`。\n2. `assert_can_manage_staff`（BACKEND-074）→ 權限較大的帳號 403 `cannot_manage_staff`。\n3. 已啟用 → 409 `staff_already_active`（不冪等回傳：每次啟用都會產生新臨時密碼，重複呼叫應明確失敗）。\n4. `is_active = true`、以 `generate_temp_password()`（BACKEND-032）產生臨時密碼並 `hash_password`（BACKEND-031）、`must_change_password = true`。token_version 不變動（停用時已 +1，舊 token 早已失效）；refresh token 停用時已全部撤銷，不需再處理。\n5. 稽核 `staff_user.activate`（before `{'is_active': False}`、after `{'is_active': True, 'must_change_password': True}`，**不含密碼**）（BACKEND-102）。\n6. 回傳 `StaffUserCreatedOut(user, temp_password)`（BACKEND-086；臨時密碼只在此回傳一次）。\n- 不需 `assert_admin_capabilities_retained`（啟用只會增加可用帳號）。\n\n**驗收標準**\n- 停用帳號啟用後 is_active=true、must_change_password=true，回傳的臨時密碼可通過 verify_password、舊密碼失效。\n- token_version 與啟用前相同。\n- 已啟用 409；權限較大者 403；不存在 404。\n- audit 'staff_user.activate' 存在且不含臨時密碼。",
+      "description": "在 `apps/api/app/services/staff_user_service.py` 實作停用帳號的重新啟用（使用者裁定：停用的員工帳號可以重新啟用）：\n```python\ndef activate(session: Session, staff_id: UUID, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> StaffUserCreatedOut: ...\n```\n1. `select ... FOR UPDATE`；不存在 → 404 `staff_user_not_found`。\n2. `assert_can_manage_staff`（BACKEND-534）→ 權限較大的帳號 403 `cannot_manage_staff`。\n3. 已啟用 → 409 `staff_already_active`（不冪等回傳：每次啟用都會產生新臨時密碼，重複呼叫應明確失敗）。\n4. `is_active = true`、以 `generate_temp_password()`（BACKEND-032）產生臨時密碼並 `hash_password`（BACKEND-031）、`must_change_password = true`。token_version 不變動（停用時已 +1，舊 token 早已失效）；refresh token 停用時已全部撤銷，不需再處理。\n5. 稽核 `staff_user.activate`（before `{'is_active': False}`、after `{'is_active': True, 'must_change_password': True}`，**不含密碼**）（BACKEND-102）。\n6. 回傳 `StaffUserCreatedOut(user, temp_password)`（BACKEND-086；臨時密碼只在此回傳一次）。\n- 不需 `assert_admin_capabilities_retained`（啟用只會增加可用帳號）。\n\n**驗收標準**\n- 停用帳號啟用後 is_active=true、must_change_password=true，回傳的臨時密碼可通過 verify_password、舊密碼失效。\n- token_version 與啟用前相同。\n- 已啟用 409；權限較大者 403；不存在 404。\n- audit 'staff_user.activate' 存在且不含臨時密碼。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": null,
@@ -13923,7 +13941,8 @@
         "BACKEND-031",
         "BACKEND-032",
         "BACKEND-086",
-        "BACKEND-102"
+        "BACKEND-102",
+        "BACKEND-534"
       ],
       "suggested_model": "fable-5",
       "risk_notes": "",
@@ -14219,6 +14238,248 @@
         ],
         "run": "just test-int apps/api/tests/integration/api/admin/test_staff_users_endpoints.py -k \"test_admin_staff_options_\"",
         "notes": "無 query / body 參數，422 不適用；以路由順序案例確認 path 不被 /{staff_id} 的 UUID 驗證攔截。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-529",
+      "title": "實作 StudentService.close_out_inactive_student：學生停讀 / 退班時同交易收尾接送、代理授權、出勤與請假",
+      "description": "在 `apps/api/app/services/student_service.py` 實作（domain_spec M3：學生狀態改為 suspended 或 withdrawn 時，同一交易內自動收尾；已發生的紀錄保留）。由 BACKEND-152 update_student 與 BACKEND-158 學年升級呼叫。\n```python\n@dataclass(frozen=True)\nclass CloseOutResult:\n    cancelled_pickup_requests: int\n    cancelled_authorizations: int\n    cancelled_leaves: int\n    truncated_leaves: int\n    deleted_attendance_dates: list[date]\n\ndef close_out_inactive_student(session: Session, student: Student, *, actor: CurrentStaff, clock: Clock) -> CloseOutResult: ...\n```\ntoday = clock.today()，依序：\n1. **請假**：該生 active 且 `end_date >= today` 的請假——`start_date >= today` → 整筆 cancelled（cancelled_by_type='staff'、cancelled_by_id=actor.id），`revert_attendance_for_leave(leave)`；已開始 → `end_date = today - 1`，`revert_attendance_for_leave(leave, from_date=today)`（BACKEND-343）。不發 leave.cancelled 通知（員工本身就是操作者）。\n2. **出勤**：刪除 `service_date >= today and status = 'expected'` 的列（含第 1 步剛還原的列）；present / left / absent 與過去的列保留。\n3. **接送請求**：該生所有非終態請求（不限日期）以條件式更新改為 cancelled，cancel_reason = '學生已停讀' 或 '學生已退班'（依新狀態）；逐筆 `publish_request_change`（BACKEND-404）。不發 pickup.cancelled（避免家長收到系統性取消通知；家長端畫面經 ws 更新）。\n4. **代理授權**：`status='active' and service_date >= today` 改為 cancelled；broadcast `pickup.authorization_updated`。\n5. 有任何刪除的出勤 → broadcast `attendance.bulk_updated`。\n6. 稽核 `student.close_out`（after：上述各計數與新狀態，不含個資）（BACKEND-102）。\n- 冪等：沒有可收尾的資料時各計數為 0，仍寫 audit（記錄狀態轉換時點）。\n- 不 commit；與 update_student 同交易，任何一步失敗整筆回滾。\n\n**驗收標準**\n- 進行中接送請求 cancelled（已完成的不動）。\n- 今天起的 active 代理授權 cancelled（過去日期與已核銷的不動）。\n- 今天起 expected 出勤刪除；present / left / absent 與過去的列保留。\n- 未開始請假 cancelled、已開始請假 end_date 截到昨天，對應出勤還原後被刪除。\n- audit student.close_out 計數正確；整體與呼叫端同交易。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/services/student_service.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "BACKEND-131",
+        "BACKEND-300",
+        "BACKEND-340",
+        "BACKEND-343",
+        "BACKEND-401",
+        "BACKEND-404",
+        "BACKEND-224",
+        "BACKEND-102",
+        "BACKEND-002"
+      ],
+      "suggested_model": "opus-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/services/test_student_service.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_close_out_pickup_requests：王小明今日 pending 請求、昨天 completed 請求 → close_out → 今日請求 status 'cancelled'、cancel_reason == '學生已退班'（student.status='withdrawn'）；昨天 completed 不變；result.cancelled_pickup_requests == 1",
+          "test_close_out_authorizations：active 授權 今天 / 明天 / 昨天 各一、completed 今天一筆 → 今天與明天的 active 變 cancelled，昨天 active 與今天 completed 不變；result.cancelled_authorizations == 2",
+          "test_close_out_attendance：今天 9/9；9/8 present、9/9 expected、9/10 expected、9/9 另一位學生 expected → close_out(王小明) 後王小明 9/9、9/10 列被刪、9/8 present 保留；另一位學生不受影響；deleted_attendance_dates == [9/9, 9/10]",
+          "test_close_out_leaves：今天 9/9；請假 A 9/7~9/11（9/9 出勤 leave）、請假 B 9/15~9/16 → A.end_date == 9/8 且 status 'active'、9/9 出勤列被刪除；B status 'cancelled'、cancelled_by_type 'staff'；truncated_leaves == 1、cancelled_leaves == 1；notifications(event='leave.cancelled') 0 列",
+          "test_close_out_keeps_history_and_audit：9/1 left 出勤、已 published 成績、completed 接送紀錄 → 全部保留；audit_logs action 'student.close_out' after 含各計數且不含學生姓名",
+          "test_close_out_rollback_with_caller：close_out 後 db_session.rollback() → 請求、授權、出勤、請假全部回原狀"
+        ],
+        "run": "just test-int apps/api/tests/integration/services/test_student_service.py -k \"test_close_out_\"",
+        "notes": ""
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-530",
+      "title": "實作 StudentService.purge_student：永久刪除（匿名化）已封存的退班學生",
+      "description": "在 `apps/api/app/services/student_service.py` 實作（domain_spec M3 個資保存：admin 以 `students:purge` 對已封存且 withdrawn 的學生執行永久刪除——匿名化並清除個資，出勤、成績等統計紀錄保留但不可識別）：\n```python\ndef purge_student(session: Session, student_id: UUID, data: StudentPurgeIn, *, actor: CurrentStaff, storage: Storage, meta: RequestMeta, clock: Clock) -> StudentPurgeOut: ...\n```\n1. `actor.has(Permission.STUDENTS_PURGE)` 否則 403 `permission_denied`（endpoint 已守衛，service 縱深防禦）。\n2. `get_student_or_404(include_archived=True, for_update=True)`；`archived_at is null` 或 `status != 'withdrawn'` → 409 `student_not_purgeable`；已有 audit `student.purge`（entity_id = student_id）→ 409 `student_already_purged`。\n3. `data.confirm_student_no != student.student_no` → 422 `purge_confirmation_mismatch`（二次確認，防誤刪）。\n4. 匿名化學生：name='已刪除學生'、student_no=`f\"DEL-{uuid4().hex[:8]}\"`、gender / birthday / school_class / note / photo_path / id_number_enc / id_number_hmac / health_note_enc 全部清為 null；保留 grade_level、school_id、class_id、status、enrolled_on、withdrawn_on、archived_at（統計用）。\n5. 監護人：該生全部 guardians → name='已刪除'、phone=null、parent_account_id=null、is_primary=false、archived_at=now（若未封存）；刪除這些 guardian 的 parent_binding_codes。家長帳號本身不刪（可能綁定其他小孩）。\n6. 接送：pickup_persons → name='已刪除'、phone='00000000'（DB CHECK 格式）、photo_path=null、archived_at=now；pickup_authorizations → proxy_name='已刪除'、proxy_phone='00000000'。\n7. 請假：student_leaves.reason=null；student_leave_attachments 刪除列。出勤 note、exam_scores.note 清為 null（可能含姓名的自由文字）。\n8. 站內通知：刪除 `payload->>'student_id' = student_id` 的 notifications（含學生姓名的收件匣內容；outbox 隨 FK cascade）。\n9. Storage：學生照片、請假附件、接送人照片的物件路徑收集後以 `run_after_commit(session, lambda: storage.delete(...))`（BACKEND-006 / 015）刪除；commit 失敗不刪，刪除失敗只記 log。\n10. 稽核 `student.purge`（entity_type 'student'、entity_id、after `{'guardians': n, 'pickup_persons': m, 'attachments': k, 'notifications': j}`；**不含任何姓名、學號、電話**）（BACKEND-102）。\n- 保留：student_attendances、homework_*、pickup_requests、exam_scores 的列（統計），只清自由文字欄位。\n- audit_logs 為 append-only（DB-006），既有稽核內容不改寫；其中敏感欄位本來就已遮罩（BACKEND-102）。\n\n**驗收標準**\n- 未封存或非 withdrawn → 409；確認學號不符 → 422；重複執行 → 409；無權限 → 403。\n- 學生、監護人、接送人、代理授權的個資欄位被匿名化或清除；綁定碼與附件列刪除；相關通知刪除。\n- 出勤、成績、接送紀錄列保留且數量不變。\n- commit 後 Storage 物件被刪除；rollback 時不刪。\n- audit 不含個資。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/services/student_service.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "BACKEND-148",
+        "BACKEND-131",
+        "BACKEND-132",
+        "BACKEND-340",
+        "BACKEND-401",
+        "BACKEND-200",
+        "BACKEND-015",
+        "BACKEND-006",
+        "BACKEND-102",
+        "BACKEND-070",
+        "BACKEND-002"
+      ],
+      "suggested_model": "fable-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/services/test_student_service.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_purge_student_preconditions：在學學生 → 409 'student_not_purgeable'；withdrawn 但未封存 → 409；confirm_student_no='WRONG' → 422 'purge_confirmation_mismatch'；actor 只有 students:write → 403 'permission_denied'",
+          "test_purge_student_anonymizes：封存 withdrawn 的王小明（S115001，身分證、健康備註、照片、note）→ purge(confirm_student_no='S115001') → name == '已刪除學生'、student_no 符合 ^DEL-[0-9a-f]{8}$、id_number_enc / id_number_hmac / health_note_enc / photo_path / birthday / note 皆 None、grade_level 與 class_id 不變",
+          "test_purge_student_guardians_and_pickup：監護人王媽媽（綁 parent p、有未使用綁定碼）、接送人李阿姨（有照片）、代理授權 proxy '李阿姨' → guardian.name == '已刪除'、phone None、parent_account_id None；parent_binding_codes 0 筆；pickup_person.name == '已刪除'、photo_path None；authorization.proxy_name == '已刪除'；parent_accounts p 仍存在",
+          "test_purge_student_keeps_statistics：出勤 5 列（其中 1 列 note '王小明發燒'）、成績 3 列、接送紀錄 2 列 → 數量不變，出勤 note 皆 None；請假附件 0 列、請假 reason None；notifications(payload.student_id == 王小明) 0 列",
+          "test_purge_student_storage_after_commit：committing session；照片、附件、接送人照片 3 個物件 → commit 後 fake_storage.objects 不含這 3 個 path；另一案例 purge 後 rollback → 3 個物件仍在",
+          "test_purge_student_audit_and_idempotent：audit 'student.purge' 1 筆，json.dumps(after) 不含 '王小明'、'S115001'、'0912'；再次 purge → 409 'student_already_purged'"
+        ],
+        "run": "just test-int apps/api/tests/integration/services/test_student_service.py -k \"test_purge_student_\"",
+        "notes": ""
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-531",
+      "title": "實作 POST /api/admin/students/{id}/purge endpoint（永久刪除，students:purge）",
+      "description": "在 `apps/api/app/api/admin/students.py`（BACKEND-159 的 router）新增：\n- `POST /api/admin/students/{student_id}/purge`，`Depends(require_permission(Permission.STUDENTS_PURGE))`（預設只有 admin），body `StudentPurgeIn{confirm_student_no}`，注入 `get_storage`、`get_request_meta` → BACKEND-530 → commit → 200 `StudentPurgeOut{student_id, purged_at, anonymized_student_no}`。\n\n**驗收標準**\n- 200 且學生資料已匿名化；422（缺 confirm_student_no / 確認不符）；401；403（缺 students:purge，director 也無）；409（未封存、非 withdrawn、已刪除過）；route audit 通過。",
+      "granularity_unit": "endpoint",
+      "target_path": "apps/api/app/api/admin/students.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "BACKEND-530",
+        "BACKEND-159",
+        "BACKEND-011",
+        "BACKEND-073",
+        "BACKEND-023"
+      ],
+      "suggested_model": "fable-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/api/admin/test_students_endpoints.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_admin_students_purge_success：staff_client(role_code='admin') 對封存 withdrawn 的 S115001 POST {'confirm_student_no':'S115001'} → 200 anonymized_student_no 符合 ^DEL-；GET /api/admin/students/{id}（include_archived）name == '已刪除學生'",
+          "test_admin_students_purge_422：{} → 422；{'confirm_student_no':'S999999'} → 422 purge_confirmation_mismatch",
+          "test_admin_students_purge_401：無 cookie → 401",
+          "test_admin_students_purge_403：staff_client(role_code='director') → 403 permission_denied（director 沒有 students:purge）",
+          "test_admin_students_purge_409：在學學生 → 409 student_not_purgeable；同一學生第二次 → 409 student_already_purged"
+        ],
+        "run": "just test-int apps/api/tests/integration/api/admin/test_students_endpoints.py -k \"test_admin_students_purge_\"",
+        "notes": ""
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-532",
+      "title": "實作 build_import_template：依匯入欄位定義產生學生 Excel 範本",
+      "description": "建立 `apps/api/app/services/student_import_template.py`（domain_spec M3：Excel 匯入只支援後台提供的範本，範本由後端依匯入欄位定義產生）：\n```python\ndef build_import_template() -> bytes: ...\n```\n- 工作表「學生資料」：第 1 列為 `IMPORT_COLUMNS`（BACKEND-155，同一常數，欄位順序一致），必填欄（帶 `*`）標題以粗體 + 淡黃底；凍結第 1 列；欄寬依標題調整；無資料列。\n- 資料驗證（openpyxl DataValidation，下拉選單）：性別「男,女,其他」、狀態「在學,暫停,退班」、年級「1~6」整數。\n- 工作表「說明」：逐欄列出欄名、是否必填、格式說明（日期 YYYY-MM-DD、身分證需 students:sensitive 權限才能匯入、就讀國小 / 安親班班級需與系統名稱一致）。\n- 純函式，不碰 DB。\n\n**驗收標準**\n- 範本第 1 列與 IMPORT_COLUMNS 完全相同；以範本直接上傳 BACKEND-155 preview → 422 import_empty（標題通過、無資料），而非 import_invalid_header。\n- 性別 / 狀態欄有下拉驗證；說明工作表涵蓋每一欄。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/services/student_import_template.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "BACKEND-155"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/unit/services/test_student_import_template.py",
+        "markers": [
+          "unit"
+        ],
+        "red_cases": [
+          "test_import_template_header：load_workbook(BytesIO(build_import_template()))['學生資料'] 第 1 列值 == IMPORT_COLUMNS，A1 字型為粗體，freeze_panes == 'A2'，max_row == 1",
+          "test_import_template_validations：'學生資料' 的 data_validations 中有 formula1 == '\"男,女,其他\"' 且套用在性別欄、'\"在學,暫停,退班\"' 套用在狀態欄",
+          "test_import_template_help_sheet：'說明' 工作表 A 欄（第 2 列起）的欄名集合 == set(IMPORT_COLUMNS)",
+          "test_import_template_passes_header_check：讀範本第 1 列交給 check_header（BACKEND-155）→ ([], [])"
+        ],
+        "run": "just test apps/api/tests/unit/services/test_student_import_template.py -k \"test_import_template_\"",
+        "notes": ""
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-533",
+      "title": "實作 GET /api/admin/students/import-template endpoint（下載匯入範本）",
+      "description": "在 `apps/api/app/api/admin/students.py`（BACKEND-159 的 router）新增：\n- `GET /api/admin/students/import-template`，`Depends(require_permission(Permission.STUDENTS_WRITE))` → BACKEND-532 → 200 xlsx：`Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`、`Content-Disposition: attachment; filename*=UTF-8''<urlencoded 學生匯入範本.xlsx>`、`Cache-Control: no-store`。\n- 路由必須註冊在 `/students/{student_id}` 之前（與 import / promote-grade 相同）。\n\n**驗收標準**\n- 200 回傳可讀的 xlsx 且標題列正確；401；403（缺 students:write）；路由不被 `/{student_id}` 攔截；route audit 通過。",
+      "granularity_unit": "endpoint",
+      "target_path": "apps/api/app/api/admin/students.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "BACKEND-532",
+        "BACKEND-159",
+        "BACKEND-073",
+        "BACKEND-023"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/api/admin/test_students_endpoints.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_admin_students_import_template_success：staff_client(permissions=['students:write']) → 200，content-type 為 xlsx、content-disposition 含 \"filename*=UTF-8''\"，load_workbook 後 '學生資料' 第 1 列 == IMPORT_COLUMNS",
+          "test_admin_students_import_template_route_order：GET /api/admin/students/import-template 不回 422（未被 /{student_id} 的 UUID 驗證攔截）",
+          "test_admin_students_import_template_401：無 cookie → 401",
+          "test_admin_students_import_template_403：staff_client(permissions=['students:read']) → 403 permission_denied",
+          "test_admin_students_import_template_method：POST /api/admin/students/import-template → 405 method_not_allowed"
+        ],
+        "run": "just test-int apps/api/tests/integration/api/admin/test_students_endpoints.py -k \"test_admin_students_import_template_\"",
+        "notes": "無 query / body 參數，422 不適用；以路由順序與 405 案例取代。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-534",
+      "title": "實作 assert_can_manage_staff：防止管理權限比自己大的員工帳號",
+      "description": "在 `apps/api/app/services/rbac_guards.py`（BACKEND-074 建立的檔案）實作員工帳號管理守衛（自 BACKEND-074 拆出）。移植 ivy `api/auth.py::_assert_can_manage_user` 的精神；去掉 scope 判斷。\n```python\ndef assert_can_manage_staff(actor: CurrentStaff, target_effective: frozenset[str]) -> None: ...\n```\n- 目標帳號的有效權限 ⊄ actor.permissions → `ForbiddenError(code='cannot_manage_staff', message='無法管理權限比您大的帳號')`（主任不能修改 / 重設密碼 / 停用 / 啟用 admin 帳號）。\n- actor 有效權限 == ALL_PERMISSIONS（admin）時自然通過；目標權限為空集合時通過。\n- 使用者：BACKEND-090 update、091 reset_password、092 deactivate、521 activate。\n\n**驗收標準**\n- 目標權限為 actor 子集合 → 通過；超出 → 403 cannot_manage_staff。\n- admin actor 對任何帳號通過。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/services/rbac_guards.py",
+      "source_ref": "BE:api/auth.py::_assert_can_manage_user",
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "BACKEND-074",
+        "BACKEND-072",
+        "BACKEND-047"
+      ],
+      "suggested_model": "fable-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/unit/services/test_rbac_guards.py",
+        "markers": [
+          "unit"
+        ],
+        "red_cases": [
+          "test_rbac_cannot_manage_stronger_staff：actor = director 有效權限（ALL_PERMISSIONS - {'staff:write','roles:write','students:purge'}，25 碼），target_effective = ALL_PERMISSIONS → ForbiddenError code 'cannot_manage_staff'",
+          "test_rbac_can_manage_weaker_staff：同 actor，target = tutor 預設權限（12 碼）→ 不拋；target = frozenset() → 不拋",
+          "test_rbac_admin_manages_all：actor permissions == ALL_PERMISSIONS、target == ALL_PERMISSIONS → 不拋"
+        ],
+        "run": "just test apps/api/tests/unit/services/test_rbac_guards.py -k \"test_rbac_cannot_manage or test_rbac_can_manage or test_rbac_admin_manages\"",
+        "notes": ""
       },
       "review": {
         "status": "pending",
