@@ -5,6 +5,10 @@
 - fake_bin：在 tmp_path/bin 建立假的 supabase / uv / pnpm / docker / just 等指令並記錄呼叫。
 - local_db_url / local_db_conn：只允許本機 loopback 的 DB 連線（integration 專用）。
 
+loopback 守衛是唯一防線：psycopg 走 libpq 的 C socket，pytest-socket 攔不到。libpq 實際連線的
+位址可被 URL query（host / hostaddr / service）與環境變數（PGHOST / PGHOSTADDR / PGSERVICE）
+覆寫，因此 local_db_url 依 libpq 的規則解析，local_db_conn 連線後再以 conn.info.hostaddr 複驗。
+
 使用 local_db_conn 的測試自動加 integration marker，預設 `just test` 不會執行。
 """
 
@@ -16,16 +20,17 @@ import sys
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Protocol
-from urllib.parse import urlsplit
 
 import psycopg
 import pytest
+from psycopg.conninfo import conninfo_to_dict
 
 pytest_plugins = ["pytester"]
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_DB_URL = "postgresql://postgres:postgres@127.0.0.1:54342/postgres"
 _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+_LOOPBACK_ADDRS = {"127.0.0.1", "::1"}
 
 
 class RunCmd(Protocol):
@@ -126,12 +131,48 @@ def fake_bin(tmp_path: Path) -> FakeBin:
     return FakeBin(tmp_path / "bin")
 
 
+def _loopback_violation(url: str, environ: Mapping[str, str]) -> str | None:
+    """依 libpq 規則找出會讓連線離開本機的設定；全部是 loopback 時回傳 None。
+
+    URL 未指定的參數由 libpq 以環境變數補上，所以 host / hostaddr 先看 URL、再看
+    PGHOST / PGHOSTADDR；多主機以逗號分隔，逐一檢查。service 檔可指定任意位址，一律拒絕。
+    """
+    try:
+        params = conninfo_to_dict(url)
+    except psycopg.ProgrammingError as exc:
+        return f"無法解析連線字串（{exc}）"
+    if "service" in params:
+        return f"service={params['service']}（service 檔可指定任意位址，不允許）"
+    if environ.get("PGSERVICE"):
+        return f"環境變數 PGSERVICE={environ['PGSERVICE']}（service 檔可指定任意位址，不允許）"
+
+    checks = (("host", "PGHOST", _LOOPBACK_HOSTS), ("hostaddr", "PGHOSTADDR", _LOOPBACK_ADDRS))
+    for key, env_name, allowed in checks:
+        raw = params.get(key)
+        value = None if raw is None else str(raw)
+        source = key
+        if value is None and environ.get(env_name):
+            value = environ[env_name]
+            source = f"環境變數 {env_name}"
+        if value is None:
+            if key == "host":
+                return "未指定 host（libpq 會改用 unix socket 預設值），請明確寫 127.0.0.1"
+            continue
+        for part in value.split(","):
+            # hostaddr 的空項目代表該主機不指定位址；host 的空項目代表走 unix socket
+            if key == "hostaddr" and part == "":
+                continue
+            if part not in allowed:
+                return f"{source}={part}"
+    return None
+
+
 @pytest.fixture
 def local_db_url() -> str:
     url = os.environ.get("SCRIPTS_TEST_DATABASE_URL", _DEFAULT_DB_URL)
-    host = urlsplit(url).hostname
-    if host not in _LOOPBACK_HOSTS:
-        pytest.fail(f"只允許本機 loopback DB：{host}")
+    violation = _loopback_violation(url, os.environ)
+    if violation is not None:
+        pytest.fail(f"只允許本機 loopback DB：{violation}")
     return url
 
 
@@ -141,6 +182,11 @@ def local_db_conn(local_db_url: str) -> Iterator[psycopg.Connection[Any]]:
         conn = psycopg.connect(local_db_url, autocommit=False, connect_timeout=3)
     except psycopg.OperationalError as exc:
         pytest.fail(f"無法連線本機 Supabase（{exc.__class__.__name__}），先跑 just db-start")
+    # 縱深防禦：以實際連上的位址再驗一次
+    hostaddr = conn.info.hostaddr
+    if hostaddr not in _LOOPBACK_ADDRS:
+        conn.close()
+        pytest.fail(f"只允許本機 loopback DB：實際連線位址 {hostaddr or '（unix socket）'}")
     try:
         yield conn
     finally:
