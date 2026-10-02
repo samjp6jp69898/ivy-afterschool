@@ -25,7 +25,8 @@ SCRIPT_PATH = REPO_ROOT / "scripts" / "check_rls.py"
 
 def _load_check_rls() -> ModuleType:
     spec = importlib.util.spec_from_file_location("check_rls_under_test", SCRIPT_PATH)
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -108,7 +109,9 @@ def test_check_rls_flags_policy_for_authenticated(
 ) -> None:
     local_db_conn.execute(f"create table {schema}.t3 (id int)")
     local_db_conn.execute(f"alter table {schema}.t3 enable row level security")
-    local_db_conn.execute(f"create policy p on {schema}.t3 for select to authenticated using (true)")
+    local_db_conn.execute(
+        f"create policy p on {schema}.t3 for select to authenticated using (true)"
+    )
 
     violations = check_rls.find_violations(local_db_conn, schema=schema)
 
@@ -121,9 +124,7 @@ def test_check_rls_ignores_app_backend_policy(
     _ensure_app_backend(local_db_conn)
     local_db_conn.execute(f"create table {schema}.t5 (id int)")
     local_db_conn.execute(f"alter table {schema}.t5 enable row level security")
-    local_db_conn.execute(
-        f"revoke all on table {schema}.t5 from anon, authenticated, service_role"
-    )
+    local_db_conn.execute(f"revoke all on table {schema}.t5 from anon, authenticated, service_role")
     local_db_conn.execute(
         f"create policy app_backend_all on {schema}.t5 for all to app_backend using (true)"
     )
@@ -173,7 +174,8 @@ def test_check_rls_flags_view_granted_to_authenticated(
 def test_check_rls_results_sorted_by_relation_then_kind(
     check_rls: ModuleType, local_db_conn: psycopg.Connection[Any], schema: str
 ) -> None:
-    # b 沒開 RLS 且 grant 給 anon；a 只有 policy 給 anon → 期望 a 先於 b，b 內 grant 先於 rls_disabled
+    # b 沒開 RLS 且 grant 給 anon；a 只有 policy 給 anon
+    # → a 先於 b，b 內 grant 先於 rls_disabled（依 relation、kind 排序）
     local_db_conn.execute(f"create table {schema}.b (id int)")
     local_db_conn.execute(f"grant select on table {schema}.b to anon")
     local_db_conn.execute(f"create table {schema}.a (id int)")

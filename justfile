@@ -168,6 +168,18 @@ db-reset *ARGS:
     fi
     cd "{{ root }}"
     supabase db reset
+    # migration + seed 套用成功後立刻驗 RLS（還沒有任何表時允許為空）；違規時 db-reset 以非 0 結束
+    just --justfile "{{ root }}/justfile" check-rls --allow-empty
+
+# RLS / 權限檢查（INFRA-007）：just check-rls [--db-url URL] [--schema public] [--allow-empty] [--allow-remote]
+check-rls *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -x "{{ root }}/apps/api/.venv/bin/python" ]; then
+        echo "錯誤：找不到 apps/api/.venv，先在 apps/api 執行 uv sync --frozen（或 just bootstrap）。" >&2
+        exit 2
+    fi
+    "{{ root }}/apps/api/.venv/bin/python" "{{ root }}/scripts/check_rls.py" "$@"
 
 # ★ 新增一支 migration：just db-new-migration NAME（snake_case，timestamp 由 CLI 自動帶）
 db-new-migration *ARGS:
