@@ -147,6 +147,7 @@ expected ──到班──▶ present ──離班/接送完成──▶ left
 | `pickup.replied` | 發起請求的家長 | in_app, line |
 | `pickup.arrived` | 有 `pickup:operate` 的員工 | ws |
 | `pickup.completed` | 學生的家長 | in_app, line |
+| `pickup.cancelled` | 家長取消 → 有 `pickup:operate` 的員工；員工取消 → 發起的家長 | 員工 in_app, ws；家長 in_app, line |
 | `exam.published` | 應考學生的家長 | in_app, line |
 | `binding.completed` | 綁定的家長 | in_app |
 
@@ -190,10 +191,10 @@ API `POST /api/device/punch`（裝置金鑰認證，卡號 → 學生 → 到班
 - 班級：`GET/POST /classes`、`GET/PATCH /classes/{id}`、`POST /classes/{id}/archive`、`PUT /classes/{id}/staff`
 - 學生：`GET/POST /students`、`GET/PATCH /students/{id}`、`POST /students/{id}/archive`、`POST /students/{id}/photo`、`POST /students/promote-grade`（學年升級，預覽 + 執行兩段）、`POST /students/import`（Excel 匯入）
 - 監護人：`GET/POST /students/{id}/guardians`、`PATCH/DELETE /guardians/{id}`、`POST /guardians/{id}/binding-code`、`POST /guardians/{id}/unbind`
-- 出勤：`GET /attendance/daily?date=&class_id=`、`POST /attendance/{student_id}/check-in`、`POST /attendance/{student_id}/check-out`、`POST /attendance/batch-check-in`、`PATCH /attendance/{id}`（改判，寫 audit）、`GET /attendance/monthly?month=&class_id=`、`GET /attendance/monthly/export`
+- 出勤：`GET /attendance/daily?date=&class_id=`、`POST /attendance/{student_id}/check-in`、`POST /attendance/{student_id}/check-out`、`POST /attendance/batch-check-in`、`POST /attendance/{student_id}/mark-absent`、`PATCH /attendance/{id}`（改判，寫 audit）、`GET /attendance/monthly?month=&class_id=`、`GET /attendance/monthly/export`
 - 請假：`GET /leaves`、`POST /leaves`（代登記）、`POST /leaves/{id}/cancel`、`GET /leaves/{id}/attachments/{aid}`（簽發 URL）
 - 作業：`GET /homework/board?date=&class_id=`、`POST /homework/items`（單一學生）、`POST /homework/items/batch`（整班）、`PATCH /homework/items/{id}`、`DELETE /homework/items/{id}`、`PUT /homework/progress/{student_id}`（overall / ready_eta / note）
-- 接送：`GET /pickup/queue?date=`、`POST /pickup/requests`（員工代建）、`POST /pickup/requests/{id}/reply`、`POST /pickup/requests/{id}/acknowledge`、`POST /pickup/requests/{id}/complete`、`POST /pickup/requests/{id}/cancel`、`GET /pickup/roster?date=&class_id=`（POS 學生卡狀態，移植 `dismissal_pos.get_pos_status`）、`POST /pickup/authorizations/{id}/verify`、`/confirm-visual-match`、`/override-complete`
+- 接送：`GET /pickup/queue?date=`、`POST /pickup/requests`（員工代建）、`POST /pickup/requests/{id}/reply`、`POST /pickup/requests/{id}/acknowledge`、`POST /pickup/requests/{id}/complete`、`POST /pickup/requests/{id}/cancel`、`GET /pickup/roster?date=&class_id=`（POS 學生卡狀態，移植 `dismissal_pos.get_pos_status`）、`GET /pickup/authorizations?date=`、`POST /pickup/authorizations/{id}/verify`、`/confirm-visual-match`、`/override-complete`
 - 成績：`GET/POST /exams`、`GET/PATCH/DELETE /exams/{id}`、`PUT /exams/{id}/subjects`、`GET /exams/{id}/scores`（格狀資料）、`PUT /exams/{id}/scores`（批次 upsert）、`POST /exams/{id}/publish`、`POST /exams/{id}/unpublish`、`GET /exams/{id}/summary`（各科平均）、`GET /students/{id}/exam-history`
 - 通知：`GET /notifications`、`POST /notifications/{id}/read`、`POST /notifications/read-all`
 - 儀表板：`GET /dashboard/today`
@@ -236,6 +237,8 @@ API `POST /api/device/punch`（裝置金鑰認證，卡號 → 學生 → 到班
 | `pickup:read` / `pickup:operate` | 接送佇列 / 回覆、確認、完成 | 全部員工 |
 | `pickup:override` | 代理接送強制完成 | director |
 | `exams:read` / `exams:write` / `exams:publish` | 成績 | 全部員工 / director, clerk, tutor / director, clerk |
+
+NFC 管理權限碼 `nfc:manage`（預設只有 admin）在 NFC 解除 blocked 時才加入 `Permission` enum。
 
 `admin` 角色在 DB 中的 `permissions` 存為 `{*}`，代表全部權限碼（含未來新增）；後端計算有效權限時把 `*` 展開成 `Permission` enum 的全部值。
 
