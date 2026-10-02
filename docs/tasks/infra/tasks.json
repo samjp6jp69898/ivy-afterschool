@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 22,
-  "last_updated": "2026-10-02T08:26:18Z",
+  "version": 23,
+  "last_updated": "2026-10-02T08:28:46Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -156,8 +156,8 @@
       "granularity_unit": "config",
       "target_path": "apps/api/.env.example",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r2",
       "depends_on": [
         "INFRA-004",
         "INFRA-005",
@@ -194,8 +194,8 @@
       "granularity_unit": "script",
       "target_path": "scripts/check_rls.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r2",
       "depends_on": [
         "INFRA-003",
         "INFRA-004",
@@ -362,8 +362,8 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/support/fake_clock.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r2",
       "depends_on": [
         "INFRA-009"
       ],
@@ -399,8 +399,8 @@
       "granularity_unit": "test",
       "target_path": "apps/web/src/test/setup.ts",
       "source_ref": "FE:tests/setup.js::installHarnessGlobals",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r2",
       "depends_on": [
         "INFRA-005"
       ],
@@ -436,8 +436,8 @@
       "granularity_unit": "test",
       "target_path": "apps/web/src/test/helpers.ts",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r2",
       "depends_on": [
         "INFRA-012"
       ],
@@ -472,8 +472,8 @@
       "granularity_unit": "config",
       "target_path": "apps/web/playwright.config.ts",
       "source_ref": "BE:e2e/playwright.config.ts::defineConfig",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r2",
       "depends_on": [
         "INFRA-002",
         "INFRA-005"
@@ -1486,8 +1486,8 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/support/db_urls.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r2",
       "depends_on": [
         "INFRA-009"
       ],

@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 5,
-  "last_updated": "2026-10-02T07:30:15Z",
+  "version": 6,
+  "last_updated": "2026-10-02T08:28:46Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -10,8 +10,8 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/parent/styles/m3-tokens.css",
       "source_ref": "FE:src/parent/styles/m3-tokens.css::--m3-primary",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r2",
       "depends_on": [
         "INFRA-005"
       ],

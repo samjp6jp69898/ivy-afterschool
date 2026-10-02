@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 13,
-  "last_updated": "2026-10-02T07:33:03Z",
+  "version": 14,
+  "last_updated": "2026-10-02T08:28:46Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -87,8 +87,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/errors.py",
       "source_ref": "BE:utils/exception_handlers.py::register_exception_handlers",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
       ],
@@ -236,8 +236,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/base.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
       ],
@@ -954,8 +954,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security/passwords.py",
       "source_ref": "BE:utils/auth.py::verify_password",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
       ],
@@ -2314,8 +2314,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/permissions.py",
       "source_ref": "BE:utils/permissions.py::Permission",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
       ],
@@ -6438,8 +6438,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/events.py",
       "source_ref": "BE:services/notification/event_types.py::STUDENT_LEAVE_SUBMITTED",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
       ],
@@ -7241,8 +7241,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/realtime/broadcaster.py",
       "source_ref": "BE:utils/broadcast/local.py::LocalBackend",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
       ],
@@ -9186,8 +9186,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_rules.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
       ],
