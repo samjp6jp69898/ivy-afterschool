@@ -19,6 +19,7 @@ API_KEYS = {
     "SUPABASE_SERVICE_ROLE_KEY",
     "SENTRY_DSN",
 }
+SECRET_PLACEHOLDER = "change-me"
 _KEY_LINE = re.compile(r"^([A-Z_][A-Z0-9_]*)=(.*)$")
 _VITE_ENV = re.compile(r"import\.meta\.env\.VITE_")
 
@@ -98,8 +99,8 @@ def test_env_examples_api_each_key_has_comment(api_env_example: Path, tmp_path: 
 
 def test_env_examples_api_secret_placeholder(api_env_example: Path) -> None:
     values = parse_env_example(api_env_example)
-    assert values["APP_SECRET_KEY"] == "change-me"
-    assert values["SUPABASE_SERVICE_ROLE_KEY"] == "change-me"
+    assert values["APP_SECRET_KEY"] == SECRET_PLACEHOLDER
+    assert values["SUPABASE_SERVICE_ROLE_KEY"] == SECRET_PLACEHOLDER
 
 
 def test_env_examples_web_has_no_keys(web_env_example: Path) -> None:
