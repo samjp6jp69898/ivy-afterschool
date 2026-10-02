@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 13,
-  "last_updated": "2026-10-02T08:40:54Z",
+  "version": 14,
+  "last_updated": "2026-10-02T09:00:04Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -10,7 +10,7 @@
       "granularity_unit": "migration",
       "target_path": "supabase/migrations/20261002000100_base.sql",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r2",
       "depends_on": [
         "INFRA-003"
@@ -38,9 +38,9 @@
         "notes": "測試驗證的是 migration 本身：需要 DDL（臨時表）、`set local role` 切換到 anon / app_backend、查其他角色的 pg_catalog 權限，屬 DB-002 允許 owner 連線的情境；DB-002 依賴本 task，因此本檔自備最小的 owner（postgres）loopback 連線（讀 `TEST_DB_OWNER_URL`，預設 `postgresql://postgres:postgres@127.0.0.1:54342/postgres`，非 loopback 時 pytest.exit），每個測試結束 rollback，不依賴 DB-002 的 fixture。pgcrypto 由 Supabase 本機預裝在 extensions schema，red case 1 在實作前即為綠，`create extension if not exists` 仍依規格保留。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r2",
+        "notes": "pass。db-reset 後 tdd.run（test-int）10 綠，-k base 選到全部 7 條 red_case（bad_privileges 擴成 4 個 parametrize）；493c242 測試先於 b249171 實作；lint / mypy 乾淨。本機 PG 17.6 實測兩處規格修改的必要性與副作用：(1)「grant app_backend to postgres with set true, inherit false」：本機 Supabase 的 postgres 非 superuser、createrole_self_grant 為空，postgres 建立的角色只有 supabase_admin 授與的 ADMIN OPTION（inherit=false, set=false），不加此 grant 時 set local role 直接 42501，加了才可切換；pg_has_role(postgres, app_backend, USAGE) 仍為 false，postgres 不因此取得 app_backend 權限或套用 app_backend_all policy。(2) 全域「alter default privileges for role postgres revoke execute on functions from public」：移除後 anon 透過內建 PUBLIC EXECUTE 對新函式has_function_privilege 為 true，證明 per-schema 無法收回、全域 revoke 必要；pg_default_acl 中只有 postgres 自己的 (f, <global>) 一列變為 {postgres=X/postgres}，postgres 在 storage schema 的預設授權與 supabase_admin / supabase_auth_admin 的全部預設授權不受影響。驗收項逐一確認：app_backend rolbypassrls / rolsuper / rolcreaterole / rolinherit 皆 false、seed 後可登入、set role postgres 42501；secure_table 後 anon 42501、真實 app_backend 登入可 insert / update / delete、trigger set_updated_at 在 app_backend 更新時照常觸發（即使其 execute 已收回）；未呼叫 secure_table 的表 app_backend 讀取 42501（符合「忘了 secure_table 會立即暴露」設計）。需讓後續 DB task 知道的副作用（請協調者轉知 DB 區域）：postgres 建立的函式若被 CHECK 約束、DEFAULT 運算式（推測含 generated column / 索引運算式）使用，app_backend 執行 insert 會得到 42501 permission denied for function（本機實測），該類 migration 必須明確 grant execute ... to app_backend；trigger 不受影響。殘留：anon / authenticated / service_role 仍有 public schema 的 USAGE（規格未要求收回，物件層已無任何授權，無實際可讀物件）；app_backend 對 extensions schema 無 USAGE，日後若 SQL 需呼叫 extensions.digest() 等需另 grant；open_design_questions 的雲端連線角色問題屬部署時待驗證（kickoff 已列），不影響本 migration 的 done。"
       }
     },
     {
@@ -1472,7 +1472,7 @@
       "granularity_unit": "seed",
       "target_path": "supabase/seed.sql",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r2",
       "depends_on": [
         "DB-001"
@@ -1494,9 +1494,9 @@
         "notes": "本 task 的測試自行以 psycopg 連線（讀 `TEST_DB_BACKEND_URL`，非 loopback 時 pytest.exit），不依賴 DB-002 的 fixture，避免循環依賴。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r2",
+        "notes": "pass。db-reset 後 tdd.run（test-int）3 綠，-k seed_local 選到全部 3 條 red_case；9906184 測試先於 39091c4 實作。seed.sql 只有一行 alter role app_backend login password，檔頭註解寫明僅本機；不含 $argon2、不含 staff_users / parent_accounts insert。以 app_backend 真實登入驗證 current_user / session_user、rolsuper / rolbypassrls false、public usage true、set role postgres 42501。殘留：測試自備的 _backend_dsn 是 loopback 規則的另一份副本（見 INFRA-041 殘留），DB-002 接線時收斂。"
       }
     },
     {

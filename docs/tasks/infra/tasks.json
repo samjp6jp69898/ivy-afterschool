@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 30,
-  "last_updated": "2026-10-02T08:46:52Z",
+  "version": 31,
+  "last_updated": "2026-10-02T09:00:04Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -156,7 +156,7 @@
       "granularity_unit": "config",
       "target_path": "apps/api/.env.example",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r2",
       "depends_on": [
         "INFRA-004",
@@ -182,9 +182,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r2",
+        "notes": "pass。tdd.run 5 綠，-k env_examples 選到全部 5 條 red_case；05f238a 測試先於 2f85c1b 實作。api 範本 8 個 key、順序與表一致，每個 key 上一行為註解，兩個 secret 都是 change-me；web 範本無任何 KEY= 行；VITE_ 掃描函式以 tmp 檔驗證會抓到違規。lint 乾淨。無殘留。"
       }
     },
     {
@@ -194,7 +194,7 @@
       "granularity_unit": "script",
       "target_path": "scripts/check_rls.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r2",
       "depends_on": [
         "INFRA-003",
@@ -226,9 +226,9 @@
         "notes": "暫存 schema 內的 view / table 為測試建立；main() 的 schema 測試需先 commit 才能被新連線看到，該類測試在 finally 中 drop schema cascade 並 commit。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r2",
+        "notes": "pass。在 flock 內實跑 just db-reset --yes：migration + seed + check-rls --allow-empty 全流程成功（輸出「schema public：0 張表全部開啟 RLS，且無對外 policy / grant」，exit 0）；之後 just check-rls 不帶 --allow-empty 在空 schema 回 exit 2，符合規格。tdd.run（test-int）13 綠，-k check_rls 選到全部 11 條 red_case 加 2 個額外案例（排序、連線失敗）；測試後 pg_namespace 無 rls_probe_% 殘留。ffb002b 測試先於 ee3f96b 實作。grant 規則補列 PUBLIC grantee（aclexplode grantee 0）是收緊不是放寬：對 PUBLIC 的 grant 等同授給 anon，應視為違規。殘留（不打回）：is_loopback_url 只看 URL 的 host / hostaddr，不像 INFRA-041 那樣檢查 PGHOSTADDR / PGSERVICE 環境變數與 ?service= 參數（URL 已有 host 時 service 檔仍可補 hostaddr）；此腳本為唯讀開發工具且有 --allow-remote 顯式開關，影響有限，之後可改用 tests/support/db_urls.loopback_violation 統一規則。"
       }
     },
     {
@@ -362,7 +362,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/support/fake_clock.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r2",
       "depends_on": [
         "INFRA-009"
@@ -387,9 +387,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r2",
+        "notes": "pass。tdd.run 6 綠，-k fake_clock 選到全部 6 條 red_case；82900b0 測試先於 fc0796d 實作。red_case 由 failed=1 改為 errors=1、failed=0 合理：fixture 內 pytest.fail 在 pytest 是 setup error 而非 test failure，不是放寬驗收（仍斷言輸出含「clock marker 必須含時區」）。FakeClock 拒絕 naive 與 utcoffset 為 None 的 tzinfo，today() 以 Asia/Taipei 判斷，跨午夜 16:30Z→9/2、15:59:59Z→9/1 皆有案例。殘留：test_fake_clock_marker_requires_timezone 以 pytester 複製根 conftest 與 support 模組執行，pyproject 的 pytest 設定變動時要同步（已由 _pytest_ini_toml 動態讀取，風險低）。"
       }
     },
     {
@@ -399,7 +399,7 @@
       "granularity_unit": "test",
       "target_path": "apps/web/src/test/setup.ts",
       "source_ref": "FE:tests/setup.js::installHarnessGlobals",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r2",
       "depends_on": [
         "INFRA-005"
@@ -424,9 +424,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r2",
+        "notes": "pass。just web-test src/test/setup.spec.ts -t harness：8 綠，測試名稱清單涵蓋全部 6 條 red_case（兩條各拆 step 1 / step 2）；e802339 測試先於 07037e4 實作；eslint 乾淨。fetch / XHR 封鎖、axios 走 XHR 必失敗、記憶體 Storage 每測試重建、enableAutoUnmount 在 unstubAllGlobals 之前執行（afterEach stack 順序）、TZ=Asia/Taipei 皆有具體斷言。殘留：afterEach 的 vi.unstubAllGlobals 到下一個 beforeEach 之間是真實 fetch / XHR，測試若留下未 await 的非同步請求理論上可在此空窗打出連線；屬測試撰寫紀律問題，不影響本 task。"
       }
     },
     {
@@ -436,7 +436,7 @@
       "granularity_unit": "test",
       "target_path": "apps/web/src/test/helpers.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r2",
       "depends_on": [
         "INFRA-012"
@@ -460,9 +460,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r2",
+        "notes": "pass。just web-test src/test/helpers.spec.ts -t helpers：6 綠，涵蓋全部 5 條 red_case 加 stubActions=true 案例；1786e6e 測試先於 8a19618 實作；eslint 乾淨。預設 catch-all 路由、router.isReady、createTestingPinia(stubActions 預設 false, createSpy: vi.fn)、MockAdapter onNoMatch throwException 與規格一致。無殘留。"
       }
     },
     {
@@ -472,7 +472,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/playwright.config.ts",
       "source_ref": "BE:e2e/playwright.config.ts::defineConfig",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r2",
       "depends_on": [
         "INFRA-002",
@@ -494,9 +494,9 @@
         "notes": "執行前先 `just web`（或 `just up`）讓 5341 有服務。守衛驗證：E2E_BASE_URL=https://example.com just e2e e2e/smoke.spec.ts 必須 exit 非 0 且輸出含 'E2E 只允許本機'；just e2e 無參數 exit 1。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r2",
+        "notes": "pass。純設定 task 親自驗收：just e2e 無參數 exit 1 並印用法；E2E_BASE_URL=https://example.com just e2e e2e/smoke.spec.ts exit 1 且輸出「E2E 只允許本機：example.com」（設定載入即 throw）；playwright test --list 列出 admin-chromium 2 個 smoke 測試（testMatch 對 e2e/smoke.spec.ts 生效、parent-mobile 無 match）；在 5394 起 vite 後以 E2E_BASE_URL=http://127.0.0.1:5394 just e2e e2e/smoke.spec.ts -g smoke 實跑 2 passed（/ 與 /parent/ 皆 200 且 #app count 1），用完已關閉。0bc6d3d 測試先於 0836283 實作；tsconfig.node.json include、README 說明、@playwright/test devDependency 皆到位。殘留：just web-typecheck 依規定只在 PR 前跑，本輪未執行。"
       }
     },
     {
@@ -1486,7 +1486,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/support/db_urls.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r2",
       "depends_on": [
         "INFRA-009"
@@ -1513,9 +1513,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r2",
+        "notes": "pass。tdd.run 18 綠（含 8 個 parametrize 案例），--collect-only 帶 / 不帶 -k 一致；ad9aae3 測試先於 05916e5 實作；lint / mypy 乾淨。與已 done 的 INFRA-008（scripts/tests/conftest.py::_loopback_violation）以 36 組反例實測比對（?host= / ?hostaddr= / PGHOSTADDR / PGHOST 補值與被忽略 / service 參數與 PGSERVICE / 多主機 host 與 hostaddr（含空項目）/ 無 host / 百分比編碼 host 與 hostaddr / postgres:// scheme / key=value 字串 / IPv6 與 IPv4-mapped / 127.0.0.2 / 大寫 LOCALHOST / 亂碼）判決全部一致；唯一差異是 postgresql+psycopg:// 輸入：INFRA-041 先去掉 +psycopg 再解析（本 task 規格），INFRA-008 直接拒絕（fail-closed），不構成問題。殘留（不打回）：同一套 libpq 規則目前有四份副本（本檔、scripts/tests/conftest.py、apps/api/tests/integration/db/test_base.py::_owner_dsn、test_seed_local.py::_backend_dsn），DB-002 接線時應收斂成只用本模組；localhost 比對區分大小寫（LOCALHOST 被拒），屬 fail-closed 可接受。"
       }
     }
   ]

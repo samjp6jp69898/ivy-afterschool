@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 8,
-  "last_updated": "2026-10-02T08:30:35Z",
+  "version": 9,
+  "last_updated": "2026-10-02T09:00:04Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -10,7 +10,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/parent/styles/m3-tokens.css",
       "source_ref": "FE:src/parent/styles/m3-tokens.css::--m3-primary",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r2",
       "depends_on": [
         "INFRA-005"
@@ -26,9 +26,9 @@
         "notes": "驗收指令：\npython3 - <<'EOF'\nimport re\nt=open('apps/web/src/parent/styles/m3-tokens.css').read()\ndefined=set(re.findall(r'(--m3-[a-z0-9-]+)\\s*:', t))\nused=set(re.findall(r'var\\((--m3-[a-z0-9-]+)', open('.claude/skills/ui-design-preview/references/preview-template-parent.html').read()))\nmissing=used-defined\nassert not missing, missing\nb=open('apps/web/src/parent/styles/base.css').read()\nassert not re.search(r'#[0-9a-fA-F]{3,8}\\b', b), 'base.css 有 hex'\nprint('ok', len(defined))\nEOF"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r2",
+        "notes": "pass。純設定 task 親自跑 tdd.notes 驗收指令：ok 70（模板用到的 33 個 --m3-* 名稱全部有定義，base.css 無 hex）。3bb8966 把 token 改為設計稿模板 / ivy 正式名稱：原 description 寫的 --m3-shape-corner-* / --m3-elevation-* / --m3-motion-* 在 ivy 全部樣式檔與 preview-template-parent.html 都不存在，ivy 與模板用的是 --m3-shape-* / --m3-elev-* / --m3-dur-* / --m3-easing-*，修改是修正規格錯誤而非遷就實作；移除的只是指向同值的別名。與 ivy m3-tokens.css 比對：light 34 個色票值完全相同、:root[data-theme='dark'] 34 個值完全相同，無 ivy 有而本檔沒有的名稱；--m3-font 為模板用名，display / body 別名指向同一堆疊（值同 ivy typography.css）。base.css 含 box-sizing、body 背景 / 字型、tap-highlight、safe-area 工具 class、reduced-motion。殘留：type scale 以 .m3-* class 提供（沿用 ivy 做法）而非 token 變數；dark 切換機制依規格不在本 task。"
       }
     },
     {

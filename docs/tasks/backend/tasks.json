@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 21,
-  "last_updated": "2026-10-02T08:43:20Z",
+  "version": 22,
+  "last_updated": "2026-10-02T09:00:04Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -87,7 +87,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/errors.py",
       "source_ref": "BE:utils/exception_handlers.py::register_exception_handlers",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
@@ -113,9 +113,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r2",
+        "notes": "pass。tdd.run 9 綠，-k test_errors_ 選到全部 7 條 red_case 加 405 與子類預設值兩個額外案例；4d0dfc6 測試先於 aac5051 實作；lint / mypy 乾淨。錯誤格式符合 domain_spec §2 的 {error: {code, message, details}}；500 回固定文案、details null、回應不含例外訊息與 Traceback，server 端 logger.exception 帶 request id（測試以 caplog 斷言）；422 只留 loc / msg / type（另以錯誤 JSON 與型別錯誤實測，回應不含輸入值）；IntegrityError 回 409 conflict 不含 SQL；429 帶 Retry-After。details 經 jsonable_encoder，datetime / set 不會讓 render 二次拋錯。殘留：「其他 HTTPException」的 message 直接用 str(exc.detail)，detail 為 dict 時會是 Python repr 字串；HTTPException 只由應用程式自己拋，不涉及外部輸入，不打回。"
       }
     },
     {
@@ -236,7 +236,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/base.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
@@ -259,9 +259,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r2",
+        "notes": "pass。tdd.run 4 綠，-k test_models_base_ 選到全部 4 條 red_case；4189eb2 測試先於 58a7472 實作；lint / mypy 乾淨。red_case 的 DDL 字串加上 DEFAULT now() 與 description 原本的「server_default now()」一致，是把 red_case 補到與 description 同步，不是放寬；實際 compile 出的 DDL 為「id UUID DEFAULT gen_random_uuid() NOT NULL」「created_at / updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL」（reviewer 親自印出核對）。殘留：test_models_base_mixin_ddl 把 id 那條拆成「id UUID」與「DEFAULT gen_random_uuid()」兩段斷言，比 red_case 的完整字串弱一點；naming convention 用 column_0_N_name（多欄位時串接），單欄位結果與規格的 uq_<table>_<col> 相同，後續 DB migration 的約束命名需對齊此規則。"
       }
     },
     {
@@ -954,13 +954,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security/passwords.py",
       "source_ref": "BE:utils/auth.py::verify_password",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "",
+      "risk_notes": "【review-r2 打回】verify_password 對 $argon2id$ 前綴正確但內容非法的 hash（例如 '$argon2id$v=19$m=65536,t=3,p=4$broken'、'$argon2id$'）走 except VerificationError 直接回 False，沒有先 dummy_verify（argon2-cffi 25.1 的 PasswordHasher.verify 對解碼失敗拋 VerificationError，不會拋 InvalidHashError），回應 0 ms vs 正常 ~33 ms，違反 description「hashed 格式非法時先呼叫 dummy_verify 再回 False」。修法：VerifyMismatchError 以外的 VerificationError（含 InvalidHashError）一律視為格式非法 → dummy_verify 後回 False；並在 test_passwords_dummy_verify_runs_argon2 或新測試中以 monkeypatch 計數斷言上述兩個輸入各觸發恰好一次對 $argon2id$ 假 hash 的 verify。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/core/security/test_passwords.py",
@@ -978,9 +978,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r2",
+        "notes": "concern（打回）。tdd.run 6 綠、-k 選到全部 5 條 red_case、92704a6 測試先於 a3a6bb9 實作、argon2id 參數 t=3 m=65536 p=4、needs_rehash 對 t=1 True / 預設 False / 非法字串 True、argon2i 雜湊即使密碼正確也回 False（前綴檢查）——這些都正確。問題在恆定時間要求未完全達成（description：「hashed 格式非法時先呼叫 dummy_verify 再回 False」）：argon2-cffi 25.1 的 PasswordHasher.verify 對「前綴正確但內容壞掉」的 hash 拋的是 VerificationError（不是 InvalidHashError；InvalidHashError 只由 check_needs_rehash 拋出），實作第 43-46 行的 InvalidHashError 分支在 verify 路徑是死碼，實際落到第 47-48 行except VerificationError 直接回 False、沒跑 dummy_verify。reviewer 實測：verify_password('x', '$argon2id$v=19$m=65536,t=3,p=4$broken') 與 verify_password('x', '$argon2id$') 都 0.0 ms，而正確格式的 hash（對 / 錯密碼）與 not-a-hash / 空字串都約 33 ms，可由回應時間區分「該帳號的 hash 壞掉」。既有測試 test_passwords_verify_invalid_hash 只斷言回 False，test_passwords_dummy_verify_runs_argon2 只覆蓋前綴不符的情況，所以沒抓到。"
       }
     },
     {
@@ -2314,7 +2314,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/permissions.py",
       "source_ref": "BE:utils/permissions.py::Permission",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
@@ -2337,9 +2337,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r2",
+        "notes": "pass。tdd.run 4 綠，-k test_permissions_ 選到全部 4 條 red_case；a6fefe0 測試先於 12cf432 實作；lint / mypy 乾淨。28 碼與 domain_spec §3 逐一比對一字不差（reviewer 手動核對：dashboard 1、staff 2、roles 2、settings 2、audit 1、classes 2、students 4、guardians 1、attendance 3、leaves 2、homework 2、pickup 3、exams 3），nfc:manage 不在其中；每碼恰在一個 group，group key 順序正確；* 與大小寫不同的碼都不是合法權限。前端 apps/web/src/constants/permissions.ts 尚不存在（FRONTEND 區域負責，一致性測試在該 task），不算問題。殘留：PERMISSION_LABELS 對 read / write 成對的碼把 §3 合併儲存格的說明拆成「查看 X」「管理 X」，紅案只釘 students:sensitive / students:purge 兩個，其他 label 文案若要與後台 UI 文件一致可在 roles 頁 task 時再調。"
       }
     },
     {
@@ -6438,7 +6438,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/events.py",
       "source_ref": "BE:services/notification/event_types.py::STUDENT_LEAVE_SUBMITTED",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
@@ -6461,9 +6461,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r2",
+        "notes": "pass。tdd.run 4 綠，-k test_events_ 選到全部 4 條 red_case；be14b10 測試先於 75f6194 實作；lint / mypy 乾淨。red_case 由 8 個改為 7 個家長可設定 LINE 事件是修正而非放寬：domain_spec M9 明寫「共 7 個」且 pickup.cancelled / binding.completed 不可關閉，DB-031 description 也寫「7 個事件」，舊 red_case 把 pickup.cancelled 誤列進去。13 個事件、recipient_types（leave.* / pickup.requested / pickup.arrived 為 staff、pickup.cancelled 兩者）與 required_payload 逐條對照 description 表格一致。殘留：EventDef 多了 optional_payload 欄位（對應表格「可選」註記），屬規格內的資訊具體化，不是範圍擴張。"
       }
     },
     {
@@ -7241,7 +7241,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/realtime/broadcaster.py",
       "source_ref": "BE:utils/broadcast/local.py::LocalBackend",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
@@ -7266,9 +7266,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r2",
+        "notes": "pass。tdd.run 10 綠，-k test_broadcaster_ 選到全部 6 條 red_case 加 4 個額外案例；5ae2703 測試先於 122cfee 實作；lint / mypy 乾淨。跨執行緒：publish_threadsafe 在真實 threading.Thread 內以 run_coroutine_threadsafe 送達（測試斷言 a.sent），無 loop / loop 已關閉 / 未運行時記 debug 後丟棄且不拋例外，排程失敗只記 warning 並 close coroutine 避免 never awaited。慢消費者：asyncio.wait_for 逾時（預設 2 秒）視為僵死、從所有 channel 移除且不計入送達數（測試以 0.05 秒 timeout 驗證 fast 收到、slow 被移除）；send_text 拋例外同樣移除。publish_many 對 channel 與連線都去重。訊息超過 16 KiB ValueError，臨界值案例有測。殘留：同一次 publish 內是逐一 await 送出，一個僵死連線會讓後面的訂閱者最多延遲 send_timeout 才收到（規格只要求逾時移除，未要求並行送出），日後連線數多時可改 gather；_log_publish_result 若 future 被 cancel 會在 callback 內拋 CancelledError（目前沒有任何路徑會 cancel）。"
       }
     },
     {
@@ -9186,7 +9186,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_rules.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
@@ -9207,9 +9207,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r2",
+        "notes": "pass。tdd.run 12 綠，-k test_derive_overall_status_ 選到 2 條 red_case（第一條展開為 10 個 parametrize 案例，含 red_case 列的六組）；4484ba2 測試先於 9ff5e9e 實作；lint / mypy 乾淨。空清單 / 全 todo → not_started、全 done → done、其餘 in_progress、未知值 ValueError（含大小寫不同）。無殘留。"
       }
     },
     {
