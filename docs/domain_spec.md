@@ -83,7 +83,7 @@ expected ──到班──▶ present ──離班/接送完成──▶ left
 
 - 同一學生的 `active` 請假期間不可重疊（DB exclusion constraint，API 回 409 `leave_overlap`），同時防止重複送出。
 - 家長送出即生效（沿用 ivy），同時把期間內的出勤改 `leave`（移植 `BE:services/student_leave_service.py::apply_attendance_for_leave` / `revert_attendance_for_leave`）。員工可在後台代登記與取消。
-- 已開始的請假日（今天之前）家長不可取消，員工可以。
+- 取消：請假尚未開始 → 整筆 `cancelled`；已開始 → 把 `end_date` 改為昨天，今天起的出勤由 `leave` 恢復為 `expected`（已登記 `present` / `left` 的不動）。家長與員工都可以這樣取消剩餘日子；員工另可整筆取消已開始的請假。
 - 建立/取消時通知班級負責員工（in_app + ws，事件 `leave.created` / `leave.cancelled`）。
 
 ### M6 作業進度
@@ -110,7 +110,8 @@ expected ──到班──▶ present ──離班/接送完成──▶ left
    - 未完成且沒有 `ready_eta` → 回覆「已通知老師，稍後回覆預計時間」，並通知員工（ws + in_app）待回覆。
 3. 員工在接送佇列看到請求，可**覆寫回覆**（設定/修改 `reply_ready_eta` 與訊息，`reply_source = staff`），按「確認」→ `acknowledged`，家長收到通知。
 4. 家長抵達按「我到了」→ `arrived`（員工端提示音，移植 `useDismissalChime`）。
-5. 員工交付學生 → `completed`（記錄由哪位監護人或哪張代理授權接走），出勤自動 `left`，通知家長。代理接送需核對接送碼或照片比對，或由有權限者強制完成（寫 audit）。
+5. 員工交付學生 → `completed`（記錄由哪位監護人或哪張代理授權接走），出勤自動 `left`，通知家長。代理接送的核驗方式：接送碼；或目視核對（常用接送人有照片時顯示照片輔助比對，沒有照片時核對身分證件，照片不是必要條件）；或由有 `pickup:override` 的員工強制完成。後兩者寫 audit。代理人到場時若家長未先發起請求，核驗成功即自動建立一筆 `source = proxy` 的已完成請求。
+   - 接送碼只顯示一次；家長遺失時可在家長端重新產生（舊碼立即失效，並重設連錯次數與鎖定）。
 6. 家長可在 `completed` 前取消；超過 `pickup.window` 設定的分鐘數未完成自動 `expired`（背景工作）。
 7. 員工也可替家長建立請求（`source = staff`，例如家長來電）。
 
@@ -205,7 +206,7 @@ API `POST /api/device/punch`（裝置金鑰認證，卡號 → 學生 → 到班
 - 請假：`GET /children/{id}/leaves`、`POST /leaves`、`POST /leaves/{id}/cancel`、`POST /leaves/{id}/attachments`
 - 作業：`GET /children/{id}/homework?date=`（items + overall + ready_eta + note）
 - 接送：`POST /pickup/requests`、`GET /pickup/requests/today`、`POST /pickup/requests/{id}/arrived`、`POST /pickup/requests/{id}/cancel`
-- 接送人：`GET/POST /children/{id}/pickup-persons`、`DELETE /pickup-persons/{id}`；代理：`GET/POST /children/{id}/pickup-authorizations`、`POST /pickup-authorizations/{id}/cancel`
+- 接送人：`GET/POST /children/{id}/pickup-persons`、`DELETE /pickup-persons/{id}`；代理：`GET/POST /children/{id}/pickup-authorizations`、`POST /pickup-authorizations/{id}/cancel`、`POST /pickup-authorizations/{id}/regenerate-code`
 - 成績：`GET /children/{id}/exams`、`GET /children/{id}/exams/{exam_id}`
 - 通知：`GET /notifications`、`POST /notifications/{id}/read`、`POST /notifications/read-all`、`GET/PUT /notification-preferences`
 - 公開設定：`GET /config`（LIFF ID、安親班名稱/Logo，不需登入）
