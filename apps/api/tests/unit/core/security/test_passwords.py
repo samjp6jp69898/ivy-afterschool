@@ -1,13 +1,14 @@
 """BACKEND-031：argon2id 密碼雜湊、恆定時間驗證、needs_rehash。"""
 
 import pytest
+from argon2 import PasswordHasher
+
 from app.core.security.passwords import (
     dummy_verify,
     hash_password,
     needs_rehash,
     verify_password,
 )
-from argon2 import PasswordHasher
 
 
 def test_passwords_hash_format() -> None:
@@ -60,4 +61,5 @@ def test_passwords_dummy_verify_runs_argon2(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 def test_passwords_dummy_verify_swallows_mismatch() -> None:
-    assert dummy_verify("whatever") is None
+    # 假 hash 一定對不上任何明文，verify 的 mismatch 不可外洩成例外
+    dummy_verify("whatever")

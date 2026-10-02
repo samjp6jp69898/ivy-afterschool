@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 16,
-  "last_updated": "2026-10-02T08:35:29Z",
+  "version": 17,
+  "last_updated": "2026-10-02T08:37:11Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -954,7 +954,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security/passwords.py",
       "source_ref": "BE:utils/auth.py::verify_password",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
