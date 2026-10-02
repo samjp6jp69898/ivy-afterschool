@@ -1,4 +1,5 @@
 // INFRA-013：mountWithApp 與 createApiMock
+/* eslint-disable vue/one-component-per-file -- 測試用的探針元件集中在同一檔 */
 import axios from 'axios'
 import { defineStore } from 'pinia'
 import { defineComponent, h } from 'vue'
