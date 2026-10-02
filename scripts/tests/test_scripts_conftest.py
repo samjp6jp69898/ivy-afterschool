@@ -13,11 +13,16 @@ if TYPE_CHECKING:
     from conftest import FakeBin, RunCmd
 
 TESTS_DIR = Path(__file__).resolve().parent
+LOCAL_URL = "postgresql://postgres:postgres@127.0.0.1:54342/postgres"
+# libpq 會用來補未指定連線參數、可把連線導向他處的環境變數
+LIBPQ_ADDRESS_ENV = ("PGHOST", "PGHOSTADDR", "PGSERVICE", "SCRIPTS_TEST_DATABASE_URL")
 
 
 @pytest.fixture
-def project(pytester: pytest.Pytester) -> pytest.Pytester:
-    """複製真實 pytest.ini 與 conftest.py 的暫存專案。"""
+def project(pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch) -> pytest.Pytester:
+    """複製真實 pytest.ini 與 conftest.py 的暫存專案（子行程不繼承外層的 PG* 位址變數）。"""
+    for name in LIBPQ_ADDRESS_ENV:
+        monkeypatch.delenv(name, raising=False)
     pytester.makefile(".ini", pytest=(TESTS_DIR / "pytest.ini").read_text(encoding="utf-8"))
     pytester.makeconftest((TESTS_DIR / "conftest.py").read_text(encoding="utf-8"))
     return pytester
@@ -80,6 +85,129 @@ def test_scripts_conftest_local_db_url_rejects_remote(
     # fixture 在 setup 階段 pytest.fail，計為 error
     result.assert_outcomes(errors=1)
     result.stdout.fnmatch_lines(["*只允許本機 loopback DB*10.0.0.5*"])
+
+
+@pytest.mark.parametrize(
+    ("url", "env", "expected"),
+    [
+        pytest.param(f"{LOCAL_URL}?host=10.0.0.6", {}, "host=10.0.0.6", id="query-host"),
+        pytest.param(
+            f"{LOCAL_URL}?hostaddr=10.0.0.7", {}, "hostaddr=10.0.0.7", id="query-hostaddr"
+        ),
+        pytest.param(
+            "postgresql://postgres:postgres@127.0.0.1:54342,10.0.0.10:54342/postgres",
+            {},
+            "host=10.0.0.10",
+            id="multi-host",
+        ),
+        pytest.param(
+            LOCAL_URL, {"PGHOSTADDR": "10.0.0.8"}, "PGHOSTADDR=10.0.0.8", id="env-hostaddr"
+        ),
+        pytest.param(
+            "postgresql://postgres:postgres@:54342/postgres",
+            {"PGHOST": "10.0.0.9"},
+            "PGHOST=10.0.0.9",
+            id="env-host",
+        ),
+        pytest.param(f"{LOCAL_URL}?service=remote", {}, "service=remote", id="query-service"),
+        pytest.param(LOCAL_URL, {"PGSERVICE": "remote"}, "PGSERVICE=remote", id="env-service"),
+        pytest.param(
+            "postgresql://postgres:postgres@:54342/postgres", {}, "未指定 host", id="missing-host"
+        ),
+    ],
+)
+def test_scripts_conftest_local_db_url_rejects_libpq_overrides(
+    project: pytest.Pytester,
+    monkeypatch: pytest.MonkeyPatch,
+    url: str,
+    env: dict[str, str],
+    expected: str,
+) -> None:
+    monkeypatch.setenv("SCRIPTS_TEST_DATABASE_URL", url)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    project.makepyfile(test_remote="def test_remote(local_db_url):\n    pass\n")
+
+    result = project.runpytest_subprocess()
+
+    result.assert_outcomes(errors=1)
+    result.stdout.fnmatch_lines([f"*只允許本機 loopback DB*{expected}*"])
+
+
+@pytest.mark.parametrize(
+    ("url", "env"),
+    [
+        pytest.param(None, {}, id="default"),
+        pytest.param("postgresql://u:p@[::1]:54342/postgres", {}, id="ipv6"),
+        pytest.param(f"{LOCAL_URL}?hostaddr=127.0.0.1", {}, id="loopback-hostaddr"),
+        # URL 已指定 host，libpq 不會採用 PGHOST
+        pytest.param(LOCAL_URL, {"PGHOST": "10.0.0.9"}, id="url-host-wins-over-pghost"),
+    ],
+)
+def test_scripts_conftest_local_db_url_accepts_loopback(
+    project: pytest.Pytester,
+    monkeypatch: pytest.MonkeyPatch,
+    url: str | None,
+    env: dict[str, str],
+) -> None:
+    if url is not None:
+        monkeypatch.setenv("SCRIPTS_TEST_DATABASE_URL", url)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    expected = url or LOCAL_URL
+    project.makepyfile(
+        test_local=f"def test_local(local_db_url):\n    assert local_db_url == {expected!r}\n"
+    )
+
+    project.runpytest_subprocess().assert_outcomes(passed=1)
+
+
+_FAKE_CONNECT_TEST = """
+import psycopg
+import pytest
+
+
+class _Info:
+    hostaddr = {hostaddr!r}
+
+
+class _Conn:
+    info = _Info()
+
+    def rollback(self):
+        pass
+
+    def close(self):
+        print("FAKE_CONN_CLOSED")
+
+
+@pytest.fixture(autouse=True)
+def _fake_connect(monkeypatch):
+    monkeypatch.setattr(psycopg, "connect", lambda *args, **kwargs: _Conn())
+
+
+def test_conn(local_db_conn):
+    pass
+"""
+
+
+def test_scripts_conftest_local_db_conn_rechecks_connected_address(
+    project: pytest.Pytester,
+) -> None:
+    project.makepyfile(test_conn=_FAKE_CONNECT_TEST.format(hostaddr="10.0.0.11"))
+
+    result = project.runpytest_subprocess("-m", "integration", "-s")
+
+    result.assert_outcomes(errors=1)
+    result.stdout.fnmatch_lines(["*FAKE_CONN_CLOSED*", "*只允許本機 loopback DB*10.0.0.11*"])
+
+
+def test_scripts_conftest_local_db_conn_accepts_loopback_connection(
+    project: pytest.Pytester,
+) -> None:
+    project.makepyfile(test_conn=_FAKE_CONNECT_TEST.format(hostaddr="127.0.0.1"))
+
+    project.runpytest_subprocess("-m", "integration").assert_outcomes(passed=1)
 
 
 def test_scripts_conftest_db_tests_deselected_by_default(project: pytest.Pytester) -> None:
