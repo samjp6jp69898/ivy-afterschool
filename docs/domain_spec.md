@@ -38,8 +38,14 @@
 | `pickup.window` | 可發起接送的時段、`我要來接` 可選的最晚時間、接送請求自動過期分鐘數 |
 | `homework.defaults` | 未設定預計完成時間時是否自動回覆、預設提示文案 |
 | `notification.toggles` | 各事件是否啟用（全域開關） |
-| `line.liff` | LIFF ID 與 LINE Login channel ID（家長端登入、後端驗證 id_token 用） |
+| `line.liff` | LIFF ID、LINE Login channel ID（後端驗證 id_token）、官方帳號加好友 URL（家長端引導加好友） |
+| `leave.window` | 家長可申請請假的日期範圍（今天前 N 天 ~ 後 M 天，預設 30 / 60）、每筆附件數上限（預設 3）、單檔大小上限 MB（預設 10） |
+| `pickup.authorization` | 代理接送授權最多可提前幾天（預設 14）、同一學生同一天 active 授權上限（預設 3） |
+| `pickup.persons` | 每位學生常用接送人上限（預設 10） |
+| `homework.window` | 作業可新增 / 編輯的日期範圍（今天前 N 天 ~ 後 M 天，預設 30 / 7） |
 | `line.messaging` | channel access token、channel secret（secret，加密） |
+
+固定的業務規則（不開放後台調整）：員工密碼至少 10 碼且含英文與數字；家長預計抵達時間最多可早於現在 5 分鐘；綁定碼效期 7 天；接送碼連錯 5 次鎖定。
 
 **subjects**：`name`、`sort_order`、`is_active`。預設 seed：國語、數學、英語、自然、社會。
 **exam_types**：`name`、`sort_order`、`is_active`。預設 seed：段考、小考、複習考。
@@ -54,6 +60,9 @@
 **students**：`student_no`（unique，人工可編）、`name`、`gender`（`male` / `female` / `other`）、`birthday`、`grade_level int`（1~6）、`school_id → schools`、`school_class text`（例如「三年二班」）、`class_id → classes`、`status`（`active` / `suspended` / `withdrawn`）、`enrolled_on`、`withdrawn_on`、`photo_path`、`id_number_enc bytea`、`id_number_hmac text`（查重用，not null 時 unique）、`health_note_enc bytea`、`note`、`archived_at`。敏感欄位以應用層 AES-256-GCM 加密，HMAC 與加密金鑰皆由 `APP_SECRET_KEY` 衍生。
 - 每年 8 月的升級（grade_level +1、六年級轉 withdrawn）由後台「學年升級」功能批次處理，不自動執行；升級時保留原安親班班級，由員工手動調班。
 - 身分證字號與健康備註只有持 `students:sensitive` 的員工能檢視與寫入。
+- 學生狀態改為 `suspended` 或 `withdrawn` 時，同一交易內自動收尾：取消進行中的接送請求與 active 代理授權、刪除今天起尚未登記（`expected`）的出勤列、取消未來的請假（已開始的截到昨天）；已發生的紀錄保留。
+- 個資保存：退班學生資料封存保留；admin（權限 `students:purge`）可對已封存且 `withdrawn` 的學生執行「永久刪除」——匿名化姓名、清除身分證 / 健康備註 / 照片 / 監護人聯絡資料與綁定，出勤、成績等統計紀錄保留但不再可識別，寫 audit。
+- Excel 匯入只支援後台提供的範本（範本由後端依匯入欄位定義產生下載）。
 
 **parent_accounts**：`line_user_id`（unique）、`display_name`、`picture_url`、`phone`、`status`（`active` / `disabled`）、`token_version`、`last_login_at`。
 **guardians**：`student_id`、`parent_account_id`（nullable，綁定後填入）、`name`、`relation`（`father` / `mother` / `grandparent` / `other`）、`phone`、`is_primary bool`、`can_pickup bool`、`receives_notifications bool`、`archived_at`。同一學生只能有一位 `is_primary`。
@@ -83,7 +92,7 @@ expected ──到班──▶ present ──離班/接送完成──▶ left
 
 - 同一學生的 `active` 請假期間不可重疊（DB exclusion constraint，API 回 409 `leave_overlap`），同時防止重複送出。
 - 家長送出即生效（沿用 ivy），同時把期間內的出勤改 `leave`（移植 `BE:services/student_leave_service.py::apply_attendance_for_leave` / `revert_attendance_for_leave`）。員工可在後台代登記與取消。
-- 取消：請假尚未開始 → 整筆 `cancelled`；已開始 → 把 `end_date` 改為昨天，今天起的出勤由 `leave` 恢復為 `expected`（已登記 `present` / `left` 的不動）。家長與員工都可以這樣取消剩餘日子；員工另可整筆取消已開始的請假。
+- 取消：請假尚未開始 → 整筆 `cancelled`；已開始 → 把 `end_date` 改為昨天，今天起的出勤由 `leave` 恢復為 `expected`（已登記 `present` / `left` 的不動）。家長與員工都可以這樣取消剩餘日子；員工另可整筆取消已開始或已結束的請假（事後更正，出勤自動還原）。
 - 建立/取消時通知班級負責員工（in_app + ws，事件 `leave.created` / `leave.cancelled`）。
 
 ### M6 作業進度
@@ -134,7 +143,9 @@ expected ──到班──▶ present ──離班/接送完成──▶ left
 
 **notifications**（站內收件匣）：`recipient_type`（`staff` / `parent`）、`recipient_id`、`event`、`title`、`body`、`payload jsonb`、`read_at`。
 **notification_outbox**：`notification_id`、`channel`（只有 `line`；ws 不進 outbox，commit 後直接廣播、盡力而為，前端以輪詢補齊）、`status`（`pending` / `sent` / `failed` / `dead`）、`attempts`、`next_attempt_at`、`last_error`。DB transaction commit 後才派送，失敗指數退避，超過次數轉 `dead`。
-**notification_preferences**：`parent_account_id`、`event`、`line_enabled bool`。in_app 一律開啟。
+**notification_preferences**：`parent_account_id`、`event`、`line_enabled bool`。in_app 一律開啟。家長可設定 LINE 開關的事件共 7 個：`attendance.checked_in`、`attendance.checked_out`、`homework.eta_updated`、`homework.done`、`pickup.replied`、`pickup.completed`、`exam.published`；`pickup.cancelled`、`binding.completed` 不可關閉。
+
+LINE 推播的前提是家長已加官方帳號好友：LIFF app 設定 `bot_prompt`（登入時詢問加好友），家長端綁定成功頁與「更多」頁另提供「加入官方帳號」按鈕（URL 來自 `line.liff`）。
 
 事件（`app/notifications/events.py`），收件人與預設頻道：
 
@@ -186,12 +197,12 @@ API `POST /api/device/punch`（裝置金鑰認證，卡號 → 學生 → 到班
 | GET | `/api/parent/me` | 家長資料 + 已綁定小孩清單 |
 
 ### 後台（`/api/admin`，皆需員工登入 + 權限碼）
-- 帳號：`GET/POST /staff-users`、`GET/PATCH /staff-users/{id}`、`POST /staff-users/{id}/reset-password`、`POST /staff-users/{id}/deactivate`、`POST /staff-users/{id}/activate`（重新啟用，產生臨時密碼並要求改密碼）
+- 帳號：`GET/POST /staff-users`、`GET/PATCH /staff-users/{id}`、`POST /staff-users/{id}/reset-password`、`POST /staff-users/{id}/deactivate`、`POST /staff-users/{id}/activate`（重新啟用，產生臨時密碼並要求改密碼）、`GET /staff-users/options`（班級老師指派下拉，`classes:write` 或 `staff:read`）
 - 角色：`GET/POST /roles`、`PATCH/DELETE /roles/{id}`、`GET /permissions`（權限碼目錄，含分組與說明）
 - 設定：`GET /settings`、`PUT /settings/{key}`；`GET/POST/PATCH/DELETE /subjects`、`/exam-types`、`/schools`、`/closed-days`
 - 稽核：`GET /audit-logs`
 - 班級：`GET/POST /classes`、`GET/PATCH /classes/{id}`、`POST /classes/{id}/archive`、`PUT /classes/{id}/staff`
-- 學生：`GET/POST /students`、`GET/PATCH /students/{id}`、`POST /students/{id}/archive`、`POST /students/{id}/photo`、`POST /students/promote-grade`（學年升級，預覽 + 執行兩段）、`POST /students/import`（Excel 匯入）
+- 學生：`GET/POST /students`、`GET/PATCH /students/{id}`、`POST /students/{id}/archive`、`POST /students/{id}/photo`、`POST /students/promote-grade`（學年升級，預覽 + 執行兩段）、`POST /students/import`（Excel 匯入）、`GET /students/import-template`（下載匯入範本）、`POST /students/{id}/purge`（永久刪除 / 匿名化，`students:purge`）
 - 監護人：`GET/POST /students/{id}/guardians`、`PATCH/DELETE /guardians/{id}`、`POST /guardians/{id}/binding-code`、`POST /guardians/{id}/unbind`
 - 出勤：`GET /attendance/daily?date=&class_id=`、`POST /attendance/{student_id}/check-in`、`POST /attendance/{student_id}/check-out`、`POST /attendance/batch-check-in`、`POST /attendance/{student_id}/mark-absent`、`PATCH /attendance/{id}`（改判，寫 audit）、`GET /attendance/monthly?month=&class_id=`、`GET /attendance/monthly/export`
 - 請假：`GET /leaves`、`POST /leaves`（代登記）、`POST /leaves/{id}/cancel`、`GET /leaves/{id}/attachments/{aid}`（簽發 URL）
@@ -210,7 +221,7 @@ API `POST /api/device/punch`（裝置金鑰認證，卡號 → 學生 → 到班
 - 接送人：`GET/POST /children/{id}/pickup-persons`、`DELETE /pickup-persons/{id}`；代理：`GET/POST /children/{id}/pickup-authorizations`、`POST /pickup-authorizations/{id}/cancel`、`POST /pickup-authorizations/{id}/regenerate-code`
 - 成績：`GET /children/{id}/exams`、`GET /children/{id}/exams/{exam_id}`
 - 通知：`GET /notifications`、`POST /notifications/{id}/read`、`POST /notifications/read-all`、`GET/PUT /notification-preferences`
-- 公開設定：`GET /config`（LIFF ID、安親班名稱 / Logo / 電話，不需登入）
+- 公開設定：`GET /config`（LIFF ID、官方帳號加好友 URL、安親班名稱 / Logo / 電話、家長端表單需要的上限：請假日期範圍與附件限制、代理授權可提前天數、常用接送人上限；不需登入）
 
 ### WebSocket
 - `/api/ws/admin`（cookie 認證，員工）：訂閱頻道 `pickup`、`homework`、`attendance`、`notifications`
@@ -218,6 +229,7 @@ API `POST /api/device/punch`（裝置金鑰認證，卡號 → 學生 → 到班
 
 ### 打卡機（blocked）
 - `POST /api/device/punch`、`GET /api/device/roster`
+- 後台管理（`nfc:manage`）：`/api/admin/nfc/devices*`、`/api/admin/nfc/cards*`（路徑於解除 blocked 時定案）
 
 ## 3. 權限碼
 
@@ -230,7 +242,8 @@ API `POST /api/device/punch`（裝置金鑰認證，卡號 → 學生 → 到班
 | `audit:read` | 稽核紀錄 | director |
 | `classes:read` / `classes:write` | 班級 | 全部員工 / director, clerk |
 | `students:read` / `students:write` | 學生 | 全部員工 / director, clerk |
-| `students:sensitive` | 查看身分證、健康備註 | director |
+| `students:sensitive` | 查看與寫入身分證、健康備註 | director |
+| `students:purge` | 永久刪除（匿名化）退班學生 | 只有 admin |
 | `guardians:write` | 監護人與綁定碼 | director, clerk |
 | `attendance:read` / `attendance:operate` | 查出勤 / 到班離班登記 | 全部員工 |
 | `attendance:amend` | 改判已登記的出勤（寫 audit） | director |
@@ -289,7 +302,4 @@ NFC 管理權限碼 `nfc:manage`（預設只有 admin）在 NFC 解除 blocked �
 ## 5. Open questions（尚未決定，已記錄在對應 task 的 `open_design_questions`）
 
 - NFC 機型、通訊協定、離線佇列、刷卡判斷規則（M10 全部 blocked）。
-- 是否需要大螢幕叫號畫面（目前只做 POS 平板頁）。
-- Railway 是否會開多實例（決定是否實作 Redis broadcaster）。
-- 是否需要從既有系統匯入學生資料（目前只做 Excel 匯入）。
-- 個資保存期限與退班學生資料刪除政策。
+- 部署時實測：Railway edge 的來源 IP 範圍與標頭（INFRA-031 / 033）；Supabase 連線池是否接受專用後端角色 `app_backend`（DB-001，不接受時改用 postgres 角色，見 architecture_decisions §5）。

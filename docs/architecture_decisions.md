@@ -45,8 +45,8 @@ afterschool/
 │   │   │   ├── core/        # config（env Settings）、db、security、errors、logging
 │   │   │   ├── models/      # SQLAlchemy models（對應 supabase/migrations）
 │   │   │   ├── schemas/     # Pydantic request/response
-│   │   │   ├── repositories/# 資料存取（純 DB 操作）
-│   │   │   ├── services/    # 業務邏輯（一個方法一個 task）
+│   │   │   ├── repositories/# 跨 service 共用的查詢
+│   │   │   ├── services/    # 業務邏輯（一個方法一個 task），直接以 SQLAlchemy 存取 DB
 │   │   │   ├── api/
 │   │   │   │   ├── admin/   # 後台 API（/api/admin/*）
 │   │   │   │   ├── parent/  # 家長端 API（/api/parent/*）
@@ -84,7 +84,7 @@ afterschool/
 
 ## 5. 資料庫原則
 
-- 後端以專用角色 `app_backend`（不帶 BYPASSRLS）連線，每張表由 `app_private.secure_table()` 統一開 RLS 並只對 `app_backend` 放行；`anon` / `authenticated` / `service_role` 對 public 的權限全部收回。
+- 後端以專用角色 `app_backend`（不帶 BYPASSRLS）連線（雲端經 Supabase 連線池；若部署實測連線池不接受自訂角色，改用 postgres 角色連線，接受 RLS 縱深防禦失效，應用層權限守衛不變），每張表由 `app_private.secure_table()` 統一開 RLS 並只對 `app_backend` 放行；`anon` / `authenticated` / `service_role` 對 public 的權限全部收回。
 - 所有 table 在 `public` schema，主鍵 `uuid default gen_random_uuid()`，時間欄位 `timestamptz`，含 `created_at` / `updated_at`（trigger 維護）。
 - **RLS 一律開啟且不給 `anon` / `authenticated` 任何 policy**：資料只透過 FastAPI 存取，後端以專用 DB role 連線。這讓 Supabase 的 PostgREST / Realtime 對外不暴露任何資料，屬縱深防禦。由 `scripts/check_rls.py` + integration 測試把關（每張表都 `rowsecurity = true` 且 `anon` 查詢回 0 筆/拒絕）。
 - 軟刪除只用在有歷史意義的主檔（students、guardians、classes）：`archived_at`；交易紀錄不刪除。
@@ -110,4 +110,4 @@ NFC 機器尚未到貨，**整段 task 標 `blocked`**：裝置註冊、卡號�
 
 ## 9. 不做的範圍
 
-教師端、多租戶、校車/娃娃車、學費帳務、成長冊/作品集、用藥、政府報表、HR（薪資/排班/員工出勤）、公告系統、大螢幕叫號（列為 open question）。
+教師端、多租戶、校車/娃娃車、學費帳務、成長冊/作品集、用藥、政府報表、HR（薪資/排班/員工出勤）、公告系統、大螢幕叫號、從其他系統轉入資料（只支援 Excel 範本匯入）、PWA 離線快取。

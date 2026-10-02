@@ -28,6 +28,7 @@
 | 前端元件/邏輯 | `vitest` | — | 是 | 與被測檔同目錄 `*.spec.ts` |
 | 端對端 | `playwright` | 本地全套 | 否 | `apps/web/e2e/` |
 
+- 後端 service 直接以 SQLAlchemy 存取 DB，主要以整合測試（本機 Supabase、以 `app_backend` 角色連線，禁止改用 owner 角色繞過 RLS）驗證；純函式與規則判斷用單元測試。
 - 單元測試由 `pytest-socket` 擋外部網路（只放行 loopback 給 integration）。
 - 整合測試每個測試在 transaction 內執行並 rollback；需要 commit 語意的（outbox、after-commit 通知）用獨立 fixture 清表。
 - migration / RLS / schema drift 的測試屬 integration。
