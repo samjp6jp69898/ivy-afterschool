@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 13,
-  "last_updated": "2026-10-02T08:04:33Z",
+  "version": 14,
+  "last_updated": "2026-10-02T08:07:27Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -276,7 +276,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/conftest.py",
       "source_ref": "BE:tests/conftest.py::_install_ambient_db_guard",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r1",
       "depends_on": [
         "INFRA-004"
@@ -292,10 +292,10 @@
         "red_cases": [
           "test_root_conftest_marks_unit_by_directory：暫存專案 tests/unit/test_a.py 含一個無 marker 的測試，執行 `-m unit` → passed=1；執行 `-m integration` → deselected=1",
           "test_root_conftest_integration_excluded_by_default：tests/integration/test_b.py 一個測試，不帶 -m 執行 → passed=0、deselected=1；帶 `-m integration` → passed=1",
-          "test_root_conftest_rejects_file_outside_layers：tests/test_c.py → 執行結果 errors=1，輸出含 '測試檔必須放在 tests/unit/ 或 tests/integration/'",
-          "test_root_conftest_rejects_integration_marker_in_unit：tests/unit/test_d.py 的測試標 @pytest.mark.integration → errors=1，輸出含 'tests/unit 底下不可標 integration'",
+          "test_root_conftest_rejects_file_outside_layers：tests/test_c.py 與 tests/support/test_y.py（parametrize）→ 執行結果 errors=1，輸出含 '測試檔必須放在 tests/unit/ 或 tests/integration/'",
+          "test_root_conftest_rejects_integration_marker_in_unit：tests/unit/test_d.py 的測試標 @pytest.mark.integration → errors=1，輸出含 'tests/unit 底下不可標 integration'；反向（parametrize）tests/integration/test_d.py 標 @pytest.mark.unit → errors=1，輸出含 'tests/integration 底下不可標 unit'",
           "test_root_conftest_unit_blocks_loopback：tests/unit/test_e.py 中 socket.create_connection(('127.0.0.1', 54342), timeout=1) → failed=1，輸出含 'SocketBlockedError'",
-          "test_root_conftest_integration_allows_only_loopback：tests/integration/test_f.py 中 socket.create_connection(('10.255.255.1', 5432), timeout=1) → failed=1，輸出含 'SocketBlockedError'；另一測試對 pytester 內以 socketserver 起在 127.0.0.1 的臨時 port 連線 → passed"
+          "test_root_conftest_integration_allows_only_loopback：tests/integration/test_f.py 中 socket.create_connection(('10.255.255.1', 5432), timeout=1) → failed=1，輸出含 'SocketConnectBlockedError' 與 '10.255.255.1'（allow_hosts 下 pytest-socket 對非允許 host 拋 SocketConnectBlockedError，它不是 SocketBlockedError 的子類別）；另一測試對 pytester 內以 socketserver 起在 127.0.0.1 的臨時 port 連線 → passed"
         ],
         "run": "just test apps/api/tests/unit/infra/test_root_conftest.py -k root_conftest",
         "notes": ""

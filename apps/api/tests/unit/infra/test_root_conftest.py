@@ -140,4 +140,4 @@ def test_root_conftest_integration_allows_only_loopback(project: pytest.Pytester
     result = project.runpytest_subprocess("-m", "integration")
 
     result.assert_outcomes(passed=1, failed=1)
-    result.stdout.fnmatch_lines(["*test_f_remote*SocketConnectBlockedError*"])
+    result.stdout.fnmatch_lines(["*SocketConnectBlockedError*10.255.255.1*"])
