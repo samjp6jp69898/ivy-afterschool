@@ -13,6 +13,7 @@ import pytest
 
 API_DIR = Path(__file__).resolve().parents[3]
 ROOT_CONFTEST = API_DIR / "tests" / "conftest.py"
+SUPPORT_DIR = API_DIR / "tests" / "support"
 PYPROJECT = API_DIR / "pyproject.toml"
 
 
@@ -31,6 +32,12 @@ def project(pytester: pytest.Pytester) -> pytest.Pytester:
     (tests_dir / "conftest.py").write_text(
         ROOT_CONFTEST.read_text(encoding="utf-8"), encoding="utf-8"
     )
+    # 根 conftest 會 import tests.support.*（例如 FakeClock），一併複製
+    (tests_dir / "support").mkdir()
+    for module in SUPPORT_DIR.glob("*.py"):
+        (tests_dir / "support" / module.name).write_text(
+            module.read_text(encoding="utf-8"), encoding="utf-8"
+        )
     return pytester
 
 
