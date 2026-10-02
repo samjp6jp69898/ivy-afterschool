@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 20,
-  "last_updated": "2026-10-02T08:22:38Z",
+  "version": 21,
+  "last_updated": "2026-10-02T08:25:45Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -238,14 +238,14 @@
       "granularity_unit": "test",
       "target_path": "scripts/tests/conftest.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r1",
       "depends_on": [
         "INFRA-002",
         "INFRA-004"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "【review-r1 打回】local_db_url 的 loopback 守衛可被繞過，違反驗收「local_db_url 拒絕非 loopback host」。psycopg（libpq）不經過 Python socket 模組，pytest-socket 的 --allow-hosts 擋不到，守衛是唯一防線。已實測下列 SCRIPTS_TEST_DATABASE_URL / 環境皆通過守衛，conn.info.hostaddr 卻是非 loopback 位址：(1) postgresql://postgres:postgres@127.0.0.1:54342/postgres?host=<遠端>（query 的 host 覆寫 authority）；(2) 同上改 ?hostaddr=<遠端>（libpq 以 hostaddr 連線，host 只用於驗證）；(3) URL 不帶 hostaddr、環境變數 PGHOSTADDR=<遠端>（libpq 以環境變數補未指定參數）。同類尚未實測但應一併處理：?service= / PGSERVICE（service file 可帶 hostaddr）。修正驗收：上述每一條都要有 red_case 斷言被拒（錯誤訊息含實際位址），原有 10.0.0.5 與 loopback 正常案例不變；建議以 psycopg.conninfo.conninfo_to_dict 解析後檢查 host 與 hostaddr、拒絕 service，並在 local_db_conn 連線後以 conn.info.hostaddr 再驗一次（不是 loopback 就立即關閉並 pytest.fail）。INFRA-041 的 assert_loopback 規格有同樣缺口（INFRA-010 / DB-002 共用），依 README「牽動其他區域」一併修正其 description 與 red_cases。",
+      "risk_notes": "loopback 守衛只檢查位址、不檢查 port；只拿 local_db_url 交給非 libpq 客戶端（pgx 等）的腳本沒有連線後複驗，需自行確認該客戶端的參數規則。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "scripts/tests/test_scripts_conftest.py",
@@ -269,9 +269,9 @@
         "notes": "pytester 需在 conftest 宣告 pytest_plugins = ['pytester']；pytester 案例用 pytester.makeini / makeconftest 複製真實檔案內容。"
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r1",
-        "notes": "打回（1 項）。tdd.run 7 passed、--collect-only 帶/不帶 -k 皆 7 條對應 red_cases，commit 0e03525（紅）先於 0699586，lint / typecheck 乾淨；errors=1 的 red_case 修正屬實（fixture setup 階段 fail 計 error）且多斷言 10.0.0.5，非放寬。問題：local_db_url 只用 urlsplit 的 authority host 判斷 loopback，libpq 實際連線位址可被 URL query 或環境變數覆寫，且 pytest-socket 攔不到 libpq 的 C socket，此守衛是唯一防線。已實測三個反例皆通過守衛卻連到非 loopback 位址（本機 LAN IP）。詳見 risk_notes。"
+        "notes": "複審通過（HEAD ac0d704）。第 1 輪打回項已修正：local_db_url 改以 conninfo_to_dict 依 libpq 規則檢查 host / hostaddr（含逗號清單）與 PGHOST / PGHOSTADDR，拒絕 service / PGSERVICE 與未指定 host；local_db_conn 連線後以 conn.info.hostaddr 複驗。tdd.run 21 passed，--collect-only 帶/不帶 -k 皆 21 條，涵蓋全部 red_case；把 e05225b 的測試配上當時的 conftest 實跑，新增的 9 條反例全紅，確認先紅後綠（e05225b → 40090ea）；lint / typecheck 乾淨；外層設 PGHOSTADDR 時測試仍綠（project fixture 已清 PG* 變數）。以本機 Supabase 與 LAN IP 實測守衛判決對照 libpq 實際連線位址：URL 已指定 host 時 PGHOST 不被採用（實連 127.0.0.1），實作者判斷正確；PGSERVICEFILE / PGSYSCONFDIR 下的 pg_service.conf 在沒有 service / PGSERVICE 時不被讀取（實連 127.0.0.1）；postgres:// scheme、百分比編碼的參數名與值、key=value 形式的 hostaddr、URL 不帶 host 改用 PGHOST、?host= 空值皆被拒；大寫 HOSTADDR 由 libpq 判為無效參數，守衛同樣拒絕；dbname 塞連線字串時 libpq 不展開（只當資料庫名）。找不到能通過守衛卻連到非 loopback 的反例。殘留（不擋）：(1) 守衛只管位址不管 port，127.0.0.1 上其他專案的 Supabase（5432x / 5433x）仍可被指到；(2) 只拿 local_db_url 交給非 libpq 客戶端（例如 supabase CLI 的 pgx）的腳本沒有連線後複驗，且 pgx 的參數規則與 libpq 不完全相同，日後這類腳本測試要自行確認；(3) INFRA-010 / DB-002 的 description 已要求連線後呼叫 assert_connected_loopback，但 red_cases 沒有驗證這段接線（判斷邏輯由 INFRA-041 的 red_case 涵蓋），實作時應比照本 task 用假 hostaddr 補一條。"
       }
     },
     {
