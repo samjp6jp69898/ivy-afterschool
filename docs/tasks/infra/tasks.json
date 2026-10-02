@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 24,
-  "last_updated": "2026-10-02T08:33:54Z",
+  "version": 25,
+  "last_updated": "2026-10-02T08:36:45Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -362,7 +362,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/support/fake_clock.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r2",
       "depends_on": [
         "INFRA-009"
@@ -381,7 +381,7 @@
           "test_fake_clock_before_taipei_midnight：@pytest.mark.clock('2026-09-01T15:59:59+00:00') → today() == date(2026, 9, 1)",
           "test_fake_clock_advance：fake_clock.advance(minutes=30) 後 → now() == datetime(2026, 9, 1, 1, 30, tzinfo=UTC)；再 advance(timedelta(hours=15)) → today() == date(2026, 9, 2)",
           "test_fake_clock_rejects_naive：FakeClock(datetime(2026, 9, 1, 9, 0)) → ValueError，訊息含 'aware'；fake_clock.set(datetime(2026, 9, 1)) → ValueError",
-          "test_fake_clock_marker_requires_timezone：pytester 執行標 @pytest.mark.clock('2026-09-01T09:00:00') 的測試 → failed=1，輸出含 'clock marker 必須含時區'"
+          "test_fake_clock_marker_requires_timezone：pytester 執行標 @pytest.mark.clock('2026-09-01T09:00:00') 的測試 → errors=1（fixture 內 pytest.fail 是 setup error）、failed=0，輸出含 'clock marker 必須含時區'"
         ],
         "run": "just test apps/api/tests/unit/infra/test_fake_clock.py -k fake_clock",
         "notes": ""
