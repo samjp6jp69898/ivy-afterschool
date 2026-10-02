@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 2,
-  "last_updated": "2026-10-02T07:06:03Z",
+  "version": 4,
+  "last_updated": "2026-10-02T07:33:27Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -270,7 +270,7 @@
     {
       "id": "FRONTEND-008",
       "title": "建立 constants/permissions.ts 並與後端 Permission enum 做一致性測試",
-      "description": "建立 `apps/web/src/constants/permissions.ts`（後台專用；家長端不使用權限碼）。`docs/architecture_decisions.md` §6：前端同步一份權限碼，並有一致性測試。移植 ivy `FE:src/constants/permissions.ts::PERMISSION_NAMES` 的「常數物件 + 型別」形式；值改為本專案扁平權限碼，**去掉** PLATFORM_ONLY_CODES、PORTAL_ONLY_ROLES、TEACHER_PORTAL_ROUTES、scope-aware 後綴。\n\n**介面**\n```ts\nexport const PERMISSIONS = {\n  DASHBOARD_READ: 'dashboard:read', STAFF_READ: 'staff:read', STAFF_WRITE: 'staff:write', ROLES_READ: 'roles:read', ROLES_WRITE: 'roles:write',\n  SETTINGS_READ: 'settings:read', SETTINGS_WRITE: 'settings:write', AUDIT_READ: 'audit:read', CLASSES_READ: 'classes:read', CLASSES_WRITE: 'classes:write',\n  STUDENTS_READ: 'students:read', STUDENTS_WRITE: 'students:write', STUDENTS_SENSITIVE: 'students:sensitive', GUARDIANS_WRITE: 'guardians:write',\n  ATTENDANCE_READ: 'attendance:read', ATTENDANCE_OPERATE: 'attendance:operate', ATTENDANCE_AMEND: 'attendance:amend', LEAVES_READ: 'leaves:read', LEAVES_WRITE: 'leaves:write',\n  HOMEWORK_READ: 'homework:read', HOMEWORK_WRITE: 'homework:write', PICKUP_READ: 'pickup:read', PICKUP_OPERATE: 'pickup:operate', PICKUP_OVERRIDE: 'pickup:override',\n  EXAMS_READ: 'exams:read', EXAMS_WRITE: 'exams:write', EXAMS_PUBLISH: 'exams:publish',\n} as const\nexport type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS]\nexport const ALL_PERMISSION_CODES: readonly PermissionCode[]\nexport function isPermissionCode(v: string): v is PermissionCode\n```\n- 一致性測試 `apps/web/src/constants/permissions.consistency.spec.ts`：以 `node:fs` 讀 `apps/api/app/core/permissions.py`（路徑以 `fileURLToPath(new URL('../../../api/app/core/permissions.py', import.meta.url))` 解析），擷取 `class Permission(StrEnum):` 區塊內所有 `= \"xxx:yyy\"` 字串值，與 `ALL_PERMISSION_CODES` 比對集合。檔案不存在時測試**失敗**並顯示路徑（不可 skip）。NFC 的 `nfc:manage` 在 NFC 解除 blocked 時兩邊同時加入。\n- 新增權限碼時：後端 enum（BACKEND-070）、domain_spec §3、本檔同時修改。\n\n**驗收標準**\n- 前端 27 碼與後端 enum 集合完全一致。\n- `*` 不是合法權限碼。",
+      "description": "建立 `apps/web/src/constants/permissions.ts`（後台專用；家長端不使用權限碼）。`docs/architecture_decisions.md` §6：前端同步一份權限碼，並有一致性測試。移植 ivy `FE:src/constants/permissions.ts::PERMISSION_NAMES` 的「常數物件 + 型別」形式；值改為本專案扁平權限碼，**去掉** PLATFORM_ONLY_CODES、PORTAL_ONLY_ROLES、TEACHER_PORTAL_ROUTES、scope-aware 後綴。\n\n**介面**\n```ts\nexport const PERMISSIONS = {\n  DASHBOARD_READ: 'dashboard:read', STAFF_READ: 'staff:read', STAFF_WRITE: 'staff:write', ROLES_READ: 'roles:read', ROLES_WRITE: 'roles:write',\n  SETTINGS_READ: 'settings:read', SETTINGS_WRITE: 'settings:write', AUDIT_READ: 'audit:read', CLASSES_READ: 'classes:read', CLASSES_WRITE: 'classes:write',\n  STUDENTS_READ: 'students:read', STUDENTS_WRITE: 'students:write', STUDENTS_SENSITIVE: 'students:sensitive', GUARDIANS_WRITE: 'guardians:write',\n  ATTENDANCE_READ: 'attendance:read', ATTENDANCE_OPERATE: 'attendance:operate', ATTENDANCE_AMEND: 'attendance:amend', LEAVES_READ: 'leaves:read', LEAVES_WRITE: 'leaves:write',\n  HOMEWORK_READ: 'homework:read', HOMEWORK_WRITE: 'homework:write', PICKUP_READ: 'pickup:read', PICKUP_OPERATE: 'pickup:operate', PICKUP_OVERRIDE: 'pickup:override',\n  EXAMS_READ: 'exams:read', EXAMS_WRITE: 'exams:write', EXAMS_PUBLISH: 'exams:publish',\n  STUDENTS_PURGE: 'students:purge',\n} as const\nexport type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS]\nexport const ALL_PERMISSION_CODES: readonly PermissionCode[]\nexport function isPermissionCode(v: string): v is PermissionCode\n```\n- 一致性測試 `apps/web/src/constants/permissions.consistency.spec.ts`：以 `node:fs` 讀 `apps/api/app/core/permissions.py`（路徑以 `fileURLToPath(new URL('../../../api/app/core/permissions.py', import.meta.url))` 解析），擷取 `class Permission(StrEnum):` 區塊內所有 `= \"xxx:yyy\"` 字串值，與 `ALL_PERMISSION_CODES` 比對集合。檔案不存在時測試**失敗**並顯示路徑（不可 skip）。NFC 的 `nfc:manage` 在 NFC 解除 blocked 時兩邊同時加入。\n- 新增權限碼時：後端 enum（BACKEND-070）、domain_spec §3、本檔同時修改。\n\n**驗收標準**\n- 前端 28 碼與後端 enum 集合完全一致。\n- `*` 不是合法權限碼。",
       "granularity_unit": "config",
       "target_path": "apps/web/src/constants/permissions.ts",
       "source_ref": "FE:src/constants/permissions.ts::PERMISSION_NAMES",
@@ -289,7 +289,7 @@
           "vitest"
         ],
         "red_cases": [
-          "permissions constants match backend Permission enum：讀 apps/api/app/core/permissions.py 擷取的值集合 → 與 new Set(ALL_PERMISSION_CODES) 完全相等，且兩者大小皆為 27",
+          "permissions constants match backend Permission enum：讀 apps/api/app/core/permissions.py 擷取的值集合 → 與 new Set(ALL_PERMISSION_CODES) 完全相等，且兩者大小皆為 28（含 'students:purge'）",
           "permissions constants reject wildcard and unknown：isPermissionCode('*') === false；isPermissionCode('students:delete') === false；isPermissionCode('pickup:override') === true",
           "permissions constants fail loudly when backend file missing：以不存在的路徑呼叫測試內的 readBackendPermissions(path) → throw Error 且 message 含該路徑"
         ],
@@ -489,7 +489,7 @@
     {
       "id": "FRONTEND-024",
       "title": "建立 router/routes.ts：後台路由表與 meta（permission / public / authOnly）",
-      "description": "建立 `apps/web/src/router/routes.ts`，依 `docs/domain_spec.md` §4 後台頁面表定義全部路由（view 以 `() => import(...)` 延遲載入）。移植 ivy `FE:src/router/index.ts::routes` 的「meta 帶權限、預設拒絕」概念；**去掉** portal、platform、legacy redirect、tenant 相關路由。\n\n**RouteMeta 擴充**（同檔 `declare module 'vue-router'`）：`title: string`、`permission?: PermissionCode`、`public?: boolean`（不需登入）、`authOnly?: boolean`（登入即可，不需權限碼）、`allowWhenMustChangePassword?: boolean`、`layout?: 'admin' | 'blank'`（預設 admin）、`tablet?: boolean`（平板頁，layout 縮小側欄）。\n\n**路由**（name 唯一，path → view / permission）\n- `/login` LoginView（public、blank）；`/change-password` ChangePasswordView（authOnly、allowWhenMustChangePassword、blank）；`/forbidden` ErrorView（authOnly、props `{kind:'forbidden'}`）；`/:pathMatch(.*)*` ErrorView（public、blank、props `{kind:'not_found'}`）\n- `/` DashboardView `dashboard:read`；`/students` StudentWorkbenchView `students:read`；`/classes` ClassesView `classes:read`\n- `/attendance` AttendanceTodayView `attendance:read`（tablet）；`/attendance/monthly` AttendanceMonthlyView `attendance:read`；`/leaves` LeavesView `leaves:read`\n- `/homework` HomeworkBoardView `homework:read`（tablet）；`/pickup` PickupPosView `pickup:read`（tablet）；`/pickup/authorizations` PickupAuthorizationsView `pickup:read`（tablet）\n- `/exams` ExamsView `exams:read`；`/exams/:id` ExamDetailView `exams:read`（props: true）\n- `/settings/system` SystemSettingsView `settings:read`；`/settings/reference` ReferenceDataView `settings:read`；`/settings/accounts` StaffAccountsView `staff:read`；`/settings/roles` RolesView `roles:read`；`/settings/audit` AuditLogView `audit:read`\n- NFC 路由由 FRONTEND-275 加入（blocked）。\n- 匯出 `routes: RouteRecordRaw[]` 與 `ROUTE_PERMISSIONS: Record<string, PermissionCode>`（path → permission，供 FRONTEND-030 一致性測試）。\n\n**驗收標準**\n- 每條路由恰屬於 public / authOnly / 有 permission 三者之一。\n- path → permission 對照與 domain_spec §4 一致；permission 都是合法權限碼。",
+      "description": "建立 `apps/web/src/router/routes.ts`，依 `docs/domain_spec.md` §4 後台頁面表定義全部路由。view 的延遲載入集中在同時建立的 `apps/web/src/router/viewLoaders.ts`：`export const VIEW_LOADERS: Record<ViewName, () => Promise<Component>>`，routes.ts 只引用 `VIEW_LOADERS.X`，本身不直接 `import()` view 檔。**初始每個 loader 都指向 `() => import('@/router/PlaceholderView.vue')`**（PlaceholderView 渲染「此頁面尚未實作：{route.meta.title}」，不屬於 UI 稿範圍），各 view task 完成時把自己的 loader 改為真正的 `() => import('@/views/...')`，因此本 task 不必等任何 view 完成即可轉綠、整個 app 在任何階段都能啟動。移植 ivy `FE:src/router/index.ts::routes` 的「meta 帶權限、預設拒絕」概念；**去掉** portal、platform、legacy redirect、tenant 相關路由。\n\n**RouteMeta 擴充**（同檔 `declare module 'vue-router'`）：`title: string`、`permission?: PermissionCode`、`public?: boolean`（不需登入）、`authOnly?: boolean`（登入即可，不需權限碼）、`allowWhenMustChangePassword?: boolean`、`layout?: 'admin' | 'blank'`（預設 admin）、`tablet?: boolean`（平板頁，layout 縮小側欄）。\n\n**路由**（name 唯一，path → view / permission）\n- `/login` LoginView（public、blank）；`/change-password` ChangePasswordView（authOnly、allowWhenMustChangePassword、blank）；`/forbidden` ErrorView（authOnly、props `{kind:'forbidden'}`）；`/:pathMatch(.*)*` ErrorView（public、blank、props `{kind:'not_found'}`）\n- `/` DashboardView `dashboard:read`；`/students` StudentWorkbenchView `students:read`；`/classes` ClassesView `classes:read`\n- `/attendance` AttendanceTodayView `attendance:read`（tablet）；`/attendance/monthly` AttendanceMonthlyView `attendance:read`；`/leaves` LeavesView `leaves:read`\n- `/homework` HomeworkBoardView `homework:read`（tablet）；`/pickup` PickupPosView `pickup:read`（tablet）；`/pickup/authorizations` PickupAuthorizationsView `pickup:read`（tablet）\n- `/exams` ExamsView `exams:read`；`/exams/:id` ExamDetailView `exams:read`（props: true）\n- `/settings/system` SystemSettingsView `settings:read`；`/settings/reference` ReferenceDataView `settings:read`；`/settings/accounts` StaffAccountsView `staff:read`；`/settings/roles` RolesView `roles:read`；`/settings/audit` AuditLogView `audit:read`\n- NFC 路由由 FRONTEND-275 加入（blocked）。\n- 測試策略：`routes.spec.ts` 以 `vi.mock('@/router/viewLoaders', () => ({ VIEW_LOADERS: <每個 ViewName 對應回傳 stub 元件的函式> }))` 替換，只驗證路由表與 meta，不載入任何真實 view。\n- 匯出 `routes: RouteRecordRaw[]` 與 `ROUTE_PERMISSIONS: Record<string, PermissionCode>`（path → permission，供 FRONTEND-030 一致性測試）。\n\n**驗收標準**\n- 每條路由恰屬於 public / authOnly / 有 permission 三者之一。\n- routes.ts 不直接 import view 檔；未完成的 view 以 PlaceholderView 呈現。\n- path → permission 對照與 domain_spec §4 一致；permission 都是合法權限碼。",
       "granularity_unit": "config",
       "target_path": "apps/web/src/router/routes.ts",
       "source_ref": "FE:src/router/index.ts::routes",
@@ -509,7 +509,8 @@
         "red_cases": [
           "admin routes every route has exactly one access mode：遍歷 routes（含 children）→ 每筆 [meta.public, meta.authOnly, meta.permission != null] 恰有一個為 true",
           "admin routes permission table matches domain_spec：ROUTE_PERMISSIONS 深等於 {'/':'dashboard:read','/students':'students:read','/classes':'classes:read','/attendance':'attendance:read','/attendance/monthly':'attendance:read','/leaves':'leaves:read','/homework':'homework:read','/pickup':'pickup:read','/pickup/authorizations':'pickup:read','/exams':'exams:read','/exams/:id':'exams:read','/settings/system':'settings:read','/settings/reference':'settings:read','/settings/accounts':'staff:read','/settings/roles':'roles:read','/settings/audit':'audit:read'}",
-          "admin routes permissions are valid codes and names unique：所有 meta.permission 通過 isPermissionCode；route name 無重複；/attendance、/homework、/pickup、/pickup/authorizations 的 meta.tablet === true"
+          "admin routes permissions are valid codes and names unique：所有 meta.permission 通過 isPermissionCode；route name 無重複；/attendance、/homework、/pickup、/pickup/authorizations 的 meta.tablet === true",
+          "admin routes use placeholder loaders by default：不 mock 時 await VIEW_LOADERS.StudentWorkbenchView() 取得的元件，以 mountWithApp 掛在 meta.title '學生工作台' 的路由下 → 文字含 '此頁面尚未實作：學生工作台'"
         ],
         "run": "just web-test src/router/routes.spec.ts -t \"admin routes\"",
         "notes": ""
@@ -523,7 +524,7 @@
     {
       "id": "FRONTEND-025",
       "title": "實作 router/authGuard.ts：預設拒絕、未登入導向、強制改密碼導向、無權限導向",
-      "description": "建立 `apps/web/src/router/authGuard.ts`。移植 ivy `FE:src/router/index.ts::authGuard` 的 return-style guard（回傳 `true` 放行或路由目標）、「`/` 無權限時導到第一個有權限的頁」、「指名頁面無權限導 403 頁」；**去掉** portal / teacher / platform 分支、Sentry、409 refresh race 特例。\n\n**介面**：`export async function authGuard(to: RouteLocationNormalized): Promise<true | RouteLocationRaw>`；`export function firstAllowedPath(perms: ReadonlySet<string>): string | null`（依 FRONTEND-024 `routes` 順序找第一個 meta.permission 有持有的 path，跳過含 `:` 參數的路徑）；`export function safeRedirect(raw: unknown): string | null`（只接受以 `/` 開頭、不以 `//` 開頭、不含 `://` 的字串，防 open redirect）。\n\n**判斷順序**\n1. `await useAuthStore().restore()`（FRONTEND-022）。\n2. `meta.public`：若是 `/login` 且已登入 → `safeRedirect(to.query.redirect)`（且該路徑有權限）否則 `firstAllowedPath`（都沒有 → `/forbidden`）；其他 public 放行。\n3. 未登入 → `{ path: '/login', query: { redirect: to.fullPath } }`（to 為 `/` 時不帶 query）。\n4. `mustChangePassword` 且目標無 `allowWhenMustChangePassword` → `/change-password`。\n5. `meta.authOnly` → 放行。\n6. 沒有 `meta.permission`（漏設）→ 預設拒絕：`{ path: '/forbidden', query: { from: to.fullPath } }`。\n7. 無該權限：目標是 `/` → `firstAllowedPath() ?? '/forbidden'`；其他 → `/forbidden?from=...`。\n8. 放行。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/router/authGuard.ts`。移植 ivy `FE:src/router/index.ts::authGuard` 的 return-style guard（回傳 `true` 放行或路由目標）、「`/` 無權限時導到第一個有權限的頁」、「指名頁面無權限導 403 頁」；**去掉** portal / teacher / platform 分支、Sentry、409 refresh race 特例。\n\n**介面**：`export async function authGuard(to: RouteLocationNormalized): Promise<true | RouteLocationRaw>`；`export function firstAllowedPath(perms: ReadonlySet<string>): string | null`（依 FRONTEND-024 `routes` 順序找第一個 meta.permission 有持有的 path，跳過含 `:` 參數的路徑）；`export function safeRedirect(raw: unknown): string | null`（只接受以 `/` 開頭、不以 `//` 開頭、不含 `://` 的字串，防 open redirect）。\n\n**判斷順序**\n1. `await useAuthStore().restore()`（FRONTEND-022）。\n2. `meta.public`：若是 `/login` 且已登入 → `safeRedirect(to.query.redirect)`（且該路徑有權限）否則 `firstAllowedPath`（都沒有 → `/forbidden`）；其他 public 放行。\n3. 未登入 → `{ path: '/login', query: { redirect: to.fullPath } }`（to 為 `/` 時不帶 query）。\n4. `mustChangePassword` 且目標無 `allowWhenMustChangePassword` → `/change-password`。\n5. `meta.authOnly` → 放行。\n6. 沒有 `meta.permission`（漏設）→ 預設拒絕：`{ path: '/forbidden', query: { from: to.fullPath } }`。\n7. 無該權限：目標是 `/` → `firstAllowedPath() ?? '/forbidden'`；其他 → `/forbidden?from=...`。\n8. 放行。\n- 測試策略：本 task 的測試一律 `vi.mock('@/router/viewLoaders')` 回傳 stub 元件（不載入真實 view），因此不需等 view task 完成即可轉綠，view 完成後也不受其內部依賴影響。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "composable",
       "target_path": "apps/web/src/router/authGuard.ts",
       "source_ref": "FE:src/router/index.ts::authGuard",
@@ -563,7 +564,7 @@
     {
       "id": "FRONTEND-026",
       "title": "建立 router/index.ts：hash router、掛 authGuard、頁面標題",
-      "description": "建立 `apps/web/src/router/index.ts`：`createRouter({ history: createWebHashHistory(), routes })`（FRONTEND-024），`router.beforeEach(authGuard)`（FRONTEND-025），`router.afterEach(to => document.title = \\`${to.meta.title} - 安親班管理系統\\`)`。另匯出 `createAdminRouter(history?: RouterHistory)` 供測試以 memory history 建立。移植 ivy `FE:src/router/index.ts` 的 `router.beforeEach` 寫法；**去掉** route loading bar、chunk self-heal、Sentry。\n\n**驗收標準**\n- 未登入導向 /login；登入後可進有權限的頁；document.title 更新。\n- 未知路徑顯示 404 頁。",
+      "description": "建立 `apps/web/src/router/index.ts`：`createRouter({ history: createWebHashHistory(), routes })`（FRONTEND-024），`router.beforeEach(authGuard)`（FRONTEND-025），`router.afterEach(to => document.title = \\`${to.meta.title} - 安親班管理系統\\`)`。另匯出 `createAdminRouter(history?: RouterHistory)` 供測試以 memory history 建立。移植 ivy `FE:src/router/index.ts` 的 `router.beforeEach` 寫法；**去掉** route loading bar、chunk self-heal、Sentry。\n- 測試策略：本 task 的測試一律 `vi.mock('@/router/viewLoaders')` 回傳 stub 元件（不載入真實 view），因此不需等 view task 完成即可轉綠，view 完成後也不受其內部依賴影響。\n\n**驗收標準**\n- 未登入導向 /login；登入後可進有權限的頁；document.title 更新。\n- 未知路徑顯示 404 頁。",
       "granularity_unit": "config",
       "target_path": "apps/web/src/router/index.ts",
       "source_ref": "FE:src/router/index.ts::router",
@@ -597,7 +598,7 @@
     {
       "id": "FRONTEND-027",
       "title": "實作 App.vue：依路由 layout 切換 AdminLayout 或空白版面，套用 Element Plus 繁中語系",
-      "description": "建立 `apps/web/src/App.vue`：`<el-config-provider :locale=\"zhTw\">` 包住內容；`route.meta.layout === 'blank'` → 直接 `<RouterView />`；否則 `<AdminLayout>`（FRONTEND-029）內含 `<RouterView />`。`zhTw` 取自 `element-plus/es/locale/lang/zh-tw`。路由尚未 ready（`router.isReady()` 前）顯示全頁 loading，避免閃現側欄。\n\n**驗收標準**\n- `/login` 不渲染側欄；`/students` 渲染 AdminLayout。\n- Element Plus 元件文字為繁中（el-pagination 的 total 文字取自 zh-tw locale）。",
+      "description": "建立 `apps/web/src/App.vue`：`<el-config-provider :locale=\"zhTw\">` 包住內容；`route.meta.layout === 'blank'` → 直接 `<RouterView />`；否則 `<AdminLayout>`（FRONTEND-029）內含 `<RouterView />`。`zhTw` 取自 `element-plus/es/locale/lang/zh-tw`。路由尚未 ready（`router.isReady()` 前）顯示全頁 loading，避免閃現側欄。\n- 測試策略：本 task 的測試一律 `vi.mock('@/router/viewLoaders')` 回傳 stub 元件（不載入真實 view），因此不需等 view task 完成即可轉綠，view 完成後也不受其內部依賴影響。\n\n**驗收標準**\n- `/login` 不渲染側欄；`/students` 渲染 AdminLayout。\n- Element Plus 元件文字為繁中（el-pagination 的 total 文字取自 zh-tw locale）。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/App.vue",
       "source_ref": null,
@@ -632,7 +633,7 @@
     {
       "id": "FRONTEND-028",
       "title": "實作 bootstrap.ts 與 main.ts：建立後台 app、注入 http handler、掛載",
-      "description": "建立 `apps/web/src/bootstrap.ts`：\n```ts\nexport function createAdminApp(opts?: { history?: RouterHistory }): { app: App; router: Router; pinia: Pinia }\n```\n- `createApp(App)`、`createPinia()`、`createAdminRouter(opts.history)`（FRONTEND-026）。\n- `setAdminHttpHandlers`（FRONTEND-020）：\n  - `refresh`：`const user = await authApi.refresh(); useAuthStore().setUser(user)`（refresh 回來的權限可能已變更）。\n  - `authFailure`：`useAuthStore().reset()`；目前路由非 public 時 `router.replace({ path: '/login', query: { redirect: currentRoute.fullPath } })`。\n  - `passwordChangeRequired`：`router.replace('/change-password')`。\n- `app.config.errorHandler`：未捕捉錯誤以 `ElMessage.error(errorMessage(err, '發生未預期的錯誤'))` 顯示（`isCanceled` 略過）。\n`apps/web/src/main.ts` 取代 INFRA-005 的佔位：`import 'element-plus/dist/index.css'`、`createAdminApp().app.mount('#app')`。\n\n**驗收標準**\n- authFailure 會清空登入狀態並導向 /login 帶 redirect。\n- refresh handler 呼叫 refresh endpoint 並更新 store 的權限。\n- passwordChangeRequired 導向 /change-password。",
+      "description": "建立 `apps/web/src/bootstrap.ts`：\n```ts\nexport function createAdminApp(opts?: { history?: RouterHistory }): { app: App; router: Router; pinia: Pinia }\n```\n- `createApp(App)`、`createPinia()`、`createAdminRouter(opts.history)`（FRONTEND-026）。\n- `setAdminHttpHandlers`（FRONTEND-020）：\n  - `refresh`：`const user = await authApi.refresh(); useAuthStore().setUser(user)`（refresh 回來的權限可能已變更）。\n  - `authFailure`：`useAuthStore().reset()`；目前路由非 public 時 `router.replace({ path: '/login', query: { redirect: currentRoute.fullPath } })`。\n  - `passwordChangeRequired`：`router.replace('/change-password')`。\n- `app.config.errorHandler`：未捕捉錯誤以 `ElMessage.error(errorMessage(err, '發生未預期的錯誤'))` 顯示（`isCanceled` 略過）。\n`apps/web/src/main.ts` 取代 INFRA-005 的佔位：`import 'element-plus/dist/index.css'`、`createAdminApp().app.mount('#app')`。\n- 測試策略：本 task 的測試一律 `vi.mock('@/router/viewLoaders')` 回傳 stub 元件（不載入真實 view），因此不需等 view task 完成即可轉綠，view 完成後也不受其內部依賴影響。\n\n**驗收標準**\n- authFailure 會清空登入狀態並導向 /login 帶 redirect。\n- refresh handler 呼叫 refresh endpoint 並更新 store 的權限。\n- passwordChangeRequired 導向 /change-password。",
       "granularity_unit": "config",
       "target_path": "apps/web/src/bootstrap.ts",
       "source_ref": null,
@@ -1311,7 +1312,7 @@
     {
       "id": "FRONTEND-047",
       "title": "實作 views/LoginView.vue：員工登入頁",
-      "description": "建立 `apps/web/src/views/LoginView.vue`。移植 ivy `FE:src/views/LoginView.vue` 的表單驗證、第一個錯誤欄位聚焦、送出中 loading；**去掉** tenant branding、portal-only 導向、idle logout 提示。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-login.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。 稿需呈現：一般、欄位驗證錯誤、帳密錯誤、嘗試過多（鎖定）、伺服器無法連線、送出中。\n\n**內容**\n- 上方顯示安親班名稱與 Logo：`fetchPublicConfig()`（FRONTEND-021）取得 `org_name` / `logo_url`；失敗或空值顯示「安親班管理系統」。\n- 欄位：帳號（autocomplete username）、密碼（show-password，autocomplete current-password）；皆必填（「請輸入帳號」「請輸入密碼」）。\n- 送出：`auth.login(username.trim(), password)`（FRONTEND-022）→ 成功：`must_change_password` → `/change-password`；否則 `safeRedirect(route.query.redirect)`（FRONTEND-025，且有權限）或 `firstAllowedPath`，都沒有 → `/forbidden`。\n- 錯誤：`invalid_credentials` → 表單上方 el-alert「帳號或密碼錯誤」並清空密碼；`too_many_attempts` → 顯示後端 message；network_error / timeout → 「無法連線伺服器，請稍後再試」。\n- `auth.restoreError` 有值時（啟動還原失敗）同樣顯示無法連線提示。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/views/LoginView.vue`。移植 ivy `FE:src/views/LoginView.vue` 的表單驗證、第一個錯誤欄位聚焦、送出中 loading；**去掉** tenant branding、portal-only 導向、idle logout 提示。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-login.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。 稿需呈現：一般、欄位驗證錯誤、帳密錯誤、嘗試過多（鎖定）、伺服器無法連線、送出中。\n\n**內容**\n- 上方顯示安親班名稱與 Logo：`fetchPublicConfig()`（FRONTEND-021）取得 `org_name` / `logo_url`；失敗或空值顯示「安親班管理系統」。\n- 欄位：帳號（autocomplete username）、密碼（show-password，autocomplete current-password）；皆必填（「請輸入帳號」「請輸入密碼」）。\n- 送出：`auth.login(username.trim(), password)`（FRONTEND-022）→ 成功：`must_change_password` → `/change-password`；否則 `safeRedirect(route.query.redirect)`（FRONTEND-025，且有權限）或 `firstAllowedPath`，都沒有 → `/forbidden`。\n- 錯誤：`invalid_credentials` → 表單上方 el-alert「帳號或密碼錯誤」並清空密碼；`too_many_attempts` → 顯示後端 message；network_error / timeout → 「無法連線伺服器，請稍後再試」。\n- `auth.restoreError` 有值時（啟動還原失敗）同樣顯示無法連線提示。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/LoginView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/LoginView.vue",
       "source_ref": "FE:src/views/LoginView.vue::default",
@@ -1320,7 +1321,8 @@
       "depends_on": [
         "FRONTEND-022",
         "FRONTEND-025",
-        "FRONTEND-021"
+        "FRONTEND-021",
+        "FRONTEND-024"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -1350,7 +1352,7 @@
     {
       "id": "FRONTEND-048",
       "title": "實作 views/ChangePasswordView.vue：修改密碼（含首次登入強制修改）",
-      "description": "建立 `apps/web/src/views/ChangePasswordView.vue`。移植 ivy `FE:src/views/ChangePasswordView.vue` 的表單與 `FE:src/utils/passwordRules.ts::PASSWORD_RULES` 前端檢查；規則改為本專案（BACKEND-049：≥10 碼且含英文與數字）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-change-password.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。 稿需呈現：強制修改模式、一般模式、各種錯誤。\n\n**內容**\n- 欄位：目前密碼、新密碼、確認新密碼。前端規則：新密碼 ≥ 10 碼、含英文字母、含數字（逐條即時顯示 ✓/✗ 清單）；確認需一致（「兩次輸入的新密碼不一致」）；新舊不可相同（「新密碼不可與目前密碼相同」）。\n- `auth.mustChangePassword` 為 true：頂部 el-alert「首次登入或密碼已被重設，請先修改密碼」，不顯示「返回」按鈕；否則顯示「返回」（router.back，無歷史時回 firstAllowedPath）。\n- 送出 `auth.changePassword`（FRONTEND-022）→ `ElMessage.success('密碼已更新')` → `firstAllowedPath`（無則 `/forbidden`）。\n- 錯誤：`current_password_incorrect` → 目前密碼欄位錯誤「目前密碼不正確」；`password_unchanged` → 新密碼欄位「新密碼不可與目前密碼相同」；`weak_password` → 新密碼欄位顯示 `details.reasons` 對應文字（too_short「至少 10 碼」、missing_letter「需包含英文字母」、missing_digit「需包含數字」，未知 reason 直接顯示原文）；其他 → ElMessage.error。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/views/ChangePasswordView.vue`。移植 ivy `FE:src/views/ChangePasswordView.vue` 的表單與 `FE:src/utils/passwordRules.ts::PASSWORD_RULES` 前端檢查；規則改為本專案（BACKEND-049：≥10 碼且含英文與數字）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-change-password.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。 稿需呈現：強制修改模式、一般模式、各種錯誤。\n\n**內容**\n- 欄位：目前密碼、新密碼、確認新密碼。前端規則：新密碼 ≥ 10 碼、含英文字母、含數字（逐條即時顯示 ✓/✗ 清單）；確認需一致（「兩次輸入的新密碼不一致」）；新舊不可相同（「新密碼不可與目前密碼相同」）。\n- `auth.mustChangePassword` 為 true：頂部 el-alert「首次登入或密碼已被重設，請先修改密碼」，不顯示「返回」按鈕；否則顯示「返回」（router.back，無歷史時回 firstAllowedPath）。\n- 送出 `auth.changePassword`（FRONTEND-022）→ `ElMessage.success('密碼已更新')` → `firstAllowedPath`（無則 `/forbidden`）。\n- 錯誤：`current_password_incorrect` → 目前密碼欄位錯誤「目前密碼不正確」；`password_unchanged` → 新密碼欄位「新密碼不可與目前密碼相同」；`weak_password` → 新密碼欄位顯示 `details.reasons` 對應文字（too_short「至少 10 碼」、missing_letter「需包含英文字母」、missing_digit「需包含數字」，未知 reason 直接顯示原文）；其他 → ElMessage.error。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/ChangePasswordView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/ChangePasswordView.vue",
       "source_ref": "FE:src/views/ChangePasswordView.vue::default",
@@ -1358,7 +1360,8 @@
       "assignee_session": null,
       "depends_on": [
         "FRONTEND-022",
-        "FRONTEND-025"
+        "FRONTEND-025",
+        "FRONTEND-024"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -1386,14 +1389,15 @@
     {
       "id": "FRONTEND-049",
       "title": "實作 views/ErrorView.vue：403 無權限與 404 找不到頁面",
-      "description": "建立 `apps/web/src/views/ErrorView.vue`（props `kind: 'forbidden' | 'not_found'`）。參考 ivy `FE:src/views/ErrorStateView.vue` 的版面；**去掉** maintenance / chunk error 類型與 Sentry。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-error.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。\n\n- forbidden：標題「沒有權限」、說明「你的帳號沒有檢視此頁面的權限，如需使用請聯絡主任或管理員。」；`route.query.from` 有值時顯示「嘗試前往：{from}」。\n- not_found：標題「找不到頁面」、說明「網址可能有誤或頁面已移除。」\n- 按鈕「回到首頁」：已登入 → `firstAllowedPath(auth.permissions)`（無則停在原地並 disabled）；未登入 → `/login`。\n\n**驗收標準**\n- 兩種 kind 的文案；回首頁導向正確。",
+      "description": "建立 `apps/web/src/views/ErrorView.vue`（props `kind: 'forbidden' | 'not_found'`）。參考 ivy `FE:src/views/ErrorStateView.vue` 的版面；**去掉** maintenance / chunk error 類型與 Sentry。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-error.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。\n\n- forbidden：標題「沒有權限」、說明「你的帳號沒有檢視此頁面的權限，如需使用請聯絡主任或管理員。」；`route.query.from` 有值時顯示「嘗試前往：{from}」。\n- not_found：標題「找不到頁面」、說明「網址可能有誤或頁面已移除。」\n- 按鈕「回到首頁」：已登入 → `firstAllowedPath(auth.permissions)`（無則停在原地並 disabled）；未登入 → `/login`。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/ErrorView.vue')`。\n\n**驗收標準**\n- 兩種 kind 的文案；回首頁導向正確。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/ErrorView.vue",
       "source_ref": "FE:src/views/ErrorStateView.vue::default",
       "status": "pending",
       "assignee_session": null,
       "depends_on": [
-        "FRONTEND-025"
+        "FRONTEND-025",
+        "FRONTEND-024"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -1420,7 +1424,7 @@
     {
       "id": "FRONTEND-050",
       "title": "實作 api/settings.ts：系統設定讀取與更新 api client",
-      "description": "建立 `apps/web/src/api/settings.ts`（`docs/tasks/api_index.md` §4）。走 `adminHttp`。\n\n**型別**：`SettingGroup = 'org' | 'pickup' | 'homework' | 'notification' | 'line'`；`Setting = {key, group, label, is_secret, value: Record<string, unknown>, json_schema: JsonSchema, updated_at: string | null, updated_by_name: string | null}`；`JsonSchema` 為 Pydantic 產生的 JSON Schema（含 `$defs` / `$ref`），型別定義為遞迴的寬鬆介面（type、properties、required、$ref、$defs、anyOf、enum、pattern、minimum、maximum、maxLength、minLength、format、title、description、additionalProperties）。\n\n- `listSettings(): Promise<Setting[]>` → `GET /admin/settings`，回 `data.items`\n- `updateSetting(key: string, value: Record<string, unknown>): Promise<Setting>` → `PUT /admin/settings/{key}`，body `{value}`；key 以 `encodeURIComponent` 放入路徑（含 `.` 不需編碼但保持一致）。\n\n**驗收標準**\n- 路徑與 body 正確；422 `invalid_setting_value` 的 details（Pydantic 錯誤清單）以 ApiError 原樣拋出。",
+      "description": "建立 `apps/web/src/api/settings.ts`（`docs/tasks/api_index.md` §4）。走 `adminHttp`。\n\n**型別**：`SettingGroup = string`（registry 驅動，後端新增 key 或分組時前端不需改型別；目前分組為 BACKEND-106 的 org / pickup / homework / leave / notification / line）；`Setting = {key, group, label, is_secret, value: Record<string, unknown>, json_schema: JsonSchema, updated_at: string | null, updated_by_name: string | null}`；`JsonSchema` 為 Pydantic 產生的 JSON Schema（含 `$defs` / `$ref`），型別定義為遞迴的寬鬆介面（type、properties、required、$ref、$defs、anyOf、enum、pattern、minimum、maximum、maxLength、minLength、format、title、description、additionalProperties）。\n\n- `listSettings(): Promise<Setting[]>` → `GET /admin/settings`，回 `data.items`\n- `updateSetting(key: string, value: Record<string, unknown>): Promise<Setting>` → `PUT /admin/settings/{key}`，body `{value}`；key 以 `encodeURIComponent` 放入路徑（含 `.` 不需編碼但保持一致）。\n\n**驗收標準**\n- 路徑與 body 正確；422 `invalid_setting_value` 的 details（Pydantic 錯誤清單）以 ApiError 原樣拋出。",
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/settings.ts",
       "source_ref": null,
@@ -1637,7 +1641,8 @@
           "JsonSchemaForm handles nullable strings：org.profile 的 logo_url schema anyOf [{type:'string',format:'uri'},{type:'null'}]、值 'https://x/logo.png' → 清空輸入 → emit 的 logo_url === null",
           "JsonSchemaForm shows errors and readonly state：errors {'mon.start':'開始時間需早於結束時間'} → 對應欄位下顯示該文字；readonly true → 所有 input / switch 皆 disabled",
           "JsonSchemaForm marks unsupported shapes：schema 含 {type:'array',items:{type:'object'}} 的欄位 → 顯示 '此欄位格式不支援線上編輯'，emit 時該欄位保留原值",
-          "JsonSchemaForm falls back to field name without title：property {auto_expire_minutes:{type:'integer'}}（無 title）→ 標籤文字 'auto_expire_minutes'"
+          "JsonSchemaForm falls back to field name without title：property {auto_expire_minutes:{type:'integer'}}（無 title）→ 標籤文字 'auto_expire_minutes'",
+          "JsonSchemaForm renders new registry settings without special handling：leave.window 風格 schema {properties:{days_before:{type:'integer',minimum:0,maximum:365,title:'可提前申請天數'},max_attachments:{type:'integer',minimum:0,maximum:10,title:'每筆附件數上限'}}} → 渲染兩個 el-input-number，標籤為 schema title，max 屬性分別為 365 與 10"
         ],
         "run": "just web-test src/components/settings/JsonSchemaForm.spec.ts -t \"JsonSchemaForm\"",
         "notes": ""
@@ -1724,7 +1729,7 @@
     {
       "id": "FRONTEND-058",
       "title": "實作 views/settings/SystemSettingsView.vue：系統設定頁（依分組分頁顯示設定卡）",
-      "description": "建立 `apps/web/src/views/settings/SystemSettingsView.vue`（路由 `/settings/system`，`settings:read`）。參考 ivy `FE:src/components/settings/SettingsLineTab.vue` 的「讀取 → 表單 → 儲存」流程。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-system.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：各分組表單、secret 欄位（已設定 / 未設定 / 修改中）、欄位驗證錯誤、只有 settings:read 時的唯讀樣式、儲存中與儲存成功。\n\n**內容**\n- `PageHeader` 標題「系統設定」。載入 `listSettings()`；依 `group` 分頁（el-tabs）：org「安親班資料」、pickup「接送」、homework「作業進度」、notification「通知」、line「LINE 串接」；每頁內依 API 回傳順序放 `SettingCard`（FRONTEND-057）。分頁以 `route.query.tab` 記住。\n- 欄位中文標籤與說明直接取後端 `json_schema` 的 `title` / `description`（`notification.toggles` 用 `x-labels`，BACKEND-106），由 JsonSchemaForm（FRONTEND-055）渲染；本頁不維護標籤對照表。\n- 載入中 skeleton；載入失敗 `EmptyState` error + 「重試」。\n- 切換分頁或離開路由時，有任一卡片 `isDirty` → `confirmDiscardChanges()`（FRONTEND-046）。\n\n**驗收標準**\n- 依分組顯示卡片；tab 與 query 同步。\n- 未儲存變更離開時提示；載入失敗可重試。",
+      "description": "建立 `apps/web/src/views/settings/SystemSettingsView.vue`（路由 `/settings/system`，`settings:read`）。參考 ivy `FE:src/components/settings/SettingsLineTab.vue` 的「讀取 → 表單 → 儲存」流程。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-system.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：各分組表單、secret 欄位（已設定 / 未設定 / 修改中）、欄位驗證錯誤、只有 settings:read 時的唯讀樣式、儲存中與儲存成功。\n\n**內容**\n- `PageHeader` 標題「系統設定」。載入 `listSettings()`；依 `group` 分頁（el-tabs），分頁由 API 回傳的 group 動態產生（registry 驅動，BACKEND-106：`leave.window` → leave、`pickup.window` / `pickup.authorization` / `pickup.persons` → pickup、`homework.defaults` / `homework.window` → homework，新 key 自動出現在對應分組，不需改前端）：已知分組依序顯示中文標題 org「安親班資料」、pickup「接送」、homework「作業進度」、leave「請假」、notification「通知」、line「LINE 串接」，未知分組排在最後並以 group 原字串為標題；每頁內依 API 回傳順序放 `SettingCard`（FRONTEND-057）。分頁以 `route.query.tab` 記住。\n- 欄位中文標籤與說明直接取後端 `json_schema` 的 `title` / `description`（`notification.toggles` 用 `x-labels`，BACKEND-106），由 JsonSchemaForm（FRONTEND-055）渲染；本頁不維護標籤對照表。\n- 載入中 skeleton；載入失敗 `EmptyState` error + 「重試」。\n- 切換分頁或離開路由時，有任一卡片 `isDirty` → `confirmDiscardChanges()`（FRONTEND-046）。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/settings/SystemSettingsView.vue')`。\n\n**驗收標準**\n- 依分組顯示卡片；tab 與 query 同步。\n- 未儲存變更離開時提示；載入失敗可重試。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/settings/SystemSettingsView.vue",
       "source_ref": "FE:src/components/settings/SettingsLineTab.vue::default",
@@ -1733,7 +1738,8 @@
       "depends_on": [
         "FRONTEND-057",
         "FRONTEND-039",
-        "FRONTEND-042"
+        "FRONTEND-042",
+        "FRONTEND-024"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -1744,10 +1750,11 @@
           "vitest"
         ],
         "red_cases": [
-          "SystemSettingsView groups settings into tabs：GET /admin/settings 回 7 個 key → tab 標題依序 ['安親班資料','接送','作業進度','通知','LINE 串接']；點 'LINE 串接' → 顯示 '登入（LIFF）' 與 'Messaging API' 兩張卡（label 取 API），router query.tab === 'line'",
+          "SystemSettingsView groups settings into tabs dynamically：GET /admin/settings 回 org / pickup（pickup.window、pickup.authorization、pickup.persons 三張卡）/ homework / leave / notification / line 的 key → tab 標題依序 ['安親班資料','接送','作業進度','請假','通知','LINE 串接']；點 '接送' → 顯示 3 張卡；點 'LINE 串接' → router query.tab === 'line'",
           "SystemSettingsView renders field labels from schema titles：GET /admin/settings 的 pickup.window json_schema 中 request_start 的 title 為 '可發起接送開始時間' → 點 '接送' tab 後文字含 '可發起接送開始時間'；通知 tab 顯示 json_schema['x-labels'] 中的事件名稱",
           "SystemSettingsView warns before leaving with unsaved changes：在接送卡修改欄位後點 '通知' tab → body 出現 '尚未儲存的變更將會遺失'；點 '繼續編輯' → 仍停在接送 tab",
-          "SystemSettingsView shows retry on load failure：GET 回 500 → 文字含 '無法載入系統設定'，點 '重試' 且第二次回 200 → 顯示卡片"
+          "SystemSettingsView shows retry on load failure：GET 回 500 → 文字含 '無法載入系統設定'，點 '重試' 且第二次回 200 → 顯示卡片",
+          "SystemSettingsView shows unknown group last：回應另含 group 'beta' 的 key → 最後一個 tab 標題為 'beta' 且內含該卡"
         ],
         "run": "just web-test src/views/settings/SystemSettingsView.spec.ts -t \"SystemSettingsView\"",
         "notes": ""
@@ -1919,7 +1926,7 @@
     {
       "id": "FRONTEND-063",
       "title": "實作 views/settings/ReferenceDataView.vue：參考資料頁（科目 / 考試類型 / 國小 / 休息日分頁）",
-      "description": "建立 `apps/web/src/views/settings/ReferenceDataView.vue`（路由 `/settings/reference`，`settings:read`）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-reference.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現四個分頁的表格、新增 / 編輯 dialog、刪除被引用時改為停用的提示、只有 settings:read 時的唯讀樣式、空清單。\n\n- `PageHeader`「參考資料」，副標「科目、考試類型、合作國小與休息日」。\n- el-tabs：科目（FRONTEND-059）、考試類型（FRONTEND-060）、合作國小（FRONTEND-061）、休息日（FRONTEND-062）；分頁存 `route.query.tab`（subjects / exam-types / schools / closed-days），未切到的分頁不載入（lazy）。\n- 任一表格寫入成功後呼叫 `useLookupsStore().invalidate(kind)`（FRONTEND-083；科目 → `subjects`、考試類型 → `examTypes`、國小 → `schools`；休息日不在 lookups 中不需處理），讓其他頁的下拉選單更新。\n\n**驗收標準**\n- 分頁與 query 同步；未開啟的分頁不發請求。\n- 寫入後 lookups 快取失效。",
+      "description": "建立 `apps/web/src/views/settings/ReferenceDataView.vue`（路由 `/settings/reference`，`settings:read`）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-reference.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現四個分頁的表格、新增 / 編輯 dialog、刪除被引用時改為停用的提示、只有 settings:read 時的唯讀樣式、空清單。\n\n- `PageHeader`「參考資料」，副標「科目、考試類型、合作國小與休息日」。\n- el-tabs：科目（FRONTEND-059）、考試類型（FRONTEND-060）、合作國小（FRONTEND-061）、休息日（FRONTEND-062）；分頁存 `route.query.tab`（subjects / exam-types / schools / closed-days），未切到的分頁不載入（lazy）。\n- 任一表格寫入成功後呼叫 `useLookupsStore().invalidate(kind)`（FRONTEND-083；科目 → `subjects`、考試類型 → `examTypes`、國小 → `schools`；休息日不在 lookups 中不需處理），讓其他頁的下拉選單更新。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/settings/ReferenceDataView.vue')`。\n\n**驗收標準**\n- 分頁與 query 同步；未開啟的分頁不發請求。\n- 寫入後 lookups 快取失效。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/settings/ReferenceDataView.vue",
       "source_ref": null,
@@ -1930,7 +1937,9 @@
         "FRONTEND-060",
         "FRONTEND-061",
         "FRONTEND-062",
-        "FRONTEND-083"
+        "FRONTEND-083",
+        "FRONTEND-024",
+        "FRONTEND-039"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -1957,7 +1966,7 @@
     {
       "id": "FRONTEND-064",
       "title": "實作 views/settings/StaffAccountsView.vue：員工帳號列表與操作",
-      "description": "建立 `apps/web/src/views/settings/StaffAccountsView.vue`（路由 `/settings/accounts`，`staff:read`）。移植 ivy `FE:src/components/settings/SettingsAccountsTab.vue` 的列表欄位、操作下拉與重設密碼流程；**去掉** 家長帳號清單（ParentAccountsList）、portal-only 角色、employee 連動、自訂新密碼輸入（改為後端產生臨時密碼）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-accounts.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：列表（啟用 / 停用 / 需改密碼 tag）、篩選、建立 / 編輯 dialog（含個別權限調整）、臨時密碼只顯示一次的 dialog、停用與重新啟用確認、只有 staff:read 時的唯讀樣式、空清單。\n\n**內容**\n- `PageHeader`「員工帳號」；`AdminListToolbar`：搜尋（帳號 / 姓名）、角色（`listRoles()`）、狀態（啟用 / 停用）；`usePagedList`（FRONTEND-045，syncQuery）+ `listStaffUsers`。\n- 表格欄：帳號、姓名、角色、個別調整（extra / revoked 數量徽章，hover 顯示碼的中文標籤）、狀態（啟用 / 停用；`must_change_password` 加「待改密碼」tag）、最後登入（formatDateTime，null →「從未登入」）。\n- 有 `staff:write`：「新增員工」、每列操作「編輯」「重設密碼」「停用」/「重新啟用」。自己那一列不顯示「重設密碼」「停用」（後端 cannot_reset_self / cannot_deactivate_self）。\n- 重設密碼：確認「重設後 {display_name} 目前的登入會失效，確定要重設嗎？」→ `resetStaffPassword` → `TempPasswordDialog`（FRONTEND-066）。\n- 停用：確認「停用後 {display_name} 將無法登入，確定要停用嗎？」→ `deactivateStaffUser` → 更新該列。\n- 重新啟用：確認 → `activateStaffUser` → `TempPasswordDialog`。\n- 建立成功 → `TempPasswordDialog` 顯示 `temp_password`。\n- 錯誤以 `errorMessage` 顯示（cannot_manage_staff「無法管理權限比你大的帳號」等後端 message）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/views/settings/StaffAccountsView.vue`（路由 `/settings/accounts`，`staff:read`）。移植 ivy `FE:src/components/settings/SettingsAccountsTab.vue` 的列表欄位、操作下拉與重設密碼流程；**去掉** 家長帳號清單（ParentAccountsList）、portal-only 角色、employee 連動、自訂新密碼輸入（改為後端產生臨時密碼）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-accounts.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：列表（啟用 / 停用 / 需改密碼 tag）、篩選、建立 / 編輯 dialog（含個別權限調整）、臨時密碼只顯示一次的 dialog、停用與重新啟用確認、只有 staff:read 時的唯讀樣式、空清單。\n\n**內容**\n- `PageHeader`「員工帳號」；`AdminListToolbar`：搜尋（帳號 / 姓名）、角色（`listRoles()`）、狀態（啟用 / 停用）；`usePagedList`（FRONTEND-045，syncQuery）+ `listStaffUsers`。\n- 表格欄：帳號、姓名、角色、個別調整（extra / revoked 數量徽章，hover 顯示碼的中文標籤）、狀態（啟用 / 停用；`must_change_password` 加「待改密碼」tag）、最後登入（formatDateTime，null →「從未登入」）。\n- 有 `staff:write`：「新增員工」、每列操作「編輯」「重設密碼」「停用」/「重新啟用」。自己那一列不顯示「重設密碼」「停用」（後端 cannot_reset_self / cannot_deactivate_self）。\n- 重設密碼：確認「重設後 {display_name} 目前的登入會失效，確定要重設嗎？」→ `resetStaffPassword` → `TempPasswordDialog`（FRONTEND-066）。\n- 停用：確認「停用後 {display_name} 將無法登入，確定要停用嗎？」→ `deactivateStaffUser` → 更新該列。\n- 重新啟用：確認 → `activateStaffUser` → `TempPasswordDialog`。\n- 建立成功 → `TempPasswordDialog` 顯示 `temp_password`。\n- 錯誤以 `errorMessage` 顯示（cannot_manage_staff「無法管理權限比你大的帳號」等後端 message）。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/settings/StaffAccountsView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/settings/StaffAccountsView.vue",
       "source_ref": "FE:src/components/settings/SettingsAccountsTab.vue::default",
@@ -1969,7 +1978,9 @@
         "FRONTEND-045",
         "FRONTEND-041",
         "FRONTEND-065",
-        "FRONTEND-066"
+        "FRONTEND-066",
+        "FRONTEND-024",
+        "FRONTEND-039"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -2216,7 +2227,7 @@
     {
       "id": "FRONTEND-071",
       "title": "實作 views/settings/RolesView.vue：角色權限頁（角色卡 + 詳情面板）",
-      "description": "建立 `apps/web/src/views/settings/RolesView.vue`（路由 `/settings/roles`，`roles:read`）。移植 ivy `FE:src/views/settings/SettingsRolesView.vue` 的左右兩欄、`route.query.role` 記住選中角色、`useUnsavedChangesGuard`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-roles.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：角色卡列表（系統角色 / 自訂角色、使用人數）、角色詳情（admin 不可編輯、其他可改名稱說明與權限）、權限勾選器（無法授出的碼 disabled 與提示）、新增角色、刪除使用中角色的錯誤、只有 roles:read 時唯讀。\n\n- 同時載入 `listRoles()` 與 `fetchPermissionCatalog()`；左 `RoleCardsGrid`（showStaffCount）、右 `RoleDetailPanel`。預設選 `query.role`，否則第一個。\n- 有 `roles:write` 顯示「新增角色」→ `RoleCreateDialog`，建立後選中新角色。\n- 切換角色時若詳情 `isDirty` → `confirmDiscardChanges`。\n- saved / deleted 後重新載入角色清單（deleted 後選第一個）。\n- 載入失敗 EmptyState error + 重試。\n\n**驗收標準**\n- 預設選取與 query 同步；未儲存切換提示；新增與刪除後清單更新。",
+      "description": "建立 `apps/web/src/views/settings/RolesView.vue`（路由 `/settings/roles`，`roles:read`）。移植 ivy `FE:src/views/settings/SettingsRolesView.vue` 的左右兩欄、`route.query.role` 記住選中角色、`useUnsavedChangesGuard`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-roles.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：角色卡列表（系統角色 / 自訂角色、使用人數）、角色詳情（admin 不可編輯、其他可改名稱說明與權限）、權限勾選器（無法授出的碼 disabled 與提示）、新增角色、刪除使用中角色的錯誤、只有 roles:read 時唯讀。\n\n- 同時載入 `listRoles()` 與 `fetchPermissionCatalog()`；左 `RoleCardsGrid`（showStaffCount）、右 `RoleDetailPanel`。預設選 `query.role`，否則第一個。\n- 有 `roles:write` 顯示「新增角色」→ `RoleCreateDialog`，建立後選中新角色。\n- 切換角色時若詳情 `isDirty` → `confirmDiscardChanges`。\n- saved / deleted 後重新載入角色清單（deleted 後選第一個）。\n- 載入失敗 EmptyState error + 重試。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/settings/RolesView.vue')`。\n\n**驗收標準**\n- 預設選取與 query 同步；未儲存切換提示；新增與刪除後清單更新。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/settings/RolesView.vue",
       "source_ref": "FE:src/views/settings/SettingsRolesView.vue::default",
@@ -2225,7 +2236,9 @@
       "depends_on": [
         "FRONTEND-067",
         "FRONTEND-069",
-        "FRONTEND-070"
+        "FRONTEND-070",
+        "FRONTEND-024",
+        "FRONTEND-042"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -2253,7 +2266,7 @@
     {
       "id": "FRONTEND-072",
       "title": "實作 views/settings/AuditLogView.vue：稽核紀錄查詢頁",
-      "description": "建立 `apps/web/src/views/settings/AuditLogView.vue`（路由 `/settings/audit`，`audit:read`）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-audit.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：篩選列（動作類別、對象類型、操作者類型、日期區間）、列表、before / after 差異抽屜、空清單。\n\n**內容**\n- 篩選：動作類別（el-select，值為 action_prefix：`staff_user.` 帳號、`role.` 角色、`settings.` 系統設定、`student.` 學生、`guardian.` 監護人、`attendance.` 出勤改判、`exam_score.` 成績修改、`pickup.` 接送強制完成 / 目視核對）、對象類型 entity_type（文字）、操作者類型（員工 / 家長 / 系統 / 裝置）、日期區間（預設近 7 天，`todayTaipei` 為迄日）。`usePagedList`（page_size 50，syncQuery）+ `listAuditLogs`。\n- 表格：時間（formatDateTime）、操作者（actor_name + 類型 tag）、動作（action 原文 + 對照中文，例如 `staff_user.update`「修改員工帳號」；未知顯示原文）、對象（entity_type / entity_id 前 8 碼）、IP。點列開 `AuditDiffDrawer`（FRONTEND-073）。\n- 動作中文對照表 `AUDIT_ACTION_LABELS` 放本檔，至少涵蓋 domain_spec M1 列出的稽核事件。\n- 空清單「這段期間沒有稽核紀錄」。\n\n**驗收標準**\n- 預設日期區間與篩選參數正確；點列開抽屜；空狀態。",
+      "description": "建立 `apps/web/src/views/settings/AuditLogView.vue`（路由 `/settings/audit`，`audit:read`）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-audit.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：篩選列（動作類別、對象類型、操作者類型、日期區間）、列表、before / after 差異抽屜、空清單。\n\n**內容**\n- 篩選：動作類別（el-select，值為 action_prefix：`staff_user.` 帳號、`role.` 角色、`settings.` 系統設定、`student.` 學生、`guardian.` 監護人、`attendance.` 出勤改判、`exam_score.` 成績修改、`pickup.` 接送強制完成 / 目視核對）、對象類型 entity_type（文字）、操作者類型（員工 / 家長 / 系統 / 裝置）、日期區間（預設近 7 天，`todayTaipei` 為迄日）。`usePagedList`（page_size 50，syncQuery）+ `listAuditLogs`。\n- 表格：時間（formatDateTime）、操作者（actor_name + 類型 tag）、動作（action 原文 + 對照中文，例如 `staff_user.update`「修改員工帳號」；未知顯示原文）、對象（entity_type / entity_id 前 8 碼）、IP。點列開 `AuditDiffDrawer`（FRONTEND-073）。\n- 動作中文對照表 `AUDIT_ACTION_LABELS` 放本檔，至少涵蓋 domain_spec M1 列出的稽核事件。\n- 空清單「這段期間沒有稽核紀錄」。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/settings/AuditLogView.vue')`。\n\n**驗收標準**\n- 預設日期區間與篩選參數正確；點列開抽屜；空狀態。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/settings/AuditLogView.vue",
       "source_ref": null,
@@ -2263,7 +2276,8 @@
         "FRONTEND-054",
         "FRONTEND-045",
         "FRONTEND-073",
-        "FRONTEND-003"
+        "FRONTEND-003",
+        "FRONTEND-024"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -2367,7 +2381,7 @@
     {
       "id": "FRONTEND-081",
       "title": "實作 api/students.ts：學生 api client（CRUD、封存、照片、學年升級、Excel 匯入）",
-      "description": "建立 `apps/web/src/api/students.ts`（`docs/tasks/api_index.md` §6）。走 `adminHttp`。移植 ivy `FE:src/api/students.ts` 的函式分組；**去掉** lifecycle、graduate、bulk transfer、bonus impact、medical reason 查詢（本專案敏感欄位直接隨詳情回傳給有權限者）。\n\n**型別**\n- `StudentListItem = {id, student_no, name, gender, grade_level, school: {id, name, short_name} | null, school_class, class: {id, name} | null, status, archived_at}`\n- `StudentDetail = StudentListItem & {birthday, enrolled_on, withdrawn_on, note, photo_url, has_id_number, has_health_note, sensitive: {id_number, health_note} | null, guardians: Guardian[]}`（Guardian 型別取自 FRONTEND-082）\n- `StudentCreate = {student_no, name, gender?, birthday?, grade_level, school_id?, school_class?, class_id?, status?, enrolled_on?, withdrawn_on?, note?, id_number?, health_note?}`；`StudentUpdate = Partial<StudentCreate>`（`id_number` / `health_note` 給 `null` = 清除，不給 = 不變）\n- `PromotionPreview = {from_academic_year, to_academic_year, promote: PromotionItem[], graduate: PromotionItem[], total, already_promoted}`、`PromotionItem = {id, student_no, name, grade_from, grade_to, class_name}`、`PromotionResult = {promoted, graduated}`\n- `ImportPreview = {rows: {row_number, display: Record<string, string>, errors: string[]}[], total, valid, invalid}`、`ImportResult = {created, student_ids}`\n\n**函式**\n- `listStudents(params: {q?, class_id?, grade_level?, status?, school_id?, include_archived?, page?, page_size?}): Promise<Page<StudentListItem>>` → `GET /admin/students`\n- `getStudent(id)`、`createStudent(body)`、`updateStudent(id, body)`（PATCH）、`archiveStudent(id)`（POST `/archive`）\n- `uploadStudentPhoto(id, file: File): Promise<{photo_url}>` → multipart `file`（FRONTEND-006 buildFormData）\n- `previewPromotion(fromYear): Promise<PromotionPreview>` → `POST /admin/students/promote-grade` body `{from_academic_year, dry_run: true}`\n- `executePromotion(body: {from_academic_year, expected_total, withdrawn_on?}): Promise<PromotionResult>` → 同路徑 `dry_run: false`\n- `previewImport(file, academicYear): Promise<ImportPreview>` / `executeImport(file, academicYear): Promise<ImportResult>` → `POST /admin/students/import` multipart `file`、`academic_year`、`dry_run`\n\n**驗收標準**\n- 各函式路徑、body（含 multipart 欄位）、回傳值正確；`updateStudent` 保留 `null` 值（清除敏感欄位）。",
+      "description": "建立 `apps/web/src/api/students.ts`（`docs/tasks/api_index.md` §6）。走 `adminHttp`。移植 ivy `FE:src/api/students.ts` 的函式分組；**去掉** lifecycle、graduate、bulk transfer、bonus impact、medical reason 查詢（本專案敏感欄位直接隨詳情回傳給有權限者）。\n\n**型別**\n- `StudentListItem = {id, student_no, name, gender, grade_level, school: {id, name, short_name} | null, school_class, class: {id, name} | null, status, archived_at}`\n- `StudentDetail = StudentListItem & {birthday, enrolled_on, withdrawn_on, note, photo_url, has_id_number, has_health_note, sensitive: {id_number, health_note} | null, guardians: Guardian[]}`（Guardian 型別取自 FRONTEND-082）\n- `StudentCreate = {student_no, name, gender?, birthday?, grade_level, school_id?, school_class?, class_id?, status?, enrolled_on?, withdrawn_on?, note?, id_number?, health_note?}`；`StudentUpdate = Partial<StudentCreate>`（`id_number` / `health_note` 給 `null` = 清除，不給 = 不變）\n- `PromotionPreview = {from_academic_year, to_academic_year, promote: PromotionItem[], graduate: PromotionItem[], total, already_promoted}`、`PromotionItem = {id, student_no, name, grade_from, grade_to, class_name}`、`PromotionResult = {promoted, graduated}`\n- `ImportPreview = {rows: {row_number, display: Record<string, string>, errors: string[]}[], total, valid, invalid}`、`ImportResult = {created, student_ids}`\n\n**函式**\n- `listStudents(params: {q?, class_id?, grade_level?, status?, school_id?, include_archived?, page?, page_size?}): Promise<Page<StudentListItem>>` → `GET /admin/students`\n- `getStudent(id)`、`createStudent(body)`、`updateStudent(id, body)`（PATCH）、`archiveStudent(id)`（POST `/archive`）\n- `uploadStudentPhoto(id, file: File): Promise<{photo_url}>` → multipart `file`（FRONTEND-006 buildFormData）\n- `previewPromotion(fromYear): Promise<PromotionPreview>` → `POST /admin/students/promote-grade` body `{from_academic_year, dry_run: true}`\n- `executePromotion(body: {from_academic_year, expected_total, withdrawn_on?}): Promise<PromotionResult>` → 同路徑 `dry_run: false`\n- `purgeStudent(id, confirmStudentNo: string): Promise<PurgeResult>` → `POST /admin/students/{id}/purge`，body `{confirm_student_no}`（必須等於目前學號，否則 422 `purge_confirmation_mismatch`）；回傳 `PurgeResult = {student_id, purged_at, anonymized_student_no}`。需 `students:purge`，只限已封存且退班的學生（不符時後端回 409，以 ApiError 拋出）。\n- `downloadImportTemplate(): Promise<AxiosResponse<Blob>>` → `GET /admin/students/import-template`，`responseType: 'blob'`（回完整 response 供 FRONTEND-007 取檔名）。\n- `previewImport(file, academicYear): Promise<ImportPreview>` / `executeImport(file, academicYear): Promise<ImportResult>` → `POST /admin/students/import` multipart `file`、`academic_year`、`dry_run`\n\n**驗收標準**\n- 各函式路徑、body（含 multipart 欄位）、回傳值正確；`updateStudent` 保留 `null` 值（清除敏感欄位）。",
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/students.ts",
       "source_ref": "FE:src/api/students.ts::getStudents",
@@ -2383,7 +2397,9 @@
         "BACKEND-163",
         "BACKEND-164",
         "BACKEND-165",
-        "BACKEND-166"
+        "BACKEND-166",
+        "BACKEND-531",
+        "BACKEND-533"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -2398,7 +2414,9 @@
           "studentsApi update keeps null to clear sensitive field：PATCH /admin/students/s1 預期 body 深等於 {health_note:null,note:'對花生過敏請注意'} → updateStudent('s1',{health_note:null,note:'對花生過敏請注意'}) 回傳 StudentDetail",
           "studentsApi uploads photo as multipart：POST /admin/students/s1/photo 的 request data 為 FormData 且 data.get('file').name === 'me.jpg' → 回傳 photo_url === 'https://storage/x.jpg'",
           "studentsApi promotion preview and execute bodies：previewPromotion(114) 的 POST body 深等於 {from_academic_year:114,dry_run:true}；executePromotion({from_academic_year:114,expected_total:96,withdrawn_on:'2026-08-01'}) body 深等於 {from_academic_year:114,dry_run:false,expected_total:96,withdrawn_on:'2026-08-01'}",
-          "studentsApi import sends multipart fields：previewImport(file,115) → FormData 的 academic_year === '115'、dry_run === 'true'；executeImport → dry_run === 'false'；回 409 {error:{code:'import_has_errors'}} → reject code 'import_has_errors'"
+          "studentsApi import sends multipart fields：previewImport(file,115) → FormData 的 academic_year === '115'、dry_run === 'true'；executeImport → dry_run === 'false'；回 409 {error:{code:'import_has_errors'}} → reject code 'import_has_errors'",
+          "studentsApi purge posts confirmation：purgeStudent('s1','S1001') → POST /admin/students/s1/purge body 深等於 {confirm_student_no:'S1001'}，回 {student_id:'s1',purged_at:'2026-10-02T08:00:00Z',anonymized_student_no:'PURGED-7F3A'} → 回傳 anonymized_student_no === 'PURGED-7F3A'；回 422 {error:{code:'purge_confirmation_mismatch',message:'確認學號不符'}} → reject code 'purge_confirmation_mismatch'",
+          "studentsApi downloads import template as blob：GET /admin/students/import-template responseType 'blob' 回 headers content-disposition → 回傳物件 data instanceof Blob 且 headers['content-disposition'] 存在"
         ],
         "run": "just web-test src/api/students.spec.ts -t \"studentsApi\"",
         "notes": ""
@@ -2523,7 +2541,7 @@
     {
       "id": "FRONTEND-085",
       "title": "實作 views/StudentWorkbenchView.vue：學生工作台（列表 + 詳情面板）",
-      "description": "建立 `apps/web/src/views/StudentWorkbenchView.vue`（路由 `/students`，`students:read`）。移植 ivy `FE:src/views/StudentWorkbenchView.vue` 的左右兩欄與 query 驅動選取；**去掉** TodayTasksPanel、招生 / 在籍統計連動。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-students.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：學生列表（篩選、分頁、封存學生）、詳情面板（基本資料 / 監護人 / 成績紀錄分頁）、敏感欄位三種狀態（有權限遮罩 / 顯示、無權限已填寫、未填寫）、編輯 dialog（有 / 無 students:sensitive）、照片上傳、監護人管理與綁定碼 dialog、Excel 匯入三步驟、學年升級預覽與執行、只有 students:read 時的唯讀樣式、空清單。\n\n- 左：`StudentListPanel`（FRONTEND-086）；右：`StudentDetailPanel`（FRONTEND-087），以 `route.query.student` 決定選中的學生（點列 → `router.replace` 帶入）。\n- 寬度 < 1200：詳情改為右側 el-drawer（寬 640）；關閉 drawer 清掉 query.student。\n- 詳情中編輯 / 封存 / 照片更新後，通知列表重新載入目前頁（列表 expose `reload`）。\n- 沒選學生時右側顯示「從左側選擇學生以檢視詳情」。\n\n**驗收標準**\n- 點列表列後 query 與詳情同步；直接以 query 進入時開啟該學生。\n- 詳情變更後列表重新載入。",
+      "description": "建立 `apps/web/src/views/StudentWorkbenchView.vue`（路由 `/students`，`students:read`）。移植 ivy `FE:src/views/StudentWorkbenchView.vue` 的左右兩欄與 query 驅動選取；**去掉** TodayTasksPanel、招生 / 在籍統計連動。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-students.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：學生列表（篩選、分頁、封存學生）、詳情面板（基本資料 / 監護人 / 成績紀錄分頁）、敏感欄位三種狀態（有權限遮罩 / 顯示、無權限已填寫、未填寫）、編輯 dialog（有 / 無 students:sensitive）、照片上傳、監護人管理與綁定碼 dialog、Excel 匯入三步驟、學年升級預覽與執行、只有 students:read 時的唯讀樣式、空清單。\n\n- 左：`StudentListPanel`（FRONTEND-086）；右：`StudentDetailPanel`（FRONTEND-087），以 `route.query.student` 決定選中的學生（點列 → `router.replace` 帶入）。\n- 寬度 < 1200：詳情改為右側 el-drawer（寬 640）；關閉 drawer 清掉 query.student。\n- 詳情中編輯 / 封存 / 照片更新後，通知列表重新載入目前頁（列表 expose `reload`）。\n- 沒選學生時右側顯示「從左側選擇學生以檢視詳情」。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/StudentWorkbenchView.vue')`。\n\n**驗收標準**\n- 點列表列後 query 與詳情同步；直接以 query 進入時開啟該學生。\n- 詳情變更後列表重新載入。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/StudentWorkbenchView.vue",
       "source_ref": "FE:src/views/StudentWorkbenchView.vue::default",
@@ -2531,7 +2549,8 @@
       "assignee_session": null,
       "depends_on": [
         "FRONTEND-086",
-        "FRONTEND-087"
+        "FRONTEND-087",
+        "FRONTEND-024"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -2603,7 +2622,7 @@
     {
       "id": "FRONTEND-087",
       "title": "實作 components/student/StudentDetailPanel.vue：學生詳情（基本資料、監護人、成績紀錄、編輯 / 封存）",
-      "description": "建立 `apps/web/src/components/student/StudentDetailPanel.vue`。移植 ivy `FE:src/components/student/StudentDetailPanel.vue` 的「摘要 header + tabs + 編輯 dialog」骨架；**去掉** lifecycle、費用、活動、健康成長、溝通紀錄、IEP、在學證明等分頁。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-students.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：學生列表（篩選、分頁、封存學生）、詳情面板（基本資料 / 監護人 / 成績紀錄分頁）、敏感欄位三種狀態（有權限遮罩 / 顯示、無權限已填寫、未填寫）、編輯 dialog（有 / 無 students:sensitive）、照片上傳、監護人管理與綁定碼 dialog、Excel 匯入三步驟、學年升級預覽與執行、只有 students:read 時的唯讀樣式、空清單。\n\n**props / emits**：`studentId: string`；emits `changed()`、`close()`。\n**內容**\n- 載入 `getStudent(id)`（切換 id 時取消舊請求的結果採用，以序號防護）；載入中 skeleton；404 → EmptyState「找不到此學生，可能已被刪除」。\n- header：照片（`StudentPhotoUploader` FRONTEND-090）、姓名、學號、狀態 tag、年級、安親班班級、就讀國小與班級；封存學生顯示「已封存（{formatDate(archived_at)}）」。\n- 按鈕（`students:write`，封存學生不顯示）：「編輯」→ `StudentFormDialog`（FRONTEND-089）；「封存」→ 確認「封存後此學生不會出現在出勤、接送等名單，確定要封存 {name} 嗎？」→ `archiveStudent` → emit changed。\n- tabs：\n  - 基本資料：性別、生日、入學日、退班日、備註，以及 `StudentSensitiveFields`（FRONTEND-088）。\n  - 監護人：`GuardianManager`（FRONTEND-091，傳入 detail.guardians 作為初始資料）。\n  - 成績紀錄（有 `exams:read` 才顯示）：`StudentExamHistoryTab`（FRONTEND-240）。\n- 分頁存 `route.query.tab`。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/student/StudentDetailPanel.vue`。移植 ivy `FE:src/components/student/StudentDetailPanel.vue` 的「摘要 header + tabs + 編輯 dialog」骨架；**去掉** lifecycle、費用、活動、健康成長、溝通紀錄、IEP、在學證明等分頁。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-students.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：學生列表（篩選、分頁、封存學生）、詳情面板（基本資料 / 監護人 / 成績紀錄分頁）、敏感欄位三種狀態（有權限遮罩 / 顯示、無權限已填寫、未填寫）、編輯 dialog（有 / 無 students:sensitive）、照片上傳、監護人管理與綁定碼 dialog、Excel 匯入三步驟、學年升級預覽與執行、只有 students:read 時的唯讀樣式、空清單。\n\n**props / emits**：`studentId: string`；emits `changed()`、`close()`。\n**內容**\n- 載入 `getStudent(id)`（切換 id 時取消舊請求的結果採用，以序號防護）；載入中 skeleton；404 → EmptyState「找不到此學生，可能已被刪除」。\n- header：照片（`StudentPhotoUploader` FRONTEND-090）、姓名、學號、狀態 tag、年級、安親班班級、就讀國小與班級；封存學生顯示「已封存（{formatDate(archived_at)}）」。\n- 按鈕（`students:write`，封存學生不顯示）：「編輯」→ `StudentFormDialog`（FRONTEND-089）；「封存」→ 確認「封存後此學生不會出現在出勤、接送等名單，確定要封存 {name} 嗎？」→ `archiveStudent` → emit changed。\n- 「永久刪除」（只有持 `students:purge`、且學生已封存 `archived_at` 有值、status 為 `withdrawn` 才顯示，danger 文字按鈕置於 header 右側 ⋮ 選單）→ `StudentPurgeDialog`（FRONTEND-100）→ purged 後重新載入詳情並 emit changed。\n- tabs：\n  - 基本資料：性別、生日、入學日、退班日、備註，以及 `StudentSensitiveFields`（FRONTEND-088）。\n  - 監護人：`GuardianManager`（FRONTEND-091，傳入 detail.guardians 作為初始資料）。\n  - 成績紀錄（有 `exams:read` 才顯示）：`StudentExamHistoryTab`（FRONTEND-240）。\n- 分頁存 `route.query.tab`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/student/StudentDetailPanel.vue",
       "source_ref": "FE:src/components/student/StudentDetailPanel.vue::default",
@@ -2615,7 +2634,9 @@
         "FRONTEND-089",
         "FRONTEND-090",
         "FRONTEND-091",
-        "FRONTEND-240"
+        "FRONTEND-240",
+        "FRONTEND-100",
+        "FRONTEND-042"
       ],
       "suggested_model": "opus-5",
       "risk_notes": "",
@@ -2631,7 +2652,8 @@
           "StudentDetailPanel hides write actions for readers and archived students：permissions ['students:read'] → 沒有 '編輯'、'封存'；students:write 但 archived_at 有值 → 文字含 '已封存（' 且沒有 '編輯'",
           "StudentDetailPanel shows exam tab only with exams:read：無 exams:read → tab 標題不含 '成績紀錄'；有 → 含",
           "StudentDetailPanel ignores stale responses when switching：studentId 's1' 的請求 300ms 後回、改為 's2' 後 10ms 回 → 最終顯示 s2 的姓名",
-          "StudentDetailPanel not found state：GET 回 404 student_not_found → 文字含 '找不到此學生，可能已被刪除'"
+          "StudentDetailPanel not found state：GET 回 404 student_not_found → 文字含 '找不到此學生，可能已被刪除'",
+          "StudentDetailPanel shows purge only for archived withdrawn students with permission：permissions 含 students:purge、student archived_at 有值且 status 'withdrawn' → ⋮ 含 '永久刪除'，點擊開啟 dialog（文字含 '請輸入學號 S1001 以確認'）；status 'suspended' 或未封存 → 不含；無 students:purge → 不含"
         ],
         "run": "just web-test src/components/student/StudentDetailPanel.spec.ts -t \"StudentDetailPanel\"",
         "notes": ""
@@ -2680,7 +2702,7 @@
     {
       "id": "FRONTEND-089",
       "title": "實作 components/student/StudentFormDialog.vue：新增 / 編輯學生（敏感欄位依權限）",
-      "description": "建立 `apps/web/src/components/student/StudentFormDialog.vue`。移植 ivy `FE:src/components/student/StudentEditDialog.vue` 的 FormDialog + 分段表單 + dirty 防呆 + 422 欄位錯誤對應；欄位改為本專案 StudentCreate，**去掉** 家長 / 緊急聯絡 / 政府申報分段、lifecycle。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-students.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：學生列表（篩選、分頁、封存學生）、詳情面板（基本資料 / 監護人 / 成績紀錄分頁）、敏感欄位三種狀態（有權限遮罩 / 顯示、無權限已填寫、未填寫）、編輯 dialog（有 / 無 students:sensitive）、照片上傳、監護人管理與綁定碼 dialog、Excel 匯入三步驟、學年升級預覽與執行、只有 students:read 時的唯讀樣式、空清單。\n\n**props / emits**：`modelValue: boolean`、`student?: StudentDetail`（有值 = 編輯）；emits `update:modelValue`、`saved(detail: StudentDetail)`。\n**欄位**\n- 基本：學號（必填 ≤20）、姓名（必填 ≤30）、性別（GENDER_LABELS）、生日（不可晚於今天）、年級（GRADE_OPTIONS，必填）。\n- 就讀：就讀國小（lookups schoolOptions）、學校班級（文字，例如「三年二班」）、安親班班級（lookups classOptions，currentAcademicYear）。\n- 狀態：狀態（在學 / 暫停 / 退班，新增預設在學）、入學日（新增預設 todayTaipei）、退班日（狀態為退班時顯示且必填）、備註。\n- 敏感（只有 `students:sensitive` 才渲染此分段）：身分證字號（新增：選填，前端格式檢查 `^[A-Z][12]\\d{8}$`，自動轉大寫）、健康備註（textarea ≤500）。編輯時欄位初始為空並提示「留空表示不變更」，另有「清除已填寫的資料」checkbox（勾選送 `null`）；`has_id_number` 時顯示「目前已填寫」。\n**送出**\n- 新增 → `createStudent`；編輯 → 只送有變更的欄位（`updateStudent`），未變更不送請求並直接關閉。\n- 錯誤：`student_no_taken` → 學號欄「學號已被使用」；`id_number_duplicate` → 身分證欄「此身分證字號已有學生使用」；`invalid_dates` → 顯示後端 message 於退班日；`sensitive_permission_required` → ElMessage.error；422 欄位錯誤對應。\n- 成功 `ElMessage.success('已儲存')`、emit saved、關閉；dirty 時關閉需確認（FormDialog）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/student/StudentFormDialog.vue`。移植 ivy `FE:src/components/student/StudentEditDialog.vue` 的 FormDialog + 分段表單 + dirty 防呆 + 422 欄位錯誤對應；欄位改為本專案 StudentCreate，**去掉** 家長 / 緊急聯絡 / 政府申報分段、lifecycle。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-students.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：學生列表（篩選、分頁、封存學生）、詳情面板（基本資料 / 監護人 / 成績紀錄分頁）、敏感欄位三種狀態（有權限遮罩 / 顯示、無權限已填寫、未填寫）、編輯 dialog（有 / 無 students:sensitive）、照片上傳、監護人管理與綁定碼 dialog、Excel 匯入三步驟、學年升級預覽與執行、只有 students:read 時的唯讀樣式、空清單。\n\n**props / emits**：`modelValue: boolean`、`student?: StudentDetail`（有值 = 編輯）；emits `update:modelValue`、`saved(detail: StudentDetail)`。\n**欄位**\n- 基本：學號（必填 ≤20）、姓名（必填 ≤30）、性別（GENDER_LABELS）、生日（不可晚於今天）、年級（GRADE_OPTIONS，必填）。\n- 就讀：就讀國小（lookups schoolOptions）、學校班級（文字，例如「三年二班」）、安親班班級（lookups classOptions，currentAcademicYear）。\n- 狀態：狀態（在學 / 暫停 / 退班，新增預設在學）、入學日（新增預設 todayTaipei）、退班日（狀態為退班時顯示且必填）、備註。\n- 敏感（只有 `students:sensitive` 才渲染此分段）：身分證字號（新增：選填，前端格式檢查 `^[A-Z][12]\\d{8}$`，自動轉大寫）、健康備註（textarea ≤500）。編輯時欄位初始為空並提示「留空表示不變更」，另有「清除已填寫的資料」checkbox（勾選送 `null`）；`has_id_number` 時顯示「目前已填寫」。\n**送出**\n- 新增 → `createStudent`；編輯 → 只送有變更的欄位（`updateStudent`），未變更不送請求並直接關閉。\n- 錯誤：`student_no_taken` → 學號欄「學號已被使用」；`id_number_duplicate` → 身分證欄「此身分證字號已有學生使用」；`invalid_dates` → 顯示後端 message 於退班日；`sensitive_permission_required` → ElMessage.error；422 欄位錯誤對應。\n- 成功 `ElMessage.success('已儲存')`、emit saved、關閉；dirty 時關閉需確認（FormDialog）。\n- **暫停 / 退班確認**（domain_spec M3、BACKEND-529）：編輯時把狀態由在學改為暫停或退班（或由暫停改為退班）並按儲存，送出前先跳確認框：標題「確認將 {name} 改為{暫停 / 退班}」，內容「儲存後系統會自動：取消今天進行中的接送請求與有效的代理接送授權、刪除今天起尚未登記的出勤、取消未來的請假（已開始的截到昨天）。已發生的紀錄會保留。」；取消則不送出並保留表單內容。新增學生時不顯示此確認。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/student/StudentFormDialog.vue",
       "source_ref": "FE:src/components/student/StudentEditDialog.vue::default",
@@ -2707,7 +2729,9 @@
           "StudentFormDialog edit sends only changed fields and clears sensitive：student 有 has_health_note true → 改姓名為 '王小明明'、勾選健康備註的 '清除已填寫的資料' → PATCH /admin/students/s1 body 深等於 {name:'王小明明',health_note:null}",
           "StudentFormDialog requires withdrawn date for withdrawn status：狀態選 '退班' 且退班日空白 → 點 '儲存' 顯示 '請選擇退班日'，mock.history.post 與 patch 皆為 0",
           "StudentFormDialog maps duplicate errors：POST 回 409 student_no_taken → 學號欄文字 '學號已被使用'；回 409 id_number_duplicate → 身分證欄文字 '此身分證字號已有學生使用'",
-          "StudentFormDialog validates id number format：身分證輸入 'a12345' → 欄位錯誤 '身分證字號格式不正確'；輸入 'a123456789' → 值自動轉為 'A123456789'"
+          "StudentFormDialog validates id number format：身分證輸入 'a12345' → 欄位錯誤 '身分證字號格式不正確'；輸入 'a123456789' → 值自動轉為 'A123456789'",
+          "StudentFormDialog confirms before suspending or withdrawing：student.status 'active' → 狀態改 '退班'、退班日 2026-10-02 後點 '儲存' → body 出現 '確認將 王小明 改為退班' 與 '取消今天進行中的接送請求與有效的代理接送授權、刪除今天起尚未登記的出勤、取消未來的請假'；點 '取消' → mock.history.patch.length === 0 且表單仍開啟；再次儲存並確認 → PATCH body 含 {status:'withdrawn',withdrawn_on:'2026-10-02'}",
+          "StudentFormDialog skips status confirm when not deactivating：只改姓名 → 無確認框直接 PATCH；新增學生選狀態 '暫停' → 無確認框直接 POST"
         ],
         "run": "just web-test src/components/student/StudentFormDialog.spec.ts -t \"StudentFormDialog\"",
         "notes": ""
@@ -2868,7 +2892,7 @@
     {
       "id": "FRONTEND-094",
       "title": "實作 components/student/StudentImportDialog.vue：Excel 匯入（上傳 → 預覽 → 執行）",
-      "description": "建立 `apps/web/src/components/student/StudentImportDialog.vue`（BACKEND-155 / 156：預覽不寫入、執行全有或全無）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-students.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：學生列表（篩選、分頁、封存學生）、詳情面板（基本資料 / 監護人 / 成績紀錄分頁）、敏感欄位三種狀態（有權限遮罩 / 顯示、無權限已填寫、未填寫）、編輯 dialog（有 / 無 students:sensitive）、照片上傳、監護人管理與綁定碼 dialog、Excel 匯入三步驟、學年升級預覽與執行、只有 students:read 時的唯讀樣式、空清單。\n\n**props / emits**：`modelValue`；emits `update:modelValue`、`imported(result: ImportResult)`。\n**步驟**（el-steps）\n1. 選擇：學年度（academicYearOptions，預設 currentAcademicYear，決定「安親班班級」欄比對哪一學年度）+ 檔案（拖曳或選擇 .xlsx，`checkUpload(file, XLSX_RULE)`）。說明欄位：必填「學號、姓名、年級」，其餘「性別、生日、就讀國小、學校班級、安親班班級、狀態、入學日、備註」，以及「身分證字號、健康備註」（需敏感資料權限，無 `students:sensitive` 時提示「你沒有敏感資料權限，含這兩欄資料的列會被標為錯誤」）；最多 500 列。按「預覽」→ `previewImport`。\n2. 預覽：摘要「共 {total} 列，正確 {valid} 列，錯誤 {invalid} 列」；表格顯示列號、學號、姓名、年級、班級（取 `display`）、錯誤（紅字，多則換行）；「只顯示錯誤列」切換。`invalid > 0` 時「匯入」disabled 並提示「請修正 Excel 中的錯誤後重新上傳（匯入為全部成功或全部不寫入）」，提供「重新上傳」。\n3. 執行：確認「將建立 {valid} 位學生，確定匯入嗎？」→ `executeImport` → 成功顯示「已建立 {created} 位學生」並 emit imported；409 `import_has_errors` / `import_conflict`（預覽後資料有變）→ 顯示後端 message 並回到步驟 1。\n- 422 `import_invalid_header`：details 固定為 `{missing: string[], unexpected: string[]}`（兩個 key 一定存在，可能為空陣列）→ `missing` 非空時顯示「缺少欄位：學號*、姓名*」，`unexpected` 非空時顯示「無法辨識的欄位：電話、地址」（提示「請確認標題列使用範本欄名」），空陣列的那一行不顯示；`import_too_many_rows` / `import_empty` 顯示後端 message。\n- 關閉時重設所有狀態。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/student/StudentImportDialog.vue`（BACKEND-155 / 156：預覽不寫入、執行全有或全無）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-students.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：學生列表（篩選、分頁、封存學生）、詳情面板（基本資料 / 監護人 / 成績紀錄分頁）、敏感欄位三種狀態（有權限遮罩 / 顯示、無權限已填寫、未填寫）、編輯 dialog（有 / 無 students:sensitive）、照片上傳、監護人管理與綁定碼 dialog、Excel 匯入三步驟、學年升級預覽與執行、只有 students:read 時的唯讀樣式、空清單。\n\n**props / emits**：`modelValue`；emits `update:modelValue`、`imported(result: ImportResult)`。\n**步驟**（el-steps）\n1. 選擇：學年度（academicYearOptions，預設 currentAcademicYear，決定「安親班班級」欄比對哪一學年度）+ 檔案（拖曳或選擇 .xlsx，`checkUpload(file, XLSX_RULE)`）。提供「下載範本」按鈕：`downloadImportTemplate()`（FRONTEND-081）→ `saveBlobResponse(res, '學生匯入範本.xlsx')`（FRONTEND-007），下載中 loading、失敗以 `errorMessage` 提示；說明「只支援以範本建立的檔案」。說明欄位：必填「學號、姓名、年級」，其餘「性別、生日、就讀國小、學校班級、安親班班級、狀態、入學日、備註」，以及「身分證字號、健康備註」（需敏感資料權限，無 `students:sensitive` 時提示「你沒有敏感資料權限，含這兩欄資料的列會被標為錯誤」）；最多 500 列。按「預覽」→ `previewImport`。\n2. 預覽：摘要「共 {total} 列，正確 {valid} 列，錯誤 {invalid} 列」；表格顯示列號、學號、姓名、年級、班級（取 `display`）、錯誤（紅字，多則換行）；「只顯示錯誤列」切換。`invalid > 0` 時「匯入」disabled 並提示「請修正 Excel 中的錯誤後重新上傳（匯入為全部成功或全部不寫入）」，提供「重新上傳」。\n3. 執行：確認「將建立 {valid} 位學生，確定匯入嗎？」→ `executeImport` → 成功顯示「已建立 {created} 位學生」並 emit imported；409 `import_has_errors` / `import_conflict`（預覽後資料有變）→ 顯示後端 message 並回到步驟 1。\n- 422 `import_invalid_header`：details 固定為 `{missing: string[], unexpected: string[]}`（兩個 key 一定存在，可能為空陣列）→ `missing` 非空時顯示「缺少欄位：學號*、姓名*」，`unexpected` 非空時顯示「無法辨識的欄位：電話、地址」（提示「請確認標題列使用範本欄名」），空陣列的那一行不顯示；`import_too_many_rows` / `import_empty` 顯示後端 message。\n- 關閉時重設所有狀態。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/student/StudentImportDialog.vue",
       "source_ref": null,
@@ -2878,7 +2902,8 @@
         "FRONTEND-081",
         "FRONTEND-006",
         "FRONTEND-084",
-        "FRONTEND-040"
+        "FRONTEND-040",
+        "FRONTEND-007"
       ],
       "suggested_model": "opus-5",
       "risk_notes": "",
@@ -2893,7 +2918,8 @@
           "StudentImportDialog blocks import when any row invalid：上例 → '匯入' 按鈕 disabled，文字含 '請修正 Excel 中的錯誤後重新上傳'",
           "StudentImportDialog executes when all rows valid：預覽回 valid 2、invalid 0 → 點 '匯入' 並確認 → POST FormData dry_run 'false'；回 {created:2,student_ids:['a','b']} → 文字含 '已建立 2 位學生'、emitted('imported')[0][0].created === 2",
           "StudentImportDialog shows header problems from details：預覽回 422 {error:{code:'import_invalid_header',message:'標題列不正確',details:{missing:['學號*','姓名*'],unexpected:['電話']}}} → 文字含 '缺少欄位：學號*、姓名*' 與 '無法辨識的欄位：電話'；另一案 details {missing:[],unexpected:['地址']} → 文字含 '無法辨識的欄位：地址' 且不含 '缺少欄位'",
-          "StudentImportDialog rejects non xlsx file client side：選擇 students.csv（text/csv）→ 文字含 '只接受' 且 mock.history.post.length === 0"
+          "StudentImportDialog rejects non xlsx file client side：選擇 students.csv（text/csv）→ 文字含 '只接受' 且 mock.history.post.length === 0",
+          "StudentImportDialog downloads template：點 '下載範本' → GET /admin/students/import-template responseType 'blob'；攔截 anchor click 的 download 為 Content-Disposition 中的檔名（無 header 時為 '學生匯入範本.xlsx'）"
         ],
         "run": "just web-test src/components/student/StudentImportDialog.spec.ts -t \"StudentImportDialog\"",
         "notes": ""
@@ -2979,7 +3005,7 @@
     {
       "id": "FRONTEND-097",
       "title": "實作 views/ClassesView.vue：班級管理頁",
-      "description": "建立 `apps/web/src/views/ClassesView.vue`（路由 `/classes`，`classes:read`）。移植 ivy `FE:src/views/ClassroomView.vue` 的班級卡 / 表格、學年度切換、新增 / 編輯 / 刪除流程；**去掉** 容量、預留名額、招生計畫、學期、班級異動紀錄抽屜、年級表。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-classes.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：班級列表（學年度切換、含封存、只看我的班）、新增 / 編輯 dialog、指派負責老師 dialog、封存仍有學生時的錯誤、只有 classes:read 時唯讀、空清單。\n\n**內容**\n- `PageHeader`「班級管理」；篩選：學年度（academicYearOptions，預設 currentAcademicYear）、「只看我的班」（mine）、「含已封存」；資料 `listClasses`。\n- 表格：班級名稱、年級（gradeLevelsLabel）、在學人數（連結 → `/students?class_id={id}`）、負責老師（lead 粗體在前，assistant 其後，以「、」分隔；無 → 「尚未指派」）、排序、狀態（封存 tag + 封存日）。依 sort_order、名稱排序。\n- 有 `classes:write`：「新增班級」→ `ClassFormDialog`（FRONTEND-098）；每列（未封存）「編輯」「指派老師」（FRONTEND-099）「封存」。\n- 封存：確認「封存後此班級不會出現在班級選單，確定要封存 {name} 嗎？」→ `archiveClass`；409 `class_has_students` →「班級仍有 {student_count} 位在學學生，請先將學生調班或退班」。\n- 寫入成功後 `useLookupsStore().invalidate('classes')`。\n- 空清單：「{year} 學年度還沒有班級」（附新增按鈕）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/views/ClassesView.vue`（路由 `/classes`，`classes:read`）。移植 ivy `FE:src/views/ClassroomView.vue` 的班級卡 / 表格、學年度切換、新增 / 編輯 / 刪除流程；**去掉** 容量、預留名額、招生計畫、學期、班級異動紀錄抽屜、年級表。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-classes.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：班級列表（學年度切換、含封存、只看我的班）、新增 / 編輯 dialog、指派負責老師 dialog、封存仍有學生時的錯誤、只有 classes:read 時唯讀、空清單。\n\n**內容**\n- `PageHeader`「班級管理」；篩選：學年度（academicYearOptions，預設 currentAcademicYear）、「只看我的班」（mine）、「含已封存」；資料 `listClasses`。\n- 表格：班級名稱、年級（gradeLevelsLabel）、在學人數（連結 → `/students?class_id={id}`）、負責老師（lead 粗體在前，assistant 其後，以「、」分隔；無 → 「尚未指派」）、排序、狀態（封存 tag + 封存日）。依 sort_order、名稱排序。\n- 有 `classes:write`：「新增班級」→ `ClassFormDialog`（FRONTEND-098）；每列（未封存）「編輯」「指派老師」（FRONTEND-099）「封存」。\n- 封存：確認「封存後此班級不會出現在班級選單，確定要封存 {name} 嗎？」→ `archiveClass`；409 `class_has_students` →「班級仍有 {student_count} 位在學學生，請先將學生調班或退班」。\n- 寫入成功後 `useLookupsStore().invalidate('classes')`。\n- 空清單：「{year} 學年度還沒有班級」（附新增按鈕）。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/ClassesView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/ClassesView.vue",
       "source_ref": "FE:src/views/ClassroomView.vue::default",
@@ -2990,7 +3016,9 @@
         "FRONTEND-083",
         "FRONTEND-084",
         "FRONTEND-098",
-        "FRONTEND-099"
+        "FRONTEND-099",
+        "FRONTEND-024",
+        "FRONTEND-039"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -3093,6 +3121,44 @@
       }
     },
     {
+      "id": "FRONTEND-100",
+      "title": "實作 components/student/StudentPurgeDialog.vue：退班學生個資永久刪除（輸入學號確認）",
+      "description": "建立 `apps/web/src/components/student/StudentPurgeDialog.vue`（domain_spec M3 個資保存：admin 以 `students:purge` 對已封存且 `withdrawn` 的學生永久刪除 / 匿名化；BACKEND-531）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-students.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。此 dialog 畫在學生工作台稿的詳情面板中（已封存且退班學生的「永久刪除」）。\n\n**props / emits**：`modelValue`、`student: StudentDetail`；emits `update:modelValue`、`purged(result: PurgeResult)`。\n- 內容：danger 樣式說明「永久刪除後將匿名化姓名，並清除身分證字號、健康備註、照片、監護人聯絡資料與家長綁定；出勤、成績等統計紀錄保留但不再能辨識此學生。此操作無法復原，並會記錄於稽核紀錄。」\n- 確認輸入：「請輸入學號 {student_no} 以確認」；輸入值（去頭尾空白）與 student_no 完全相同才啟用「永久刪除」按鈕。\n- 送出 `purgeStudent(student.id, 輸入值去頭尾空白)`（FRONTEND-081，body `{confirm_student_no}`）→ `ElMessage.success('已永久刪除並匿名化（新編號 {anonymized_student_no}）')` → emit `purged(result: PurgeResult)` → 關閉。\n- 422 `purge_confirmation_mismatch`（學號在開啟 dialog 後被他人修改等情況）→ 輸入欄下顯示「確認學號不符，請重新整理後再試」並清空輸入。\n- 錯誤以 `errorMessage` 顯示在 dialog 內（例如學生不再符合封存且退班條件的 409）。\n- 送出中不可關閉。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "granularity_unit": "component",
+      "target_path": "apps/web/src/components/student/StudentPurgeDialog.vue",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "FRONTEND-081",
+        "FRONTEND-040",
+        "FRONTEND-009"
+      ],
+      "suggested_model": "opus-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/web/src/components/student/StudentPurgeDialog.spec.ts",
+        "markers": [
+          "vitest"
+        ],
+        "red_cases": [
+          "StudentPurgeDialog requires exact student number：student {student_no:'S1001',name:'王小明'} → '永久刪除' 按鈕 disabled；輸入 'S100' 仍 disabled；輸入 ' S1001 ' → enabled",
+          "StudentPurgeDialog purges and emits：輸入 ' S1001 ' 後點 '永久刪除' → POST /admin/students/s1/purge body 深等於 {confirm_student_no:'S1001'}；回 {student_id:'s1',purged_at:'2026-10-02T08:00:00Z',anonymized_student_no:'PURGED-7F3A'} → body 含 '已永久刪除並匿名化（新編號 PURGED-7F3A）'，emitted('purged')[0][0].anonymized_student_no === 'PURGED-7F3A'",
+          "StudentPurgeDialog shows backend error：POST 回 409 {error:{code:'student_not_purgeable',message:'只能刪除已封存且退班的學生'}} → dialog 內文字含 '只能刪除已封存且退班的學生'，dialog 仍開啟",
+          "StudentPurgeDialog explains irreversible effects：開啟時文字含 '此操作無法復原' 與 '出勤、成績等統計紀錄保留但不再能辨識此學生'",
+          "StudentPurgeDialog handles confirmation mismatch：POST 回 422 {error:{code:'purge_confirmation_mismatch',message:'確認學號不符'}} → 輸入欄下文字含 '確認學號不符，請重新整理後再試'，輸入值清空，'永久刪除' 按鈕 disabled，dialog 仍開啟"
+        ],
+        "run": "just web-test src/components/student/StudentPurgeDialog.spec.ts -t \"StudentPurgeDialog\"",
+        "notes": ""
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
       "id": "FRONTEND-120",
       "title": "實作 api/attendance.ts：出勤 api client（每日清單、到班、離班、批次到班、缺席、改判、月報、匯出）",
       "description": "建立 `apps/web/src/api/attendance.ts`（`docs/tasks/api_index.md` §7）。走 `adminHttp`。參考 ivy `FE:src/api/studentAttendance.ts` 的函式分組；改為本專案逐生操作 endpoint。\n\n**型別**：`AttendanceRow = {id|null, student_id, student_no, student_name, grade_level, class_id, class_name, service_date, status, check_in_at, check_in_source, check_out_at, check_out_source, leave: {id, leave_type, leave_type_label, start_date, end_date}|null, note, updated_at}`；`DailyAttendance = {date, is_service_day, summary: {total, expected, present, left, absent, leave}, items: AttendanceRow[]}`；`BatchCheckInResult = {succeeded: AttendanceRow[], skipped: {student_id, code, message}[]}`；`AttendanceAmend = {status?: 'expected'|'present'|'left'|'absent', check_in_at?, check_out_at?, note?, reason: string}`；`MonthlyAttendance = {month, class_id, class_name, days: {date, weekday, is_service_day}[], students: {student_id, student_no, name, class_name, statuses: (AttendanceStatus|null)[], stats: {service_days, attended, absent, leave, unrecorded}}[], totals}`。\n\n- `fetchDailyAttendance(params: {date?, class_id?, status?}): Promise<DailyAttendance>` → `GET /admin/attendance/daily`\n- `checkIn(studentId, note?)` → `POST /admin/attendance/{student_id}/check-in`（無 note 時 body 為 `{}`）\n- `checkOut(studentId, note?)` → `POST .../check-out`\n- `batchCheckIn(studentIds: string[]): Promise<BatchCheckInResult>` → `POST /admin/attendance/batch-check-in` body `{student_ids}`\n- `markAbsent(studentId, note?)` → `POST .../mark-absent`\n- `amendAttendance(attendanceId, body: AttendanceAmend): Promise<AttendanceRow>` → `PATCH /admin/attendance/{id}`\n- `fetchMonthlyAttendance(params: {month, class_id?})` → `GET /admin/attendance/monthly`\n- `exportMonthlyAttendance(params: {month, class_id?}): Promise<AxiosResponse<Blob>>` → `GET /admin/attendance/monthly/export`，`responseType: 'blob'`（回完整 response 供 FRONTEND-007 取檔名）\n\n**驗收標準**\n- 每個函式的路徑、body / query、回傳值正確；409 code（already_checked_in 等）以 ApiError 拋出。",
@@ -3178,7 +3244,7 @@
     {
       "id": "FRONTEND-122",
       "title": "實作 views/AttendanceTodayView.vue：今日出勤頁（平板友善點名、批次到班、改判、即時更新）",
-      "description": "建立 `apps/web/src/views/AttendanceTodayView.vue`（路由 `/attendance`，`attendance:read`，meta.tablet）。移植 ivy `FE:src/views/StudentAttendanceView.vue` 的班級篩選 + 日期切換 + 統計摘要；點名方式改為本專案逐生到班 / 離班 / 缺席，**去掉** 圖表、學期、教師端批次表單（ivy `AttendanceBatchPanel` 的整班一次儲存改為逐生即時送出 + 批次到班）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-attendance-today.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸、觸控目標 ≥ 44px。稿需呈現：班級篩選與狀態摘要 chip、逐生卡片的五種狀態（預計到班 / 已到班 / 已離班 / 缺席 / 請假）與各狀態可按的按鈕、批次到班選取模式與結果（部分略過）、改判 dialog（需 attendance:amend）、非今天日期的唯讀檢視、非營業日、即時連線中斷提示、只有 attendance:read 時的唯讀樣式、空清單、載入中。\n\n**內容**\n- 頂部：日期（預設 `todayTaipei()`，可選過去日期查看；非今天時顯示「檢視 {date}，僅可改判」）、班級（lookups classOptions 當前學年度，存 `route.query.class_id`；預設「全部」）、搜尋（姓名 / 學號，前端過濾）、「重新整理」。\n- `AttendanceSummaryBar`（FRONTEND-123）：點 chip 依狀態前端過濾（不重新請求），再點一次取消。\n- 學生卡片 grid（`AttendanceStudentCard` FRONTEND-124，最小寬 220px）；依班級分組標題（全部班級時）。\n- 批次到班（有 `attendance:operate` 且是今天）：「批次到班」進入選取模式 → 卡片可勾選（只能勾 expected / absent）、「全選未到」、底部固定列「已選 N 位・確認到班 / 取消」→ `batchCheckIn` → 結果 toast「已到班 {succeeded} 位」；有 skipped 時 el-dialog 列出「{student_name}：{message}」。\n- 非營業日（`is_service_day=false`）：EmptyState「{date} 不是營業日」（若仍有列，照常顯示並可改判）。\n- 即時更新：`useAttendanceBoard`（FRONTEND-126）處理資料與 ws；`denied` 時顯示「沒有即時更新權限，請手動重新整理」。\n- 改判：卡片 emit amend → `AttendanceAmendDialog`（FRONTEND-125）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/views/AttendanceTodayView.vue`（路由 `/attendance`，`attendance:read`，meta.tablet）。移植 ivy `FE:src/views/StudentAttendanceView.vue` 的班級篩選 + 日期切換 + 統計摘要；點名方式改為本專案逐生到班 / 離班 / 缺席，**去掉** 圖表、學期、教師端批次表單（ivy `AttendanceBatchPanel` 的整班一次儲存改為逐生即時送出 + 批次到班）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-attendance-today.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸、觸控目標 ≥ 44px。稿需呈現：班級篩選與狀態摘要 chip、逐生卡片的五種狀態（預計到班 / 已到班 / 已離班 / 缺席 / 請假）與各狀態可按的按鈕、批次到班選取模式與結果（部分略過）、改判 dialog（需 attendance:amend）、非今天日期的唯讀檢視、非營業日、即時連線中斷提示、只有 attendance:read 時的唯讀樣式、空清單、載入中。\n\n**內容**\n- 頂部：日期（預設 `todayTaipei()`，可選過去日期查看；非今天時顯示「檢視 {date}，僅可改判」）、班級（lookups classOptions 當前學年度，存 `route.query.class_id`；預設「全部」）、搜尋（姓名 / 學號，前端過濾）、「重新整理」。\n- `AttendanceSummaryBar`（FRONTEND-123）：點 chip 依狀態前端過濾（不重新請求），再點一次取消。\n- 學生卡片 grid（`AttendanceStudentCard` FRONTEND-124，最小寬 220px）；依班級分組標題（全部班級時）。\n- 批次到班（有 `attendance:operate` 且是今天）：「批次到班」進入選取模式 → 卡片可勾選（只能勾 expected / absent）、「全選未到」、底部固定列「已選 N 位・確認到班 / 取消」→ `batchCheckIn` → 結果 toast「已到班 {succeeded} 位」；有 skipped 時 el-dialog 列出「{student_name}：{message}」。\n- 非營業日（`is_service_day=false`）：EmptyState「{date} 不是營業日」（若仍有列，照常顯示並可改判）。\n- 即時更新：`useAttendanceBoard`（FRONTEND-126）處理資料與 ws；`denied` 時顯示「沒有即時更新權限，請手動重新整理」。\n- 改判：卡片 emit amend → `AttendanceAmendDialog`（FRONTEND-125）。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/AttendanceTodayView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/AttendanceTodayView.vue",
       "source_ref": "FE:src/views/StudentAttendanceView.vue::default",
@@ -3189,7 +3255,9 @@
         "FRONTEND-123",
         "FRONTEND-124",
         "FRONTEND-125",
-        "FRONTEND-083"
+        "FRONTEND-083",
+        "FRONTEND-024",
+        "FRONTEND-042"
       ],
       "suggested_model": "opus-5",
       "risk_notes": "",
@@ -3370,7 +3438,7 @@
     {
       "id": "FRONTEND-127",
       "title": "實作 views/AttendanceMonthlyView.vue：月出勤報表與匯出",
-      "description": "建立 `apps/web/src/views/AttendanceMonthlyView.vue`（路由 `/attendance/monthly`，`attendance:read`）。移植 ivy `FE:src/views/StudentAttendanceView.vue` 的 fetchMonthly + downloadFile 匯出流程；**去掉** 圖表、學期。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-attendance-monthly.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：月份與班級篩選、日期 × 學生格狀表（狀態符號與顏色、非營業日灰底、今天標示）、每生統計欄與合計列、匯出按鈕、空清單、載入中。\n\n**內容**\n- `PageHeader`「月出勤報表」；篩選：月份（el-date-picker type month，預設 `monthOf(todayTaipei())`，存 query.month）、班級（lookups classOptions，存 query.class_id，預設全部）。\n- 資料 `fetchMonthlyAttendance` → `MonthlyAttendanceGrid`（FRONTEND-128）。\n- 頂部合計：營業日數、出席人次、缺席人次、請假人次、未登記人次（totals）。\n- 「匯出 Excel」：`exportMonthlyAttendance` → `saveBlobResponse(res, '出勤月報_{class_name|全部}_{month}.xlsx')`（FRONTEND-007）；匯出中 loading；失敗 `errorMessage`（blob JSON 錯誤已由 FRONTEND-001 正規化）。\n- 空清單：「此月份沒有出勤資料」。\n\n**驗收標準**\n- 預設月份與 query 同步；合計顯示；匯出以後端檔名下載；空狀態。",
+      "description": "建立 `apps/web/src/views/AttendanceMonthlyView.vue`（路由 `/attendance/monthly`，`attendance:read`）。移植 ivy `FE:src/views/StudentAttendanceView.vue` 的 fetchMonthly + downloadFile 匯出流程；**去掉** 圖表、學期。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-attendance-monthly.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：月份與班級篩選、日期 × 學生格狀表（狀態符號與顏色、非營業日灰底、今天標示）、每生統計欄與合計列、匯出按鈕、空清單、載入中。\n\n**內容**\n- `PageHeader`「月出勤報表」；篩選：月份（el-date-picker type month，預設 `monthOf(todayTaipei())`，存 query.month）、班級（lookups classOptions，存 query.class_id，預設全部）。\n- 資料 `fetchMonthlyAttendance` → `MonthlyAttendanceGrid`（FRONTEND-128）。\n- 頂部合計：營業日數、出席人次、缺席人次、請假人次、未登記人次（totals）。\n- 「匯出 Excel」：`exportMonthlyAttendance` → `saveBlobResponse(res, '出勤月報_{class_name|全部}_{month}.xlsx')`（FRONTEND-007）；匯出中 loading；失敗 `errorMessage`（blob JSON 錯誤已由 FRONTEND-001 正規化）。\n- 空清單：「此月份沒有出勤資料」。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/AttendanceMonthlyView.vue')`。\n\n**驗收標準**\n- 預設月份與 query 同步；合計顯示；匯出以後端檔名下載；空狀態。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/AttendanceMonthlyView.vue",
       "source_ref": "FE:src/views/StudentAttendanceView.vue::default",
@@ -3380,7 +3448,9 @@
         "FRONTEND-120",
         "FRONTEND-128",
         "FRONTEND-007",
-        "FRONTEND-083"
+        "FRONTEND-083",
+        "FRONTEND-024",
+        "FRONTEND-039"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -3444,7 +3514,7 @@
     {
       "id": "FRONTEND-129",
       "title": "實作 views/LeavesView.vue：請假列表（篩選、代登記、取消、附件）",
-      "description": "建立 `apps/web/src/views/LeavesView.vue`（路由 `/leaves`，`leaves:read`）。移植 ivy `FE:src/views/StudentLeavesListView.vue` 的篩選 + 表格 + 學生連結；**去掉** 學期班級標籤（classroomTerm）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-leaves.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：請假列表（篩選：學生 / 班級 / 狀態 / 假別 / 建立者 / 日期區間）、代登記 dialog（含期間重疊錯誤）、取消 dialog（剩餘日子 / 整筆兩種範圍與說明）、附件檢視（圖片預覽 / PDF 另開）、只有 leaves:read 時的唯讀樣式、空清單。\n\n**內容**\n- `PageHeader`「請假」；`AdminListToolbar`：學生（`StudentSelect` FRONTEND-096，可清除）、班級、狀態（生效中 / 已取消，預設生效中）、假別、建立者（家長 / 員工）、日期區間（預設今天起 30 天：date_from = todayTaipei，date_to = +30）。`usePagedList`（syncQuery）+ `listLeaves`。\n- 表格：學生（姓名 + 學號，連結 `/students?student={id}`）、班級、假別 tag（LEAVE_TYPE_META）、期間（start~end，同日只顯示一天；含今天時加「進行中」tag）、原因、建立者（「家長：{created_by_name}」/「員工：{name}」）+ formatDateTime(created_at)、狀態（已取消顯示「{cancelled_by_name} 於 {formatDateTime(cancelled_at)} 取消」）、附件（數量 → 展開 `LeaveAttachmentList` FRONTEND-132）。\n- 有 `leaves:write`：「代登記請假」→ `LeaveFormDialog`（FRONTEND-130）；active 且 `end_date >= todayTaipei()` 的列有「取消」→ `LeaveCancelDialog`（FRONTEND-131）。\n- 即時：`notification.created` 的 `leave.created` / `leave.cancelled` 不另外訂閱，頁面提供「重新整理」按鈕。\n- 空清單：「這段期間沒有請假紀錄」。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/views/LeavesView.vue`（路由 `/leaves`，`leaves:read`）。移植 ivy `FE:src/views/StudentLeavesListView.vue` 的篩選 + 表格 + 學生連結；**去掉** 學期班級標籤（classroomTerm）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-leaves.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：請假列表（篩選：學生 / 班級 / 狀態 / 假別 / 建立者 / 日期區間）、代登記 dialog（含期間重疊錯誤）、取消 dialog（剩餘日子 / 整筆兩種範圍與說明）、附件檢視（圖片預覽 / PDF 另開）、只有 leaves:read 時的唯讀樣式、空清單。\n\n**內容**\n- `PageHeader`「請假」；`AdminListToolbar`：學生（`StudentSelect` FRONTEND-096，可清除）、班級、狀態（生效中 / 已取消，預設生效中）、假別、建立者（家長 / 員工）、日期區間（預設今天起 30 天：date_from = todayTaipei，date_to = +30）。`usePagedList`（syncQuery）+ `listLeaves`。\n- 表格：學生（姓名 + 學號，連結 `/students?student={id}`）、班級、假別 tag（LEAVE_TYPE_META）、期間（start~end，同日只顯示一天；含今天時加「進行中」tag）、原因、建立者（「家長：{created_by_name}」/「員工：{name}」）+ formatDateTime(created_at)、狀態（已取消顯示「{cancelled_by_name} 於 {formatDateTime(cancelled_at)} 取消」）、附件（數量 → 展開 `LeaveAttachmentList` FRONTEND-132）。\n- 有 `leaves:write`：「代登記請假」→ `LeaveFormDialog`（FRONTEND-130）；active 且 `end_date >= todayTaipei()` 的列有「取消」，active 且已結束（`end_date < todayTaipei()`）的列有「整筆取消」（事後更正，出勤自動還原）；兩者都開 `LeaveCancelDialog`（FRONTEND-131）。\n- 即時：`notification.created` 的 `leave.created` / `leave.cancelled` 不另外訂閱，頁面提供「重新整理」按鈕。\n- 空清單：「這段期間沒有請假紀錄」。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/LeavesView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/LeavesView.vue",
       "source_ref": "FE:src/views/StudentLeavesListView.vue::default",
@@ -3456,7 +3526,10 @@
         "FRONTEND-096",
         "FRONTEND-130",
         "FRONTEND-131",
-        "FRONTEND-132"
+        "FRONTEND-132",
+        "FRONTEND-024",
+        "FRONTEND-039",
+        "FRONTEND-041"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -3469,7 +3542,7 @@
         "red_cases": [
           "LeavesView loads active leaves for next 30 days：fake now 2026-10-02 → 第一次 GET /admin/leaves params 深等於 {status:'active',date_from:'2026-10-02',date_to:'2026-11-01',page:1,page_size:20}",
           "LeavesView renders creator and in-progress tag：回 [{student:{name:'王小明',student_no:'S1001'},leave_type:'sick',leave_type_label:'病假',start_date:'2026-10-01',end_date:'2026-10-03',created_by_type:'parent',created_by_name:'王大明',status:'active'}] → 文字含 '病假'、'2026-10-01~2026-10-03'、'進行中'、'家長：王大明'",
-          "LeavesView shows cancel only for cancellable rows with permission：leaves:write → end_date 2026-10-03 的 active 列有 '取消'；end_date 2026-09-30 的列沒有；cancelled 列沒有；permissions ['leaves:read'] → 沒有 '代登記請假' 與 '取消'",
+          "LeavesView shows cancel actions per leave state with permission：fake now 2026-10-02、leaves:write → end_date 2026-10-03 的 active 列有 '取消'；end_date 2026-09-30 的 active 列有 '整筆取消'（點擊開啟 dialog 且文字含 '已結束的請假只能整筆取消'）；cancelled 列兩者皆無；permissions ['leaves:read'] → 沒有 '代登記請假'、'取消'、'整筆取消'",
           "LeavesView shows cancelled info：status cancelled、cancelled_by_name '林行政'、cancelled_at '2026-10-01T02:00:00Z' → 文字含 '林行政 於 2026/10/01 10:00 取消'",
           "LeavesView empty state：回 {items:[],total:0} → 文字含 '這段期間沒有請假紀錄'"
         ],
@@ -3522,7 +3595,7 @@
     {
       "id": "FRONTEND-131",
       "title": "實作 components/leaves/LeaveCancelDialog.vue：取消請假（剩餘日子 / 整筆）",
-      "description": "建立 `apps/web/src/components/leaves/LeaveCancelDialog.vue`（domain_spec M5、BACKEND-353：remaining 對未開始的請假 = 整筆取消、已開始 = end_date 改為昨天；all = 整筆取消，已登記到班 / 離班的出勤不動）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-leaves.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：請假列表（篩選：學生 / 班級 / 狀態 / 假別 / 建立者 / 日期區間）、代登記 dialog（含期間重疊錯誤）、取消 dialog（剩餘日子 / 整筆兩種範圍與說明）、附件檢視（圖片預覽 / PDF 另開）、只有 leaves:read 時的唯讀樣式、空清單。\n\n**props / emits**：`modelValue`、`leave: Leave`、`today?: string`（預設 todayTaipei）；emits `update:modelValue`、`cancelled(leave: Leave)`。\n**內容**\n- 摘要：學生、假別、期間。\n- 依日期判斷：\n  - 尚未開始（start_date > today）：只顯示說明「將取消整筆請假」，送出 scope `remaining`。\n  - 已開始（start_date ≤ today ≤ end_date）：radio 兩個選項——「取消今天起的請假（{today}~{end_date}）」（預設，scope remaining，說明「今天起的出勤會恢復為預計到班；{start_date}~{昨天} 保留為請假」，start_date 為今天時說明改為「將取消整筆請假」）與「整筆取消（{start_date}~{end_date}）」（scope all，說明「已過去的日子也會改回，已登記到班或離班的紀錄不受影響」）。\n- 送出 `cancelLeave(id, scope)` → ElMessage.success('已取消請假') → emit cancelled。\n- 錯誤 `leave_not_active` / `leave_already_ended` 顯示後端 message。\n\n**驗收標準**\n- 未開始 / 已開始兩種畫面與 scope；說明文字的日期正確。",
+      "description": "建立 `apps/web/src/components/leaves/LeaveCancelDialog.vue`（domain_spec M5、BACKEND-353：remaining 對未開始的請假 = 整筆取消、已開始 = end_date 改為昨天；all = 整筆取消，已登記到班 / 離班的出勤不動）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-leaves.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：請假列表（篩選：學生 / 班級 / 狀態 / 假別 / 建立者 / 日期區間）、代登記 dialog（含期間重疊錯誤）、取消 dialog（剩餘日子 / 整筆兩種範圍與說明）、附件檢視（圖片預覽 / PDF 另開）、只有 leaves:read 時的唯讀樣式、空清單。\n\n**props / emits**：`modelValue`、`leave: Leave`、`today?: string`（預設 todayTaipei）；emits `update:modelValue`、`cancelled(leave: Leave)`。\n**內容**\n- 摘要：學生、假別、期間。\n- 依日期判斷：\n  - 尚未開始（start_date > today）：只顯示說明「將取消整筆請假」，送出 scope `remaining`。\n  - 已開始（start_date ≤ today ≤ end_date）：radio 兩個選項——「取消今天起的請假（{today}~{end_date}）」（預設，scope remaining，說明「今天起的出勤會恢復為預計到班；{start_date}~{昨天} 保留為請假」，start_date 為今天時說明改為「將取消整筆請假」）與「整筆取消（{start_date}~{end_date}）」（scope all，說明「已過去的日子也會改回，已登記到班或離班的紀錄不受影響」）。\n  - 已結束（end_date < today）：只顯示說明「已結束的請假只能整筆取消（事後更正）；期間內登記為請假的出勤會自動還原，已登記到班或離班的紀錄不受影響」，送出 scope `all`（不送 remaining，避免 409 leave_already_ended）。\n- 送出 `cancelLeave(id, scope)` → ElMessage.success('已取消請假') → emit cancelled。\n- 錯誤 `leave_not_active` / `leave_already_ended` 顯示後端 message。\n\n**驗收標準**\n- 未開始 / 已開始 / 已結束三種畫面與 scope；說明文字的日期正確。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/leaves/LeaveCancelDialog.vue",
       "source_ref": null,
@@ -3545,7 +3618,8 @@
           "LeaveCancelDialog future leave cancels whole leave：today '2026-10-02'、leave 2026-10-05~2026-10-06 → 文字含 '將取消整筆請假'，沒有 radio；送出 → POST /admin/leaves/l1/cancel body 深等於 {scope:'remaining'}",
           "LeaveCancelDialog started leave defaults to remaining：leave 2026-09-30~2026-10-04 → 預設選中 '取消今天起的請假（2026-10-02~2026-10-04）'，說明含 '2026-09-30~2026-10-01 保留為請假'；送出 body {scope:'remaining'}",
           "LeaveCancelDialog started leave can cancel all：選 '整筆取消（2026-09-30~2026-10-04）' → 送出 body 深等於 {scope:'all'}，emitted('cancelled') 長度 1",
-          "LeaveCancelDialog surfaces ended error：回 409 {error:{code:'leave_already_ended',message:'請假已結束，無法取消剩餘日子'}} → body 含該訊息"
+          "LeaveCancelDialog surfaces ended error：回 409 {error:{code:'leave_already_ended',message:'請假已結束，無法取消剩餘日子'}} → body 含該訊息",
+          "LeaveCancelDialog ended leave only allows cancel all：today '2026-10-02'、leave 2026-09-28~2026-09-30 → 文字含 '已結束的請假只能整筆取消'，沒有 radio；送出 → POST /admin/leaves/l1/cancel body 深等於 {scope:'all'}"
         ],
         "run": "just web-test src/components/leaves/LeaveCancelDialog.spec.ts -t \"LeaveCancelDialog\"",
         "notes": ""
@@ -3635,7 +3709,7 @@
     {
       "id": "FRONTEND-151",
       "title": "實作 views/HomeworkBoardView.vue：作業進度看板（平板友善逐生卡片）",
-      "description": "建立 `apps/web/src/views/HomeworkBoardView.vue`（路由 `/homework`，`homework:read`，meta.tablet）。新做（domain_spec §4：ivy 無對應頁）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-homework-board.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸、觸控目標 ≥ 44px。稿需呈現：班級 / 日期篩選與整體狀態摘要、逐生卡片（無作業 / 進行中 / 全部完成 / 手動標記完成 / 請假或缺席淡化）、作業項目四種狀態切換、新增單項與整班批次新增 dialog、預計可接送時間與家長說明 dialog（含上次設定者）、非今天日期的限制、即時連線中斷提示、只有 homework:read 時的唯讀樣式、空清單、載入中。\n\n**內容**\n- 頂部：日期（預設 todayTaipei；可選範圍今天 −30 ~ +7，其餘 disabled）、班級（lookups classOptions，存 query.class_id）、「隱藏請假 / 缺席 / 已離班」切換（預設開，存 localStorage，try/catch）、搜尋（前端過濾）、「整班新增作業」（`homework:write`，需先選班級，否則 disabled 並 tooltip「請先選擇班級」）→ `HomeworkBatchAddDialog`（FRONTEND-156）。\n- 摘要：`StatCard` ×4：全部 / 已完成 / 進行中 / 尚未開始（summary 由 FRONTEND-152 重算），點擊前端過濾。\n- 卡片 grid：`HomeworkStudentCard`（FRONTEND-153），依班級、學號排序；全部班級時依班級分組。\n- 非今天：頂部提示「檢視 {date}：可修改作業項目，預計可接送時間只能設定今天」。\n- 即時：FRONTEND-152 `wsDenied` 時提示手動重新整理。\n- 空清單：有班級篩選「{班級} 今天沒有預計到班的學生」；無資料「沒有學生資料」。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/views/HomeworkBoardView.vue`（路由 `/homework`，`homework:read`，meta.tablet）。新做（domain_spec §4：ivy 無對應頁）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-homework-board.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸、觸控目標 ≥ 44px。稿需呈現：班級 / 日期篩選與整體狀態摘要、逐生卡片（無作業 / 進行中 / 全部完成 / 手動標記完成 / 請假或缺席淡化）、作業項目四種狀態切換、新增單項與整班批次新增 dialog、預計可接送時間與家長說明 dialog（含上次設定者）、非今天日期的限制、即時連線中斷提示、只有 homework:read 時的唯讀樣式、空清單、載入中。\n\n**內容**\n- 頂部：日期（預設 todayTaipei；可選範圍今天 −30 ~ +7，其餘 disabled）、班級（lookups classOptions，存 query.class_id）、「隱藏請假 / 缺席 / 已離班」切換（預設開，存 localStorage，try/catch）、搜尋（前端過濾）、「整班新增作業」（`homework:write`，需先選班級，否則 disabled 並 tooltip「請先選擇班級」）→ `HomeworkBatchAddDialog`（FRONTEND-156）。\n- 摘要：`StatCard` ×4：全部 / 已完成 / 進行中 / 尚未開始（summary 由 FRONTEND-152 重算），點擊前端過濾。\n- 卡片 grid：`HomeworkStudentCard`（FRONTEND-153），依班級、學號排序；全部班級時依班級分組。\n- 非今天：頂部提示「檢視 {date}：可修改作業項目，預計可接送時間只能設定今天」。\n- 即時：FRONTEND-152 `wsDenied` 時提示手動重新整理。\n- 空清單：有班級篩選「{班級} 今天沒有預計到班的學生」；無資料「沒有學生資料」。\n- **卡片事件對應**（`HomeworkStudentCard` FRONTEND-153 的 emit → `useHomeworkBoard` FRONTEND-152 的方法）：\n  - `edit-eta(student)` → 開 `ReadyEtaDialog`（FRONTEND-157，傳入該生 progress）→ submit `{ready_eta, note}` → `setProgress(student_id, {ready_eta, note})`；成功關閉，失敗把 `errorMessage` 傳給 dialog 的 `error`。\n  - `add-item(student)` → 開 `HomeworkItemDialog`（FRONTEND-155，新增模式）→ submit `{subject_id, title}` → `addItem(student_id, {subject_id, title})`。\n  - `edit-item(item)` → 開 `HomeworkItemDialog`（編輯模式，帶入 item）→ submit 後與原值比對，只傳有變更的欄位給 `renameItem(item, {...})`；沒有變更直接關閉。\n  - `set-status(item, status)` → `setItemStatus(item, status)`。\n  - `remove-item(item)` → `useConfirmDelete`（FRONTEND-044，訊息「確定要刪除作業「{title}」嗎？」）確認後 `removeItem(item)`。\n  - `set-overall(student, 'done' | 'auto')` → `setProgress(student_id, {overall})`。\n  - dialog 的 `loading` 綁定進行中狀態；同一時間只開一個 dialog。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/HomeworkBoardView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/HomeworkBoardView.vue",
       "source_ref": null,
@@ -3646,7 +3720,11 @@
         "FRONTEND-153",
         "FRONTEND-156",
         "FRONTEND-043",
-        "FRONTEND-083"
+        "FRONTEND-083",
+        "FRONTEND-155",
+        "FRONTEND-157",
+        "FRONTEND-044",
+        "FRONTEND-024"
       ],
       "suggested_model": "opus-5",
       "risk_notes": "",
@@ -3662,7 +3740,13 @@
           "HomeworkBoardView filters by summary card：點 '已完成' StatCard → 只顯示 progress.overall_status done 的卡片，無新請求",
           "HomeworkBoardView batch add requires class：無 class_id → '整班新增作業' disabled；有 class_id 且 homework:write → enabled，點擊開啟 dialog",
           "HomeworkBoardView readonly without write permission：permissions ['homework:read'] → 沒有 '整班新增作業'，卡片沒有 '新增作業' 與狀態切換可點（disabled）",
-          "HomeworkBoardView non-today notice：選日期 2026-10-01 → 文字含 '檢視 2026-10-01：可修改作業項目，預計可接送時間只能設定今天'"
+          "HomeworkBoardView non-today notice：選日期 2026-10-01 → 文字含 '檢視 2026-10-01：可修改作業項目，預計可接送時間只能設定今天'",
+          "HomeworkBoardView edit-eta saves ready eta and note：fake now 2026-10-02 台北 16:00、s1 卡片 ⋮ '設定預計可接送時間' → ReadyEtaDialog 選 17:30、說明 '數學訂正中' 並儲存 → PUT /admin/homework/progress/s1 body 深等於 {service_date:'2026-10-02',ready_eta:'17:30',note:'數學訂正中'}；回應後卡片文字含 '預計 17:30 可接送'",
+          "HomeworkBoardView add-item creates homework item：s1 卡片點 '＋ 新增作業' → HomeworkItemDialog 選科目 '數學'（sub2）、內容 '數學習作 p.12-13' 儲存 → POST /admin/homework/items body 深等於 {student_id:'s1',service_date:'2026-10-02',subject_id:'sub2',title:'數學習作 p.12-13'}；回應後卡片含 '數學習作 p.12-13'",
+          "HomeworkBoardView edit-item sends only changed fields：h1 ⋮ '編輯' 把內容改為 '數學習作 p.12-14'（科目不變）→ PATCH /admin/homework/items/h1 body 深等於 {title:'數學習作 p.12-14'}；未修改直接儲存 → 無 PATCH 且 dialog 關閉",
+          "HomeworkBoardView set-status patches item status：h1（todo）點 '完成' 段 → PATCH /admin/homework/items/h1 body 深等於 {status:'done'}",
+          "HomeworkBoardView remove-item confirms before delete：h1 ⋮ '刪除' → body 含 '確定要刪除作業「數學習作 p.12-13」嗎？'；點 '取消' → mock.history.delete.length === 0；再次刪除並確認 → DELETE /admin/homework/items/h1，卡片不再含該作業",
+          "HomeworkBoardView set-overall updates progress：s1 ⋮ '標記整體完成' → PUT /admin/homework/progress/s1 body 深等於 {service_date:'2026-10-02',overall:'done'}；另一生 '改回依項目判斷' → body 深等於 {service_date:'2026-10-02',overall:'auto'}"
         ],
         "run": "just web-test src/views/HomeworkBoardView.spec.ts -t \"HomeworkBoardView\"",
         "notes": ""
@@ -3676,7 +3760,7 @@
     {
       "id": "FRONTEND-152",
       "title": "實作 composables/useHomeworkBoard.ts：看板資料、樂觀更新、ws 即時合併",
-      "description": "建立 `apps/web/src/composables/useHomeworkBoard.ts`，作業看板（FRONTEND-151）資料擁有者。\n\n**介面**\n```ts\nexport function useHomeworkBoard(params: { date: Ref<string>; classId: Ref<string | null> }): {\n  board: Ref<HomeworkBoard | null>; loading; error\n  summary: ComputedRef<{ total; done; in_progress; not_started }>   // 由 students 的 progress 重算\n  reload(): Promise<void>\n  addItem(studentId, body: { subject_id?: string | null; title: string }): Promise<void>\n  setItemStatus(item: HomeworkItem, status): Promise<void>          // 樂觀更新\n  renameItem(item, body: { title?: string; subject_id?: string | null }): Promise<void>\n  removeItem(item): Promise<void>\n  setProgress(studentId, body: { overall?: 'done' | 'auto'; ready_eta?: string | null; note?: string | null }): Promise<void>\n  batchAdd(body: { subject_id?: string | null; title: string; student_ids?: string[] }): Promise<number>   // 回傳 created；成功後 reload\n  pendingItemIds: Ref<ReadonlySet<string>>\n  wsStatus; wsDenied\n}\n```\n- date / classId 變更 → reload（序號防護）。\n- `setItemStatus`：先在本地改 item.status 並依 domain_spec M6 規則重算 overall（無 item 或全部 todo → not_started；全部 done → done；其餘 in_progress；若 progress 原本為手動 done 則保持 done）；呼叫 API 成功後以回傳 `{item, progress}` 取代；失敗還原並 `ElMessage.error`。同一 item 進行中再呼叫：以最後一次為準（前一次完成後再送最後的值），不並行送同一 item。\n- 其他 mutation 成功後以回傳的 item / progress 更新對應學生；service_date 一律帶 `date.value`。\n- ws：`useAdminWsTopic('homework', { 'homework.progress_updated': d => ... }, { resync: reload })`：`d.service_date === date` 且學生在目前 board 中 → 以 `d.items` 與 `d.progress` 取代該生（若該生有 pending 的本地樂觀變更則延後到 pending 結束後再套用最新一筆）；不在 board 中的學生忽略。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/composables/useHomeworkBoard.ts`，作業看板（FRONTEND-151）資料擁有者。\n\n**介面**\n```ts\nexport function useHomeworkBoard(params: { date: Ref<string>; classId: Ref<string | null> }): {\n  board: Ref<HomeworkBoard | null>; loading; error\n  summary: ComputedRef<{ total; done; in_progress; not_started }>   // 由 students 的 progress 重算\n  reload(): Promise<void>\n  addItem(studentId, body: { subject_id?: string | null; title: string }): Promise<void>\n  setItemStatus(item: HomeworkItem, status): Promise<void>          // 樂觀更新\n  renameItem(item, body: { title?: string; subject_id?: string | null }): Promise<void>\n  removeItem(item): Promise<void>\n  setProgress(studentId, body: { overall?: 'done' | 'auto'; ready_eta?: string | null; note?: string | null }): Promise<void>   // 呼叫 PUT /admin/homework/progress/{student_id}，body 為 {service_date: date.value, ...body}（只含給定的鍵）\n  batchAdd(body: { subject_id?: string | null; title: string; student_ids?: string[] }): Promise<number>   // 回傳 created；成功後 reload\n  pendingItemIds: Ref<ReadonlySet<string>>\n  wsStatus; wsDenied\n}\n```\n- date / classId 變更 → reload（序號防護）。\n- `setItemStatus`：先在本地改 item.status 並依 domain_spec M6 規則重算 overall（無 item 或全部 todo → not_started；全部 done → done；其餘 in_progress；若 progress 原本為手動 done 則保持 done）；呼叫 API 成功後以回傳 `{item, progress}` 取代；失敗還原並 `ElMessage.error`。同一 item 進行中再呼叫：以最後一次為準（前一次完成後再送最後的值），不並行送同一 item。\n- 其他 mutation 成功後以回傳的 item / progress 更新對應學生；service_date 一律帶 `date.value`。\n- ws：`useAdminWsTopic('homework', { 'homework.progress_updated': d => ... }, { resync: reload })`：`d.service_date === date` 且學生在目前 board 中 → 以 `d.items` 與 `d.progress` 取代該生（若該生有 pending 的本地樂觀變更則延後到 pending 結束後再套用最新一筆）；不在 board 中的學生忽略。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/useHomeworkBoard.ts",
       "source_ref": null,
@@ -4200,7 +4284,7 @@
     {
       "id": "FRONTEND-188",
       "title": "實作 composables/usePickupBoard.ts：接送 POS 資料擁有者（佇列、名單、授權、ws 合併與操作）",
-      "description": "建立 `apps/web/src/composables/usePickupBoard.ts`，接送 POS（FRONTEND-189）與代理核驗頁（FRONTEND-200）共用。參考 ivy `FE:src/views/DismissalQueueView.vue` 的 loadCalls 序號防護、handleWsEvent upsert、WS 斷線 15 秒輪詢；改為本專案三種資料與 ws 事件（`docs/tasks/api_index.md` §15）。\n\n**介面**\n```ts\nexport function usePickupBoard(opts?: { withRoster?: boolean; withAuthorizations?: boolean }): {\n  queue: Ref<PickupQueue | null>; roster: Ref<PickupRoster | null>; authorizations: Ref<StaffAuthorization[]>\n  counts: ComputedRef<{ pending; acknowledged; arrived; needs_reply }>   // 由 queue.open 重算\n  loading; error; reload(): Promise<void>\n  reply(id, body): Promise<PickupRequest>; acknowledge(id): Promise<PickupRequest>\n  complete(id, body): Promise<PickupRequest>; create(body): Promise<PickupRequest>\n  applyRequest(req: PickupRequest): void; applyAuthorization(a: StaffAuthorization): void\n  onArrived(fn: (req) => void): () => void; onNewRequest(fn: (req) => void): () => void\n  wsStatus; wsDenied\n}\n```\n- 日期固定為 `todayTaipei()`；跨午夜（每分鐘檢查）時自動 reload 新的一天。\n- `applyRequest(req)`：req.service_date 非今天忽略；open 狀態 → upsert 到 queue.open（移出 closed）；終態 → 移出 open、upsert 到 closed 最前；同步 roster 中該生的 `open_request`（終態設 null；completed 時 attendance_status 設 'left'）。狀態從非 arrived 變 arrived → 觸發 onArrived；新出現的 pending（原本不在 open）→ 觸發 onNewRequest。家長可用「我已經到了」捷徑直接建立 arrived 的請求（B440 `arrived: true`，未經 pending、`expected_arrival_at` 為 null、`arrived_at` 有值）：第一次看到的請求就是 arrived 時只觸發 onArrived（不觸發 onNewRequest）。\n- mutation 成功後以回傳值 applyRequest；409 `invalid_pickup_status` → ElMessage.warning(`此請求狀態已變更（目前：{label}）`) 並 reload；其他錯誤 rethrow 給 dialog 顯示。\n- ws：`useAdminWsTopic('pickup', { 'pickup.request_updated': applyRequest, 'pickup.authorization_updated': applyAuthorization }, { resync: reload })`；withRoster 時另訂閱 `attendance`（`attendance.updated` → patchRosterStudent attendance_status / 時間）與 `homework`（`homework.progress_updated` → homework_status / ready_eta），對應 topic 被拒（deniedTopics）時改為每 60 秒重抓 roster。\n- `applyAuthorization`：upsert；roster 中該生 active_authorization_count 以 authorizations 中該生 effective_status active 數量重算。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/composables/usePickupBoard.ts`，接送 POS（FRONTEND-189）與代理核驗頁（FRONTEND-200）共用。參考 ivy `FE:src/views/DismissalQueueView.vue` 的 loadCalls 序號防護、handleWsEvent upsert、WS 斷線 15 秒輪詢；改為本專案三種資料與 ws 事件（`docs/tasks/api_index.md` §15）。\n\n**介面**\n```ts\nexport function usePickupBoard(opts?: { withRoster?: boolean; withAuthorizations?: boolean }): {\n  queue: Ref<PickupQueue | null>; roster: Ref<PickupRoster | null>; authorizations: Ref<StaffAuthorization[]>\n  counts: ComputedRef<{ pending; acknowledged; arrived; needs_reply }>   // 由 queue.open 重算\n  loading; error; reload(): Promise<void>\n  reply(id, body): Promise<PickupRequest>; acknowledge(id): Promise<PickupRequest>\n  complete(id, body): Promise<PickupRequest>; create(body): Promise<PickupRequest>\n  applyRequest(req: PickupRequest): void; applyAuthorization(a: StaffAuthorization): void\n  onArrived(fn: (req) => void): () => void; onNewRequest(fn: (req) => void): () => void\n  wsStatus; wsDenied\n}\n```\n- 日期固定為 `todayTaipei()`；跨午夜（每分鐘檢查）時自動 reload 新的一天。\n- `applyRequest(req)`：req.service_date 非今天忽略；open 狀態 → upsert 到 queue.open（移出 closed）；終態 → 移出 open、upsert 到 closed 最前；同步 roster 中該生的 `open_request`（終態設 null；completed 時 attendance_status 設 'left'）。狀態從非 arrived 變 arrived → 觸發 onArrived；新出現的 pending（原本不在 open）→ 觸發 onNewRequest。家長可用「我已經到了」捷徑直接建立 arrived 的請求（B440 `arrived: true`，未經 pending、`expected_arrival_at` 為 null、`arrived_at` 有值）：第一次看到的請求就是 arrived 時只觸發 onArrived（不觸發 onNewRequest）。\n- mutation 回 404 `pickup_request_not_found` → `ElMessage.warning('此接送請求已不存在，已重新整理')` 並 reload（不 rethrow）。\n- mutation 成功後以回傳值 applyRequest；409 `invalid_pickup_status` → ElMessage.warning(`此請求狀態已變更（目前：{label}）`) 並 reload；其他錯誤 rethrow 給 dialog 顯示。\n- ws：`useAdminWsTopic('pickup', { 'pickup.request_updated': applyRequest, 'pickup.authorization_updated': applyAuthorization }, { resync: reload })`；withRoster 時另訂閱 `attendance`（`attendance.updated` → patchRosterStudent attendance_status / 時間）與 `homework`（`homework.progress_updated` → homework_status / ready_eta），對應 topic 被拒（deniedTopics）時改為每 60 秒重抓 roster。\n- `applyAuthorization`：upsert；roster 中該生 active_authorization_count 以 authorizations 中該生 effective_status active 數量重算。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/usePickupBoard.ts",
       "source_ref": "FE:src/views/DismissalQueueView.vue::handleWsEvent",
@@ -4229,7 +4313,8 @@
           "usePickupBoard handles invalid status conflict：acknowledge('r1') 回 409 {error:{code:'invalid_pickup_status',details:{current_status:'cancelled'}}} → body 含 '此請求狀態已變更（目前：已取消）'，GET queue 請求數 +1",
           "usePickupBoard recomputes counts from open list：open [pending needs_reply, acknowledged, arrived] → counts 深等於 {pending:1,acknowledged:1,arrived:1,needs_reply:1}",
           "usePickupBoard falls back to roster polling when homework topic denied：收到 {type:'error',code:'permission_denied',topics:['homework']} → 60 秒後 GET roster 請求數 +1",
-          "usePickupBoard handles request created directly as arrived：queue.open 原本沒有 r5 → ws pickup.request_updated {id:'r5',status:'arrived',expected_arrival_at:null,arrived_at:'2026-10-02T09:00:00Z',source:'parent'} → queue.open 含 r5、roster 中該生 open_request.status === 'arrived'；onArrived 收到 r5 一次、onNewRequest 呼叫次數 0；counts.arrived 增加 1"
+          "usePickupBoard handles request created directly as arrived：queue.open 原本沒有 r5 → ws pickup.request_updated {id:'r5',status:'arrived',expected_arrival_at:null,arrived_at:'2026-10-02T09:00:00Z',source:'parent'} → queue.open 含 r5、roster 中該生 open_request.status === 'arrived'；onArrived 收到 r5 一次、onNewRequest 呼叫次數 0；counts.arrived 增加 1",
+          "usePickupBoard handles request not found：acknowledge('r1') 回 404 {error:{code:'pickup_request_not_found',message:'找不到接送請求'}} → body 含 '此接送請求已不存在，已重新整理'，GET /admin/pickup/queue 請求數 +1，promise 不 reject"
         ],
         "run": "just web-test src/composables/usePickupBoard.spec.ts -t \"usePickupBoard\"",
         "notes": ""
@@ -4243,7 +4328,7 @@
     {
       "id": "FRONTEND-189",
       "title": "實作 views/PickupPosView.vue：接送 POS 頁（頂部狀態列、靜音、代建、POS 三欄）",
-      "description": "建立 `apps/web/src/views/PickupPosView.vue`（路由 `/pickup`，`pickup:read`，meta.tablet）。移植 ivy `FE:src/views/DismissalQueueView.vue` 的頁面骨架（PageHeader、連線狀態、POS board 容器、建立 dialog）；**去掉** 歷史篩選分頁、手機卡片列表、娃娃車、教師端連動。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-pickup-pos.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸、觸控目標 ≥ 44px。稿需呈現：三欄 POS（左班級欄含待處理徽章、中學生卡七種狀態、右佇列）、佇列卡各狀態（待回覆 / 等待確認 / 已確認 / 家長已到含等候分鐘與急迫色 / 已結束）、員工代建 5 秒倒數卡、左滑取消、回覆預計可接送時間 dialog、完成交付 dialog（監護人 / 代理人 / 主管確認交付）、代建請求 dialog、靜音切換、即時連線中斷提示、只有 pickup:read 時的唯讀樣式、空佇列、載入中。\n\n**內容**\n- 頂部列：「接送」+ 今天日期（formatDateWithWeekday）；計數 chip（待回覆 {needs_reply} danger、等待確認 {pending}、已確認 {acknowledged}、家長已到 {arrived} danger）；連線狀態（open「即時」/ reconnecting「重新連線中，每 15 秒更新」）；靜音切換（FRONTEND-187 muted，icon + 文字「提示音：開 / 關」）；「代理接送核驗」連結 → `/pickup/authorizations`；有 `pickup:operate` 時「代建接送請求」→ `PickupCreateDialog`（FRONTEND-199，未預選學生）。\n- 主體 `DismissalPosBoard`（FRONTEND-190），傳入 `usePickupBoard({withRoster: true, withAuthorizations: true})`（FRONTEND-188）的資料與操作。\n- 提示音：`board.onArrived(chime.onArrived)`、`board.onNewRequest(chime.onNewRequest)`；頁面第一次 pointerdown 時 `chime.unlock()`；並訂閱 `useNotificationsStore().onTransient`（`pickup.arrived` 以 request_id 去重，不重播）。\n- 第一次進入且尚未 unlock 時顯示提示條「點一下畫面以啟用提示音」，unlock 後消失。\n- 載入失敗 EmptyState error + 重試。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/views/PickupPosView.vue`（路由 `/pickup`，`pickup:read`，meta.tablet）。移植 ivy `FE:src/views/DismissalQueueView.vue` 的頁面骨架（PageHeader、連線狀態、POS board 容器、建立 dialog）；**去掉** 歷史篩選分頁、手機卡片列表、娃娃車、教師端連動。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-pickup-pos.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸、觸控目標 ≥ 44px。稿需呈現：三欄 POS（左班級欄含待處理徽章、中學生卡七種狀態、右佇列）、佇列卡各狀態（待回覆 / 等待確認 / 已確認 / 家長已到含等候分鐘與急迫色 / 已結束）、員工代建 5 秒倒數卡、左滑取消、回覆預計可接送時間 dialog、完成交付 dialog（監護人 / 代理人 / 主管確認交付）、代建請求 dialog、靜音切換、即時連線中斷提示、只有 pickup:read 時的唯讀樣式、空佇列、載入中。\n\n**內容**\n- 頂部列：「接送」+ 今天日期（formatDateWithWeekday）；計數 chip（待回覆 {needs_reply} danger、等待確認 {pending}、已確認 {acknowledged}、家長已到 {arrived} danger）；連線狀態（open「即時」/ reconnecting「重新連線中，每 15 秒更新」）；靜音切換（FRONTEND-187 muted，icon + 文字「提示音：開 / 關」）；「代理接送核驗」連結 → `/pickup/authorizations`；有 `pickup:operate` 時「代建接送請求」→ `PickupCreateDialog`（FRONTEND-199，未預選學生）。\n- 主體 `DismissalPosBoard`（FRONTEND-190），傳入 `usePickupBoard({withRoster: true, withAuthorizations: true})`（FRONTEND-188）的資料與操作。\n- 提示音：`board.onArrived(chime.onArrived)`、`board.onNewRequest(chime.onNewRequest)`；頁面第一次 pointerdown 時 `chime.unlock()`；並訂閱 `useNotificationsStore().onTransient`（`pickup.arrived` 以 request_id 去重，不重播）。\n- 第一次進入且尚未 unlock 時顯示提示條「點一下畫面以啟用提示音」，unlock 後消失。\n- 載入失敗 EmptyState error + 重試。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/PickupPosView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/PickupPosView.vue",
       "source_ref": "FE:src/views/DismissalQueueView.vue::default",
@@ -4254,7 +4339,10 @@
         "FRONTEND-187",
         "FRONTEND-190",
         "FRONTEND-199",
-        "FRONTEND-034"
+        "FRONTEND-034",
+        "FRONTEND-024",
+        "FRONTEND-039",
+        "FRONTEND-042"
       ],
       "suggested_model": "opus-5",
       "risk_notes": "",
@@ -4658,7 +4746,7 @@
     {
       "id": "FRONTEND-200",
       "title": "實作 views/PickupAuthorizationsView.vue：代理接送核驗頁",
-      "description": "建立 `apps/web/src/views/PickupAuthorizationsView.vue`（路由 `/pickup/authorizations`，`pickup:read`，meta.tablet）。移植 ivy `FE:src/views/PickupAuthorizationsView.vue` 的今日清單、狀態計數篩選、搜尋、待處理排前、核驗 dialog 開啟流程；**去掉** 歷史 scope 切換為日期選擇、手機卡片欄位設定、GUARDIANS_WRITE 權限判斷（改為 pickup:operate）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-pickup-authorizations.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸。稿需呈現：今日代理授權卡片列表（有效 / 已接送 / 已取消 / 已過期、錯誤次數、已鎖定）、篩選與搜尋、核驗 dialog 三種方式（接送碼、目視核對有照片 / 無照片、主管強制完成）、碼錯誤剩餘次數、鎖定後只剩強制完成、核驗成功畫面、只有 pickup:read 時唯讀、無 pickup:override 時不顯示強制完成、空清單。\n\n**內容**\n- `PageHeader`「代理接送核驗」；日期（預設 todayTaipei，可選過去 30 天，非今天唯讀）；狀態 chip（全部 / 有效 / 已接送 / 已取消 / 已過期，含計數，依 effective_status）；搜尋（代理人姓名、電話、學生姓名、末四碼）。`route.query.student_id` 有值時只顯示該生並顯示「只顯示：{學生}（清除）」。\n- 資料：`usePickupBoard({ withAuthorizations: true })`（FRONTEND-188，日期非今天時改直接呼叫 `listPickupAuthorizations({date})` 且不訂閱 ws）。\n- 卡片清單：`AuthorizationCard`（FRONTEND-202），active 排前，其餘依 verified_at / created_at 新到舊。\n- 核驗：卡片 emit verify → `AuthorizationVerifyDialog`（FRONTEND-201）。`route.query.verify={id}` 時載入後自動開啟該授權的核驗（從 POS 完成交付導過來）。\n- 核驗成功：dialog 顯示成功畫面；清單以回傳 authorization 更新。\n- 空清單：「今天沒有代理接送授權」/ 篩選後「沒有符合條件的授權」。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/views/PickupAuthorizationsView.vue`（路由 `/pickup/authorizations`，`pickup:read`，meta.tablet）。移植 ivy `FE:src/views/PickupAuthorizationsView.vue` 的今日清單、狀態計數篩選、搜尋、待處理排前、核驗 dialog 開啟流程；**去掉** 歷史 scope 切換為日期選擇、手機卡片欄位設定、GUARDIANS_WRITE 權限判斷（改為 pickup:operate）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-pickup-authorizations.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸。稿需呈現：今日代理授權卡片列表（有效 / 已接送 / 已取消 / 已過期、錯誤次數、已鎖定）、篩選與搜尋、核驗 dialog 三種方式（接送碼、目視核對有照片 / 無照片、主管強制完成）、碼錯誤剩餘次數、鎖定後只剩強制完成、核驗成功畫面、只有 pickup:read 時唯讀、無 pickup:override 時不顯示強制完成、空清單。\n\n**內容**\n- `PageHeader`「代理接送核驗」；日期（預設 todayTaipei，可選過去 30 天，非今天唯讀）；狀態 chip（全部 / 有效 / 已接送 / 已取消 / 已過期，含計數，依 effective_status）；搜尋（代理人姓名、電話、學生姓名、末四碼）。`route.query.student_id` 有值時只顯示該生並顯示「只顯示：{學生}（清除）」。\n- 資料：`usePickupBoard({ withAuthorizations: true })`（FRONTEND-188，日期非今天時改直接呼叫 `listPickupAuthorizations({date})` 且不訂閱 ws）。\n- 卡片清單：`AuthorizationCard`（FRONTEND-202），active 排前，其餘依 verified_at / created_at 新到舊。\n- 核驗：卡片 emit verify → `AuthorizationVerifyDialog`（FRONTEND-201）。`route.query.verify={id}` 時載入後自動開啟該授權的核驗（從 POS 完成交付導過來）。\n- 核驗成功：dialog 顯示成功畫面；清單以回傳 authorization 更新。\n- 空清單：「今天沒有代理接送授權」/ 篩選後「沒有符合條件的授權」。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/PickupAuthorizationsView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/PickupAuthorizationsView.vue",
       "source_ref": "FE:src/views/PickupAuthorizationsView.vue::default",
@@ -4668,7 +4756,9 @@
         "FRONTEND-188",
         "FRONTEND-181",
         "FRONTEND-201",
-        "FRONTEND-202"
+        "FRONTEND-202",
+        "FRONTEND-024",
+        "FRONTEND-039"
       ],
       "suggested_model": "opus-5",
       "risk_notes": "",
@@ -4820,7 +4910,7 @@
     {
       "id": "FRONTEND-231",
       "title": "實作 views/ExamsView.vue：考試列表",
-      "description": "建立 `apps/web/src/views/ExamsView.vue`（路由 `/exams`，`exams:read`）。新做（domain_spec §4）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exams.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試列表（篩選、草稿 / 已發布）、建立 / 編輯考試 dialog（含初始科目與滿分、已發布時只可改名稱日期備註）、只有 exams:read 時的唯讀樣式、空清單。\n\n**內容**\n- `PageHeader`「考試」；`AdminListToolbar`：搜尋（名稱）、狀態（草稿 / 已發布）、考試類型（lookups examTypeOptions）、班級、年級、日期區間（預設近 90 天到未來 30 天）。`usePagedList`（syncQuery）+ `listExams`，依 exam_date desc。\n- 表格：考試日期（formatDateWithWeekday）、名稱、類型、對象（年級與 / 或班級：「三年級」「低年級A班」「低年級A班・二年級」）、科目數、應考人數（roster_count）、狀態 tag（EXAM_STATUS_META；已發布附 formatDateTime(published_at)）。點列 → `/exams/{id}`。\n- 有 `exams:write`：「建立考試」→ `ExamFormDialog`（FRONTEND-232），建立成功導到 `/exams/{id}?tab=scores`；草稿列 ⋮「刪除」（`useConfirmDelete`，訊息「刪除後已輸入的成績會一併刪除，確定要刪除「{name}」嗎？」）。\n- 空清單：「還沒有考試紀錄」（有寫入權限附建立按鈕）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/views/ExamsView.vue`（路由 `/exams`，`exams:read`）。新做（domain_spec §4）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exams.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試列表（篩選、草稿 / 已發布）、建立 / 編輯考試 dialog（含初始科目與滿分、已發布時只可改名稱日期備註）、只有 exams:read 時的唯讀樣式、空清單。\n\n**內容**\n- `PageHeader`「考試」；`AdminListToolbar`：搜尋（名稱）、狀態（草稿 / 已發布）、考試類型（lookups examTypeOptions）、班級、年級、日期區間（預設近 90 天到未來 30 天）。`usePagedList`（syncQuery）+ `listExams`，依 exam_date desc。\n- 表格：考試日期（formatDateWithWeekday）、名稱、類型、對象（年級與 / 或班級：「三年級」「低年級A班」「低年級A班・二年級」）、科目數、應考人數（roster_count）、狀態 tag（EXAM_STATUS_META；已發布附 formatDateTime(published_at)）。點列 → `/exams/{id}`。\n- 有 `exams:write`：「建立考試」→ `ExamFormDialog`（FRONTEND-232），建立成功導到 `/exams/{id}?tab=scores`；草稿列 ⋮「刪除」（`useConfirmDelete`，訊息「刪除後已輸入的成績會一併刪除，確定要刪除「{name}」嗎？」）。\n- 空清單：「還沒有考試紀錄」（有寫入權限附建立按鈕）。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/ExamsView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/ExamsView.vue",
       "source_ref": null,
@@ -4831,7 +4921,10 @@
         "FRONTEND-045",
         "FRONTEND-232",
         "FRONTEND-083",
-        "FRONTEND-044"
+        "FRONTEND-044",
+        "FRONTEND-024",
+        "FRONTEND-039",
+        "FRONTEND-041"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -4936,7 +5029,7 @@
     {
       "id": "FRONTEND-234",
       "title": "實作 views/ExamDetailView.vue：考試詳情（成績輸入、各科平均、科目設定、發布 / 取消發布）",
-      "description": "建立 `apps/web/src/views/ExamDetailView.vue`（路由 `/exams/:id`，`exams:read`）。新做（domain_spec §4、M8）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exam-detail.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試 header（狀態、發布 / 取消發布 / 編輯 / 刪除依權限）、成績輸入格（學生 × 科目，格子五種狀態：未填 / 編輯中 / 儲存中 / 已儲存 / 錯誤，缺考勾選、超出滿分錯誤、已不在名單的學生）、已發布後修改的重新通知選擇、各科平均表、科目設定（草稿可改 / 已發布唯讀）、只有 exams:read 時唯讀、無科目時的引導、載入中。\n\n**內容**\n- 載入 `getExam(id)`；404 → EmptyState「找不到此考試」+「回考試列表」。\n- header：名稱、類型、日期、對象、應考人數、狀態 tag；已發布「{published_by_name} 於 {formatDateTime(published_at)} 發布」。\n- 動作：\n  - 「編輯資訊」（exams:write）→ `ExamFormDialog`（FRONTEND-232）。\n  - 「發布」（exams:publish，draft）→ 先 `fetchExamSummary` 計算未填格數（各科 missing_count 加總）→ 確認「發布後家長即可查看成績並收到通知。{missing > 0 ? '尚有 {missing} 格未填，家長會看到「未填」。' : ''}確定發布嗎？」→ `publishExam`；`exam_has_no_subjects` →「請先設定科目」並切到科目分頁。\n  - 「取消發布」（exams:publish，published）→ 確認「取消發布後家長將看不到此次成績，已送出的通知不會收回。」→ `unpublishExam`。\n  - 「刪除」（exams:write，draft）→ useConfirmDelete → 成功導回 `/exams`。\n- 分頁（存 `route.query.tab`，預設 scores）：成績輸入（`ScoreGrid` FRONTEND-235）、各科平均（`ExamSummaryTable` FRONTEND-239）、科目設定（`ExamSubjectsEditor` FRONTEND-233）。\n- 成績有未儲存或儲存失敗的格子時離開路由 → `confirmDiscardChanges`（FRONTEND-046）。\n- 發布 / 取消發布 / 科目變更後重新載入 exam 與成績格。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/views/ExamDetailView.vue`（路由 `/exams/:id`，`exams:read`）。新做（domain_spec §4、M8）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exam-detail.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試 header（狀態、發布 / 取消發布 / 編輯 / 刪除依權限）、成績輸入格（學生 × 科目，格子五種狀態：未填 / 編輯中 / 儲存中 / 已儲存 / 錯誤，缺考勾選、超出滿分錯誤、已不在名單的學生）、已發布後修改的重新通知選擇、各科平均表、科目設定（草稿可改 / 已發布唯讀）、只有 exams:read 時唯讀、無科目時的引導、載入中。\n\n**內容**\n- 載入 `getExam(id)`；404 → EmptyState「找不到此考試」+「回考試列表」。\n- header：名稱、類型、日期、對象、應考人數、狀態 tag；已發布「{published_by_name} 於 {formatDateTime(published_at)} 發布」。\n- 動作：\n  - 「編輯資訊」（exams:write）→ `ExamFormDialog`（FRONTEND-232）。\n  - 「發布」（exams:publish，draft）→ 先 `fetchExamSummary` 計算未填格數（各科 missing_count 加總）→ 確認「發布後家長即可查看成績並收到通知。{missing > 0 ? '尚有 {missing} 格未填，家長會看到「未填」。' : ''}確定發布嗎？」→ `publishExam`；`exam_has_no_subjects` →「請先設定科目」並切到科目分頁。\n  - 「取消發布」（exams:publish，published）→ 確認「取消發布後家長將看不到此次成績，已送出的通知不會收回。」→ `unpublishExam`。\n  - 「刪除」（exams:write，draft）→ useConfirmDelete → 成功導回 `/exams`。\n- 狀態競爭：取消發布回 409 `exam_not_published`、發布回 409 `exam_already_published`（他人已先操作）→ `ElMessage.warning('考試狀態已變更，已重新載入')` 並重新載入 exam 與成績格。\n- 分頁（存 `route.query.tab`，預設 scores）：成績輸入（`ScoreGrid` FRONTEND-235）、各科平均（`ExamSummaryTable` FRONTEND-239）、科目設定（`ExamSubjectsEditor` FRONTEND-233）。\n- 成績有未儲存或儲存失敗的格子時離開路由 → `confirmDiscardChanges`（FRONTEND-046）。\n- 發布 / 取消發布 / 科目變更後重新載入 exam 與成績格。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/ExamDetailView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/ExamDetailView.vue",
       "source_ref": null,
@@ -4948,7 +5041,10 @@
         "FRONTEND-233",
         "FRONTEND-235",
         "FRONTEND-239",
-        "FRONTEND-046"
+        "FRONTEND-046",
+        "FRONTEND-024",
+        "FRONTEND-042",
+        "FRONTEND-044"
       ],
       "suggested_model": "opus-5",
       "risk_notes": "",
@@ -4964,7 +5060,8 @@
           "ExamDetailView no subjects publish error switches tab：publish 回 422 exam_has_no_subjects → body 含 '請先設定科目'，router query.tab === 'subjects'",
           "ExamDetailView permission based actions：permissions ['exams:read'] → 沒有 '編輯資訊'、'發布'、'刪除'；有 exams:write 無 exams:publish → 有 '編輯資訊' 無 '發布'",
           "ExamDetailView not found：GET /admin/exams/zz 回 404 → 文字含 '找不到此考試'",
-          "ExamDetailView guards leaving with unsaved cells：ScoreGrid 回報有未儲存格 → router.push('/exams') 時 body 出現 '尚未儲存的變更將會遺失'，點 '繼續編輯' 後仍在 /exams/e1"
+          "ExamDetailView guards leaving with unsaved cells：ScoreGrid 回報有未儲存格 → router.push('/exams') 時 body 出現 '尚未儲存的變更將會遺失'，點 '繼續編輯' 後仍在 /exams/e1",
+          "ExamDetailView reloads on status conflict：published 頁面點 '取消發布' 確認 → POST .../unpublish 回 409 {error:{code:'exam_not_published',message:'考試尚未發布'}} → body 含 '考試狀態已變更，已重新載入'，GET /admin/exams/e1 請求數 +1"
         ],
         "run": "just web-test src/views/ExamDetailView.spec.ts -t \"ExamDetailView\"",
         "notes": ""
@@ -4988,7 +5085,8 @@
         "FRONTEND-230",
         "FRONTEND-236",
         "FRONTEND-237",
-        "FRONTEND-238"
+        "FRONTEND-238",
+        "FRONTEND-042"
       ],
       "suggested_model": "opus-5",
       "risk_notes": "",
@@ -5167,7 +5265,8 @@
       "status": "pending",
       "assignee_session": null,
       "depends_on": [
-        "FRONTEND-230"
+        "FRONTEND-230",
+        "FRONTEND-042"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -5229,7 +5328,7 @@
     {
       "id": "FRONTEND-261",
       "title": "實作 views/DashboardView.vue：今日儀表板",
-      "description": "建立 `apps/web/src/views/DashboardView.vue`（路由 `/`，`dashboard:read`；domain_spec M11：今日應到 / 已到 / 未到 / 請假 / 缺席人數、待回覆接送請求數、作業完成率、近期請假清單，單一 endpoint 聚合）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-dashboard.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：營業日（出勤、接送、作業、近期請假四區）、非營業日、各卡片依權限是否可點、載入中、載入失敗。\n\n**內容**\n- `PageHeader`「今日儀表板」，副標 `formatDateWithWeekday(date)`；「重新整理」按鈕與「{n} 秒前更新」。\n- 非營業日：el-alert info「今天不是營業日」，下方仍顯示近期請假。\n- 出勤區（`StatCard` ×5）：應到 expected_total、已到 arrived（hint「在班 {present}・已離班 {left}」）、未到 not_arrived（warning）、請假 leave、缺席 absent（danger）。有 `attendance:read` 時卡片 `to` 為 `/attendance`（未到卡帶 `?status=expected` 不實作篩選 query 時僅導頁）。\n- 接送區：進行中 open、待回覆 needs_reply（> 0 danger）、家長已到 arrived（> 0 danger）、今日已完成 completed；有 `pickup:read` 時 `to` 為 `/pickup`。\n- 作業區：完成率 el-progress（`Math.round(completion_rate * 100)`%）+ 已完成 / 進行中 / 尚未開始；有 `homework:read` 時可點至 `/homework`。\n- 近期請假：`RecentLeavesList`（FRONTEND-262）。\n- 自動更新：頁面可見時每 60 秒重抓（`document.hidden` 時暫停，回到可見立即重抓一次）；無 ws。\n- 載入失敗：EmptyState error + 重試；已有資料時失敗只顯示 ElMessage 並保留舊資料。\n\n**驗收標準**：每一條對應下列 red_case（fake timers）。",
+      "description": "建立 `apps/web/src/views/DashboardView.vue`（路由 `/`，`dashboard:read`；domain_spec M11：今日應到 / 已到 / 未到 / 請假 / 缺席人數、待回覆接送請求數、作業完成率、近期請假清單，單一 endpoint 聚合）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-dashboard.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：營業日（出勤、接送、作業、近期請假四區）、非營業日、各卡片依權限是否可點、載入中、載入失敗。\n\n**內容**\n- `PageHeader`「今日儀表板」，副標 `formatDateWithWeekday(date)`；「重新整理」按鈕與「{n} 秒前更新」。\n- 非營業日：el-alert info「今天不是營業日」，下方仍顯示近期請假。\n- 出勤區（`StatCard` ×5）：應到 expected_total、已到 arrived（hint「在班 {present}・已離班 {left}」）、未到 not_arrived（warning）、請假 leave、缺席 absent（danger）。有 `attendance:read` 時卡片 `to` 為 `/attendance`（未到卡帶 `?status=expected` 不實作篩選 query 時僅導頁）。\n- 接送區：進行中 open、待回覆 needs_reply（> 0 danger）、家長已到 arrived（> 0 danger）、今日已完成 completed；有 `pickup:read` 時 `to` 為 `/pickup`。\n- 作業區：完成率 el-progress（`Math.round(completion_rate * 100)`%）+ 已完成 / 進行中 / 尚未開始；有 `homework:read` 時可點至 `/homework`。\n- 近期請假：`RecentLeavesList`（FRONTEND-262）。\n- 自動更新：頁面可見時每 60 秒重抓（`document.hidden` 時暫停，回到可見立即重抓一次）；無 ws。\n- 載入失敗：EmptyState error + 重試；已有資料時失敗只顯示 ElMessage 並保留舊資料。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/DashboardView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case（fake timers）。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/DashboardView.vue",
       "source_ref": null,
@@ -5239,7 +5338,10 @@
         "FRONTEND-260",
         "FRONTEND-043",
         "FRONTEND-262",
-        "FRONTEND-023"
+        "FRONTEND-023",
+        "FRONTEND-024",
+        "FRONTEND-039",
+        "FRONTEND-042"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
