@@ -6453,7 +6453,7 @@
         ],
         "red_cases": [
           "test_events_exact：{e.value for e in Event} == {'attendance.checked_in', 'leave.created', 'homework.eta_updated', 'exam.published', 'pickup.arrived', 'attendance.checked_out', 'homework.done', 'pickup.requested', 'binding.completed', 'pickup.completed', 'leave.cancelled', 'pickup.replied', 'pickup.cancelled'}",
-          "test_events_parent_line_configurable：{e.value for e in PARENT_LINE_CONFIGURABLE} == {'attendance.checked_in', 'homework.eta_updated', 'exam.published', 'homework.done', 'attendance.checked_out', 'pickup.completed', 'pickup.replied', 'pickup.cancelled'}",
+          "test_events_parent_line_configurable：{e.value for e in PARENT_LINE_CONFIGURABLE} == {'attendance.checked_in', 'attendance.checked_out', 'homework.eta_updated', 'homework.done', 'pickup.replied', 'pickup.completed', 'exam.published'}（7 個，與 DB-031 CHECK 一致；pickup.cancelled 與 binding.completed 不在其中）",
           "test_events_recipient_types：{e.value for e,d in EVENTS.items() if 'staff' in d.recipient_types} == {'leave.created','leave.cancelled','pickup.requested','pickup.arrived','pickup.cancelled'}；EVENTS[Event.PICKUP_CANCELLED].recipient_types == frozenset({'staff','parent'})",
           "test_events_required_payload：EVENTS[Event.PICKUP_COMPLETED].required_payload == ('student_id','student_name','request_id','time','picked_up_by')"
         ],
