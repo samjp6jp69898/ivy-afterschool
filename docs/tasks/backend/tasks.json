@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 15,
-  "last_updated": "2026-10-02T08:33:50Z",
+  "version": 16,
+  "last_updated": "2026-10-02T08:35:29Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -236,7 +236,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/base.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
@@ -250,7 +250,7 @@
           "unit"
         ],
         "red_cases": [
-          "test_models_base_mixin_ddl：宣告 class Probe(UUIDPkMixin, TimestampMixin, Base): __tablename__='probe'; name: Mapped[str] → str(CreateTable(Probe.__table__).compile(dialect=postgresql.dialect())) 含 'id UUID'、'created_at TIMESTAMP WITH TIME ZONE NOT NULL'、'updated_at TIMESTAMP WITH TIME ZONE NOT NULL'",
+          "test_models_base_mixin_ddl：宣告 class Probe(UUIDPkMixin, TimestampMixin, Base): __tablename__='probe'; name: Mapped[str] → str(CreateTable(Probe.__table__).compile(dialect=postgresql.dialect())) 含 'id UUID DEFAULT gen_random_uuid() NOT NULL'、'created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL'、'updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL'（postgresql dialect 把 DEFAULT 放在 NOT NULL 前）",
           "test_models_base_naming_convention：Probe 加 UniqueConstraint('name') → 約束名 == 'uq_probe_name'",
           "test_models_base_archivable：ArchivableMixin 的 model 實例 archived_at=None → is_archived is False；設為 aware datetime → True",
           "test_models_base_import：from app.models import Base → Base.metadata 為 MetaData 實例"

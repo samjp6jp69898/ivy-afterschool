@@ -2,11 +2,12 @@
 
 from datetime import UTC, datetime
 
-from app.models.base import ArchivableMixin, Base, TimestampMixin, UUIDPkMixin
-from sqlalchemy import MetaData, UniqueConstraint
+from sqlalchemy import MetaData, Table, UniqueConstraint
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped
 from sqlalchemy.schema import CreateTable
+
+from app.models.base import ArchivableMixin, Base, TimestampMixin, UUIDPkMixin
 
 
 class Probe(UUIDPkMixin, TimestampMixin, ArchivableMixin, Base):
@@ -16,8 +17,14 @@ class Probe(UUIDPkMixin, TimestampMixin, ArchivableMixin, Base):
     name: Mapped[str]
 
 
+def _probe_table() -> Table:
+    return Base.metadata.tables["probe"]
+
+
 def _ddl() -> str:
-    return str(CreateTable(Probe.__table__).compile(dialect=postgresql.dialect()))
+    # DDLElement.compile 在 SQLAlchemy 的型別標註中未加註
+    compiled = CreateTable(_probe_table()).compile(dialect=postgresql.dialect())  # type: ignore[no-untyped-call]
+    return str(compiled)
 
 
 def test_models_base_mixin_ddl() -> None:
@@ -25,14 +32,15 @@ def test_models_base_mixin_ddl() -> None:
 
     assert "id UUID" in ddl
     assert "DEFAULT gen_random_uuid()" in ddl
-    assert "created_at TIMESTAMP WITH TIME ZONE NOT NULL" in ddl
-    assert "updated_at TIMESTAMP WITH TIME ZONE NOT NULL" in ddl
+    # postgresql dialect 把 DEFAULT 放在 NOT NULL 前面
+    assert "created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL" in ddl
+    assert "updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL" in ddl
     assert "archived_at TIMESTAMP WITH TIME ZONE" in ddl
     assert "PRIMARY KEY (id)" in ddl
 
 
 def test_models_base_naming_convention() -> None:
-    names = {c.name for c in Probe.__table__.constraints}
+    names = {c.name for c in _probe_table().constraints}
 
     assert "uq_probe_name" in names
     assert "pk_probe" in names
