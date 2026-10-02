@@ -72,16 +72,18 @@ afterschool/
 
 | 層 | 放什麼 | 例子 |
 |---|---|---|
-| env（`apps/api/.env`，Pydantic Settings） | 只放「沒有它程式起不來」或 secret 的基礎設施值 | `DATABASE_URL`、`APP_SECRET_KEY`（JWT 簽章 + DB 內 secret 加密金鑰）、`APP_ENV`、`CORS_ORIGINS`、`PUBLIC_BASE_URL`、`SENTRY_DSN` |
+| env（`apps/api/.env`，Pydantic Settings） | 只放「沒有它程式起不來」或 secret 的基礎設施值 | `DATABASE_URL`、`APP_SECRET_KEY`（JWT 簽章 + DB 內 secret 加密金鑰）、`APP_ENV`、`CORS_ORIGINS`、`PUBLIC_BASE_URL`、`SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`（Storage 操作與簽發短效 URL）、`SENTRY_DSN` |
 | DB `system_settings`（後台「系統設定」頁可改） | 營運參數，key/value + 每個 key 有 Pydantic schema 驗證 | 安親班名稱/Logo、營業時段、接送時段、作業進度預設預計完成時間、通知文案開關、LIFF ID、LINE Messaging channel token/secret（加密存放） |
 | DB 參考資料表（後台各自的管理頁） | 可增刪的清單型設定 | 科目、考試類型、合作國小清單、作業項目範本、休假日 |
 
+- 系統必要的預設資料（角色、科目、考試類型、system_settings 預設值）以 data migration 建立（雲端不執行 `seed.sql`）；`seed.sql` 只放本機開發用設定。初始 admin 帳號由一次性 CLI `uv run python -m app.cli create-admin` 建立，不寫在任何 seed。
 - 系統設定讀取走有 TTL 的 in-process cache，後台修改後立即失效該 key。
 - DB 內的 secret（LINE channel token 等）以 `APP_SECRET_KEY` 衍生的金鑰做對稱加密存放，API 回傳時只回遮罩值。
 - 新增設定項時：先在 `app/core/settings_registry.py` 註冊 key + schema + 預設值，再由 migration seed 預設值；**不要**為業務參數新增 env 變數。
 
 ## 5. 資料庫原則
 
+- 後端以專用角色 `app_backend`（不帶 BYPASSRLS）連線，每張表由 `app_private.secure_table()` 統一開 RLS 並只對 `app_backend` 放行；`anon` / `authenticated` / `service_role` 對 public 的權限全部收回。
 - 所有 table 在 `public` schema，主鍵 `uuid default gen_random_uuid()`，時間欄位 `timestamptz`，含 `created_at` / `updated_at`（trigger 維護）。
 - **RLS 一律開啟且不給 `anon` / `authenticated` 任何 policy**：資料只透過 FastAPI 存取，後端以專用 DB role 連線。這讓 Supabase 的 PostgREST / Realtime 對外不暴露任何資料，屬縱深防禦。由 `scripts/check_rls.py` + integration 測試把關（每張表都 `rowsecurity = true` 且 `anon` 查詢回 0 筆/拒絕）。
 - 軟刪除只用在有歷史意義的主檔（students、guardians、classes）：`archived_at`；交易紀錄不刪除。

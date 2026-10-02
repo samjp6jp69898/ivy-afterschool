@@ -51,7 +51,7 @@
 **classes**：`name`、`grade_levels int[]`（1~6，可混齡）、`academic_year int`（民國學年度）、`sort_order`、`archived_at`。
 **class_staff**：`class_id`、`staff_user_id`、`role`（`lead` / `assistant`）。僅作為後台篩選「我的班」與通知收件人，不是教師端。
 
-**students**：`student_no`（unique，人工可編）、`name`、`gender`（`male` / `female` / `other`）、`birthday`、`grade_level int`（1~6）、`school_id → schools`、`school_class text`（例如「三年二班」）、`class_id → classes`、`status`（`active` / `suspended` / `withdrawn`）、`enrolled_on`、`withdrawn_on`、`photo_path`、`id_number_enc bytea`、`health_note_enc bytea`、`note`、`archived_at`。
+**students**：`student_no`（unique，人工可編）、`name`、`gender`（`male` / `female` / `other`）、`birthday`、`grade_level int`（1~6）、`school_id → schools`、`school_class text`（例如「三年二班」）、`class_id → classes`、`status`（`active` / `suspended` / `withdrawn`）、`enrolled_on`、`withdrawn_on`、`photo_path`、`id_number_enc bytea`、`id_number_hmac text`（查重用，not null 時 unique）、`health_note_enc bytea`、`note`、`archived_at`。敏感欄位以應用層 AES-256-GCM 加密，HMAC 與加密金鑰皆由 `APP_SECRET_KEY` 衍生。
 - 每年 8 月的升級（grade_level +1、六年級轉 withdrawn）由後台「學年升級」功能批次處理，不自動執行。
 
 **parent_accounts**：`line_user_id`（unique）、`display_name`、`picture_url`、`phone`、`status`（`active` / `disabled`）、`token_version`、`last_login_at`。
@@ -80,6 +80,7 @@ expected ──到班──▶ present ──離班/接送完成──▶ left
 **student_leaves**：`student_id`、`leave_type`（`sick` / `personal` / `other`）、`start_date`、`end_date`、`reason`、`status`（`active` / `cancelled`）、`created_by_type`（`parent` / `staff`）、`created_by_id`、`cancelled_at`、`cancelled_by_type`、`cancelled_by_id`。
 **student_leave_attachments**：`leave_id`、`storage_path`、`mime_type`、`size_bytes`。檔案存 Supabase Storage 私有 bucket `leave-attachments`，後端簽發短效 URL。
 
+- 同一學生的 `active` 請假期間不可重疊（DB exclusion constraint，API 回 409 `leave_overlap`），同時防止重複送出。
 - 家長送出即生效（沿用 ivy），同時把期間內的出勤改 `leave`（移植 `BE:services/student_leave_service.py::apply_attendance_for_leave` / `revert_attendance_for_leave`）。員工可在後台代登記與取消。
 - 已開始的請假日（今天之前）家長不可取消，員工可以。
 - 建立/取消時通知班級負責員工（in_app + ws，事件 `leave.created` / `leave.cancelled`）。
@@ -98,7 +99,7 @@ expected ──到班──▶ present ──離班/接送完成──▶ left
 **pickup_requests**（移植 `BE:models/dismissal.py::StudentDismissalCall`）：`student_id`、`service_date`、`source`（`parent` / `staff` / `proxy`）、`requested_by_type`、`requested_by_id`、`expected_arrival_at`（家長預計抵達時間，可空）、`status`（`pending` / `acknowledged` / `arrived` / `completed` / `cancelled` / `expired`）、`homework_status_at_request`、`reply_ready_eta`（回覆給家長的預計可接送時間）、`reply_message`、`reply_source`（`auto` / `staff`）、`replied_at`、`replied_by`、`arrived_at`、`completed_at`、`completed_by`、`picked_up_by_guardian_id`、`picked_up_by_authorization_id`、`completion_method`（`guardian` / `code` / `visual_match` / `override`）、`cancelled_at`、`cancel_reason`。同一學生同一天只能有一筆非終態請求（partial unique index）。
 
 **pickup_persons**（常用接送人，移植 `BE:models/pickup.py::StudentPickupPerson`）：`student_id`、`name`、`relation`、`phone`、`photo_path`、`created_by_parent_id`、`archived_at`。
-**pickup_authorizations**（單日代理接送，移植 `BE:models/pickup.py::PickupAuthorization`）：`student_id`、`service_date`、`pickup_person_id`（nullable）、`proxy_name`、`proxy_phone`、`code_hash`、`code_last4`、`status`（`active` / `completed` / `cancelled`）、`verified_at`、`verified_by`、`verification_method`（`code` / `visual_match` / `override`）、`created_by_parent_id`。
+**pickup_authorizations**（單日代理接送，移植 `BE:models/pickup.py::PickupAuthorization`）：`student_id`、`service_date`、`pickup_person_id`（nullable）、`proxy_name`、`proxy_phone`、`code_hash`、`code_last4`、`code_attempts`、`code_locked_at`（接送碼連錯 5 次鎖定、不自動解鎖，需 `pickup:override` 員工處理）、`status`（`active` / `completed` / `cancelled`）、`verified_at`、`verified_by`、`verification_method`（`code` / `visual_match` / `override`）、`created_by_parent_id`。
 
 流程（家長發起 + 員工主動更新兩者都要）：
 1. 員工在「作業進度看板」持續更新 items 與 `ready_eta`（M6），家長隨時可在家長端看到。
@@ -129,7 +130,7 @@ expected ──到班──▶ present ──離班/接送完成──▶ left
 移植 `BE:services/notification/`（`dispatch.py::enqueue`、`channel_matrix.py`、`_channels/line.py`、`_channels/ws.py`、`outbox_sweeper.py`、`retry_scheduler.py`）。
 
 **notifications**（站內收件匣）：`recipient_type`（`staff` / `parent`）、`recipient_id`、`event`、`title`、`body`、`payload jsonb`、`read_at`。
-**notification_outbox**：`notification_id`、`channel`（`line` / `ws`）、`status`（`pending` / `sent` / `failed` / `dead`）、`attempts`、`next_attempt_at`、`last_error`。DB transaction commit 後才派送，失敗指數退避，超過次數轉 `dead`。
+**notification_outbox**：`notification_id`、`channel`（只有 `line`；ws 不進 outbox，commit 後直接廣播、盡力而為，前端以輪詢補齊）、`status`（`pending` / `sent` / `failed` / `dead`）、`attempts`、`next_attempt_at`、`last_error`。DB transaction commit 後才派送，失敗指數退避，超過次數轉 `dead`。
 **notification_preferences**：`parent_account_id`、`event`、`line_enabled bool`。in_app 一律開啟。
 
 事件（`app/notifications/events.py`），收件人與預設頻道：
@@ -232,7 +233,7 @@ API `POST /api/device/punch`（裝置金鑰認證，卡號 → 學生 → 到班
 | `pickup:override` | 代理接送強制完成 | director |
 | `exams:read` / `exams:write` / `exams:publish` | 成績 | 全部員工 / director, clerk, tutor / director, clerk |
 
-`admin` 角色擁有全部權限碼（含未來新增）。
+`admin` 角色在 DB 中的 `permissions` 存為 `{*}`，代表全部權限碼（含未來新增）；後端計算有效權限時把 `*` 展開成 `Permission` enum 的全部值。
 
 ## 4. 前端頁面
 
