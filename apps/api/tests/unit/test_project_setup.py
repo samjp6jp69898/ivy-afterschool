@@ -25,7 +25,8 @@ RUNTIME_MODULES = [
     "apscheduler",
     "openpyxl",
     "sentry_sdk",
-    "multipart",
+    # python-multipart 的模組名（舊名 multipart 會發 PendingDeprecationWarning）
+    "python_multipart",
 ]
 
 
@@ -48,7 +49,9 @@ def test_project_setup_sqlalchemy_is_v2() -> None:
 
 
 def test_project_setup_blocks_external_socket() -> None:
-    with pytest.raises(pytest_socket.SocketBlockedError):
+    # 全域 --allow-hosts 下 pytest-socket 對非允許 host 拋 SocketConnectBlockedError；
+    # 整個 socket 被停用時拋 SocketBlockedError（兩者互不為子類別）。
+    with pytest.raises((pytest_socket.SocketBlockedError, pytest_socket.SocketConnectBlockedError)):
         socket.create_connection(("1.1.1.1", 53), timeout=1)
 
 
