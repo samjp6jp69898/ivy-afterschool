@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 24,
-  "last_updated": "2026-10-02T09:02:49Z",
+  "version": 25,
+  "last_updated": "2026-10-02T09:15:33Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -954,13 +954,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security/passwords.py",
       "source_ref": "BE:utils/auth.py::verify_password",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "【review-r2 打回】verify_password 對 $argon2id$ 前綴正確但內容非法的 hash（例如 '$argon2id$v=19$m=65536,t=3,p=4$broken'、'$argon2id$'）走 except VerificationError 直接回 False，沒有先 dummy_verify（argon2-cffi 25.1 的 PasswordHasher.verify 對解碼失敗拋 VerificationError，不會拋 InvalidHashError），回應 0 ms vs 正常 ~33 ms，違反 description「hashed 格式非法時先呼叫 dummy_verify 再回 False」。修法：VerifyMismatchError 以外的 VerificationError（含 InvalidHashError）一律視為格式非法 → dummy_verify 後回 False；並在 test_passwords_dummy_verify_runs_argon2 或新測試中以 monkeypatch 計數斷言上述兩個輸入各觸發恰好一次對 $argon2id$ 假 hash 的 verify。",
+      "risk_notes": "【review-r2 打回】verify_password 對 $argon2id$ 前綴正確但內容非法的 hash（例如 '$argon2id$v=19$m=65536,t=3,p=4$broken'、'$argon2id$'）走 except VerificationError 直接回 False，沒有先 dummy_verify（argon2-cffi 25.1 的 PasswordHasher.verify 對解碼失敗拋 VerificationError，不會拋 InvalidHashError），回應 0 ms vs 正常 ~33 ms，違反 description「hashed 格式非法時先呼叫 dummy_verify 再回 False」。修法：VerifyMismatchError 以外的 VerificationError（含 InvalidHashError）一律視為格式非法 → dummy_verify 後回 False；並在 test_passwords_dummy_verify_runs_argon2 或新測試中以 monkeypatch 計數斷言上述兩個輸入各觸發恰好一次對 $argon2id$ 假 hash 的 verify。\n【review-r2 第二次打回】hash 含非 ASCII 字元（例如 '$argon2id$v=19$m=65536,t=3,p=4$ＡＢＣ$ＤＥＦ'、'$argon2id$é'）時 argon2-cffi 拋 UnicodeEncodeError（ValueError 子類，不是 VerificationError），verify_password 把例外往上拋且 0 ms，違反「非法 hash 字串 False 且不拋例外」與 dummy_verify 規則。另 InvalidHashError 是 ValueError 子類、不是 VerificationError 子類，except VerificationError 接不到它（目前 argon2-cffi 25.1 的 verify 不拋，但文件允許）。修法：verify 路徑把 VerifyMismatchError 以外的 VerificationError 與 ValueError（涵蓋 UnicodeEncodeError、InvalidHashError）一律視為格式非法 → dummy_verify 後回 False（或在 verify 前以 hashed.isascii() 守門走同一條 dummy 路徑）；test_passwords_dummy_verify_runs_for_malformed_prefix 的 parametrize 加上上述兩個非 ASCII 輸入，斷言回 False、不拋例外、且各恰好一次對 $argon2id$ 假 hash 的 verify。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/core/security/test_passwords.py",
@@ -981,7 +981,7 @@
       "review": {
         "status": "concern",
         "reviewer": "review-r2",
-        "notes": "concern（打回）。tdd.run 6 綠、-k 選到全部 5 條 red_case、92704a6 測試先於 a3a6bb9 實作、argon2id 參數 t=3 m=65536 p=4、needs_rehash 對 t=1 True / 預設 False / 非法字串 True、argon2i 雜湊即使密碼正確也回 False（前綴檢查）——這些都正確。問題在恆定時間要求未完全達成（description：「hashed 格式非法時先呼叫 dummy_verify 再回 False」）：argon2-cffi 25.1 的 PasswordHasher.verify 對「前綴正確但內容壞掉」的 hash 拋的是 VerificationError（不是 InvalidHashError；InvalidHashError 只由 check_needs_rehash 拋出），實作第 43-46 行的 InvalidHashError 分支在 verify 路徑是死碼，實際落到第 47-48 行except VerificationError 直接回 False、沒跑 dummy_verify。reviewer 實測：verify_password('x', '$argon2id$v=19$m=65536,t=3,p=4$broken') 與 verify_password('x', '$argon2id$') 都 0.0 ms，而正確格式的 hash（對 / 錯密碼）與 not-a-hash / 空字串都約 33 ms，可由回應時間區分「該帳號的 hash 壞掉」。既有測試 test_passwords_verify_invalid_hash 只斷言回 False，test_passwords_dummy_verify_runs_argon2 只覆蓋前綴不符的情況，所以沒抓到。"
+        "notes": "concern（第二次打回，只剩非 ASCII hash 一條反例）。複審範圍 6ef20e9..ce70006：tdd.run 8 綠，-k 選到全部 6 條 red_case（新 red_case 展開為 2 個 parametrize）；cd473c0 的測試配 6ef20e9 的實作實跑確認紅（2 failed：兩個 malformed_prefix 案例）、13a5588 後轉綠；lint / mypy 乾淨。第一次打回項已修好：正常 hash 錯密碼 / not-a-hash / 空字串 / 前綴正確內容壞 / 只有前綴 / argon2i 與 argon2d 前綴（正確密碼仍回 False）/ v=16 / 參數非數字 / 過短 salt / 20 萬字元超長 hash / 前後空白 / 含 \\x00 全部約 31 ms 一致且回 False。仍可構造的反例（違反驗收標準「非法 hash 字串 False 且不拋例外」）：hash 含非 ASCII 字元時 argon2-cffi 的 _ensure_bytes(hash, 'ascii') 拋 UnicodeEncodeError（ValueError 子類，不是 VerificationError），verify_password 直接把例外往上拋且 0 ms 結束：verify_password('x', '$argon2id$v=19$m=65536,t=3,p=4$ＡＢＣ$ＤＥＦ') 與 verify_password('x', '$argon2id$é') 皆 RAISED UnicodeEncodeError。同根因：InvalidHashError 的 MRO 是 ValueError → Exception，不是 VerificationError 子類，13a5588 註解寫的「VerificationError（含 InvalidHashError）」不成立；argon2-cffi 25.1 的 verify 目前不拋 InvalidHashError 所以未爆，但文件允許它拋，版本升級就會變成未捕捉例外。殘留（不打回）：verify 會照 hash 內嵌參數配置記憶體，m=2000000000 的竄改 hash 會讓 worker 卡住（argon2 固有行為，DB 竄改不在威脅模型，DB-004 CHECK 只驗前綴）；t=1 的弱 hash 驗證約 11 ms、與預設參數 31 ms 可區分（固有，needs_rehash 會在登入成功後升級）；非 str 輸入（bytes / None）會 TypeError / AttributeError，型別標註已限定 str。"
       }
     },
     {
