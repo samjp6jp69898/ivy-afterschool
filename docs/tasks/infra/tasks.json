@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 23,
-  "last_updated": "2026-10-02T08:28:46Z",
+  "version": 24,
+  "last_updated": "2026-10-02T08:33:54Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1486,7 +1486,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/support/db_urls.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r2",
       "depends_on": [
         "INFRA-009"
