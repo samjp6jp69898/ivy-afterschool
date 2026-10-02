@@ -25,7 +25,7 @@
 
 **refresh_tokens**：`subject_type`（`staff` / `parent`）、`subject_id`、`family_id`、`token_hash`、`expires_at`、`revoked_at`、`replaced_by`。refresh 輪替 + 偵測重用即撤銷整個 family（移植 `BE:utils/auth.py`）。
 
-**audit_logs**：`actor_type`（`staff` / `parent` / `system` / `device`）、`actor_id`、`action`（例如 `exam_score.update`）、`entity_type`、`entity_id`、`before jsonb`、`after jsonb`、`ip`、`user_agent`。記錄：權限/角色/帳號異動、已發布成績修改、出勤手動改判、接送強制完成、系統設定修改。
+**audit_logs**：`actor_type`（`staff` / `parent` / `system` / `device`）、`actor_id`、`action`（例如 `exam_score.update`）、`entity_type`、`entity_id`、`before jsonb`、`after jsonb`、`ip`、`user_agent`。記錄：權限/角色/帳號異動、已發布成績修改、出勤手動改判、接送強制完成、系統設定修改、學生 Excel 匯入、學年升級、學生敏感欄位修改。
 
 ### M2 系統設定與參考資料
 
@@ -38,7 +38,7 @@
 | `pickup.window` | 可發起接送的時段、`我要來接` 可選的最晚時間、接送請求自動過期分鐘數 |
 | `homework.defaults` | 未設定預計完成時間時是否自動回覆、預設提示文案 |
 | `notification.toggles` | 各事件是否啟用（全域開關） |
-| `line.liff` | LIFF ID（家長端用） |
+| `line.liff` | LIFF ID 與 LINE Login channel ID（家長端登入、後端驗證 id_token 用） |
 | `line.messaging` | channel access token、channel secret（secret，加密） |
 
 **subjects**：`name`、`sort_order`、`is_active`。預設 seed：國語、數學、英語、自然、社會。
@@ -205,7 +205,7 @@ API `POST /api/device/punch`（裝置金鑰認證，卡號 → 學生 → 到班
 - 接送：`POST /pickup/requests`、`GET /pickup/requests/today`、`POST /pickup/requests/{id}/arrived`、`POST /pickup/requests/{id}/cancel`
 - 接送人：`GET/POST /children/{id}/pickup-persons`、`DELETE /pickup-persons/{id}`；代理：`GET/POST /children/{id}/pickup-authorizations`、`POST /pickup-authorizations/{id}/cancel`
 - 成績：`GET /children/{id}/exams`、`GET /children/{id}/exams/{exam_id}`
-- 通知：`GET /notifications`、`POST /notifications/{id}/read`、`GET/PUT /notification-preferences`
+- 通知：`GET /notifications`、`POST /notifications/{id}/read`、`POST /notifications/read-all`、`GET/PUT /notification-preferences`
 - 公開設定：`GET /config`（LIFF ID、安親班名稱/Logo，不需登入）
 
 ### WebSocket
