@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 27,
-  "last_updated": "2026-10-02T09:17:37Z",
+  "version": 28,
+  "last_updated": "2026-10-02T09:19:04Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -954,7 +954,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security/passwords.py",
       "source_ref": "BE:utils/auth.py::verify_password",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r2",
       "depends_on": [
         "INFRA-004"
@@ -979,9 +979,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r2",
-        "notes": "concern（第二次打回，只剩非 ASCII hash 一條反例）。複審範圍 6ef20e9..ce70006：tdd.run 8 綠，-k 選到全部 6 條 red_case（新 red_case 展開為 2 個 parametrize）；cd473c0 的測試配 6ef20e9 的實作實跑確認紅（2 failed：兩個 malformed_prefix 案例）、13a5588 後轉綠；lint / mypy 乾淨。第一次打回項已修好：正常 hash 錯密碼 / not-a-hash / 空字串 / 前綴正確內容壞 / 只有前綴 / argon2i 與 argon2d 前綴（正確密碼仍回 False）/ v=16 / 參數非數字 / 過短 salt / 20 萬字元超長 hash / 前後空白 / 含 \\x00 全部約 31 ms 一致且回 False。仍可構造的反例（違反驗收標準「非法 hash 字串 False 且不拋例外」）：hash 含非 ASCII 字元時 argon2-cffi 的 _ensure_bytes(hash, 'ascii') 拋 UnicodeEncodeError（ValueError 子類，不是 VerificationError），verify_password 直接把例外往上拋且 0 ms 結束：verify_password('x', '$argon2id$v=19$m=65536,t=3,p=4$ＡＢＣ$ＤＥＦ') 與 verify_password('x', '$argon2id$é') 皆 RAISED UnicodeEncodeError。同根因：InvalidHashError 的 MRO 是 ValueError → Exception，不是 VerificationError 子類，13a5588 註解寫的「VerificationError（含 InvalidHashError）」不成立；argon2-cffi 25.1 的 verify 目前不拋 InvalidHashError 所以未爆，但文件允許它拋，版本升級就會變成未捕捉例外。殘留（不打回）：verify 會照 hash 內嵌參數配置記憶體，m=2000000000 的竄改 hash 會讓 worker 卡住（argon2 固有行為，DB 竄改不在威脅模型，DB-004 CHECK 只驗前綴）；t=1 的弱 hash 驗證約 11 ms、與預設參數 31 ms 可區分（固有，needs_rehash 會在登入成功後升級）；非 str 輸入（bytes / None）會 TypeError / AttributeError，型別標註已限定 str。"
+        "notes": "pass（第二次複審，範圍 0e1be58..98b9776）。tdd.run 10 綠，--collect-only 帶 / 不帶 -k 一致，6 條 red_case 全選到（malformed_prefix 展開為 4 個 parametrize，含兩個非 ASCII 輸入）；777ced1 的測試配 0e1be58 的實作實跑確認紅（2 failed：兩個非 ASCII 案例）、98b9776 後全綠；lint / mypy 乾淨。上一輪反例清單逐條核實：'$argon2id$v=19$m=65536,t=3,p=4$ＡＢＣ$ＤＥＦ' 與 '$argon2id$é' 現在回 False、不拋、各恰好一次對假 hash 的 verify，約 31 ms；except 擴成 (VerificationError, ValueError) 後 InvalidHashError（ValueError 子類）也接得到。語意未被吃掉：正確 hash + 正確密碼 True（31.1 ms，PasswordHasher.verify 恰好呼叫 1 次、無 dummy）；正確 hash + 錯密碼 False（30.9 ms，VerifyMismatchError 先接、verify 恰好 1 次、無 dummy）；非 ASCII 密碼配正確 hash True / 錯密碼 False。時間重測九種輸入（正常錯密碼 / not-a-hash / 空字串 / 前綴+壞內容 / 只有前綴 / 非 ASCII 內容 / 非 ASCII 短字串 / argon2i 前綴 / 含 \\x00）全部 31.0~33.5 ms。殘留（沿上輪，不打回）：verify 照 hash 內嵌參數配置資源，竄改成巨大 m 的 hash 會讓 worker 卡住（argon2 固有、DB 竄改不在威脅模型）；t=1 弱 hash 約 11 ms 可與預設 31 ms 區分（needs_rehash 登入後升級）；非 str 輸入會 TypeError / AttributeError（型別標註限定 str）。第一、二次打回內容已修正，risk_notes 內的兩段【review-r2 打回】記錄保留作為歷史依據。"
       }
     },
     {
