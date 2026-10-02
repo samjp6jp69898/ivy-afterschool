@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 28,
-  "last_updated": "2026-10-02T08:44:04Z",
+  "version": 29,
+  "last_updated": "2026-10-02T08:46:10Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -436,7 +436,7 @@
       "granularity_unit": "test",
       "target_path": "apps/web/src/test/helpers.ts",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r2",
       "depends_on": [
         "INFRA-012"
