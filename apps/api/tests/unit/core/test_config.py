@@ -239,6 +239,28 @@ def test_config_repr_hides_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.r2_secret_access_key.get_secret_value() == "y" * 40
 
 
+def test_config_repr_hides_database_url_password(monkeypatch: pytest.MonkeyPatch) -> None:
+    url = "postgresql+psycopg://app_backend:Pw123@127.0.0.1:54342/postgres"
+    monkeypatch.setenv("DATABASE_URL", url)
+
+    settings = _settings()
+
+    assert "Pw123" not in repr(settings)
+    assert "Pw123" not in str(settings)
+    assert settings.database_url == url
+
+
+def test_config_repr_hides_sentry_dsn(monkeypatch: pytest.MonkeyPatch) -> None:
+    dsn = "https://abcdef123456@o1.ingest.sentry.io/9"
+    monkeypatch.setenv("SENTRY_DSN", dsn)
+
+    settings = _settings()
+
+    assert "abcdef123456" not in repr(settings)
+    assert "abcdef123456" not in str(settings)
+    assert settings.sentry_dsn == dsn
+
+
 def test_config_ignores_migration_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(
         "MIGRATION_DATABASE_URL", "postgresql://postgres:pw@127.0.0.1:54342/postgres"
