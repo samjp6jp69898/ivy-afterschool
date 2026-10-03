@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 31,
-  "last_updated": "2026-10-03T14:36:37Z",
+  "version": 32,
+  "last_updated": "2026-10-03T14:37:14Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -819,7 +819,7 @@
     {
       "id": "PARENT-023",
       "title": "移植 M3Snackbar 元件（顯示 snackbar store 的第一則）",
-      "description": "建立 `apps/web/src/parent/components/m3/M3Snackbar.vue`（移植 ivy `FE:src/parent/components/m3/M3Snackbar.vue`）。\n\n**介面**：\n```ts\nprops: { item: SnackbarItem | null /* PARENT-011 的型別 */ }\nemits: { dismiss: [id: number] }\n```\n保留：inverse surface 配色、位於底部導覽上方、進出場動畫（reduced-motion 時關閉）。\n去掉：ivy 以陣列 prop 傳入整個佇列的做法（改由 PARENT-024 傳第一則）。**新增** `role=\"status\"` + `aria-live=\"polite\"`，error tone 用 `role=\"alert\"`；error tone 與 info 同為 `--m3-inverse-surface` 底，訊息前加 filled `error` 圖示（`m3-snackbar__icon`，`--m3-error-container` 色），info 沒有圖示；action 按鈕點擊後執行 onClick 並 emit dismiss。\n樣式只用 PARENT-001 的 `--m3-*` 變數；觸控目標 ≥ 44×44px；有 `:focus-visible` 外框。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-m3-kit.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：一般訊息 / 有 action / error tone。可與其他 M3 元件 task 共用同一張稿 `docs/mockups/parent-component-m3-kit.html`（`preview-tasks` 列出 PARENT-014~PARENT-023、PARENT-098、PARENT-175）。\n\n**驗收標準**：每一條對應 red_case（vitest + @vue/test-utils 真實 DOM）。",
+      "description": "建立 `apps/web/src/parent/components/m3/M3Snackbar.vue`（移植 ivy `FE:src/parent/components/m3/M3Snackbar.vue`）。\n\n**介面**：\n```ts\nprops: { item: SnackbarItem | null /* PARENT-011 的型別 */ }\nemits: { dismiss: [id: number] }\n```\n保留：inverse surface 配色、位於底部導覽上方、進出場動畫（reduced-motion 時關閉）。\n去掉：ivy 以陣列 prop 傳入整個佇列的做法（改由 PARENT-024 傳第一則）。**新增** `role=\"status\"` + `aria-live=\"polite\"`，error tone 用 `role=\"alert\"`（不另帶 aria-live）；根元素帶 `m3-snackbar--{tone}` class；error tone 與 info 同為 `--m3-inverse-surface` 底，訊息前加 filled `error` 圖示（`m3-snackbar__icon`，`--m3-error-container` 色），info 沒有圖示；action 按鈕點擊後執行 onClick 並 emit dismiss。\n- 版面：底部導覽上方 16px、左右各 16px（最大寬跟 layout 的 560px）、圓角 `--m3-shape-extra-small`、`--m3-elev-3`；訊息最多兩行；action 為 `--m3-inverse-primary` 色文字按鈕、44px 點擊高、靠右；不加關閉鈕（常駐訊息由呼叫端 dismiss）。\n- 動畫：進場由下 16px 淡入 250ms（emphasized-decel）、出場淡出 150ms；以 item.id 為 key，換下一則時先出後進（`mode=\"out-in\"`）；reduced-motion 無動畫。\n樣式只用 PARENT-001 的 `--m3-*` 變數；觸控目標 ≥ 44×44px；有 `:focus-visible` 外框。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-m3-kit.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：一般訊息 / 有 action / error tone。可與其他 M3 元件 task 共用同一張稿 `docs/mockups/parent-component-m3-kit.html`（`preview-tasks` 列出 PARENT-014~PARENT-023、PARENT-098、PARENT-175）。\n\n**驗收標準**：每一條對應 red_case（vitest + @vue/test-utils 真實 DOM）。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3Snackbar.vue",
       "source_ref": "FE:src/parent/components/m3/M3Snackbar.vue::props",
@@ -839,9 +839,10 @@
           "vitest"
         ],
         "red_cases": [
-          "M3Snackbar renders message with live region：item={id:1, message:'已送出接送通知', tone:'info', duration:4000} → 文字含 '已送出接送通知'，role === 'status'",
+          "M3Snackbar renders message with live region：item={id:1, message:'已送出接送通知', tone:'info', duration:4000} → 文字含 '已送出接送通知'，role === 'status'、aria-live === 'polite'，無 action 時沒有按鈕",
           "M3Snackbar action runs and dismisses：item.action={label:'重試', onClick: spy} → 點擊 '重試' 後 spy 被呼叫 1 次且 emitted('dismiss')[0] 深等於 [1]",
-          "M3Snackbar error tone uses alert and icon：tone='error' → role === 'alert'，且有 '.m3-snackbar__icon' 元素（M3Icon name 'error'）；tone='info' → 無 '.m3-snackbar__icon'；item=null → 不渲染任何內容"
+          "M3Snackbar error tone uses alert and icon：tone='error' → role === 'alert'、無 aria-live、含 'm3-snackbar--error' class，且有 '.m3-snackbar__icon' 元素（M3Icon name 'error'、filled、aria-hidden）；tone='info' → 無 '.m3-snackbar__icon'；item=null → 不渲染任何內容",
+          "M3Snackbar swaps to next item：item 由 id 1 換成 {id:2, message:'已取消接送'} → 只有一個 '.m3-snackbar' 且文字為 '已取消接送'；再設為 null → 不渲染（Transition 用 test-utils 預設 stub）"
         ],
         "run": "just web-test src/parent/components/m3/M3Snackbar.spec.ts -t \"M3Snackbar\"",
         "notes": ""
