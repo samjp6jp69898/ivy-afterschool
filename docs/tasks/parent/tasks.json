@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 14,
-  "last_updated": "2026-10-03T12:13:52Z",
+  "version": 15,
+  "last_updated": "2026-10-03T12:14:25Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -38,7 +38,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/public/parent.webmanifest",
       "source_ref": "FE:public/parent.webmanifest::start_url",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r3",
       "depends_on": [
         "INFRA-005",
