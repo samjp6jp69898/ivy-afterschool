@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 75,
-  "last_updated": "2026-10-03T14:48:32Z",
+  "version": 76,
+  "last_updated": "2026-10-03T14:48:56Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1113,8 +1113,8 @@
       "granularity_unit": "config",
       "target_path": "apps/api/Dockerfile",
       "source_ref": "BE:Dockerfile::CMD",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-004",
         "INFRA-008",
@@ -1236,8 +1236,8 @@
       "granularity_unit": "config",
       "target_path": "apps/web/Dockerfile",
       "source_ref": "FE:Dockerfile::runtime",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-033"
       ],
