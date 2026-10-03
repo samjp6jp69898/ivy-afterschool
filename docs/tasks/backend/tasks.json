@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 50,
-  "last_updated": "2026-10-03T12:49:39Z",
+  "version": 51,
+  "last_updated": "2026-10-03T12:50:25Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1715,7 +1715,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/line_id_token.py",
       "source_ref": "BE:services/line_login_service.py::LineLoginService.verify_id_token",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-003",

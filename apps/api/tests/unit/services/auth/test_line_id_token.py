@@ -213,7 +213,7 @@ def test_line_verify_rate_limited_or_timeout(fake_clock: FakeClock) -> None:
     for exc_type in (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.RemoteProtocolError):
 
         def fail(
-            request: httpx.Request, exc_type: type[httpx.HTTPError] = exc_type
+            request: httpx.Request, exc_type: type[httpx.TransportError] = exc_type
         ) -> httpx.Response:
             raise exc_type("boom", request=request)
 
