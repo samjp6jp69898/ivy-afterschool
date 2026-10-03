@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 46,
-  "last_updated": "2026-10-03T13:03:56Z",
+  "version": 47,
+  "last_updated": "2026-10-03T13:04:30Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -4631,7 +4631,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/pickup/pos/CountdownBar.vue",
       "source_ref": "FE:src/components/dismissal/pos/DismissalPosCountdownBar.vue::default",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013"
