@@ -73,6 +73,7 @@ function focusFirstField(): void {
 
 <template>
   <el-dialog
+    class="form-dialog"
     :model-value="modelValue"
     :title="title"
     :width="width"
@@ -119,5 +120,29 @@ function focusFirstField(): void {
 
 .form-dialog__footer :deep(.el-button + .el-button) {
   margin-left: 0;
+}
+</style>
+
+<style>
+/*
+ * 手機滿版：footer 固定在視窗底部、只有 body 捲動。
+ * Element Plus 的 .el-dialog.is-fullscreen 只設 height: 100% 與 overflow: auto（整個 dialog 一起捲動）。
+ * dialog teleport 到 body，scoped style 碰不到 .el-dialog，故以 form-dialog 命名空間寫非 scoped 規則。
+ */
+.el-dialog.form-dialog.is-fullscreen {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.el-dialog.form-dialog.is-fullscreen > .el-dialog__header,
+.el-dialog.form-dialog.is-fullscreen > .el-dialog__footer {
+  flex: none;
+}
+
+.el-dialog.form-dialog.is-fullscreen > .el-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 </style>
