@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 74,
-  "last_updated": "2026-10-03T14:53:20Z",
+  "version": 75,
+  "last_updated": "2026-10-03T14:57:06Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -503,7 +503,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/storage.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-013"
@@ -526,9 +526,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-fe",
+        "notes": "通過。tdd.run（-k test_signed_url_）6 項全綠，涵蓋 4 條 red_case。紅燈 commit 先於實作 commit，實作 commit 未動任何測試；storage.py / config.py / test_storage.py / test_config.py 的 ruff 乾淨，mypy 對 storage.py、config.py 乾淨；pytest --disable-socket 只允許 127.0.0.1，無網路。實測簽出的 URL：https、host 為 endpoint、path 為 /<bucket_name>/<分區>/<owner>/<hex>.jpg（path-style），X-Amz-Algorithm=AWS4-HMAC-SHA256、X-Amz-Expires=300、SignedHeaders=host；Credential 只含 access key id，URL 不含 secret；以啟用但未登記 response 的 Stubber 呼叫仍成功，確認不發 S3 請求。expires_in 29、3601、0、-1 皆 ValueError，30 與 3600 成功；簽章失敗（EndpointConnectionError）轉 StorageError 且無 __context__；非法 path 被拒。突變驗證：範圍下限 / 上限放寬、不經 object_key、Key 被改寫、簽章不經 _s3_call，皆被抓到。"
       }
     },
     {
@@ -538,7 +538,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/storage.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-013"
@@ -565,9 +565,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-fe",
+        "notes": "通過。tdd.run（-k test_storage_delete_）8 項全綠，對應 8 條 red_case。紅燈 commit 先於實作 commit，實作 commit 未動任何測試；storage.py / config.py / test_storage.py / test_config.py 的 ruff 乾淨，mypy 對 storage.py、config.py 乾淨；pytest --disable-socket 只允許 127.0.0.1，無網路。實測：任一 path 不合法時一個請求都不送（keys 先全部過 object_key）；1000 個為一批、1001 個分兩批；部分 key 失敗時繼續送完後續批次、最後彙整成一個 StorageError，2500 個 path 其中 22 個失敗時訊息含總數 22 並只列 10 個 key 與錯誤碼；整個請求失敗（ClientError 500）立即拋出，後續批次不再送；空清單不呼叫 S3；Quiet=True。突變驗證：批次大小 1001、驗證延後、遇首個失敗即停、訊息不設上限、忽略 Errors、Quiet 改 False、_s3_call 改回 from None，皆被抓到。殘留（不打回）：「後續批次整個請求失敗時立即拋出」的行為由實作保證（我以 Stubber 實測確認），但沒有專屬 red_case；另外先前批次已累積的 key 失敗在這種情況下不會出現在訊息中，與規格「立即拋出」一致。"
       }
     },
     {
@@ -14654,7 +14654,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/storage.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-537",
@@ -14678,9 +14678,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-fe",
+        "notes": "通過。tdd.run 4 條 red_case 全綠，test_storage.py + test_config.py 共 87 項全綠。紅燈 commit 先於實作 commit，實作 commit 未動任何測試；storage.py / config.py / test_storage.py / test_config.py 的 ruff 乾淨，mypy 對 storage.py、config.py 乾淨；pytest --disable-socket 只允許 127.0.0.1，無網路。覆寫 Settings.__init__ 重建 ValidationError 的改法合理：實測欄位錯誤的 loc / type / msg 保留（database_url、app_secret_key、r2_bucket missing 與 model 層 production 規則），正常建立 Settings 不受影響。實測三種情況（DATABASE_URL=mysql://u:Pw123@h/db；production + R2_SECRET_ACCESS_KEY=change-me；APP_SECRET_KEY 過短）str(e)、repr(e.errors())、e.json() 都不含 DB 密碼與 APP_SECRET_KEY 值，__cause__ 與 __context__ 皆為 None。storage 的 _s3_call 讓 upload / create_signed_url / delete 的 StorageError 都沒有 __cause__ 與 __context__，traceback 不含 AWSAccessKeyId 與 StringToSign。突變驗證：拿掉 __init__ 覆寫、保留 input、在 except 內 raise、丟掉 ctx、storage 改回 from None、sign 不經 helper，皆被測試抓到。殘留（不打回）：model_config 的 hide_input_in_errors=True 拿掉後測試仍綠（重建後的錯誤本來就不帶 input，該設定屬冗餘防護）；重建會丟掉 pydantic 錯誤的 url 欄位，無影響。"
       }
     }
   ]
