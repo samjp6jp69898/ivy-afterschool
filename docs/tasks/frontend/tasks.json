@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 19,
-  "last_updated": "2026-10-03T12:29:03Z",
+  "version": 20,
+  "last_updated": "2026-10-03T12:30:36Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -495,7 +495,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/router/routes.ts",
       "source_ref": "FE:src/router/index.ts::routes",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-008"
