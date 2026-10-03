@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 34,
-  "last_updated": "2026-10-03T12:51:13Z",
+  "version": 35,
+  "last_updated": "2026-10-03T12:51:40Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1049,8 +1049,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/PageHeader.vue",
       "source_ref": "FE:src/components/common/PageHeader.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013"
       ],
@@ -1118,8 +1118,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/AdminListToolbar.vue",
       "source_ref": "FE:src/components/common/AdminListToolbar.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013"
       ],
@@ -1153,8 +1153,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/EmptyState.vue",
       "source_ref": "FE:src/components/common/EmptyState.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013"
       ],
@@ -1677,8 +1677,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/SecretInput.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013"
       ],
@@ -2071,8 +2071,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/TempPasswordDialog.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013"
       ],
@@ -4623,8 +4623,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/pickup/pos/CountdownBar.vue",
       "source_ref": "FE:src/components/dismissal/pos/DismissalPosCountdownBar.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013"
       ],
@@ -5143,8 +5143,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/exams/ScoreCell.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013"
       ],
@@ -5217,8 +5217,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/exams/RenotifyChoiceDialog.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013"
       ],
