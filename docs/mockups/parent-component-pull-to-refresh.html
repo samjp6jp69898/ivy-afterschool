@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-027">
 <meta name="preview-route" content="component:parent/components/PullToRefresh.vue">
 <meta name="preview-updated" content="2026-10-03">
@@ -270,15 +270,13 @@ button { font: inherit; }
 .m3-icon-button:disabled { opacity: 0.38; cursor: not-allowed; }
 .m3-icon-button:disabled .m3-icon-button__container::before { opacity: 0; }
 
-/* M3Card（PARENT-017）：配色依待裁定 1，data-card-scheme 切換 */
+/* M3Card（PARENT-017）：底色照 M3 / ivy */
 .m3-card { position: relative; display: block; border-radius: var(--m3-shape-medium); color: var(--m3-on-surface); }
 .m3-card--pad-none { padding: 0; }
 .m3-card--pad-sm { padding: 12px; }
 .m3-card--pad-md { padding: 16px; }
-.m3-card--filled { background: var(--m3-surface-container-low); }
-.m3-card--elevated { background: var(--m3-surface-container-lowest); box-shadow: var(--m3-elev-1); }
-[data-card-scheme='b'] .m3-card--filled { background: var(--m3-surface-container-highest); }
-[data-card-scheme='b'] .m3-card--elevated { background: var(--m3-surface-container-low); }
+.m3-card--filled { background: var(--m3-surface-container-highest); }
+.m3-card--elevated { background: var(--m3-surface-container-low); box-shadow: var(--m3-elev-1); }
 .m3-card--outlined { background: var(--m3-surface); border: 1px solid var(--m3-outline-variant); }
 .m3-card.is-clickable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .m3-card.is-clickable::before { background: var(--m3-on-surface); }
@@ -413,9 +411,6 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
 .m3-snackbar__message { flex: 1; min-width: 0; padding: 10px 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .m3-snackbar__action { flex: none; min-height: 44px; padding: 0 12px; border: none; border-radius: var(--m3-shape-full); background: transparent; color: var(--m3-inverse-primary); cursor: pointer; }
 .m3-snackbar__action:focus-visible { outline: 2px solid var(--m3-inverse-primary); outline-offset: 0; }
-[data-snack-scheme='b'] .m3-snackbar--error { background: var(--m3-error-container); color: var(--m3-on-error-container); }
-[data-snack-scheme='b'] .m3-snackbar--error .m3-snackbar__icon { color: var(--m3-error); }
-[data-snack-scheme='b'] .m3-snackbar--error .m3-snackbar__action { color: var(--m3-on-error-container); }
 .m3-snackbar-enter-active { transition: opacity var(--m3-dur-medium-1) var(--m3-easing-emphasized-decel), transform var(--m3-dur-medium-1) var(--m3-easing-emphasized-decel); }
 .m3-snackbar-leave-active { transition: opacity var(--m3-dur-short-3) var(--m3-easing-emphasized-accel); }
 .m3-snackbar-enter-from { opacity: 0; transform: translateY(16px); }

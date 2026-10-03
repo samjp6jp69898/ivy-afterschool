@@ -223,12 +223,12 @@ button { font: inherit; }
 .m3-icon-button:hover::after { opacity: var(--m3-state-hover); }
 .m3-icon-button:active::after { opacity: var(--m3-state-pressed); }
 
-/* Card（filled / elevated） */
+/* Card（filled / elevated）：底色照 M3Card（parent-component-m3-kit.html） */
 .m3-card {
   padding: 16px; border-radius: var(--m3-shape-medium);
-  background: var(--m3-surface-container-low); color: var(--m3-on-surface);
+  background: var(--m3-surface-container-highest); color: var(--m3-on-surface);
 }
-.m3-card--elevated { background: var(--m3-surface-container-lowest); box-shadow: var(--m3-elev-1); }
+.m3-card--elevated { background: var(--m3-surface-container-low); box-shadow: var(--m3-elev-1); }
 
 /* Button（filled，44px 以上觸控高度） */
 .m3-button {

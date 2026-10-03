@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-028">
 <meta name="preview-route" content="component:parent/components/SkeletonBlock.vue">
 <meta name="preview-updated" content="2026-10-03">
@@ -270,15 +270,13 @@ button { font: inherit; }
 .m3-icon-button:disabled { opacity: 0.38; cursor: not-allowed; }
 .m3-icon-button:disabled .m3-icon-button__container::before { opacity: 0; }
 
-/* M3Card（PARENT-017）：配色依待裁定 1，data-card-scheme 切換 */
+/* M3Card（PARENT-017）：底色照 M3 / ivy */
 .m3-card { position: relative; display: block; border-radius: var(--m3-shape-medium); color: var(--m3-on-surface); }
 .m3-card--pad-none { padding: 0; }
 .m3-card--pad-sm { padding: 12px; }
 .m3-card--pad-md { padding: 16px; }
-.m3-card--filled { background: var(--m3-surface-container-low); }
-.m3-card--elevated { background: var(--m3-surface-container-lowest); box-shadow: var(--m3-elev-1); }
-[data-card-scheme='b'] .m3-card--filled { background: var(--m3-surface-container-highest); }
-[data-card-scheme='b'] .m3-card--elevated { background: var(--m3-surface-container-low); }
+.m3-card--filled { background: var(--m3-surface-container-highest); }
+.m3-card--elevated { background: var(--m3-surface-container-low); box-shadow: var(--m3-elev-1); }
 .m3-card--outlined { background: var(--m3-surface); border: 1px solid var(--m3-outline-variant); }
 .m3-card.is-clickable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .m3-card.is-clickable::before { background: var(--m3-on-surface); }
@@ -413,9 +411,6 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
 .m3-snackbar__message { flex: 1; min-width: 0; padding: 10px 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .m3-snackbar__action { flex: none; min-height: 44px; padding: 0 12px; border: none; border-radius: var(--m3-shape-full); background: transparent; color: var(--m3-inverse-primary); cursor: pointer; }
 .m3-snackbar__action:focus-visible { outline: 2px solid var(--m3-inverse-primary); outline-offset: 0; }
-[data-snack-scheme='b'] .m3-snackbar--error { background: var(--m3-error-container); color: var(--m3-on-error-container); }
-[data-snack-scheme='b'] .m3-snackbar--error .m3-snackbar__icon { color: var(--m3-error); }
-[data-snack-scheme='b'] .m3-snackbar--error .m3-snackbar__action { color: var(--m3-on-error-container); }
 .m3-snackbar-enter-active { transition: opacity var(--m3-dur-medium-1) var(--m3-easing-emphasized-decel), transform var(--m3-dur-medium-1) var(--m3-easing-emphasized-decel); }
 .m3-snackbar-leave-active { transition: opacity var(--m3-dur-short-3) var(--m3-easing-emphasized-accel); }
 .m3-snackbar-enter-from { opacity: 0; transform: translateY(16px); }
@@ -464,8 +459,7 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
 .pref-row__label { flex: 1; min-width: 0; }
 
 /* ============================================================
-   SkeletonBlock（PARENT-028）
-   動畫依待裁定 5：A 脈動（預設）/ B 掃光（data-sk-scheme="b"）
+   SkeletonBlock（PARENT-028）：pulse 透明度脈動
    ============================================================ */
 .skeleton { display: block; }
 .sk { display: block; height: 14px; width: 100%; border-radius: var(--m3-shape-extra-small); background: var(--m3-surface-container-high); animation: sk-pulse 1.2s ease-in-out infinite; }
@@ -479,13 +473,6 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
 .skeleton-row { display: flex; align-items: center; gap: 16px; min-height: 72px; padding: 8px 16px; }
 .skeleton-row__lines { flex: 1; min-width: 0; }
 .skeleton-row__lines .sk + .sk { margin-top: 8px; }
-[data-sk-scheme='b'] .sk { position: relative; overflow: hidden; animation: none; }
-[data-sk-scheme='b'] .sk::after {
-  content: ''; position: absolute; inset: 0; transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent 0%, var(--m3-surface-container-lowest) 50%, transparent 100%);
-  opacity: 0.6; animation: sk-shimmer 1.4s ease-in-out infinite;
-}
-@keyframes sk-shimmer { to { transform: translateX(100%); } }
 
 /* ---- 宿主頁面（只為示範情境） ---- */
 .muted { color: var(--m3-on-surface-variant); }
@@ -509,7 +496,7 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
   </div>
 
   <div class="stage">
-    <div class="device" :data-sk-scheme="skScheme">
+    <div class="device">
       <div class="screen">
         <m3-top-app-bar :title="pageTitle" :show-back="state !== 'home-loading' && state !== 'home-data'">
           <template v-if="state === 'home-loading' || state === 'home-data'" v-slot:leading><span class="logo-mark m3-title-medium" aria-hidden="true">向</span></template>
@@ -589,15 +576,12 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
       <div class="notes__row">主題
         <span class="state-switch"><button type="button" :class="{ 'is-active': theme === 'light' }" @click="theme = 'light'">淺色</button><button type="button" :class="{ 'is-active': theme === 'dark' }" @click="theme = 'dark'">深色</button></span>
       </div>
-      <div class="notes__row">待裁定 5 動畫
-        <span class="state-switch"><button type="button" :class="{ 'is-active': skScheme === 'a' }" @click="skScheme = 'a'">A 脈動</button><button type="button" :class="{ 'is-active': skScheme === 'b' }" @click="skScheme = 'b'">B 掃光</button></span>
-      </div>
 
       <h4>設計決策</h4>
       <ol><li v-for="(d, i) in decisions" :key="i">{{ d }}</li></ol>
 
-      <h4 v-if="openQuestions.length">待裁定（編號與其他家長端元件稿連號）</h4>
-      <ol :start="questionStart">
+      <h4 v-if="openQuestions.length">待裁定</h4>
+      <ol>
         <li v-for="(q, i) in openQuestions" :key="i" style="margin-bottom: 8px">
           <div>{{ q.question }}</div>
           <div class="notes__option">A. {{ q.optionA }}<br>B. {{ q.optionB }}</div>
@@ -988,28 +972,21 @@ const app = createApp({
     const meta = { status: readMeta('preview-status'), tasks: readMeta('preview-tasks'), route: readMeta('preview-route'), updated: readMeta('preview-updated') }
 
     const decisions = [
-      '顏色只用 --m3-surface-container-high；動畫見待裁定 5，reduced-motion 時停用（靜止色塊）。',
+      '色塊只用 --m3-surface-container-high；動畫為 pulse：透明度 1 → 0.5 → 1、1.2 秒 ease-in-out 無限循環（不做 shimmer 掃光，深色模式不需額外亮色）；reduced-motion 時停用（靜止色塊）。',
       'line：高 14px、圓角 4px、行距 8px、寬 100%；count > 1 且沒指定 width 時最後一行 60%，看起來像一段文字。',
-      'card：外框照 M3Card filled（surface-container-low、圓角 12px、padding 16px），內含 40% 寬 16px 高的標題 + 100% / 70% 兩行；卡片間距 12px。',
+      'card：外框尺寸同 M3Card（圓角 12px、padding 16px），底色 surface-container-low（不跟 filled 卡的 surface-container-highest 同色，色塊才看得出來）；內含 40% 寬 16px 高的標題 + 100% / 70% 兩行；卡片間距 12px。',
       'row：高 72px（與 M3ListItem 二行 + leading 同高，載入完成時不跳動）、左右 padding 16px、40px 圓 + 30% / 70% 兩行；不畫分隔線。',
       'width / height 套在每個區塊的外框上：line 是每一行、card / row 是整張卡 / 整列；兩者都沒給時用上述預設。',
       '外層 aria-busy="true" + 視覺隱藏文字「載入中」；所有色塊 aria-hidden。不加 role=status（同頁多個骨架時才不會重複朗讀）。',
       '去掉 ivy 的卡片陰影與 hairline 邊框、--pt-* 舊 token；variant 改為 line / card / row 列舉。',
     ]
-    const openQuestions = [
-      {
-        question: '骨架動畫用哪一種？（右側可切換預覽，請也切到深色看）',
-        optionA: '脈動：整塊透明度 1 → 0.5 → 1、1.2 秒循環（設計稿模板現在用的）。【推薦】只用一個 token，深色模式不用另找掃光色',
-        optionB: '掃光（shimmer）：左到右掃過一道亮帶、1.4 秒循環（ivy 現況、task 原文寫法）。需要額外的亮色；用 surface-container-lowest 時深色模式會變成一道暗帶',
-      },
-    ]
+    const openQuestions = []
 
     const theme = ref('light')
     watch(theme, (v) => {
       if (v === 'dark') document.documentElement.setAttribute('data-theme', 'dark')
       else document.documentElement.removeAttribute('data-theme')
     })
-    const skScheme = ref('a')
     const state = ref('kit')
     const pageTitle = computed(() => ({ kit: 'SkeletonBlock', 'inbox-loading': '通知', 'inbox-data': '通知', 'home-loading': '首頁', 'home-data': '首頁' })[state.value])
     const filter = ref('all')
@@ -1024,7 +1001,7 @@ const app = createApp({
     ]
 
     return {
-      meta, decisions, openQuestions, questionStart: 5, theme, skScheme, state, pageTitle,
+      meta, decisions, openQuestions, theme, state, pageTitle,
       filter, filterItems, notifications, navItems: NAV_ITEMS,
       states: [
         { value: 'kit', label: '元件展示（line / card / row × 3）' },

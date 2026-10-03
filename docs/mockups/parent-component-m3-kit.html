@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-014,PARENT-015,PARENT-016,PARENT-017,PARENT-018,PARENT-019,PARENT-020,PARENT-021,PARENT-022,PARENT-023,PARENT-098,PARENT-175">
 <meta name="preview-route" content="component:parent/components/m3/{M3Icon,M3Button,M3IconButton,M3Card,M3TextField,M3Chip,M3ListItem,M3TopAppBar,M3NavigationBar,M3Snackbar,M3SegmentedButton,M3Switch}.vue">
 <meta name="preview-updated" content="2026-10-03">
@@ -269,15 +269,13 @@ button { font: inherit; }
 .m3-icon-button:disabled { opacity: 0.38; cursor: not-allowed; }
 .m3-icon-button:disabled .m3-icon-button__container::before { opacity: 0; }
 
-/* M3Card（PARENT-017）：配色依待裁定 1，data-card-scheme 切換 */
+/* M3Card（PARENT-017）：底色照 M3 / ivy */
 .m3-card { position: relative; display: block; border-radius: var(--m3-shape-medium); color: var(--m3-on-surface); }
 .m3-card--pad-none { padding: 0; }
 .m3-card--pad-sm { padding: 12px; }
 .m3-card--pad-md { padding: 16px; }
-.m3-card--filled { background: var(--m3-surface-container-low); }
-.m3-card--elevated { background: var(--m3-surface-container-lowest); box-shadow: var(--m3-elev-1); }
-[data-card-scheme='b'] .m3-card--filled { background: var(--m3-surface-container-highest); }
-[data-card-scheme='b'] .m3-card--elevated { background: var(--m3-surface-container-low); }
+.m3-card--filled { background: var(--m3-surface-container-highest); }
+.m3-card--elevated { background: var(--m3-surface-container-low); box-shadow: var(--m3-elev-1); }
 .m3-card--outlined { background: var(--m3-surface); border: 1px solid var(--m3-outline-variant); }
 .m3-card.is-clickable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .m3-card.is-clickable::before { background: var(--m3-on-surface); }
@@ -412,9 +410,6 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
 .m3-snackbar__message { flex: 1; min-width: 0; padding: 10px 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .m3-snackbar__action { flex: none; min-height: 44px; padding: 0 12px; border: none; border-radius: var(--m3-shape-full); background: transparent; color: var(--m3-inverse-primary); cursor: pointer; }
 .m3-snackbar__action:focus-visible { outline: 2px solid var(--m3-inverse-primary); outline-offset: 0; }
-[data-snack-scheme='b'] .m3-snackbar--error { background: var(--m3-error-container); color: var(--m3-on-error-container); }
-[data-snack-scheme='b'] .m3-snackbar--error .m3-snackbar__icon { color: var(--m3-error); }
-[data-snack-scheme='b'] .m3-snackbar--error .m3-snackbar__action { color: var(--m3-on-error-container); }
 .m3-snackbar-enter-active { transition: opacity var(--m3-dur-medium-1) var(--m3-easing-emphasized-decel), transform var(--m3-dur-medium-1) var(--m3-easing-emphasized-decel); }
 .m3-snackbar-leave-active { transition: opacity var(--m3-dur-short-3) var(--m3-easing-emphasized-accel); }
 .m3-snackbar-enter-from { opacity: 0; transform: translateY(16px); }
@@ -479,7 +474,7 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
   </div>
 
   <div class="stage">
-    <div class="device" :data-card-scheme="cardScheme" :data-snack-scheme="snackScheme" :class="{ 'show-hit': showHit }">
+    <div class="device" :class="{ 'show-hit': showHit }">
       <div class="screen">
 
         <m3-top-app-bar :title="currentSection.label" :show-back="true" :scrolled="scrolled" @back="snack.show('back 事件：由 ParentLayout 決定返回行為')">
@@ -807,12 +802,6 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
       <div class="notes__row">點擊區虛線
         <span class="state-switch"><button type="button" :class="{ 'is-active': !showHit }" @click="showHit = false">隱藏</button><button type="button" :class="{ 'is-active': showHit }" @click="showHit = true">顯示</button></span>
       </div>
-      <div class="notes__row">待裁定 1 卡片配色
-        <span class="state-switch"><button type="button" :class="{ 'is-active': cardScheme === 'a' }" @click="cardScheme = 'a'">A</button><button type="button" :class="{ 'is-active': cardScheme === 'b' }" @click="cardScheme = 'b'">B</button></span>
-      </div>
-      <div class="notes__row">待裁定 2 snackbar error
-        <span class="state-switch"><button type="button" :class="{ 'is-active': snackScheme === 'a' }" @click="snackScheme = 'a'">A</button><button type="button" :class="{ 'is-active': snackScheme === 'b' }" @click="snackScheme = 'b'">B</button></span>
-      </div>
 
       <h4>設計決策</h4>
       <div class="notes__row">
@@ -823,8 +812,8 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
         <ol><li v-for="(d, i) in g.items" :key="i">{{ d }}</li></ol>
       </template>
 
-      <h4 v-if="openQuestions.length">待裁定（編號與其他家長端元件稿連號）</h4>
-      <ol :start="questionStart">
+      <h4 v-if="openQuestions.length">待裁定</h4>
+      <ol>
         <li v-for="(q, i) in openQuestions" :key="i" style="margin-bottom: 8px">
           <div>{{ q.question }}</div>
           <div class="notes__option">A. {{ q.optionA }}<br>B. {{ q.optionB }}</div>
@@ -1212,7 +1201,7 @@ const DECISIONS = {
     '圓角 12px（medium），不沿用 ivy 的 26px；padding none 0 / sm 12px / md 16px。',
     'header slot 下方 8px；actions slot 靠右、上方 16px、按鈕間距 8px，空間不夠時換行。',
     'clickable：role=button + tabindex=0、Enter / Space 觸發、on-surface 色 state layer、cursor pointer。不可點的卡片完全沒有 role。',
-    'variant 配色見待裁定 1（右側可切 A / B）。',
+    'filled（預設）= surface-container-highest；elevated = surface-container-low + elev-1；outlined = surface + 1px outline-variant 邊（照 M3 / ivy）。',
   ],
   M3TextField: [
     'outlined、高 56px、圓角 4px（M3 extra-small）；浮動 label 用 fieldset / legend 在邊框挖缺口，放在卡片或 BottomSheet 等任何底色上都不用補底色。',
@@ -1248,7 +1237,8 @@ const DECISIONS = {
     '在底部導覽上方 16px、左右各 16px（最大寬跟 layout 的 560px）；inverse-surface 底、圓角 4px、elev-3。',
     '訊息最多兩行；action 是 inverse-primary 色文字按鈕、44px 點擊高、靠右。',
     '進場：由下 16px 淡入 250ms（emphasized-decel）；出場：淡出 150ms；換下一則時先出後進；reduced-motion 無動畫。',
-    'info → role=status + aria-live=polite；error → role=alert；error 的視覺見待裁定 2。',
+    'info → role=status + aria-live=polite；error → role=alert。',
+    'error tone 與一般訊息同為 inverse-surface 底，訊息前加 filled error 圖示（--m3-error-container 色），不整條變紅。',
     '不加關閉鈕：目前沒有呼叫端用 duration 0，常駐訊息由呼叫端 dismiss。',
   ],
   M3SegmentedButton: [
@@ -1270,18 +1260,7 @@ const app = createApp({
     const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
     const meta = { status: readMeta('preview-status'), tasks: readMeta('preview-tasks'), route: readMeta('preview-route'), updated: readMeta('preview-updated') }
 
-    const openQuestions = [
-      {
-        question: 'M3Card 的 filled / elevated 用哪組底色？（右側可切換預覽）',
-        optionA: '照設計稿模板：filled = surface-container-low、elevated = surface-container-lowest + elev-1。【推薦】之後的家長端頁面稿都從模板出發；淺色下卡片多時對比較柔和。代價：深色色票裡 surface-container-low 與 surface 同色，filled 卡會融進背景（目前沒有深色模式的 task，日後要做時再調）',
-        optionB: '照 M3 原規格 / ivy：filled = surface-container-highest、elevated = surface-container-low + elev-1。淺色下 filled 卡偏灰較重，但深色也分得出來；設計稿模板要跟著改',
-      },
-      {
-        question: 'M3Snackbar 的 error tone 長什麼樣？（右側可切換預覽，到 M3Snackbar 頁按「error tone」）',
-        optionA: '與一般訊息同為 inverse-surface 底，訊息前加 error 圖示。【推薦】與一般訊息一致，淺色 / 深色都清楚',
-        optionB: '改用 error-container 底 + on-error-container 字，整條變紅',
-      },
-    ]
+    const openQuestions = []
 
     /* 稿內模擬 PARENT-011 snackbar store 的佇列規則 */
     let nextId = 1
@@ -1322,8 +1301,6 @@ const app = createApp({
       else document.documentElement.removeAttribute('data-theme')
     })
     const showHit = ref(false)
-    const cardScheme = ref('a')
-    const snackScheme = ref('a')
     const showAllDecisions = ref(false)
     const visibleDecisionGroups = computed(() => Object.entries(DECISIONS)
       .filter(([group]) => showAllDecisions.value || group === '通用' || group === currentSection.value.label)
@@ -1389,8 +1366,8 @@ const app = createApp({
     }
 
     return {
-      meta, openQuestions, questionStart: 1, sections: SECTIONS, section, currentSection, contentEl, scrolled, onScroll,
-      theme, showHit, cardScheme, snackScheme, showAllDecisions, visibleDecisionGroups,
+      meta, openQuestions, sections: SECTIONS, section, currentSection, contentEl, scrolled, onScroll,
+      theme, showHit, showAllDecisions, visibleDecisionGroups,
       snack, pushFour, noop: () => {},
       currentTab, navBadgeKey, navBadgeOptions, navItemsWithBadge, liveNavItems, navDemoRows, onNavSelect,
       pickupLoading, notifyPickup, tf, etaOptions, eta, listSwitch,

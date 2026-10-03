@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-025">
 <meta name="preview-route" content="component:parent/components/ParentBottomSheet.vue">
 <meta name="preview-updated" content="2026-10-03">
@@ -270,15 +270,13 @@ button { font: inherit; }
 .m3-icon-button:disabled { opacity: 0.38; cursor: not-allowed; }
 .m3-icon-button:disabled .m3-icon-button__container::before { opacity: 0; }
 
-/* M3Card（PARENT-017）：配色依待裁定 1，data-card-scheme 切換 */
+/* M3Card（PARENT-017）：底色照 M3 / ivy */
 .m3-card { position: relative; display: block; border-radius: var(--m3-shape-medium); color: var(--m3-on-surface); }
 .m3-card--pad-none { padding: 0; }
 .m3-card--pad-sm { padding: 12px; }
 .m3-card--pad-md { padding: 16px; }
-.m3-card--filled { background: var(--m3-surface-container-low); }
-.m3-card--elevated { background: var(--m3-surface-container-lowest); box-shadow: var(--m3-elev-1); }
-[data-card-scheme='b'] .m3-card--filled { background: var(--m3-surface-container-highest); }
-[data-card-scheme='b'] .m3-card--elevated { background: var(--m3-surface-container-low); }
+.m3-card--filled { background: var(--m3-surface-container-highest); }
+.m3-card--elevated { background: var(--m3-surface-container-low); box-shadow: var(--m3-elev-1); }
 .m3-card--outlined { background: var(--m3-surface); border: 1px solid var(--m3-outline-variant); }
 .m3-card.is-clickable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .m3-card.is-clickable::before { background: var(--m3-on-surface); }
@@ -413,9 +411,6 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
 .m3-snackbar__message { flex: 1; min-width: 0; padding: 10px 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .m3-snackbar__action { flex: none; min-height: 44px; padding: 0 12px; border: none; border-radius: var(--m3-shape-full); background: transparent; color: var(--m3-inverse-primary); cursor: pointer; }
 .m3-snackbar__action:focus-visible { outline: 2px solid var(--m3-inverse-primary); outline-offset: 0; }
-[data-snack-scheme='b'] .m3-snackbar--error { background: var(--m3-error-container); color: var(--m3-on-error-container); }
-[data-snack-scheme='b'] .m3-snackbar--error .m3-snackbar__icon { color: var(--m3-error); }
-[data-snack-scheme='b'] .m3-snackbar--error .m3-snackbar__action { color: var(--m3-on-error-container); }
 .m3-snackbar-enter-active { transition: opacity var(--m3-dur-medium-1) var(--m3-easing-emphasized-decel), transform var(--m3-dur-medium-1) var(--m3-easing-emphasized-decel); }
 .m3-snackbar-leave-active { transition: opacity var(--m3-dur-short-3) var(--m3-easing-emphasized-accel); }
 .m3-snackbar-enter-from { opacity: 0; transform: translateY(16px); }
@@ -581,7 +576,7 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
         <m3-navigation-bar :items="navItems" current-key="pickup"></m3-navigation-bar>
 
         <!-- 一般內容：選擇小孩（ChildContextHeader 用法） -->
-        <parent-bottom-sheet v-model="sheets.child" title="選擇小孩" :close-button="closeButton" :drag-from-content="dragFromContent">
+        <parent-bottom-sheet v-model="sheets.child" title="選擇小孩">
           <ul class="m3-list" role="list" style="margin: 0 -24px">
             <m3-list-item v-for="c in children" :key="c.id" :headline="c.name" :supporting-text="c.grade + ' 年級 · ' + c.className" :clickable="true" @click="pickChild(c.id)">
               <template v-slot:leading><span class="avatar m3-title-medium" aria-hidden="true">{{ c.name.slice(-1) }}</span></template>
@@ -591,7 +586,7 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
         </parent-bottom-sheet>
 
         <!-- 含 footer：新增接送人 -->
-        <parent-bottom-sheet v-model="sheets.person" title="新增接送人" :close-button="closeButton" :drag-from-content="dragFromContent">
+        <parent-bottom-sheet v-model="sheets.person" title="新增接送人">
           <div class="demo-col" style="padding-top: 8px">
             <m3-text-field v-model="form.name" label="姓名" :error-text="formError" autocomplete="name"></m3-text-field>
             <m3-text-field v-model="form.relation" label="與學生關係" placeholder="例如：外婆"></m3-text-field>
@@ -604,7 +599,7 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
         </parent-bottom-sheet>
 
         <!-- fullHeight：新增代理接送 -->
-        <parent-bottom-sheet v-model="sheets.auth" title="新增代理接送" :full-height="true" :close-button="closeButton" :drag-from-content="dragFromContent">
+        <parent-bottom-sheet v-model="sheets.auth" title="新增代理接送" :full-height="true">
           <div class="demo-col" style="padding-top: 8px">
             <m3-segmented-button v-model="authMode" :items="authModeItems" aria-label="接送人來源"></m3-segmented-button>
             <template v-if="authMode === 'saved'">
@@ -626,7 +621,7 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
         </parent-bottom-sheet>
 
         <!-- 長內容可捲動：請假詳情 -->
-        <parent-bottom-sheet v-model="sheets.leave" title="請假詳情" :close-button="closeButton" :drag-from-content="dragFromContent">
+        <parent-bottom-sheet v-model="sheets.leave" title="請假詳情">
           <div class="kv m3-body-medium"><span class="kv__k">學生</span><span class="kv__v">王小明</span></div>
           <div class="kv m3-body-medium"><span class="kv__k">假別</span><span class="kv__v">病假</span></div>
           <div class="kv m3-body-medium"><span class="kv__k">期間</span><span class="kv__v">10/06（一）– 10/07（二），共 2 天</span></div>
@@ -648,7 +643,7 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
         </parent-bottom-sheet>
 
         <!-- 不可關閉：接送碼只顯示一次 -->
-        <parent-bottom-sheet v-model="sheets.code" title="接送碼" :dismissible="false" :close-button="closeButton" :drag-from-content="dragFromContent">
+        <parent-bottom-sheet v-model="sheets.code" title="接送碼" :dismissible="false">
           <p class="m3-body-medium" style="margin: 0">請把接送碼傳給 {{ authPerson }}，接送時出示給老師。<strong>關閉後無法再查看</strong>，忘記時只能重新產生。</p>
           <div class="code-box">
             <div class="code-box__code">482 913</div>
@@ -674,24 +669,18 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
         <button type="button" @click="open('person')">含 footer 按鈕</button>
         <button type="button" @click="open('code')">不可關閉</button>
       </div>
-      <p class="notes__option">關閉方式：點 scrim、按 Esc、按住把手或標題列往下拖超過 80px 放開。</p>
+      <p class="notes__option">關閉方式：標題列 ✕、點 scrim、按 Esc、按住把手或標題列往下拖超過 80px 放開。</p>
 
       <h4>預覽選項</h4>
       <div class="notes__row">主題
         <span class="state-switch"><button type="button" :class="{ 'is-active': theme === 'light' }" @click="theme = 'light'">淺色</button><button type="button" :class="{ 'is-active': theme === 'dark' }" @click="theme = 'dark'">深色</button></span>
       </div>
-      <div class="notes__row">待裁定 3 關閉鈕
-        <span class="state-switch"><button type="button" :class="{ 'is-active': closeButton }" @click="closeButton = true">A 有</button><button type="button" :class="{ 'is-active': !closeButton }" @click="closeButton = false">B 無</button></span>
-      </div>
-      <div class="notes__row">待裁定 4 拖曳範圍
-        <span class="state-switch"><button type="button" :class="{ 'is-active': !dragFromContent }" @click="dragFromContent = false">A 把手 + 標題</button><button type="button" :class="{ 'is-active': dragFromContent }" @click="dragFromContent = true">B 含內容區</button></span>
-      </div>
 
       <h4>設計決策</h4>
       <ol><li v-for="(d, i) in decisions" :key="i">{{ d }}</li></ol>
 
-      <h4 v-if="openQuestions.length">待裁定（編號與其他家長端元件稿連號）</h4>
-      <ol :start="questionStart">
+      <h4 v-if="openQuestions.length">待裁定</h4>
+      <ol>
         <li v-for="(q, i) in openQuestions" :key="i" style="margin-bottom: 8px">
           <div>{{ q.question }}</div>
           <div class="notes__option">A. {{ q.optionA }}<br>B. {{ q.optionB }}</div>
@@ -1024,7 +1013,6 @@ const M3Switch = {
 
 /* ============================================================
    PARENT-025 ParentBottomSheet
-   closeButton / dragFromContent 只為待裁定 3、4 的預覽切換，實作依裁定結果擇一。
    ============================================================ */
 const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
 const DISMISS_DISTANCE = 80
@@ -1037,12 +1025,10 @@ const ParentBottomSheet = {
     title: { type: String, default: '' },
     dismissible: { type: Boolean, default: true },
     fullHeight: { type: Boolean, default: false },
-    closeButton: { type: Boolean, default: true },
-    dragFromContent: { type: Boolean, default: false },
   },
   emits: ['update:modelValue'],
   data() {
-    return { titleId: `sheet-title-${++sheetUid}`, offset: 0, dragging: false, startY: 0, pendingBodyDrag: false, prevFocus: null }
+    return { titleId: `sheet-title-${++sheetUid}`, offset: 0, dragging: false, startY: 0, prevFocus: null }
   },
   computed: {
     sheetStyle() { return this.offset ? { transform: `translateY(${this.offset}px)` } : null },
@@ -1089,12 +1075,6 @@ const ParentBottomSheet = {
       window.addEventListener('pointercancel', this.onPointerUp)
     },
     onHandleDown(e) { if (e.button === 0 || e.pointerType !== 'mouse') this.startDrag(e) },
-    onBodyDown(e) {
-      // 待裁定 4 方案 B：內容捲在頂端時往下拉也能拖
-      if (!this.dragFromContent || this.$refs.body.scrollTop > 0) return
-      if (e.target.closest('input, textarea, button, a, [role="button"]')) return
-      this.startDrag(e)
-    },
     onPointerMove(e) {
       if (!this.dragging) return
       const dy = Math.max(0, e.clientY - this.startY)
@@ -1120,12 +1100,12 @@ const ParentBottomSheet = {
         role="dialog" aria-modal="true" :aria-labelledby="titleId" tabindex="-1" @keydown="onKeydown">
         <div class="sheet__drag" @pointerdown="onHandleDown">
           <div class="sheet__handle" aria-hidden="true"></div>
-          <div class="sheet__header" :class="{ 'has-close': closeButton && dismissible }">
+          <div class="sheet__header" :class="{ 'has-close': dismissible }">
             <h2 :id="titleId" class="sheet__title m3-title-large">{{ title }}</h2>
-            <m3-icon-button v-if="closeButton && dismissible" icon="close" label="關閉" @pointerdown.stop @click="requestClose"></m3-icon-button>
+            <m3-icon-button v-if="dismissible" icon="close" label="關閉" @pointerdown.stop @click="requestClose"></m3-icon-button>
           </div>
         </div>
-        <div ref="body" class="sheet__body" @pointerdown="onBodyDown"><slot></slot></div>
+        <div class="sheet__body"><slot></slot></div>
         <div v-if="$slots.footer" class="sheet__footer"><slot name="footer"></slot></div>
       </div>
     </div>
@@ -1151,25 +1131,15 @@ const app = createApp({
       '把手 32×4、on-surface-variant 40%，固定顯示；標題 title-large 靠左、可換行，padding 左右 24px。',
       'footer：上方 1px outline-variant 分隔線，padding 16px 24px + safe-area-inset-bottom；按鈕平分寬度（一顆即滿版；兩顆時次要 outlined 在左、主要 filled 在右）。',
       '動畫：開啟 400ms emphasized-decel 由下滑入 + scrim 淡入；關閉 200ms emphasized-accel；reduced-motion 無動畫。',
-      '拖曳：跟手 1:1，放開時下移超過 80px 關閉，否則 200ms 回彈；往上拖不移動。用 Pointer Events（稿裡滑鼠也能拖）。可拖範圍見待裁定 4。',
-      'dismissible=false：把手照樣顯示，拖曳只給最多 24px 的阻尼位移後回彈；scrim、Esc、拖曳都不關閉，也不顯示關閉鈕；只能由內容按鈕（例如「我已記下接送碼」）關閉。',
+      '拖曳：只有把手 + 標題列可拖（內容區不能拖，不和內容捲動、表單輸入、下拉重新整理搶手勢）；跟手 1:1，放開時下移超過 80px 關閉，否則 200ms 回彈；往上拖不移動。用 Pointer Events（稿裡滑鼠也能拖）。',
+      '關閉鈕：dismissible 時標題列右側顯示 close icon button（aria-label「關閉」，48px 點擊區），點了 emit update:modelValue(false)；dismissible=false 時不渲染。按下關閉鈕不會觸發拖曳。',
+      'dismissible=false：把手照樣顯示，拖曳只給最多 24px 的阻尼位移後回彈；scrim、Esc、拖曳都不關閉，沒有關閉鈕；只能由內容按鈕（例如「我已記下接送碼」）關閉。',
       '焦點：開啟後移到 sheet 內第一個可聚焦元素（沒有就 sheet 本身），Tab / Shift+Tab 在 sheet 內循環；關閉後回到開啟前的元素。Esc 監聽在 document。',
       '開啟期間鎖背景捲動（稿中背景頁捲不動）；關閉或卸載時還原。',
       '去掉 ivy 的 snapPoints 多段高度、showHandle、鍵盤模式自動切 full、close / snap-change 事件；只保留 v-model 與 fullHeight。',
       '稿內 sheet 畫在手機框裡；實作 Teleport 到 body、position: fixed。Snackbar 的層級高於 sheet（接送碼 sheet 上按「複製」的回饋要看得到）。',
     ]
-    const openQuestions = [
-      {
-        question: '標題列右側要不要放關閉鈕？（右側可切換預覽）',
-        optionA: 'dismissible 時標題列右側加 close icon button（aria-label「關閉」）；不可關閉模式不顯示。【推薦】VoiceOver / TalkBack 使用者沒有 Esc、scrim 也讀不到，長輩看到 ✕ 也比較直覺',
-        optionB: '不加，只靠點 scrim、拖曳、Esc 關閉（ivy 現況，畫面較乾淨）',
-      },
-      {
-        question: '哪裡可以拖曳關閉？（右側可切換預覽）',
-        optionA: '只有把手 + 標題列可拖。【推薦】不和內容捲動、表單輸入、下拉重新整理搶手勢，實作單純',
-        optionB: '內容捲在最頂端時，從內容區往下拉也能拖（類似 iOS 原生 sheet）',
-      },
-    ]
+    const openQuestions = []
 
     let nextId = 1
     let headTimer = null
@@ -1199,8 +1169,6 @@ const app = createApp({
       if (v === 'dark') document.documentElement.setAttribute('data-theme', 'dark')
       else document.documentElement.removeAttribute('data-theme')
     })
-    const closeButton = ref(true)
-    const dragFromContent = ref(false)
     const scrolled = ref(false)
 
     const sheets = reactive({ child: false, person: false, auth: false, leave: false, code: false })
@@ -1248,8 +1216,8 @@ const app = createApp({
     }
 
     return {
-      meta, decisions, openQuestions, questionStart: 3,
-      snack, theme, closeButton, dragFromContent, scrolled,
+      meta, decisions, openQuestions,
+      snack, theme, scrolled,
       sheets, anyOpen, open, navItems: NAV_ITEMS,
       children, childId, currentChild, pickChild,
       persons, form, formError, saving, savePerson,
