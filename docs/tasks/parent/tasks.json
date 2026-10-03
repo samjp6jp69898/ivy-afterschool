@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 11,
-  "last_updated": "2026-10-03T12:12:36Z",
+  "version": 12,
+  "last_updated": "2026-10-03T12:13:00Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -67,7 +67,7 @@
       "granularity_unit": "method",
       "target_path": "apps/web/src/parent/utils/safeRedirect.ts",
       "source_ref": "FE:src/parent/utils/safeRedirect.ts::isSafeRedirectPath",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r3",
       "depends_on": [
         "INFRA-012"
