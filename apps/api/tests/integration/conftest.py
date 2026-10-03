@@ -1,7 +1,9 @@
 """整合測試共用的 SQLAlchemy session fixture（INFRA-010）。
 
-- `db_engine`（session scope）：以 app_backend 連本機 Supabase 的 engine。連線前後都驗 loopback，
-  並確認實際角色是不帶 superuser / BYPASSRLS 的 app_backend；任何一項不符就 `pytest.exit`。
+- `db_engine`（session scope）：以 app_backend 連本機 DB（compose 的 Postgres，127.0.0.1:54342）的
+  engine。連線前後都驗 loopback，並確認實際角色是不帶 superuser / BYPASSRLS 的 app_backend；任何一項
+  不符就 `pytest.exit`。app_backend 由 baseline revision（DB-041）建立，本機密碼由
+  just db-reset 設定。
   **不提供 fallback**：app_backend 連不上就停止，絕不改用 owner 連線。
 - `db_session`：外層 transaction + savepoint 模式。被測程式碼 `session.commit()` 只釋放 savepoint，
   測試結束一律 rollback。
@@ -27,9 +29,9 @@ from tests.support import db_urls
 _EXIT_CODE = 2
 _BACKEND_ROLE = "app_backend"
 _DB_DOWN_MESSAGE = (
-    "本機 Supabase 未啟動或 app_backend 無法登入，先跑 just db-start 與 just db-reset --yes"
+    "本機 DB 未啟動或 app_backend 無法登入，先跑 just db-start 與 just db-reset --yes"
 )
-# seed.sql 寫入的表：清空後其他測試與本機開發都會壞
+# data migration（Alembic revision）寫入預設資料的表：清空後其他測試與本機開發都會壞
 _SEED_TABLES = frozenset({"roles", "system_settings", "subjects", "exam_types"})
 
 
@@ -60,7 +62,7 @@ def _verify_backend_connection(engine: Engine) -> None:
         ).one()
     if role != _BACKEND_ROLE or is_super or bypass_rls:
         pytest.exit(
-            f"db_session 必須以 app_backend 連線，禁止以 owner 角色繞過 RLS：{role}",
+            f"db_session 必須以 app_backend 連線，禁止以 owner 角色連線：{role}",
             returncode=_EXIT_CODE,
         )
 
