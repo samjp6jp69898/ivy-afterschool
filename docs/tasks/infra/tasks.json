@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 87,
-  "last_updated": "2026-10-03T15:09:25Z",
+  "version": 88,
+  "last_updated": "2026-10-03T15:09:52Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -791,7 +791,7 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": "FE:.github/workflows/ci.yml::concurrency",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-004",

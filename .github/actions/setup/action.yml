@@ -1,7 +1,7 @@
-# CI 共用環境安裝（INFRA-022）。各 job 依需要開關 python / node / supabase。
+# CI 共用環境安裝（INFRA-022）。各 job 依需要開關 python / node；需要本機 Postgres / SeaweedFS 的 job 自行 docker compose up。
 # 第三方 action 目前以主版號 tag 引用；正式上線前改為 commit SHA 釘選。
 name: Setup afterschool toolchain
-description: 安裝 uv + Python 3.13、Node 24 + pnpm、just，以及（選用）Supabase CLI
+description: 安裝 uv + Python 3.13、Node 24 + pnpm 與 just（本機 Postgres / SeaweedFS 由 job 內 docker compose 啟動）
 
 inputs:
   python:
@@ -12,10 +12,6 @@ inputs:
     description: 安裝 Node 24、啟用 corepack 並 pnpm install apps/web（"true" / "false"）
     required: false
     default: "true"
-  supabase:
-    description: 安裝 Supabase CLI（"true" / "false"）
-    required: false
-    default: "false"
 
 runs:
   using: composite
@@ -65,9 +61,3 @@ runs:
 
     - name: 安裝 just
       uses: extractions/setup-just@v3
-
-    - name: 安裝 Supabase CLI（與本機主版號 2 相同）
-      if: inputs.supabase == 'true'
-      uses: supabase/setup-cli@v1
-      with:
-        version: 2.98.2
