@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 73,
-  "last_updated": "2026-10-03T14:45:58Z",
+  "version": 74,
+  "last_updated": "2026-10-03T14:47:11Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -500,7 +500,7 @@
       "granularity_unit": "script",
       "target_path": "scripts/bootstrap.sh",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-002",
@@ -528,9 +528,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-infra",
+        "notes": "通過。紅燈 68947f1 先於實作 ce3f223（紅燈時 scripts/bootstrap.sh 不存在）。`just test scripts/tests/test_bootstrap.py -k bootstrap` 7 passed，--collect-only 對照 6 條 red_case 與補充的 installs_hooks_when_recipe_exists 全選到；lint / typecheck 乾淨。PATH 隔離：測試 PATH 只有 fake_bin、apps/api/.venv/bin（只有 python3，無 uv / pnpm / just）與 /usr/bin:/bin，真實 uv / pnpm / just 都在 /opt/homebrew/bin，碰不到。scratchpad 副本實機驗證（假 uv / pnpm、真 just，未在共用工作樹執行 bootstrap）：新建 .env 權限 600（mktemp 先建 600 暫存檔、chmod 600 後 mv；umask 000 下仍為 600），APP_SECRET_KEY 64 字元，stdout / stderr 不含 secret，無殘留 .env.XXXXXX；重跑時 .env 雜湊不變；justfile 有 install-hooks 時執行、只有 install-hooks-extra 時略過（grep -x 完整比對）。突變：改成直接寫 .env（644）→ creates_env 紅；拿掉已存在檢查 → keeps_existing_env 紅。殘留（不擋）：(a) secret 以 sed 參數傳入，sed 執行的瞬間在 ps 可見（本機開發機，影響有限）；(b) .env.example 若沒有 `APP_SECRET_KEY=change-me` 這一行，sed 不替換也不報錯，產生的 .env 不含隨機 secret；(c) 「justfile 存在但沒有 install-hooks 時略過」沒有測試鎖住，本次以 scratchpad 實測確認。"
       }
     },
     {
