@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 19,
-  "last_updated": "2026-10-03T12:23:01Z",
+  "version": 20,
+  "last_updated": "2026-10-03T12:26:37Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -101,7 +101,7 @@
       "granularity_unit": "migration",
       "target_path": "supabase/migrations/20261002000300_create_roles.sql",
       "source_ref": "BE:models/permission_models.py::Role",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-001",
@@ -293,7 +293,7 @@
       "granularity_unit": "migration",
       "target_path": "supabase/migrations/20261002000800_create_subjects.sql",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-001",
@@ -330,7 +330,7 @@
       "granularity_unit": "migration",
       "target_path": "supabase/migrations/20261002000900_create_exam_types.sql",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-001",
@@ -367,7 +367,7 @@
       "granularity_unit": "migration",
       "target_path": "supabase/migrations/20261002001000_create_schools.sql",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-001",
@@ -405,7 +405,7 @@
       "granularity_unit": "migration",
       "target_path": "supabase/migrations/20261002001100_create_closed_days.sql",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-001",
@@ -442,7 +442,7 @@
       "granularity_unit": "migration",
       "target_path": "supabase/migrations/20261002001200_create_classes.sql",
       "source_ref": "BE:models/classroom.py::Classroom",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-001",
