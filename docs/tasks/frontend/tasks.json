@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 14,
-  "last_updated": "2026-10-03T12:24:15Z",
+  "version": 15,
+  "last_updated": "2026-10-03T12:24:46Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -10,8 +10,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/shared/http/createHttpClient.ts",
       "source_ref": "FE:src/api/index.ts::api",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-005",
         "INFRA-013",
@@ -90,8 +90,8 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/shared/utils/datetime.ts",
       "source_ref": "FE:src/utils/taipeiTime.ts::formatTaipeiClock",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012",
         "FRONTEND-002"
@@ -130,8 +130,8 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/shared/ws/createWsClient.ts",
       "source_ref": "FE:src/composables/useInboxNotifications.ts::useInboxNotifications",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012",
         "FRONTEND-002"
@@ -172,8 +172,8 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/shared/constants/statusLabels.ts",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-002"
       ],
@@ -310,8 +310,8 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/shared/utils/errorMessage.ts",
       "source_ref": "FE:src/utils/apiErrorMessage.ts::apiErrorMessage",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-002"
       ],
@@ -494,8 +494,8 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/router/routes.ts",
       "source_ref": "FE:src/router/index.ts::routes",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-008"
       ],
