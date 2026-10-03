@@ -7,11 +7,12 @@ import re
 import traceback
 from collections.abc import Iterator
 from typing import Any
+from urllib.parse import parse_qs, unquote, urlparse
 from uuid import UUID, uuid4
 
 import boto3
 import pytest
-from botocore.exceptions import EndpointConnectionError
+from botocore.exceptions import EndpointConnectionError, NoCredentialsError
 from botocore.stub import Stubber
 from mypy_boto3_s3 import S3Client
 
@@ -195,6 +196,89 @@ def test_storage_error_has_no_context(storage: R2Storage, stubber: Stubber) -> N
     assert "AKIDLEAK" not in rendered
     assert "STSLEAK" not in rendered
     assert "SignatureDoesNotMatch" in rendered
+
+
+# --- create_signed_url（BACKEND-014） ------------------------------------------------------
+
+
+def _cloud_storage() -> R2Storage:
+    return R2Storage(
+        endpoint_url="https://acct.r2.cloudflarestorage.com",
+        access_key_id=_ACCESS_KEY,
+        secret_access_key=_SECRET_VALUE,
+        bucket_name=_BUCKET_NAME,
+    )
+
+
+def test_signed_url_structure() -> None:
+    path = _valid_path("jpg")
+
+    url = _cloud_storage().create_signed_url("student-photos", path, 300)
+
+    parsed = urlparse(url)
+    query = parse_qs(parsed.query)
+    assert parsed.scheme == "https"
+    assert parsed.netloc == "acct.r2.cloudflarestorage.com"
+    assert parsed.path == f"/{_BUCKET_NAME}/student-photos/{path}"
+    assert query["X-Amz-Expires"] == ["300"]
+    assert query["X-Amz-Algorithm"] == ["AWS4-HMAC-SHA256"]
+    assert re.fullmatch(r"[0-9a-f]{64}", query["X-Amz-Signature"][0])
+    assert query["X-Amz-Credential"][0].startswith(f"{_ACCESS_KEY}/")
+    assert "/auto/s3/aws4_request" in query["X-Amz-Credential"][0]
+
+
+def test_signed_url_default_expiry_and_bucket_prefix() -> None:
+    path = _valid_path("pdf")
+
+    url = _cloud_storage().create_signed_url("leave-attachments", path)
+
+    parsed = urlparse(url)
+    assert parsed.path == f"/{_BUCKET_NAME}/leave-attachments/{path}"
+    assert parse_qs(parsed.query)["X-Amz-Expires"] == ["300"]
+
+
+def test_signed_url_expires_range() -> None:
+    storage = _cloud_storage()
+    path = _valid_path()
+
+    for bad in (10, 29, 3601, 0, -1):
+        with pytest.raises(ValueError, match="expires_in"):
+            storage.create_signed_url("student-photos", path, bad)
+    for ok in (30, 3600):
+        url = storage.create_signed_url("student-photos", path, ok)
+        assert parse_qs(urlparse(url).query)["X-Amz-Expires"] == [str(ok)]
+
+
+def test_signed_url_offline(storage: R2Storage, stubber: Stubber) -> None:
+    # Stubber 啟用但未登記任何 response：有任何 S3 API 呼叫都會拋錯
+    path = _valid_path("png")
+
+    url = storage.create_signed_url("pickup-person-photos", path)
+
+    assert urlparse(url).path == f"/{_BUCKET_NAME}/pickup-person-photos/{path}"
+    with pytest.raises(ValueError, match="path"):
+        storage.create_signed_url("pickup-person-photos", "x/y.jpg")
+
+
+def test_signed_url_does_not_leak_secret() -> None:
+    url = _cloud_storage().create_signed_url("student-photos", _valid_path())
+
+    assert _SECRET_VALUE not in url
+    assert _SECRET_VALUE not in unquote(url)
+
+
+def test_signed_url_signing_error(storage: R2Storage, monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail(*args: object, **kwargs: object) -> str:
+        raise NoCredentialsError()
+
+    monkeypatch.setattr(storage.client, "generate_presigned_url", fail)
+
+    with pytest.raises(StorageError) as exc_info:
+        storage.create_signed_url("student-photos", _valid_path())
+
+    assert "NoCredentialsError" in str(exc_info.value)
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
 
 
 # --- object_key / build_object_path ---------------------------------------------------------
