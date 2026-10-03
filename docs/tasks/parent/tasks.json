@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 16,
-  "last_updated": "2026-10-03T12:17:42Z",
+  "version": 17,
+  "last_updated": "2026-10-03T13:01:28Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -2123,7 +2123,7 @@
           "vitest"
         ],
         "red_cases": [
-          "PickupPersonListItem renders info and emits delete：person {name:'李阿姨', relation:'保母', phone:'0912000123', photo_url:'https://x.supabase.co/p.jpg'} → 含 '李阿姨' 與 '保母 · 0912000123'，img.src 為該網址；點 aria-label '刪除 李阿姨' → emitted('delete')[0][0].name === '李阿姨'",
+          "PickupPersonListItem renders info and emits delete：person {name:'李阿姨', relation:'保母', phone:'0912000123', photo_url:'https://acct.r2.cloudflarestorage.com/afterschool/pickup-person-photos/p.jpg'} → 含 '李阿姨' 與 '保母 · 0912000123'，img.src 為該網址；點 aria-label '刪除 李阿姨' → emitted('delete')[0][0].name === '李阿姨'",
           "PickupPersonListItem falls back to initial：photo_url=null → 無 img，頭像文字 '李'；有 photo_url 但 img 觸發 error 事件 → img 消失並顯示 '李'"
         ],
         "run": "just web-test src/parent/components/pickup/PickupPersonListItem.spec.ts -t \"PickupPersonListItem\"",
