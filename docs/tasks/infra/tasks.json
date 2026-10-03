@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 36,
-  "last_updated": "2026-10-03T12:16:52Z",
+  "version": 37,
+  "last_updated": "2026-10-03T12:19:44Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -738,7 +738,7 @@
       "granularity_unit": "test",
       "target_path": "scripts/tests/test_justfile.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-002",
@@ -758,14 +758,14 @@
           "test_justfile_guarded_recipes_require_args：對 test、test-int、lint、typecheck、web-test、web-lint、db-new-migration、e2e 逐一無參數執行（pytest.mark.parametrize）→ 每個 returncode == 1 且 stderr 含 '用法'",
           "test_justfile_rejects_full_run_paths：`just test apps/api/tests`、`just test apps/api/tests/unit/`、`just lint scripts`、`just test-int apps/api/tests/integration` → returncode == 1 且 stderr 含 '禁止全量'",
           "test_justfile_rejects_unknown_prefix：`just test foo/bar.py` → returncode == 1、stderr 含 '只支援'",
-          "test_justfile_db_reset_rejects_linked：`just db-reset --linked` 與 `just db-reset --db-url x` → returncode == 1，fake_bin.calls('supabase') == []",
-          "test_justfile_db_reset_requires_yes_without_tty：stdin 非 TTY、`just db-reset` 不帶參數 → returncode == 1，fake_bin.calls('supabase') == []",
+          "test_justfile_db_reset_rejects_linked：`just db-reset --linked`、`just db-reset --db-url x`，以及同時帶 --yes 的 `just db-reset --yes --linked`、`just db-reset --yes --db-url x`（pytest.mark.parametrize）→ returncode == 1，fake_bin.calls('supabase') == []（不帶 --yes 時非 TTY 守衛也會擋下，帶 --yes 才能證明是參數白名單擋的）",
+          "test_justfile_db_reset_requires_yes_without_tty：stdin 非 TTY、`just db-reset` 不帶參數 → returncode == 1、stderr 含 '--yes'，fake_bin.calls('supabase') == []",
           "test_justfile_db_new_migration_validates_name：`just db-new-migration Bad-Name` → 1 且 supabase 未被呼叫；`just db-new-migration create_probe` → 0，fake_bin.calls('supabase')[0]['argv'] == ['migration', 'new', 'create_probe']",
           "test_justfile_test_int_requires_local_db：沒有服務監聽 127.0.0.1:54342 的情況（以 monkeypatch 環境變數 JUST_TEST_INT_DB_PORT 指向一個未監聽的臨時 port）→ `just test-int apps/api/tests/integration/x.py` returncode == 1、stderr 含 'just db-start'",
           "test_justfile_list_documents_every_recipe：`just --list` 輸出中每個 recipe 行都帶 '#' 說明（不允許沒有說明的 recipe）"
         ],
         "run": "just test scripts/tests/test_justfile.py -k justfile",
-        "notes": "test-int 的 DB port 探測需支援 JUST_TEST_INT_DB_PORT 覆寫（預設 54342），若 INFRA-002 未提供，本 task 一併加入並在 justfile 註解說明只供測試使用。突變驗證：逐一暫時移除 test / db-reset 的守衛，確認對應測試轉紅後還原。"
+        "notes": "test-int 的 DB port 探測支援 JUST_TEST_INT_DB_PORT 覆寫（INFRA-002 已提供，預設 54342）。突變驗證在 scratchpad 的 repo 複本上進行（justfile、scripts/_pyroute.sh、scripts/tests 與 db_urls 複本 + apps/api/.venv 連結），不動共用工作樹的 justfile；每次只套一個突變，結果：移除 py_prepare 無參數區塊 → require_args[test/test-int/lint/typecheck] 4 紅；py_is_full_run 恆回 1 → rejects_full_run_paths 4 紅；未知前綴改為放行 → rejects_unknown_prefix 紅；db-reset 參數白名單改為放行 → rejects_linked[yes-linked / yes-db-url] 紅；db-reset 非 TTY 檢查移除 → requires_yes_without_tty 紅；migration 名稱檢查移除 → db_new_migration_validates_name 紅；test-int port 探測移除 → test_int_requires_local_db 紅；web-test 無參數檢查移除 → require_args[web-test] 紅；default recipe 說明移除 → list_documents_every_recipe 紅。基準（未突變）21 passed。"
       },
       "review": {
         "status": "pending",
