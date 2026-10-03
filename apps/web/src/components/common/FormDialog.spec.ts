@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { mountWithApp } from '@/test/helpers'
 import FormDialog from './FormDialog.vue'
+import formDialogSource from './FormDialog.vue?raw'
 
 const DISCARD_TEXT = '尚未儲存的變更將會遺失，確定要關閉嗎？'
 
@@ -187,6 +188,41 @@ describe('FormDialog', () => {
     )
     await mountDialog()
     expect(dialogEl().classList.contains('is-fullscreen')).toBe(true)
+  })
+
+  it('FormDialog mobile fullscreen pins footer', async () => {
+    await mountDialog()
+    expect(dialogEl().classList.contains('form-dialog')).toBe(true)
+    expect(dialogEl().classList.contains('is-fullscreen')).toBe(false)
+
+    document.body.innerHTML = ''
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: query === '(max-width: 767.98px)',
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    )
+    await mountDialog()
+
+    const dialog = dialogEl()
+    expect(dialog.classList.contains('form-dialog')).toBe(true)
+    expect(dialog.classList.contains('is-fullscreen')).toBe(true)
+    // flex column 版面依賴 header / body / footer 是 .el-dialog 的直接子元素
+    expect(Array.from(dialog.children).map((el) => `${el.tagName.toLowerCase()}.${el.classList[0]}`)).toEqual([
+      'header.el-dialog__header',
+      'div.el-dialog__body',
+      'footer.el-dialog__footer',
+    ])
+
+    // happy-dom 不算版面：鎖住非 scoped style 中讓 footer 固定、只有 body 捲動的規則
+    const globalStyle = formDialogSource.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? ''
+    const compact = globalStyle.replace(/\s+/g, ' ')
+    expect(compact).toMatch(/\.el-dialog\.form-dialog\.is-fullscreen \{[^}]*display: flex;[^}]*flex-direction: column;/)
+    expect(compact).toMatch(
+      /\.el-dialog\.form-dialog\.is-fullscreen > \.el-dialog__body \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;/,
+    )
   })
 
   it('FormDialog autofocus first editable field after opened', async () => {
