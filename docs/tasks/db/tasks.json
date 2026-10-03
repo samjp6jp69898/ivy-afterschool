@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 26,
-  "last_updated": "2026-10-03T14:51:39Z",
+  "version": 27,
+  "last_updated": "2026-10-03T14:53:03Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -1629,7 +1629,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/db/conftest.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-041",
@@ -1654,7 +1654,7 @@
           "test_fixture_assert_backend_read_write_fails_without_update_privilege：public._ro 以 grant_backend(..., 'select, insert') 授權，as_role(owner_conn, 'app_backend') 內 insert_row 後 assert_backend_read_write → psycopg.errors.InsufficientPrivilege（42501）"
         ],
         "run": "just test-int apps/api/tests/integration/db/test_fixtures.py -k fixture",
-        "notes": "本 task 只改 conftest.py 與 test_fixtures.py；各表測試中的 assert_table_secured 由各表 task（DB-003、DB-008~012 等）改寫。另跑：grep -nE 'anon|authenticated|service_role|secure_table|assert_table_secured|Supabase' apps/api/tests/integration/db/conftest.py apps/api/tests/integration/db/test_fixtures.py 應無輸出。"
+        "notes": "本 task 只改 conftest.py 與 test_fixtures.py；各表測試中的 assert_table_secured 由各表 task（DB-003、DB-008~012 等）改寫。另跑：grep -nE 'anon|authenticated|service_role|secure_table|assert_table_secured|Supabase' apps/api/tests/integration/db/conftest.py 應無輸出；grep -nE 'secure_table|assert_table_secured|Supabase' apps/api/tests/integration/db/test_fixtures.py 應無輸出（test_fixtures.py 的 as_role 拒絕清單刻意含 anon / authenticated / service_role）。"
       },
       "review": {
         "status": "pending",
