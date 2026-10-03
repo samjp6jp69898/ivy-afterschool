@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 93,
-  "last_updated": "2026-10-03T15:30:19Z",
+  "version": 94,
+  "last_updated": "2026-10-03T15:30:49Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -618,7 +618,7 @@
       "granularity_unit": "script",
       "target_path": "scripts/doctor.sh",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-002",
@@ -626,7 +626,7 @@
         "INFRA-008"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "現有實作依 Supabase 版完成，需依目前 description 改寫。 改寫範圍：移除 supabase CLI 與 SUPABASE_SERVICE_ROLE_KEY 檢查，新增 docker compose 檢查，port 探測改為 54342 / 54344。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "scripts/tests/test_doctor.py",
@@ -648,9 +648,9 @@
         "notes": "port 測試需要 DOCTOR_API_PORT / DOCTOR_WEB_PORT 覆寫變數（預設 8341 / 5341）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-fe",
+        "notes": "通過（Railway / compose 重做版）。tdd.run 10 項全綠（9 條 red_case 都有對應測試，外加 --help / 未知參數）；測試 commit ac5e14a 先於實作 9c135a2；test_doctor.py 的 ruff 乾淨。doctor.sh 已無 supabase 檢查（grep 無結果、test_doctor_no_supabase_check 鎖住），新增 docker compose v2 檢查（主版號 < 2 或指令失敗為 FAIL，docker 不在 PATH 時 daemon 與 compose 各算一項 FAIL），探測 54342（本機 DB）與 54344（SeaweedFS）各一行且未啟動為 WARN。以腳本副本突變驗證：compose 主版號門檻放寬、整段 compose 檢查移除、拿掉 54344 探測、port 改成 54341、殘留 supabase 行，皆被抓到。殘留（不打回，實作經讀碼確認正確）：(1) 本機 DB / SeaweedFS port 沒有可覆寫的環境變數，測試依賴開發機當下是否有服務在跑；我審查時兩個服務都在跑，「54342 / 54344 未啟動為 WARN 而非 FAIL」這條在本機實際未被執行，把該 WARN 改成 FAIL 的突變測試仍綠。建議補 DOCTOR_DB_PORT / DOCTOR_S3_PORT 覆寫並加一條指向空 port 的測試。(2) APP_SECRET_KEY 長度 < 32 的 FAIL 條件沒有測試（只測了 change-me），把門檻改成 8 測試仍綠。(3) justfile 第 9、34、44 行仍有 Supabase 字樣（含 test-int 的錯誤訊息「本機 Supabase 未啟動」），不屬本 task，請協調者指派收斂。"
       }
     },
     {
@@ -791,7 +791,7 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": "FE:.github/workflows/ci.yml::concurrency",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-004",
@@ -799,7 +799,7 @@
         "INFRA-008"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "第三方 action 先用主版號 tag；正式上線前改為 commit SHA 釘選（ivy backend CI 的做法）。 現有實作依 Supabase 版完成，需依目前 description 改寫。 改寫範圍：setup action 移除 supabase input 與 supabase/setup-cli 步驟。",
+      "risk_notes": "第三方 action 先用主版號 tag；正式上線前改為 commit SHA 釘選（ivy backend CI 的做法）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "scripts/tests/test_ci_workflow.py",
@@ -817,9 +817,9 @@
         "notes": "另跑：uvx --from actionlint-py actionlint .github/workflows/ci.yml"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-fe",
+        "notes": "通過（setup action 移除 supabase 後的重做版）。tdd.run 8 項全綠（5 條 red_case 都有對應測試，外加 concurrency 與 steps 條件測試）；測試 commit 8e627c9 先於實作 1e78148；ruff 乾淨。action.yml 的 inputs 只剩 python / node，全文與 .github 目錄無 supabase 字樣；步驟保持 uv/Python/Node/pnpm 快取與 just，服務啟動留給 job 內 docker compose。uvx --from actionlint-py actionlint .github/workflows/ci.yml exit 0。殘留（不打回）：第三方 action 仍用主版號 tag（risk_notes 已記錄，上線前改 SHA 釘選）；actionlint 不檢查 action 版本是否存在（checkout@v7、setup-node@v6 等），首次 CI 跑起來時留意。"
       }
     },
     {
@@ -1117,7 +1117,7 @@
       "granularity_unit": "config",
       "target_path": "apps/api/Dockerfile",
       "source_ref": "BE:Dockerfile::CMD",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-004",
@@ -1147,9 +1147,9 @@
         "notes": "另跑（需 Docker）：docker build -t afterschool-api apps/api && test \"$(docker run --rm afterschool-api id -u)\" = 10001 && ! docker run --rm afterschool-api python -c 'import pytest' && docker run --rm afterschool-api sh -c 'test ! -d /app/tests' && docker run --rm afterschool-api python -c 'import fastapi, sqlalchemy, psycopg, apscheduler, alembic, boto3' && docker run --rm afterschool-api sh -c 'test -f /app/alembic.ini && test -f /app/alembic/env.py'"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-fe",
+        "notes": "通過。tdd.run（api_docker / api_uvicorn）7 項全綠，對應 7 條 red_case；測試 commit 254a2b9 先於實作 a1ee313；ruff 乾淨。實際 docker build（tag review-r3-fe-api，驗完已刪、未推送）：id -u 為 10001、USER app；import pytest 失敗；/app/tests 不存在；fastapi、sqlalchemy、psycopg、apscheduler、alembic、boto3 皆可 import；/app/alembic.ini、/app/alembic/env.py 與 versions/ 都在；映像內沒有 .env* 與 *.map；ENTRYPOINT 為 tini、CMD 含 --workers 1 --factory --forwarded-allow-ips \"${FORWARDED_ALLOW_IPS}\"（fd12::/16，非 *）。uvicorn 的 _TrustedHosts(\"fd12::/16\") 實測：fd12:1234::5 信任，127.0.0.1、::1、fe80::1、10.0.0.1 不信任；偽造 X-Forwarded-For 的行為由 test_api_uvicorn_ignores_spoofed_forwarded_for（含對照組）鎖住。--host :: 只監聽 IPv6 的說法經實測成立（映像內 ::1 可連、127.0.0.1 connection refused）：規格如實寫明並把「是否需要 IPv4（private network 與 Railway healthcheck）」列為部署時實測的 open_design_questions，處理合理，不構成打回。突變驗證：拿掉 USER、USER 放在 CMD 之後、workers 改 2、forwarded-allow-ips 改 *、拿掉 alembic 或 alembic.ini 的 COPY、.dockerignore 加入 alembic/、移除 tests/、改 pip install，皆被抓到。殘留（不打回）：Dockerfile 中 CMD 上方的註解寫「--host :: 同時監聽 IPv4 / IPv6」與實測及 description 相反，會誤導後人，下次動到此檔時請改為「只監聽 IPv6（V6ONLY）」；open_design_questions 保留至部署實測後刪除。"
       }
     },
     {
@@ -1240,7 +1240,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/Dockerfile",
       "source_ref": "FE:Dockerfile::runtime",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-033"
@@ -1263,9 +1263,9 @@
         "notes": "另跑（需 Docker）：docker build -t afterschool-web apps/web && cid=$(docker run -d -p 18080:8080 -e BACKEND_URL=http://127.0.0.1:9 afterschool-web) && sleep 2 && for p in / /parent/ /healthz; do test \"$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080$p)\" = 200; done && curl -sI http://127.0.0.1:18080/ | grep -qi content-security-policy && test \"$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/health)\" = 502; docker rm -f $cid"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-fe",
+        "notes": "通過。tdd.run（web_docker）4 項全綠，對應 4 條 red_case；測試 commit 254a2b9 先於實作 2336450；ruff 乾淨。實際 docker build（tag review-r3-fe-web，驗完已刪、未推送）並以 BACKEND_URL=http://127.0.0.1:9 啟動：/、/parent/、/healthz 皆 200；/ 的回應含 Content-Security-Policy 與 X-Frame-Options: DENY；/assets/main-*.js 的 Cache-Control 為 public, max-age=31536000, immutable；/api/health 回 502（nginx log 為連不上 upstream，確認走到代理而非 SPA fallback）；html 目錄 *.map 為 0 個、容器內無 .env*；/etc/nginx/real-ip.conf 內容為 set_real_ip_from 100.64.0.0/10，security-headers.conf 與 templates 已就位。不帶 BACKEND_URL 啟動時 1 秒內以 exit 1 結束，log 為 unknown \"backend_url\" variable（fail-fast）。TRUSTED_EDGE_CIDRS 預設 100.64.0.0/10 符合寧窄勿寬：這是 CGNAT 保留範圍，網際網路上的用戶端無法以此為來源，設錯的後果只是 audit 記到 edge IP，不會讓用戶端偽造 client IP；test_web_dockerfile_runtime_env 以突變（改成 0.0.0.0/0）驗證會紅。突變驗證：npm ci、拿掉 40-real-ip.sh 的 COPY、ENV 給 BACKEND_URL 預設、拿掉 NGINX_ENTRYPOINT_LOCAL_RESOLVERS、加 ARG VITE_、.dockerignore 拿掉 .env，皆被抓到。殘留（不打回）：(1) 刪除 *.map 的那行沒有結構測試（拿掉測試仍綠），我以實際映像確認目前為 0 個；(2) nginx 官方映像的 master 行程以 root 執行、worker 為 nginx 使用者，規格未要求 web 映像以非 root 執行，若之後要求需改用 nginx-unprivileged 並重驗 8080 與 /etc/nginx 寫入。"
       }
     },
     {
@@ -1781,7 +1781,7 @@
       "granularity_unit": "doc",
       "target_path": "README.md",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-044",
@@ -1806,9 +1806,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-fe",
+        "notes": "通過。tdd.run 4 項全綠（對應 4 條 red_case）；測試 commit 611f4f8 先於實作 f4a054e；ruff 乾淨。README 內容逐項對照 compose.yaml 與 architecture_decisions：Postgres 17（postgres/postgres）54342、SeaweedFS S3 54344（bucket afterschool-local）、FastAPI 8341、Vite 5341，只綁 127.0.0.1；快速開始順序 bootstrap → db-start → db-reset --yes → api / web；migration 小節的 just db-migrate、just db-new-migration、forward-only 與 justfile recipe 相符；全文無 supabase / RLS / seed 字樣。port 測試改為「README 出現的 543xx 集合 == compose 發佈的 host port 集合」合理：同時擋漏列與殘留舊 port（Supabase 的 54341 等），README 說明的「避開 5432x / 5433x」不會被 543\\d\\d 規則誤抓。殘留（不打回）：文件索引列出的 docs/deployment.md 尚不存在，由後續部署文件 task 建立。"
       }
     },
     {
