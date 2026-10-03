@@ -191,20 +191,31 @@ check-rls *ARGS:
     fi
     "{{ root }}/apps/api/.venv/bin/python" "{{ root }}/scripts/check_rls.py" "$@"
 
-# ★ 新增一支 migration：just db-new-migration NAME（snake_case，timestamp 由 CLI 自動帶）
+# 對本機 DB 套用尚未套用的 Alembic revision（只連 127.0.0.1:54342，不採用呼叫端的 MIGRATION_DATABASE_URL）
+db-migrate:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{ root }}/apps/api"
+    MIGRATION_DATABASE_URL="postgresql+psycopg://postgres:postgres@127.0.0.1:54342/postgres" \
+        uv run --frozen alembic upgrade head
+
+# ★ 新增一支 Alembic revision：just db-new-migration REV SLUG（例如 db004 create_students；不需連 DB）
 db-new-migration *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ $# -ne 1 ]; then
-        echo "用法: just db-new-migration NAME（snake_case，例如 create_students）" >&2
+    # 單引號：bash 3.2 會把 $ 後緊接的全形字元當成變數名
+    usage='用法: just db-new-migration REV SLUG（REV 如 db004，符合 ^[a-z]+[0-9]{3}[a-z0-9_]*$；SLUG 為 snake_case，例如 create_students）'
+    if [ $# -ne 2 ]; then
+        echo "$usage" >&2
         exit 1
     fi
-    if ! [[ "$1" =~ ^[a-z][a-z0-9_]*$ ]]; then
-        echo '錯誤：migration 名稱必須符合 ^[a-z][a-z0-9_]*$（snake_case），收到：'"${1}" >&2
+    if ! [[ "$1" =~ ^[a-z]+[0-9]{3}[a-z0-9_]*$ ]] || ! [[ "$2" =~ ^[a-z][a-z0-9_]*$ ]]; then
+        echo "$usage" >&2
+        echo "錯誤：收到 REV=${1}、SLUG=${2}" >&2
         exit 1
     fi
-    cd "{{ root }}"
-    supabase migration new "$1"
+    cd "{{ root }}/apps/api"
+    uv run --frozen alembic revision --rev-id "$1" -m "$2"
 
 # ---------------------------------------------------------------------------
 # 開發伺服器與工具

@@ -20,6 +20,10 @@ dependencies = [
   "sentry-sdk[fastapi]>=2.71",
   # FastAPI 處理檔案上傳必需（請假附件、學生照片、Excel 匯入）
   "python-multipart>=0.0.32",
+  # migration（apps/api/alembic，architecture_decisions §5）
+  "alembic>=1.20",
+  # R2 / 本機 S3 相容儲存（architecture_decisions §10）
+  "boto3>=1.43",
 ]
 
 [dependency-groups]
@@ -33,6 +37,7 @@ dev = [
   # scripts/tests/test_ci_workflow.py 解析 GitHub Actions YAML
   "pyyaml>=6.0",
   "types-PyYAML>=6.0",
+  "boto3-stubs[s3]>=1.43",
 ]
 
 [tool.uv]
@@ -51,6 +56,8 @@ allowed-confusables = ["，", "：", "；", "（", "）", "！", "？", "～"]
 [tool.ruff.lint.isort]
 # 從 repo root 以 --config 執行時 src 推不到 apps/api，明確指定 first-party
 known-first-party = ["app", "tests"]
+# apps/api/alembic/ 是 migration 目錄而非套件，避免 ruff 把 alembic 套件誤判為 first-party
+known-third-party = ["alembic"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
