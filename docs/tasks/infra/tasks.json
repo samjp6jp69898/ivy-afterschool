@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 58,
-  "last_updated": "2026-10-03T13:32:11Z",
+  "version": 59,
+  "last_updated": "2026-10-03T13:36:08Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1190,7 +1190,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/nginx/default.conf.template",
       "source_ref": "FE:nginx.conf.template::location /api/",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-005",
@@ -1210,15 +1210,16 @@
           "test_nginx_ws_location_upgrades：解析 default.conf.template 的 `location /api/ws/` 區塊 → 含 'proxy_set_header Upgrade $http_upgrade' 與 'proxy_read_timeout 3600s'",
           "test_nginx_api_location_body_limit：`location /api/` 區塊含 'client_max_body_size 20m' 與 'proxy_pass $backend_upstream'",
           "test_nginx_healthz_location：存在 `location = /healthz` 且含 'return 200'",
-          "test_nginx_static_locations_include_security_headers：`location /`、`location /parent/`、`location /assets/` 三個區塊都含 'include /etc/nginx/security-headers.conf'；測試內構造一個缺 include 的設定字串餵給同一檢查函式 → 回報該 location",
+          "test_nginx_static_locations_include_security_headers：`location /`、`location = /index.html`（/ 與所有後台 SPA 路由的 HTML 外殼最後都由它回應）、`location /parent/`、`location /assets/` 四個區塊都含 'include /etc/nginx/security-headers.conf'；測試內構造一個 `= /index.html` 與 `/parent/` 缺 include 的設定字串餵給同一檢查函式 → 回報 ['= /index.html', '/parent/']",
           "test_nginx_csp_directives：security-headers.conf 的 CSP 值含 \"frame-ancestors 'none'\"、'https://api.line.me'、\"object-src 'none'\"，img-src 含 'https://*.r2.cloudflarestorage.com'（R2 presigned URL，architecture_decisions §10），且不含 \"'unsafe-eval'\" 與 'supabase'",
           "test_nginx_real_ip_config：default.conf.template 含 'include /etc/nginx/real-ip.conf'、'real_ip_header X-Forwarded-For'、'real_ip_recursive on'；以 TRUSTED_EDGE_CIDRS='10.0.0.0/8 fd00::/8' 執行 40-real-ip.sh（輸出路徑以環境變數覆寫到 tmp_path）→ 產生恰好兩行 'set_real_ip_from 10.0.0.0/8;'、'set_real_ip_from fd00::/8;'；TRUSTED_EDGE_CIDRS='' 或 '1.2.3.4/8; evil' → exit 1",
           "test_nginx_overwrites_forwarded_for：`location /api/` 與 `location /api/ws/` 區塊都含 'proxy_set_header X-Forwarded-For $remote_addr'，整份範本不含 '$proxy_add_x_forwarded_for'",
-          "test_nginx_spoofed_forwarded_for_not_passed：測試在 127.0.0.1 臨時 port 起一個記錄請求標頭的 HTTP 伺服器，以 docker 執行 nginx:1.27-alpine 套用本範本（BACKEND_URL 指向 host.docker.internal:<port>，TRUSTED_EDGE_CIDRS 設為不含 docker bridge 的 203.0.113.0/24），從主機帶 'X-Forwarded-For: 6.6.6.6' 請求 /api/probe → 記錄到的 X-Forwarded-For 只有一個值且 != '6.6.6.6'、不含 '6.6.6.6'；對照組把 TRUSTED_EDGE_CIDRS 設為 docker bridge 網段（0.0.0.0/0）→ 記錄到的值 == '6.6.6.6'（證明測試能偵測信任設定）。環境沒有 docker 時 pytest.fail('此測試需要 Docker')，不得 skip",
-          "test_nginx_config_syntax_valid：以 docker 執行 nginx:1.27-alpine，掛載 default.conf.template、security-headers.conf 與 40-real-ip.sh（/docker-entrypoint.d/），TRUSTED_EDGE_CIDRS='10.0.0.0/8' → `nginx -T` exit 0、stderr 含 'syntax is ok'，stdout 含 'location /api/ws/' 與 'set_real_ip_from 10.0.0.0/8;'（證明載入的是本範本而非映像內建設定）；掛載來源檔不存在時直接 pytest.fail（docker 會在主機建立同名空目錄並以內建設定假綠）。環境沒有 docker 時 pytest.fail，不得 skip"
+          "test_nginx_spoofed_forwarded_for_not_passed：建立一個 user-defined docker network，在其中起「記錄後端」容器（nginx:1.27-alpine，`return 200 \"xff=[$http_x_forwarded_for]\"`，不對主機發佈 port）與被測 nginx 容器（套用本範本，BACKEND_URL=http://<後端容器名>:8080，以 docker 內建 DNS 解析，只把 8080 發佈到 127.0.0.1 的臨時 port）；TRUSTED_EDGE_CIDRS 設為不含 docker network 閘道的 203.0.113.0/24，從主機帶 'X-Forwarded-For: 6.6.6.6' 請求 /api/probe → 後端收到的 X-Forwarded-For 非空、只有一個值（不含逗號）且不含 '6.6.6.6'；對照組 TRUSTED_EDGE_CIDRS='0.0.0.0/0' → 收到的值 == '6.6.6.6'（證明測試能偵測信任設定）。不經主機 loopback、不使用 host.docker.internal，Linux docker 與 Docker Desktop 行為相同；測試結束移除容器與 network。環境沒有 docker 時 pytest.fail('此測試需要 Docker')，不得 skip",
+          "test_nginx_config_syntax_valid：以 docker 執行 nginx:1.27-alpine，掛載 default.conf.template、security-headers.conf 與 40-real-ip.sh（/docker-entrypoint.d/），TRUSTED_EDGE_CIDRS='10.0.0.0/8' → `nginx -T` exit 0、stderr 含 'syntax is ok'，stdout 含 'location /api/ws/' 與 'set_real_ip_from 10.0.0.0/8;'（證明載入的是本範本而非映像內建設定）；掛載來源檔不存在時直接 pytest.fail（docker 會在主機建立同名空目錄並以內建設定假綠）。環境沒有 docker 時 pytest.fail，不得 skip",
+          "test_nginx_html_responses_carry_security_headers：以同一組容器（TRUSTED_EDGE_CIDRS='203.0.113.0/24'）GET / 與 /students/1（SPA 路由）→ status 200，Content-Security-Policy 含 \"frame-ancestors 'none'\"、X-Frame-Options == 'DENY'、Cache-Control == 'no-cache'（拿掉 `location = /index.html` 的 include 時本測試與結構測試都轉紅）"
         ],
         "run": "just test scripts/tests/test_deploy_configs.py -k nginx",
-        "notes": "語法驗證由 test_nginx_config_syntax_valid 執行（需 Docker）；等效手動指令：docker run --rm -e PORT=8080 -e BACKEND_URL=http://127.0.0.1:9 -e NGINX_ENTRYPOINT_LOCAL_RESOLVERS=true -e TRUSTED_EDGE_CIDRS=10.0.0.0/8 -v \"$PWD/apps/web/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro\" -v \"$PWD/apps/web/nginx/security-headers.conf:/etc/nginx/security-headers.conf:ro\" -v \"$PWD/apps/web/nginx/40-real-ip.sh:/docker-entrypoint.d/40-real-ip.sh:ro\" nginx:1.27-alpine nginx -t（範本 include /etc/nginx/real-ip.conf，必須同時掛載 40-real-ip.sh 並設定 TRUSTED_EDGE_CIDRS 才會產生該檔）。"
+        "notes": "語法驗證由 test_nginx_config_syntax_valid 執行（需 Docker）；等效手動指令：docker run --rm -e PORT=8080 -e BACKEND_URL=http://127.0.0.1:9 -e NGINX_ENTRYPOINT_LOCAL_RESOLVERS=true -e TRUSTED_EDGE_CIDRS=10.0.0.0/8 -v \"$PWD/apps/web/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro\" -v \"$PWD/apps/web/nginx/security-headers.conf:/etc/nginx/security-headers.conf:ro\" -v \"$PWD/apps/web/nginx/40-real-ip.sh:/docker-entrypoint.d/40-real-ip.sh:ro\" nginx:1.27-alpine nginx -t（範本 include /etc/nginx/real-ip.conf，必須同時掛載 40-real-ip.sh 並設定 TRUSTED_EDGE_CIDRS 才會產生該檔）。 打回修正的突變驗證（scratchpad 複本）：拿掉 `location = /index.html` 的 security-headers include → static_locations 與 html_responses 兩條紅；/api/ 改用 $proxy_add_x_forwarded_for → overwrites_forwarded_for 與 spoofed_forwarded_for 兩條紅；基準 12 passed。"
       },
       "review": {
         "status": "concern",

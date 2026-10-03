@@ -2,21 +2,25 @@
 
 結構測試直接解析 apps/web/nginx/ 底下的檔案；行為測試以 docker 執行官方 nginx 映像套用本範本，
 環境沒有 Docker 時 pytest.fail（不 skip）。
+
+行為測試的記錄後端也是容器（nginx 映像以 `return 200` 回傳收到的 X-Forwarded-For），與被測的 nginx
+放在同一個 user-defined network，以容器名稱互連（docker 內建 DNS 127.0.0.11）。這個做法不經過主機
+loopback，也不依賴 host.docker.internal，Linux docker 與 Docker Desktop 的行為相同；主機只透過被測
+nginx 綁在 127.0.0.1 的 port 發請求，記錄後端不對主機發佈任何 port。
 """
 
 from __future__ import annotations
 
-import http.server
 import re
 import shutil
 import socket
 import subprocess
-import threading
 import time
 import urllib.request
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 import pytest
 
@@ -30,7 +34,7 @@ SECURITY_HEADERS = NGINX_DIR / "security-headers.conf"
 REAL_IP_SCRIPT = NGINX_DIR / "40-real-ip.sh"
 NGINX_IMAGE = "nginx:1.27-alpine"
 SECURITY_INCLUDE = "include /etc/nginx/security-headers.conf"
-STATIC_LOCATIONS = ("/", "/parent/", "/assets/")
+STATIC_LOCATIONS = ("/", "= /index.html", "/parent/", "/assets/")
 
 
 def _template() -> str:
@@ -128,11 +132,12 @@ def test_nginx_static_locations_include_security_headers() -> None:
     constructed = (
         "server {\n"
         f"  location / {{ {SECURITY_INCLUDE}; try_files $uri /index.html; }}\n"
+        '  location = /index.html { add_header Cache-Control "no-cache" always; }\n'
         "  location /parent/ { try_files $uri /parent/index.html; }\n"
         f"  location /assets/ {{ {SECURITY_INCLUDE}; }}\n"
         "}\n"
     )
-    assert locations_missing_security_headers(constructed) == ["/parent/"]
+    assert locations_missing_security_headers(constructed) == ["= /index.html", "/parent/"]
 
 
 def test_nginx_csp_directives() -> None:
@@ -253,98 +258,139 @@ def test_nginx_config_syntax_valid(run_cmd: RunCmd) -> None:
     assert "set_real_ip_from 10.0.0.0/8;" in result.stdout
 
 
-class _RecordingHandler(http.server.BaseHTTPRequestHandler):
-    records: list[list[str]]
-
-    def do_GET(self) -> None:
-        self.records.append(self.headers.get_all("X-Forwarded-For") or [])
-        body = b"ok"
-        self.send_response(200)
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def log_message(self, format: str, *args: object) -> None:
-        return
+_BACKEND_CONF = (
+    "server { listen 8080; location / { default_type text/plain; "
+    'return 200 "xff=[$http_x_forwarded_for]"; } }'
+)
 
 
-@pytest.fixture
-def recording_backend() -> Iterator[tuple[int, list[list[str]]]]:
-    records: list[list[str]] = []
-    handler = type("Handler", (_RecordingHandler,), {"records": records})
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield server.server_address[1], records
-    finally:
-        server.shutdown()
-        server.server_close()
+class _NginxProbe:
+    """在同一個 user-defined network 上起「記錄後端」與「被測 nginx」兩個容器。"""
 
+    def __init__(self, run_cmd: RunCmd, trusted: str) -> None:
+        self.run_cmd = run_cmd
+        suffix = uuid4().hex[:8]
+        self.network = f"afterschool-nginx-probe-{suffix}"
+        self.backend = f"afterschool-nginx-backend-{suffix}"
+        self.web = f"afterschool-nginx-web-{suffix}"
+        self.trusted = trusted
+        self.web_port = _free_port()
 
-def _forwarded_for_seen(
-    run_cmd: RunCmd, backend_port: int, records: list[list[str]], trusted: str
-) -> list[str]:
-    web_port = _free_port()
-    name = f"afterschool-nginx-probe-{web_port}"
-    started = run_cmd(
-        [
-            "docker",
+    def _docker(self, *args: str) -> subprocess.CompletedProcess[str]:
+        result = self.run_cmd(["docker", *args], timeout=180)
+        assert result.returncode == 0, result.stdout + result.stderr
+        return result
+
+    def start(self) -> None:
+        mounts = _nginx_mounts()
+        self._docker("network", "create", self.network)
+        self._docker(
             "run",
             "-d",
             "--rm",
             "--name",
-            name,
-            "--add-host",
-            "host.docker.internal:host-gateway",
+            self.backend,
+            "--network",
+            self.network,
+            NGINX_IMAGE,
+            "sh",
+            "-c",
+            f"printf '%s\\n' '{_BACKEND_CONF}' > /etc/nginx/conf.d/default.conf "
+            "&& exec nginx -g 'daemon off;'",
+        )
+        self._docker(
+            "run",
+            "-d",
+            "--rm",
+            "--name",
+            self.web,
+            "--network",
+            self.network,
             "-p",
-            f"127.0.0.1:{web_port}:8080",
+            f"127.0.0.1:{self.web_port}:8080",
             "-e",
             "PORT=8080",
             "-e",
-            f"BACKEND_URL=http://host.docker.internal:{backend_port}",
+            f"BACKEND_URL=http://{self.backend}:8080",
             "-e",
             "NGINX_ENTRYPOINT_LOCAL_RESOLVERS=true",
             "-e",
-            f"TRUSTED_EDGE_CIDRS={trusted}",
-            *_nginx_mounts(),
+            f"TRUSTED_EDGE_CIDRS={self.trusted}",
+            *mounts,
             NGINX_IMAGE,
-        ],
-        timeout=180,
-    )
-    assert started.returncode == 0, started.stderr
-    try:
+        )
+
+    def stop(self) -> None:
+        self.run_cmd(["docker", "rm", "-f", self.web, self.backend], timeout=60)
+        self.run_cmd(["docker", "network", "rm", self.network], timeout=60)
+
+    def get(
+        self, path: str, headers: dict[str, str] | None = None
+    ) -> tuple[int, dict[str, str], str]:
+        """對被測 nginx 發請求；容器尚未就緒（連不上或後端 502）時重試，最多 30 秒。"""
         request = urllib.request.Request(
-            f"http://127.0.0.1:{web_port}/api/probe", headers={"X-Forwarded-For": "6.6.6.6"}
+            f"http://127.0.0.1:{self.web_port}{path}", headers=headers or {}
         )
         deadline = time.monotonic() + 30
         while True:
             try:
                 with urllib.request.urlopen(request, timeout=5) as response:  # noqa: S310  固定本機 URL
-                    assert response.status == 200
-                break
+                    return response.status, dict(response.headers), response.read().decode()
             except OSError:
                 if time.monotonic() > deadline:
-                    logs = run_cmd(["docker", "logs", name])
+                    logs = self.run_cmd(["docker", "logs", self.web])
                     pytest.fail(f"nginx 容器未就緒：{logs.stdout}{logs.stderr}")
                 time.sleep(0.5)
-    finally:
-        run_cmd(["docker", "rm", "-f", name], timeout=60)
-    assert len(records) == 1, records
-    return records.pop()
 
 
-def test_nginx_spoofed_forwarded_for_not_passed(
-    run_cmd: RunCmd, recording_backend: tuple[int, list[list[str]]]
-) -> None:
+StartProbe = Callable[[str], _NginxProbe]
+
+
+@pytest.fixture
+def start_probe(run_cmd: RunCmd) -> Iterator[StartProbe]:
+    """回傳啟動函式：以指定的 TRUSTED_EDGE_CIDRS 起一組容器；測試結束一律移除容器與 network。"""
     _require_docker(run_cmd)
-    backend_port, records = recording_backend
+    started: list[_NginxProbe] = []
 
-    untrusted = _forwarded_for_seen(run_cmd, backend_port, records, "203.0.113.0/24")
-    assert len(untrusted) == 1, untrusted
-    assert untrusted[0] != "6.6.6.6"
-    assert "6.6.6.6" not in untrusted[0]
+    def _start(trusted: str) -> _NginxProbe:
+        probe = _NginxProbe(run_cmd, trusted)
+        started.append(probe)
+        probe.start()
+        return probe
+
+    try:
+        yield _start
+    finally:
+        for probe in started:
+            probe.stop()
+
+
+def _forwarded_for_seen(start_probe: StartProbe, trusted: str) -> str:
+    status, _, body = start_probe(trusted).get("/api/probe", headers={"X-Forwarded-For": "6.6.6.6"})
+    assert status == 200, body
+    assert body.startswith("xff=["), body
+    assert body.endswith("]"), body
+    return body.removeprefix("xff=[").removesuffix("]")
+
+
+def test_nginx_spoofed_forwarded_for_not_passed(start_probe: StartProbe) -> None:
+    untrusted = _forwarded_for_seen(start_probe, "203.0.113.0/24")
+    assert untrusted != ""
+    assert "," not in untrusted, untrusted
+    assert "6.6.6.6" not in untrusted
 
     # 對照組：信任所有來源時，nginx 會採信用戶端自填值（證明測試能偵測信任設定）
-    trusted = _forwarded_for_seen(run_cmd, backend_port, records, "0.0.0.0/0")
-    assert trusted == ["6.6.6.6"]
+    trusted = _forwarded_for_seen(start_probe, "0.0.0.0/0")
+    assert trusted == "6.6.6.6"
+
+
+def test_nginx_html_responses_carry_security_headers(start_probe: StartProbe) -> None:
+    probe = start_probe("203.0.113.0/24")
+
+    # / 與後台 SPA 路由都由 location = /index.html 回應（映像內建的 index.html）
+    for path in ("/", "/students/1"):
+        status, headers, _ = probe.get(path)
+        assert status == 200, path
+        assert "frame-ancestors 'none'" in headers.get("Content-Security-Policy", ""), path
+        assert headers.get("X-Frame-Options") == "DENY", path
+        assert headers.get("Cache-Control") == "no-cache", path
