@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 26,
-  "last_updated": "2026-10-03T12:44:37Z",
+  "version": 27,
+  "last_updated": "2026-10-03T12:45:12Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -354,8 +354,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/http.ts",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-001",
         "INFRA-013"
@@ -722,8 +722,8 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/constants/navigation.ts",
       "source_ref": "FE:src/constants/navigation/index.ts::SIDEBAR_TREE",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-024"
       ],
@@ -1257,8 +1257,8 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/usePagedList.ts",
       "source_ref": "FE:src/composables/useTableFilters.ts::useTableFilters",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-009",
         "INFRA-013"
@@ -2524,8 +2524,8 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/utils/academicYear.ts",
       "source_ref": "FE:src/utils/academic.ts::currentRocYear",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-003"
       ],
