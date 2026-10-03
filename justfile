@@ -226,6 +226,10 @@ web:
     cd "{{ root }}/apps/web"
     pnpm exec vite --host 127.0.0.1 --port 5341 --strictPort
 
+# 檢查本機工具版本、Docker、port 與 env（exit code = FAIL 項數）：just doctor [--help]
+doctor *ARGS:
+    @bash "{{ root }}/scripts/doctor.sh" "$@"
+
 # 驗證 docs/tasks 的 tasks.json（參數原樣轉給 scripts/validate_tasks.py，例如 --ready INFRA）
 validate-tasks *ARGS:
     python3 "{{ root }}/scripts/validate_tasks.py" "{{ root }}" "$@"
