@@ -3,15 +3,17 @@
 - 單一私有 bucket，以 key 前綴（邏輯分區）區分用途：``<bucket>/<owner_id>/<32 hex>.<ext>``。
   DB 欄位只存前綴之後的 path，不使用使用者提供的檔名。本機為 compose 的 SeaweedFS。
 - 大小與格式不在這裡檢查：呼叫端一律先經 BACKEND-016 ``read_validated_upload`` 取得 bytes。
-- 上游錯誤轉 StorageError，訊息只含 S3 錯誤碼與 HTTP status；以 ``from None`` 切斷例外鏈，
-  因為 SignatureDoesNotMatch 等錯誤回應本文會帶 AWSAccessKeyId / StringToSign。
+- 上游錯誤一律經 ``_s3_call`` 轉 StorageError，訊息只含 S3 錯誤碼與 HTTP status；在 ``except``
+  之外才 raise，``__cause__`` 與 ``__context__`` 皆為 None——SignatureDoesNotMatch 等錯誤回應本文
+  會帶 AWSAccessKeyId / StringToSign，不可隨例外鏈進 log。
+- ``client`` 內含憑證：不得 log 或序列化。
 - ``create_signed_url`` / ``delete`` 由 BACKEND-014 / 015 實作。
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from functools import lru_cache
 from typing import TYPE_CHECKING, Final, Literal, Protocol, get_args, runtime_checkable
 from uuid import UUID, uuid4
@@ -67,6 +69,16 @@ def _error_message(operation: str, exc: Exception) -> str:
     return f"S3 {operation} 失敗：{type(exc).__name__}"
 
 
+def _s3_call[T](operation: str, call: Callable[[], T]) -> T:
+    """執行一次 S3 呼叫；上游錯誤只擷取錯誤碼與 status，離開 except 後才 raise StorageError。"""
+    message: str
+    try:
+        return call()
+    except (ClientError, BotoCoreError) as exc:
+        message = _error_message(operation, exc)
+    raise StorageError(message)
+
+
 class R2Storage:
     def __init__(
         self,
@@ -99,12 +111,12 @@ class R2Storage:
 
     def upload(self, bucket: Bucket, path: str, content: bytes, content_type: str) -> None:
         key = object_key(bucket, path)
-        try:
-            self.client.put_object(
+        _s3_call(
+            "put_object",
+            lambda: self.client.put_object(
                 Bucket=self.bucket_name, Key=key, Body=content, ContentType=content_type
-            )
-        except (ClientError, BotoCoreError) as exc:
-            raise StorageError(_error_message("put_object", exc)) from None
+            ),
+        )
 
     def create_signed_url(self, bucket: Bucket, path: str, expires_in: int = 300) -> str:
         raise NotImplementedError("BACKEND-014 實作")

@@ -14,9 +14,16 @@ from __future__ import annotations
 
 import re
 from functools import lru_cache
-from typing import Annotated, Final, Literal
+from typing import Annotated, Any, Final, Literal
 
-from pydantic import AnyHttpUrl, Field, SecretStr, field_validator, model_validator
+from pydantic import (
+    AnyHttpUrl,
+    Field,
+    SecretStr,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 _PLACEHOLDER: Final = "change-me"
@@ -28,10 +35,37 @@ _R2_BUCKET = re.compile(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]")
 _LOCAL_R2_SECRET: Final = "afterschool-local-secret"  # noqa: S105
 
 
+def _without_inputs(exc: ValidationError) -> ValidationError:
+    """保留 type / loc / ctx（錯誤訊息由此重建），input 一律換成 ***。"""
+    details: list[Any] = []
+    for err in exc.errors():
+        detail: dict[str, Any] = {"type": err["type"], "loc": err["loc"], "input": "***"}
+        if "ctx" in err:
+            detail["ctx"] = err["ctx"]
+        details.append(detail)
+    return ValidationError.from_exception_data(exc.title, details, hide_input=True)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore", frozen=True
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        frozen=True,
+        hide_input_in_errors=True,
     )
+
+    def __init__(self, **values: Any) -> None:
+        # hide_input_in_errors 只影響 str(e)；e.errors() 仍帶 input，
+        # model 層錯誤的 input 是整包設定值（含 DATABASE_URL 密碼與 APP_SECRET_KEY）。
+        # 重建成 input='***' 的錯誤，並在 except 外 raise，讓原例外不掛在 __context__ 上。
+        sanitized: ValidationError | None = None
+        try:
+            super().__init__(**values)
+        except ValidationError as exc:
+            sanitized = _without_inputs(exc)
+        if sanitized is not None:
+            raise sanitized
 
     app_env: Literal["development", "test", "production"] = "development"
     # 含 app_backend 密碼：維持 str（建 engine 的呼叫端不變），但不進 repr / str
