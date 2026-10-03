@@ -230,6 +230,10 @@ web:
 doctor *ARGS:
     @bash "{{ root }}/scripts/doctor.sh" "$@"
 
+# 安裝 git hooks（core.hooksPath 指向 scripts/hooks；pre-commit 只對 staged 檔案跑 lint）
+install-hooks:
+    git -C "{{ root }}" config core.hooksPath scripts/hooks
+
 # 驗證 docs/tasks 的 tasks.json（參數原樣轉給 scripts/validate_tasks.py，例如 --ready INFRA）
 validate-tasks *ARGS:
     python3 "{{ root }}/scripts/validate_tasks.py" "{{ root }}" "$@"

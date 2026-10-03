@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# git pre-commit hook（INFRA-019）：只對 staged 檔案跑 lint，並擋下 env 檔與不合格的 tasks.json。
+# 安裝：just install-hooks（git config core.hooksPath scripts/hooks）
+#
+# - 被刪除的檔案不處理（--diff-filter=ACMR）。
+# - .env / .env.*（.env.example、.env.*.example 除外）→ 拒絕提交，不執行後續 lint。
+# - apps/api/**/*.py、scripts/**/*.py → 依路由各一次 just lint（justfile 不允許兩者混在同一次呼叫）。
+# - apps/web/**/*.{ts,vue,js}（排除自動產生的 src/auto-imports.d.ts、src/components.d.ts）
+#   → 路徑轉成相對 apps/web 後一次 just web-lint。
+# - docs/tasks/*/tasks.json → python3 scripts/validate_tasks.py .
+# - 不自動修正、不重新 stage；lint 的對象是工作樹中的檔案。
+
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)" || exit 1
+cd "$ROOT" || exit 1
+
+api_py=()
+scripts_py=()
+web_files=()
+tasks_changed=0
+env_rejected=0
+
+while IFS= read -r -d '' path; do
+    name="${path##*/}"
+    case "$name" in
+        .env.example | .env.*.example) ;;
+        .env | .env.*)
+            echo "拒絕提交 env 檔：${path}" >&2
+            env_rejected=1
+            continue
+            ;;
+    esac
+    case "$path" in
+        apps/api/*.py) api_py+=("$path") ;;
+        scripts/*.py) scripts_py+=("$path") ;;
+        apps/web/src/auto-imports.d.ts | apps/web/src/components.d.ts) ;;
+        apps/web/*.ts | apps/web/*.vue | apps/web/*.js) web_files+=("${path#apps/web/}") ;;
+        docs/tasks/*/tasks.json) tasks_changed=1 ;;
+    esac
+done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+
+if [ "$env_rejected" -eq 1 ]; then
+    exit 1
+fi
+
+status=0
+if [ ${#api_py[@]} -gt 0 ]; then
+    just lint "${api_py[@]}" || status=1
+fi
+if [ ${#scripts_py[@]} -gt 0 ]; then
+    just lint "${scripts_py[@]}" || status=1
+fi
+if [ ${#web_files[@]} -gt 0 ]; then
+    just web-lint "${web_files[@]}" || status=1
+fi
+if [ "$tasks_changed" -eq 1 ]; then
+    python3 scripts/validate_tasks.py . || status=1
+fi
+exit "$status"
