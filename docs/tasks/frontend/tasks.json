@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 7,
-  "last_updated": "2026-10-03T12:14:13Z",
+  "version": 8,
+  "last_updated": "2026-10-03T12:14:56Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -236,11 +236,11 @@
     {
       "id": "FRONTEND-007",
       "title": "實作 shared/http/download：以 Content-Disposition 檔名儲存 blob 回應",
-      "description": "建立 `apps/web/src/shared/http/download.ts`，供月出勤報表匯出（FRONTEND-127）等 blob 下載使用。移植 ivy `FE:src/utils/download.ts::saveBlobResponse` 的 `filename*=UTF-8''` 優先、`filename=\"...\"` 次之的解析；**去掉** ivy `downloadFile` 內建 ElMessage（錯誤由呼叫端以 FRONTEND-009 呈現，shared 不得依賴 element-plus）。\n\n**介面**\n```ts\nexport function filenameFromDisposition(header: string | undefined, fallback: string): string\nexport function saveBlob(blob: Blob, filename: string): void          // createObjectURL → <a download> click → revokeObjectURL\nexport function saveBlobResponse(res: AxiosResponse<Blob>, fallback: string): string   // 回傳實際使用的檔名\n```\n- `filenameFromDisposition`：`attachment; filename*=UTF-8''%E5%87%BA%E5%8B%A4.xlsx` → `出勤.xlsx`；`attachment; filename=\"report.xlsx\"` → `report.xlsx`；header 缺或解碼失敗 → fallback。\n- `saveBlob`：建立的 `<a>` 加入 document 後 click 再移除；URL 用畢 revoke。\n\n**驗收標準**\n- 檔名解析三種情況正確。\n- saveBlob 產生的 anchor `download` 屬性為指定檔名，且結束後 document 中不殘留 anchor。",
+      "description": "建立 `apps/web/src/shared/http/download.ts`，供月出勤報表匯出（FRONTEND-127）等 blob 下載使用。移植 ivy `FE:src/utils/download.ts::saveBlobResponse` 的 `filename*=UTF-8''` 優先、`filename=\"...\"` 次之的解析；**去掉** ivy `downloadFile` 內建 ElMessage（錯誤由呼叫端以 FRONTEND-009 呈現，shared 不得依賴 element-plus）。\n\n**介面**\n```ts\nexport function filenameFromDisposition(header: string | undefined, fallback: string): string\nexport function saveBlob(blob: Blob, filename: string): void          // createObjectURL → <a download> click → revokeObjectURL\nexport function saveBlobResponse(res: AxiosResponse<Blob>, fallback: string): string   // 回傳實際使用的檔名\n```\n- `filenameFromDisposition`：`attachment; filename*=UTF-8''%E5%87%BA%E5%8B%A4.xlsx` → `出勤.xlsx`；`attachment; filename=\"report.xlsx\"` → `report.xlsx`；`filename*` 解碼失敗時改用 `filename=`；header 缺或兩者都取不到 → fallback。\n- `saveBlob`：建立的 `<a>` 加入 document 後 click 再移除；URL 用畢 revoke。\n\n**驗收標準**\n- 檔名解析三種情況正確。\n- saveBlob 產生的 anchor `download` 屬性為指定檔名，且結束後 document 中不殘留 anchor。",
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/shared/http/download.ts",
       "source_ref": "FE:src/utils/download.ts::saveBlobResponse",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012"
@@ -256,7 +256,8 @@
         "red_cases": [
           "download helpers parse content disposition：filenameFromDisposition(\"attachment; filename*=UTF-8''%E5%87%BA%E5%8B%A4%E6%9C%88%E5%A0%B1_%E5%85%A8%E9%83%A8_2026-09.xlsx\", 'x.xlsx') === '出勤月報_全部_2026-09.xlsx'；'attachment; filename=\"report.xlsx\"' → 'report.xlsx'；undefined → 'x.xlsx'；\"filename*=UTF-8''%E0%A4%A\" → 'x.xlsx'",
           "download helpers saveBlob clicks a temporary anchor：stub URL.createObjectURL 回 'blob:1'、攔截 HTMLAnchorElement.prototype.click 記錄 this.download 與 this.href → 記錄值為 '出勤.xlsx' 與 'blob:1'；呼叫後 document.querySelectorAll('a[download]').length === 0；URL.revokeObjectURL 收到 'blob:1'",
-          "download helpers saveBlobResponse returns used filename：res.headers['content-disposition'] 缺 → 回傳 fallback '出勤月報.xlsx'"
+          "download helpers saveBlobResponse returns used filename：res.headers['content-disposition'] 缺 → 回傳 fallback '出勤月報.xlsx'",
+          "download helpers prefer filename* and fall back to filename when it fails to decode：'attachment; filename=\"report.xlsx\"; filename*=UTF-8''%E5%87%BA%E5%8B%A4.xlsx' → '出勤.xlsx'；\"attachment; filename*=UTF-8''%E0%A4%A; filename=\\\"report.xlsx\\\"\" → 'report.xlsx'；'attachment' → fallback"
         ],
         "run": "just web-test src/shared/http/download.spec.ts -t \"download helpers\"",
         "notes": ""
