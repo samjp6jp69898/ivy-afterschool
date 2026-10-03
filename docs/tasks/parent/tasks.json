@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 13,
-  "last_updated": "2026-10-03T12:13:36Z",
+  "version": 14,
+  "last_updated": "2026-10-03T12:13:52Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -371,7 +371,7 @@
       "granularity_unit": "store",
       "target_path": "apps/web/src/parent/stores/snackbar.ts",
       "source_ref": "FE:src/parent/composables/useSnackbar.ts::useSnackbar",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r3",
       "depends_on": [
         "INFRA-012"
