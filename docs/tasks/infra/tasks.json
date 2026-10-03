@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 57,
-  "last_updated": "2026-10-03T13:31:04Z",
+  "version": 58,
+  "last_updated": "2026-10-03T13:32:11Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1810,7 +1810,7 @@
       "granularity_unit": "config",
       "target_path": "apps/api/.env.example",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-006",
