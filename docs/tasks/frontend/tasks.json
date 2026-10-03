@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 6,
-  "last_updated": "2026-10-03T12:13:37Z",
+  "version": 7,
+  "last_updated": "2026-10-03T12:14:13Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -206,7 +206,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/shared/http/upload.ts",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012"
