@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 46,
-  "last_updated": "2026-10-03T12:45:12Z",
+  "version": 47,
+  "last_updated": "2026-10-03T12:46:04Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10069,7 +10069,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/auto_reply.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-106"
