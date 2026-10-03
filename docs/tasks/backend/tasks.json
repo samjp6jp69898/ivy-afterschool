@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 32,
-  "last_updated": "2026-10-03T12:13:21Z",
+  "version": 33,
+  "last_updated": "2026-10-03T12:15:02Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -411,7 +411,7 @@
     {
       "id": "BACKEND-012",
       "title": "實作 app/core/rate_limit.py：in-process SlidingWindowLimiter 與 FailureLockout",
-      "description": "建立 `apps/api/app/core/rate_limit.py`。api 固定單一實例單 worker（architecture_decisions §2 部署），節流狀態放記憶體即可；介面保留日後換 DB/Redis 的接縫。移植 ivy `utils/rate_limit.py::SlidingWindowLimiter` 的滑動視窗；去掉 tenant key 與 Postgres 實作。\n\n**介面**（不持有 clock，時間由呼叫端以參數傳入，讓 dependency override 的 FakeClock 能生效）\n```python\nclass SlidingWindowLimiter:\n    def __init__(self, *, max_hits: int, window_seconds: int) -> None: ...\n    def hit(self, key: str, now: datetime) -> None: ...              # 記錄一次；超過 max_hits → raise RateLimitedError(retry_after_seconds=視窗內最早一筆到期的剩餘秒數，無條件進位)\n    def reset(self, key: str) -> None: ...\n\nclass FailureLockout:\n    def __init__(self, *, threshold: int, lockout_seconds: int) -> None: ...\n    def check(self, key: str, now: datetime) -> None: ...            # 鎖定中 → RateLimitedError(retry_after_seconds=剩餘秒數)\n    def record_failure(self, key: str, now: datetime) -> None: ...   # 連續失敗達 threshold → 進入鎖定，計數歸零\n    def clear(self, key: str) -> None: ...                           # 成功時清除\n```\n- 執行緒安全（`threading.Lock`）：sync endpoint 在 threadpool 並行執行。\n- 過期 key 在每次操作時順手清理，避免無界成長。\n- 實例由使用端以 FastAPI dependency 提供（例如 BACKEND-040 `get_auth_throttles`），測試以 dependency override 換成新實例，不需要全域 reset。\n\n**驗收標準**\n- 視窗內第 max_hits+1 次 hit 拋 RateLimitedError，retry_after 正確；視窗過後恢復。\n- FailureLockout 達門檻鎖定、鎖定期滿解除、clear 後計數歸零。\n- 不同 key 互不影響。\n- 多執行緒同時 hit 的總次數精確。",
+      "description": "建立 `apps/api/app/core/rate_limit.py`。api 固定單一實例單 worker（architecture_decisions §2 部署），節流狀態放記憶體即可；介面保留日後換 DB/Redis 的接縫。移植 ivy `utils/rate_limit.py::SlidingWindowLimiter` 的滑動視窗；去掉 tenant key 與 Postgres 實作。\n\n**介面**（不持有 clock，時間由呼叫端以參數傳入，讓 dependency override 的 FakeClock 能生效）\n```python\nclass SlidingWindowLimiter:\n    def __init__(self, *, max_hits: int, window_seconds: int) -> None: ...\n    def hit(self, key: str, now: datetime) -> None: ...              # 記錄一次；超過 max_hits → raise RateLimitedError(retry_after_seconds=視窗內最早一筆到期的剩餘秒數，無條件進位)\n    def reset(self, key: str) -> None: ...\n\nclass FailureLockout:\n    def __init__(self, *, threshold: int, lockout_seconds: int) -> None: ...\n    def check(self, key: str, now: datetime) -> None: ...            # 鎖定中 → RateLimitedError(retry_after_seconds=剩餘秒數)\n    def record_failure(self, key: str, now: datetime) -> None: ...   # 連續失敗達 threshold → 進入鎖定，計數歸零\n    def clear(self, key: str) -> None: ...                           # 成功時清除\n```\n- 執行緒安全（`threading.Lock`）：sync endpoint 在 threadpool 並行執行。\n- 被拒的 hit 不記錄（持續重試不延長封鎖）。\n- FailureLockout 的失敗計數自最後一次失敗起 `lockout_seconds` 內沒有新失敗即過期歸零（否則只失敗幾次的 key 永不過期、無界成長；對攻擊者也比永不過期嚴格：每 lockout_seconds 最多 threshold−1 次）。鎖定中呼叫 `record_failure`（已通過 check 的並行請求晚到）不延長鎖定、不累計。\n- 過期 key 清理：每次操作清理當前 key；全表清掃至多每 `window_seconds`（FailureLockout 為 `lockout_seconds`）一次，避免每次操作都 O(n)。`__len__` 回傳追蹤中的 key 數（觀測用）。\n- `now` 必須是 aware datetime（naive → ValueError）；`max_hits` / `window_seconds` / `threshold` / `lockout_seconds` 必須 >= 1（否則 ValueError）。\n- 實例由使用端以 FastAPI dependency 提供（例如 BACKEND-040 `get_auth_throttles`），測試以 dependency override 換成新實例，不需要全域 reset。\n\n**驗收標準**\n- 視窗內第 max_hits+1 次 hit 拋 RateLimitedError，retry_after 正確；視窗過後恢復。\n- FailureLockout 達門檻鎖定、鎖定期滿解除、clear 後計數歸零；失敗計數閒置 lockout_seconds 後過期；鎖定中的失敗不延長鎖定。\n- 過期 key 被清掃（`len()` 下降）。\n- 不同 key 互不影響。\n- 多執行緒同時 hit 的總次數精確。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/rate_limit.py",
       "source_ref": "BE:utils/rate_limit.py::SlidingWindowLimiter",
@@ -434,7 +434,13 @@
           "test_rate_limit_keys_isolated：key A 用滿 3 次後 key B hit → 不拋例外",
           "test_failure_lockout_threshold：FailureLockout(threshold=5, lockout_seconds=900) 對 'amy|1.2.3.4' record_failure 4 次後 check 不拋；第 5 次後 check → RateLimitedError，retry_after_seconds == 900；advance(seconds=899) 仍拋、retry_after == 1；再 advance(seconds=2) → 不拋",
           "test_failure_lockout_clear：record_failure 4 次 → clear → 再 record_failure 4 次 → check 不拋（計數已歸零）",
-          "test_rate_limit_thread_safe：max_hits=100，10 個執行緒各 hit 10 次 → 全部成功；第 101 次 → RateLimitedError"
+          "test_rate_limit_thread_safe：max_hits=100，10 個執行緒各 hit 10 次 → 全部成功；第 101 次 → RateLimitedError",
+          "test_rate_limit_window_boundary_exact：max_hits=3、window 60，hit 3 次；advance(59) → RateLimitedError、retry_after == 1；再 advance(1) → 不拋（最早一筆剛好到期）",
+          "test_rate_limit_rejected_hit_is_not_recorded：max_hits=2 用滿後 30 秒內被拒 5 次；再 advance(30) → 可再 hit 2 次",
+          "test_rate_limit_expired_keys_are_swept：100 個 key 各 hit 1 次 → len == 100；advance(60) 後 hit 新 key → len == 1",
+          "test_failure_lockout_failures_during_lock_do_not_extend：threshold=2 鎖定後 600 秒再 record_failure 2 次 → check 的 retry_after == 300；期滿後 record_failure 1 次 → check 不拋",
+          "test_failure_lockout_idle_failures_expire：threshold=5 record_failure 4 次 → advance(900) → 再 1 次 → check 不拋；之後每 899 秒失敗一次累計到 5 → 鎖定",
+          "test_failure_lockout_expired_keys_are_swept：50 個 key 各失敗 1 次 + 1 個已鎖定 key → len == 51；advance(900) 後 check 新 key → len == 0"
         ],
         "run": "just test apps/api/tests/unit/core/test_rate_limit.py -k \"test_rate_limit_ or test_failure_lockout_\"",
         "notes": ""
