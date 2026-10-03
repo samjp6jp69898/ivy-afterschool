@@ -1,5 +1,5 @@
 import { defineConfig, mergeConfig } from 'vitest/config'
-import viteConfig from './vite.config'
+import viteConfig from './vite.config.ts'
 
 export default mergeConfig(
   viteConfig,
@@ -14,6 +14,9 @@ export default mergeConfig(
       clearMocks: true,
       restoreMocks: true,
       maxWorkers: 2,
+      // INFRA-043：ElementPlusResolver 會自動 import theme-chalk CSS；element-plus 交給 vite 轉譯，
+      // 否則 Node 直接載入 .css 會拋 Unknown file extension ".css"
+      server: { deps: { inline: ['element-plus'] } },
     },
   }),
 )
