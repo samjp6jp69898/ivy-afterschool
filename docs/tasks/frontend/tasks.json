@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 53,
-  "last_updated": "2026-10-03T13:05:05Z",
+  "version": 54,
+  "last_updated": "2026-10-03T13:06:44Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1078,7 +1078,7 @@
     {
       "id": "FRONTEND-040",
       "title": "實作 components/common/FormDialog.vue：統一的表單對話框（送出 / 取消 / loading / 未儲存提醒）",
-      "description": "建立 `apps/web/src/components/common/FormDialog.vue`。移植 ivy `FE:src/components/common/FormDialog.vue` 的 size 分型、dirty 關閉確認（`confirmDiscardChanges`）、手機滿版；**去掉** requiredLegend、enterSubmit、autofocus 以外的進階選項。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-common-extra.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。一張稿逐一展示 FRONTEND-040、043 各元件的全部狀態；共用元件 039/041/042 在 `docs/mockups/component-common.html`。\n\n**props / emits**\n- `modelValue: boolean`、`title: string`、`size?: 'sm' | 'md' | 'lg'`（寬 420 / 560 / 800，預設 md）、`loading?: boolean`、`submitText?: string`（預設「儲存」）、`cancelText?: string`（預設「取消」）、`submitDisabled?: boolean`、`dirty?: boolean`、`hideFooter?: boolean`、`autofocus?: boolean`（預設 true）。\n- emits `update:modelValue`、`submit`、`closed`。\n**行為**\n- 送出按鈕：loading 時顯示 loading 且 disabled；點擊 emit `submit`（不自己關閉，由父層成功後關）。\n- 關閉（取消、X、Esc、點遮罩）：`dirty` 為 true 時先呼叫 FRONTEND-046 `confirmDiscardChanges()`，使用者取消則保持開啟；loading 中不可關閉。\n- 視窗寬 < 768 時 fullscreen。\n- 開啟後聚焦第一個可輸入欄位（autofocus）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/common/FormDialog.vue`。移植 ivy `FE:src/components/common/FormDialog.vue` 的 size 分型、dirty 關閉確認（`confirmDiscardChanges`）、手機滿版；**去掉** requiredLegend、enterSubmit、autofocus 以外的進階選項。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-common-extra.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。一張稿逐一展示 FRONTEND-040、043 各元件的全部狀態；共用元件 039/041/042 在 `docs/mockups/component-common.html`。\n\n**props / emits**\n- `modelValue: boolean`、`title: string`、`size?: 'sm' | 'md' | 'lg'`（寬 420 / 560 / 800，預設 md）、`loading?: boolean`、`submitText?: string`（預設「儲存」）、`cancelText?: string`（預設「取消」）、`submitDisabled?: boolean`、`dirty?: boolean`、`hideFooter?: boolean`、`autofocus?: boolean`（預設 true）。\n- emits `update:modelValue`、`submit`、`closed`。\n**行為**\n- 送出按鈕：loading 時顯示 loading 且 disabled；點擊 emit `submit`（不自己關閉，由父層成功後關）。\n- 關閉（取消、X、Esc、點遮罩）：`dirty` 為 true 時先呼叫 FRONTEND-046 `confirmDiscardChanges()`，使用者取消則保持開啟；loading 中不可關閉。\n- 視窗寬 < 768 時 fullscreen。\n- 開啟動畫結束（el-dialog `opened`）後聚焦 body 內第一個可輸入的 input / textarea（略過 disabled、readonly、checkbox / radio，以及 el-select、日期 / 時間 picker、cascader、autocomplete 內的 input）；沒有可輸入欄位時不搶焦點。el-dialog 的 `closed` 轉 emit `closed`。\n- 關閉以 `before-close` 處理並由元件自行 emit `update:modelValue(false)`（受控：父層把 modelValue 改為 false 才真的關閉）。\n- 外觀以設計稿 `docs/mockups/component-common-extra.html` 的 decisions 為準：footer 靠右「取消」（default）在左、送出（primary）在右；loading 中「取消」停用、右上 X 隱藏、Esc 與點遮罩無效；`submitDisabled` 只停用送出鈕；`hideFooter` 時不渲染 footer。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/FormDialog.vue",
       "source_ref": "FE:src/components/common/FormDialog.vue::default",
@@ -1100,7 +1100,12 @@
           "FormDialog emits submit and shows custom text：modelValue true、submitText '建立' → 點文字為 '建立' 的按鈕 → emitted('submit').length === 1，且 emitted('update:modelValue') 為 undefined",
           "FormDialog disables actions while loading：loading true → 送出按鈕有 is-loading 且 disabled；點取消 → emitted('update:modelValue') 為 undefined",
           "FormDialog confirms before closing dirty form：dirty true → 點取消 → document.body 出現 '尚未儲存的變更將會遺失，確定要關閉嗎？'；點訊息框的 '繼續編輯' → emitted('update:modelValue') 為 undefined；再次點取消並點 '放棄變更' → emitted('update:modelValue')[0] 深等於 [false]",
-          "FormDialog closes directly when clean：dirty false → 點取消 → emitted('update:modelValue')[0] 深等於 [false]"
+          "FormDialog closes directly when clean：dirty false → 點取消 → emitted('update:modelValue')[0] 深等於 [false]",
+          "FormDialog footer order submitDisabled and hideFooter：footer 按鈕依序 ['取消','儲存']（預設文字）；submitDisabled true → 送出 disabled、取消可用；hideFooter true → 沒有 .el-dialog__footer",
+          "FormDialog loading hides close and ignores escape：loading true → 沒有 .el-dialog__headerbtn、取消 disabled；按 Esc → 沒有 emit、沒有確認框",
+          "FormDialog closes via X Esc and overlay with dirty check：dirty false 點 X → [false]；dirty false 點遮罩 → [false]；dirty true 按 Esc → 出現確認框",
+          "FormDialog sizes and mobile fullscreen：size 'sm' / 'md' / 'lg' → dialog 寬 420px / 560px / 800px；matchMedia('(max-width: 767.98px)') 為 true → dialog class 含 is-fullscreen",
+          "FormDialog autofocus first editable field after opened：body 依序含 disabled input、el-select、可輸入的 input#name → el-dialog emit opened 後 document.activeElement 為 #name；autofocus false → 不改焦點；el-dialog emit closed → emitted('closed').length === 1"
         ],
         "run": "just web-test src/components/common/FormDialog.spec.ts -t \"FormDialog\"",
         "notes": ""
