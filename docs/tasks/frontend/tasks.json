@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 67,
-  "last_updated": "2026-10-03T14:37:13Z",
+  "version": 68,
+  "last_updated": "2026-10-03T14:40:10Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1231,7 +1231,7 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/useConfirmDelete.ts",
       "source_ref": "FE:src/composables/useConfirmDelete.ts::useConfirmDelete",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-009",
@@ -1258,9 +1258,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-fe",
+        "notes": "通過。tdd.run 8/8 全綠（7 條 red_case 各有對應測試，外加 fallback 一條）；web-lint 對 useConfirmDelete.ts / spec 乾淨；紅燈 commit 3a2658b 先於實作 b61aeea。實作者補的規格皆合理：result 為 request 回傳值（api client 回 body）、防連點範圍從確認框開啟算到請求結束且 deleting 只含請求期間、成功先 ElMessage.success 再 onSuccess(row, result)；錯誤文案走 FRONTEND-009 errorMessage（ApiError 用後端訊息、其餘用 fallback「刪除失敗」），用法與其定義一致；與 FormDialog（040）無耦合。審查者自行構造反例並以暫時副本驗證（已刪除）：同一 tick 連呼叫兩次、在點下「刪除」的同一 tick 再呼叫、失敗後 / 取消後可再次呼叫且 deleting 復原，實作皆正確（busy 在任何 await 前同步設定、finally 釋放）。突變驗證：移除 busy 防護、busy 延到確認後才設、改用 deleting 當防護、deleting 不在 finally 復原、不釋放 busy、取消回 true、錯誤不用後端訊息，全部被測試抓到。殘留（不打回）：(1) successMessage 第二參數 row 沒有測試鎖住（改成傳 undefined 測試仍綠）；(2) 成功訊息與 onSuccess 的先後順序沒有測試鎖住；(3) onSuccess / successMessage 函式若拋錯會讓 confirmDelete reject（busy 仍會釋放），規格未定義，呼叫端勿在其中拋錯。"
       }
     },
     {
