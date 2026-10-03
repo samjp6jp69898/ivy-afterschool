@@ -16,8 +16,8 @@ from tests.integration.db.conftest import (
     UNIQUE_VIOLATION,
     Conn,
     as_role,
+    assert_backend_grants,
     assert_backend_read_write,
-    assert_table_secured,
     assert_updated_at_trigger,
     connect_backend,
     connect_owner,
@@ -114,13 +114,15 @@ def test_fixture_pg_error_fails_when_no_error_raised(owner_conn: Conn) -> None:
     assert _scalar(owner_conn, "select 2") == 2
 
 
-def test_fixture_as_role_switches_and_resets(owner_conn: Conn) -> None:
-    with as_role(owner_conn, "anon"):
-        assert _scalar(owner_conn, "select current_user") == "anon"
+def test_fixture_as_role_switches_to_app_backend(owner_conn: Conn) -> None:
+    with as_role(owner_conn, "app_backend"):
+        assert _scalar(owner_conn, "select current_user") == "app_backend"
     assert _scalar(owner_conn, "select current_user") == "postgres"
 
 
-@pytest.mark.parametrize("role", ["postgres; drop", "postgres", "ANON", ""])
+@pytest.mark.parametrize(
+    "role", ["anon", "authenticated", "service_role", "postgres; drop", "postgres", ""]
+)
 def test_fixture_as_role_rejects_unknown_role(owner_conn: Conn, role: str) -> None:
     with pytest.raises(ValueError, match="as_role"), as_role(owner_conn, role):
         pass
@@ -165,21 +167,50 @@ def test_fixture_rejects_connected_non_loopback(
     assert fake.closed is True
 
 
-def test_fixture_assert_table_secured_passes_for_secured_table(owner_conn: Conn) -> None:
-    owner_conn.execute("create table public._sec(id int)")
-    owner_conn.execute("call app_private.secure_table('public._sec')")
+def _granted_table(conn: Conn, table: str, privileges: str | None = None) -> None:
+    conn.execute(f"create table {table}(id int)")
+    if privileges is None:
+        conn.execute("call app_private.grant_backend(%s)", (table,))
+    else:
+        conn.execute("call app_private.grant_backend(%s, %s)", (table, privileges))
 
-    assert_table_secured(owner_conn, "public._sec")
-    # 檢查結束後角色已還原、transaction 仍可用
-    assert _scalar(owner_conn, "select current_user") == "postgres"
+
+def test_fixture_assert_backend_grants_passes(owner_conn: Conn) -> None:
+    _granted_table(owner_conn, "public._g")
+    _granted_table(owner_conn, "public._g2", "select, insert")
+
+    assert_backend_grants(owner_conn, "public._g")
+    assert_backend_grants(owner_conn, "public._g2", frozenset({"SELECT", "INSERT"}))
 
 
-def test_fixture_assert_table_secured_fails_without_rls(owner_conn: Conn) -> None:
-    owner_conn.execute("create table public._unsec(id int)")
+def test_fixture_assert_backend_grants_fails_for_public_grant(owner_conn: Conn) -> None:
+    _granted_table(owner_conn, "public._g")
+    owner_conn.execute("grant select on public._g to public")
 
-    with pytest.raises(AssertionError, match="_unsec"):
-        assert_table_secured(owner_conn, "public._unsec")
-    assert _scalar(owner_conn, "select current_user") == "postgres"
+    with pytest.raises(AssertionError, match="PUBLIC"):
+        assert_backend_grants(owner_conn, "public._g")
+
+
+def test_fixture_assert_backend_grants_fails_for_privilege_mismatch(owner_conn: Conn) -> None:
+    _granted_table(owner_conn, "public._g2", "select, insert")
+
+    with pytest.raises(AssertionError, match="UPDATE"):
+        assert_backend_grants(owner_conn, "public._g2")
+
+
+def test_fixture_assert_backend_grants_fails_without_grant(owner_conn: Conn) -> None:
+    owner_conn.execute("create table public._ng(id int)")
+
+    with pytest.raises(AssertionError, match="_ng"):
+        assert_backend_grants(owner_conn, "public._ng")
+
+
+def test_fixture_assert_backend_grants_fails_with_rls(owner_conn: Conn) -> None:
+    _granted_table(owner_conn, "public._g")
+    owner_conn.execute("alter table public._g enable row level security")
+
+    with pytest.raises(AssertionError, match="relrowsecurity"):
+        assert_backend_grants(owner_conn, "public._g")
 
 
 def test_fixture_insert_row_returns_inserted_row(owner_conn: Conn) -> None:
@@ -237,7 +268,7 @@ def test_fixture_assert_backend_read_write_round_trip(owner_conn: Conn) -> None:
     owner_conn.execute(
         "create table public._rw(id uuid primary key default gen_random_uuid(), name text)"
     )
-    owner_conn.execute("call app_private.secure_table('public._rw')")
+    owner_conn.execute("call app_private.grant_backend('public._rw')")
 
     with as_role(owner_conn, "app_backend"):
         row = insert_row(owner_conn, "public._rw", name="x")
@@ -251,7 +282,7 @@ def test_fixture_assert_backend_read_write_fails_without_update_privilege(
     owner_conn.execute(
         "create table public._ro(id uuid primary key default gen_random_uuid(), name text)"
     )
-    owner_conn.execute("call app_private.secure_table('public._ro', 'select, insert')")
+    owner_conn.execute("call app_private.grant_backend('public._ro', 'select, insert')")
 
     with as_role(owner_conn, "app_backend"):
         row = insert_row(owner_conn, "public._ro", name="x")
