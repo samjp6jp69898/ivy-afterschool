@@ -1,0 +1,31 @@
+# CI（INFRA-022 骨架）：唯一允許全量執行 lint / test 的地方（docs/testing_conventions.md §4）。
+# 後續 job 由 INFRA-023 ~ INFRA-029、INFRA-036 逐一加入本檔；結構測試在 scripts/tests/test_ci_workflow.py。
+# 第三方 action 目前以主版號 tag 引用；正式上線前改為 commit SHA 釘選。
+name: CI
+
+on:
+  pull_request:
+    paths-ignore:
+      - "docs/mockups/**"
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/mockups/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-tasks:
+    name: 驗證 docs/tasks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 驗證 tasks.json
+        run: python3 scripts/validate_tasks.py .

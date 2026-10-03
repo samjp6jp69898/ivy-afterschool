@@ -30,6 +30,9 @@ dev = [
   "mypy>=2.4",
   # starlette.testclient 優先使用 httpx2；只有 httpx 時會發 StarletteDeprecationWarning
   "httpx2>=2.13",
+  # scripts/tests/test_ci_workflow.py 解析 GitHub Actions YAML
+  "pyyaml>=6.0",
+  "types-PyYAML>=6.0",
 ]
 
 [tool.uv]
