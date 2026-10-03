@@ -503,4 +503,4 @@ def test_settings_registry_typed_handles() -> None:
 def test_settings_registry_defaults_are_immutable() -> None:
     default = REGISTRY["pickup.window"].default
     with pytest.raises(ValidationError):
-        default.auto_expire_minutes = 1  # type: ignore[misc]
+        default.auto_expire_minutes = 1
