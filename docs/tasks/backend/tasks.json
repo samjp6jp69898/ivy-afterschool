@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 41,
-  "last_updated": "2026-10-03T12:23:07Z",
+  "version": 43,
+  "last_updated": "2026-10-03T12:24:27Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -6512,11 +6512,11 @@
     {
       "id": "BACKEND-203",
       "title": "實作 app/notifications/templates.py：事件標題 / 內文 / 深連結渲染與 LINE 文字",
-      "description": "建立 `apps/api/app/notifications/templates.py`。移植 ivy `services/notification/renderers.py` 的「事件 → 文案」集中管理；文案改為本專案。\n\n```python\n@dataclass(frozen=True)\nclass Rendered:\n    title: str        # ≤100（DB-029 CHECK）\n    body: str         # ≤1000\n    deep_link: str    # 家長端 hash 路由（例如 '/homework'）或後台路由（例如 '/pickup'）\n\ndef render(event: Event, payload: Mapping[str, Any]) -> Rendered: ...\ndef line_text(rendered: Rendered, *, public_base_url: str) -> str: ...   # f\"{title}\\n{body}\\n{public_base_url}/parent/#{deep_link}\"，總長截 5000\nDEEP_LINKS: Mapping[Event, str]   # 事件 → deep_link（與下方文案表一致），BACKEND-210 的 NotificationOut 使用\n```\n- 缺 `EVENTS[event].required_payload` 任一 key → ValueError（列出缺少的 key）。\n- 文案（固定字串，測試逐字比對）：\n  - attendance.checked_in：title「{student_name} 已到班」、body「{student_name} 於 {time} 到達安親班。」、deep_link `/attendance`\n  - attendance.checked_out：「{student_name} 已離班」／「{student_name} 於 {time} 離開安親班。」、`/attendance`\n  - leave.created：「{student_name} 請假」／「{student_name} {start_date}～{end_date} {leave_type_label}。」、`/leaves`\n  - leave.cancelled：「{student_name} 取消請假」／「{student_name} {start_date}～{end_date} 的請假已取消。」、`/leaves`\n  - homework.eta_updated：「{student_name} 預計 {ready_eta} 可接送」／「預計 {ready_eta} 可接送。」+（有 note 時換行接 note）、`/homework`\n  - homework.done：「{student_name} 作業已完成」／「作業已完成，可以來接送了。」、`/homework`\n  - pickup.requested：「{student_name} 家長要來接」／ 有 expected_arrival_at「家長預計 {expected_arrival_at} 抵達。」否則「家長已發起接送。」、`/pickup`\n  - pickup.replied：「{student_name} 接送回覆」／「{reply_message}」、`/pickup`\n  - pickup.arrived：「{student_name} 家長已抵達」／「家長已到達門口。」、`/pickup`\n  - pickup.completed：「{student_name} 已接走」／「{student_name} 於 {time} 由 {picked_up_by} 接走。」、`/pickup`\n  - exam.published：「{exam_name} 成績已公布」／「{student_name} 的 {exam_name} 成績已公布。」、`/exams`\n  - pickup.cancelled：「{student_name} 接送已取消」／「{cancelled_by_label}已取消今天的接送請求。」+（有 reason 時換行接「原因：{reason}」）、`/pickup`\n  - binding.completed：「綁定完成」／「已成功綁定 {student_name}，之後會在這裡收到通知。」、`/`\n- title 超過 100 字截斷並以「…」結尾；body 超過 1000 同理。\n\n**驗收標準**\n- 13 個事件文案逐字正確；可選欄位分支正確。\n- 缺必填 payload → ValueError。\n- line_text 組出正確連結；超長截斷。",
+      "description": "建立 `apps/api/app/notifications/templates.py`。移植 ivy `services/notification/renderers.py` 的「事件 → 文案」集中管理；文案改為本專案。\n\n```python\n@dataclass(frozen=True)\nclass Rendered:\n    title: str        # ≤100（DB-029 CHECK）\n    body: str         # ≤1000\n    deep_link: str    # 家長端 hash 路由（例如 '/homework'）或後台路由（例如 '/pickup'）\n\ndef render(event: Event, payload: Mapping[str, Any]) -> Rendered: ...\ndef line_text(rendered: Rendered, *, public_base_url: str) -> str: ...   # f\"{title}\\n{body}\\n{public_base_url}/parent/#{deep_link}\"，總長截 5000\nDEEP_LINKS: Mapping[Event, str]   # 事件 → deep_link（與下方文案表一致），BACKEND-210 的 NotificationOut 使用\n```\n- 缺 `EVENTS[event].required_payload` 任一 key → ValueError（列出缺少的 key）。\n- 文案（固定字串，測試逐字比對）：\n  - attendance.checked_in：title「{student_name} 已到班」、body「{student_name} 於 {time} 到達安親班。」、deep_link `/attendance`\n  - attendance.checked_out：「{student_name} 已離班」／「{student_name} 於 {time} 離開安親班。」、`/attendance`\n  - leave.created：「{student_name} 請假」／「{student_name} {start_date}～{end_date} {leave_type_label}。」、`/leaves`\n  - leave.cancelled：「{student_name} 取消請假」／「{student_name} {start_date}～{end_date} 的請假已取消。」、`/leaves`\n  - homework.eta_updated：「{student_name} 預計 {ready_eta} 可接送」／「預計 {ready_eta} 可接送。」+（有 note 時換行接 note）、`/homework`\n  - homework.done：「{student_name} 作業已完成」／「作業已完成，可以來接送了。」、`/homework`\n  - pickup.requested：「{student_name} 家長要來接」／ 有 expected_arrival_at「家長預計 {expected_arrival_at} 抵達。」否則「家長已發起接送。」、`/pickup`\n  - pickup.replied：「{student_name} 接送回覆」／「{reply_message}」、`/pickup`\n  - pickup.arrived：「{student_name} 家長已抵達」／「家長已到達門口。」、`/pickup`\n  - pickup.completed：「{student_name} 已接走」／「{student_name} 於 {time} 由 {picked_up_by} 接走。」、`/pickup`\n  - exam.published：「{exam_name} 成績已公布」／「{student_name} 的 {exam_name} 成績已公布。」、`/exams`\n  - pickup.cancelled：「{student_name} 接送已取消」／「{cancelled_by_label}已取消今天的接送請求。」+（有 reason 時換行接「原因：{reason}」）、`/pickup`\n  - binding.completed：「綁定完成」／「已成功綁定 {student_name}，之後會在這裡收到通知。」、`/`\n- title 超過 100 字截斷並以「…」結尾；body 超過 1000 同理。\n- 可選欄位（note、expected_arrival_at、reason）為 None 或空白字串時視同沒有；payload 值一律以 str() 代入（例如 date）。\n- line_text 超過 5000 時先截 title + body（以「…」結尾），連結保持完整。\n\n**驗收標準**\n- 13 個事件文案逐字正確；可選欄位分支正確。\n- 缺必填 payload → ValueError。\n- line_text 組出正確連結；超長截斷。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/templates.py",
       "source_ref": "BE:services/notification/renderers.py::render",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-201"
@@ -6537,7 +6537,9 @@
           "test_templates_line_text：line_text(Rendered('t','b','/homework'), public_base_url='https://as.example.com') == 't\\nb\\nhttps://as.example.com/parent/#/homework'",
           "test_templates_truncate_title：student_name 為 120 字 → len(title) == 100 且以 '…' 結尾",
           "test_templates_all_events_render：以每個事件的 required_payload 填假值 → 13 個事件都能 render 且 title 非空",
-          "test_templates_pickup_cancelled：render(Event.PICKUP_CANCELLED, {'student_id':'x','student_name':'王小明','request_id':'r','cancelled_by_label':'家長','reason':'改由爺爺接'}) == Rendered('王小明 接送已取消', '家長已取消今天的接送請求。\\n原因：改由爺爺接', '/pickup')；無 reason → body == '家長已取消今天的接送請求。'"
+          "test_templates_pickup_cancelled：render(Event.PICKUP_CANCELLED, {'student_id':'x','student_name':'王小明','request_id':'r','cancelled_by_label':'家長','reason':'改由爺爺接'}) == Rendered('王小明 接送已取消', '家長已取消今天的接送請求。\\n原因：改由爺爺接', '/pickup')；無 reason → body == '家長已取消今天的接送請求。'",
+          "test_templates_exact_copy：13 個事件各以一組 payload render → 與文案表逐字相同的 Rendered",
+          "test_templates_line_text_truncates_body_keeps_link：Rendered('t', 'b'*6000, '/homework') → len == 5000 且以 '…\\nhttps://as.example.com/parent/#/homework' 結尾"
         ],
         "run": "just test apps/api/tests/unit/notifications/test_templates.py -k \"test_templates_\"",
         "notes": ""
