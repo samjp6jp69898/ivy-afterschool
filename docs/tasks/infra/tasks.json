@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 91,
-  "last_updated": "2026-10-03T15:28:44Z",
+  "version": 92,
+  "last_updated": "2026-10-03T15:29:24Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -312,7 +312,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/conftest.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-044",
@@ -344,9 +344,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-infra",
+        "notes": "重做通過。紅燈 9eb64ef 先於 cafb3b5：紅燈快照實跑 db_down_exits_once、refuses_owner_role 2 failed / 9 passed（訊息仍為 Supabase / 「繞過 RLS」）。cafb3b5 只改 conftest 的 docstring、DB 未啟動訊息（「本機 DB 未啟動或 app_backend 無法登入」）、owner 角色訊息（「禁止以 owner 角色連線」）與 seed 表註解；loopback 前後檢查、app_backend / superuser / BYPASSRLS 檢查、不降級、savepoint rollback、committing_db_session 的 marker 與 seed 表保護行為皆未變。`just test-int apps/api/tests/integration/infra/test_db_fixtures.py -k db_fixtures`（flock db lock，INFRA-046 db-reset 後）11 passed、--collect-only 全選到；跑完無殘留 infra_probe schema；conftest 已無 Supabase / seed.sql / RLS 字樣；lint / typecheck 乾淨。殘留（不擋）：rolbypassrls 檢查保留（不使用 RLS 後仍是有效的最小權限防線）。"
       }
     },
     {
