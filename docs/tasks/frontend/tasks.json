@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 65,
-  "last_updated": "2026-10-03T14:35:37Z",
+  "version": 66,
+  "last_updated": "2026-10-03T14:36:26Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1227,7 +1227,7 @@
     {
       "id": "FRONTEND-044",
       "title": "實作 composables/useConfirmDelete.ts：刪除 / 封存前確認並處理結果訊息",
-      "description": "建立 `apps/web/src/composables/useConfirmDelete.ts`。移植 ivy `FE:src/composables/useConfirmDelete.ts::useConfirmDelete` 的確認框文案與 deleting 狀態；改為注入型別化的 request 函式（不再用 endpoint 字串拼 URL）。\n\n**介面**\n```ts\nexport function useConfirmDelete<Row>(opts: {\n  request: (row: Row) => Promise<unknown>\n  confirmMessage: (row: Row) => string          // 例如 row => `確定要刪除 ${row.name} 嗎？`\n  confirmTitle?: string                          // 預設「確認刪除」\n  confirmButtonText?: string                     // 預設「刪除」\n  successMessage?: string | ((result: unknown, row: Row) => string)   // 預設「已刪除」\n  onSuccess?: (row: Row, result: unknown) => void\n}): { confirmDelete: (row: Row) => Promise<boolean>; deleting: Ref<boolean> }\n```\n- 使用者取消 → 回 false，不呼叫 request。\n- 失敗 → `ElMessage.error(errorMessage(err, '刪除失敗'))`（FRONTEND-009），回 false。\n- 進行中再次呼叫 → 直接回 false（防連點）。\n\n**驗收標準**：每一條對應下列 red_case（以真實 api client + axios-mock-adapter，點擊 ElMessageBox 按鈕）。",
+      "description": "建立 `apps/web/src/composables/useConfirmDelete.ts`。移植 ivy `FE:src/composables/useConfirmDelete.ts::useConfirmDelete` 的確認框文案與 deleting 狀態；改為注入型別化的 request 函式（不再用 endpoint 字串拼 URL）。\n\n**介面**\n```ts\nexport function useConfirmDelete<Row>(opts: {\n  request: (row: Row) => Promise<unknown>\n  confirmMessage: (row: Row) => string          // 例如 row => `確定要刪除 ${row.name} 嗎？`\n  confirmTitle?: string                          // 預設「確認刪除」\n  confirmButtonText?: string                     // 預設「刪除」\n  successMessage?: string | ((result: unknown, row: Row) => string)   // 預設「已刪除」\n  onSuccess?: (row: Row, result: unknown) => void\n}): { confirmDelete: (row: Row) => Promise<boolean>; deleting: Ref<boolean> }\n```\n- 使用者取消 → 回 false，不呼叫 request。\n- 失敗 → `ElMessage.error(errorMessage(err, '刪除失敗'))`（FRONTEND-009），回 false。\n- 進行中再次呼叫 → 直接回 false（防連點）：「進行中」從確認框開啟算到請求結束（避免連點開出兩個確認框）；`deleting` 只在 request 執行期間為 true。\n- 確認框：`ElMessageBox.confirm(confirmMessage(row), confirmTitle, { type: 'warning', confirmButtonText, cancelButtonText: '取消' })`。\n- 成功：`ElMessage.success(successMessage)` 後呼叫 `onSuccess(row, result)`，回 true。`result` 為 `request` 的回傳值（api client 應回傳 response body，例如 `row => adminHttp.delete(...).then(r => r.data)`；`successMessage` 函式依 body 欄位決定文案時必須如此）。\n\n**驗收標準**：每一條對應下列 red_case（以真實 api client + axios-mock-adapter，點擊 ElMessageBox 按鈕）。",
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/useConfirmDelete.ts",
       "source_ref": "FE:src/composables/useConfirmDelete.ts::useConfirmDelete",
@@ -1249,7 +1249,10 @@
           "useConfirmDelete deletes after confirmation：request = row => adminHttp.delete(`/admin/subjects/${row.id}`)、mock DELETE /admin/subjects/s1 回 {deleted:true,deactivated:false} → confirmDelete({id:'s1',name:'自然'}) 時 body 出現 '確定要刪除 自然 嗎？'，點 '刪除' → 結果 true、mock.history.delete.length === 1、body 含 '已刪除'",
           "useConfirmDelete does nothing when cancelled：點 '取消' → 結果 false、mock.history.delete.length === 0",
           "useConfirmDelete shows backend error：DELETE 回 409 {error:{code:'role_in_use',message:'仍有 3 位員工使用此角色'}} → 結果 false、body 含 '仍有 3 位員工使用此角色'、deleting.value === false",
-          "useConfirmDelete supports dynamic success message：successMessage = r => r.deactivated ? '已停用（仍被引用）' : '已刪除'，DELETE 回 {deleted:false,deactivated:true} → body 含 '已停用（仍被引用）'"
+          "useConfirmDelete supports dynamic success message：request = row => adminHttp.delete(`/admin/subjects/${row.id}`).then(r => r.data)、successMessage = r => r.deactivated ? '已停用（仍被引用）' : '已刪除'，DELETE 回 {deleted:false,deactivated:true} → body 含 '已停用（仍被引用）'",
+          "useConfirmDelete calls onSuccess with row and result：request 回 response body {deleted:true,deactivated:false} → onSuccess 收到 (row, {deleted:true,deactivated:false}) 各一次",
+          "useConfirmDelete ignores repeated calls while busy：確認框開著時再呼叫 confirmDelete → 立即回 false 且 body 只有一個確認框；確認後 DELETE 回應前 deleting.value === true、再呼叫回 false；全部結束後 mock.history.delete.length === 1、deleting.value === false",
+          "useConfirmDelete uses custom title and button text：confirmTitle '確認封存'、confirmButtonText '封存' → 確認框標題 '確認封存'、按鈕含 '封存' 與 '取消'"
         ],
         "run": "just web-test src/composables/useConfirmDelete.spec.ts -t \"useConfirmDelete\"",
         "notes": ""
