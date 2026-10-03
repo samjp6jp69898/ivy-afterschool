@@ -1,0 +1,13 @@
+# build context 精簡：只需要 pyproject.toml、uv.lock、app/、alembic.ini、alembic/
+.venv
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.mypy_cache
+tests/
+# 映像不需要任何 env 範本，全部排除
+.env
+.env.*
+*.md
