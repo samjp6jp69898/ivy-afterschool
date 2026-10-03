@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 39,
-  "last_updated": "2026-10-03T12:57:44Z",
+  "version": 40,
+  "last_updated": "2026-10-03T12:58:25Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -2072,7 +2072,7 @@
     {
       "id": "FRONTEND-066",
       "title": "實作 components/settings/TempPasswordDialog.vue：臨時密碼只顯示一次（複製、關閉前確認）",
-      "description": "建立 `apps/web/src/components/settings/TempPasswordDialog.vue`，建立帳號、重設密碼、重新啟用後顯示後端產生的臨時密碼。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-settings.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。元件外觀、狀態與互動以此元件稿為準；所屬頁面稿 `docs/mockups/page-settings-accounts.html` 只畫頁面版面並引用本元件，不另訂元件規格。\n\n**props / emits**：`modelValue: boolean`、`username: string`、`displayName: string`、`tempPassword: string`；emits `update:modelValue`。\n**行為**\n- 大字等寬顯示臨時密碼 +「複製」（`navigator.clipboard.writeText`，成功「已複製」，失敗「無法複製，請手動抄寫」）。\n- 說明：「此密碼只會顯示這一次。{displayName}（帳號 {username}）首次登入後必須修改密碼。」\n- 關閉（按鈕、X、Esc）前若尚未按過「複製」→ 確認框「關閉後將無法再次查看此密碼，確定已記下了嗎？」；已複製則直接關閉。`close-on-click-modal` 為 false。\n- 關閉後元件內部不保留密碼字串（父層應同時清空 prop）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/settings/TempPasswordDialog.vue`，建立帳號、重設密碼、重新啟用後顯示後端產生的臨時密碼。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-settings.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。元件外觀、狀態與互動以此元件稿為準；所屬頁面稿 `docs/mockups/page-settings-accounts.html` 只畫頁面版面並引用本元件，不另訂元件規格。\n\n**props / emits**：`modelValue: boolean`、`username: string`、`displayName: string`、`tempPassword: string`；emits `update:modelValue`。\n**行為**\n- 大字等寬顯示臨時密碼 +「複製」（`navigator.clipboard.writeText`，成功「已複製」，失敗「無法複製，請手動抄寫」）。\n- 說明：「此密碼只會顯示這一次。{displayName}（帳號 {username}）首次登入後必須修改密碼。」\n- 關閉（按鈕、X、Esc）前若尚未按過「複製」→ 確認框「關閉後將無法再次查看此密碼，確定已記下了嗎？」；已複製則直接關閉。`close-on-click-modal` 為 false。\n- 關閉後元件內部不保留密碼字串（父層應同時清空 prop）：對話框內容在關閉後銷毀（`destroy-on-close`），重新開啟時「已複製」狀態重置。\n- 外觀與文案以設計稿 `docs/mockups/component-settings.html` 的 decisions 為準：標題「臨時密碼」、寬 440px；複製成功按鈕變「已複製」並顯示「已複製到剪貼簿，請交給本人。」；footer 只有 primary「我已記下」；確認框按鈕「確定關閉」/「取消」。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/TempPasswordDialog.vue",
       "source_ref": null,
@@ -2093,7 +2093,10 @@
           "TempPasswordDialog shows password and one-time notice：props {tempPassword:'Tmp-8f3K2q9x',username:'tutor02',displayName:'陳老師'} → 文字含 'Tmp-8f3K2q9x' 與 '此密碼只會顯示這一次。陳老師（帳號 tutor02）首次登入後必須修改密碼。'",
           "TempPasswordDialog copies to clipboard：stub navigator.clipboard.writeText resolve → 點 '複製' → writeText 收到 'Tmp-8f3K2q9x'，body 含 '已複製'；之後點 '我已記下' → emitted('update:modelValue')[0] 深等於 [false] 且無確認框",
           "TempPasswordDialog confirms before closing without copy：未複製時點 '我已記下' → body 含 '關閉後將無法再次查看此密碼'；點 '取消' → emitted('update:modelValue') 為 undefined",
-          "TempPasswordDialog handles clipboard failure：writeText reject → body 含 '無法複製，請手動抄寫'"
+          "TempPasswordDialog handles clipboard failure：writeText reject → body 含 '無法複製，請手動抄寫'",
+          "TempPasswordDialog confirms on X and Esc too：未複製時點標題列 X → body 含 '關閉後將無法再次查看此密碼'；點 '確定關閉' → emitted('update:modelValue')[0] 深等於 [false]；另一實例按 Esc 同樣先跳確認框",
+          "TempPasswordDialog ignores overlay click：點遮罩 → 沒有 emit、沒有確認框",
+          "TempPasswordDialog shows copy success text and resets on reopen：複製成功 → 按鈕文字 '已複製'、body 含 '已複製到剪貼簿，請交給本人。'；setProps({modelValue:false}) 後 body 不含 'Tmp-8f3K2q9x'；再 setProps({modelValue:true, tempPassword:'Tmp-Q7m2Lp4d'}) → 按鈕文字回到 '複製'、不含 '已複製到剪貼簿'"
         ],
         "run": "just web-test src/components/settings/TempPasswordDialog.spec.ts -t \"TempPasswordDialog\"",
         "notes": ""
