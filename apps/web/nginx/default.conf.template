@@ -1,0 +1,103 @@
+# web 服務的 nginx 設定（INFRA-033）。官方映像啟動時以 envsubst 渲染到 /etc/nginx/conf.d/default.conf。
+#
+# envsubst 只替換「實際存在於環境變數」的名稱：$host / $uri 等 nginx 變數原樣保留；
+# ${PORT}、${BACKEND_URL}、${NGINX_LOCAL_RESOLVERS} 必須有值（Dockerfile 給預設值，
+# NGINX_LOCAL_RESOLVERS 由 NGINX_ENTRYPOINT_LOCAL_RESOLVERS=true 時官方 15-local-resolvers.envsh 產生）。
+#
+# 前後端同源：/api 與 /api/ws 由本服務經 Railway private network 反代到 api（api 不開 public domain），
+# httpOnly cookie 因此是 first-party，避免 LINE in-app webview 擋第三方 cookie。
+
+server {
+    listen ${PORT};
+    listen [::]:${PORT};
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # 反代後對外埠與 scheme 不同，301 一律吐相對路徑
+    absolute_redirect off;
+    server_tokens off;
+
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # 真實 client IP：real-ip.conf 由 /docker-entrypoint.d/40-real-ip.sh 依 TRUSTED_EDGE_CIDRS 產生
+    # （只信任 Railway edge 的來源範圍）。來源不在信任範圍時 $remote_addr 維持實際連線位址，
+    # 用戶端自填的 X-Forwarded-For 不被採信。
+    include /etc/nginx/real-ip.conf;
+    real_ip_header X-Forwarded-For;
+    real_ip_recursive on;
+
+    # proxy_pass 用變數形式：nginx 依 DNS TTL 重新解析 api 的 private DNS（api 重新部署換 IP 後自動收斂）
+    resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv6=on;
+    set $backend_upstream ${BACKEND_URL};
+
+    # X-Forwarded-For 一律以 $remote_addr（real_ip 處理後的真實 client IP）覆寫，
+    # 不用 append 既有標頭的寫法（會把用戶端自填值傳給 api）。
+    # Railway edge 已終止 TLS，X-Forwarded-Proto 沿用 edge 傳入的值。
+    location /api/ws/ {
+        proxy_pass $backend_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    location /api/ {
+        proxy_pass $backend_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        # Excel 匯入、照片、請假附件；細部上限由後端驗證
+        client_max_body_size 20m;
+        proxy_read_timeout 60s;
+    }
+
+    # Railway healthcheck
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok";
+    }
+
+    # source map 不對外提供
+    location ~ \.map$ {
+        return 404;
+    }
+
+    location = /parent {
+        return 301 /parent/;
+    }
+
+    location /parent/ {
+        include /etc/nginx/security-headers.conf;
+        add_header Cache-Control "no-cache" always;
+        try_files $uri /parent/index.html;
+    }
+
+    location /assets/ {
+        include /etc/nginx/security-headers.conf;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        try_files $uri =404;
+    }
+
+    location = /index.html {
+        include /etc/nginx/security-headers.conf;
+        add_header Cache-Control "no-cache" always;
+    }
+
+    location / {
+        include /etc/nginx/security-headers.conf;
+        try_files $uri /index.html;
+    }
+}
