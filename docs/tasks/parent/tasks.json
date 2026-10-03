@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 9,
-  "last_updated": "2026-10-02T09:00:04Z",
+  "version": 10,
+  "last_updated": "2026-10-03T12:10:10Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -38,8 +38,8 @@
       "granularity_unit": "config",
       "target_path": "apps/web/public/parent.webmanifest",
       "source_ref": "FE:public/parent.webmanifest::start_url",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r3",
       "depends_on": [
         "INFRA-005",
         "PARENT-001"
@@ -67,8 +67,8 @@
       "granularity_unit": "method",
       "target_path": "apps/web/src/parent/utils/safeRedirect.ts",
       "source_ref": "FE:src/parent/utils/safeRedirect.ts::isSafeRedirectPath",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r3",
       "depends_on": [
         "INFRA-012"
       ],
@@ -370,8 +370,8 @@
       "granularity_unit": "store",
       "target_path": "apps/web/src/parent/stores/snackbar.ts",
       "source_ref": "FE:src/parent/composables/useSnackbar.ts::useSnackbar",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r3",
       "depends_on": [
         "INFRA-012"
       ],

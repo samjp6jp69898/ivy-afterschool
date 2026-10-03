@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 4,
-  "last_updated": "2026-10-02T07:33:27Z",
+  "version": 5,
+  "last_updated": "2026-10-03T12:10:10Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -54,8 +54,8 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/shared/types/api.ts",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-005",
         "INFRA-012"
@@ -206,8 +206,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/shared/http/upload.ts",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012"
       ],
@@ -240,8 +240,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/shared/http/download.ts",
       "source_ref": "FE:src/utils/download.ts::saveBlobResponse",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012"
       ],
@@ -274,8 +274,8 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/constants/permissions.ts",
       "source_ref": "FE:src/constants/permissions.ts::PERMISSION_NAMES",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012",
         "BACKEND-070"
@@ -1282,8 +1282,8 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/useFormDirty.ts",
       "source_ref": "FE:src/composables/useFormDirty.ts::useFormDirty",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012"
       ],
@@ -4214,8 +4214,8 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/useSwipeReveal.ts",
       "source_ref": "FE:src/composables/useSwipeReveal.ts::useSwipeReveal",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012"
       ],
