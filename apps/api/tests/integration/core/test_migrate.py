@@ -9,6 +9,7 @@ advisory lock 串行化的 alembic upgrade 與 app_backend 密碼同步。
 - 連線一律經 tests.support.db_urls 的 owner_url() 與 loopback 守衛。
 """
 
+import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -191,6 +192,43 @@ def test_migrate_load_urls_accepts_sqlalchemy_scheme_and_default_port() -> None:
             },
             "DATABASE_URL",
         ),
+        # review-r3-infra 打回 1：hostaddr / service 也決定實際連線位址
+        (
+            {
+                "MIGRATION_DATABASE_URL": "postgresql://postgres:pw@db.internal:5432/railway?hostaddr=10.0.0.1",
+                "DATABASE_URL": "postgresql://app_backend:secret1@db.internal:5432/railway?hostaddr=10.0.0.2",
+            },
+            "hostaddr",
+        ),
+        (
+            {
+                "MIGRATION_DATABASE_URL": "postgresql://postgres:pw@db.internal:5432/railway",
+                "DATABASE_URL": "postgresql://app_backend:secret1@db.internal:5432/railway?hostaddr=10.9.9.9",
+            },
+            "hostaddr",
+        ),
+        (
+            {
+                "MIGRATION_DATABASE_URL": "postgresql://postgres:pw@/railway?service=prod",
+                "DATABASE_URL": "postgresql://app_backend:secret1@/railway?service=staging",
+            },
+            "service",
+        ),
+        (
+            {
+                "MIGRATION_DATABASE_URL": "postgresql://postgres:pw@db.internal:5432/railway?service=x",
+                "DATABASE_URL": "postgresql://app_backend:secret1@db.internal:5432/railway",
+            },
+            "service",
+        ),
+        (
+            {
+                "MIGRATION_DATABASE_URL": _OWNER_URL,
+                "DATABASE_URL": _BACKEND_URL,
+                "PGSERVICE": "prod",
+            },
+            "PGSERVICE",
+        ),
     ],
 )
 def test_migrate_load_urls_rejects(environ: dict[str, str], fragment: str) -> None:
@@ -214,6 +252,103 @@ def test_migrate_load_urls_password_in_query_is_masked() -> None:
 
     assert "secret1" not in str(exc_info.value)
     assert "password=pw" not in str(exc_info.value)
+
+
+_RESERVED_PASSWORDS = ["Ab3/xYz+Q9=", "pa?ss", "pa#ss", "pa@ss", "a[b]c"]
+
+
+def _leaks(text: str, password: str) -> bool:
+    """完整密碼或其 4 字元以上的片段（以保留字元切開後）出現在輸出中。"""
+    pieces = [password] + [p for p in re.split(r"[/?#@\[\]]", password) if len(p) >= 4]
+    return any(piece in text for piece in pieces)
+
+
+@pytest.mark.parametrize("password", _RESERVED_PASSWORDS)
+@pytest.mark.parametrize("which", ["DATABASE_URL", "MIGRATION_DATABASE_URL"])
+def test_migrate_load_urls_reserved_chars_in_password(password: str, which: str) -> None:
+    environ = {"MIGRATION_DATABASE_URL": _OWNER_URL, "DATABASE_URL": _BACKEND_URL}
+    user = "app_backend" if which == "DATABASE_URL" else "postgres"
+    environ[which] = f"postgresql://{user}:{password}@db.internal:5432/railway"
+
+    with pytest.raises(MigrationConfigError) as exc_info:
+        load_migration_urls(environ)
+
+    message = str(exc_info.value)
+    assert which in message
+    assert "%2F" in message  # 提示以百分比編碼
+    assert not _leaks(message, password)
+    assert "secret1" not in message
+    assert "pw@" not in message
+
+
+def test_migrate_load_urls_accepts_percent_encoded_password() -> None:
+    urls = load_migration_urls(
+        {
+            "MIGRATION_DATABASE_URL": "postgresql://postgres:pw@db.internal:5432/railway",
+            "DATABASE_URL": "postgresql://app_backend:Ab3%2FxYz%2BQ9%3D@db.internal:5432/railway",
+        }
+    )
+
+    assert urls.backend_url.endswith("@db.internal:5432/railway")
+
+
+@pytest.mark.parametrize(
+    ("backend", "fragment"),
+    [
+        ("postgresql://app_backend:{pw}@other.internal:5432/railway", "host"),
+        ("postgresql://app_backend:{pw}@db.internal:6543/railway", "port"),
+        ("postgresql://app_backend:{pw}@db.internal:5432/other", "database"),
+        ("postgresql://app_backend:{pw}@db.internal:5432/railway?hostaddr=10.0.0.9", "hostaddr"),
+        ("postgresql://someone:{pw}@db.internal:5432/railway", "app_backend"),
+    ],
+)
+def test_migrate_load_urls_errors_never_echo_password(backend: str, fragment: str) -> None:
+    encoded = "Ab3%2FxY%3Fz%23Q%409%3D"  # 解碼後為 Ab3/xY?z#Q@9=
+    decoded = "Ab3/xY?z#Q@9="
+
+    with pytest.raises(MigrationConfigError) as exc_info:
+        load_migration_urls(
+            {
+                "MIGRATION_DATABASE_URL": f"postgresql://postgres:{encoded}@db.internal:5432/railway",
+                "DATABASE_URL": backend.format(pw=encoded),
+            }
+        )
+
+    message = str(exc_info.value)
+    assert fragment in message
+    assert decoded not in message
+    assert encoded not in message
+    assert "Ab3" not in message
+
+
+@pytest.mark.parametrize(
+    "backend_url",
+    [
+        "postgresql://app_backend:Ab3/xYz+Q9=@db.internal:5432/railway",
+        "postgresql://app_backend:pa@ss@db.internal:5432/railway",
+        "postgresql://app_backend:pa?ss@db.internal:5432/railway",
+    ],
+)
+def test_cli_migrate_reserved_password_not_printed(
+    backend_url: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv(
+        "MIGRATION_DATABASE_URL", "postgresql://postgres:pw@db.internal:5432/railway"
+    )
+    monkeypatch.setenv("DATABASE_URL", backend_url)
+    password = backend_url.split("app_backend:", 1)[1].rsplit("@", 1)[0]
+
+    def must_not_connect(*args: Any, **kwargs: Any) -> str:
+        # 設定檢查必須在連線前擋下；不可真的去解析 db.internal（libpq 的 DNS 查詢攔不住）
+        raise AssertionError("不應執行到 run_migrations")
+
+    monkeypatch.setattr(cli, "run_migrations", must_not_connect)
+
+    assert cli.main(["migrate"]) == 2
+
+    out = capsys.readouterr()
+    assert not _leaks(out.out + out.err, password)
+    assert "DATABASE_URL" in out.err
 
 
 def test_migrate_lock_key_formula() -> None:
