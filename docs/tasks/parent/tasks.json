@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 15,
-  "last_updated": "2026-10-03T12:14:25Z",
+  "version": 16,
+  "last_updated": "2026-10-03T12:17:42Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -38,7 +38,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/public/parent.webmanifest",
       "source_ref": "FE:public/parent.webmanifest::start_url",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r3",
       "depends_on": [
         "INFRA-005",
@@ -55,9 +55,9 @@
         "notes": "驗收指令：\ncd apps/web && python3 -c \"import json,os;m=json.load(open('public/parent.webmanifest'));assert m['start_url']=='/parent/' and m['scope']=='/parent/';assert len(m['icons'])==3;[os.stat('public'+i['src']) for i in m['icons']];print('ok')\" && pnpm exec vite build && test -f dist/parent.webmanifest && grep -q 'rel=\"manifest\"' dist/parent/index.html && grep -q 'viewport-fit=cover' dist/parent/index.html"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。驗收指令實跑：manifest 為合法 JSON、start_url / scope 皆 /parent/、icons 三筆且檔案存在；pnpm exec vite build（改用 scratchpad 暫存 outDir，未動到 apps/web/dist）產出 parent.webmanifest 與三張圖示，dist/parent/index.html 含 rel=\"manifest\" 與 viewport-fit=cover。manifest 欄位與 description 逐項一致（name、short_name、display standalone、orientation portrait、background_color #ffffff、theme_color #006d3d 與 m3-tokens.css 淺色 --m3-primary 同值、maskable 那張 purpose maskable），未帶入 TB_* token、vite-plugin-pwa 或 service worker；index.html 的 lang、title、viewport、theme-color、apple-touch-icon、apple-mobile-web-app-capable 皆符合。三張 PNG 尺寸 192 / 512 / 512 正確。INFRA-033 nginx 規格的 CSP default-src 'self' 涵蓋 manifest-src，/parent.webmanifest 由 location / 的 try_files 提供，無衝突。殘留：maskable 與 512 一般圖示目前是同一張純色佔位圖，品牌圖替換時 maskable 需另做安全區留白。"
       }
     },
     {
@@ -67,7 +67,7 @@
       "granularity_unit": "method",
       "target_path": "apps/web/src/parent/utils/safeRedirect.ts",
       "source_ref": "FE:src/parent/utils/safeRedirect.ts::isSafeRedirectPath",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r3",
       "depends_on": [
         "INFRA-012"
@@ -93,9 +93,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 實跑 7/7 綠，--reporter=verbose 測試名稱逐一對應 7 條 red_case，且多測了 '\\\\\\\\evil.com'、'///evil.com'、data:、大小寫 JaVaScRiPt:、0x7F、'/\\r\\n/evil.com'、null / 數字 / 有 toString 的物件、'/more?from=/login' 等；b35f07e 測試先於 607fb27 實作；web-lint 乾淨。規則逐條與 description 一致（trim 比 ASCII 空白更嚴，也擋 U+00A0 / U+FEFF 等前後空白）。自行構造反例實測：以 32 種原子（/、\\、%2F、%5C、%09、tab、換行、空白、@、:、.、..、javascript:、data:、HTTPS:、U+3000、U+FF0F、U+FF3C、U+2028、U+00A0、U+FEFF、U+0085、U+200B、U+2215、U+2044、%00、?、#、login 等）窮舉長度 ≤4 的 108 萬組字串，凡被判為安全的 21612 組，以 new URL 對 https://a.example/、/parent/、/parent/x/y?q=1#h 三個 base 解析，origin 全部維持同源、協定維持 https，無 open redirect。規格變更（登入 / 綁定迴圈比對不分大小寫、容許單一結尾斜線）合理：以 vue-router 5.3.1 預設 matcher 實測，/LOGIN、/login/、/Login?x=1、/bind#a 會進登入 / 綁定頁，/login//、/%6Cogin、/login%2F、/./login、/x/../login、/login;a、全形 ｌ、土耳其 İ / ı 都不會，與實作的 /^\\/(login|bind)\\/?$/i 判定完全一致；此變更只會擋更多、不會放寬，且編碼繞過 red_case 斷言同源而非字面，屬強化。殘留（不打回）：(1) 含 dot segment 的路徑（'/..//evil.com'、'/.//evil.com'）會被接受，瀏覽器解析後為同源 pathname '//evil.com'，不會離站；若日後有程式把解析後的 location.pathname 再拿去當 redirect 值，會被本函式以 // 開頭擋下，目前無實際影響。(2) '/x/../login' 被接受，vue-router 不正規化 dot segment 而落到 not-found，history.pushState 後網址列會被瀏覽器正規化成 /parent/login，重新整理才進登入頁，不構成迴圈。"
       }
     },
     {
@@ -371,7 +371,7 @@
       "granularity_unit": "store",
       "target_path": "apps/web/src/parent/stores/snackbar.ts",
       "source_ref": "FE:src/parent/composables/useSnackbar.ts::useSnackbar",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r3",
       "depends_on": [
         "INFRA-012"
@@ -396,9 +396,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 實跑 9/9 綠，--reporter=verbose 測試名稱涵蓋全部 6 條 red_case，另加排隊項不提早計時、dismiss 非首則不影響首則計時、id 唯一與 action 保留三條；8b54143 測試先於 5248916 實作；web-lint 乾淨。Pinia setup store id 為 parentSnackbar、介面與 description 型別一致；只有 items[0] 計時、首則被 dismiss（含自動到期）才為下一則啟動計時、duration 0 不計時、超過 3 則以 splice(1,1) 丟最舊未顯示項、clear 取消計時器，皆有測試鎖住。新增的兩條 red_case（dismiss 換下一則計時、clear 取消計時）是 description 既有語意的具體化，非範圍擴張。殘留（不打回）：duration 傳 NaN 或 Infinity 時 setTimeout 會立即觸發（NaN <= 0 為 false、Infinity 超過 2^31-1），負數則被視為不自動消失；呼叫端都是程式內常數，非外部輸入，目前無實際影響。"
       }
     },
     {
