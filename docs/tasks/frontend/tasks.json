@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 68,
-  "last_updated": "2026-10-03T14:40:10Z",
+  "version": 69,
+  "last_updated": "2026-10-03T14:51:25Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -275,7 +275,7 @@
       "review": {
         "status": "pass",
         "reviewer": "review-r3",
-        "notes": "通過。tdd.run 4/4 綠，涵蓋 4 條 red_case；a57f7d6 測試先於 d48e675 實作。web-lint 對 12 個動到的檔案乾淨；以暫時 tsconfig（extends tsconfig.app.json、include 只列動到的檔與 src/*.d.ts，--listFilesOnly 確認涵蓋）跑 vue-tsc 無錯誤，暫時檔已刪除。規格變更合理：「filename* 解碼失敗時先退到 filename=，兩者都取不到才用 fallback」符合 RFC 6266（filename 是給無法處理 filename* 的情況使用的後備），原 red_case `filename*=UTF-8''%E0%A4%A`（沒有 filename=）→ fallback 仍成立，新增 red_case 驗證兩種順序與純 'attachment'。shared 未依賴 element-plus；saveBlob 測試斷言 click 當下 anchor 已掛在 document、download / href 值、結束後無殘留 anchor 與 revoke 參數。殘留：(a) 帶語言標記的 `filename*=UTF-8'zh-TW'...` 不會被解析（改用 filename= 或 fallback），後端目前不產生此格式。(b) click 後立即 revokeObjectURL（與 ivy 相同），少數舊版瀏覽器可能因此中斷下載。"
+        "notes": "通過。tdd.run 4/4 綠，涵蓋 4 條 red_case；a57f7d6 測試先於 d48e675 實作。web-lint 對 12 個動到的檔案乾淨；以暫時 tsconfig（extends tsconfig.app.json、include 只列動到的檔與 src/*.d.ts，--listFilesOnly 確認涵蓋）跑 vue-tsc 無錯誤，暫時檔已刪除。規格變更合理：「filename* 解碼失敗時先退到 filename=，兩者都取不到才用 fallback」符合 RFC 6266（filename 是給無法處理 filename* 的情況使用的後備），原 red_case `filename*=UTF-8''%E0%A4%A`（沒有 filename=）→ fallback 仍成立，新增 red_case 驗證兩種順序與純 'attachment'。shared 未依賴 element-plus；saveBlob 測試斷言 click 當下 anchor 已掛在 document、download / href 值、結束後無殘留 anchor 與 revoke 參數。殘留：(a) 帶語言標記的 `filename*=UTF-8'zh-TW'...` 不會被解析（改用 filename= 或 fallback），後端目前不產生此格式。(b) click 後立即 revokeObjectURL（與 ivy 相同），少數較早期的瀏覽器版本可能因此中斷下載。"
       }
     },
     {
