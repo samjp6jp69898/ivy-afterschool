@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 15,
-  "last_updated": "2026-10-03T12:24:46Z",
+  "version": 16,
+  "last_updated": "2026-10-03T12:25:53Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -172,7 +172,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/shared/constants/statusLabels.ts",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-002"
