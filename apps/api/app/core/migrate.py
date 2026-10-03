@@ -42,8 +42,12 @@ _SQLALCHEMY_SCHEME: Final = "postgresql+psycopg://"
 _PLAIN_SCHEME: Final = "postgresql://"
 _DEFAULT_PORT: Final = "5432"
 
-_USERINFO_PASSWORD = re.compile(r"(://[^:/@?#]*:)[^@/?#]*@")
-_QUERY_PASSWORD = re.compile(r"(?i)(password=)[^&#]*")
+# 帳號密碼段內必須百分比編碼的保留字元：libpq 遇到未編碼的 / 會把密碼片段解析成 port / dbname、
+# @ 會解析成 host，SQLAlchemy 的解析結果又不同；只能在解析前就拒絕
+_USERINFO_RESERVED: Final = frozenset("/?#@[]")
+_FRAGMENT_SPLIT = re.compile(r"[/?#@\[\]]")
+_MIN_FRAGMENT: Final = 4
+_URL_VARS: Final = ("MIGRATION_DATABASE_URL", "DATABASE_URL")
 
 
 class MigrationConfigError(Exception):
@@ -60,9 +64,50 @@ class MigrationUrls:
     backend_url: str  # app_backend，postgresql+psycopg://
 
 
-def mask_url(url: str) -> str:
-    """把 userinfo 與 query 中的密碼換成 ***。"""
-    return _QUERY_PASSWORD.sub(r"\1***", _USERINFO_PASSWORD.sub(r"\1***@", url))
+def _userinfo(url: str) -> str:
+    """``://`` 之後到最後一個 ``@`` 之前的原始帳號密碼段；沒有 ``@`` 時為空字串。"""
+    rest = url.split("://", 1)[-1]
+    at = rest.rfind("@")
+    return rest[:at] if at >= 0 else ""
+
+
+def secret_fragments(environ: Mapping[str, str]) -> list[str]:
+    """兩個 URL 可能出現在輸出中的機密字串，供錯誤訊息與 CLI 輸出遮罩。
+
+    - 整串：URL 原樣與兩種 scheme 的寫法、``user:password`` 段——夠長，不論密碼多短都能整段遮掉。
+    - 密碼（原始與 libpq 解析後）及其以保留字元切開的片段：只取 4 字元以上，
+      太短的片段一換就會破壞訊息；訊息本身已不回顯 URL，這裡只是最後一道。
+    """
+    found: set[str] = set()
+    for name in _URL_VARS:
+        url = environ.get(name, "")
+        if not url:
+            continue
+        rest = url.split("://", 1)[-1]
+        userinfo = _userinfo(url)
+        _, has_password, raw_password = userinfo.partition(":")
+        found.update({url, _SQLALCHEMY_SCHEME + rest, _PLAIN_SCHEME + rest})
+        passwords = []
+        if has_password:
+            found.add(userinfo)
+            passwords.append(raw_password)
+        try:
+            parsed = conninfo_to_dict(_to_psycopg(_normalize(name, url)))
+        except (MigrationConfigError, psycopg.Error):
+            parsed = {}
+        if parsed.get("password"):
+            passwords.append(str(parsed["password"]))
+        for password in passwords:
+            pieces = [password, *_FRAGMENT_SPLIT.split(password)]
+            found.update(piece for piece in pieces if len(piece) >= _MIN_FRAGMENT)
+    return sorted(found, key=len, reverse=True)
+
+
+def scrub(text: str, fragments: list[str]) -> str:
+    """把密碼片段換成 ***（長的先換，避免短片段先替換後長片段比對不到）。"""
+    for fragment in sorted(fragments, key=len, reverse=True):
+        text = text.replace(fragment, "***")
+    return text
 
 
 def _normalize(name: str, url: str) -> str:
@@ -78,25 +123,45 @@ def _to_psycopg(url: str) -> str:
 
 
 def _parse(name: str, url: str) -> dict[str, Any]:
+    if any(ch in _USERINFO_RESERVED for ch in _userinfo(url)):
+        raise MigrationConfigError(
+            f"{name} 的帳號或密碼含未編碼的保留字元（/ ? # @ [ ]），"
+            "請以百分比編碼後再設定（例如 / → %2F、@ → %40）"
+        )
     try:
-        return conninfo_to_dict(_to_psycopg(url))
+        params = conninfo_to_dict(_to_psycopg(url))
     except psycopg.Error:
         # 解析器的錯誤訊息可能引用連線字串片段，不附原文
-        raise MigrationConfigError(f"{name} 無法解析：{mask_url(url)}") from None
+        raise MigrationConfigError(
+            f"{name} 無法解析（格式應為 postgresql://user:password@host:port/dbname）"
+        ) from None
+    if "service" in params:
+        raise MigrationConfigError(f"{name} 不可使用 service（service 檔可指定任意位址）")
+    return params
 
 
-def _target(params: Mapping[str, Any]) -> tuple[str, str, str]:
+def _target(params: Mapping[str, Any]) -> tuple[str, str, str, str]:
     user = str(params.get("user") or "")
     return (
         str(params.get("host") or ""),
+        str(params.get("hostaddr") or ""),
         str(params.get("port") or _DEFAULT_PORT),
         str(params.get("dbname") or user),  # libpq：未指定 dbname 時用使用者名稱
     )
 
 
-def load_migration_urls(environ: Mapping[str, str]) -> MigrationUrls:
+def _describe(params: Mapping[str, Any]) -> str:
+    """解析後欄位組成的連線描述，不含密碼。"""
+    host, hostaddr, port, dbname = _target(params)
+    addr = f"(hostaddr={hostaddr})" if hostaddr else ""
+    return f"{params.get('user') or '-'}@{host or '-'}{addr}:{port}/{dbname}"
+
+
+def _load(environ: Mapping[str, str]) -> MigrationUrls:
+    if environ.get("PGSERVICE"):
+        raise MigrationConfigError("環境變數 PGSERVICE 不可設定（service 檔可指定任意位址）")
     raw: dict[str, str] = {}
-    for name in ("MIGRATION_DATABASE_URL", "DATABASE_URL"):
+    for name in _URL_VARS:
         value = environ.get(name, "")
         if not value:
             raise MigrationConfigError(f"未設定 {name}")
@@ -106,23 +171,31 @@ def load_migration_urls(environ: Mapping[str, str]) -> MigrationUrls:
 
     owner = _parse("MIGRATION_DATABASE_URL", migration_url)
     backend = _parse("DATABASE_URL", backend_url)
-    masked = (
-        f"（MIGRATION_DATABASE_URL={mask_url(migration_url)}，"
-        f"DATABASE_URL={mask_url(backend_url)}）"
-    )
+    described = f"（MIGRATION_DATABASE_URL={_describe(owner)}，DATABASE_URL={_describe(backend)}）"
 
     if backend.get("user") != BACKEND_ROLE:
-        raise MigrationConfigError(f"DATABASE_URL 的使用者必須是 {BACKEND_ROLE}{masked}")
+        raise MigrationConfigError(f"DATABASE_URL 的使用者必須是 {BACKEND_ROLE}{described}")
     if not backend.get("password"):
-        raise MigrationConfigError(f"DATABASE_URL 必須帶 {BACKEND_ROLE} 的密碼{masked}")
+        raise MigrationConfigError(f"DATABASE_URL 必須帶 {BACKEND_ROLE} 的密碼{described}")
     if owner.get("user") == backend.get("user"):
-        raise MigrationConfigError(f"兩個 URL 的使用者不可相同{masked}")
+        raise MigrationConfigError(f"兩個 URL 的使用者不可相同{described}")
     for label, owner_value, backend_value in zip(
-        ("host", "port", "database"), _target(owner), _target(backend), strict=True
+        ("host", "hostaddr", "port", "database"), _target(owner), _target(backend), strict=True
     ):
         if owner_value != backend_value:
-            raise MigrationConfigError(f"兩個 URL 的 {label} 必須相同{masked}")
+            raise MigrationConfigError(f"兩個 URL 的 {label} 必須相同{described}")
     return MigrationUrls(migration_url=migration_url, backend_url=backend_url)
+
+
+def load_migration_urls(environ: Mapping[str, str]) -> MigrationUrls:
+    """只讀 MIGRATION_DATABASE_URL 與 DATABASE_URL；錯誤訊息不含密碼。"""
+    message: str
+    try:
+        return _load(environ)
+    except MigrationConfigError as exc:
+        # 最後一道遮罩；在 except 之外 raise，原例外不掛在 __context__
+        message = scrub(str(exc), secret_fragments(environ))
+    raise MigrationConfigError(message)
 
 
 def sync_backend_password(

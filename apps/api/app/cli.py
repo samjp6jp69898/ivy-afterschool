@@ -12,57 +12,35 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import Final
-
-import psycopg
-from psycopg.conninfo import conninfo_to_dict
+from typing import Final, TextIO
 
 from app.core.migrate import (
     MigrationConfigError,
-    MigrationUrls,
     load_migration_urls,
     run_migrations,
+    scrub,
+    secret_fragments,
 )
 
 ALEMBIC_INI: Final = Path(__file__).resolve().parents[1] / "alembic.ini"
 
 
-def _passwords(urls: MigrationUrls) -> list[str]:
-    found: list[str] = []
-    for url in (urls.migration_url, urls.backend_url):
-        try:
-            params = conninfo_to_dict(url.replace("postgresql+psycopg://", "postgresql://", 1))
-        except psycopg.Error:  # 解析失敗就沒有可遮罩的密碼
-            continue
-        value = params.get("password")
-        if value:
-            found.append(str(value))
-    return found
-
-
-def _scrub(text: str, secrets: list[str]) -> str:
-    """例外訊息意外帶出連線字串時，把密碼換成 ***。"""
-    for secret in sorted(secrets, key=len, reverse=True):
-        text = text.replace(secret, "***")
-    return text
+def _emit(text: str, stream: TextIO) -> None:
+    """所有輸出先遮罩兩個 URL 的密碼片段（例外訊息意外帶出連線字串時也不洩漏到部署 log）。"""
+    print(scrub(text, secret_fragments(os.environ)), file=stream)
 
 
 def _migrate() -> int:
     try:
         urls = load_migration_urls(os.environ)
-    except MigrationConfigError as exc:
-        print(f"migration 設定錯誤：{exc}", file=sys.stderr)
-        return 2
-    try:
         head = run_migrations(urls, alembic_ini=ALEMBIC_INI)
     except MigrationConfigError as exc:
-        print(f"migration 設定錯誤：{_scrub(str(exc), _passwords(urls))}", file=sys.stderr)
+        _emit(f"migration 設定錯誤：{exc}", sys.stderr)
         return 2
     except Exception as exc:
-        message = _scrub(str(exc), _passwords(urls))
-        print(f"migration 失敗：{type(exc).__name__}: {message}", file=sys.stderr)
+        _emit(f"migration 失敗：{type(exc).__name__}: {exc}", sys.stderr)
         return 1
-    print(f"migration 完成：head = {head}")
+    _emit(f"migration 完成：head = {head}", sys.stdout)
     return 0
 
 
