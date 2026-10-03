@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 33,
-  "last_updated": "2026-10-03T14:38:49Z",
+  "version": 34,
+  "last_updated": "2026-10-03T14:40:16Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -978,7 +978,7 @@
     {
       "id": "PARENT-027",
       "title": "移植 PullToRefresh 元件（下拉重新整理）",
-      "description": "建立 `apps/web/src/parent/components/PullToRefresh.vue`：\n```ts\nprops: { onRefresh: () => Promise<unknown>; threshold?: number /* 預設 64 */; disabled?: boolean }\nslots: default\n```\n- 只在捲動容器 `scrollTop === 0` 時啟動；touch 下拉距離以阻尼係數 0.5 計算，超過 threshold 放開 → 顯示轉圈並 await onRefresh，完成（含 reject）後收回；refresh 進行中再次下拉不重複觸發。\n- 指示器 `role=\"status\"`，refresh 中 `aria-label=\"重新整理中\"`。reduced-motion 時不做回彈動畫。\n\n移植 ivy `FE:src/parent/components/PullToRefresh.vue` 與 `FE:src/parent/composables/usePullToRefresh.ts::usePullToRefresh`（邏輯併入元件，不另建 composable）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-pull-to-refresh.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：靜止 / 下拉未達門檻 / 超過門檻 / 重新整理中。\n\n**驗收標準**：每一條對應 red_case（以 TouchEvent 模擬）。",
+      "description": "建立 `apps/web/src/parent/components/PullToRefresh.vue`：\n```ts\nprops: { onRefresh: () => Promise<unknown>; threshold?: number /* 預設 64 */; disabled?: boolean }\nslots: default\n```\n- 只在頁面捲動位置為 0（`window.scrollY`，ParentLayout 以頁面捲動）時按下才啟動；下拉途中頁面被捲走就取消；往上滑照常捲動。touch 下拉位移 = 手指距離 × 0.5，上限 threshold × 2；位移 ≥ threshold 放開 → 內容停在 56px、顯示轉圈並 await onRefresh，完成（含 reject，錯誤由元件吞下、失敗提示由呼叫端負責）後收回到 0；未達門檻放開直接回彈。refresh 進行中再次下拉不觸發也不位移；disabled 時完全不攔截手勢。\n- 只在確定進入下拉（起點在頂端且往下拉）時 `preventDefault`（touchmove 以 `passive: false` 註冊），擋掉 iOS 回彈與 Android 原生下拉刷新。只聽 touch 事件。\n- 指示器（`role=\"status\"`）固定存在、高度 = 位移，refresh 中 `aria-label=\"重新整理中\"`；內含 36px 圓形進度環與 `arrow_downward`（超過門檻轉 180°；refresh 中換成不定進度轉圈）與一行可見文字（`下拉重新整理` / `放開即可重新整理` / `重新整理中…`，`aria-hidden`）。內容以 translateY 跟著下移。reduced-motion 時不做回彈、箭頭旋轉與轉圈動畫。\n\n移植 ivy `FE:src/parent/components/PullToRefresh.vue` 與 `FE:src/parent/composables/usePullToRefresh.ts::usePullToRefresh`（邏輯併入元件，不另建 composable）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-pull-to-refresh.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：靜止 / 下拉未達門檻 / 超過門檻 / 重新整理中。\n\n**驗收標準**：每一條對應 red_case（以 TouchEvent 模擬）。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/PullToRefresh.vue",
       "source_ref": "FE:src/parent/components/PullToRefresh.vue::props",
@@ -997,10 +997,14 @@
           "vitest"
         ],
         "red_cases": [
-          "PullToRefresh triggers past threshold：touchstart y=0 → touchmove y=200（位移 100 > 64）→ touchend → onRefresh 被呼叫 1 次，期間指示器 aria-label === '重新整理中'，resolve 後指示器消失",
-          "PullToRefresh ignores short pull：touchmove y=100（位移 50）→ touchend → onRefresh 未被呼叫",
-          "PullToRefresh no duplicate while refreshing：第一次觸發後 onRefresh 尚未 resolve 時再完成一次下拉 → onRefresh 總呼叫次數仍為 1",
-          "PullToRefresh disabled：disabled=true 下拉 200px → onRefresh 未被呼叫"
+          "PullToRefresh triggers past threshold：touchstart y=0 → touchmove y=200（位移 100 > 64）→ touchend → onRefresh 被呼叫 1 次，期間指示器 aria-label === '重新整理中'、高度 56px、內容 translateY(56px)、文字 '重新整理中…'；resolve 後指示器 aria-label 移除、高度 0px、內容無 transform",
+          "PullToRefresh ignores short pull：touchmove y=100（位移 50）→ 指示器高度 50px、文字 '下拉重新整理'；touchend → onRefresh 未被呼叫、高度回到 0px",
+          "PullToRefresh no duplicate while refreshing：第一次觸發後 onRefresh 尚未 resolve 時再完成一次下拉 → onRefresh 總呼叫次數仍為 1、該次 touchmove 未 preventDefault、高度維持 56px；resolve 後再下拉 → 呼叫次數 2",
+          "PullToRefresh disabled：disabled=true 下拉 400px → onRefresh 未被呼叫、touchmove 未 preventDefault、高度 0px",
+          "PullToRefresh collapses after reject：onRefresh reject → 指示器 aria-label 移除、高度 0px（不拋出未處理的錯誤）",
+          "PullToRefresh caps pull at twice threshold and arms past threshold：touchmove y=1000 → 高度 128px、內容 translateY(128px)、文字 '放開即可重新整理' 且文字元素 aria-hidden === 'true'；threshold=100 時下拉 180（位移 90）放開 → 不觸發",
+          "PullToRefresh prevents default only while pulling down：touchstart y=300 → touchmove y=200（往上）未 preventDefault；再 touchmove y=400（往下）→ defaultPrevented === true",
+          "PullToRefresh only starts at page top：window.scrollY = 120 → 下拉 300 的 touchmove 未 preventDefault、onRefresh 未被呼叫、高度 0px"
         ],
         "run": "just web-test src/parent/components/PullToRefresh.spec.ts -t \"PullToRefresh\"",
         "notes": ""
