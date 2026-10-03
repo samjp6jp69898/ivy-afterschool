@@ -1,6 +1,6 @@
 # CLAUDE.md — afterschool
 
-國小安親班管理系統（單一安親班、單一租戶）。管理後台（員工）+ 家長端（LINE LIFF），涵蓋帳號角色權限、學生 / 班級 / 家長、出勤、請假、作業進度與家長等待通知、接送管理、考試成績、NFC 打卡（機器未到，blocked）。功能模組從 ivy（`../ivyManageSystem-backend`、`../ivyManageSystem-frontend`）移植改寫。DB 使用 Supabase，部署在 Railway。
+國小安親班管理系統（單一安親班、單一租戶）。管理後台（員工）+ 家長端（LINE LIFF），涵蓋帳號角色權限、學生 / 班級 / 家長、出勤、請假、作業進度與家長等待通知、接送管理、考試成績、NFC 打卡（機器未到，blocked）。功能模組從 ivy（`../ivyManageSystem-backend`、`../ivyManageSystem-frontend`）移植改寫。DB 使用 PostgreSQL（雲端 Railway Postgres、本機 docker compose），migration 用 Alembic，檔案存 Cloudflare R2，部署在 Railway。
 
 ## 文檔規則
 
