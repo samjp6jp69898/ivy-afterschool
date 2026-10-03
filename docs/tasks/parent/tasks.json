@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 17,
-  "last_updated": "2026-10-03T13:01:28Z",
+  "version": 18,
+  "last_updated": "2026-10-03T13:08:34Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -592,7 +592,7 @@
     {
       "id": "PARENT-017",
       "title": "移植 M3Card 元件（elevated / filled / outlined、可點擊）",
-      "description": "建立 `apps/web/src/parent/components/m3/M3Card.vue`（移植 ivy `FE:src/parent/components/m3/M3Card.vue`）。\n\n**介面**：\n```ts\nprops: { variant?: 'elevated' | 'filled' | 'outlined' /* 預設 filled */; clickable?: boolean; padding?: 'none' | 'sm' | 'md' /* 預設 md */ }\nemits: { click: [MouseEvent] }\nslots: default、header、actions\n```\n保留：三種 variant、clickable 時 state layer。\n去掉：padding 改為列舉值，不接受任意 CSS 字串。**新增** clickable 時渲染為 `role=\"button\"`、`tabindex=\"0\"`，Enter / Space 觸發 click。\n樣式只用 PARENT-001 的 `--m3-*` 變數；觸控目標 ≥ 44×44px；有 `:focus-visible` 外框。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-m3-kit.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：三種 variant、含 header / actions slot、clickable hover / pressed。可與其他 M3 元件 task 共用同一張稿 `docs/mockups/parent-component-m3-kit.html`（`preview-tasks` 列出 PARENT-014~PARENT-023、PARENT-098、PARENT-175）。\n\n**驗收標準**：每一條對應 red_case（vitest + @vue/test-utils 真實 DOM）。",
+      "description": "建立 `apps/web/src/parent/components/m3/M3Card.vue`（移植 ivy `FE:src/parent/components/m3/M3Card.vue`）。\n\n**介面**：\n```ts\nprops: { variant?: 'elevated' | 'filled' | 'outlined' /* 預設 filled */; clickable?: boolean; padding?: 'none' | 'sm' | 'md' /* 預設 md */ }\nemits: { click: [MouseEvent] }\nslots: default、header、actions\n```\n保留：三種 variant、clickable 時 state layer。底色照 M3 / ivy：filled（預設）為 `--m3-surface-container-highest`；elevated 為 `--m3-surface-container-low` + `--m3-elev-1`；outlined 為 `--m3-surface` + 1px `--m3-outline-variant` 邊框；圓角 `--m3-shape-medium`。根元素帶 `m3-card--{variant}` class。\n去掉：padding 改為列舉值，不接受任意 CSS 字串。**新增** clickable 時渲染為 `role=\"button\"`、`tabindex=\"0\"`，Enter / Space 觸發 click。\n樣式只用 PARENT-001 的 `--m3-*` 變數；觸控目標 ≥ 44×44px；有 `:focus-visible` 外框。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-m3-kit.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：三種 variant、含 header / actions slot、clickable hover / pressed。可與其他 M3 元件 task 共用同一張稿 `docs/mockups/parent-component-m3-kit.html`（`preview-tasks` 列出 PARENT-014~PARENT-023、PARENT-098、PARENT-175）。\n\n**驗收標準**：每一條對應 red_case（vitest + @vue/test-utils 真實 DOM）。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3Card.vue",
       "source_ref": "FE:src/parent/components/m3/M3Card.vue::props",
@@ -613,7 +613,8 @@
         "red_cases": [
           "M3Card renders slots：slots {header:'<h3>今日狀態</h3>', default:'<p>已到班</p>', actions:'<button>接送</button>'} → text 依序含 '今日狀態'、'已到班'、'接送'",
           "M3Card clickable keyboard activation：clickable=true → attributes('role') === 'button'、tabindex === '0'；trigger('keydown', {key:'Enter'}) → emitted('click').length === 1",
-          "M3Card non clickable ignores click：clickable 預設 false → trigger('click') 後 emitted('click') 為 undefined，且無 role 屬性"
+          "M3Card non clickable ignores click：clickable 預設 false → trigger('click') 後 emitted('click') 為 undefined，且無 role 屬性",
+          "M3Card variant class：variant 未傳 → classes() 含 'm3-card--filled'；variant='elevated' → 含 'm3-card--elevated' 且不含 'm3-card--filled'"
         ],
         "run": "just web-test src/parent/components/m3/M3Card.spec.ts -t \"M3Card\"",
         "notes": ""
@@ -805,7 +806,7 @@
     {
       "id": "PARENT-023",
       "title": "移植 M3Snackbar 元件（顯示 snackbar store 的第一則）",
-      "description": "建立 `apps/web/src/parent/components/m3/M3Snackbar.vue`（移植 ivy `FE:src/parent/components/m3/M3Snackbar.vue`）。\n\n**介面**：\n```ts\nprops: { item: SnackbarItem | null /* PARENT-011 的型別 */ }\nemits: { dismiss: [id: number] }\n```\n保留：inverse surface 配色、位於底部導覽上方、進出場動畫（reduced-motion 時關閉）。\n去掉：ivy 以陣列 prop 傳入整個佇列的做法（改由 PARENT-024 傳第一則）。**新增** `role=\"status\"` + `aria-live=\"polite\"`，error tone 用 `role=\"alert\"`；action 按鈕點擊後執行 onClick 並 emit dismiss。\n樣式只用 PARENT-001 的 `--m3-*` 變數；觸控目標 ≥ 44×44px；有 `:focus-visible` 外框。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-m3-kit.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：一般訊息 / 有 action / error tone。可與其他 M3 元件 task 共用同一張稿 `docs/mockups/parent-component-m3-kit.html`（`preview-tasks` 列出 PARENT-014~PARENT-023、PARENT-098、PARENT-175）。\n\n**驗收標準**：每一條對應 red_case（vitest + @vue/test-utils 真實 DOM）。",
+      "description": "建立 `apps/web/src/parent/components/m3/M3Snackbar.vue`（移植 ivy `FE:src/parent/components/m3/M3Snackbar.vue`）。\n\n**介面**：\n```ts\nprops: { item: SnackbarItem | null /* PARENT-011 的型別 */ }\nemits: { dismiss: [id: number] }\n```\n保留：inverse surface 配色、位於底部導覽上方、進出場動畫（reduced-motion 時關閉）。\n去掉：ivy 以陣列 prop 傳入整個佇列的做法（改由 PARENT-024 傳第一則）。**新增** `role=\"status\"` + `aria-live=\"polite\"`，error tone 用 `role=\"alert\"`；error tone 與 info 同為 `--m3-inverse-surface` 底，訊息前加 filled `error` 圖示（`m3-snackbar__icon`，`--m3-error-container` 色），info 沒有圖示；action 按鈕點擊後執行 onClick 並 emit dismiss。\n樣式只用 PARENT-001 的 `--m3-*` 變數；觸控目標 ≥ 44×44px；有 `:focus-visible` 外框。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-m3-kit.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：一般訊息 / 有 action / error tone。可與其他 M3 元件 task 共用同一張稿 `docs/mockups/parent-component-m3-kit.html`（`preview-tasks` 列出 PARENT-014~PARENT-023、PARENT-098、PARENT-175）。\n\n**驗收標準**：每一條對應 red_case（vitest + @vue/test-utils 真實 DOM）。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3Snackbar.vue",
       "source_ref": "FE:src/parent/components/m3/M3Snackbar.vue::props",
@@ -827,7 +828,7 @@
         "red_cases": [
           "M3Snackbar renders message with live region：item={id:1, message:'已送出接送通知', tone:'info', duration:4000} → 文字含 '已送出接送通知'，role === 'status'",
           "M3Snackbar action runs and dismisses：item.action={label:'重試', onClick: spy} → 點擊 '重試' 後 spy 被呼叫 1 次且 emitted('dismiss')[0] 深等於 [1]",
-          "M3Snackbar error tone uses alert：tone='error' → role === 'alert'；item=null → 不渲染任何內容"
+          "M3Snackbar error tone uses alert and icon：tone='error' → role === 'alert'，且有 '.m3-snackbar__icon' 元素（M3Icon name 'error'）；tone='info' → 無 '.m3-snackbar__icon'；item=null → 不渲染任何內容"
         ],
         "run": "just web-test src/parent/components/m3/M3Snackbar.spec.ts -t \"M3Snackbar\"",
         "notes": ""
@@ -887,7 +888,7 @@
     {
       "id": "PARENT-025",
       "title": "移植 ParentBottomSheet 元件（v-model 開關、拖曳關閉、焦點鎖定）",
-      "description": "建立 `apps/web/src/parent/components/ParentBottomSheet.vue`：\n```ts\nprops: { modelValue: boolean; title?: string; dismissible?: boolean /* 預設 true */; fullHeight?: boolean }\nemits: { 'update:modelValue': [boolean] }\nslots: default、footer\n```\n- Teleport 到 body；scrim 點擊、Esc、向下拖曳超過 80px（dismissible 時）→ emit `update:modelValue(false)`；dismissible=false 時三者都不關閉（用於接送碼只顯示一次的確認流程）。\n- 開啟時 `role=\"dialog\"`、`aria-modal=\"true\"`、`aria-labelledby` 指向標題，焦點移入 sheet 並鎖在其中，關閉後還原到開啟前的元素；開啟期間鎖 body 捲動。\n- footer slot 固定在底部並加 `env(safe-area-inset-bottom)`。\n\n移植 ivy `FE:src/parent/components/ParentBottomSheet.vue`；**去掉** snapPoints 多段高度（改為內容自適應 + fullHeight 一個選項）、showHandle prop（固定顯示把手）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-bottom-sheet.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：一般內容 / 長內容可捲動 / fullHeight / 含 footer 按鈕 / 不可關閉模式。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/ParentBottomSheet.vue`：\n```ts\nprops: { modelValue: boolean; title?: string; dismissible?: boolean /* 預設 true */; fullHeight?: boolean }\nemits: { 'update:modelValue': [boolean] }\nslots: default、footer\n```\n- Teleport 到 body；scrim 點擊、Esc、標題列關閉鈕、從把手或標題列向下拖曳超過 80px（dismissible 時）→ emit `update:modelValue(false)`；dismissible=false 時都不關閉（用於接送碼只顯示一次的確認流程）。\n- 關閉鈕：dismissible 時標題列右側渲染 PARENT-016 M3IconButton（icon `close`、label「關閉」）；dismissible=false 時不渲染。在關閉鈕上按下不會開始拖曳。\n- 拖曳：只有把手與標題列可拖曳（Pointer Events），內容區不攔截拖曳手勢；下移未超過 80px 放開時回彈；往上拖不移動。dismissible=false 時拖曳只回彈、不關閉。\n- 開啟時 `role=\"dialog\"`、`aria-modal=\"true\"`、`aria-labelledby` 指向標題，焦點移入 sheet 並鎖在其中，關閉後還原到開啟前的元素；開啟期間鎖 body 捲動。\n- footer slot 固定在底部並加 `env(safe-area-inset-bottom)`。\n\n移植 ivy `FE:src/parent/components/ParentBottomSheet.vue`；**去掉** snapPoints 多段高度（改為內容自適應 + fullHeight 一個選項）、showHandle prop（固定顯示把手）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-bottom-sheet.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：一般內容 / 長內容可捲動 / fullHeight / 含 footer 按鈕 / 不可關閉模式。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/ParentBottomSheet.vue",
       "source_ref": "FE:src/parent/components/ParentBottomSheet.vue::props",
@@ -909,7 +910,9 @@
           "ParentBottomSheet renders dialog when open：modelValue=true、title='新增接送人' → document.body 內有 role=dialog 且 aria-modal='true'，標題文字為 '新增接送人'；modelValue=false → 無 dialog",
           "ParentBottomSheet closes on scrim and escape：點擊 scrim → emitted('update:modelValue')[0] 深等於 [false]；document 觸發 keydown Escape → 第二次 emit [false]",
           "ParentBottomSheet non dismissible ignores close：dismissible=false → 點擊 scrim 與按 Escape 後 emitted('update:modelValue') 為 undefined",
-          "ParentBottomSheet restores focus：開啟前 focus 在外部按鈕 → 開啟後 document.activeElement 在 dialog 內；改 modelValue=false → activeElement 回到該按鈕"
+          "ParentBottomSheet restores focus：開啟前 focus 在外部按鈕 → 開啟後 document.activeElement 在 dialog 內；改 modelValue=false → activeElement 回到該按鈕",
+          "ParentBottomSheet close button follows dismissible：modelValue=true（dismissible 預設）→ dialog 內有 aria-label='關閉' 的按鈕，點擊 → emitted('update:modelValue')[0] 深等於 [false]；dismissible=false → dialog 內沒有 aria-label='關閉' 的按鈕",
+          "ParentBottomSheet drags only from handle and header：在內容區 pointerdown clientY=300 → window pointermove clientY=420 → pointerup → emitted('update:modelValue') 為 undefined；在標題列做同樣操作 → emitted('update:modelValue')[0] 深等於 [false]；在標題列只下移 60px 放開 → 不 emit"
         ],
         "run": "just web-test src/parent/components/ParentBottomSheet.spec.ts -t \"ParentBottomSheet\"",
         "notes": ""
@@ -996,7 +999,7 @@
     {
       "id": "PARENT-028",
       "title": "移植 SkeletonBlock 元件（載入骨架）",
-      "description": "建立 `apps/web/src/parent/components/SkeletonBlock.vue`：\n```ts\nprops: { variant?: 'line' | 'card' | 'row' /* 預設 line */; count?: number /* 預設 1 */; width?: string; height?: string }\n```\n- 渲染 count 個區塊，外層 `aria-busy=\"true\"` + 視覺隱藏文字「載入中」；shimmer 動畫在 reduced-motion 時停用；顏色用 `--m3-surface-container-high`。\n\n移植 ivy `FE:src/parent/components/SkeletonBlock.vue`（variant/count/width/height 保留，variant 改為列舉）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-skeleton.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：line / card / row 三種、count=3。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/SkeletonBlock.vue`：\n```ts\nprops: { variant?: 'line' | 'card' | 'row' /* 預設 line */; count?: number /* 預設 1 */; width?: string; height?: string }\n```\n- 渲染 count 個區塊，外層 `aria-busy=\"true\"` + 視覺隱藏文字「載入中」；動畫為 pulse 透明度脈動（1 → 0.5 → 1、1.2 秒循環），reduced-motion 時停用；顏色用 `--m3-surface-container-high`。\n\n移植 ivy `FE:src/parent/components/SkeletonBlock.vue`（variant/count/width/height 保留，variant 改為列舉）；**去掉** ivy 的 shimmer 掃光（改為 pulse）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-skeleton.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：line / card / row 三種、count=3。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/SkeletonBlock.vue",
       "source_ref": "FE:src/parent/components/SkeletonBlock.vue::props",
