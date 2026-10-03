@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 68,
-  "last_updated": "2026-10-03T14:39:23Z",
+  "version": 69,
+  "last_updated": "2026-10-03T14:41:49Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -694,7 +694,7 @@
       "granularity_unit": "script",
       "target_path": "scripts/check_schema_drift.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-044",
@@ -721,10 +721,11 @@
           "test_schema_drift_ignores_indexes_and_alembic_version：DB 多一個 partial index（create index ... where name is not null）與一張 alembic_version(version_num varchar(32) primary key)，metadata 都沒有 → compare 回 []",
           "test_schema_drift_table_ignore_list：DB 多一張 orphan 表、ignore_tables={'orphan'} → 回 []；不傳 ignore_tables → 一筆 table_missing_in_model",
           "test_schema_drift_main_missing_models：monkeypatch 讓 import app.models 拋 ModuleNotFoundError，main([]) → 2，stderr 含 '找不到 app.models.Base'",
-          "test_schema_drift_main_rejects_remote：main(['--db-url', 'postgresql+psycopg://u:p@db.example.com/postgres']) → 2，且 psycopg.connect 未被呼叫"
+          "test_schema_drift_main_rejects_remote：main(['--db-url', 'postgresql+psycopg://u:p@db.example.com/postgres']) → 2，且 psycopg.connect 未被呼叫",
+          "test_schema_drift_unknown_diff_reported_as_unsupported：convert([('add_table_comment', 't', '說明')]) → 一筆 kind='unsupported'、target='add_table_comment'，detail 含原始 diff（不得靜默丟棄）"
         ],
         "run": "just test-int scripts/tests/test_check_schema_drift.py -k schema_drift",
-        "notes": ""
+        "notes": "另有兩條補充測試：test_schema_drift_fk_matches_when_declared（宣告相同 FK → []）與 test_schema_drift_results_sorted（依 kind、target 排序）。目前 app.models 尚無業務 model，`flock /tmp/afterschool_db.lock just schema-drift` 對本機 DB 回「沒有 schema drift（比對 0 張表）」exit 0；真實 models 的 drift 整合測試由 BACKEND-024 負責。"
       },
       "review": {
         "status": "pending",

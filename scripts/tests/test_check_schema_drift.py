@@ -284,3 +284,12 @@ def test_schema_drift_main_rejects_remote(
     assert drift.main(["--db-url", "postgresql+psycopg://u:p@db.example.com/postgres"]) == 2
     assert connects == []
     assert "只允許本機 loopback DB" in capsys.readouterr().err
+
+
+def test_schema_drift_unknown_diff_reported_as_unsupported(drift: ModuleType) -> None:
+    unknown = ("add_table_comment", "t", "說明")
+
+    result = drift.convert([unknown])
+
+    assert [(d.kind, d.target) for d in result] == [("unsupported", "add_table_comment")]
+    assert "說明" in result[0].detail

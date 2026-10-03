@@ -201,6 +201,16 @@ db-migrate:
         MIGRATION_DATABASE_URL="postgresql+psycopg://postgres:postgres@127.0.0.1:54342/postgres" \
         uv run --frozen alembic upgrade head
 
+# 比對 app.models.Base 與本機 DB 的 schema drift：just schema-drift [--schema S] [--ignore-table T]...（只連 127.0.0.1）
+schema-drift *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -x "{{ root }}/apps/api/.venv/bin/python" ]; then
+        echo "錯誤：找不到 apps/api/.venv，先在 apps/api 執行 uv sync --frozen（或 just bootstrap）。" >&2
+        exit 2
+    fi
+    "{{ root }}/apps/api/.venv/bin/python" "{{ root }}/scripts/check_schema_drift.py" "$@"
+
 # ★ 新增一支 Alembic revision：just db-new-migration REV SLUG（例如 db004 create_students；不需連 DB）
 db-new-migration *ARGS:
     #!/usr/bin/env bash
