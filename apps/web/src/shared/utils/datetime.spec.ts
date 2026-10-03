@@ -87,6 +87,19 @@ describe('datetime', () => {
     expect(weekdayLabel('2026-10-05')).toBe('一')
   })
 
+  it('datetime invalid inputs', () => {
+    expect(formatDate('2026-02-30')).toBe('—')
+    expect(formatDateWithWeekday('2026/10/02')).toBe('—')
+    expect(formatDateTime('abc')).toBe('—')
+    expect(() => toTaipeiDate('abc')).toThrow(RangeError)
+    expect(() => utcIsoToHHMM('abc')).toThrow(RangeError)
+    expect(() => addDays('2026-02-30', 1)).toThrow(RangeError)
+    expect(() => monthOf('2026-10')).toThrow(RangeError)
+    expect(() => weekdayLabel('')).toThrow(RangeError)
+    expect(() => hhmmToUtcIso('2026-13-01', '10:00')).toThrow(RangeError)
+    expect(minutesSince('abc', new Date('2026-10-02T08:00:00Z'))).toBe(0)
+  })
+
   it('datetime minutesSince', () => {
     expect(minutesSince('2026-10-02T08:00:00Z', new Date('2026-10-02T08:07:59Z'))).toBe(7)
     expect(minutesSince('2026-10-02T08:10:00Z', new Date('2026-10-02T08:07:59Z'))).toBe(0)

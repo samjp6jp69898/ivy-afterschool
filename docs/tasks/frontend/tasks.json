@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 17,
-  "last_updated": "2026-10-03T12:26:55Z",
+  "version": 18,
+  "last_updated": "2026-10-03T12:27:20Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -112,7 +112,8 @@
           "datetime hhmm and utc conversion：hhmmToUtcIso('2026-10-02','16:30') === '2026-10-02T08:30:00.000Z'；utcIsoToHHMM('2026-10-02T08:30:00Z') === '16:30'；hhmmToUtcIso('2026-10-02','07:00') === '2026-10-01T23:00:00.000Z'；hhmmToUtcIso('2026-10-02','25:00') throw RangeError",
           "datetime hhmm validation and compare：isValidHHMM('09:05') === true、isValidHHMM('9:05') === false、isValidHHMM('24:00') === false；compareHHMM('16:30','17:00') < 0、compareHHMM('17:00','17:00') === 0",
           "datetime addDays and monthOf：addDays('2026-09-30', 1) === '2026-10-01'；addDays('2026-03-01', -1) === '2026-02-28'；monthOf('2026-10-02') === '2026-10'；weekdayLabel('2026-10-04') === '日'",
-          "datetime minutesSince：minutesSince('2026-10-02T08:00:00Z', new Date('2026-10-02T08:07:59Z')) === 7；未來時間回 0"
+          "datetime minutesSince：minutesSince('2026-10-02T08:00:00Z', new Date('2026-10-02T08:07:59Z')) === 7；未來時間回 0",
+          "datetime invalid inputs：formatDate('2026-02-30')、formatDateWithWeekday('2026/10/02')、formatDateTime('abc') 皆回 '—'；toTaipeiDate('abc')、utcIsoToHHMM('abc')、addDays('2026-02-30',1)、monthOf('2026-10')、weekdayLabel('')、hhmmToUtcIso('2026-13-01','10:00') throw RangeError；minutesSince('abc', now) === 0"
         ],
         "run": "just web-test src/shared/utils/datetime.spec.ts -t \"datetime\"",
         "notes": ""
