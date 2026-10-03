@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 36,
-  "last_updated": "2026-10-03T14:51:14Z",
+  "version": 37,
+  "last_updated": "2026-10-03T15:22:08Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -1020,7 +1020,7 @@
     {
       "id": "PARENT-028",
       "title": "移植 SkeletonBlock 元件（載入骨架）",
-      "description": "建立 `apps/web/src/parent/components/SkeletonBlock.vue`：\n```ts\nprops: { variant?: 'line' | 'card' | 'row' /* 預設 line */; count?: number /* 預設 1 */; width?: string; height?: string }\n```\n- 渲染 count 個區塊，外層 `aria-busy=\"true\"` + 視覺隱藏文字「載入中」；動畫為 pulse 透明度脈動（1 → 0.5 → 1、1.2 秒循環），reduced-motion 時停用；顏色用 `--m3-surface-container-high`。\n- 區塊：`line` 每個區塊是一行（`.skeleton-line`，高 14px）；`card` 每個區塊是一張卡（`.skeleton-card`，圓角 / padding 同 M3Card，底色 `--m3-surface-container-low`）；`row` 每個區塊是一列（`.skeleton-row`，高 72px，與 M3ListItem 二行 + leading 同高）。`width` / `height` 套在每個區塊的外框上；`variant=line`、`count > 1` 且沒給 `width` 時最後一行寬 60%。\n- 所有色塊 `aria-hidden=\"true\"`；外層不加 `role=\"status\"`（同頁多個骨架時不重複朗讀）。\n\n移植 ivy `FE:src/parent/components/SkeletonBlock.vue`（variant/count/width/height 保留，variant 改為列舉）；**去掉** ivy 的 shimmer 掃光（改為 pulse）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-skeleton.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：line / card / row 三種、count=3。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/SkeletonBlock.vue`：\n```ts\nprops: { variant?: 'line' | 'card' | 'row' /* 預設 line */; count?: number /* 預設 1 */; width?: string; height?: string }\n```\n- 渲染 count 個區塊，外層 `aria-busy=\"true\"` + 視覺隱藏文字「載入中」；動畫為 pulse 透明度脈動（1 → 0.5 → 1、1.2 秒循環），reduced-motion 時停用；顏色用 `--m3-surface-container-high`。\n- 區塊：`line` 每個區塊是一行（`.skeleton-line`，高 14px）；`card` 每個區塊是一張卡（`.skeleton-card`，圓角 / padding 同 M3Card，底色 `--m3-surface-container-low`）；`row` 每個區塊是一列（`.skeleton-row`，高 72px，與 M3ListItem 二行 + leading 同高）。`width` / `height` 套在每個區塊的外框上（給 height 時同時以 inline `min-height` 覆寫 row 的 72px 下限，指定值即實際高度）；`variant=line`、`count > 1` 且沒給 `width` 時最後一行寬 60%（只給 height 也照樣縮短）。\n- 所有色塊 `aria-hidden=\"true\"`；外層不加 `role=\"status\"`（同頁多個骨架時不重複朗讀）。\n\n移植 ivy `FE:src/parent/components/SkeletonBlock.vue`（variant/count/width/height 保留，variant 改為列舉）；**去掉** ivy 的 shimmer 掃光（改為 pulse）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-skeleton.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：line / card / row 三種、count=3。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/SkeletonBlock.vue",
       "source_ref": "FE:src/parent/components/SkeletonBlock.vue::props",
@@ -1043,7 +1043,9 @@
           "SkeletonBlock applies custom size：width='60%'、height='20px' → 區塊 style 含 'width: 60%' 與 'height: 20px'；variant='card'、count=2、width='120px'、height='48px' → 兩張 '.skeleton-card' 的 style 都含 'width: 120px' 與 'height: 48px'",
           "SkeletonBlock defaults to one line：不傳 props → 1 個 '.skeleton-line' 且無 style，沒有 card / row 區塊",
           "SkeletonBlock shortens last line when width not given：variant='line'、count=3 → 前兩行無 style、第三行 style 含 'width: 60%'；count=2、width='80%' → 兩行都是 'width: 80%'",
-          "SkeletonBlock renders card blocks：variant='card'、count=3 → '.skeleton-card' 元素數 === 3、沒有 '.skeleton-line'"
+          "SkeletonBlock renders card blocks：variant='card'、count=3 → '.skeleton-card' 元素數 === 3、沒有 '.skeleton-line'",
+          "SkeletonBlock row height overrides default row height：variant='row'、count=2、height='56px' → 兩個 '.skeleton-row' 的 style 皆含 'height: 56px' 與 'min-height: 56px'",
+          "SkeletonBlock shortens last line when only height given：variant='line'、count=3、height='20px' → 三行 style 皆含 'height: 20px'，前兩行無 width、第三行 'width: 60%'"
         ],
         "run": "just web-test src/parent/components/SkeletonBlock.spec.ts -t \"SkeletonBlock\"",
         "notes": ""
