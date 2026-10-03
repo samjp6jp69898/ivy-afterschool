@@ -1,24 +1,34 @@
-"""INFRA-006：apps/api/.env.example 與 apps/web/.env.example 的把關（env 只放基礎設施與 secret）。
+"""INFRA-006 / INFRA-049：apps/api 與 apps/web 的 .env.example 把關（env 只放基礎設施與 secret）。
 
 解析 / 掃描函式接受路徑參數，所以同一個函式既檢查真實檔案、也以 tmp 檔驗證「會抓到違規」。
+本機值必須與 repo root 的 compose.yaml（INFRA-044）一致。
 """
 
+import json
 import re
 import textwrap
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
+import yaml
 
-API_KEYS = {
+# architecture_decisions §4 的 env，順序即範本順序
+API_KEY_ORDER = [
     "APP_ENV",
     "DATABASE_URL",
+    "MIGRATION_DATABASE_URL",
     "APP_SECRET_KEY",
     "CORS_ORIGINS",
     "PUBLIC_BASE_URL",
-    "SUPABASE_URL",
-    "SUPABASE_SERVICE_ROLE_KEY",
+    "R2_ENDPOINT_URL",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "R2_BUCKET",
     "SENTRY_DSN",
-}
+]
+API_KEYS = set(API_KEY_ORDER)
+LOCAL_DB_HOSTPORT = "127.0.0.1:54342"
 PLACEHOLDER_VALUE = "change-me"
 _KEY_LINE = re.compile(r"^([A-Z_][A-Z0-9_]*)=(.*)$")
 _VITE_ENV = re.compile(r"import\.meta\.env\.VITE_")
@@ -70,12 +80,12 @@ def web_env_example(repo_root: Path) -> Path:
 
 
 def test_env_examples_api_keys_exact(api_env_example: Path, tmp_path: Path) -> None:
-    assert set(parse_env_example(api_env_example)) == API_KEYS
+    assert list(parse_env_example(api_env_example)) == API_KEY_ORDER
 
     extra = tmp_path / ".env.example"
-    extra.write_text(api_env_example.read_text(encoding="utf-8") + "\n# x\nLINE_CHANNEL_TOKEN=x\n")
+    extra.write_text(api_env_example.read_text(encoding="utf-8") + "\n# x\nSUPABASE_URL=x\n")
     unexpected = set(parse_env_example(extra)) - API_KEYS
-    assert unexpected == {"LINE_CHANNEL_TOKEN"}, f"多出的 key：{sorted(unexpected)}"
+    assert unexpected == {"SUPABASE_URL"}, f"多出的 key：{sorted(unexpected)}"
 
 
 def test_env_examples_api_each_key_has_comment(api_env_example: Path, tmp_path: Path) -> None:
@@ -100,7 +110,38 @@ def test_env_examples_api_each_key_has_comment(api_env_example: Path, tmp_path: 
 def test_env_examples_api_secret_placeholder(api_env_example: Path) -> None:
     values = parse_env_example(api_env_example)
     assert values["APP_SECRET_KEY"] == PLACEHOLDER_VALUE
-    assert values["SUPABASE_SERVICE_ROLE_KEY"] == PLACEHOLDER_VALUE
+
+
+def _compose(repo_root: Path) -> dict[str, object]:
+    data = yaml.safe_load((repo_root / "compose.yaml").read_text(encoding="utf-8"))
+    assert isinstance(data, dict)
+    return data
+
+
+def test_env_examples_local_values_match_compose(api_env_example: Path, repo_root: Path) -> None:
+    values = parse_env_example(api_env_example)
+    compose = _compose(repo_root)
+    services = compose["services"]
+    assert isinstance(services, dict)
+    configs = compose["configs"]
+    assert isinstance(configs, dict)
+
+    storage_host_ports = {int(str(p).split(":")[1]) for p in services["storage"]["ports"]}
+    assert urlsplit(values["R2_ENDPOINT_URL"]).port in storage_host_ports
+    assert urlsplit(values["R2_ENDPOINT_URL"]).port == 54344
+
+    identities = json.loads(configs["seaweedfs-s3"]["content"])["identities"]
+    assert len(identities) == 1
+    credential = identities[0]["credentials"][0]
+    assert values["R2_ACCESS_KEY_ID"] == credential["accessKey"]
+    assert values["R2_SECRET_ACCESS_KEY"] == credential["secretKey"]
+
+    command = services["storage"]["command"]
+    command_text = command if isinstance(command, str) else " ".join(command)
+    assert f"-bucket={values['R2_BUCKET']}" in command_text
+
+    for key in ("DATABASE_URL", "MIGRATION_DATABASE_URL"):
+        assert urlsplit(values[key]).netloc.rsplit("@", 1)[1] == LOCAL_DB_HOSTPORT, key
 
 
 def test_env_examples_web_has_no_keys(web_env_example: Path) -> None:
