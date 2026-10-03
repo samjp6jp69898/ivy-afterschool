@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 19,
-  "last_updated": "2026-10-03T13:09:11Z",
+  "version": 20,
+  "last_updated": "2026-10-03T13:20:10Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -486,7 +486,7 @@
     {
       "id": "PARENT-014",
       "title": "移植 M3Icon 元件與自架 Material Symbols 子集字型",
-      "description": "建立 `apps/web/src/parent/components/m3/M3Icon.vue`（移植 ivy `FE:src/parent/components/m3/M3Icon.vue`）。\n\n**介面**：\n```ts\nprops: { name: string; size?: number | string /* 預設 24 */; filled?: boolean; label?: string }\n// label 有值 → role=\"img\" + aria-label；無值 → aria-hidden=\"true\"\n```\n保留：以 Material Symbols Rounded ligature 渲染、`font-variation-settings` 控制 FILL；1em 夾盒避免字型未載入時露出 ligature 原文跑版（ivy `styles/icons.css`）。\n去掉：ivy 的 weight prop 與 manifest 自動產生流程。字型子集檔 `apps/web/src/parent/assets/fonts/material-symbols-rounded-subset.woff2` 與 `apps/web/src/parent/styles/icons.css`（@font-face + `.m3-icon` 夾盒）一併在本 task 建立；子集內容只需涵蓋家長端實際用到的圖示（清單寫在 icons.css 註解，新增圖示時更新）。\n樣式只用 PARENT-001 的 `--m3-*` 變數；觸控目標 ≥ 44×44px；有 `:focus-visible` 外框。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-m3-kit.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：預設 / filled / 三種尺寸、帶 label 與裝飾用兩種無障礙模式。可與其他 M3 元件 task 共用同一張稿 `docs/mockups/parent-component-m3-kit.html`（`preview-tasks` 列出 PARENT-014~PARENT-023、PARENT-098、PARENT-175）。\n\n**驗收標準**：每一條對應 red_case（vitest + @vue/test-utils 真實 DOM）。",
+      "description": "建立 `apps/web/src/parent/components/m3/M3Icon.vue`（移植 ivy `FE:src/parent/components/m3/M3Icon.vue`）。\n\n**介面**：\n```ts\nprops: { name: string; size?: number | string /* 預設 24 */; filled?: boolean; label?: string }\n// label 有值 → role=\"img\" + aria-label；無值 → aria-hidden=\"true\"\n```\n保留：以 Material Symbols Rounded ligature 渲染、`font-variation-settings` 控制 FILL；1em 夾盒避免字型未載入時露出 ligature 原文跑版（ivy `styles/icons.css`）。\n去掉：ivy 的 weight prop 與 manifest 自動產生流程。字型子集檔 `apps/web/src/parent/assets/fonts/material-symbols-rounded-subset.woff2` 與 `apps/web/src/parent/styles/icons.css`（@font-face + `.m3-icon` 夾盒）一併在本 task 建立；子集內容只需涵蓋家長端實際用到的圖示（清單寫在 icons.css 註解，新增圖示時更新）。\n樣式只用 PARENT-001 的 `--m3-*` 變數。本元件不可互動、不取焦點（不帶 tabindex、不聽事件）；44px 觸控目標與 `:focus-visible` 外框由外層 IconButton / Button 負責。`size` 接受數字（px）或字串（例如 `1.5em`）；`font-variation-settings` 固定 `wght` 400、`GRAD` 0、`opsz` 24。字型子集由 Google Fonts css2 的 `icon_names` 參數取得（軸 `opsz,wght,FILL,GRAD@24,400,0..1,0`，FILL 保留 0..1 範圍），取得方式與圖示清單寫在 icons.css 註解；`@font-face` 用 `font-display: block`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-m3-kit.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：預設 / filled / 三種尺寸、帶 label 與裝飾用兩種無障礙模式。可與其他 M3 元件 task 共用同一張稿 `docs/mockups/parent-component-m3-kit.html`（`preview-tasks` 列出 PARENT-014~PARENT-023、PARENT-098、PARENT-175）。\n\n**驗收標準**：每一條對應 red_case（vitest + @vue/test-utils 真實 DOM）。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3Icon.vue",
       "source_ref": "FE:src/parent/components/m3/M3Icon.vue::props",
@@ -507,7 +507,9 @@
         "red_cases": [
           "M3Icon renders ligature and size：mount({name:'home', size:32}) → 元素文字 === 'home'，style 含 'font-size: 32px'",
           "M3Icon decorative vs labelled：無 label → attributes('aria-hidden') === 'true'；label='通知' → attributes('role') === 'img' 且 aria-label === '通知'、無 aria-hidden",
-          "M3Icon filled variation：filled=true → style 的 font-variation-settings 含 \"'FILL' 1\"；預設含 \"'FILL' 0\""
+          "M3Icon filled variation：filled=true → style 的 font-variation-settings 含 FILL 1（引號由瀏覽器序列化決定，單雙引號皆可）；預設含 FILL 0",
+          "M3Icon default size and string size：未傳 size → style 含 'font-size: 24px'；size='1.5em' → 含 'font-size: 1.5em'",
+          "M3Icon is not interactive：label='說明' → 根元素為 span、無 tabindex 屬性、role === 'img'"
         ],
         "run": "just web-test src/parent/components/m3/M3Icon.spec.ts -t \"M3Icon\"",
         "notes": ""
