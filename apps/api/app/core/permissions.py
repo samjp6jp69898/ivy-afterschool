@@ -169,8 +169,9 @@ def resolve_effective_permissions(
     移植 ivy ``utils/permissions.py::resolve_user_permissions`` 的「DB 為單一事實來源、
     空清單不回退任何預設」原則。
 
-    - 只有角色權限中的 ``*`` 會展開成 ``ALL_PERMISSIONS``（含日後新增的碼）；
-      extra / revoked 中的 ``*`` 視為不合法碼（extra 不可藉此提權）。
+    - 角色權限中的 ``*`` 展開成 ``ALL_PERMISSIONS``（含日後新增的碼）。
+    - extra 中的 ``*`` 是不合法碼，丟棄（不可藉此提權）。
+    - revoked 中的 ``*`` 採 fail-closed：撤銷全部權限，回傳空集合。
     - 結果只含合法碼；三個來源中的不合法碼（DB 手動寫入、enum 改名殘留）合併成一則 warning。
     """
     role = [str(code) for code in role_permissions]
@@ -184,10 +185,12 @@ def resolve_effective_permissions(
     }
     if any(invalid.values()):
         logger.warning(
-            "忽略不合法的權限碼：%s",
+            "不合法的權限碼（extra 中丟棄；revoked 含 * 時撤銷全部）：%s",
             " ".join(f"{source}={codes!r}" for source, codes in invalid.items() if codes),
         )
 
+    if WILDCARD in revoked:
+        return frozenset()
     base = set(ALL_PERMISSIONS) if WILDCARD in role else set(role)
     effective = (base | set(extra)) - set(revoked)
     return frozenset(code for code in effective if is_valid_permission(code))
