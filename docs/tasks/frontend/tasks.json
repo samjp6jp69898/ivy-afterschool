@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 8,
-  "last_updated": "2026-10-03T12:14:56Z",
+  "version": 9,
+  "last_updated": "2026-10-03T12:16:16Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -271,11 +271,11 @@
     {
       "id": "FRONTEND-008",
       "title": "建立 constants/permissions.ts 並與後端 Permission enum 做一致性測試",
-      "description": "建立 `apps/web/src/constants/permissions.ts`（後台專用；家長端不使用權限碼）。`docs/architecture_decisions.md` §6：前端同步一份權限碼，並有一致性測試。移植 ivy `FE:src/constants/permissions.ts::PERMISSION_NAMES` 的「常數物件 + 型別」形式；值改為本專案扁平權限碼，**去掉** PLATFORM_ONLY_CODES、PORTAL_ONLY_ROLES、TEACHER_PORTAL_ROUTES、scope-aware 後綴。\n\n**介面**\n```ts\nexport const PERMISSIONS = {\n  DASHBOARD_READ: 'dashboard:read', STAFF_READ: 'staff:read', STAFF_WRITE: 'staff:write', ROLES_READ: 'roles:read', ROLES_WRITE: 'roles:write',\n  SETTINGS_READ: 'settings:read', SETTINGS_WRITE: 'settings:write', AUDIT_READ: 'audit:read', CLASSES_READ: 'classes:read', CLASSES_WRITE: 'classes:write',\n  STUDENTS_READ: 'students:read', STUDENTS_WRITE: 'students:write', STUDENTS_SENSITIVE: 'students:sensitive', GUARDIANS_WRITE: 'guardians:write',\n  ATTENDANCE_READ: 'attendance:read', ATTENDANCE_OPERATE: 'attendance:operate', ATTENDANCE_AMEND: 'attendance:amend', LEAVES_READ: 'leaves:read', LEAVES_WRITE: 'leaves:write',\n  HOMEWORK_READ: 'homework:read', HOMEWORK_WRITE: 'homework:write', PICKUP_READ: 'pickup:read', PICKUP_OPERATE: 'pickup:operate', PICKUP_OVERRIDE: 'pickup:override',\n  EXAMS_READ: 'exams:read', EXAMS_WRITE: 'exams:write', EXAMS_PUBLISH: 'exams:publish',\n  STUDENTS_PURGE: 'students:purge',\n} as const\nexport type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS]\nexport const ALL_PERMISSION_CODES: readonly PermissionCode[]\nexport function isPermissionCode(v: string): v is PermissionCode\n```\n- 一致性測試 `apps/web/src/constants/permissions.consistency.spec.ts`：以 `node:fs` 讀 `apps/api/app/core/permissions.py`（路徑以 `fileURLToPath(new URL('../../../api/app/core/permissions.py', import.meta.url))` 解析），擷取 `class Permission(StrEnum):` 區塊內所有 `= \"xxx:yyy\"` 字串值，與 `ALL_PERMISSION_CODES` 比對集合。檔案不存在時測試**失敗**並顯示路徑（不可 skip）。NFC 的 `nfc:manage` 在 NFC 解除 blocked 時兩邊同時加入。\n- 新增權限碼時：後端 enum（BACKEND-070）、domain_spec §3、本檔同時修改。\n\n**驗收標準**\n- 前端 28 碼與後端 enum 集合完全一致。\n- `*` 不是合法權限碼。",
+      "description": "建立 `apps/web/src/constants/permissions.ts`（後台專用；家長端不使用權限碼）。`docs/architecture_decisions.md` §6：前端同步一份權限碼，並有一致性測試。移植 ivy `FE:src/constants/permissions.ts::PERMISSION_NAMES` 的「常數物件 + 型別」形式；值改為本專案扁平權限碼，**去掉** PLATFORM_ONLY_CODES、PORTAL_ONLY_ROLES、TEACHER_PORTAL_ROUTES、scope-aware 後綴。\n\n**介面**\n```ts\nexport const PERMISSIONS = {\n  DASHBOARD_READ: 'dashboard:read', STAFF_READ: 'staff:read', STAFF_WRITE: 'staff:write', ROLES_READ: 'roles:read', ROLES_WRITE: 'roles:write',\n  SETTINGS_READ: 'settings:read', SETTINGS_WRITE: 'settings:write', AUDIT_READ: 'audit:read', CLASSES_READ: 'classes:read', CLASSES_WRITE: 'classes:write',\n  STUDENTS_READ: 'students:read', STUDENTS_WRITE: 'students:write', STUDENTS_SENSITIVE: 'students:sensitive', GUARDIANS_WRITE: 'guardians:write',\n  ATTENDANCE_READ: 'attendance:read', ATTENDANCE_OPERATE: 'attendance:operate', ATTENDANCE_AMEND: 'attendance:amend', LEAVES_READ: 'leaves:read', LEAVES_WRITE: 'leaves:write',\n  HOMEWORK_READ: 'homework:read', HOMEWORK_WRITE: 'homework:write', PICKUP_READ: 'pickup:read', PICKUP_OPERATE: 'pickup:operate', PICKUP_OVERRIDE: 'pickup:override',\n  EXAMS_READ: 'exams:read', EXAMS_WRITE: 'exams:write', EXAMS_PUBLISH: 'exams:publish',\n  STUDENTS_PURGE: 'students:purge',\n} as const\nexport type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS]\nexport const ALL_PERMISSION_CODES: readonly PermissionCode[]\nexport function isPermissionCode(v: string): v is PermissionCode\n```\n- 一致性測試 `apps/web/src/constants/permissions.consistency.spec.ts`：以 `node:fs` 讀 `apps/api/app/core/permissions.py`（路徑以 `resolve(dirname(fileURLToPath(import.meta.url)), '../../../api/app/core/permissions.py')` 解析；不可寫成 `new URL(相對路徑, import.meta.url)`，Vite 會把該字面模式改寫成 asset URL），擷取 `class Permission(StrEnum):` 區塊內所有 `= \"xxx:yyy\"` 字串值，與 `ALL_PERMISSION_CODES` 比對集合。檔案不存在時測試**失敗**並顯示路徑（不可 skip）。NFC 的 `nfc:manage` 在 NFC 解除 blocked 時兩邊同時加入。\n- 新增權限碼時：後端 enum（BACKEND-070）、domain_spec §3、本檔同時修改。\n\n**驗收標準**\n- 前端 28 碼與後端 enum 集合完全一致。\n- `*` 不是合法權限碼。",
       "granularity_unit": "config",
       "target_path": "apps/web/src/constants/permissions.ts",
       "source_ref": "FE:src/constants/permissions.ts::PERMISSION_NAMES",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012",

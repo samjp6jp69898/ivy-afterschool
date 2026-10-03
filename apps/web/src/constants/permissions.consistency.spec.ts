@@ -1,13 +1,14 @@
 /// <reference types="node" />
 // FRONTEND-008：前端權限碼與後端 Permission enum（apps/api/app/core/permissions.py）一致性測試。
 import { existsSync, readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { ALL_PERMISSION_CODES, isPermissionCode, PERMISSIONS } from './permissions'
 
-const BACKEND_PERMISSIONS_PATH = fileURLToPath(
-  new URL('../../../api/app/core/permissions.py', import.meta.url),
-)
+// 不寫成 new URL(相對路徑, import.meta.url)：Vite 會把這個字面模式改寫成 asset URL（http://localhost/...）
+const HERE = dirname(fileURLToPath(import.meta.url))
+const BACKEND_PERMISSIONS_PATH = resolve(HERE, '../../../api/app/core/permissions.py')
 
 /** 擷取 `class Permission(StrEnum):` 區塊內所有 `= "xxx:yyy"` 字串值；檔案不存在直接 throw（不可 skip）。 */
 function readBackendPermissions(path: string): Set<string> {
@@ -52,7 +53,7 @@ describe('permissions constants', () => {
   })
 
   it('permissions constants fail loudly when backend file missing', () => {
-    const missing = fileURLToPath(new URL('../../../api/app/core/no_such_permissions.py', import.meta.url))
+    const missing = resolve(HERE, '../../../api/app/core/no_such_permissions.py')
 
     expect(() => readBackendPermissions(missing)).toThrow(missing)
   })
