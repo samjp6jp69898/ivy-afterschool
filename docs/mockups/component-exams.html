@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+
+<meta name="preview-status" content="draft">
+<meta name="preview-tasks" content="FRONTEND-236,FRONTEND-238">
+<meta name="preview-route" content="component:components/exams/{ScoreCell,RenotifyChoiceDialog}.vue">
+<meta name="preview-updated" content="2026-10-03">
+
+<title>設計稿：成績元件（ScoreCell / RenotifyChoiceDialog）</title>
+
+<!-- 版號對齊 apps/web/pnpm-lock.yaml 的實際安裝版本 -->
+<link rel="stylesheet" href="https://unpkg.com/element-plus@2.14.7/dist/index.css">
+<script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/locale/zh-tw.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue@2.3.2/dist/index.iife.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+#app { display: flex; flex-direction: column; height: 100%; }
+body { font-family: var(--el-font-family); background: var(--el-bg-color-page); color: var(--el-text-color-primary); }
+
+.preview-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 6px 16px; font-size: 12px;
+  color: var(--el-color-info-dark-2);
+  background: var(--el-color-info-light-9);
+  border-bottom: 1px dashed var(--el-border-color);
+}
+.preview-bar__spacer { flex: 1; }
+.preview-bar code { font-size: 12px; }
+
+.sheet { flex: 1; min-height: 0; overflow: auto; padding: 24px; }
+.sheet__inner { max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+.section-title { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+.section-desc { margin: 0 0 16px; font-size: 13px; color: var(--el-text-color-secondary); line-height: 1.6; }
+.text-secondary { color: var(--el-text-color-secondary); font-size: 13px; }
+/* 按鈕內 icon 與文字的間距（實作用 :icon prop 時 EP 自帶） */
+.el-button > span > .el-icon { margin-right: 4px; }
+.demo-box { padding: 16px; border: 1px dashed var(--el-border-color); border-radius: 6px; background: var(--el-bg-color); }
+
+/* ---------- 情境：ScoreGrid 工具列與表格（屬 FRONTEND-235） ---------- */
+.grid-toolbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; font-size: 13px; }
+.grid-toolbar__status { display: inline-flex; align-items: center; gap: 4px; color: var(--el-text-color-secondary); }
+.grid-toolbar__status.is-ok { color: var(--el-color-success); }
+.grid-toolbar__status.is-error { color: var(--el-color-danger); }
+.grid-toolbar__spacer { flex: 1; }
+.grid-toolbar__notify { display: inline-flex; align-items: center; gap: 8px; }
+.row-out { opacity: 0.55; }
+.out-tag { margin-left: 6px; }
+
+/* ---------- ScoreCell（FRONTEND-236） ---------- */
+.score-cell { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.score-cell__input { width: 64px; }
+.score-cell__input .el-input__inner { text-align: center; font-variant-numeric: tabular-nums; }
+.score-cell.is-error .el-input__wrapper,
+.score-cell.is-invalid .el-input__wrapper { box-shadow: 0 0 0 1px var(--el-color-danger) inset; }
+.score-cell__absent { height: 24px; }
+.score-cell__absent .el-checkbox__label { padding-left: 4px; font-size: 13px; }
+/* 角標與狀態圖示：貼在輸入框右上角，不擠動版面 */
+.score-cell__mark { position: absolute; top: -5px; left: 54px; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.score-cell__dirty { position: absolute; top: 1px; left: 53px; width: 0; height: 0; border-top: 10px solid var(--el-color-warning); border-left: 10px solid transparent; border-top-right-radius: 3px; pointer-events: none; }
+.score-cell__spin { font-size: 13px; color: var(--el-color-primary); background: var(--el-bg-color); border-radius: 50%; animation: score-spin 1s linear infinite; }
+.score-cell__ok { font-size: 13px; color: var(--el-color-white); background: var(--el-color-success); border-radius: 50%; padding: 1px; }
+.score-cell__err { font-size: 14px; color: var(--el-color-danger); background: var(--el-bg-color); border-radius: 50%; }
+@keyframes score-spin { to { transform: rotate(360deg); } }
+.fade-leave-active { transition: opacity 0.4s ease; }
+.fade-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .score-cell__spin { animation: none; } .fade-leave-active { transition: none; } }
+.score-cell__text { display: inline-block; min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
+.score-cell__text.is-absent { color: var(--el-color-warning-dark-2); }
+.score-cell__text.is-empty { color: var(--el-text-color-placeholder); }
+
+/* ---------- 狀態一覽 ---------- */
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.gallery__item { padding: 14px 12px 12px; border: 1px solid var(--el-border-color-lighter); border-radius: 6px; background: var(--el-bg-color); }
+.gallery__title { margin-bottom: 10px; font-size: 12px; font-weight: 600; color: var(--el-text-color-secondary); }
+
+/* ---------- RenotifyChoiceDialog（FRONTEND-238） ---------- */
+.renotify__lead { margin: 0; line-height: 1.7; color: var(--el-text-color-regular); }
+.renotify__count { margin: 12px 0 0; font-weight: 600; color: var(--el-color-warning-dark-2); }
+.renotify__hint { margin: 8px 0 0; font-size: 13px; color: var(--el-text-color-secondary); }
+</style>
+</head>
+
+<body>
+<div id="app">
+  <div class="preview-bar">
+    <el-tag :type="meta.status === 'approved' ? 'success' : 'warning'" size="small" effect="dark" disable-transitions>
+      {{ meta.status === 'approved' ? '已核可' : '待核可' }}
+    </el-tag>
+    <span>{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span>以身分檢視</span>
+    <el-select v-model="viewAs" size="small" style="width: 180px">
+      <el-option v-for="(r, key) in roles" :key="key" :label="r.label" :value="key"></el-option>
+    </el-select>
+    <span class="preview-bar__spacer"></span>
+    <span>更新 {{ meta.updated }}</span>
+    <el-button size="small" text type="primary" @click="notesOpen = true">
+      設計說明 / 待裁定（{{ openQuestions.length }}）
+    </el-button>
+  </div>
+
+  <div class="sheet">
+    <div class="sheet__inner">
+
+      <!-- ============ 情境：成績輸入格 ============ -->
+      <el-card shadow="never">
+        <h2 class="section-title">情境：第一次段考 成績輸入<el-tag size="small" type="info" disable-transitions>情境</el-tag></h2>
+        <p class="section-desc">ScoreGrid（FRONTEND-235）與 useScoreAutosave（FRONTEND-237）在 page-exam-detail 稿另畫，這裡用簡化版串起 ScoreCell 與 RenotifyChoiceDialog：輸入後 blur 或 Enter → 格子變 dirty → 停 800ms 批次儲存 → 儲存中 → 已儲存（1 秒後淡出）。<br>
+          切到「已發布」再改分數：尚未選擇是否通知時格子停在未儲存，跳出重新通知選擇。</p>
+
+        <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 12px">
+          <span class="text-secondary">考試狀態（稿用切換）</span>
+          <el-radio-group v-model="examStatus" size="small" @change="onStatusChange">
+            <el-radio-button value="draft">草稿</el-radio-button>
+            <el-radio-button value="published">已發布</el-radio-button>
+          </el-radio-group>
+          <el-checkbox v-model="failNext" size="small">模擬下一次儲存失敗（網路錯誤）</el-checkbox>
+        </div>
+
+        <div class="demo-box">
+          <div class="grid-toolbar">
+            <span v-if="failedCount" class="grid-toolbar__status is-error">
+              <el-icon><icon-warning-filled></icon-warning-filled></el-icon>{{ failedCount }} 格儲存失敗
+              <el-button link type="primary" @click="retryFailed">重試</el-button>
+            </span>
+            <span v-else-if="savingAny" class="grid-toolbar__status"><el-icon class="score-cell__spin"><icon-loading></icon-loading></el-icon>儲存中…</span>
+            <span v-else-if="dirtyCount" class="grid-toolbar__status">{{ dirtyCount }} 格尚未儲存</span>
+            <span v-else class="grid-toolbar__status is-ok"><el-icon><icon-circle-check></icon-circle-check></el-icon>所有變更已儲存</span>
+            <span class="grid-toolbar__spacer"></span>
+            <span v-if="examStatus === 'published' && canWrite" class="grid-toolbar__notify">
+              修改後通知家長：
+              <el-radio-group :model-value="notifyChoice" size="small" @update:model-value="choose">
+                <el-radio-button :value="true">開</el-radio-button>
+                <el-radio-button :value="false">關</el-radio-button>
+              </el-radio-group>
+              <el-tag v-if="notifyChoice === null" type="warning" size="small" disable-transitions>尚未選擇</el-tag>
+            </span>
+          </div>
+
+          <el-table :data="students" border :row-class-name="({ row }) => (row.in_roster ? '' : 'row-out')">
+            <el-table-column prop="student_no" label="學號" width="90" fixed></el-table-column>
+            <el-table-column label="姓名" width="170" fixed>
+              <template #default="{ row }">
+                {{ row.name }}<el-tag v-if="!row.in_roster" class="out-tag" size="small" type="info" disable-transitions>已不在名單</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="class_name" label="班級" width="110"></el-table-column>
+            <el-table-column v-for="sub in subjects" :key="sub.id" :label="sub.name + '（滿分 ' + sub.full + '）'" min-width="150" align="center">
+              <template #default="{ row }">
+                <score-cell :score="cell(row.id, sub.id).score" :is-absent="cell(row.id, sub.id).is_absent"
+                            :full-score="sub.full" :state="cell(row.id, sub.id).state"
+                            :error-message="cell(row.id, sub.id).error" :readonly="!canWrite"
+                            @change="(v) => edit(row.id, sub.id, v)"></score-cell>
+              </template>
+            </el-table-column>
+          </el-table>
+          <p v-if="!canWrite" class="text-secondary" style="margin-bottom: 0">目前身分只有 exams:read：每格只顯示文字（缺考顯示「缺考」、未填顯示「—」），沒有通知切換。</p>
+        </div>
+      </el-card>
+
+      <!-- ============ FRONTEND-236 ScoreCell 狀態一覽 ============ -->
+      <el-card shadow="never">
+        <h2 class="section-title">ScoreCell 狀態一覽<el-tag size="small" disable-transitions>FRONTEND-236</el-tag></h2>
+        <p class="section-desc">props：<code>score</code>、<code>isAbsent</code>、<code>fullScore</code>、<code>state: idle | dirty | saving | saved | error</code>、<code>errorMessage?</code>、<code>readonly</code>；emits <code>change({score, is_absent})</code>。輸入框 64px、inputmode decimal；允許空白、0~滿分、最多一位小數；輸入「缺」或「-」等同勾選缺考。不合法時紅框 + tooltip、不 emit。以下每格都可直接操作（滿分 100）。</p>
+        <div class="gallery">
+          <div v-for="g in gallery" :key="g.title" class="gallery__item">
+            <div class="gallery__title">{{ g.title }}</div>
+            <score-cell :score="g.score" :is-absent="g.absent" :full-score="100" :state="g.state"
+                        :error-message="g.error" :readonly="g.readonly" :initial-text="g.text"></score-cell>
+          </div>
+        </div>
+      </el-card>
+
+      <!-- ============ FRONTEND-238 RenotifyChoiceDialog ============ -->
+      <el-card shadow="never">
+        <h2 class="section-title">RenotifyChoiceDialog<el-tag size="small" disable-transitions>FRONTEND-238</el-tag></h2>
+        <p class="section-desc">props：<code>modelValue</code>、<code>pendingCount</code>；emits <code>update:modelValue</code>、<code>choose(notify)</code>。「通知家長」emit true、「不通知」emit false，兩者都關閉。點遮罩不關；Esc 不 emit choose（關不關見待裁定第 1 題，本稿照 A 畫）。</p>
+        <div class="demo-box" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap">
+          <span class="text-secondary">pendingCount</span>
+          <el-input-number v-model="standalone.count" :min="1" :max="99" size="small"></el-input-number>
+          <el-button type="primary" @click="standalone.chosen = false; standalone.open = true">開啟 dialog</el-button>
+          <span class="text-secondary">最後一次結果：{{ standalone.result }}</span>
+        </div>
+      </el-card>
+    </div>
+  </div>
+
+  <renotify-choice-dialog v-model="dialogOpen" :pending-count="dirtyCount" @choose="choose"></renotify-choice-dialog>
+  <renotify-choice-dialog :model-value="standalone.open" :pending-count="standalone.count"
+                          @choose="(v) => { standalone.chosen = true; standalone.result = 'choose(' + v + ')' }"
+                          @update:model-value="(v) => { standalone.open = v; if (!v && !standalone.chosen) standalone.result = '未選擇就關閉（未 emit choose）' }"></renotify-choice-dialog>
+
+  <el-drawer v-model="notesOpen" title="設計說明 / 待裁定" size="460px">
+    <el-alert v-if="openQuestions.length" title="以下項目需要你裁定，未回覆前這張稿不會進入實作"
+              type="warning" :closable="false" show-icon style="margin-bottom: 16px"></el-alert>
+    <h4>設計決策</h4>
+    <ol>
+      <li v-for="(d, i) in decisions" :key="i" style="margin-bottom: 6px">{{ d }}</li>
+    </ol>
+    <h4 v-if="openQuestions.length">待裁定</h4>
+    <ol>
+      <li v-for="(q, i) in openQuestions" :key="i" style="margin-bottom: 8px">
+        <div>{{ q.question }}</div>
+        <div style="color: var(--el-text-color-secondary); font-size: 13px">
+          A. {{ q.optionA }}<br>B. {{ q.optionB }}
+        </div>
+      </li>
+    </ol>
+  </el-drawer>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch } = Vue
+
+const ALL_STAFF = [
+  'dashboard:read', 'classes:read', 'students:read',
+  'attendance:read', 'attendance:operate', 'leaves:read',
+  'homework:read', 'homework:write', 'pickup:read', 'pickup:operate', 'exams:read',
+]
+const ROLES = {
+  director: { label: '主任', permissions: [...ALL_STAFF, 'exams:write', 'exams:publish'] },
+  clerk: { label: '行政', permissions: [...ALL_STAFF, 'exams:write', 'exams:publish'] },
+  tutor: { label: '課輔老師', permissions: [...ALL_STAFF, 'exams:write'] },
+  viewer: { label: '自訂角色（成績僅檢視）', permissions: ALL_STAFF },
+}
+
+const fmt = (n) => (n === null || n === undefined ? '' : String(n))
+
+/* ---------- ScoreCell ----------
+   initialText 只用於狀態一覽直接停在「輸入了不合法值」的樣子；實作沒有這個 prop。 */
+const ScoreCell = {
+  props: {
+    score: { type: Number, default: null },
+    isAbsent: { type: Boolean, default: false },
+    fullScore: { type: Number, required: true },
+    state: { type: String, default: 'idle' },
+    errorMessage: { type: String, default: '' },
+    readonly: { type: Boolean, default: false },
+    initialText: { type: String, default: null },
+  },
+  emits: ['change'],
+  setup(props, { emit }) {
+    const text = ref(props.initialText ?? fmt(props.score))
+    watch(() => [props.score, props.isAbsent], () => { text.value = fmt(props.score) })
+    const parse = (raw) => {
+      const t = raw.trim()
+      if (t === '') return { ok: true, value: { score: null, is_absent: false } }
+      if (t === '缺' || t === '-') return { ok: true, value: { score: null, is_absent: true } }
+      if (/^\d+\.\d{2,}$/.test(t)) return { ok: false, message: '最多一位小數' }
+      if (!/^\d+(\.\d)?$/.test(t) || Number(t) > props.fullScore) return { ok: false, message: `需介於 0~${props.fullScore}` }
+      return { ok: true, value: { score: Number(t), is_absent: false } }
+    }
+    const localError = computed(() => { const r = parse(text.value); return r.ok ? '' : r.message })
+    const tip = computed(() => localError.value || (props.state === 'error' ? props.errorMessage : ''))
+    const commit = () => {
+      const r = parse(text.value)
+      if (!r.ok) return
+      if (r.value.is_absent) { text.value = ''; if (!props.isAbsent) emit('change', r.value); return }
+      if (r.value.score === props.score && props.isAbsent === false) return
+      emit('change', r.value)
+    }
+    const toggleAbsent = (v) => { text.value = ''; emit('change', { score: null, is_absent: v }) }
+    const display = computed(() => (props.isAbsent ? '缺考' : props.score === null ? '—' : fmt(props.score)))
+    return { text, localError, tip, commit, toggleAbsent, display }
+  },
+  template: `
+    <span v-if="readonly" class="score-cell__text"
+          :class="{ 'is-absent': isAbsent, 'is-empty': !isAbsent && score === null }">{{ display }}</span>
+    <div v-else class="score-cell" :class="{ 'is-error': state === 'error', 'is-invalid': !!localError }" :title="tip">
+      <el-tooltip :content="tip" :disabled="!tip" placement="top" effect="dark">
+        <el-input v-model="text" class="score-cell__input" inputmode="decimal" :disabled="isAbsent"
+                  :placeholder="isAbsent ? '缺考' : ''" @blur="commit" @keyup.enter="commit"></el-input>
+      </el-tooltip>
+      <el-checkbox class="score-cell__absent" :model-value="isAbsent" size="small" @update:model-value="toggleAbsent">缺</el-checkbox>
+      <span v-if="state === 'dirty'" class="score-cell__dirty" aria-label="尚未儲存"></span>
+      <span v-else-if="state === 'saving'" class="score-cell__mark"><el-icon class="score-cell__spin" aria-label="儲存中"><icon-loading></icon-loading></el-icon></span>
+      <transition name="fade">
+        <span v-if="state === 'saved'" class="score-cell__mark"><el-icon class="score-cell__ok" aria-label="已儲存"><icon-check></icon-check></el-icon></span>
+      </transition>
+      <span v-if="state === 'error' && !localError" class="score-cell__mark"><el-icon class="score-cell__err"><icon-warning-filled></icon-warning-filled></el-icon></span>
+    </div>`,
+}
+
+/* ---------- RenotifyChoiceDialog ---------- */
+const RenotifyChoiceDialog = {
+  props: { modelValue: { type: Boolean, default: false }, pendingCount: { type: Number, default: 0 } },
+  emits: ['update:modelValue', 'choose'],
+  setup(props, { emit }) {
+    const pick = (v) => { emit('choose', v); emit('update:modelValue', false) }
+    const dismiss = () => emit('update:modelValue', false)
+    return { pick, dismiss }
+  },
+  template: `
+    <el-dialog :model-value="modelValue" title="修改已發布的成績" width="440px" :close-on-click-modal="false"
+               append-to-body @update:model-value="(v) => { if (!v) dismiss() }">
+      <p class="renotify__lead">此考試已發布，修改分數會記錄於稽核紀錄。是否在修改後通知家長分數已更新？</p>
+      <p class="renotify__count">目前有 {{ pendingCount }} 格等待儲存</p>
+      <p class="renotify__hint">本次編輯期間都會套用此選擇，可在工具列切換。</p>
+      <template #footer>
+        <el-button @click="pick(false)">不通知</el-button>
+        <el-button type="primary" @click="pick(true)">通知家長</el-button>
+      </template>
+    </el-dialog>`,
+}
+
+const app = createApp({
+  components: { ScoreCell, RenotifyChoiceDialog },
+  setup() {
+    const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
+    const meta = {
+      status: readMeta('preview-status'), tasks: readMeta('preview-tasks'),
+      route: readMeta('preview-route'), updated: readMeta('preview-updated'),
+    }
+    const viewAs = ref('tutor')
+    const canWrite = computed(() => ROLES[viewAs.value].permissions.includes('exams:write'))
+
+    const decisions = [
+      'ScoreCell 版面：64px 置中數字輸入框（tabular 數字）+ 右側小勾選「缺」。狀態標記貼在輸入框右上角、不推動版面：dirty = 橘黃三角角標；saving = 主色轉圈 icon；saved = 綠底白勾，1 秒後由 saved 轉 idle 時淡出；error = 紅框 + 紅色警告 icon。',
+      'ScoreCell 不合法輸入（超出 0~滿分、超過一位小數、非數字）即時紅框，hover / focus 時 tooltip 顯示「需介於 0~{fullScore}」或「最多一位小數」，根元素 title 也帶同一訊息；輸入保留讓使用者修正，不 emit。非數字一律用「需介於 0~{fullScore}」。',
+      'ScoreCell 後端錯誤（state error）tooltip 與 title 顯示 errorMessage（例如「分數超出 0~滿分」「儲存失敗，請重試」）；本地驗證錯誤優先於後端錯誤顯示。',
+      'ScoreCell 缺考：勾選後輸入框清空、disabled、placeholder「缺考」；輸入「缺」或「-」後 blur / Enter 同勾選。取消勾選 emit {score: null, is_absent: false}，輸入框恢復可編輯且為空。',
+      'ScoreCell readonly：只顯示文字，置中；分數照原值顯示（90 顯示「90」、88.5 顯示「88.5」，不補 .0）；缺考顯示「缺考」（warning 深色字）；未填顯示「—」（placeholder 色）。',
+      'ScoreCell saving 轉圈與 saved 淡出在 prefers-reduced-motion 時不做動畫（轉圈 icon 靜止、勾直接消失）。',
+      'RenotifyChoiceDialog 寬 440px、標題「修改已發布的成績」；內文照規格，「目前有 {n} 格等待儲存」用 warning 深色粗體單獨一行，下方灰字「本次編輯期間都會套用此選擇，可在工具列切換。」。footer：左「不通知」（default）、右「通知家長」（primary）。',
+      '情境中的工具列（屬 FRONTEND-235）：已發布時顯示「修改後通知家長：開 / 關」切換，尚未選擇時兩個都不亮並加橘色「尚未選擇」tag；在工具列點開 / 關等同在 dialog 裡選擇。',
+    ]
+    const openQuestions = [
+      {
+        question: 'RenotifyChoiceDialog 按 Esc（或右上 X）時要不要關掉對話框？規格只寫「保持等待、不 emit、格子維持未儲存」。',
+        optionA: '（推薦）關閉對話框、不 emit choose；格子維持未儲存，工具列顯示「尚未選擇」，使用者可在工具列選，或下一次自動儲存觸發時再跳出。本稿照此畫（有 X）。',
+        optionB: '不關閉：沒有 X、Esc 無作用，一定要在「通知家長 / 不通知」二選一才能繼續操作。',
+      },
+    ]
+
+    const subjects = [
+      { id: 'sub1', name: '國語', full: 100 },
+      { id: 'sub2', name: '數學', full: 100 },
+      { id: 'sub3', name: '英語', full: 50 },
+    ]
+    const students = [
+      { id: 's1', student_no: 'S11301', name: '王小明', class_name: '中年級班', in_roster: true },
+      { id: 's2', student_no: 'S11302', name: '陳小美', class_name: '中年級班', in_roster: true },
+      { id: 's3', student_no: 'S11305', name: '李承恩', class_name: '中年級班', in_roster: true },
+      { id: 's4', student_no: 'S11309', name: '林小華', class_name: '高年級班', in_roster: false },
+    ]
+    const seed = {
+      's1:sub1': [95, false], 's1:sub2': [88.5, false], 's1:sub3': [42, false],
+      's2:sub1': [null, true], 's2:sub2': [76, false],
+      's3:sub1': [100, false],
+      's4:sub1': [81, false], 's4:sub2': [69, false],
+    }
+    const cells = reactive({})
+    for (const st of students) for (const sub of subjects) {
+      const [score, absent] = seed[`${st.id}:${sub.id}`] ?? [null, false]
+      cells[`${st.id}:${sub.id}`] = { score, is_absent: absent, state: 'idle', error: '' }
+    }
+    const cell = (sid, subid) => cells[`${sid}:${subid}`]
+
+    const examStatus = ref('draft')
+    const notifyChoice = ref(false)          // 草稿固定 false；已發布從 null 開始
+    const dialogOpen = ref(false)
+    const failNext = ref(false)
+    let debounce = null
+
+    const all = () => Object.values(cells)
+    const dirtyCount = computed(() => all().filter((c) => c.state === 'dirty').length)
+    const failedCount = computed(() => all().filter((c) => c.state === 'error').length)
+    const savingAny = computed(() => all().some((c) => c.state === 'saving'))
+
+    const send = (list) => {
+      list.forEach((c) => { c.state = 'saving'; c.error = '' })
+      setTimeout(() => {
+        const fail = failNext.value
+        failNext.value = false
+        list.forEach((c) => {
+          if (c.state !== 'saving') return
+          if (fail) { c.state = 'error'; c.error = '儲存失敗，請重試'; return }
+          c.state = 'saved'
+          setTimeout(() => { if (c.state === 'saved') c.state = 'idle' }, 1000)
+        })
+      }, 700)
+    }
+    const flush = () => {
+      clearTimeout(debounce)
+      const list = all().filter((c) => c.state === 'dirty')
+      if (!list.length) return
+      if (notifyChoice.value === null) { dialogOpen.value = true; return }
+      send(list)
+    }
+    const edit = (sid, subid, v) => {
+      const c = cells[`${sid}:${subid}`]
+      c.score = v.score; c.is_absent = v.is_absent; c.state = 'dirty'; c.error = ''
+      clearTimeout(debounce)
+      debounce = setTimeout(flush, 800)
+    }
+    const choose = (v) => { notifyChoice.value = v; dialogOpen.value = false; flush() }
+    const retryFailed = () => send(all().filter((c) => c.state === 'error'))
+    const onStatusChange = (v) => { notifyChoice.value = v === 'published' ? null : false }
+
+    const gallery = [
+      { title: '未填（idle、null）', score: null, absent: false, state: 'idle' },
+      { title: '已有分數（idle）', score: 92, absent: false, state: 'idle' },
+      { title: '編輯後未儲存（dirty）', score: 87, absent: false, state: 'dirty' },
+      { title: '儲存中（saving）', score: 87, absent: false, state: 'saving' },
+      { title: '已儲存（saved，1 秒後淡出）', score: 87, absent: false, state: 'saved' },
+      { title: '後端錯誤（error）', score: 87, absent: false, state: 'error', error: '儲存失敗，請重試' },
+      { title: '輸入超出滿分（不 emit）', score: 87, absent: false, state: 'idle', text: '105' },
+      { title: '輸入超過一位小數（不 emit）', score: 87, absent: false, state: 'idle', text: '88.25' },
+      { title: '缺考（輸入框停用）', score: null, absent: true, state: 'idle' },
+      { title: '唯讀：分數', score: 88.5, absent: false, state: 'idle', readonly: true },
+      { title: '唯讀：缺考', score: null, absent: true, state: 'idle', readonly: true },
+      { title: '唯讀：未填', score: null, absent: false, state: 'idle', readonly: true },
+    ].map((g) => ({ error: '', readonly: false, text: null, ...g }))
+
+    return {
+      meta, decisions, openQuestions, roles: ROLES, viewAs, canWrite, notesOpen: ref(false),
+      subjects, students, cell, edit, examStatus, onStatusChange, notifyChoice, choose, dialogOpen, failNext,
+      dirtyCount, failedCount, savingAny, retryFailed, gallery,
+      standalone: reactive({ open: false, chosen: false, count: 3, result: '（尚未操作）' }),
+    }
+  },
+})
+
+app.use(ElementPlus, { locale: ElementPlusLocaleZhTw })
+const toKebab = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+for (const [name, component] of Object.entries(ElementPlusIconsVue)) {
+  app.component(`icon-${toKebab(name)}`, component)
+}
+app.mount('#app')
+</script>
+</body>
+</html>

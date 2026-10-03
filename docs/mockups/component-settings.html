@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+
+<meta name="preview-status" content="draft">
+<meta name="preview-tasks" content="FRONTEND-056,FRONTEND-066">
+<meta name="preview-route" content="component:components/settings/{SecretInput,TempPasswordDialog}.vue">
+<meta name="preview-updated" content="2026-10-03">
+
+<title>設計稿：設定元件（SecretInput / TempPasswordDialog）</title>
+
+<!-- 版號對齊 apps/web/pnpm-lock.yaml 的實際安裝版本 -->
+<link rel="stylesheet" href="https://unpkg.com/element-plus@2.14.7/dist/index.css">
+<script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/locale/zh-tw.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue@2.3.2/dist/index.iife.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+#app { display: flex; flex-direction: column; height: 100%; }
+body { font-family: var(--el-font-family); background: var(--el-bg-color-page); color: var(--el-text-color-primary); }
+
+.preview-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 6px 16px; font-size: 12px;
+  color: var(--el-color-info-dark-2);
+  background: var(--el-color-info-light-9);
+  border-bottom: 1px dashed var(--el-border-color);
+}
+.preview-bar__spacer { flex: 1; }
+.preview-bar code { font-size: 12px; }
+
+.sheet { flex: 1; min-height: 0; overflow: auto; padding: 24px; }
+.sheet__inner { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+.section-title { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+.section-desc { margin: 0 0 16px; font-size: 13px; color: var(--el-text-color-secondary); line-height: 1.6; }
+.demo-label { margin: 20px 0 8px; font-size: 12px; font-weight: 600; color: var(--el-text-color-secondary); }
+.demo-box { padding: 16px; border: 1px dashed var(--el-border-color); border-radius: 6px; background: var(--el-bg-color); }
+.demo-grid { display: grid; grid-template-columns: 180px 1fr; gap: 14px 16px; align-items: center; }
+.demo-grid__label { font-size: 13px; color: var(--el-text-color-secondary); }
+.text-secondary { color: var(--el-text-color-secondary); font-size: 13px; }
+/* 按鈕內 icon 與文字的間距（實作用 :icon prop 時 EP 自帶） */
+.el-button > span > .el-icon { margin-right: 4px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.payload {
+  margin-top: 12px; padding: 8px 12px; font-size: 12px; line-height: 1.7;
+  color: var(--el-text-color-regular); background: var(--el-fill-color-light); border-radius: 4px; white-space: pre-wrap;
+}
+.trigger-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.trigger-row .el-button + .el-button { margin-left: 0; }
+.field-desc { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); }
+
+/* ---------- SecretInput（FRONTEND-056） ---------- */
+.secret-input { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 32px; width: 100%; }
+.secret-input__status { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--el-text-color-regular); }
+.secret-input__status.is-unset { color: var(--el-text-color-secondary); }
+.secret-input__status.is-cleared { color: var(--el-text-color-placeholder); text-decoration: line-through; }
+.secret-input__pending { font-size: 13px; color: var(--el-color-warning-dark-2); }
+.secret-input__editor { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 260px; }
+.secret-input__editor .el-input { flex: 1; max-width: 360px; }
+.secret-input .el-button + .el-button { margin-left: 0; }
+
+/* ---------- TempPasswordDialog（FRONTEND-066） ---------- */
+.temp-pw__box {
+  display: flex; align-items: center; gap: 12px; margin-top: 16px; padding: 14px 16px;
+  border: 1px solid var(--el-border-color); border-radius: 6px; background: var(--el-fill-color-lighter);
+}
+.temp-pw__value {
+  flex: 1; min-width: 0; font-size: 26px; font-weight: 600; letter-spacing: 2px;
+  color: var(--el-text-color-primary); user-select: all; word-break: break-all;
+}
+.temp-pw__feedback { margin-top: 8px; font-size: 13px; display: flex; align-items: center; gap: 4px; min-height: 20px; }
+.temp-pw__feedback.is-success { color: var(--el-color-success); }
+.temp-pw__feedback.is-error { color: var(--el-color-danger); }
+</style>
+</head>
+
+<body>
+<div id="app">
+  <div class="preview-bar">
+    <el-tag :type="meta.status === 'approved' ? 'success' : 'warning'" size="small" effect="dark" disable-transitions>
+      {{ meta.status === 'approved' ? '已核可' : '待核可' }}
+    </el-tag>
+    <span>{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span>以身分檢視</span>
+    <el-select v-model="viewAs" size="small" style="width: 150px">
+      <el-option v-for="(r, key) in roles" :key="key" :label="r.label" :value="key"></el-option>
+    </el-select>
+    <span class="preview-bar__spacer"></span>
+    <span>更新 {{ meta.updated }}</span>
+    <el-button size="small" text type="primary" @click="notesOpen = true">
+      設計說明 / 待裁定（{{ openQuestions.length }}）
+    </el-button>
+  </div>
+
+  <div class="sheet">
+    <div class="sheet__inner">
+
+      <!-- ============ FRONTEND-056 SecretInput ============ -->
+      <el-card shadow="never">
+        <h2 class="section-title">SecretInput<el-tag size="small" disable-transitions>FRONTEND-056</el-tag></h2>
+        <p class="section-desc">後端回傳遮罩值（<code>****abcd</code>；長度 ≤ 8 時為 <code>********</code>；未設定為 <code>null</code>）。送回遮罩值 = 不修改、<code>null</code> = 清除、其他字串 = 新值。遮罩值永遠不放進可編輯 input。<br>
+          權限差異：有 <code>settings:write</code>（主任、系統管理員）可操作；只有 <code>settings:read</code>（行政）時 disabled，只剩狀態文字。</p>
+
+        <div class="demo-label">情境：系統設定「LINE 推播」分組（JsonSchemaForm 渲染 secret 欄位）</div>
+        <div class="demo-box">
+          <el-form label-position="top" style="max-width: 620px">
+            <el-form-item label="Channel access token">
+              <secret-input v-model="line.token" :initial="lineInitial.token" :disabled="!can('settings:write')"></secret-input>
+              <div class="field-desc">LINE Messaging API 的長期 channel access token，推播通知使用。</div>
+            </el-form-item>
+            <el-form-item label="Channel secret">
+              <secret-input v-model="line.secret" :initial="lineInitial.secret" :disabled="!can('settings:write')"></secret-input>
+              <div class="field-desc">驗證 LINE webhook 簽章使用。</div>
+            </el-form-item>
+            <el-form-item v-if="can('settings:write')">
+              <el-button type="primary" :loading="saving" @click="saveLine">儲存</el-button>
+            </el-form-item>
+          </el-form>
+          <div class="payload">PUT /admin/settings/line.messaging 將送出的 value：
+{{ payloadText }}</div>
+        </div>
+
+        <div class="demo-label">各狀態一覽（每格是獨立實例，可直接操作）</div>
+        <div class="demo-box">
+          <div class="demo-grid">
+            <span class="demo-grid__label">已設定（****abcd）</span>
+            <secret-input v-model="gallery.masked" initial="****abcd"></secret-input>
+            <span class="demo-grid__label">已設定（短值 ********）</span>
+            <secret-input v-model="gallery.short" initial="********"></secret-input>
+            <span class="demo-grid__label">未設定（null）</span>
+            <secret-input v-model="gallery.unset" :initial="null"></secret-input>
+            <span class="demo-grid__label">修改中</span>
+            <secret-input v-model="gallery.editing" initial="****9f2c" start="editing"></secret-input>
+            <span class="demo-grid__label">將於儲存後清除</span>
+            <secret-input v-model="gallery.cleared" initial="****77e1" start="cleared"></secret-input>
+            <span class="demo-grid__label">disabled（已設定）</span>
+            <secret-input v-model="gallery.disabledSet" initial="****abcd" disabled></secret-input>
+            <span class="demo-grid__label">disabled（未設定）</span>
+            <secret-input v-model="gallery.disabledUnset" :initial="null" disabled></secret-input>
+          </div>
+        </div>
+      </el-card>
+
+      <!-- ============ FRONTEND-066 TempPasswordDialog ============ -->
+      <el-card shadow="never">
+        <h2 class="section-title">TempPasswordDialog<el-tag size="small" disable-transitions>FRONTEND-066</el-tag></h2>
+        <p class="section-desc">建立帳號、重設密碼、重新啟用成功後由員工帳號頁（FRONTEND-064）開啟。沒按過「複製」就要關閉（「我已記下」、右上 X、Esc）會先跳確認框；點遮罩不會關閉。<br>
+          權限差異：三個入口都需要 <code>staff:write</code>（預設只有系統管理員）；缺權限時列表沒有這些操作，這個 dialog 不會出現。</p>
+
+        <div class="demo-box">
+          <div v-if="can('staff:write')" class="trigger-row">
+            <el-button @click="openPw('陳老師', 'tutor02', 'Tmp-8f3K2q9x')">建立帳號成功：陳老師</el-button>
+            <el-button @click="openPw('林行政', 'clerk01', 'Tmp-Q7m2Lp4d')">重設密碼成功：林行政</el-button>
+            <el-button @click="openPw('吳老師', 'tutor05', 'Tmp-x9Rk3Tw6')">重新啟用成功：吳老師</el-button>
+            <el-checkbox v-model="clipboardFails" style="margin-left: 8px">模擬剪貼簿失敗（非 https / 權限被拒）</el-checkbox>
+          </div>
+          <el-alert v-else type="info" :closable="false" show-icon
+                    title="目前身分沒有 staff:write：員工帳號列表不顯示「新增員工」「重設密碼」「重新啟用」，不會開到這個 dialog。切到「系統管理員」看互動。"></el-alert>
+          <div class="payload">{{ pwLog }}</div>
+        </div>
+      </el-card>
+    </div>
+  </div>
+
+  <temp-password-dialog v-model="pw.open" :username="pw.username" :display-name="pw.displayName"
+                        :temp-password="pw.password" :clipboard-fails="clipboardFails"
+                        @update:model-value="onPwClosed"></temp-password-dialog>
+
+  <el-drawer v-model="notesOpen" title="設計說明 / 待裁定" size="460px">
+    <el-alert v-if="openQuestions.length" title="以下項目需要你裁定，未回覆前這張稿不會進入實作"
+              type="warning" :closable="false" show-icon style="margin-bottom: 16px"></el-alert>
+    <h4>設計決策</h4>
+    <ol>
+      <li v-for="(d, i) in decisions" :key="i" style="margin-bottom: 6px">{{ d }}</li>
+    </ol>
+    <h4 v-if="openQuestions.length">待裁定</h4>
+    <ol>
+      <li v-for="(q, i) in openQuestions" :key="i" style="margin-bottom: 8px">
+        <div>{{ q.question }}</div>
+        <div style="color: var(--el-text-color-secondary); font-size: 13px">
+          A. {{ q.optionA }}<br>B. {{ q.optionB }}
+        </div>
+      </li>
+    </ol>
+  </el-drawer>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch } = Vue
+const { ElMessageBox, ElMessage } = ElementPlus
+
+const ALL_STAFF = [
+  'dashboard:read', 'classes:read', 'students:read',
+  'attendance:read', 'attendance:operate', 'leaves:read',
+  'homework:read', 'homework:write', 'pickup:read', 'pickup:operate', 'exams:read',
+]
+const DIRECTOR = [...ALL_STAFF,
+  'staff:read', 'roles:read', 'settings:read', 'settings:write', 'audit:read',
+  'classes:write', 'students:write', 'students:sensitive', 'guardians:write',
+  'attendance:amend', 'leaves:write', 'pickup:override', 'exams:write', 'exams:publish']
+const ROLES = {
+  admin: { label: '系統管理員', permissions: [...DIRECTOR, 'staff:write', 'roles:write', 'students:purge'] },
+  director: { label: '主任', permissions: DIRECTOR },
+  clerk: {
+    label: '行政',
+    permissions: [...ALL_STAFF, 'settings:read', 'classes:write', 'students:write', 'guardians:write',
+      'leaves:write', 'exams:write', 'exams:publish'],
+  },
+  tutor: { label: '課輔老師', permissions: [...ALL_STAFF, 'exams:write'] },
+}
+
+/* ---------- SecretInput ----------
+   稿裡多一個 initial prop 只是為了讓展示格各自記住「初始值」；實作時初始值取掛載當下的 modelValue。
+   start prop 也只用於展示格直接停在某個狀態。 */
+const SecretInput = {
+  props: {
+    modelValue: { type: String, default: null },
+    initial: { type: String, default: null },
+    disabled: { type: Boolean, default: false },
+    start: { type: String, default: 'view' },
+  },
+  emits: ['update:modelValue'],
+  setup(props, { emit }) {
+    const mode = ref(props.start)            // view | editing | cleared
+    const draft = ref('')
+    if (props.start === 'cleared') emit('update:modelValue', null)
+    watch(() => props.initial, () => { mode.value = 'view'; draft.value = '' })
+    const startEdit = () => { draft.value = ''; mode.value = 'editing' }
+    const onInput = (v) => { draft.value = v; emit('update:modelValue', v === '' ? props.initial : v) }
+    const cancel = () => { draft.value = ''; mode.value = 'view'; emit('update:modelValue', props.initial) }
+    const clear = () => {
+      ElMessageBox.confirm('清除後 LINE 推播將無法運作，確定要清除嗎？', '清除設定值', {
+        type: 'warning', confirmButtonText: '確定', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger',
+      }).then(() => { mode.value = 'cleared'; emit('update:modelValue', null) }).catch(() => {})
+    }
+    const undo = () => { mode.value = 'view'; emit('update:modelValue', props.initial) }
+    return { mode, draft, startEdit, onInput, cancel, clear, undo }
+  },
+  template: `
+    <div class="secret-input">
+      <template v-if="mode === 'editing' && !disabled">
+        <div class="secret-input__editor">
+          <el-input :model-value="draft" type="password" show-password autocomplete="new-password"
+                    :placeholder="initial ? '輸入新值以取代目前設定' : '輸入設定值'" @update:model-value="onInput"></el-input>
+          <el-button @click="cancel">取消</el-button>
+        </div>
+      </template>
+      <template v-else-if="mode === 'cleared'">
+        <span class="secret-input__status is-cleared"><el-icon><icon-lock></icon-lock></el-icon><span>已設定（<span class="mono">{{ initial }}</span>）</span></span>
+        <span class="secret-input__pending">將於儲存後清除</span>
+        <el-button v-if="!disabled" link type="primary" @click="undo">復原</el-button>
+      </template>
+      <template v-else-if="initial">
+        <span class="secret-input__status"><el-icon><icon-lock></icon-lock></el-icon><span>已設定（<span class="mono">{{ initial }}</span>）</span></span>
+        <template v-if="!disabled">
+          <el-button size="small" @click="startEdit">修改</el-button>
+          <el-button size="small" type="danger" plain @click="clear">清除</el-button>
+        </template>
+      </template>
+      <template v-else>
+        <span class="secret-input__status is-unset"><el-icon><icon-unlock></icon-unlock></el-icon>未設定</span>
+        <el-button v-if="!disabled" size="small" type="primary" plain @click="startEdit">設定</el-button>
+      </template>
+    </div>`,
+}
+
+/* ---------- TempPasswordDialog ---------- */
+const TempPasswordDialog = {
+  props: {
+    modelValue: { type: Boolean, default: false },
+    username: { type: String, default: '' },
+    displayName: { type: String, default: '' },
+    tempPassword: { type: String, default: '' },
+    clipboardFails: { type: Boolean, default: false },   // 只用於稿裡模擬
+  },
+  emits: ['update:modelValue'],
+  setup(props, { emit }) {
+    const copied = ref(false)
+    const copyError = ref(false)
+    watch(() => props.modelValue, (open) => { if (open) { copied.value = false; copyError.value = false } })
+    const copy = async () => {
+      try {
+        if (props.clipboardFails) throw new Error('denied')
+        await navigator.clipboard.writeText(props.tempPassword)
+        copied.value = true; copyError.value = false
+      } catch (e) {
+        copyError.value = true
+      }
+    }
+    const requestClose = (done) => {
+      if (copied.value) { emit('update:modelValue', false); if (done) done(); return }
+      ElMessageBox.confirm('關閉後將無法再次查看此密碼，確定已記下了嗎？', '確認關閉', {
+        type: 'warning', confirmButtonText: '確定關閉', cancelButtonText: '取消',
+      }).then(() => { emit('update:modelValue', false); if (done) done() }).catch(() => {})
+    }
+    return { copied, copyError, copy, requestClose }
+  },
+  template: `
+    <el-dialog :model-value="modelValue" title="臨時密碼" width="440px" :close-on-click-modal="false"
+               :before-close="requestClose" append-to-body>
+      <el-alert type="warning" :closable="false" show-icon
+                :title="'此密碼只會顯示這一次。' + displayName + '（帳號 ' + username + '）首次登入後必須修改密碼。'"></el-alert>
+      <div class="temp-pw__box">
+        <span class="temp-pw__value mono" aria-label="臨時密碼">{{ tempPassword }}</span>
+        <el-button :type="copied ? 'success' : 'primary'" :plain="copied" @click="copy">
+          <el-icon><icon-check v-if="copied"></icon-check><icon-document-copy v-else></icon-document-copy></el-icon>
+          {{ copied ? '已複製' : '複製' }}
+        </el-button>
+      </div>
+      <div class="temp-pw__feedback is-success" v-if="copied" role="status">已複製到剪貼簿，請交給本人。</div>
+      <div class="temp-pw__feedback is-error" v-else-if="copyError" role="alert">
+        <el-icon><icon-warning-filled></icon-warning-filled></el-icon>無法複製，請手動抄寫
+      </div>
+      <div class="temp-pw__feedback" v-else></div>
+      <template #footer>
+        <el-button type="primary" @click="requestClose()">我已記下</el-button>
+      </template>
+    </el-dialog>`,
+}
+
+const app = createApp({
+  components: { SecretInput, TempPasswordDialog },
+  setup() {
+    const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
+    const meta = {
+      status: readMeta('preview-status'), tasks: readMeta('preview-tasks'),
+      route: readMeta('preview-route'), updated: readMeta('preview-updated'),
+    }
+    const viewAs = ref('admin')
+    const can = (code) => ROLES[viewAs.value].permissions.includes(code)
+
+    const decisions = [
+      'SecretInput 三種外觀：已設定 = 鎖頭 icon +「已設定（****abcd）」（遮罩字串用等寬字）+「修改」（default 小按鈕）+「清除」（danger plain）；未設定 = 開鎖 icon + 灰字「未設定」+「設定」（primary plain）；修改中 = password input（show-password，最寬 360px）+「取消」。',
+      'SecretInput 修改中的 input 一開始是空的、placeholder「輸入新值以取代目前設定」（未設定時為「輸入設定值」），不預填任何東西；autocomplete=new-password 避免瀏覽器自動填入登入密碼。',
+      'SecretInput 清除確認框：標題「清除設定值」、內文「清除後 LINE 推播將無法運作，確定要清除嗎？」、確定按鈕為 danger。確定後原狀態文字加刪除線，旁邊橘字「將於儲存後清除」+「復原」文字按鈕。',
+      'SecretInput disabled（只有 settings:read）時只顯示狀態文字，不顯示任何按鈕；「將於儲存後清除」狀態下 disabled 也不顯示「復原」。',
+      'SecretInput 本身沒有「儲存」；儲存由所屬分組卡片（FRONTEND-058）負責。儲存成功後父層用後端回傳的新遮罩值重設，元件回到「已設定」或「未設定」。',
+      'TempPasswordDialog 寬 440px、標題「臨時密碼」（三種入口共用，不分建立 / 重設 / 重新啟用）。上方 warning alert 放「此密碼只會顯示這一次。{displayName}（帳號 {username}）首次登入後必須修改密碼。」，下方密碼框 26px 等寬粗體、可整段選取，右側「複製」。',
+      'TempPasswordDialog 複製成功：按鈕變綠「已複製」+ 下方綠字「已複製到剪貼簿，請交給本人。」；失敗：下方紅字「無法複製，請手動抄寫」，按鈕維持「複製」可再試。',
+      'TempPasswordDialog footer 只有一個 primary「我已記下」。未複製時「我已記下」、X、Esc 都先跳確認框「關閉後將無法再次查看此密碼，確定已記下了嗎？」（按鈕「確定關閉」/「取消」）；已複製則直接關。點遮罩不關。',
+    ]
+    const openQuestions = [
+      {
+        question: 'SecretInput 按了「修改」後，輸入框打了字又全部刪掉（變成空字串）時，要 emit 什麼？（task 規格只寫「輸入時 emit 新字串」，空字串送到後端會被當成新明文。）',
+        optionA: '（推薦）空字串視同未修改，emit 初始值（遮罩或 null）；要清除只能走「清除」按鈕。本稿目前照此做。需在 FRONTEND-056 補一條 red case。',
+        optionB: '照送空字串，交給後端 schema 驗證，422 時錯誤顯示在欄位下方。',
+      },
+    ]
+
+    const lineInitial = reactive({ token: '****a91f', secret: null })
+    const line = reactive({ token: lineInitial.token, secret: lineInitial.secret })
+    const payloadText = computed(() => {
+      const describe = (v, init) => {
+        if (v === null) return init === null ? 'null（維持未設定）' : 'null（清除）'
+        if (v === init) return `"${v}"（遮罩值 = 不修改）`
+        return `"${'•'.repeat(Math.min(v.length, 12))}"（新值，${v.length} 字）`
+      }
+      return `{ channel_access_token: ${describe(line.token, lineInitial.token)},\n  channel_secret: ${describe(line.secret, lineInitial.secret)} }`
+    })
+    const saving = ref(false)
+    const mask = (v) => (v === null ? null : v.length <= 8 ? '********' : '****' + v.slice(-4))
+    const saveLine = () => {
+      saving.value = true
+      setTimeout(() => {
+        saving.value = false
+        if (line.token !== lineInitial.token) lineInitial.token = mask(line.token)
+        if (line.secret !== lineInitial.secret) lineInitial.secret = mask(line.secret)
+        line.token = lineInitial.token; line.secret = lineInitial.secret
+        ElMessage.success('已儲存')
+      }, 800)
+    }
+
+    const pw = reactive({ open: false, username: '', displayName: '', password: '' })
+    const pwLog = ref('（點上方按鈕開啟 dialog）')
+    const openPw = (displayName, username, password) => {
+      Object.assign(pw, { open: true, displayName, username, password })
+      pwLog.value = `開啟：${displayName}（${username}）`
+    }
+    const onPwClosed = (v) => {
+      if (!v) {
+        pw.open = false
+        pw.password = ''
+        pwLog.value = `已關閉：emit update:modelValue [false]；父層同時清空 tempPassword（目前 prop 值："${pw.password}"）`
+      }
+    }
+
+    return {
+      meta, decisions, openQuestions, roles: ROLES, viewAs, can, notesOpen: ref(false),
+      line, lineInitial, payloadText, saving, saveLine,
+      gallery: reactive({ masked: '****abcd', short: '********', unset: null, editing: '****9f2c', cleared: '****77e1', disabledSet: '****abcd', disabledUnset: null }),
+      pw, pwLog, openPw, onPwClosed, clipboardFails: ref(false),
+    }
+  },
+})
+
+app.use(ElementPlus, { locale: ElementPlusLocaleZhTw })
+const toKebab = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+for (const [name, component] of Object.entries(ElementPlusIconsVue)) {
+  app.component(`icon-${toKebab(name)}`, component)
+}
+app.mount('#app')
+</script>
+</body>
+</html>

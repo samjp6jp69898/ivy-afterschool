@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+
+<meta name="preview-status" content="draft">
+<meta name="preview-tasks" content="FRONTEND-039,FRONTEND-041,FRONTEND-042">
+<meta name="preview-route" content="component:components/common/{PageHeader,AdminListToolbar,EmptyState}.vue">
+<meta name="preview-updated" content="2026-10-03">
+
+<title>設計稿：共用元件（PageHeader / AdminListToolbar / EmptyState）</title>
+
+<!-- 版號對齊 apps/web/pnpm-lock.yaml 的實際安裝版本 -->
+<link rel="stylesheet" href="https://unpkg.com/element-plus@2.14.7/dist/index.css">
+<script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/locale/zh-tw.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue@2.3.2/dist/index.iife.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+#app { display: flex; flex-direction: column; height: 100%; }
+body { font-family: var(--el-font-family); background: var(--el-bg-color-page); color: var(--el-text-color-primary); }
+
+.preview-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 6px 16px; font-size: 12px;
+  color: var(--el-color-info-dark-2);
+  background: var(--el-color-info-light-9);
+  border-bottom: 1px dashed var(--el-border-color);
+}
+.preview-bar__spacer { flex: 1; }
+.preview-bar code { font-size: 12px; }
+
+.sheet { flex: 1; min-height: 0; overflow: auto; padding: 24px; }
+.sheet__inner { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+.section-title { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+.section-desc { margin: 0 0 16px; font-size: 13px; color: var(--el-text-color-secondary); line-height: 1.6; }
+.demo-label { margin: 20px 0 8px; font-size: 12px; font-weight: 600; color: var(--el-text-color-secondary); }
+.demo-label:first-of-type { margin-top: 0; }
+.demo-box { padding: 16px; border: 1px dashed var(--el-border-color); border-radius: 6px; background: var(--el-bg-color-page); }
+.demo-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.demo-narrow { width: 375px; max-width: 100%; }
+.text-secondary { color: var(--el-text-color-secondary); font-size: 13px; }
+/* 按鈕內 icon 與文字的間距（實作用 :icon prop 時 EP 自帶） */
+.el-button > span > .el-icon { margin-right: 4px; }
+.emit-log {
+  margin-top: 12px; padding: 8px 12px; min-height: 64px; max-height: 140px; overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.7;
+  color: var(--el-text-color-regular); background: var(--el-fill-color-light); border-radius: 4px;
+}
+.emit-log__empty { color: var(--el-text-color-placeholder); }
+
+.note {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; margin-left: 6px; border-radius: 50%;
+  font-size: 11px; font-weight: 700; line-height: 1; cursor: help;
+  color: var(--el-color-warning); background: var(--el-color-warning-light-9);
+  border: 1px solid var(--el-color-warning-light-5);
+}
+
+/* ---------- PageHeader（FRONTEND-039） ---------- */
+.page-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+.page-header__body { flex: 1; min-width: 0; }
+.page-header__title { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; color: var(--el-text-color-primary); }
+.page-header__subtitle { margin: 4px 0 0; font-size: 13px; color: var(--el-text-color-secondary); }
+.page-header__extra { margin-top: 8px; }
+.page-header__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+.page-header__actions .el-button + .el-button { margin-left: 0; }
+/* 實作用 @media (max-width: 767.98px)；稿裡用 .is-narrow 在 375px 框內示意 */
+.is-narrow .page-header { flex-wrap: wrap; }
+.is-narrow .page-header__body { flex-basis: 100%; }
+.is-narrow .page-header__actions { width: 100%; }
+
+/* ---------- AdminListToolbar（FRONTEND-041） ---------- */
+.list-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.list-toolbar__search { width: 240px; }
+.list-toolbar__filter { display: flex; align-items: center; gap: 6px; }
+.list-toolbar__filter-label { font-size: 13px; color: var(--el-text-color-secondary); white-space: nowrap; }
+.list-toolbar__spacer { flex: 1 1 auto; }
+.list-toolbar__count { font-size: 13px; color: var(--el-text-color-secondary); white-space: nowrap; }
+.list-toolbar__actions { display: flex; gap: 8px; }
+.list-toolbar__actions .el-button + .el-button { margin-left: 0; }
+.is-narrow .list-toolbar__search { width: 100%; }
+.is-narrow .list-toolbar__filter { flex: 1 1 calc(50% - 6px); }
+.is-narrow .list-toolbar__filter .el-select { flex: 1; }
+
+/* ---------- EmptyState（FRONTEND-042） ---------- */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 16px; }
+.empty-state__icon { font-size: 48px; color: var(--el-text-color-placeholder); margin-bottom: 16px; }
+.empty-state__title { margin: 0 0 6px; font-size: 16px; font-weight: 500; color: var(--el-text-color-regular); }
+.empty-state__desc { margin: 0; max-width: 360px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.empty-state__action { margin-top: 16px; display: flex; gap: 8px; }
+.empty-state.is-error .empty-state__icon { color: var(--el-color-danger); }
+.empty-state.is-inline { padding: 16px 8px; }
+.empty-state.is-inline .empty-state__title { font-size: 14px; margin-bottom: 2px; }
+.empty-state.is-inline .empty-state__action { margin-top: 8px; }
+</style>
+</head>
+
+<body>
+<div id="app">
+  <div class="preview-bar">
+    <el-tag :type="meta.status === 'approved' ? 'success' : 'warning'" size="small" effect="dark" disable-transitions>
+      {{ meta.status === 'approved' ? '已核可' : '待核可' }}
+    </el-tag>
+    <span>{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span>以身分檢視</span>
+    <el-select v-model="viewAs" size="small" style="width: 150px">
+      <el-option v-for="(r, key) in roles" :key="key" :label="r.label" :value="key"></el-option>
+    </el-select>
+    <span class="preview-bar__spacer"></span>
+    <span>更新 {{ meta.updated }}</span>
+    <el-button size="small" text type="primary" @click="notesOpen = true">
+      設計說明 / 待裁定（{{ openQuestions.length }}）
+    </el-button>
+  </div>
+
+  <div class="sheet">
+    <div class="sheet__inner">
+
+      <!-- ============ 組合示意：三個元件在列表頁裡怎麼搭 ============ -->
+      <el-card shadow="never">
+        <h2 class="section-title">組合示意：員工帳號列表<el-tag size="small" type="info" disable-transitions>情境</el-tag></h2>
+        <p class="section-desc">PageHeader + AdminListToolbar + 表格（EmptyState inline / error）。切換資料狀態看三態與錯誤態；切身分看動作按鈕的權限差異（缺 <code>staff:write</code> 時「新增員工」不出現，不是 disabled）。</p>
+        <el-radio-group v-model="listState" size="small" style="margin-bottom: 16px">
+          <el-radio-button value="data">有資料</el-radio-button>
+          <el-radio-button value="empty">空清單（無篩選）</el-radio-button>
+          <el-radio-button value="filtered-empty">篩選後無結果</el-radio-button>
+          <el-radio-button value="loading">載入中</el-radio-button>
+          <el-radio-button value="error">載入失敗</el-radio-button>
+        </el-radio-group>
+
+        <div class="demo-box" style="background: var(--el-bg-color)">
+          <page-header title="員工帳號">
+            <template #actions v-if="can('staff:write')">
+              <el-button type="primary"><el-icon><icon-plus></icon-plus></el-icon>新增員工</el-button>
+            </template>
+          </page-header>
+
+          <template v-if="listState !== 'error'">
+            <admin-list-toolbar
+              v-model:search="combo.search"
+              v-model:filter-values="combo.filters"
+              search-placeholder="搜尋帳號或姓名"
+              :filters="staffFilters"
+              :total="listState === 'loading' ? undefined : comboRows.length"></admin-list-toolbar>
+
+            <el-table v-loading="listState === 'loading'" :data="comboRows" border>
+              <el-table-column prop="username" label="帳號" width="130"></el-table-column>
+              <el-table-column prop="display_name" label="姓名" width="120"></el-table-column>
+              <el-table-column prop="role" label="角色" width="120"></el-table-column>
+              <el-table-column label="狀態" min-width="160">
+                <template #default="{ row }">
+                  <el-tag :type="row.active ? 'success' : 'info'" disable-transitions>{{ row.active ? '啟用' : '停用' }}</el-tag>
+                  <el-tag v-if="row.must_change" type="warning" style="margin-left: 6px" disable-transitions>待改密碼</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="last_login" label="最後登入" min-width="150"></el-table-column>
+              <template #empty>
+                <empty-state v-if="listState === 'filtered-empty'" variant="inline"
+                             title="沒有符合條件的員工" description="試著調整搜尋文字或篩選條件"></empty-state>
+                <empty-state v-else variant="inline" title="還沒有員工帳號"
+                             :description="can('staff:write') ? '點右上角「新增員工」建立第一個帳號' : ''"></empty-state>
+              </template>
+            </el-table>
+          </template>
+
+          <empty-state v-else variant="error" title="無法載入員工帳號" description="網路連線中斷，請確認網路後再試一次">
+            <template #action><el-button @click="listState = 'data'">重試</el-button></template>
+          </empty-state>
+        </div>
+      </el-card>
+
+      <!-- ============ FRONTEND-039 PageHeader ============ -->
+      <el-card shadow="never">
+        <h2 class="section-title">PageHeader<el-tag size="small" disable-transitions>FRONTEND-039</el-tag></h2>
+        <p class="section-desc">props：<code>title</code>、<code>subtitle?</code>；slot：<code>actions</code>（右側）、<code>default</code>（標題下方附加內容）。沒有副標時不渲染副標元素；actions slot 沒內容時不渲染右側容器。</p>
+
+        <div class="demo-label">1. 標題 + 副標 + actions</div>
+        <div class="demo-box">
+          <page-header title="學生工作台" subtitle="共 120 位在學">
+            <template #actions v-if="can('students:write')">
+              <el-button><el-icon><icon-upload></icon-upload></el-icon>匯入 Excel</el-button>
+              <el-button type="primary"><el-icon><icon-plus></icon-plus></el-icon>新增學生</el-button>
+            </template>
+          </page-header>
+        </div>
+        <p class="text-secondary" v-if="!can('students:write')">目前身分缺 students:write：actions slot 沒有內容，右側容器整個不渲染。</p>
+
+        <div class="demo-label">2. 只有標題（無副標元素）</div>
+        <div class="demo-box">
+          <page-header title="考試"></page-header>
+        </div>
+
+        <div class="demo-label">3. 副標 + default slot（篩選摘要）+ 次要動作</div>
+        <div class="demo-box">
+          <page-header title="代理接送核驗" subtitle="2026年10月2日（五）">
+            <el-tag closable type="info" disable-transitions @close="noop">只顯示：王小明</el-tag>
+            <template #actions>
+              <span class="text-secondary">12 秒前更新</span>
+              <el-button><el-icon><icon-refresh></icon-refresh></el-icon>重新整理</el-button>
+            </template>
+          </page-header>
+        </div>
+
+        <div class="demo-label">4. 窄寬度（&lt; 768px）：actions 換行到標題下方</div>
+        <div class="demo-box demo-narrow is-narrow">
+          <page-header title="參考資料" subtitle="科目、考試類型、合作國小與休息日">
+            <template #actions>
+              <el-button><el-icon><icon-upload></icon-upload></el-icon>匯入</el-button>
+              <el-button type="primary"><el-icon><icon-plus></icon-plus></el-icon>新增科目</el-button>
+            </template>
+          </page-header>
+        </div>
+      </el-card>
+
+      <!-- ============ FRONTEND-041 AdminListToolbar ============ -->
+      <el-card shadow="never">
+        <h2 class="section-title">AdminListToolbar<el-tag size="small" disable-transitions>FRONTEND-041</el-tag></h2>
+        <p class="section-desc">搜尋輸入停 300ms 後 emit 去頭尾空白的值、按 Enter 立即 emit；每個 FilterGroup 是一個 el-select，<code>clearable</code>（預設 true）時第一個選項是「全部」，選「全部」或按清除 icon → 該 key 設為 <code>undefined</code>；emit 的永遠是合併後的新物件。<code>total</code> 有值時顯示「共 N 筆」。下方灰框即時列出 emit 內容。</p>
+
+        <div class="demo-label">1. 搜尋 + 兩組篩選 + 筆數 + actions</div>
+        <div class="demo-box">
+          <admin-list-toolbar
+            :search="demo1.search"
+            :filter-values="demo1.filters"
+            search-placeholder="搜尋帳號或姓名"
+            :filters="staffFilters"
+            :total="37"
+            @update:search="(v) => { demo1.search = v; log('update:search', v) }"
+            @update:filter-values="(v) => { demo1.filters = v; log('update:filterValues', v) }">
+            <template #actions>
+              <el-button v-if="can('staff:write')" type="primary"><el-icon><icon-plus></icon-plus></el-icon>新增員工</el-button>
+            </template>
+          </admin-list-toolbar>
+          <div class="emit-log">
+            <div v-if="!emitLog.length" class="emit-log__empty">（輸入搜尋文字或選擇篩選，這裡會列出 emit）</div>
+            <div v-for="(l, i) in emitLog" :key="i">{{ l }}</div>
+          </div>
+        </div>
+
+        <div class="demo-label">2. 不可清除的篩選（clearable: false，無「全部」）+ 自訂篩選控制項<span class="note" title="待裁定第 1 題">?</span></div>
+        <div class="demo-box">
+          <admin-list-toolbar
+            v-model:search="demo2.search"
+            v-model:filter-values="demo2.filters"
+            search-placeholder="搜尋學生姓名"
+            :filters="leaveFilters"
+            :total="8">
+            <template #extra-filters>
+              <div class="list-toolbar__filter">
+                <span class="list-toolbar__filter-label">日期</span>
+                <el-date-picker v-model="demo2.range" type="daterange" range-separator="~"
+                                start-placeholder="開始" end-placeholder="結束" value-format="YYYY-MM-DD"
+                                style="width: 240px"></el-date-picker>
+              </div>
+            </template>
+            <template #actions>
+              <el-button v-if="can('leaves:write')" type="primary"><el-icon><icon-plus></icon-plus></el-icon>代登記請假</el-button>
+            </template>
+          </admin-list-toolbar>
+          <p class="text-secondary" style="margin: 0">「狀態」設 clearable: false：沒有「全部」選項、沒有清除 icon，永遠有值（預設「生效中」）。日期區間是 view 自帶的控制項，位置見待裁定第 1 題。</p>
+        </div>
+
+        <div class="demo-label">3. 只有搜尋（沒有 filters、沒有 total）</div>
+        <div class="demo-box">
+          <admin-list-toolbar v-model:search="demo3.search" search-placeholder="搜尋考試名稱"></admin-list-toolbar>
+        </div>
+
+        <div class="demo-label">4. 窄寬度：搜尋整列、篩選兩兩一列、筆數與動作同一列</div>
+        <div class="demo-box demo-narrow is-narrow">
+          <admin-list-toolbar
+            v-model:search="demo4.search"
+            v-model:filter-values="demo4.filters"
+            search-placeholder="搜尋帳號或姓名"
+            :filters="staffFilters"
+            :total="37">
+            <template #actions>
+              <el-button v-if="can('staff:write')" type="primary">新增員工</el-button>
+            </template>
+          </admin-list-toolbar>
+        </div>
+      </el-card>
+
+      <!-- ============ FRONTEND-042 EmptyState ============ -->
+      <el-card shadow="never">
+        <h2 class="section-title">EmptyState<el-tag size="small" disable-transitions>FRONTEND-042</el-tag></h2>
+        <p class="section-desc">props：<code>title</code>、<code>description?</code>、<code>variant?: 'default' | 'error' | 'inline'</code>、<code>icon?: Component</code>；slot <code>action</code>。根元素 class 依 variant 加 <code>is-error</code> / <code>is-inline</code>；inline 不渲染 icon。</p>
+
+        <div class="demo-row">
+          <div>
+            <div class="demo-label">default（預設 icon FolderOpened）+ action</div>
+            <div class="demo-box" style="background: var(--el-bg-color)">
+              <empty-state title="還沒有學生" description="點右上角新增或匯入 Excel">
+                <template #action v-if="can('students:write')">
+                  <el-button><el-icon><icon-upload></icon-upload></el-icon>匯入 Excel</el-button>
+                </template>
+              </empty-state>
+            </div>
+          </div>
+          <div>
+            <div class="demo-label">error（WarningFilled、danger 色）+ 重試</div>
+            <div class="demo-box" style="background: var(--el-bg-color)">
+              <empty-state variant="error" title="無法載入資料" description="伺服器暫時沒有回應，請稍後再試">
+                <template #action><el-button>重試</el-button></template>
+              </empty-state>
+            </div>
+          </div>
+          <div>
+            <div class="demo-label">default + 自訂 icon、無說明、無 action</div>
+            <div class="demo-box" style="background: var(--el-bg-color)">
+              <empty-state title="找不到此考試" :icon="'icon-document'"></empty-state>
+            </div>
+          </div>
+          <div>
+            <div class="demo-label">inline（表格 #empty 內，無 icon）</div>
+            <div class="demo-box" style="background: var(--el-bg-color)">
+              <el-table :data="[]" border>
+                <el-table-column label="科目" min-width="120"></el-table-column>
+                <el-table-column label="排序" width="80"></el-table-column>
+                <el-table-column label="狀態" width="90"></el-table-column>
+                <template #empty>
+                  <empty-state variant="inline" title="尚未建立科目">
+                    <template #action v-if="can('settings:write')">
+                      <el-button size="small" type="primary" plain>新增科目</el-button>
+                    </template>
+                  </empty-state>
+                </template>
+              </el-table>
+            </div>
+          </div>
+        </div>
+      </el-card>
+    </div>
+  </div>
+
+  <el-drawer v-model="notesOpen" title="設計說明 / 待裁定" size="460px">
+    <el-alert v-if="openQuestions.length" title="以下項目需要你裁定，未回覆前這張稿不會進入實作"
+              type="warning" :closable="false" show-icon style="margin-bottom: 16px"></el-alert>
+    <h4>設計決策</h4>
+    <ol>
+      <li v-for="(d, i) in decisions" :key="i" style="margin-bottom: 6px">{{ d }}</li>
+    </ol>
+    <h4 v-if="openQuestions.length">待裁定</h4>
+    <ol>
+      <li v-for="(q, i) in openQuestions" :key="i" style="margin-bottom: 8px">
+        <div>{{ q.question }}</div>
+        <div style="color: var(--el-text-color-secondary); font-size: 13px">
+          A. {{ q.optionA }}<br>B. {{ q.optionB }}
+        </div>
+      </li>
+    </ol>
+  </el-drawer>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch, onBeforeUnmount } = Vue
+
+/** 各角色預設權限碼，與 docs/domain_spec.md §3「預設授予」一致；admin 擁有全部。 */
+const ALL_STAFF = [
+  'dashboard:read', 'classes:read', 'students:read',
+  'attendance:read', 'attendance:operate', 'leaves:read',
+  'homework:read', 'homework:write', 'pickup:read', 'pickup:operate', 'exams:read',
+]
+const DIRECTOR = [...ALL_STAFF,
+  'staff:read', 'roles:read', 'settings:read', 'settings:write', 'audit:read',
+  'classes:write', 'students:write', 'students:sensitive', 'guardians:write',
+  'attendance:amend', 'leaves:write', 'pickup:override', 'exams:write', 'exams:publish']
+const ROLES = {
+  admin: { label: '系統管理員', permissions: [...DIRECTOR, 'staff:write', 'roles:write', 'students:purge'] },
+  director: { label: '主任', permissions: DIRECTOR },
+  clerk: {
+    label: '行政',
+    permissions: [...ALL_STAFF, 'settings:read', 'classes:write', 'students:write', 'guardians:write',
+      'leaves:write', 'exams:write', 'exams:publish'],
+  },
+  tutor: { label: '課輔老師', permissions: [...ALL_STAFF, 'exams:write'] },
+}
+
+/* ---------- PageHeader ---------- */
+const PageHeader = {
+  props: { title: { type: String, required: true }, subtitle: { type: String, default: '' } },
+  template: `
+    <div class="page-header">
+      <div class="page-header__body">
+        <h1 class="page-header__title">{{ title }}</h1>
+        <p v-if="subtitle" class="page-header__subtitle" data-test="page-subtitle">{{ subtitle }}</p>
+        <div v-if="$slots.default" class="page-header__extra"><slot></slot></div>
+      </div>
+      <div v-if="$slots.actions" class="page-header__actions"><slot name="actions"></slot></div>
+    </div>`,
+}
+
+/* ---------- AdminListToolbar ---------- */
+const ALL = '__all__'
+const AdminListToolbar = {
+  props: {
+    search: { type: String, default: '' },
+    searchPlaceholder: { type: String, default: '搜尋' },
+    filters: { type: Array, default: () => [] },
+    filterValues: { type: Object, default: () => ({}) },
+    total: { type: Number, default: undefined },
+  },
+  emits: ['update:search', 'update:filterValues'],
+  setup(props, { emit }) {
+    const text = ref(props.search)
+    watch(() => props.search, (v) => { if (v !== text.value.trim()) text.value = v })
+    let timer = null
+    const flush = () => { clearTimeout(timer); timer = null; emit('update:search', text.value.trim()) }
+    const onInput = (v) => { text.value = v; clearTimeout(timer); timer = setTimeout(flush, 300) }
+    onBeforeUnmount(() => clearTimeout(timer))
+    const clearable = (g) => g.clearable !== false
+    const current = (g) => {
+      const v = props.filterValues[g.key]
+      return v === undefined && clearable(g) ? ALL : v
+    }
+    const onSelect = (g, v) => {
+      emit('update:filterValues', { ...props.filterValues, [g.key]: v === ALL || v === '' ? undefined : v })
+    }
+    return { text, onInput, flush, clearable, current, onSelect, ALL }
+  },
+  template: `
+    <div class="list-toolbar">
+      <el-input class="list-toolbar__search" :model-value="text" :placeholder="searchPlaceholder"
+                :aria-label="searchPlaceholder" clearable
+                @update:model-value="onInput" @keyup.enter="flush" @clear="flush">
+        <template #prefix><el-icon><icon-search></icon-search></el-icon></template>
+      </el-input>
+      <div v-for="g in filters" :key="g.key" class="list-toolbar__filter">
+        <span class="list-toolbar__filter-label">{{ g.label }}</span>
+        <el-select :model-value="current(g)" :clearable="clearable(g) && current(g) !== ALL"
+                   style="width: 130px" @update:model-value="(v) => onSelect(g, v)">
+          <el-option v-if="clearable(g)" label="全部" :value="ALL"></el-option>
+          <el-option v-for="o in g.options" :key="String(o.value)" :label="o.label" :value="o.value"></el-option>
+        </el-select>
+      </div>
+      <slot name="extra-filters"></slot>
+      <span class="list-toolbar__spacer"></span>
+      <span v-if="total !== undefined" class="list-toolbar__count">共 {{ total }} 筆</span>
+      <div v-if="$slots.actions" class="list-toolbar__actions"><slot name="actions"></slot></div>
+    </div>`,
+}
+
+/* ---------- EmptyState ---------- */
+const EmptyState = {
+  props: {
+    title: { type: String, required: true },
+    description: { type: String, default: '' },
+    variant: { type: String, default: 'default' },
+    icon: { type: String, default: '' },
+  },
+  computed: {
+    iconName() { return this.icon || (this.variant === 'error' ? 'icon-warning-filled' : 'icon-folder-opened') },
+  },
+  template: `
+    <div class="empty-state" :class="{ 'is-error': variant === 'error', 'is-inline': variant === 'inline' }" role="status">
+      <el-icon v-if="variant !== 'inline'" class="empty-state__icon" data-test="empty-icon">
+        <component :is="iconName"></component>
+      </el-icon>
+      <p class="empty-state__title">{{ title }}</p>
+      <p v-if="description" class="empty-state__desc">{{ description }}</p>
+      <div v-if="$slots.action" class="empty-state__action"><slot name="action"></slot></div>
+    </div>`,
+}
+
+const STAFF_ROWS = [
+  { username: 'director01', display_name: '張主任', role: '主任', active: true, must_change: false, last_login: '2026/10/03 08:12' },
+  { username: 'clerk01', display_name: '林行政', role: '行政', active: true, must_change: false, last_login: '2026/10/02 17:40' },
+  { username: 'tutor02', display_name: '陳老師', role: '課輔老師', active: true, must_change: true, last_login: '從未登入' },
+  { username: 'tutor05', display_name: '吳老師', role: '課輔老師', active: false, must_change: false, last_login: '2026/08/30 16:05' },
+]
+
+const app = createApp({
+  components: { PageHeader, AdminListToolbar, EmptyState },
+  setup() {
+    const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
+    const meta = {
+      status: readMeta('preview-status'), tasks: readMeta('preview-tasks'),
+      route: readMeta('preview-route'), updated: readMeta('preview-updated'),
+    }
+    const viewAs = ref('admin')
+    const can = (code) => ROLES[viewAs.value].permissions.includes(code)
+
+    const decisions = [
+      'PageHeader 標題用 <h1>（20px / 600），副標 13px 次要色；header 下方固定 16px 間距。actions 與標題頂端對齊（default slot 有內容時不會被撐到中間）。',
+      'PageHeader 視窗寬 < 768px 時 actions 換行到標題下方、靠左、按鈕維持原寬（不做 ivy 的兩欄等寬按鈕牆；後台的主要尺寸是桌機與 1024 平板）。',
+      'PageHeader 的 actions slot 沒有內容時不渲染右側容器；呼叫端缺權限時直接不傳按鈕（隱藏而非 disabled），標題就會撐滿整列。',
+      'AdminListToolbar 版面順序：搜尋（240px）→ 各篩選（灰字標籤 + 130px el-select）→ 撐開 → 「共 N 筆」→ actions。總寬不夠時整列自動換行。',
+      'AdminListToolbar 篩選 clearable（預設）時，下拉第一個選項固定是「全部」：平板沒有 hover，el-select 的清除 icon 只在 hover 時出現，所以另給一個點得到的「全部」。選「全部」與按清除 icon 結果相同，該 key 都 emit undefined。clearable: false 時沒有「全部」也沒有清除 icon。',
+      'AdminListToolbar 搜尋框清除（x）視同 Enter：立即 emit 空字串，不等 300ms。',
+      'AdminListToolbar total 為 undefined 時不顯示筆數（例如載入中），不顯示「共 0 筆」。',
+      'AdminListToolbar 窄寬度：搜尋整列、篩選每列兩個等寬、筆數與 actions 同一列。不做 ivy 的手機 bottom sheet 與 chip（task 已排除 mobile 切換）。',
+      'EmptyState 預設 icon：default 用 FolderOpened、error 用 WarningFilled（danger 色），48px；標題 16px regular 色，說明 13px 次要色、最寬 360px 置中。inline 無 icon、標題 14px、上下 padding 16px，給表格 #empty 用。',
+      'EmptyState 的 error variant 只把 icon 改成 danger 色，標題不變紅；搭配 action slot 放「重試」（重試一律是 default 按鈕，不是 primary）。',
+      '空清單文案分兩種：完全沒有資料用「還沒有 X」+ 引導（有寫入權限時才提新增），篩選後沒有結果用「沒有符合條件的 X」+「試著調整搜尋文字或篩選條件」。各頁實際文案以各 view task 為準。',
+      '本稿 preview-tasks 只列 039 / 041 / 042；同一張稿的 FRONTEND-040（FormDialog）與 043（StatCard）尚未 ready，之後補畫時本稿會改回 draft 重送。',
+    ]
+    const openQuestions = [
+      {
+        question: 'AdminListToolbar 只有 el-select 型篩選與右側 actions slot，但請假（FRONTEND-129）、學生（FRONTEND-086）、考試（FRONTEND-231）列表還要放 StudentSelect、日期區間、「含封存」勾選等非下拉的篩選。這些控制項放哪裡？',
+        optionA: '（推薦）新增具名 slot extra-filters，渲染在下拉篩選之後、筆數之前（左側篩選區）；需同步改 FRONTEND-041 description 並加一條 red case。本稿示範 2 即為此做法。',
+        optionB: '不改元件，view 把這些控制項塞進 actions slot（右側，與「新增」按鈕同區）。',
+      },
+    ]
+
+    const staffFilters = [
+      { key: 'role_id', label: '角色', options: [
+        { label: '主任', value: 'r-director' }, { label: '行政', value: 'r-clerk' }, { label: '課輔老師', value: 'r-tutor' }] },
+      { key: 'is_active', label: '狀態', options: [{ label: '啟用', value: true }, { label: '停用', value: false }] },
+    ]
+    const leaveFilters = [
+      { key: 'status', label: '狀態', clearable: false, options: [{ label: '生效中', value: 'active' }, { label: '已取消', value: 'cancelled' }] },
+      { key: 'leave_type', label: '假別', options: [{ label: '病假', value: 'sick' }, { label: '事假', value: 'personal' }, { label: '其他', value: 'other' }] },
+    ]
+
+    const listState = ref('data')
+    const combo = reactive({ search: '', filters: {} })
+    const comboRows = computed(() => (listState.value === 'data' ? STAFF_ROWS : []))
+
+    const emitLog = ref([])
+    const t0 = Date.now()
+    const log = (name, payload) => {
+      const ms = String(Date.now() - t0).padStart(6, ' ')
+      emitLog.value.unshift(`+${ms}ms  ${name}  ${JSON.stringify(payload, (k, v) => (v === undefined ? '(undefined)' : v))}`)
+      emitLog.value.length = Math.min(emitLog.value.length, 30)
+    }
+
+    return {
+      meta, decisions, openQuestions, roles: ROLES, viewAs, can,
+      notesOpen: ref(false), noop: () => {},
+      listState, combo, comboRows, staffFilters, leaveFilters,
+      demo1: reactive({ search: '', filters: {} }),
+      demo2: reactive({ search: '', filters: { status: 'active' }, range: ['2026-10-03', '2026-11-02'] }),
+      demo3: reactive({ search: '' }),
+      demo4: reactive({ search: '', filters: { is_active: true } }),
+      emitLog, log,
+    }
+  },
+})
+
+app.use(ElementPlus, { locale: ElementPlusLocaleZhTw })
+const toKebab = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+for (const [name, component] of Object.entries(ElementPlusIconsVue)) {
+  app.component(`icon-${toKebab(name)}`, component)
+}
+app.mount('#app')
+</script>
+</body>
+</html>

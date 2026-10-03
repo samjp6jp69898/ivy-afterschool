@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+
+<meta name="preview-status" content="draft">
+<meta name="preview-tasks" content="FRONTEND-196">
+<meta name="preview-route" content="component:components/pickup/pos/CountdownBar.vue">
+<meta name="preview-updated" content="2026-10-03">
+
+<title>設計稿：接送 POS 5 秒倒數條（CountdownBar）</title>
+
+<!-- 版號對齊 apps/web/pnpm-lock.yaml 的實際安裝版本 -->
+<link rel="stylesheet" href="https://unpkg.com/element-plus@2.14.7/dist/index.css">
+<script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/locale/zh-tw.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue@2.3.2/dist/index.iife.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+#app { display: flex; flex-direction: column; height: 100%; }
+body { font-family: var(--el-font-family); background: var(--el-bg-color-page); color: var(--el-text-color-primary); }
+
+.preview-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 6px 16px; font-size: 12px;
+  color: var(--el-color-info-dark-2);
+  background: var(--el-color-info-light-9);
+  border-bottom: 1px dashed var(--el-border-color);
+}
+.preview-bar__spacer { flex: 1; }
+.preview-bar code { font-size: 12px; }
+
+.sheet { flex: 1; min-height: 0; overflow: auto; padding: 24px; }
+.sheet__inner { width: 1024px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+.section-title { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+.section-desc { margin: 0 0 16px; font-size: 13px; color: var(--el-text-color-secondary); line-height: 1.6; }
+.text-secondary { color: var(--el-text-color-secondary); font-size: 13px; }
+/* 按鈕內 icon 與文字的間距（實作用 :icon prop 時 EP 自帶） */
+.el-button > span > .el-icon { margin-right: 4px; }
+
+/* ---------- 1024×768 平板框（情境） ---------- */
+.tablet {
+  width: 1024px; height: 768px; display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid var(--el-border-color); border-radius: 12px; background: var(--el-bg-color-page);
+  box-shadow: var(--el-box-shadow-light);
+}
+.tablet__head { display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 16px; background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-light); }
+.tablet__title { font-size: 18px; font-weight: 600; }
+.tablet__body { flex: 1; min-height: 0; display: grid; grid-template-columns: 168px 1fr 340px; }
+.pos-col { min-height: 0; overflow: auto; padding: 12px; }
+.pos-col--classes { background: var(--el-bg-color); border-right: 1px solid var(--el-border-color-light); }
+.pos-col--queue { background: var(--el-bg-color); border-left: 1px solid var(--el-border-color-light); }
+.context-tag { font-size: 11px; color: var(--el-text-color-placeholder); margin-bottom: 8px; }
+.class-btn {
+  display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 48px; padding: 0 12px; margin-bottom: 6px;
+  font-size: 15px; border: 1px solid var(--el-border-color-lighter); border-radius: 8px; background: var(--el-bg-color); color: var(--el-text-color-regular);
+}
+.class-btn.is-active { border-color: var(--el-color-primary); color: var(--el-color-primary); background: var(--el-color-primary-light-9); font-weight: 600; }
+.student-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.student-card {
+  min-height: 88px; padding: 12px; text-align: left; cursor: pointer;
+  border: 1px solid var(--el-border-color-lighter); border-radius: 10px; background: var(--el-bg-color);
+  font-family: inherit; color: var(--el-text-color-primary);
+}
+.student-card:disabled { cursor: not-allowed; opacity: 0.6; }
+.student-card__name { font-size: 18px; font-weight: 600; }
+.student-card__meta { margin-top: 4px; font-size: 13px; color: var(--el-text-color-secondary); }
+.student-card.is-queued { border-color: var(--el-color-primary-light-5); background: var(--el-color-primary-light-9); }
+.queue-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-weight: 600; }
+.queue-empty { padding: 48px 12px; text-align: center; font-size: 14px; line-height: 1.7; color: var(--el-text-color-secondary); }
+
+.queue-card { padding: 14px; margin-bottom: 10px; border: 1px solid var(--el-border-color-lighter); border-radius: 10px; background: var(--el-bg-color); }
+.queue-card.is-staging { border-color: var(--el-color-primary-light-5); border-style: dashed; }
+.queue-card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.queue-card__name { font-size: 20px; font-weight: 600; }
+.queue-card__meta { margin-top: 2px; font-size: 13px; color: var(--el-text-color-secondary); }
+.queue-card__staging-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.queue-card__secs { font-size: 15px; font-weight: 600; color: var(--el-color-primary); font-variant-numeric: tabular-nums; }
+.btn-touch { min-height: 44px; min-width: 88px; font-size: 15px; }
+
+/* ---------- CountdownBar（FRONTEND-196） ---------- */
+.countdown-bar { margin-top: 10px; height: 6px; border-radius: 999px; background: var(--el-fill-color-dark); overflow: hidden; }
+.countdown-bar__fill {
+  height: 100%; width: 100%; border-radius: 999px; background: var(--el-color-primary);
+  transform-origin: left; transition-property: transform; transition-timing-function: linear;
+}
+.countdown-bar__fill.is-reduced { transition: none; }
+.countdown-bar__fill.is-done { background: var(--el-border-color-darker); }
+@media (prefers-reduced-motion: reduce) { .countdown-bar__fill { transition: none; } }
+
+/* ---------- 狀態一覽 ---------- */
+.gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.gallery__item { padding: 16px; border: 1px dashed var(--el-border-color); border-radius: 8px; background: var(--el-bg-color); }
+.gallery__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gallery__title { font-size: 14px; font-weight: 600; }
+.gallery__aria { margin-top: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--el-text-color-secondary); }
+</style>
+</head>
+
+<body>
+<div id="app">
+  <div class="preview-bar">
+    <el-tag :type="meta.status === 'approved' ? 'success' : 'warning'" size="small" effect="dark" disable-transitions>
+      {{ meta.status === 'approved' ? '已核可' : '待核可' }}
+    </el-tag>
+    <span>{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span>以身分檢視</span>
+    <el-select v-model="viewAs" size="small" style="width: 170px">
+      <el-option v-for="(r, key) in roles" :key="key" :label="r.label" :value="key"></el-option>
+    </el-select>
+    <el-checkbox v-model="reducedMotion" size="small">模擬 prefers-reduced-motion</el-checkbox>
+    <span class="preview-bar__spacer"></span>
+    <span>更新 {{ meta.updated }}</span>
+    <el-button size="small" text type="primary" @click="notesOpen = true">
+      設計說明 / 待裁定（{{ openQuestions.length }}）
+    </el-button>
+  </div>
+
+  <div class="sheet">
+    <div class="sheet__inner">
+
+      <div>
+        <h2 class="section-title">情境：員工代建接送請求的 5 秒倒數（1024×768 平板）<el-tag size="small" type="info" disable-transitions>情境</el-tag></h2>
+        <p class="section-desc">點中間學生卡 → 右側佇列頂端出現虛線框的「待送出」卡，5 秒內可按「取消」；倒數結束才真的送出 <code>POST /pickup/requests</code>，卡片轉成一般佇列卡。三欄版面、佇列卡（FRONTEND-195）與 POS 頁（FRONTEND-189）在 page-pickup-pos 稿另畫，這裡只示意倒數條擺在哪裡、多大。</p>
+        <div class="tablet">
+          <div class="tablet__head">
+            <span class="tablet__title">接送 POS</span>
+            <span class="text-secondary">2026年10月2日（五）</span>
+          </div>
+          <div class="tablet__body">
+            <div class="pos-col pos-col--classes">
+              <div class="context-tag">班級（情境）</div>
+              <button v-for="c in classes" :key="c.id" type="button" class="class-btn" :class="{ 'is-active': c.id === 3 }">
+                <span>{{ c.name }}</span>
+              </button>
+            </div>
+            <div class="pos-col">
+              <div class="context-tag">中年級班・點學生卡代建接送（情境）</div>
+              <el-alert v-if="!can('pickup:operate')" type="info" :closable="false" show-icon style="margin-bottom: 10px"
+                        title="只有 pickup:read：學生卡不可點、不會產生倒數卡。倒數卡只存在於代建者自己的畫面。"></el-alert>
+              <div class="student-grid">
+                <button v-for="s in students" :key="s.id" type="button" class="student-card"
+                        :class="{ 'is-queued': isQueued(s.id) }" :disabled="!can('pickup:operate') || isQueued(s.id)"
+                        @click="stage(s)">
+                  <div class="student-card__name">{{ s.name }}</div>
+                  <div class="student-card__meta">{{ isQueued(s.id) ? '已在佇列' : s.meta }}</div>
+                </button>
+              </div>
+            </div>
+            <div class="pos-col pos-col--queue">
+              <div class="queue-head"><span>接送佇列</span><el-tag size="small" type="info" disable-transitions>{{ queue.length }}</el-tag></div>
+              <div v-if="!queue.length" class="queue-empty">目前沒有進行中的接送<br>點中間的學生卡即可代建</div>
+              <div v-for="q in queue" :key="q.id" class="queue-card" :class="{ 'is-staging': q.phase === 'staging' }">
+                <div class="queue-card__top">
+                  <div>
+                    <div class="queue-card__name">{{ q.name }}</div>
+                    <div class="queue-card__meta">中年級班・員工代建・張主任</div>
+                  </div>
+                  <el-tag v-if="q.phase === 'sent'" type="warning" disable-transitions>等待確認</el-tag>
+                </div>
+                <template v-if="q.phase === 'staging'">
+                  <div class="queue-card__staging-row">
+                    <span class="queue-card__secs">{{ secsLeft(q) }} 秒後送出</span>
+                    <el-button class="btn-touch" @click="cancel(q)">取消</el-button>
+                  </div>
+                  <countdown-bar :key="q.id + (reducedMotion ? '-r' : '')" :started-at="q.startedAt" :reduced="reducedMotion"
+                                 :aria-label="q.name + ' 送出倒數'"></countdown-bar>
+                </template>
+                <div v-else class="queue-card__meta" style="margin-top: 8px">已送出 17:{{ q.minute }}・尚未回覆</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <el-card shadow="never">
+        <h2 class="section-title">CountdownBar 狀態一覽<el-tag size="small" disable-transitions>FRONTEND-196</el-tag></h2>
+        <p class="section-desc">props：<code>startedAt</code>（Date.now() 毫秒）、<code>durationMs?</code>（預設 5000）。掛載時算一次剩餘毫秒（clamp 在 [0, durationMs]），fill 從「剩餘比例」接續收縮到 0；要重新倒數由呼叫端換 <code>:key</code> 重新掛載。按「重播」以該情境重新掛載。</p>
+        <div class="gallery">
+          <div v-for="g in gallery" :key="g.id" class="gallery__item">
+            <div class="gallery__head">
+              <span class="gallery__title">{{ g.title }}</span>
+              <el-button size="small" @click="replay(g)">重播</el-button>
+            </div>
+            <div class="text-secondary" style="margin-top: 4px">{{ g.desc }}</div>
+            <countdown-bar :key="g.id + '-' + g.nonce + (g.reduced || reducedMotion ? '-r' : '')" :started-at="g.startedAt"
+                           :reduced="g.reduced || reducedMotion" aria-label="送出倒數"
+                           @mounted-state="(s) => g.aria = s"></countdown-bar>
+            <div class="gallery__aria">{{ g.aria }}</div>
+          </div>
+        </div>
+      </el-card>
+    </div>
+  </div>
+
+  <el-drawer v-model="notesOpen" title="設計說明 / 待裁定" size="460px">
+    <el-alert v-if="openQuestions.length" title="以下項目需要你裁定，未回覆前這張稿不會進入實作"
+              type="warning" :closable="false" show-icon style="margin-bottom: 16px"></el-alert>
+    <h4>設計決策</h4>
+    <ol>
+      <li v-for="(d, i) in decisions" :key="i" style="margin-bottom: 6px">{{ d }}</li>
+    </ol>
+    <p v-if="!openQuestions.length" class="text-secondary">這張稿沒有待裁定項目。</p>
+  </el-drawer>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, onMounted, onBeforeUnmount } = Vue
+
+const ALL_STAFF = [
+  'dashboard:read', 'classes:read', 'students:read',
+  'attendance:read', 'attendance:operate', 'leaves:read',
+  'homework:read', 'homework:write', 'pickup:read', 'pickup:operate', 'exams:read',
+]
+const ROLES = {
+  director: { label: '主任', permissions: [...ALL_STAFF, 'pickup:override'] },
+  tutor: { label: '課輔老師', permissions: ALL_STAFF },
+  viewer: { label: '自訂角色（接送僅檢視）', permissions: ALL_STAFF.filter((c) => c !== 'pickup:operate') },
+}
+
+const DURATION = 5000
+
+/* ---------- CountdownBar ----------
+   reduced prop 只用於稿裡模擬 prefers-reduced-motion；實作時於 onMounted 讀 matchMedia。 */
+const CountdownBar = {
+  props: {
+    startedAt: { type: Number, required: true },
+    durationMs: { type: Number, default: DURATION },
+    reduced: { type: Boolean, default: false },
+  },
+  emits: ['mounted-state'],
+  setup(props, { emit }) {
+    const remaining = Math.min(props.durationMs, Math.max(0, props.durationMs - (Date.now() - props.startedAt)))
+    const ratio = props.durationMs > 0 ? remaining / props.durationMs : 0
+    const shrinking = ref(false)
+    const counting = ref(remaining > 0)
+    let timer = null, raf1 = null, raf2 = null
+    const fillStyle = computed(() => (props.reduced ? {} : {
+      transform: `scaleX(${shrinking.value ? 0 : ratio})`,
+      transitionDuration: `${shrinking.value ? remaining : 0}ms`,
+    }))
+    onMounted(() => {
+      emit('mounted-state', `aria-valuenow=${remaining}  初始 scaleX(${props.reduced ? '—' : +ratio.toFixed(2)})  transition ${props.reduced ? 'none' : remaining + 'ms'}`)
+      if (props.reduced) { timer = setTimeout(() => { counting.value = false }, remaining); return }
+      raf1 = requestAnimationFrame(() => { raf2 = requestAnimationFrame(() => { shrinking.value = true }) })
+    })
+    onBeforeUnmount(() => { clearTimeout(timer); cancelAnimationFrame(raf1); cancelAnimationFrame(raf2) })
+    return { remaining, fillStyle, counting }
+  },
+  template: `
+    <div class="countdown-bar" role="progressbar" aria-valuemin="0" :aria-valuemax="durationMs" :aria-valuenow="remaining">
+      <div class="countdown-bar__fill"
+           :class="{ 'is-reduced': reduced, 'is-counting': reduced && counting, 'is-done': reduced && !counting }"
+           :style="fillStyle"></div>
+    </div>`,
+}
+
+const app = createApp({
+  components: { CountdownBar },
+  setup() {
+    const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
+    const meta = {
+      status: readMeta('preview-status'), tasks: readMeta('preview-tasks'),
+      route: readMeta('preview-route'), updated: readMeta('preview-updated'),
+    }
+    const viewAs = ref('tutor')
+    const can = (code) => ROLES[viewAs.value].permissions.includes(code)
+
+    const decisions = [
+      '倒數條高 6px、全圓角，貼在待送出卡片底部（秒數與「取消」那一列下方）；軌道 --el-fill-color-dark，倒數中 --el-color-primary，reduced motion 到期後變 --el-border-color-darker（灰）。',
+      '收縮用 transform: scaleX + transform-origin left、linear；掛載時先畫出剩餘比例，再以雙層 requestAnimationFrame 觸發收縮，transition 時長 = 剩餘毫秒。途中掛載（例如畫面重新渲染）接續剩餘比例，不從滿版重跑。',
+      'startedAt 在未來（時鐘誤差）時剩餘時間 clamp 成 durationMs：從滿版開始、5 秒收完，不會超過 5 秒。已過期（剩餘 0）時直接是空條，不播動畫。',
+      'prefers-reduced-motion：fill 全程滿版、不做任何位移，到期時 class 由 is-counting 換成 is-done（主色 → 灰）。剩餘秒數文字由 QueueCard 照常倒數，讓 reduced motion 使用者仍知道還剩多久。',
+      '根元素 role="progressbar"、aria-valuemin 0、aria-valuemax = durationMs、aria-valuenow = 掛載當下剩餘毫秒；無障礙名稱由呼叫端透過 attrs 傳 aria-label（QueueCard 傳「{姓名} 送出倒數」），元件本身不寫死文字。',
+      '元件不監聽 startedAt / durationMs 變更；要重新倒數由呼叫端換 :key 重新掛載（同 ivy）。',
+      '待送出卡片（屬 FRONTEND-195）：虛線主色邊框，與已送出的實線卡區分；「{n} 秒後送出」15px 主色粗體、tabular 數字；「取消」按鈕高 44px、寬 ≥ 88px。只有 pickup:operate 的代建者畫面上會有這張卡。',
+    ]
+    const openQuestions = []
+
+    const classes = [
+      { id: 1, name: '低年級 A 班' }, { id: 2, name: '低年級 B 班' }, { id: 3, name: '中年級班' }, { id: 4, name: '高年級班' },
+    ]
+    const students = [
+      { id: 's1', name: '王小明', meta: '三年二班・在班' },
+      { id: 's2', name: '陳小美', meta: '四年一班・在班' },
+      { id: 's3', name: '李承恩', meta: '三年五班・在班' },
+      { id: 's4', name: '林小華', meta: '四年三班・在班' },
+      { id: 's5', name: '張語晴', meta: '三年二班・在班' },
+      { id: 's6', name: '黃子軒', meta: '四年二班・在班' },
+    ]
+
+    const now = ref(Date.now())
+    const tick = setInterval(() => { now.value = Date.now() }, 200)
+    onBeforeUnmount(() => clearInterval(tick))
+
+    let seq = 0
+    const queue = ref([
+      { id: 'q0', studentId: 's4', name: '林小華', phase: 'sent', minute: '05' },
+    ])
+    const timers = {}
+    const isQueued = (sid) => queue.value.some((q) => q.studentId === sid)
+    const stage = (s) => {
+      const item = reactive({ id: `q${++seq}`, studentId: s.id, name: s.name, phase: 'staging', startedAt: Date.now(), minute: '' })
+      queue.value.unshift(item)
+      timers[item.id] = setTimeout(() => {
+        item.phase = 'sent'
+        item.minute = String(new Date().getMinutes()).padStart(2, '0')
+      }, DURATION)
+    }
+    const cancel = (q) => {
+      clearTimeout(timers[q.id])
+      queue.value = queue.value.filter((x) => x.id !== q.id)
+    }
+    const secsLeft = (q) => Math.max(0, Math.ceil((DURATION - (now.value - q.startedAt)) / 1000))
+
+    const mk = (id, title, desc, offset, reduced = false) => reactive({ id, title, desc, offset, reduced, nonce: 0, startedAt: Date.now() + offset, aria: '' })
+    const gallery = [
+      mk('fresh', '1. 剛開始', 'startedAt = now：滿版 → 5 秒收到 0', 0),
+      mk('resume', '2. 途中掛載', 'startedAt = now − 2000：從 60% 接續，3 秒收完', -2000),
+      mk('future', '3. startedAt 在未來', 'startedAt = now + 10000：clamp 成 5000ms，從滿版開始', 10000),
+      mk('expired', '4. 已過期', 'startedAt = now − 6000：剩餘 0，空條、不播動畫', -6000),
+      mk('reduced', '5. reduced motion', '滿版不動，5 秒後主色 → 灰（is-counting → is-done）', 0, true),
+      mk('reduced-resume', '6. reduced motion + 途中掛載', 'startedAt = now − 3000：滿版不動，2 秒後變灰', -3000, true),
+    ]
+    const replay = (g) => { g.startedAt = Date.now() + g.offset; g.nonce++ }
+
+    return {
+      meta, decisions, openQuestions, roles: ROLES, viewAs, can, notesOpen: ref(false),
+      reducedMotion: ref(false), classes, students, queue, isQueued, stage, cancel, secsLeft,
+      gallery, replay,
+    }
+  },
+})
+
+app.use(ElementPlus, { locale: ElementPlusLocaleZhTw })
+const toKebab = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+for (const [name, component] of Object.entries(ElementPlusIconsVue)) {
+  app.component(`icon-${toKebab(name)}`, component)
+}
+app.mount('#app')
+</script>
+</body>
+</html>
