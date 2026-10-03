@@ -1,23 +1,23 @@
 {
   "area": "backend",
-  "version": 52,
-  "last_updated": "2026-10-03T12:53:36Z",
+  "version": 53,
+  "last_updated": "2026-10-03T13:01:23Z",
   "tasks": [
     {
       "id": "BACKEND-001",
-      "title": "實作 app/core/config.py：env Settings（只含 architecture_decisions §4 的八個 env）",
-      "description": "建立 `apps/api/app/core/config.py`，以 pydantic-settings 讀 `apps/api/.env`（INFRA-006 的範本）。**只**定義 architecture_decisions §4 列出的 env，業務參數一律走 `system_settings`（BACKEND-106 的 registry），不得在此新增任何業務設定。\n\n**介面**\n```python\nclass Settings(BaseSettings):\n    model_config = SettingsConfigDict(env_file=\".env\", env_file_encoding=\"utf-8\", extra=\"ignore\", frozen=True)\n    app_env: Literal[\"development\", \"test\", \"production\"] = \"development\"\n    database_url: str                      # 必填，postgresql+psycopg://...\n    app_secret_key: SecretStr              # 必填\n    cors_origins: list[str] = []           # 逗號分隔字串 → list（空字串 → []）\n    public_base_url: AnyHttpUrl\n    supabase_url: AnyHttpUrl\n    supabase_service_role_key: SecretStr\n    sentry_dsn: str | None = None          # 空字串視為 None\n\n    @property\n    def is_production(self) -> bool: ...\n\n@lru_cache(maxsize=1)\ndef get_settings() -> Settings: ...        # FastAPI dependency；測試以 get_settings.cache_clear() 或 dependency_overrides 換掉\n```\n\n**規則**\n- `app_secret_key` 驗證：UTF-8 長度 < 32 bytes 或值為 `change-me` → `ValueError(\"APP_SECRET_KEY 至少 32 bytes 且不可為 change-me\")`（所有環境都擋，INFRA-015 bootstrap 會自動產生）。\n- `database_url` 只接受 `postgresql+psycopg://` 開頭；`postgresql://` 自動補成 `postgresql+psycopg://`；其他 scheme → ValueError。\n- `cors_origins`：去頭尾空白、去重保序；正式環境前後端經 nginx 同源反代（INFRA-033），留空是正常值（BACKEND-020 此時不掛 CORSMiddleware）；`public_base_url` 去掉結尾 `/` 後存字串化結果（`public_base_url_str` property 回傳無結尾斜線字串，供通知連結組字串）。\n- production 時 `supabase_service_role_key` 為 `change-me` → ValueError（開發環境允許，只是 Storage 不能用）。\n- 不在 import 時讀 env：只有呼叫 `get_settings()` 才建立實例，讓單元測試可以用 `monkeypatch.setenv` 控制。\n- repr / log 不得印出 secret（`SecretStr`）。\n\nJWT TTL、cookie 名稱、節流門檻等屬於程式常數（各自 task 定義），不是 env。\n\n**驗收標準**\n- 必填 env 缺漏時建立 Settings 拋 ValidationError，訊息含欄位名。\n- APP_SECRET_KEY 過短或為 change-me 被拒。\n- DATABASE_URL scheme 正規化與拒絕規則如上。\n- CORS_ORIGINS 逗號字串解析、去重保序；空字串 → []。\n- production 下 SUPABASE_SERVICE_ROLE_KEY=change-me 被拒，development 允許。\n- `repr(settings)` 不含 secret 明文。",
+      "title": "實作 app/core/config.py：env Settings（只含 architecture_decisions §4 的執行期 env）",
+      "description": "建立 `apps/api/app/core/config.py`，以 pydantic-settings 讀 `apps/api/.env`（INFRA-049 的範本）。**只**定義 architecture_decisions §4 列出的 env，業務參數一律走 `system_settings`（BACKEND-106 的 registry），不得在此新增任何業務設定。\n\n**介面**\n```python\nclass Settings(BaseSettings):\n    model_config = SettingsConfigDict(env_file=\".env\", env_file_encoding=\"utf-8\", extra=\"ignore\", frozen=True)\n    app_env: Literal[\"development\", \"test\", \"production\"] = \"development\"\n    database_url: str                      # 必填，postgresql+psycopg://...\n    app_secret_key: SecretStr              # 必填\n    cors_origins: list[str] = []           # 逗號分隔字串 → list（空字串 → []）\n    public_base_url: AnyHttpUrl\n    r2_endpoint_url: AnyHttpUrl            # S3 相容 endpoint（本機 MinIO / 雲端 R2）\n    r2_access_key_id: str\n    r2_secret_access_key: SecretStr\n    r2_bucket: str\n    sentry_dsn: str | None = None          # 空字串視為 None\n\n    @property\n    def is_production(self) -> bool: ...\n\n@lru_cache(maxsize=1)\ndef get_settings() -> Settings: ...        # FastAPI dependency；測試以 get_settings.cache_clear() 或 dependency_overrides 換掉\n```\n\n**規則**\n- `app_secret_key` 驗證：UTF-8 長度 < 32 bytes 或值為 `change-me` → `ValueError(\"APP_SECRET_KEY 至少 32 bytes 且不可為 change-me\")`（所有環境都擋，INFRA-015 bootstrap 會自動產生）。\n- `database_url` 只接受 `postgresql+psycopg://` 開頭；`postgresql://` 自動補成 `postgresql+psycopg://`；其他 scheme → ValueError。\n- `cors_origins`：去頭尾空白、去重保序；正式環境前後端經 nginx 同源反代（INFRA-033），留空是正常值（BACKEND-020 此時不掛 CORSMiddleware）；`public_base_url` 去掉結尾 `/` 後存字串化結果（`public_base_url_str` property 回傳無結尾斜線字串，供通知連結組字串）。\n- `r2_bucket` 必須符合 S3 bucket 命名 `^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`，否則 ValueError。\n- production 時 `r2_endpoint_url` 必須是 `https`，且 `r2_secret_access_key` 不可為 `change-me` 或本機 MinIO 開發值 `afterschool-local-secret` → ValueError（development / test 允許，architecture_decisions §10）。\n- `MIGRATION_DATABASE_URL` **不是** Settings 欄位：執行期程式碼不讀 owner 連線（只給 BACKEND-535 的 migrate 指令）；env 中有它時因 `extra=\"ignore\"` 被忽略。\n- 不在 import 時讀 env：只有呼叫 `get_settings()` 才建立實例，讓單元測試可以用 `monkeypatch.setenv` 控制。\n- repr / log 不得印出 secret（`SecretStr`）。\n\nJWT TTL、cookie 名稱、節流門檻等屬於程式常數（各自 task 定義），不是 env。\n\n**驗收標準**\n- 必填 env 缺漏時建立 Settings 拋 ValidationError，訊息含欄位名。\n- APP_SECRET_KEY 過短或為 change-me 被拒。\n- DATABASE_URL scheme 正規化與拒絕規則如上。\n- CORS_ORIGINS 逗號字串解析、去重保序；空字串 → []。\n- R2_BUCKET 格式檢查。\n- production 下 R2_ENDPOINT_URL 非 https、或 R2_SECRET_ACCESS_KEY 為 change-me / 本機開發值被拒，development 允許。\n- Settings 沒有 migration_database_url 欄位；env 有 MIGRATION_DATABASE_URL 時照常建立。\n- `repr(settings)` 不含 secret 明文。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/config.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "INFRA-004",
-        "INFRA-006"
+        "INFRA-049"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "現有實作依 Supabase 版完成，需依目前 description 改寫。 改寫範圍：移除 supabase_url / supabase_service_role_key 與對應驗證，改為 r2_endpoint_url / r2_access_key_id / r2_secret_access_key / r2_bucket；單元測試的必填 env 清單同步改寫。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/core/test_config.py",
@@ -29,9 +29,11 @@
           "test_config_secret_key_too_short：APP_SECRET_KEY='short' → ValidationError 含 '至少 32 bytes'；APP_SECRET_KEY='change-me' → 同樣被拒；48 字元隨機值 → 成功",
           "test_config_database_url_normalize：DATABASE_URL='postgresql://u:p@127.0.0.1:54342/postgres' → settings.database_url == 'postgresql+psycopg://u:p@127.0.0.1:54342/postgres'；'mysql://x' → ValidationError",
           "test_config_cors_origins_parse：CORS_ORIGINS='http://a.test, http://b.test,http://a.test' → ['http://a.test', 'http://b.test']；CORS_ORIGINS='' → []",
-          "test_config_production_rejects_placeholder_service_key：APP_ENV=production 且 SUPABASE_SERVICE_ROLE_KEY=change-me → ValidationError；APP_ENV=development 同值 → 成功",
+          "test_config_production_r2_rules：APP_ENV=production 且 R2_SECRET_ACCESS_KEY='change-me' → ValidationError；R2_SECRET_ACCESS_KEY='afterschool-local-secret' → ValidationError；R2_ENDPOINT_URL='http://127.0.0.1:54344' → ValidationError；R2_ENDPOINT_URL='https://acct.r2.cloudflarestorage.com' 且 secret 為 40 字元隨機值 → 成功；APP_ENV=development 搭配本機 MinIO 值 → 成功",
           "test_config_repr_hides_secrets：APP_SECRET_KEY='x'*40 → repr(settings) 不含 'x'*40，且 settings.app_secret_key.get_secret_value() == 'x'*40",
-          "test_config_public_base_url_strip：PUBLIC_BASE_URL='https://as.example.com/' → settings.public_base_url_str == 'https://as.example.com'"
+          "test_config_public_base_url_strip：PUBLIC_BASE_URL='https://as.example.com/' → settings.public_base_url_str == 'https://as.example.com'",
+          "test_config_r2_bucket_format：R2_BUCKET='Afterschool_Bucket' → ValidationError；R2_BUCKET='afterschool-local' → settings.r2_bucket == 'afterschool-local'",
+          "test_config_ignores_migration_url：設定 MIGRATION_DATABASE_URL='postgresql://postgres:pw@127.0.0.1:54342/postgres' → Settings 建立成功，且 'migration_database_url' 不在 Settings.model_fields；repr(settings) 不含 'pw'"
         ],
         "run": "just test apps/api/tests/unit/core/test_config.py -k \"test_config_\"",
         "notes": ""
@@ -158,7 +160,7 @@
     {
       "id": "BACKEND-005",
       "title": "實作 app/core/db.py：engine、SessionLocal 與 request-scoped get_db dependency",
-      "description": "建立 `apps/api/app/core/db.py`（SQLAlchemy 2 sync + psycopg 3，architecture_decisions §2）。\n\n**介面**\n```python\ndef build_engine(database_url: str) -> Engine: ...   # pool_pre_ping=True、pool_size=5、max_overflow=5、pool_recycle=1800；connect_args={'options': '-c timezone=UTC'}\ndef get_engine() -> Engine: ...                      # 以 get_settings().database_url 建立的 module 單例（lazy）\nSessionLocal: sessionmaker[Session]                  # expire_on_commit=False、autoflush=True；bind 由 get_engine() lazy 設定\ndef get_db() -> Iterator[Session]: ...               # FastAPI dependency\n@contextmanager\ndef session_scope() -> Iterator[Session]: ...        # 給背景工作 / CLI：成功 commit、例外 rollback 後 re-raise、最後 close\n```\n\n**交易約定（全後端遵守，營運模組也依此寫）**\n- service 方法只 `session.add` / `flush`，**不 commit**；寫入型 endpoint handler 在呼叫完 service 後自行 `db.commit()`，再組回應。\n- `get_db`：yield session；handler 拋例外時 rollback；最後一律 close。handler 沒 commit 的變更在 close 時丟棄（防止 GET 意外寫入）。\n- commit 後才要做的事（通知派送、ws 廣播、刪除 Storage 舊檔）一律走 BACKEND-006 的 `run_after_commit`，不得在 commit 前呼叫外部服務。\n- 連線一律使用 `app_backend` 角色（DB-001；本機登入設定由 DB-039 提供），不得在程式中 `set role`。整合測試同樣一律以 app_backend 連線，**禁止 fallback 到 owner / postgres**（連不上就讓測試失敗，才能驗證 RLS 與權限設定）；只有讀 information_schema 的 schema drift 測試與測試清理可用 owner_url()。\n\n**驗收標準**\n- get_db 在 handler 例外時 rollback，資料不落地。\n- handler 未 commit 的寫入在請求結束後不存在。\n- session_scope 成功時 commit、例外時 rollback 並重新拋出。\n- 連線 session 的 timezone 為 UTC。",
+      "description": "建立 `apps/api/app/core/db.py`（SQLAlchemy 2 sync + psycopg 3，architecture_decisions §2）。\n\n**介面**\n```python\ndef build_engine(database_url: str) -> Engine: ...   # pool_pre_ping=True、pool_size=5、max_overflow=5、pool_recycle=1800；connect_args={'options': '-c timezone=UTC'}\ndef get_engine() -> Engine: ...                      # 以 get_settings().database_url 建立的 module 單例（lazy）\nSessionLocal: sessionmaker[Session]                  # expire_on_commit=False、autoflush=True；bind 由 get_engine() lazy 設定\ndef get_db() -> Iterator[Session]: ...               # FastAPI dependency\n@contextmanager\ndef session_scope() -> Iterator[Session]: ...        # 給背景工作 / CLI：成功 commit、例外 rollback 後 re-raise、最後 close\n```\n\n**交易約定（全後端遵守，營運模組也依此寫）**\n- service 方法只 `session.add` / `flush`，**不 commit**；寫入型 endpoint handler 在呼叫完 service 後自行 `db.commit()`，再組回應。\n- `get_db`：yield session；handler 拋例外時 rollback；最後一律 close。handler 沒 commit 的變更在 close 時丟棄（防止 GET 意外寫入）。\n- commit 後才要做的事（通知派送、ws 廣播、刪除 Storage 舊檔）一律走 BACKEND-006 的 `run_after_commit`，不得在 commit 前呼叫外部服務。\n- 連線一律使用 `app_backend` 角色（DB-041；本機密碼由 INFRA-046 的 `just db-reset` 設定，雲端由 BACKEND-535 的 migrate 依 `DATABASE_URL` 同步），不得在程式中 `set role`。整合測試同樣一律以 app_backend 連線，**禁止 fallback 到 owner / postgres**（連不上就讓測試失敗，才能驗證各表的 grant）；只有讀 information_schema 的 schema drift 測試與測試清理可用 owner_url()。\n\n**驗收標準**\n- get_db 在 handler 例外時 rollback，資料不落地。\n- handler 未 commit 的寫入在請求結束後不存在。\n- session_scope 成功時 commit、例外時 rollback 並重新拋出。\n- 連線 session 的 timezone 為 UTC。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/db.py",
       "source_ref": null,
@@ -167,8 +169,8 @@
       "depends_on": [
         "BACKEND-001",
         "INFRA-010",
-        "DB-001",
-        "DB-039"
+        "DB-041",
+        "INFRA-046"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -453,15 +455,16 @@
     },
     {
       "id": "BACKEND-013",
-      "title": "實作 app/core/storage.py：SupabaseStorage.upload、get_storage dependency 與 FakeStorage",
-      "description": "建立 `apps/api/app/core/storage.py`，以 httpx 呼叫 Supabase Storage REST API（DB-034：三個私有 bucket，後端用 `SUPABASE_SERVICE_ROLE_KEY` 操作）。\n\n**介面**\n```python\nBucket = Literal[\"leave-attachments\", \"student-photos\", \"pickup-person-photos\"]\n\nclass StorageError(Exception): ...          # 上游非 2xx / 連線失敗；訊息不含 service key\n\nclass Storage(Protocol):\n    def upload(self, bucket: Bucket, path: str, content: bytes, content_type: str) -> None: ...\n    def create_signed_url(self, bucket: Bucket, path: str, expires_in: int = 300) -> str: ...\n    def delete(self, bucket: Bucket, paths: Sequence[str]) -> None: ...\n\nclass SupabaseStorage:\n    def __init__(self, base_url: str, service_role_key: str, *, transport: httpx.BaseTransport | None = None, timeout: float = 10.0) -> None: ...\n\ndef build_object_path(owner_id: UUID, ext: str) -> str: ...   # f\"{owner_id}/{uuid4().hex}.{ext}\"；ext 只接受 jpg/png/webp/heic/pdf\ndef get_storage() -> Storage: ...                              # FastAPI dependency；以 Settings 建立單例\n```\n**本 task 實作 `upload` 與 `build_object_path`**（signed URL 與 delete 見 BACKEND-014 / 015）：\n- `POST {SUPABASE_URL}/storage/v1/object/{bucket}/{path}`，headers：`Authorization: Bearer <key>`、`apikey: <key>`、`Content-Type`、`x-upsert: false`。\n- path 必須符合 `^[0-9a-f-]{36}/[0-9a-f]{32}\\.(jpg|png|webp|heic|pdf)$`（DB-034 物件路徑慣例，不使用使用者提供的檔名），否則 ValueError。\n- 409（已存在）、4xx、5xx、連線錯誤 → StorageError（含 status，不含 key）。\n\n**測試替身**：`apps/api/tests/support/fake_storage.py` 的 `FakeStorage`：記憶體 dict 實作同一 Protocol，`create_signed_url` 回 `https://storage.test/{bucket}/{path}?exp={expires_in}`，`objects` 屬性可供斷言。整合測試以 `app.dependency_overrides[get_storage]` 換掉（BACKEND-023）。\n\n**測試範圍**：本 task 與 BACKEND-014 / 015 只做 unit 測試（httpx.MockTransport），不連本機 Supabase Storage；其他 task 的整合測試一律以 FakeStorage 取代。bucket 本身（DB-034）由部署後 smoke 驗證，因此不依賴 DB-034。\n\n**驗收標準**\n- upload 送出的 URL、method、header 正確。\n- 非法 path 被拒且不發送請求。\n- 上游錯誤轉 StorageError，訊息不含 service key。\n- FakeStorage 符合 Storage Protocol。",
+      "title": "實作 app/core/storage.py：R2Storage.upload、build_object_path、get_storage dependency 與 FakeStorage",
+      "description": "建立 `apps/api/app/core/storage.py`，以 boto3 的 S3 client 操作 Cloudflare R2（architecture_decisions §10：單一私有 bucket，以 key 前綴區分用途；本機為 compose 的 MinIO）。\n\n**介面**\n```python\nBucket = Literal[\"leave-attachments\", \"student-photos\", \"pickup-person-photos\"]   # 邏輯分區，對應 R2 bucket 內的 key 前綴 \"<bucket>/\"\n\nclass StorageError(Exception): ...          # 上游錯誤 / 連線失敗；訊息不含 access key 與 secret\n\nclass Storage(Protocol):\n    def upload(self, bucket: Bucket, path: str, content: bytes, content_type: str) -> None: ...\n    def create_signed_url(self, bucket: Bucket, path: str, expires_in: int = 300) -> str: ...\n    def delete(self, bucket: Bucket, paths: Sequence[str]) -> None: ...\n\nclass R2Storage:\n    def __init__(self, *, endpoint_url: str, access_key_id: str, secret_access_key: str, bucket_name: str, client: S3Client | None = None) -> None: ...\n    # client 未傳入時以 boto3.client(\"s3\", endpoint_url=..., region_name=\"auto\",\n    #   config=Config(signature_version=\"s3v4\", s3={\"addressing_style\": \"path\"}, retries={\"max_attempts\": 3, \"mode\": \"standard\"},\n    #                 connect_timeout=5, read_timeout=10)) 建立\n\ndef object_key(bucket: Bucket, path: str) -> str: ...          # f\"{bucket}/{path}\"；path 先過格式檢查\ndef build_object_path(owner_id: UUID, ext: str) -> str: ...   # f\"{owner_id}/{uuid4().hex}.{ext}\"；ext 只接受 jpg/png/webp/heic/pdf\ndef get_storage() -> Storage: ...                              # FastAPI dependency；以 Settings（BACKEND-001 的 r2_*）建立的單例\n```\n**本 task 實作 `upload`、`object_key`、`build_object_path`、`get_storage`**（presigned URL 與 delete 見 BACKEND-014 / 015）：\n- path 必須符合 `^[0-9a-f-]{36}/[0-9a-f]{32}\\.(jpg|png|webp|heic|pdf)$`（DB 欄位只存這段：不含前綴、不使用使用者提供的檔名），否則 ValueError 且不呼叫 S3。\n- `upload` → `client.put_object(Bucket=<bucket_name>, Key=object_key(bucket, path), Body=content, ContentType=content_type)`；不設定物件 ACL（bucket 私有）。`botocore.exceptions.ClientError` / `BotoCoreError` → StorageError（訊息含 S3 錯誤碼與 HTTP status，不含 access key 與 secret）。\n\n**測試替身**：`apps/api/tests/support/fake_storage.py` 的 `FakeStorage`：記憶體 dict 實作同一 Protocol，`create_signed_url` 回 `https://storage.test/{bucket}/{path}?exp={expires_in}`，`objects` 屬性可供斷言（key 為 `(bucket, path)`）。下游 task（BACKEND-150、348、417 等）的 red_case 依賴這個 URL 格式，不得改變。整合測試以 `app.dependency_overrides[get_storage]` 換掉（BACKEND-023）。\n\n**測試範圍**：本 task 與 BACKEND-014 / 015 的單元測試以 `botocore.stub.Stubber` 驗證送出的 S3 參數與錯誤轉換，不連網路；與本機 MinIO 的往返由 BACKEND-536 驗證；其他 task 的測試一律用 FakeStorage。\n\n**驗收標準**\n- upload 送出的 Bucket / Key / ContentType / Body 正確，Key 帶邏輯分區前綴。\n- 非法 path 被拒且不呼叫 S3。\n- 上游錯誤轉 StorageError，訊息不含 secret。\n- get_storage 以 Settings 的 r2_* 建立單例。\n- FakeStorage 符合 Storage Protocol。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/storage.py",
       "source_ref": null,
       "status": "pending",
       "assignee_session": null,
       "depends_on": [
-        "BACKEND-001"
+        "BACKEND-001",
+        "INFRA-045"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -472,13 +475,14 @@
           "unit"
         ],
         "red_cases": [
-          "test_storage_upload_request：httpx.MockTransport 擷取請求；upload('student-photos', '<uuid>/<32hex>.jpg', b'\\xff\\xd8', 'image/jpeg') → method POST、url == 'http://sb.test/storage/v1/object/student-photos/<uuid>/<32hex>.jpg'、headers authorization == 'Bearer svc-key'、x-upsert == 'false'、body == b'\\xff\\xd8'",
-          "test_storage_upload_rejects_bad_path：path '../etc/passwd' 或 'abc/photo.jpg' → ValueError，MockTransport 收到 0 個請求",
-          "test_storage_upload_upstream_error：MockTransport 回 500 body 'boom' → StorageError，str(e) 含 '500' 且不含 'svc-key'；回 409 → StorageError",
-          "test_storage_build_object_path：build_object_path(UUID('11111111-1111-1111-1111-111111111111'), 'png') 符合 ^11111111-1111-1111-1111-111111111111/[0-9a-f]{32}\\.png$；ext 'exe' → ValueError",
-          "test_storage_fake_storage_protocol：FakeStorage().upload('leave-attachments', p, b'x', 'application/pdf') 後 objects[('leave-attachments', p)] == b'x'；isinstance 檢查以 typing.runtime_checkable Protocol 通過"
+          "test_storage_upload_request：Stubber 預期 put_object(Bucket='afterschool-test', Key='student-photos/<uuid>/<32hex>.jpg', Body=b'\\xff\\xd8', ContentType='image/jpeg') → upload 完成且 stubber.assert_no_pending_responses() 通過（參數不符時 Stubber 拋 StubAssertionError，測試即紅）",
+          "test_storage_upload_rejects_bad_path：path '../etc/passwd'、'abc/photo.jpg'、'<uuid>/<32hex>.exe' → ValueError；Stubber 未登記任何 response（若有 S3 呼叫會拋錯）",
+          "test_storage_upload_upstream_error：Stubber.add_client_error('put_object', service_error_code='InternalError', http_status_code=500) → StorageError，str(e) 含 '500' 且不含 secret_access_key 的值",
+          "test_storage_build_object_path：build_object_path(UUID('11111111-1111-1111-1111-111111111111'), 'png') 符合 ^11111111-1111-1111-1111-111111111111/[0-9a-f]{32}\\.png$；ext 'exe' → ValueError；object_key('leave-attachments', p) == 'leave-attachments/' + p",
+          "test_storage_get_storage_uses_settings：monkeypatch R2_ENDPOINT_URL='http://127.0.0.1:54344'、R2_BUCKET='afterschool-test' 等 env 並清 get_settings / get_storage 快取 → get_storage() 回 R2Storage，其 client.meta.endpoint_url == 'http://127.0.0.1:54344'、bucket_name == 'afterschool-test'；連續呼叫回同一物件",
+          "test_storage_fake_storage_protocol：FakeStorage().upload('leave-attachments', p, b'x', 'application/pdf') 後 objects[('leave-attachments', p)] == b'x'；isinstance 以 runtime_checkable Protocol 檢查通過"
         ],
-        "run": "just test apps/api/tests/unit/core/test_storage.py -k \"test_storage_upload_ or test_storage_build_object_path or test_storage_fake_storage\"",
+        "run": "just test apps/api/tests/unit/core/test_storage.py -k \"test_storage_upload_ or test_storage_build_object_path or test_storage_get_storage or test_storage_fake_storage\"",
         "notes": ""
       },
       "review": {
@@ -489,8 +493,8 @@
     },
     {
       "id": "BACKEND-014",
-      "title": "實作 SupabaseStorage.create_signed_url：簽發短效下載 URL",
-      "description": "在 `apps/api/app/core/storage.py` 實作 `create_signed_url(bucket, path, expires_in=300) -> str`（DB-034：私有 bucket，前端只拿短效 URL）。\n\n- `POST {SUPABASE_URL}/storage/v1/object/sign/{bucket}/{path}`，JSON `{\"expiresIn\": expires_in}`，headers 同 upload。\n- 回應 `{\"signedURL\": \"/object/sign/<bucket>/<path>?token=...\"}` → 回傳 `f\"{SUPABASE_URL}/storage/v1{signedURL}\"`。\n- `expires_in` 必須介於 30~3600 秒，否則 ValueError。\n- 404（物件不存在）→ StorageError（呼叫端可轉成業務 404）；回應缺 signedURL → StorageError。\n\n**驗收標準**\n- 請求格式與回傳 URL 組合正確。\n- expires_in 範圍檢查。\n- 上游 404 / 缺欄位 → StorageError。",
+      "title": "實作 R2Storage.create_signed_url：簽發短效 presigned GET URL",
+      "description": "在 `apps/api/app/core/storage.py` 實作 `create_signed_url(bucket, path, expires_in=300) -> str`（architecture_decisions §10：私有 bucket，前端只拿短效 URL）。\n\n- `client.generate_presigned_url(\"get_object\", Params={\"Bucket\": bucket_name, \"Key\": object_key(bucket, path)}, ExpiresIn=expires_in)`：SigV4 在本地簽章，不發網路請求、不檢查物件是否存在（呼叫端以 DB 紀錄為準）。\n- `expires_in` 必須介於 30~3600 秒，否則 ValueError；path 過 BACKEND-013 的格式檢查。\n- 簽章失敗（`BotoCoreError`）→ StorageError。\n- 產生的 URL 為 path-style：`<endpoint>/<bucket_name>/<bucket>/<path>?X-Amz-Algorithm=AWS4-HMAC-SHA256&...&X-Amz-Expires=<expires_in>&X-Amz-Signature=...`；URL 不含 secret。\n\n**驗收標準**\n- URL 的 host、path 與簽章參數正確。\n- expires_in 範圍檢查。\n- 不發出任何 S3 API 呼叫。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/storage.py",
       "source_ref": null,
@@ -508,9 +512,10 @@
           "unit"
         ],
         "red_cases": [
-          "test_signed_url_request_and_result：MockTransport 回 {'signedURL': '/object/sign/student-photos/a/b.jpg?token=t1'} → 回傳 'http://sb.test/storage/v1/object/sign/student-photos/a/b.jpg?token=t1'，請求 body == {'expiresIn': 300}",
-          "test_signed_url_expires_range：expires_in=10 → ValueError；expires_in=3601 → ValueError",
-          "test_signed_url_upstream_404：MockTransport 回 404 → StorageError；回 200 {} → StorageError"
+          "test_signed_url_structure：endpoint 'https://acct.r2.cloudflarestorage.com'、bucket_name 'afterschool-test' 的 R2Storage，create_signed_url('student-photos', p, 300) → urlparse 後 scheme == 'https'、netloc == 'acct.r2.cloudflarestorage.com'、path == f'/afterschool-test/student-photos/{p}'，query 的 X-Amz-Expires == ['300']、X-Amz-Algorithm == ['AWS4-HMAC-SHA256']，且有 X-Amz-Signature",
+          "test_signed_url_expires_range：expires_in=10 → ValueError；expires_in=3601 → ValueError；expires_in=30 與 3600 → 成功",
+          "test_signed_url_offline：以啟用 Stubber 但未登記任何 response 的 client 呼叫 create_signed_url → 成功回傳 URL（有任何 S3 API 呼叫會拋錯）；path 'x/y.jpg' → ValueError",
+          "test_signed_url_does_not_leak_secret：回傳 URL 不含 secret_access_key 的值"
         ],
         "run": "just test apps/api/tests/unit/core/test_storage.py -k \"test_signed_url_\"",
         "notes": ""
@@ -523,8 +528,8 @@
     },
     {
       "id": "BACKEND-015",
-      "title": "實作 SupabaseStorage.delete：批次刪除物件",
-      "description": "在 `apps/api/app/core/storage.py` 實作 `delete(bucket, paths)`：\n- `DELETE {SUPABASE_URL}/storage/v1/object/{bucket}`，JSON `{\"prefixes\": [...paths]}`。\n- paths 為空 → 不發請求直接 return；每個 path 同樣過 BACKEND-013 的路徑格式檢查。\n- 刪除不存在的物件視為成功（Supabase 回 200 + 空陣列）；非 2xx → StorageError。\n- 呼叫端（例如學生換照片）應以 BACKEND-006 `run_after_commit` 在 DB commit 後刪舊檔，刪除失敗只記 log（孤兒檔可接受，不可反過來刪了檔但 DB 回滾）。\n\n**驗收標準**\n- 請求格式正確；空清單不發請求。\n- 非法 path 被拒。\n- 上游錯誤 → StorageError。",
+      "title": "實作 R2Storage.delete：批次刪除物件",
+      "description": "在 `apps/api/app/core/storage.py` 實作 `delete(bucket, paths)`：\n- `client.delete_objects(Bucket=bucket_name, Delete={\"Objects\": [{\"Key\": object_key(bucket, p)} for p in paths], \"Quiet\": True})`；一次最多 1000 個 key，超過依序分批。\n- paths 為空 → 不呼叫 S3 直接 return；每個 path 同樣過 BACKEND-013 的格式檢查（任一不合法 → ValueError，不送出任何請求）。\n- 刪除不存在的物件視為成功（S3 / R2 對不存在的 key 回成功）；回應的 `Errors` 非空或 `ClientError` → StorageError（訊息列出失敗的 key 與錯誤碼）。\n- 呼叫端（例如學生換照片）應以 BACKEND-006 `run_after_commit` 在 DB commit 後刪舊檔，刪除失敗只記 log（孤兒檔可接受，不可反過來刪了檔但 DB 回滾）。\n\n**驗收標準**\n- 請求參數正確；空清單不呼叫 S3；超過 1000 個分批。\n- 非法 path 被拒。\n- 上游錯誤（含部分失敗）→ StorageError。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/storage.py",
       "source_ref": null,
@@ -542,9 +547,10 @@
           "unit"
         ],
         "red_cases": [
-          "test_storage_delete_request：delete('student-photos', [p1, p2]) → method DELETE、url 結尾 '/storage/v1/object/student-photos'、JSON == {'prefixes': [p1, p2]}",
-          "test_storage_delete_empty_noop：delete('student-photos', []) → MockTransport 收到 0 個請求",
-          "test_storage_delete_upstream_error：MockTransport 回 403 → StorageError；path 'x/y.jpg' → ValueError"
+          "test_storage_delete_request：Stubber 預期 delete_objects(Bucket='afterschool-test', Delete={'Objects': [{'Key': 'student-photos/' + p1}, {'Key': 'student-photos/' + p2}], 'Quiet': True}) 回 {} → delete('student-photos', [p1, p2]) 完成且 stubber.assert_no_pending_responses() 通過",
+          "test_storage_delete_empty_noop：delete('student-photos', []) → 完成，Stubber 未登記 response（有呼叫會拋錯）",
+          "test_storage_delete_batches_over_1000：1001 個合法 path → Stubber 依序收到兩次 delete_objects，Objects 長度分別為 1000 與 1",
+          "test_storage_delete_upstream_error：回應 {'Errors': [{'Key': 'student-photos/' + p1, 'Code': 'AccessDenied', 'Message': 'denied'}]} → StorageError 訊息含 'AccessDenied'；add_client_error('delete_objects', http_status_code=403) → StorageError；paths 含 'x/y.jpg' → ValueError"
         ],
         "run": "just test apps/api/tests/unit/core/test_storage.py -k \"test_storage_delete_\"",
         "notes": ""
@@ -787,7 +793,7 @@
     {
       "id": "BACKEND-022",
       "title": "建立 tests/support/factories.py：整合測試用 SQLAlchemy 測資 factory",
-      "description": "建立 `apps/api/tests/support/factories.py`，BACKEND 整合測試（含營運模組）建立測資的唯一入口。與 DB-002 的 `apps/api/tests/integration/db/factories.py`（psycopg、給 migration 測試）分工：本檔用 ORM、給 service / endpoint 測試。\n\nfactory 透過 INFRA-010 的 `db_session` 寫入，該連線一律為 app_backend 角色（DB-039 的本機登入設定），**禁止 fallback 到 owner**：factory 能寫入即代表 RLS 對 app_backend 放行正確。\n\n**介面**（皆 `session.add` + `flush` 後回傳 ORM 物件，不 commit；預設值擬真但非真實個資）\n```python\ndef make_role(session, *, code: str | None = None, permissions: Sequence[str] = (), name: str | None = None, is_system: bool = False) -> Role\ndef make_staff(session, *, permissions: Sequence[str] | None = None, role_code: str | None = None, username: str | None = None,\n               password: str = \"Passw0rd-Test1\", display_name: str = \"林老師\", is_active: bool = True,\n               must_change_password: bool = False, extra_permissions: Sequence[str] = (), revoked_permissions: Sequence[str] = ()) -> StaffUser\n    # permissions 給值 → 建一個只含這些權限碼的自訂角色；role_code 給值（'admin'/'director'/'clerk'/'tutor'）→ 使用 seed 系統角色；兩者皆無 → 空權限角色\n    # password 以 BACKEND-031 hash_password 雜湊（測試加速：模組層 cache 同一明文的 hash）\ndef make_parent(session, *, line_user_id: str | None = None, display_name: str = \"王媽媽\", status: str = \"active\") -> ParentAccount   # line_user_id 預設 'U' + uuid4().hex\ndef make_school(session, *, name: str | None = None) -> School\ndef make_class(session, *, name: str | None = None, grade_levels: Sequence[int] = (1, 2), academic_year: int = 115, archived: bool = False) -> SchoolClass\ndef make_student(session, *, name: str = \"王小明\", student_no: str | None = None, grade_level: int = 3, class_: SchoolClass | None = None,\n                 status: str = \"active\", archived: bool = False, school: School | None = None) -> Student\ndef make_guardian(session, student: Student, *, parent: ParentAccount | None = None, name: str = \"王媽媽\", relation: str = \"mother\",\n                  is_primary: bool = False, can_pickup: bool = True, receives_notifications: bool = True, archived: bool = False) -> Guardian\ndef make_class_staff(session, class_: SchoolClass, staff: StaffUser, *, role: str = \"lead\") -> ClassStaff\n```\n- 唯一欄位（username、student_no、班名、校名）預設以遞增序號產生，避免同一測試多次呼叫衝突。\n- 營運模組新增自己的 factory 時加在本檔（`make_leave`、`make_attendance` 等）。\n\n**驗收標準**\n- 每個 factory 在 db_session 中建立的列可被查回，預設值如上。\n- make_staff(permissions=[...]) 產生的帳號經 BACKEND-072 計算出的有效權限恰為給定集合。\n- 連續呼叫兩次 make_student 不違反 student_no unique。",
+      "description": "建立 `apps/api/tests/support/factories.py`，BACKEND 整合測試（含營運模組）建立測資的唯一入口。與 DB-002 的 `apps/api/tests/integration/db/factories.py`（psycopg、給 migration 測試）分工：本檔用 ORM、給 service / endpoint 測試。\n\nfactory 透過 INFRA-010 的 `db_session` 寫入，該連線一律為 app_backend 角色（本機密碼由 INFRA-046 的 `just db-reset` 設定），**禁止 fallback 到 owner**：factory 能寫入即代表各表對 app_backend 的 grant 正確。\n\n**介面**（皆 `session.add` + `flush` 後回傳 ORM 物件，不 commit；預設值擬真但非真實個資）\n```python\ndef make_role(session, *, code: str | None = None, permissions: Sequence[str] = (), name: str | None = None, is_system: bool = False) -> Role\ndef make_staff(session, *, permissions: Sequence[str] | None = None, role_code: str | None = None, username: str | None = None,\n               password: str = \"Passw0rd-Test1\", display_name: str = \"林老師\", is_active: bool = True,\n               must_change_password: bool = False, extra_permissions: Sequence[str] = (), revoked_permissions: Sequence[str] = ()) -> StaffUser\n    # permissions 給值 → 建一個只含這些權限碼的自訂角色；role_code 給值（'admin'/'director'/'clerk'/'tutor'）→ 使用 seed 系統角色；兩者皆無 → 空權限角色\n    # password 以 BACKEND-031 hash_password 雜湊（測試加速：模組層 cache 同一明文的 hash）\ndef make_parent(session, *, line_user_id: str | None = None, display_name: str = \"王媽媽\", status: str = \"active\") -> ParentAccount   # line_user_id 預設 'U' + uuid4().hex\ndef make_school(session, *, name: str | None = None) -> School\ndef make_class(session, *, name: str | None = None, grade_levels: Sequence[int] = (1, 2), academic_year: int = 115, archived: bool = False) -> SchoolClass\ndef make_student(session, *, name: str = \"王小明\", student_no: str | None = None, grade_level: int = 3, class_: SchoolClass | None = None,\n                 status: str = \"active\", archived: bool = False, school: School | None = None) -> Student\ndef make_guardian(session, student: Student, *, parent: ParentAccount | None = None, name: str = \"王媽媽\", relation: str = \"mother\",\n                  is_primary: bool = False, can_pickup: bool = True, receives_notifications: bool = True, archived: bool = False) -> Guardian\ndef make_class_staff(session, class_: SchoolClass, staff: StaffUser, *, role: str = \"lead\") -> ClassStaff\n```\n- 唯一欄位（username、student_no、班名、校名）預設以遞增序號產生，避免同一測試多次呼叫衝突。\n- 營運模組新增自己的 factory 時加在本檔（`make_leave`、`make_attendance` 等）。\n\n**驗收標準**\n- 每個 factory 在 db_session 中建立的列可被查回，預設值如上。\n- make_staff(permissions=[...]) 產生的帳號經 BACKEND-072 計算出的有效權限恰為給定集合。\n- 連續呼叫兩次 make_student 不違反 student_no unique。",
       "granularity_unit": "test",
       "target_path": "apps/api/tests/support/factories.py",
       "source_ref": null,
@@ -803,7 +809,7 @@
         "BACKEND-072",
         "INFRA-010",
         "DB-035",
-        "DB-039"
+        "INFRA-046"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -874,7 +880,7 @@
     {
       "id": "BACKEND-024",
       "title": "建立 schema drift 整合測試：SQLAlchemy metadata 對本機 DB",
-      "description": "建立 `apps/api/tests/integration/test_schema_drift.py`，以 INFRA-020 `scripts/check_schema_drift.py::compare` 比對 `app.models.Base.metadata` 與本機 Supabase 的 public schema（architecture_decisions §2：不用 Alembic，model 與 migration 一致由 drift 測試把關）。\n\n**測試內容**\n1. `test_schema_drift_modeled_tables`：`compare(Base.metadata, conn)` 過濾掉 `table_missing_in_model` 以外的全部 drift → 必須為空（欄位、型別、nullable、PK、FK、unique 全部一致）。\n2. `test_schema_drift_every_table_modeled`：`table_missing_in_model` 的表名集合必須 ⊆ `PENDING_MODEL_TABLES`。`PENDING_MODEL_TABLES` 為本檔常數，初始值為營運模組尚未建 model 的表：`{\"student_attendances\", \"student_leaves\", \"student_leave_attachments\", \"homework_items\", \"homework_daily_progress\", \"pickup_persons\", \"pickup_authorizations\", \"pickup_requests\", \"exams\", \"exam_subjects\", \"exam_scores\", \"devices\", \"nfc_cards\"}`。營運模組每完成一個 models task 就從此集合移除對應表（該 task 的驗收標準之一）。\n3. `test_schema_drift_pending_tables_not_modeled`：`PENDING_MODEL_TABLES` 中任何已出現在 metadata 的表 → 失敗並提示「請從 PENDING_MODEL_TABLES 移除 <table>」（防止集合過期）。\n\n連線用 INFRA-010 的 `owner_url()`（讀 information_schema 需要），先 `assert_loopback`。\n\n**驗收標準**\n- 三個測試在全部本區 models task 完成後通過。\n- 故意把某 model 欄位改成 nullable 不一致時第 1 個測試失敗並列出該欄位。",
+      "description": "建立 `apps/api/tests/integration/test_schema_drift.py`，以 INFRA-020 `scripts/check_schema_drift.py::compare` 比對 `app.models.Base.metadata` 與套用全部 Alembic revision 後的本機 DB public schema（architecture_decisions §5：model 與 migration 一致由 drift 檢查把關；`alembic_version` 由 INFRA-020 的 include_object 排除）。\n\n**測試內容**\n1. `test_schema_drift_modeled_tables`：`compare(Base.metadata, conn)` 過濾掉 `table_missing_in_model` 以外的全部 drift → 必須為空（欄位、型別、nullable、PK、FK、unique 全部一致）。\n2. `test_schema_drift_every_table_modeled`：`table_missing_in_model` 的表名集合必須 ⊆ `PENDING_MODEL_TABLES`。`PENDING_MODEL_TABLES` 為本檔常數，初始值為營運模組尚未建 model 的表：`{\"student_attendances\", \"student_leaves\", \"student_leave_attachments\", \"homework_items\", \"homework_daily_progress\", \"pickup_persons\", \"pickup_authorizations\", \"pickup_requests\", \"exams\", \"exam_subjects\", \"exam_scores\", \"devices\", \"nfc_cards\"}`。營運模組每完成一個 models task 就從此集合移除對應表（該 task 的驗收標準之一）。\n3. `test_schema_drift_pending_tables_not_modeled`：`PENDING_MODEL_TABLES` 中任何已出現在 metadata 的表 → 失敗並提示「請從 PENDING_MODEL_TABLES 移除 <table>」（防止集合過期）。\n\n連線用 INFRA-010 的 `owner_url()`（讀 information_schema 需要），先 `assert_loopback`。\n\n**驗收標準**\n- 三個測試在全部本區 models task 完成後通過。\n- 故意把某 model 欄位改成 nullable 不一致時第 1 個測試失敗並列出該欄位。",
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/test_schema_drift.py",
       "source_ref": null,
@@ -2256,7 +2262,7 @@
     {
       "id": "BACKEND-065",
       "title": "實作 CLI python -m app.cli create-admin：一次性建立初始 admin 帳號",
-      "description": "建立 `apps/api/app/cli.py`（DB-039 的介面：初始 admin 不寫在任何 seed，由一次性 CLI 建立）。\n\n```python\ndef create_admin(session: Session, *, username: str, display_name: str, password: str) -> StaffUser: ...\ndef main(argv: list[str] | None = None) -> int: ...\n```\n- 指令：`uv run python -m app.cli create-admin --username <name> --display-name <name>`；以 `getpass` 互動輸入密碼兩次，不一致 → exit 2「兩次輸入不一致」。\n- 已存在任何 `is_active = true` 且角色為 `admin` 的帳號 → 拒絕，exit 1「已存在啟用中的 admin 帳號，請改由後台建立」（避免被當成後門重設工具）。\n- username 正規化小寫並檢查格式（DB CHECK `^[a-z0-9][a-z0-9._-]{2,31}$`）、不可重複；密碼過 `validate_password_strength`。\n- 建立 `staff_users`：role = `admin` 系統角色、`must_change_password = true`；寫 audit `staff_user.create`（actor_type='system'）。\n- 使用 `session_scope()`（BACKEND-005）commit；成功 exit 0 並印出 username（不印密碼）。\n- argparse 錯誤（缺參數）→ exit 2。\n\n**驗收標準**\n- 首次執行建立 admin、must_change_password=true，exit 0。\n- 已有啟用中的 admin → exit 1，不新增帳號。\n- 兩次密碼不一致 / 弱密碼 / username 格式錯 → 非 0 且不新增。\n- stdout 不含密碼。",
+      "description": "在 BACKEND-535 建立的 `apps/api/app/cli.py` 加入 `create-admin` 子指令（初始 admin 不寫在任何 migration，由一次性 CLI 建立）。\n\n```python\ndef create_admin(session: Session, *, username: str, display_name: str, password: str) -> StaffUser: ...\ndef main(argv: list[str] | None = None) -> int: ...\n```\n- 指令：`uv run python -m app.cli create-admin --username <name> --display-name <name>`；以 `getpass` 互動輸入密碼兩次，不一致 → exit 2「兩次輸入不一致」。\n- 已存在任何 `is_active = true` 且角色為 `admin` 的帳號 → 拒絕，exit 1「已存在啟用中的 admin 帳號，請改由後台建立」（避免被當成後門重設工具）。\n- username 正規化小寫並檢查格式（DB CHECK `^[a-z0-9][a-z0-9._-]{2,31}$`）、不可重複；密碼過 `validate_password_strength`。\n- 建立 `staff_users`：role = `admin` 系統角色、`must_change_password = true`；寫 audit `staff_user.create`（actor_type='system'）。\n- 使用 `session_scope()`（BACKEND-005）commit；成功 exit 0 並印出 username（不印密碼）。\n- argparse 錯誤（缺參數）→ exit 2。\n\n**驗收標準**\n- 首次執行建立 admin、must_change_password=true，exit 0。\n- 已有啟用中的 admin → exit 1，不新增帳號。\n- 兩次密碼不一致 / 弱密碼 / username 格式錯 → 非 0 且不新增。\n- stdout 不含密碼。",
       "granularity_unit": "script",
       "target_path": "apps/api/app/cli.py",
       "source_ref": null,
@@ -2269,7 +2275,7 @@
         "BACKEND-005",
         "BACKEND-102",
         "DB-035",
-        "DB-039"
+        "BACKEND-535"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -5244,7 +5250,7 @@
     {
       "id": "BACKEND-154",
       "title": "實作 StudentService.upload_photo：上傳學生照片（驗證、Storage、commit 後刪舊檔）",
-      "description": "在 `apps/api/app/services/student_service.py` 實作：\n```python\ndef upload_photo(session: Session, student_id: UUID, file: UploadFile, *, storage: Storage) -> PhotoUploadOut: ...\n```\n1. 學生不存在或已封存 → 404。\n2. `read_validated_upload(file, allowed=IMAGE_TYPES, max_bytes=5 MiB)`（BACKEND-016）→ 413 / 415 / 422。\n3. `path = build_object_path(student_id, ext)` → `storage.upload('student-photos', path, content, mime)`；StorageError → 502 `storage_unavailable`。\n4. 更新 `photo_path`，flush；flush 失敗 → 刪除剛上傳的物件後重新拋出。\n5. 舊 photo_path 存在 → `run_after_commit(session, lambda: storage.delete('student-photos', [old]))`（失敗只記 log）。\n6. 回傳新照片的短效 URL。\n- 物件路徑不使用使用者檔名（DB-034）。\n\n**驗收標準**\n- 成功：FakeStorage 有新物件、photo_path 更新、回傳 URL；commit 後舊物件被刪。\n- rollback 時舊物件不被刪。\n- 非圖片 415、過大 413。\n- Storage 失敗 502 且 photo_path 不變。",
+      "description": "在 `apps/api/app/services/student_service.py` 實作：\n```python\ndef upload_photo(session: Session, student_id: UUID, file: UploadFile, *, storage: Storage) -> PhotoUploadOut: ...\n```\n1. 學生不存在或已封存 → 404。\n2. `read_validated_upload(file, allowed=IMAGE_TYPES, max_bytes=5 MiB)`（BACKEND-016）→ 413 / 415 / 422。\n3. `path = build_object_path(student_id, ext)` → `storage.upload('student-photos', path, content, mime)`；StorageError → 502 `storage_unavailable`。\n4. 更新 `photo_path`，flush；flush 失敗 → 刪除剛上傳的物件後重新拋出。\n5. 舊 photo_path 存在 → `run_after_commit(session, lambda: storage.delete('student-photos', [old]))`（失敗只記 log）。\n6. 回傳新照片的短效 URL。\n- 物件路徑不使用使用者檔名（BACKEND-013 `build_object_path`）。\n\n**驗收標準**\n- 成功：FakeStorage 有新物件、photo_path 更新、回傳 URL；commit 後舊物件被刪。\n- rollback 時舊物件不被刪。\n- 非圖片 415、過大 413。\n- Storage 失敗 502 且 photo_path 不變。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": null,
@@ -14507,6 +14513,86 @@
         ],
         "run": "just test apps/api/tests/unit/services/test_rbac_guards.py -k \"test_rbac_cannot_manage or test_rbac_can_manage or test_rbac_admin_manages\"",
         "notes": ""
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-535",
+      "title": "實作 python -m app.cli migrate：advisory lock 串行化的 alembic upgrade 與 app_backend 密碼同步",
+      "description": "建立 `apps/api/app/core/migrate.py` 與 `apps/api/app/cli.py` 的 `migrate` 子指令，供 Railway pre-deploy command（INFRA-032：`python -m app.cli migrate`）在每次部署前套用 migration（architecture_decisions §5）。移植 ivy `BE:startup/migrations.py::_alembic_upgrade_lock`（session 級 advisory lock、等待上限、逾時訊息提示查 pg_stat_activity）與 `apply_migration_lock_timeout`；去掉 ivy 的四態偵測（empty / needs_baseline / unknown_nonempty）、maintenance engine、blocking revision 守衛與 subprocess 呼叫（本專案在同一行程以 `alembic.command.upgrade` 執行）。\n\n**介面**\n```python\nMIGRATION_LOCK_KEY: Final[int]            # md5(b\"migration|alembic_upgrade\") 前 8 bytes → 63-bit 正整數（與 BACKEND-017 advisory_key 同公式；本模組不 import locks.py）\nLOCK_WAIT_TIMEOUT_MS: Final = 600_000     # 等待其他 migrate 釋放鎖的上限（程式常數，不是 env）\n\nclass MigrationConfigError(Exception): ...    # env 缺漏或不合法；訊息不含密碼\nclass MigrationLockTimeout(RuntimeError): ... # 等鎖逾時\n\n@dataclass(frozen=True)\nclass MigrationUrls:\n    migration_url: str   # owner，postgresql+psycopg://\n    backend_url: str     # app_backend，postgresql+psycopg://\n\ndef load_migration_urls(environ: Mapping[str, str]) -> MigrationUrls: ...\ndef sync_backend_password(conn: psycopg.Connection, password: str, *, role: str = \"app_backend\") -> None: ...\ndef run_migrations(urls: MigrationUrls, *, alembic_ini: Path, lock_wait_timeout_ms: int = LOCK_WAIT_TIMEOUT_MS) -> str: ...  # 回傳套用後的 head\n```\n\n**規則**\n- `load_migration_urls`：只讀 `MIGRATION_DATABASE_URL` 與 `DATABASE_URL`，**不**建立 BACKEND-001 的 Settings（pre-deploy 與本機都不需要 APP_SECRET_KEY 等其他 env）。任一缺漏 → MigrationConfigError（訊息含缺漏的變數名）；`postgresql://` 補成 `postgresql+psycopg://`；`DATABASE_URL` 的使用者必須是 `app_backend` 且帶密碼；兩者的使用者不可相同；兩者的 host / port / database 必須相同（避免把密碼同步到另一個 DB）。錯誤訊息一律以遮罩後的 URL 呈現，不得含密碼。\n- `run_migrations`：\n  1. 以 psycopg（autocommit）開 owner 連線，`set_config('lock_timeout', <lock_wait_timeout_ms>, false)` 後 `pg_try_advisory_lock(MIGRATION_LOCK_KEY)`；拿不到時印「另一個 migrate 正在執行，等待其完成」再以 `pg_advisory_lock` 阻塞等待；等待逾時 → MigrationLockTimeout，訊息提示以 `pg_stat_activity` / `pg_locks` 找出持鎖的連線。\n  2. 持鎖期間以 `alembic.config.Config(alembic_ini)` 執行 `command.upgrade(cfg, \"head\")`；連線字串由 env.py 讀 `MIGRATION_DATABASE_URL`（INFRA-045），本函式不改寫環境變數。\n  3. 同一 owner 連線呼叫 `sync_backend_password`：以 `conn.pgconn.encrypt_password(password, role, b\"scram-sha-256\")` 在客戶端產生 SCRAM verifier，再 `alter role <role> with login password <verifier>`（以 `psycopg.sql.Identifier` / `Literal` 組 SQL；明文密碼不送進 DB、不寫進 log）。role 不存在 → RuntimeError「<role> 不存在」。\n  4. `finally` 執行 `pg_advisory_unlock`；連線中斷時鎖隨 session 結束自動釋放。\n  5. 回傳 `alembic_version` 的值。\n- `app/cli.py`：建立 argparse 子指令架構（`main(argv: list[str] | None = None) -> int`，`if __name__ == \"__main__\": raise SystemExit(main())`）與 `migrate` 子指令：`load_migration_urls(os.environ)` → `run_migrations(..., alembic_ini=<apps/api>/alembic.ini)`；成功印「migration 完成：head = <rev>」exit 0；MigrationConfigError → stderr 訊息、exit 2；MigrationLockTimeout 或其他例外 → stderr 印例外類型與訊息（不含密碼）、exit 1。BACKEND-065 之後在同一個 `main` 加入 `create-admin` 子指令。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/core/migrate.py",
+      "source_ref": "BE:startup/migrations.py::_alembic_upgrade_lock",
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "INFRA-045",
+        "DB-041",
+        "INFRA-041"
+      ],
+      "suggested_model": "fable-5",
+      "risk_notes": "pre-deploy 與執行期使用同一組 Railway 環境變數，MIGRATION_DATABASE_URL 也會出現在 api 執行期的環境中；執行期程式碼（Settings 與其他模組）不得引用它。alembic 在同一行程執行時會載入 env.py 與 app.models，models import 不得有連 DB 的副作用。",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/core/test_migrate.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_migrate_load_urls_valid：environ 只含 MIGRATION_DATABASE_URL='postgresql://postgres:pw@127.0.0.1:54342/postgres' 與 DATABASE_URL='postgresql://app_backend:secret1@127.0.0.1:54342/postgres' → MigrationUrls 兩個欄位都以 'postgresql+psycopg://' 開頭；environ 不含 APP_SECRET_KEY 也成功",
+          "test_migrate_load_urls_rejects（parametrize）：缺 MIGRATION_DATABASE_URL、缺 DATABASE_URL、DATABASE_URL 使用者為 'postgres'、DATABASE_URL 無密碼、兩者 database 不同（/postgres vs /other）、host 不同 → MigrationConfigError；每個訊息都不含 'secret1' 與 'pw@'",
+          "test_migrate_sync_backend_password_sets_scram_verifier：owner_conn 在 transaction 內 create role migrate_probe_<uuid8> nologin；sync_backend_password(owner_conn, 'probe-pass-1', role=<該角色>) → pg_authid 的 rolcanlogin == true 且 rolpassword 以 'SCRAM-SHA-256$' 開頭；以 monkeypatch 記錄送出的 SQL 文字 → 不含 'probe-pass-1'",
+          "test_migrate_sync_backend_password_missing_role：role='no_such_role_x' → RuntimeError 訊息含 'no_such_role_x'",
+          "test_migrate_run_upgrades_probe_database：owner 建立暫存 database migrate_probe_<uuid8>，MigrationUrls 指向它（backend 密碼 'app_backend_local'，與本機現值相同）並以 monkeypatch 設定 MIGRATION_DATABASE_URL → run_migrations 回傳值 == `alembic heads` 的唯一 head，暫存 database 的 alembic_version 為該值；測試結束 drop 暫存 database",
+          "test_migrate_lock_timeout：另一條 owner 連線先取得 pg_advisory_lock(MIGRATION_LOCK_KEY)，run_migrations(..., lock_wait_timeout_ms=500) → MigrationLockTimeout，訊息含 'pg_stat_activity'，且暫存 database 沒有 alembic_version 表",
+          "test_migrate_releases_lock_on_failure：monkeypatch alembic.command.upgrade 拋 RuntimeError('boom') → run_migrations 拋出 RuntimeError；之後另一條連線 pg_try_advisory_lock(MIGRATION_LOCK_KEY) → true",
+          "test_cli_migrate_exit_codes：monkeypatch run_migrations 回 'db040' → main(['migrate']) == 0 且 stdout 含 'db040'；load_migration_urls 拋 MigrationConfigError → 2；run_migrations 拋 MigrationLockTimeout → 1；三種情況 capsys 的 stdout / stderr 都不含 DATABASE_URL 的密碼"
+        ],
+        "run": "just test-int apps/api/tests/integration/core/test_migrate.py -k migrate",
+        "notes": "暫存 database 與暫存角色一律以 migrate_probe_ 為前綴，測試結束清除（drop database ... with (force)）；不得修改共用本機 DB 的 app_backend 密碼（端到端案例使用與本機相同的 'app_backend_local'）。連線一律經 INFRA-041 的 owner_url() 與 loopback 守衛。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-536",
+      "title": "R2Storage 對本機 MinIO 的整合測試：上傳、presigned 下載、刪除往返",
+      "description": "以 compose 的本機 MinIO（`127.0.0.1:54344`，bucket `afterschool-local`，INFRA-044）驗證 BACKEND-013~015 的 R2Storage 與真實 S3 相容服務的往返，補足 Stubber 單元測試看不到的簽章與 path-style 行為（architecture_decisions §10）。\n\n- fixture `minio_storage`：讀 `TEST_R2_ENDPOINT_URL`（預設 `http://127.0.0.1:54344`）、`TEST_R2_ACCESS_KEY_ID`（預設 `afterschool`）、`TEST_R2_SECRET_ACCESS_KEY`（預設 `afterschool-local-secret`）、`TEST_R2_BUCKET`（預設 `afterschool-local`）建立 R2Storage；endpoint 的 host 不是 `127.0.0.1` / `localhost` / `::1` 時 `pytest.exit(\"只允許本機 loopback 儲存服務：<host>\", returncode=2)`，且不建立 client；TCP 探測連不上時 `pytest.exit(\"本機 MinIO 未啟動，先跑 just db-start\", returncode=2)`。\n- 每個測試用新的 `build_object_path(uuid4(), ...)`，結束時刪除自己建立的物件。\n- 下載以 httpx 直接 GET presigned URL（pytest-socket 已放行 loopback）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "granularity_unit": "test",
+      "target_path": "apps/api/tests/integration/core/test_storage_minio.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "BACKEND-013",
+        "BACKEND-014",
+        "BACKEND-015",
+        "INFRA-044"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/core/test_storage_minio.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_storage_minio_round_trip：upload('student-photos', p, b'\\xff\\xd8\\xffminio-probe', 'image/jpeg') 後 httpx.get(create_signed_url('student-photos', p, 60)) → status 200、content == 上傳的 bytes、headers['content-type'] == 'image/jpeg'",
+          "test_storage_minio_unsigned_access_denied：同一物件以不帶簽章的 URL（<endpoint>/afterschool-local/student-photos/<p>）GET → 403",
+          "test_storage_minio_tampered_signature_rejected：把 presigned URL 的 X-Amz-Signature 最後一個字元改成不同的 hex 字元 → GET 回 403",
+          "test_storage_minio_delete：delete('student-photos', [p]) 後重新簽發 URL 並 GET → 404；再次 delete 同一 path → 不拋例外",
+          "test_storage_minio_rejects_remote_endpoint：pytester 以 TEST_R2_ENDPOINT_URL='https://acct.r2.cloudflarestorage.com' 執行使用 minio_storage 的測試 → ret == 2，輸出含 '只允許本機 loopback 儲存服務'"
+        ],
+        "run": "just test-int apps/api/tests/integration/core/test_storage_minio.py -k storage_minio",
+        "notes": "需要先 just db-start（MinIO 與 storage-init 已建立 bucket）。"
       },
       "review": {
         "status": "pending",
