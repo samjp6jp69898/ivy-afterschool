@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 92,
-  "last_updated": "2026-10-03T15:29:24Z",
+  "version": 93,
+  "last_updated": "2026-10-03T15:30:19Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -745,7 +745,7 @@
       "granularity_unit": "test",
       "target_path": "scripts/tests/test_justfile.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-002",
@@ -779,9 +779,9 @@
         "notes": "test-int 的 DB port 探測支援 JUST_TEST_INT_DB_PORT 覆寫（預設 54342）。純補測試：突變驗證在 scratchpad 的 repo 複本上進行（justfile、scripts/_pyroute.sh、scripts/tests 與 db_urls 複本 + apps/api/.venv 連結），不動共用工作樹的 justfile；每次只套一個突變。結果（基準 27 passed）：移除 py_prepare 無參數區塊 → require_args[test/test-int/lint/typecheck] 4 紅；py_is_full_run 恆回 1 → rejects_full_run_paths 4 紅；未知前綴放行 → rejects_unknown_prefix 紅；db-reset 白名單放行 → db_reset_rejects_unknown_args 4 紅；db-reset 非 TTY 檢查移除 → requires_yes_without_tty 紅；db-reset 改呼叫其他腳本 → db_reset_yes_runs_local_script 紅；db-new-migration 參數個數檢查放寬為 $# -lt 1 → validates_args[missing-slug / extra-arg] 2 紅；db-new-migration 正則檢查移除 → validates_args[upper-rev / bad-slug] 2 紅；db-migrate 移除 MIGRATION_DATABASE_URL 覆寫 → db_migrate_forces_local_url 紅；test-int port 探測移除 → test_int_requires_local_db 紅；web-test 無參數檢查移除 → require_args[web-test] 紅；default recipe 說明移除 → list_documents_every_recipe 紅。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-infra",
+        "notes": "重做通過（純補測試，aefaf07）。`just test scripts/tests/test_justfile.py -k justfile` 27 passed、--collect-only 對照 red_case 全選到；lint / typecheck 乾淨。新介面皆有鎖住：db-reset（白名單 4 例、非 TTY 需 --yes、--yes 只呼叫 uv run --frozen … scripts/db_reset_local.py 且不帶 URL）、db-new-migration（缺 SLUG / REV 大寫 / SLUG 不合法 / 多一個參數皆 exit 1 且不呼叫 uv；成功時 argv 與 cwd=apps/api）、db-migrate（呼叫端 MIGRATION_DATABASE_URL 被覆寫為本機 owner URL）。PGHOSTADDR / PGSERVICE 的移除由 INFRA-045 的 test_alembic_db_migrate_recipe_ignores_libpq_env 鎖住。實作者在 tdd.notes 記錄的 12 種突變另行抽驗 3 種（scratchpad 複本）：db-migrate 移除 URL 覆寫、db-reset 轉發 --db-url、db-new-migration 改在 repo root 執行 → 各自對應的測試轉紅。假指令只剩 uv / pnpm / docker；justfile 已無任何 supabase 指令呼叫。殘留（不擋）：justfile 第 9 行註解、test-int 的說明與「本機 Supabase 未啟動」錯誤訊息仍寫 Supabase（只是文字，未呼叫 supabase），check-rls recipe 仍在；屬 INFRA-047 的清除範圍。"
       }
     },
     {
