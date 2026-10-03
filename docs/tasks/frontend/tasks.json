@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 38,
-  "last_updated": "2026-10-03T12:57:12Z",
+  "version": 39,
+  "last_updated": "2026-10-03T12:57:44Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1082,8 +1082,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/FormDialog.vue",
       "source_ref": "FE:src/components/common/FormDialog.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013",
         "FRONTEND-046"
@@ -1186,8 +1186,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/StatCard.vue",
       "source_ref": "FE:src/components/common/StatCard.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013",
         "FRONTEND-005"
