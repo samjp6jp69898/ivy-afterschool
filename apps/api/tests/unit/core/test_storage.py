@@ -5,11 +5,11 @@ S3 呼叫一律以 botocore.stub.Stubber 攔截，不連網路。
 
 import re
 from collections.abc import Iterator
+from typing import Any
 from uuid import UUID, uuid4
 
 import boto3
 import pytest
-from botocore.config import Config
 from botocore.exceptions import EndpointConnectionError
 from botocore.stub import Stubber
 from mypy_boto3_s3 import S3Client
@@ -211,12 +211,14 @@ def test_storage_default_client_config() -> None:
     )
 
     meta = storage.client.meta
-    config: Config = meta.config
+    # botocore 的 Config stubs 沒有宣告這些屬性
+    config: Any = meta.config
     assert meta.endpoint_url == "http://127.0.0.1:54344"
     assert meta.region_name == "auto"
     assert config.signature_version == "s3v4"
     assert config.s3 == {"addressing_style": "path"}
-    assert config.retries == {"max_attempts": 3, "mode": "standard"}
+    # botocore 把 max_attempts=3（重試次數）正規化為 total_max_attempts=4（含第一次）
+    assert config.retries == {"mode": "standard", "total_max_attempts": 4}
     assert config.connect_timeout == 5
     assert config.read_timeout == 10
     assert storage.bucket_name == _BUCKET_NAME

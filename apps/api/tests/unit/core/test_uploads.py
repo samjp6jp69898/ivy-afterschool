@@ -229,7 +229,7 @@ def test_uploads_constants() -> None:
     assert frozenset({"jpg", "png", "webp"}) == IMAGE_TYPES
     assert frozenset({"jpg", "png", "webp", "heic", "pdf"}) == ATTACHMENT_TYPES
     assert frozenset({"xlsx"}) == XLSX_TYPES
-    # 與 DB-034 bucket file_size_limit 一致
+    # 應用層上限（architecture_decisions §10、BACKEND-013 上傳上限對照表）
     assert PHOTO_MAX_BYTES == 5242880
     assert ATTACHMENT_MAX_BYTES == 10485760
     assert XLSX_MAX_BYTES == 5242880

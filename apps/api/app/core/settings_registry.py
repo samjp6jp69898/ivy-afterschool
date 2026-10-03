@@ -189,7 +189,8 @@ class LeaveWindow(_SettingModel):
     max_attachments: int = Field(
         ge=0, le=10, title="每筆請假附件數上限", description="每筆請假最多可上傳的附件數"
     )
-    # 上限 10 受 DB-019 size_bytes CHECK 與 DB-034 bucket file_size_limit 硬性限制
+    # 上限 10 受 DB-019 size_bytes CHECK 與 BACKEND-016 ATTACHMENT_MAX_BYTES 硬性限制
+    # （architecture_decisions §10）
     max_attachment_mb: int = Field(
         ge=1,
         le=10,

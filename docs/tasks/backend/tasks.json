@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 62,
-  "last_updated": "2026-10-03T14:44:25Z",
+  "version": 64,
+  "last_updated": "2026-10-03T14:45:16Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -460,7 +460,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/storage.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-001",
@@ -484,7 +484,7 @@
           "test_storage_upload_error_hides_credentials：Stubber.add_client_error('put_object', service_error_code='SignatureDoesNotMatch', http_status_code=403, response_meta 帶 AWSAccessKeyId) → StorageError，str 含 'SignatureDoesNotMatch' 與 '403'、不含 access key id 與 secret，且 __cause__ is None、__suppress_context__ is True",
           "test_storage_upload_connection_error：client.put_object 拋 EndpointConnectionError → StorageError",
           "test_storage_object_key_rejects_unknown_bucket：object_key('other', 有效 path) → ValueError",
-          "test_storage_default_client_config：R2Storage(endpoint_url='http://127.0.0.1:54344', ...) 的 client.meta.region_name == 'auto'、config.signature_version == 's3v4'、s3.addressing_style == 'path'、retries == {'max_attempts': 3, 'mode': 'standard'}、connect_timeout 5、read_timeout 10；repr 不含 secret",
+          "test_storage_default_client_config：R2Storage(endpoint_url='http://127.0.0.1:54344', ...) 的 client.meta.region_name == 'auto'、config.signature_version == 's3v4'、s3.addressing_style == 'path'、retries == {'mode': 'standard', 'total_max_attempts': 4}（botocore 把 max_attempts=3 正規化為含第一次的總次數）、connect_timeout 5、read_timeout 10；repr 不含 secret",
           "test_storage_fake_storage_failures：FakeStorage 設定 upload_error / sign_error / delete_error 後對應方法拋該 StorageError 且 objects 不變；create_signed_url 格式 'https://storage.test/{bucket}/{path}?exp={expires_in}'；delete 移除物件並忽略不存在的 path；非法 path → ValueError"
         ],
         "run": "just test apps/api/tests/unit/core/test_storage.py -k \"test_storage_\"",

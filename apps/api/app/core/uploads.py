@@ -21,7 +21,7 @@ ATTACHMENT_TYPES: Final = IMAGE_TYPES | {"heic", "pdf"}
 XLSX_TYPES: Final = frozenset({"xlsx"})
 
 _MIB: Final = 1024 * 1024
-# 與 DB-034 bucket file_size_limit 一致
+# 上限全部由應用層把關（R2 bucket 沒有逐分區的大小設定，architecture_decisions §10）
 PHOTO_MAX_BYTES: Final = 5 * _MIB
 ATTACHMENT_MAX_BYTES: Final = 10 * _MIB
 XLSX_MAX_BYTES: Final = 5 * _MIB
