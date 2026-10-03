@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 47,
-  "last_updated": "2026-10-03T12:46:04Z",
+  "version": 48,
+  "last_updated": "2026-10-03T12:47:30Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1286,7 +1286,7 @@
     {
       "id": "BACKEND-040",
       "title": "實作 app/services/auth/throttle.py：登入、改密碼、LIFF、綁定的節流設定與 dependency",
-      "description": "建立 `apps/api/app/services/auth/throttle.py`，以 BACKEND-012 的元件組出認證相關節流（移植 ivy `api/auth.py` 的 `_IP_WINDOW` / `_FAIL_THRESHOLD` / `_FAIL_LOCKOUT` 參數與 `api/parent_portal/auth.py` 的 bind lockout）。\n\n```python\n@dataclass\nclass AuthThrottles:\n    login_ip: SlidingWindowLimiter = SlidingWindowLimiter(max_hits=20, window_seconds=300)        # 同 IP 5 分鐘 20 次登入嘗試\n    login_account_ip: FailureLockout = FailureLockout(threshold=5, lockout_seconds=900)           # (username, ip) 連續失敗 5 次鎖 15 分\n    login_account: FailureLockout = FailureLockout(threshold=20, lockout_seconds=900)             # 同帳號跨來源失敗 20 次鎖 15 分（分散式猜測）\n    password_change: FailureLockout = FailureLockout(threshold=5, lockout_seconds=900)            # 改密碼舊密碼錯 5 次\n    liff_ip: SlidingWindowLimiter = SlidingWindowLimiter(max_hits=30, window_seconds=300)\n    bind: FailureLockout = FailureLockout(threshold=5, lockout_seconds=900)                       # key：line_user_id 或 parent id\n\ndef get_auth_throttles() -> AuthThrottles: ...   # FastAPI dependency，回傳 module 單例；測試以 dependency override 換成新實例\ndef login_keys(username: str, ip: str | None) -> tuple[str, str]: ...   # (f\"{username}|{ip or '-'}\", username)\n```\n- IP 為 None 時以 `'-'` 作 key（仍受帳號維度保護）。\n\n**驗收標準**\n- 預設門檻值如上。\n- get_auth_throttles 回傳單例。\n- login_keys 對 None IP 的處理。",
+      "description": "建立 `apps/api/app/services/auth/throttle.py`，以 BACKEND-012 的元件組出認證相關節流（移植 ivy `api/auth.py` 的 `_IP_WINDOW` / `_FAIL_THRESHOLD` / `_FAIL_LOCKOUT` 參數與 `api/parent_portal/auth.py` 的 bind lockout）。\n\n```python\n@dataclass\nclass AuthThrottles:\n    # 一律用 field(default_factory=...)：直接寫 = SlidingWindowLimiter(...) 會讓所有實例共用同一個 limiter\n    login_ip: SlidingWindowLimiter = field(default_factory=lambda: SlidingWindowLimiter(max_hits=20, window_seconds=300))   # 同 IP 5 分鐘 20 次登入嘗試\n    login_account_ip: FailureLockout = field(default_factory=lambda: FailureLockout(threshold=5, lockout_seconds=900))      # (username, ip) 連續失敗 5 次鎖 15 分\n    login_account: FailureLockout = field(default_factory=lambda: FailureLockout(threshold=20, lockout_seconds=900))        # 同帳號跨來源失敗 20 次鎖 15 分（分散式猜測）\n    password_change: FailureLockout = field(default_factory=lambda: FailureLockout(threshold=5, lockout_seconds=900))       # 改密碼舊密碼錯 5 次\n    liff_ip: SlidingWindowLimiter = field(default_factory=lambda: SlidingWindowLimiter(max_hits=30, window_seconds=300))\n    bind: FailureLockout = field(default_factory=lambda: FailureLockout(threshold=5, lockout_seconds=900))                  # key：line_user_id 或 parent id\n\ndef get_auth_throttles() -> AuthThrottles: ...   # FastAPI dependency，回傳 module 單例；測試以 dependency override 換成新實例\ndef login_keys(username: str, ip: str | None) -> tuple[str, str]: ...   # (f\"{u}|{ip or '-'}\", u)，u = username.strip().lower()\n```\n- IP 為 None 時以 `'-'` 作 key（仍受帳號維度保護）。\n- username 先 `strip().lower()`（與 BACKEND-041 第 1 步一致；staff_users.username 一律小寫）。login_keys 自身也正規化屬縱深防禦：任何呼叫端漏了正規化，都不會讓大小寫或前後空白變化換到新的計數而繞過帳號鎖定。\n- `(username, ip)` 組 key 必須是單射：ip 由伺服器端取得、不含 `|`，以最後一個 `|` 切分即可還原，不同組合不會撞到同一個 key（攻擊者無法藉特製 username 鎖住別人的 (帳號, IP) 計數）。\n\n**驗收標準**\n- 預設門檻值如上；每個 AuthThrottles 實例的節流元件互相獨立。\n- get_auth_throttles 回傳單例。\n- login_keys 對 None IP 的處理、username 正規化、key 單射。\n- 換 IP 分散猜同一帳號仍被 login_account 擋下；同一 IP 換帳號猜仍被 login_ip 擋下。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/throttle.py",
       "source_ref": "BE:api/auth.py::_check_account_lockout",
@@ -1306,7 +1306,13 @@
         "red_cases": [
           "test_auth_throttle_defaults：AuthThrottles() 的 login_account_ip 連續 record_failure 5 次後 check → RateLimitedError retry_after_seconds == 900；login_ip 第 21 次 hit → RateLimitedError",
           "test_auth_throttle_singleton：get_auth_throttles() is get_auth_throttles() → True",
-          "test_auth_throttle_login_keys：login_keys('amy', None) == ('amy|-', 'amy')；login_keys('amy','1.2.3.4') == ('amy|1.2.3.4','amy')"
+          "test_auth_throttle_login_keys：login_keys('amy', None) == ('amy|-', 'amy')；login_keys('amy','1.2.3.4') == ('amy|1.2.3.4','amy')",
+          "test_auth_throttle_instances_isolated：a, b = AuthThrottles(), AuthThrottles() → a.login_ip is not b.login_ip；a 的 login_account_ip 鎖定後 b 的同 key check 不拋",
+          "test_auth_throttle_login_keys_normalize：login_keys(' Amy ', '1.2.3.4') == ('amy|1.2.3.4', 'amy')；login_keys('AMY', None) == login_keys('amy', None)",
+          "test_auth_throttle_login_keys_injective：login_keys('amy|1.2.3.4', None)[0] != login_keys('amy', '1.2.3.4')[0]，且多組 (username, ip) 產生的 key 互不相同",
+          "test_auth_throttle_rotating_ip_hits_account_lockout：同帳號以 20 個不同 IP 各失敗 1 次 → login_account check 拋 RateLimitedError，各 (帳號, IP) 都未達 5 次",
+          "test_auth_throttle_rotating_username_hits_ip_limit：同一 IP 以 20 個不同帳號各 hit login_ip 一次 → 第 21 次 RateLimitedError",
+          "test_auth_throttle_dependency_override：FastAPI app 以 Depends(get_auth_throttles) 取節流，dependency_overrides 換成新實例後，端點操作的是新實例、單例狀態不受影響"
         ],
         "run": "just test apps/api/tests/unit/services/auth/test_throttle.py -k \"test_auth_throttle_\"",
         "notes": ""
