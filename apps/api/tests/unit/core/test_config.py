@@ -31,7 +31,7 @@ def base_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _settings() -> Settings:
-    return Settings(_env_file=None)  # type: ignore[call-arg]
+    return Settings(_env_file=None)
 
 
 def test_config_missing_required_env(monkeypatch: pytest.MonkeyPatch) -> None:
