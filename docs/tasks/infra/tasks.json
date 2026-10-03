@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 44,
-  "last_updated": "2026-10-03T12:54:09Z",
+  "version": 45,
+  "last_updated": "2026-10-03T12:55:09Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1559,7 +1559,7 @@
     {
       "id": "INFRA-043",
       "title": "vitest 設定 inline element-plus，讓自動 import 的 Element Plus 元件與樣式可在測試中載入",
-      "description": "`apps/web/vite.config.ts` 的 unplugin-vue-components（ElementPlusResolver）在元件使用 `<el-*>` 時會同時自動 import 對應的 theme-chalk CSS。vitest 在 Node 端載入 element-plus 時不經 vite 轉譯，遇到 `.css` 會拋 `TypeError: Unknown file extension \".css\"`，導致任何用到 Element Plus 元件的 spec 無法執行。\n\n**修改**：`apps/web/vitest.config.ts` 的 `test` 區塊加 `server: { deps: { inline: ['element-plus'] } }`，讓 element-plus 經 vite 轉譯（CSS 由 vite 處理）。同時把 `import viteConfig from './vite.config'` 改為帶副檔名的 `'./vite.config.ts'`（或依 TS 設定可接受的寫法），消除 vitest 執行時的「import 未帶副檔名」警告；若 tsconfig 不允許 `.ts` 副檔名 import，改用不觸發警告的等效寫法並註明。\n\n**驗收標準**：\n- 一個以 `mount` 渲染 template 內使用 `<el-button>`、`<el-icon>`（自動 import，不手動 import 元件）的測試元件的 spec 可執行並通過，且渲染結果含 `.el-button`。\n- 既有 `src/test/setup.spec.ts`、`src/test/helpers.spec.ts` 仍全綠。\n- 執行 vitest 時不再出現 vite.config import 未帶副檔名的警告。",
+      "description": "`apps/web/vite.config.ts` 的 unplugin-vue-components（ElementPlusResolver）在元件使用 `<el-*>` 時會同時自動 import 對應的 theme-chalk CSS。vitest 在 Node 端載入 element-plus 時不經 vite 轉譯，遇到 `.css` 會拋 `TypeError: Unknown file extension \".css\"`，導致任何用到 Element Plus 元件的 spec 無法執行。\n\n**修改**：`apps/web/vitest.config.ts` 的 `test` 區塊加 `server: { deps: { inline: ['element-plus'] } }`，讓 element-plus 經 vite 轉譯（CSS 由 vite 處理）。同時把 `import viteConfig from './vite.config'` 改為帶副檔名的 `'./vite.config.ts'`（或依 TS 設定可接受的寫法），消除 vitest 執行時的「import 未帶副檔名」警告；若 tsconfig 不允許 `.ts` 副檔名 import，改用不觸發警告的等效寫法並註明。\n\n**驗收標準**：\n- 一個以 `mount` 渲染測試用 SFC `apps/web/src/test/fixtures/ElementPlusProbe.vue`（template 內使用 `<el-button>`、`<el-icon>`，元件不手動 import，由 ElementPlusResolver 自動 import）的 spec 可執行並通過，且渲染結果含 `.el-button`。測試元件必須是 .vue：unplugin-vue-components 只轉換經 vite 編譯的 SFC，`.ts` 內 `defineComponent({ template })` 的字串 template 在執行期編譯、不會觸發自動 import（只會得到 Failed to resolve component）。\n- 既有 `src/test/setup.spec.ts`、`src/test/helpers.spec.ts` 仍全綠。\n- 執行 vitest 時不再出現 vite.config import 未帶副檔名的警告。",
       "granularity_unit": "config",
       "target_path": "apps/web/vitest.config.ts",
       "source_ref": null,
@@ -1577,7 +1577,7 @@
           "vitest"
         ],
         "red_cases": [
-          "elementPlus auto-imported components render in tests：以 defineComponent({ template: '<el-button type=\"primary\">送出</el-button><el-icon><Search /></el-icon>' }) 為測試元件（Search 由 @element-plus/icons-vue 匯入），mount 後 wrapper.find('.el-button').exists() === true 且文字含 '送出'；修改前此 spec 因 Unknown file extension \".css\" 失敗",
+          "elementPlus auto-imported components render in tests：mount apps/web/src/test/fixtures/ElementPlusProbe.vue（template 為 <el-button type=\"primary\">送出</el-button><el-icon><Search /></el-icon>，Search 由 @element-plus/icons-vue 匯入，<el-*> 不手動 import） → wrapper.find('.el-button').exists() === true、文字含 '送出'、.el-icon 內有 svg；修改前此 spec 因 Unknown file extension \".css\" 失敗",
           "elementPlus vitest config inlines element-plus and imports vite config with extension：讀取 apps/web/vitest.config.ts 原始碼 → 含 inline 設定且陣列包含 'element-plus'；import vite 設定的模組字串不是不帶副檔名的 './vite.config'"
         ],
         "run": "just web-test src/test/elementPlus.spec.ts -t \"elementPlus\"",
