@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="FRONTEND-040,FRONTEND-043">
 <meta name="preview-route" content="component:components/common/{FormDialog,StatCard}.vue">
 <meta name="preview-updated" content="2026-10-03">
@@ -131,8 +131,7 @@ body { font-family: var(--el-font-family); background: var(--el-bg-color-page); 
       <!-- ============ FRONTEND-043 StatCard ============ -->
       <el-card shadow="never">
         <h2 class="section-title">StatCard<el-tag size="small" disable-transitions>FRONTEND-043</el-tag></h2>
-        <p class="section-desc">props：<code>label</code>、<code>value</code>、<code>tone?: success | warning | danger | info</code>（預設 info，根元素 class <code>tone-*</code>）、<code>hint?</code>、<code>to?</code>、<code>loading?</code>、<code>active?</code>；emits <code>click</code>。有 <code>to</code> 時整張卡可點、右上有箭頭、點擊導頁；作為篩選 chip 時點擊 emit click，選中時套 active 樣式。loading 時以 skeleton 取代數值。<br>
-          稿裡以 <code>clickable</code> 標示「沒有 to 但可點」的卡（見待裁定第 1 題）。</p>
+        <p class="section-desc">props：<code>label</code>、<code>value</code>、<code>tone?: success | warning | danger | info</code>（預設 info，根元素 class <code>tone-*</code>）、<code>hint?</code>、<code>to?</code>、<code>loading?</code>、<code>active?</code>、<code>clickable?</code>；emits <code>click</code>。有 <code>to</code> 時整張卡可點、右上有箭頭、點擊導頁；沒有 to 但 <code>clickable</code> 時作為篩選 chip，點擊 emit click，選中時套 active 樣式；兩者皆無時為靜態卡。loading 時以 skeleton 取代數值。</p>
 
         <el-radio-group v-model="dashState" size="small" style="margin-bottom: 12px">
           <el-radio-button value="data">有資料</el-radio-button>
@@ -353,7 +352,7 @@ const FormDialog = {
 }
 
 /* ---------- StatCard ----------
-   clickable 對應待裁定第 1 題的選項 B；navigate 事件只用於稿裡模擬 router.push。 */
+   navigate 事件只用於稿裡模擬 router.push。 */
 const StatCard = {
   props: {
     label: { type: String, required: true }, value: { type: [String, Number], required: true },
@@ -417,14 +416,9 @@ const app = createApp({
       'StatCard 有 to 時：標籤列右側灰色箭頭，hover 時邊框轉主色淡色並浮起淡陰影、箭頭轉主色；role="link"、可 Tab 聚焦、Enter 觸發。沒有 to 也不可點的卡完全靜態（無箭頭、無 hover、不可聚焦），例如儀表板上沒有對應權限的區塊。',
       'StatCard 當篩選 chip：role="button" + aria-pressed；選中時主色邊框（2px 視覺）+ primary-light-9 底色，不改數值顏色。',
       'StatCard loading：標籤照常顯示，數值換成 56×24 的 skeleton 條，hint 不顯示；loading 中仍可點（導頁或 emit click 照常）。',
+      'StatCard 新增 clickable?: boolean（預設 false）：有 to 或 clickable 才可點；沒有 to 且 clickable 不為 true 時為靜態卡（沒有 role、tabindex、hover，點擊不 emit）。篩選 chip 用法傳 clickable + active。',
     ]
-    const openQuestions = [
-      {
-        question: 'StatCard 沒有 to 時，怎麼判斷這張卡「可點」（要不要有 hover、游標、可聚焦）？規格只寫「沒有 to 時點擊 emit click」；但儀表板在缺權限時不傳 to，那些卡應該是靜態的，不能看起來可以點。',
-        optionA: '依呼叫端有沒有綁 @click 自動判斷（不加 prop；實作要讀 vnode 的 onClick，較隱晦，測試也要分別掛載有 / 無 listener 的情況）。',
-        optionB: '（推薦）新增 clickable?: boolean prop：有 to 或 clickable 才可點，其餘一律靜態。篩選 chip 用法傳 clickable + active。需改 FRONTEND-043 description 並加一條 red case（clickable false 且無 to 時沒有 role / tabindex）。本稿照此畫。',
-      },
-    ]
+    const openQuestions = []
 
     const mobile = ref(false)
     const blank = {
