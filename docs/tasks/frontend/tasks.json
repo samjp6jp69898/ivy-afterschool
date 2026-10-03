@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 10,
-  "last_updated": "2026-10-03T12:17:23Z",
+  "version": 11,
+  "last_updated": "2026-10-03T12:18:38Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -4211,11 +4211,11 @@
     {
       "id": "FRONTEND-186",
       "title": "實作 composables/useSwipeReveal.ts：左滑露出動作按鈕的手勢（Pointer Events）",
-      "description": "建立 `apps/web/src/composables/useSwipeReveal.ts`，佇列卡左滑露出「取消」使用。移植 ivy `FE:src/composables/useSwipeReveal.ts::useSwipeReveal`（ivy 已以此取代舊的 useSwipeToCancel：鬆手只切換開合，業務動作由按鈕 click 觸發，避免誤觸取消）。保留：Pointer Events 單一實作、`revealWidth` 可傳 getter、`openThresholdRatio` 0.45、dragX clamp 在 [-revealWidth, 0]、已開啟時往右拖可關閉、多指時忽略新的 pointerdown、reduced motion 時 `reboundInstant`。\n\n**介面**\n```ts\nexport function useSwipeReveal(opts?: { revealWidth?: number | (() => number); openThresholdRatio?: number; disabled?: () => boolean }): {\n  dragX: Ref<number>; dragging: Ref<boolean>; isOpen: Ref<boolean>; reboundInstant: Ref<boolean>\n  onPointerDown(e: PointerEvent): void; onPointerMove(e: PointerEvent): void; onPointerUp(e: PointerEvent): void\n  close(): void\n}\n```\n- `disabled()` 為 true 時所有手勢忽略（唯讀使用者、closed 卡片）。\n- 垂直位移大於水平位移（> 10px）時視為捲動，放棄本次手勢。\n\n**驗收標準**：每一條對應下列 red_case（以合成 PointerEvent 驅動）。",
+      "description": "建立 `apps/web/src/composables/useSwipeReveal.ts`，佇列卡左滑露出「取消」使用。移植 ivy `FE:src/composables/useSwipeReveal.ts::useSwipeReveal`（ivy 已以此取代舊的 useSwipeToCancel：鬆手只切換開合，業務動作由按鈕 click 觸發，避免誤觸取消）。保留：Pointer Events 單一實作、`revealWidth` 可傳 getter、`openThresholdRatio` 0.45、dragX clamp 在 [-revealWidth, 0]、已開啟時往右拖可關閉、多指時忽略新的 pointerdown、reduced motion 時 `reboundInstant`。\n\n**介面**\n```ts\nexport function useSwipeReveal(opts?: { revealWidth?: number | (() => number); openThresholdRatio?: number; disabled?: () => boolean }): {\n  dragX: Ref<number>; dragging: Ref<boolean>; isOpen: Ref<boolean>; reboundInstant: Ref<boolean>\n  onPointerDown(e: PointerEvent): void; onPointerMove(e: PointerEvent): void; onPointerUp(e: PointerEvent): void; onPointerCancel(e: PointerEvent): void\n  close(): void\n}\n```\n- `disabled()` 為 true 時所有手勢忽略（唯讀使用者、closed 卡片）。\n- 垂直位移大於水平位移（> 10px）時視為捲動，放棄本次手勢。\n- `onPointerCancel`（瀏覽器接管手勢時的 `pointercancel`）：結束本次手勢、不改變 `isOpen`，`dragX` 回到目前開合狀態的位置；消費端綁在 `@pointercancel`，否則觸控捲動後 `dragging` 會卡在 true。\n\n**驗收標準**：每一條對應下列 red_case（以合成 PointerEvent 驅動）。",
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/useSwipeReveal.ts",
       "source_ref": "FE:src/composables/useSwipeReveal.ts::useSwipeReveal",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012"
@@ -4233,7 +4233,11 @@
           "useSwipeReveal rebounds below threshold：move 到 x=270（-30）後 up → isOpen false、dragX 0；拖曳中 dragX 被限制在 [-84, 0]（move 到 x=100 時 dragX === -84）",
           "useSwipeReveal closes by dragging right when open：已開啟 → pointerdown x=200、move x=260、up → isOpen false",
           "useSwipeReveal ignores vertical scroll and disabled state：move dx=-5、dy=40 → dragging false、dragX 0；disabled 回 true 時 down/move/up 後 isOpen 仍為 false",
-          "useSwipeReveal uses getter width：revealWidth = () => w，w 由 84 改為 168 後開啟 → dragX === -168"
+          "useSwipeReveal uses getter width：revealWidth = () => w，w 由 84 改為 168 後開啟 → dragX === -168",
+          "useSwipeReveal ignores a second pointer while dragging：pointer 1 down x=300、move x=290 → pointer 2 down/move/up 被忽略（dragging 仍 true、dragX -10）；pointer 1 move x=240、up → isOpen true、dragX -84",
+          "useSwipeReveal pointercancel restores resting position without toggling：關閉狀態 down x=300、move x=220、cancel → dragging false、isOpen false、dragX 0；開啟狀態 down x=200、move x=280、cancel → isOpen true、dragX -84",
+          "useSwipeReveal close resets open state：開啟後 close() → isOpen false、dragX 0",
+          "useSwipeReveal sets reboundInstant from reduced motion preference：matchMedia('(prefers-reduced-motion: reduce)').matches true 時 pointerdown → reboundInstant true；false 時 → false"
         ],
         "run": "just web-test src/composables/useSwipeReveal.spec.ts -t \"useSwipeReveal\"",
         "notes": ""
