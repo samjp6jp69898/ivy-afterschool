@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 40,
-  "last_updated": "2026-10-03T12:22:13Z",
+  "version": 41,
+  "last_updated": "2026-10-03T12:23:07Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -6482,7 +6482,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/channel_matrix.py",
       "source_ref": "BE:services/notification/channel_matrix.py::CHANNEL_MATRIX",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-201"
