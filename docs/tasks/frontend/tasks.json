@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 37,
-  "last_updated": "2026-10-03T12:57:05Z",
+  "version": 38,
+  "last_updated": "2026-10-03T12:57:12Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1674,7 +1674,7 @@
     {
       "id": "FRONTEND-056",
       "title": "實作 components/settings/SecretInput.vue：secret 欄位遮罩顯示、修改與清除",
-      "description": "建立 `apps/web/src/components/settings/SecretInput.vue`。後端回傳的 secret 值已遮罩（例如 `****abcd`，未設定為 `null`）；送回遮罩值代表「不修改」、`null` 代表清除、其他字串為新值（BACKEND-110）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-settings.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。元件外觀、狀態與互動以此元件稿為準；所屬頁面稿 `docs/mockups/page-settings-system.html` 只畫頁面版面並引用本元件，不另訂元件規格。\n\n**props / emits**：`modelValue: string | null`、`disabled?: boolean`；emits `update:modelValue`。\n**行為**\n- 初始值為遮罩字串：顯示唯讀文字「已設定（****abcd）」+「修改」「清除」按鈕；不把遮罩值放進可編輯 input。\n- 初始值 null：顯示「未設定」+「設定」按鈕。\n- 點「修改」/「設定」→ 顯示 password input（show-password）+「取消」；輸入時 emit 新字串；按「取消」→ emit 回初始值（遮罩或 null）並收起。\n- 修改中 input 為空字串時視同未修改：emit 初始值（遮罩或 null），不送出空字串；要清除只能經「清除」。\n- 點「清除」→ 確認框「清除後 LINE 推播將無法運作，確定要清除嗎？」→ emit `null`，顯示「將於儲存後清除」與「復原」（復原 emit 初始值）。\n- disabled 時只顯示狀態文字，不顯示按鈕。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/settings/SecretInput.vue`。後端回傳的 secret 值已遮罩（例如 `****abcd`，未設定為 `null`）；送回遮罩值代表「不修改」、`null` 代表清除、其他字串為新值（BACKEND-110）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-settings.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。元件外觀、狀態與互動以此元件稿為準；所屬頁面稿 `docs/mockups/page-settings-system.html` 只畫頁面版面並引用本元件，不另訂元件規格。\n\n**props / emits**：`modelValue: string | null`、`disabled?: boolean`；emits `update:modelValue`。\n**行為**\n- 初始值為遮罩字串：顯示唯讀文字「已設定（****abcd）」+「修改」「清除」按鈕；不把遮罩值放進可編輯 input。\n- 初始值 null：顯示「未設定」+「設定」按鈕。\n- 點「修改」/「設定」→ 顯示 password input（show-password）+「取消」；輸入時 emit 新字串；按「取消」→ emit 回初始值（遮罩或 null）並收起。\n- 修改中 input 為空字串時視同未修改：emit 初始值（遮罩或 null），不送出空字串；要清除只能經「清除」。\n- 點「清除」→ 確認框「清除後 LINE 推播將無法運作，確定要清除嗎？」→ emit `null`，顯示「將於儲存後清除」與「復原」（復原 emit 初始值）。\n- disabled 時只顯示狀態文字，不顯示按鈕（「將於儲存後清除」狀態下也不顯示「復原」）。\n- 「初始值」= 掛載時的 `modelValue`。之後 `modelValue` 被外部改成不是元件最後一次 emit 的值（父層儲存成功後換成後端回傳的新遮罩、重新載入設定）→ 以該值為新的初始值並回到檢視狀態（已設定 / 未設定）。父層把 emit 的值寫回（v-model 回聲）不影響目前狀態。清除後儲存、後端回 `null` 時 `modelValue` 沒有變化，父層需以 `:key` 重建元件才會回到「未設定」（SettingCard FRONTEND-057 儲存成功後重建表單）。\n- 外觀細節（icon、按鈕樣式、placeholder、確認框標題與按鈕）以設計稿 `docs/mockups/component-settings.html` 的 decisions 為準：修改中的 input 一開始為空、placeholder「輸入新值以取代目前設定」（未設定時「輸入設定值」）、`autocomplete=new-password`；清除確認框標題「清除設定值」、確定按鈕為 danger，取消確認框不 emit。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/SecretInput.vue",
       "source_ref": null,
@@ -1696,7 +1696,11 @@
           "SecretInput edits new value and cancel restores mask：點 '修改' → password input 出現；setValue('new-token-xyz') → emitted('update:modelValue') 最後一筆 ['new-token-xyz']；點 '取消' → 最後一筆 ['****abcd'] 且 input 消失",
           "SecretInput clears after confirmation and can undo：點 '清除' 並在確認框點 '確定' → 最後 emit [null]、文字含 '將於儲存後清除'；點 '復原' → 最後 emit ['****abcd']",
           "SecretInput unset and disabled states：modelValue null → 文字含 '未設定' 與 '設定' 按鈕；disabled true → 沒有任何 button",
-          "SecretInput empty edit keeps initial value：modelValue '****abcd'，點 '修改' → setValue('new') → setValue('') → emitted('update:modelValue') 最後一筆 ['****abcd']（不是 ['']）"
+          "SecretInput empty edit keeps initial value：modelValue '****abcd'，點 '修改' → setValue('new') → setValue('') → emitted('update:modelValue') 最後一筆 ['****abcd']（不是 ['']）",
+          "SecretInput adopts external reset but ignores v-model echo：modelValue '****abcd' → 點 '修改'、setValue('new-token') → setProps({modelValue:'new-token'})（回聲）後 password input 仍在；setProps({modelValue:'****oken'}) → 文字含 '已設定（****oken）'、沒有 input；再 setProps({modelValue:null}) → 文字含 '未設定'",
+          "SecretInput editor placeholder and autocomplete：已設定時點 '修改' → input placeholder '輸入新值以取代目前設定'、autocomplete 'new-password'、value 為空；未設定時點 '設定' → placeholder '輸入設定值'",
+          "SecretInput clear confirm dialog and cancel：點 '清除' → 確認框標題 '清除設定值'；點 '取消' → 沒有任何 emit、仍顯示 '修改' 按鈕",
+          "SecretInput cleared state hides undo when disabled：清除確認後 setProps({disabled:true}) → 文字含 '將於儲存後清除'、沒有任何 button"
         ],
         "run": "just web-test src/components/settings/SecretInput.spec.ts -t \"SecretInput\"",
         "notes": ""
@@ -1710,7 +1714,7 @@
     {
       "id": "FRONTEND-057",
       "title": "實作 components/settings/SettingCard.vue：單一設定 key 的卡片（表單、儲存、錯誤對應、更新者）",
-      "description": "建立 `apps/web/src/components/settings/SettingCard.vue`，系統設定頁每個 key 一張卡。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-system.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：各分組表單、secret 欄位（已設定 / 未設定 / 修改中）、欄位驗證錯誤、只有 settings:read 時的唯讀樣式、儲存中與儲存成功。\n\n**props / emits**：`setting: Setting`（FRONTEND-050）；emits `saved(setting: Setting)`。\n**行為**\n- 標題 `setting.label`；副標「最後更新：{formatDateTime(updated_at)}・{updated_by_name}」（從未更新顯示「使用預設值」）。\n- 內容 `JsonSchemaForm`（FRONTEND-055），`secretFields` = `is_secret` 時 schema 中所有 string 欄位（line.messaging 的 channel_access_token、channel_secret）。\n- 無 `settings:write`：表單 readonly、不顯示儲存按鈕，顯示「你只有檢視權限」。\n- 有 `settings:write`：表單有變更（FRONTEND-046 useFormDirty）才啟用「儲存」「還原」；儲存 → `updateSetting(key, value)` → 成功 `ElMessage.success('已儲存「{label}」')`、以回傳值重設基準、emit `saved`；422 `invalid_setting_value` → details 的 `loc` 以 `.` 串接成欄位路徑傳給 `errors`，並顯示「部分欄位不正確」；其他錯誤 ElMessage.error。\n- 離開頁面時若有未儲存變更，由 SystemSettingsView 統一提示（本元件 expose `isDirty`）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/settings/SettingCard.vue`，系統設定頁每個 key 一張卡。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-system.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：各分組表單、secret 欄位（已設定 / 未設定 / 修改中）、欄位驗證錯誤、只有 settings:read 時的唯讀樣式、儲存中與儲存成功。\n\n**props / emits**：`setting: Setting`（FRONTEND-050）；emits `saved(setting: Setting)`。\n**行為**\n- 標題 `setting.label`；副標「最後更新：{formatDateTime(updated_at)}・{updated_by_name}」（從未更新顯示「使用預設值」）。\n- 內容 `JsonSchemaForm`（FRONTEND-055），`secretFields` = `is_secret` 時 schema 中所有 string 欄位（line.messaging 的 channel_access_token、channel_secret）。\n- 無 `settings:write`：表單 readonly、不顯示儲存按鈕，顯示「你只有檢視權限」。\n- 有 `settings:write`：表單有變更（FRONTEND-046 useFormDirty）才啟用「儲存」「還原」；儲存 → `updateSetting(key, value)` → 成功 `ElMessage.success('已儲存「{label}」')`、以回傳值重設基準並以 `:key` 重建 `JsonSchemaForm`（SecretInput FRONTEND-056 以掛載時的值為初始值；清除後儲存回 `null` 時值沒有變化，需重建才會回到「未設定」）、emit `saved`；422 `invalid_setting_value` → details 的 `loc` 以 `.` 串接成欄位路徑傳給 `errors`，並顯示「部分欄位不正確」；其他錯誤 ElMessage.error。\n- 離開頁面時若有未儲存變更，由 SystemSettingsView 統一提示（本元件 expose `isDirty`）。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/SettingCard.vue",
       "source_ref": null,
