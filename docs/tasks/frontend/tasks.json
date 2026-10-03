@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 25,
-  "last_updated": "2026-10-03T12:36:15Z",
+  "version": 26,
+  "last_updated": "2026-10-03T12:44:37Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -10,7 +10,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/shared/http/createHttpClient.ts",
       "source_ref": "FE:src/api/index.ts::api",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-005",
@@ -47,9 +47,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 19/19 綠，16 條 red_case 皆有同名測試；481a7ed 測試與規格修正先於 4fb612c 實作（實作 commit 對測試只把 let 改 const）。web-lint 對動到的檔案乾淨；以暫時 tsconfig（只 include 本批動到的檔與 src/*.d.ts）跑 vue-tsc 無錯誤，暫時檔已刪除。自行構造反例實測（暫時 spec 跑完已刪除）：(1) 5 個並行 401 且 refresh 延遲完成、期間再有一個 401 晚到 → refresh 1 次、6 個全部重送成功、onAuthFailure 0 次。(2) refresh 失敗時 5 個並行請求全部 reject 401、onAuthFailure 1 次、每個只送 1 次；下一批再觸發新的 refresh 與 1 次 onAuthFailure。(3) refresh = async () => client.post('/admin/auth/refresh') 且 noRefreshPaths 為空、端點回 401 → 原請求在時限內 reject、POST 1 次、onAuthFailure 1 次，不死鎖。(4) refresh 回 409 refresh_in_progress、三個並行請求重送仍 401 → refresh 1 次、每個請求恰送 2 次、onAuthFailure 1 次，不會無限重送（重送的 config 已標 _retried）。409 規格與 BACKEND-037（同一 refresh token 5 秒內併發 → ConflictError refresh_in_progress，「前端重打原請求即可」、不撤銷）及 BACKEND-044（409 不清 cookie）一致。risk_notes 的前提條件經實測成立且合理：refresh() 若先 await 其他東西才發出 refresh 請求、又沒把 refresh 端點列入 noRefreshPaths，該請求的 401 會等待自己所屬的 refresh 而永久卡住（實測 300ms 未 settle）；列入 noRefreshPaths 即不會卡。FRONTEND-020 與 PARENT-004 的 noRefreshPaths 都已列出各自的 refresh 端點，主要防線成立。殘留：(a) 實作把 refresh 的任何 409 都當成 refresh_in_progress（未比對 code），目前 refresh 端點只會回這一種 409，且最多多重送一次，無實際影響。(b) 多分頁時，若本分頁收到 409 時另一分頁的 refresh 回應尚未寫入新 cookie，重送可能仍 401 而觸發 onAuthFailure；時序上另一分頁的回應先於本分頁的 409 送出，實務上機率低。(c) 上述 risk_notes 前提：日後若為此 instance 加非 synchronous 的 request interceptor，refresh 呼叫標記會失效，只剩 noRefreshPaths 一道防線。"
       }
     },
     {
@@ -95,7 +95,7 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/shared/utils/datetime.ts",
       "source_ref": "FE:src/utils/taipeiTime.ts::formatTaipeiClock",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012",
@@ -124,9 +124,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 9/9 綠，9 條 red_case 皆有同名測試；另以 TZ=UTC、America/Los_Angeles、Pacific/Kiritimati 各跑一次全綠，確認不依賴執行環境時區。0aac19a 測試先於 81466fe 實作。web-lint 對動到的檔案乾淨；以暫時 tsconfig（只 include 本批動到的檔與 src/*.d.ts）跑 vue-tsc 無錯誤，暫時檔已刪除。關於 f7f482b 晚到的測試：0aac19a 時的 description 對非法輸入只要求 hhmmToUtcIso('…','25:00') throw RangeError 與 formatTime('abc') 回 '—'，這兩條在紅燈 commit 已有測試；「format* 一律回 '—'、換算類 throw RangeError、minutesSince 回 0」的通則是 81466fe 實作 commit 才寫進 description 的新規格，f7f482b 再補測試與 red_case。屬「實作後才補進的規格」，不判違反 TDD，列為殘留。殘留：(a) 上述非法輸入通則是先實作後補測試（實作者回報已以突變確認測試會紅），流程上應先改規格與測試。(b) 非 ISO 的時間字串（例如沒有時區的 '2026-10-02 16:05'）由 new Date 依執行環境時區解析；後端一律回帶 Z 的 ISO，目前無影響。"
       }
     },
     {
@@ -136,7 +136,7 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/shared/ws/createWsClient.ts",
       "source_ref": "FE:src/composables/useInboxNotifications.ts::useInboxNotifications",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012",
@@ -170,9 +170,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 14/14 綠，14 條 red_case 皆有同名測試；28bf6f3 測試 → 28eb276 規格與測試修正 → 93f0a2d 實作。web-lint 對動到的檔案乾淨；以暫時 tsconfig（只 include 本批動到的檔與 src/*.d.ts）跑 vue-tsc 無錯誤，暫時檔已刪除。規格補充合理：28eb276 補的 status 轉換（idle / connecting / open / reconnecting / closed 的進出條件、isReconnect 以 start() 為單位、恢復可見時退避歸零、4401 / 4403 移除可見性監聽）是原 description 行為的明確化，並追加 4 條 red_case 鎖住首次連線失敗即輪詢、stop 與隱藏時清掉重連與輪詢計時器；修正 commit 早於實作。不照搬 ivy「error 事件就關閉 socket」合理：WHATWG 規範中 WebSocket 的 error 事件必定接著 close 事件，重連統一由 onclose 處理可避免重複排程；實作中每個 socket 的 handler 都以 socket !== current 檢查，舊 socket 的晚到事件不會干擾。殘留：createSocket 若同步 throw（例如非法 URL），status 會停在 connecting 且不排重連；path 由程式常數組成，目前無影響。"
       }
     },
     {
@@ -182,7 +182,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/shared/constants/statusLabels.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-002"
@@ -204,9 +204,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 3/3 綠，名稱對應 3 條 red_case；3db24a8 測試先於 4358531 實作。web-lint 對動到的檔案乾淨；以暫時 tsconfig（只 include 本批動到的檔與 src/*.d.ts）跑 vue-tsc 無錯誤，暫時檔已刪除。每個 map 以 Record<enum 型別, …> 宣告，完整性測試逐一比對 10 組 enum 的 key 集合；label / tone 與 description 表逐項一致；NOTIFICATION_EVENT_LABELS 與後端 app/notifications/events.py 的 13 個 label 逐字相同（以 python 印出比對）；statusMeta 以 Object.hasOwn 查，未知值與 null 回 fallback 不 throw（'toString' 之類的原型鍵不會誤中）。無殘留。"
       }
     },
     {
@@ -320,7 +320,7 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/shared/utils/errorMessage.ts",
       "source_ref": "FE:src/utils/apiErrorMessage.ts::apiErrorMessage",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-002"
@@ -342,9 +342,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 4/4 綠，3 條 red_case 皆有同名測試（另加 query 前綴與格式不符的 details）；ed15953 測試先於 e3fd9ad 實作。web-lint 對動到的檔案乾淨；以暫時 tsconfig（只 include 本批動到的檔與 src/*.d.ts）跑 vue-tsc 無錯誤，暫時檔已刪除。只信任 ApiError 的 message（其他錯誤一律 fallback，不顯示英文技術訊息）；validationFieldErrors 只處理 validation_error、去掉開頭 body / query、同欄位留第一則、略過格式不符的項目。無殘留。"
       }
     },
     {
@@ -504,7 +504,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/router/routes.ts",
       "source_ref": "FE:src/router/index.ts::routes",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-008"
@@ -527,9 +527,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 6/6 綠，4 條 red_case 皆有同名測試（另加特殊頁 meta / props 與「只經 VIEW_LOADERS 延遲載入」）；80e9526 測試先於 9777931 實作。web-lint 對動到的檔案乾淨；以暫時 tsconfig（只 include 本批動到的檔與 src/*.d.ts）跑 vue-tsc 無錯誤，暫時檔已刪除。路由與 domain_spec §4 後台頁面表逐條比對：16 條權限路由的 path → permission 完全一致，/login、/change-password、/forbidden、catch-all 的 public / authOnly / blank 設定符合 description，/attendance、/homework、/pickup、/pickup/authorizations 為 tablet；routes.ts 只 import 型別與 VIEW_LOADERS，所有 loader 指向 PlaceholderView。target_path 在 src/router/，PlaceholderView 依 description 不屬設計稿範圍。無殘留。"
       }
     },
     {
