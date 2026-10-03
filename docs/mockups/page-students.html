@@ -660,7 +660,7 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
   </el-dialog>
 
   <!-- ============ StudentPurgeDialog（FRONTEND-100）：危險操作用 danger 按鈕，不用 FormDialog ============ -->
-  <el-dialog v-model="pg.open" title="永久刪除學生資料" width="480px" :close-on-click-modal="false" :close-on-press-escape="!pg.loading"
+  <el-dialog v-model="pg.open" title="永久刪除學生資料" width="560px" :close-on-click-modal="false" :close-on-press-escape="!pg.loading"
              :show-close="!pg.loading" :before-close="(done) => { if (!pg.loading) done() }" append-to-body>
     <el-alert type="error" :closable="false" show-icon
               title="永久刪除後將匿名化姓名，並清除身分證字號、健康備註、照片、監護人聯絡資料與家長綁定；出勤、成績等統計紀錄保留但不再能辨識此學生。此操作無法復原，並會記錄於稽核紀錄。"></el-alert>
