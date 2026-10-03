@@ -85,7 +85,8 @@ def test_pre_commit_lints_staged_python(repo: Repo, fake_bin: FakeBin) -> None:
     result = repo.hook()
 
     assert result.returncode == 0, result.stderr
-    assert _just_argvs(fake_bin) == [["lint", "apps/api/app/x.py", "scripts/y.py"]]
+    # justfile 不允許 apps/api/ 與 scripts/ 混在同一次呼叫，依路由各呼叫一次
+    assert _just_argvs(fake_bin) == [["lint", "apps/api/app/x.py"], ["lint", "scripts/y.py"]]
 
 
 def test_pre_commit_lints_staged_web_files(repo: Repo, fake_bin: FakeBin) -> None:

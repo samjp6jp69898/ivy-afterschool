@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 38,
-  "last_updated": "2026-10-03T12:21:32Z",
+  "version": 39,
+  "last_updated": "2026-10-03T12:22:34Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -653,7 +653,7 @@
     {
       "id": "INFRA-019",
       "title": "實作 git pre-commit hook：只對 staged 檔案跑 lint，並擋下 .env 與不合格的 tasks.json",
-      "description": "新增 `scripts/hooks/pre-commit`（bash，可執行）與 justfile recipe `install-hooks`（`git config core.hooksPath scripts/hooks`）；INFRA-015 的 bootstrap 偵測到這個 recipe 時會自動呼叫。\n\n**hook 行為**：\n1. 取得 staged 清單：`git diff --cached --name-only --diff-filter=ACMR`（被刪除的檔案不處理）。\n2. 任一 staged 路徑的檔名為 `.env` 或符合 `.env.*` 但不是 `.env.example` / `.env.*.example` → 印「拒絕提交 env 檔：<path>」exit 1（不執行後續 lint）。\n3. `apps/api/**/*.py` 或 `scripts/**/*.py` → 一次呼叫 `just lint <這些檔案>`。\n4. `apps/web/**/*.{ts,vue,js}`（排除 `src/auto-imports.d.ts`、`src/components.d.ts`）→ 路徑轉成相對 `apps/web` 後一次呼叫 `just web-lint <檔案>`。\n5. 有 `docs/tasks/*/tasks.json` → 執行 `python3 scripts/validate_tasks.py .`。\n6. 任一步 exit 非 0 則 hook exit 1；沒有相關檔案時不呼叫任何指令、exit 0。\n7. 不自動修正、不重新 stage。lint 的對象是工作樹中的檔案（部分 stage 的情況見 risk_notes）。\n\n**驗收標準**：每一條對應下列 red_case。測試在 `tmp_path` 以 `git init` 建立暫存 repo，複製 hook 與 `scripts/validate_tasks.py`，用 `fake_bin` 替換 `just`，stage 檔案後直接執行 hook 腳本。",
+      "description": "新增 `scripts/hooks/pre-commit`（bash，可執行）與 justfile recipe `install-hooks`（`git config core.hooksPath scripts/hooks`）；INFRA-015 的 bootstrap 偵測到這個 recipe 時會自動呼叫。\n\n**hook 行為**：\n1. 取得 staged 清單：`git diff --cached --name-only --diff-filter=ACMR`（被刪除的檔案不處理）。\n2. 任一 staged 路徑的檔名為 `.env` 或符合 `.env.*` 但不是 `.env.example` / `.env.*.example` → 印「拒絕提交 env 檔：<path>」exit 1（不執行後續 lint）。\n3. `apps/api/**/*.py` → 一次呼叫 `just lint <這些檔案>`；`scripts/**/*.py` → 另外一次呼叫 `just lint <這些檔案>`（justfile 的 Python 路徑路由不允許 apps/api/ 與 scripts/ 混在同一次呼叫）。\n4. `apps/web/**/*.{ts,vue,js}`（排除 `src/auto-imports.d.ts`、`src/components.d.ts`）→ 路徑轉成相對 `apps/web` 後一次呼叫 `just web-lint <檔案>`。\n5. 有 `docs/tasks/*/tasks.json` → 執行 `python3 scripts/validate_tasks.py .`。\n6. 任一步 exit 非 0 則 hook exit 1；沒有相關檔案時不呼叫任何指令、exit 0。\n7. 不自動修正、不重新 stage。lint 的對象是工作樹中的檔案（部分 stage 的情況見 risk_notes）。\n\n**驗收標準**：每一條對應下列 red_case。測試在 `tmp_path` 以 `git init` 建立暫存 repo，複製 hook 與 `scripts/validate_tasks.py`，用 `fake_bin` 替換 `just`，stage 檔案後直接執行 hook 腳本。",
       "granularity_unit": "script",
       "target_path": "scripts/hooks/pre-commit",
       "source_ref": null,
@@ -672,7 +672,7 @@
           "unit"
         ],
         "red_cases": [
-          "test_pre_commit_lints_staged_python：stage apps/api/app/x.py 與 scripts/y.py → exit 0；fake_bin.calls('just') == [{'argv': ['lint', 'apps/api/app/x.py', 'scripts/y.py'], ...}]（只比對 argv）",
+          "test_pre_commit_lints_staged_python：stage apps/api/app/x.py 與 scripts/y.py → exit 0；fake_bin.calls('just') 的 argv 依序為 ['lint', 'apps/api/app/x.py'] 與 ['lint', 'scripts/y.py']（只比對 argv）",
           "test_pre_commit_lints_staged_web_files：stage apps/web/src/a.vue 與 apps/web/src/components.d.ts → just 只被呼叫一次，argv == ['web-lint', 'src/a.vue']",
           "test_pre_commit_rejects_env_file：stage apps/api/.env → exit 1，stderr 含 '拒絕提交 env 檔：apps/api/.env'，fake_bin.calls('just') == []",
           "test_pre_commit_allows_env_example：只 stage apps/api/.env.example → exit 0 且 just 沒有被呼叫",
