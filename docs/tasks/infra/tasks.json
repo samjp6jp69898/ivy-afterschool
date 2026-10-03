@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 43,
-  "last_updated": "2026-10-03T12:54:01Z",
+  "version": 44,
+  "last_updated": "2026-10-03T12:54:09Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1577,7 +1577,8 @@
           "vitest"
         ],
         "red_cases": [
-          "elementPlus auto-imported components render in tests：以 defineComponent({ template: '<el-button type=\"primary\">送出</el-button><el-icon><Search /></el-icon>' }) 為測試元件（Search 由 @element-plus/icons-vue 匯入），mount 後 wrapper.find('.el-button').exists() === true 且文字含 '送出'；修改前此 spec 因 Unknown file extension \".css\" 失敗"
+          "elementPlus auto-imported components render in tests：以 defineComponent({ template: '<el-button type=\"primary\">送出</el-button><el-icon><Search /></el-icon>' }) 為測試元件（Search 由 @element-plus/icons-vue 匯入），mount 後 wrapper.find('.el-button').exists() === true 且文字含 '送出'；修改前此 spec 因 Unknown file extension \".css\" 失敗",
+          "elementPlus vitest config inlines element-plus and imports vite config with extension：讀取 apps/web/vitest.config.ts 原始碼 → 含 inline 設定且陣列包含 'element-plus'；import vite 設定的模組字串不是不帶副檔名的 './vite.config'"
         ],
         "run": "just web-test src/test/elementPlus.spec.ts -t \"elementPlus\"",
         "notes": "回歸：just web-test src/test/setup.spec.ts -t \"harness\" 與 just web-test src/test/helpers.spec.ts -t \"helpers\" 全綠；並確認輸出無 vite.config 副檔名警告。"
