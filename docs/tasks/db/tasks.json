@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 23,
-  "last_updated": "2026-10-03T14:38:57Z",
+  "version": 24,
+  "last_updated": "2026-10-03T14:41:27Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -1587,7 +1587,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db001_base.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "INFRA-045",
