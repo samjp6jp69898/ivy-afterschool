@@ -143,3 +143,17 @@ def test_dev_up_starts_db_unless_skipped(dev_up: DevUp, fake_bin: FakeBin) -> No
 
     assert skipped.returncode == 0, skipped.stderr
     assert all("db-start" not in call["argv"] for call in fake_bin.calls("just"))
+
+
+def test_dev_up_rejects_port_taken_by_other_process(dev_up: DevUp, root: Path) -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        sock.listen()
+        busy = sock.getsockname()[1]
+
+        result = dev_up(DEV_UP_API_PORT=str(busy), DEV_UP_API_CMD=_server_cmd(busy))
+
+    # 不可把別人占用的 port 誤當成自己的服務已就緒
+    assert result.returncode == 1
+    assert f"port {busy}" in result.stderr
+    assert not (root / "var" / "run" / "api.pid").exists()
