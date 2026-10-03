@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 29,
-  "last_updated": "2026-10-03T14:35:15Z",
+  "version": 30,
+  "last_updated": "2026-10-03T14:36:37Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -657,7 +657,7 @@
           "M3TextField shows error state：supportingText 與 errorText='綁定碼格式錯誤' 都有 → 畫面含 '綁定碼格式錯誤' 且不含 supportingText，input 的 aria-invalid === 'true'，aria-describedby 指向含該文字的元素 id，根元素含 'is-error'，'.m3-tf__trailing' 文字為 'error'",
           "M3TextField textarea counter：type='textarea'、maxlength=200、modelValue='生病' → 渲染 textarea，畫面含 '2/200'",
           "M3TextField emits enter：trigger('keydown', {key:'Enter'}) → emitted('enter').length === 1；其他按鍵不增加",
-          "M3TextField uses given id and generates unique ids：id='proxy-name' → input id 與 label for 皆為 'proxy-name'；兩個未傳 id 的元件 input id 不同",
+          "M3TextField uses given id and generates unique ids：id='proxy-name' → input id 與 label for 皆為 'proxy-name'；同一個 app 內兩個未傳 id 的欄位 input id 不同，各自 label for 對應",
           "M3TextField supporting text and valid state：只有 supportingText → aria-invalid === 'false'、aria-describedby 指向 supportingText 元素、無 '.m3-tf__trailing'；都沒有 → 無 aria-describedby、無 '.m3-tf__supporting'",
           "M3TextField counter for input with maxlength：type 預設、maxlength=8、modelValue='AB12' → '.m3-tf__counter' 為 '4/8'；無 maxlength → 無 counter；modelValue 未傳 → '0/8'",
           "M3TextField ignores enter while composing：keydown Enter 帶 isComposing:true 或 keyCode:229 → 無 enter emit；type='textarea' 按 Enter → 無 enter emit",

@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
+import { defineComponent } from 'vue'
 import M3TextField from './M3TextField.vue'
 
 describe('M3TextField', () => {
@@ -19,9 +20,17 @@ describe('M3TextField', () => {
     expect(given.get('input').attributes('id')).toBe('proxy-name')
     expect(given.get('label').attributes('for')).toBe('proxy-name')
 
-    const a = mount(M3TextField, { props: { label: 'A' } }).get('input').attributes('id')
-    const b = mount(M3TextField, { props: { label: 'B' } }).get('input').attributes('id')
+    // useId 在同一個 app 內唯一：同一頁兩個欄位的 id 不可相撞
+    const page = mount(
+      defineComponent({
+        components: { M3TextField },
+        template: '<div><M3TextField label="A" /><M3TextField label="B" /></div>',
+      }),
+    )
+    const [a, b] = page.findAll('input').map((i) => i.attributes('id'))
+    expect(a).toMatch(/\S/)
     expect(a).not.toBe(b)
+    expect(page.findAll('label').map((l) => l.attributes('for'))).toEqual([a, b])
   })
 
   it('M3TextField shows error state', () => {
