@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 62,
-  "last_updated": "2026-10-03T14:35:19Z",
+  "version": 63,
+  "last_updated": "2026-10-03T14:35:46Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1644,7 +1644,7 @@
       "granularity_unit": "config",
       "target_path": "apps/api/alembic/env.py",
       "source_ref": "BE:alembic/env.py::run_migrations_online",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-004",

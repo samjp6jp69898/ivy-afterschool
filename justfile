@@ -196,7 +196,9 @@ db-migrate:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "{{ root }}/apps/api"
-    MIGRATION_DATABASE_URL="postgresql+psycopg://postgres:postgres@127.0.0.1:54342/postgres" \
+    # libpq 會以 PGHOSTADDR / PGSERVICE（PGSERVICEFILE）補 URL 未指定的參數、把連線導向他處，一律移除
+    env -u PGHOSTADDR -u PGSERVICE -u PGSERVICEFILE \
+        MIGRATION_DATABASE_URL="postgresql+psycopg://postgres:postgres@127.0.0.1:54342/postgres" \
         uv run --frozen alembic upgrade head
 
 # ★ 新增一支 Alembic revision：just db-new-migration REV SLUG（例如 db004 create_students；不需連 DB）
