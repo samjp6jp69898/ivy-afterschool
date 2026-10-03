@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 13,
-  "last_updated": "2026-10-03T12:19:04Z",
+  "version": 14,
+  "last_updated": "2026-10-03T12:24:15Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -54,7 +54,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/shared/types/api.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-005",
@@ -78,9 +78,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 5/5 綠，verbose 名稱涵蓋 4 條 red_case（另加 details 預設 null）；bc1e2c9 測試先於 e99ed91 實作。web-lint 對 12 個動到的檔案乾淨；以暫時 tsconfig（extends tsconfig.app.json、include 只列動到的檔與 src/*.d.ts，--listFilesOnly 確認涵蓋）跑 vue-tsc 無錯誤，暫時檔已刪除。逐一對照 docs/domain_spec.md：24 組 enum 的值與順序都和 §1 欄位定義一致，NOTIFICATION_EVENTS 13 個、順序與 M9 事件表相同；測試對每一組 enum 都做深等於，不只 red_case 列的 3 組。ApiError 欄位、name、instanceof Error、isApiError 以 instanceof 判定（純物件回 false）皆符合。無殘留。"
       }
     },
     {
@@ -206,7 +206,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/shared/http/upload.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012"
@@ -228,9 +228,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 6/6 綠，涵蓋 3 條 red_case（另加大小上限邊界、10 MiB+1、xlsx、空 type 無副檔名、undefined 與 false）；533380d 測試先於 9825bf2 實作。web-lint 對 12 個動到的檔案乾淨；以暫時 tsconfig（extends tsconfig.app.json、include 只列動到的檔與 src/*.d.ts，--listFilesOnly 確認涵蓋）跑 vue-tsc 無錯誤，暫時檔已刪除。協調者提到的「type 非空但不在清單時仍以副檔名判定」不是規格變更：description 原文即為「file.type 不在清單 → 再以副檔名比對」，不限空字串；前端檢查只為即時回饋，BACKEND-016 以 magic bytes 判定才是權威，此行為合理（也能容納部分 OS 把 .xlsx 報成 application/octet-stream 的情況）。上限與 BACKEND-154 / 166（5 MiB）、ATTACHMENT 10 MiB 一致。殘留：(a) 副檔名 fallback 會讓 type 與副檔名不符的檔案（例如 type=application/pdf、名為 x.jpg）通過前端檢查，由後端 415 擋下。(b) 請假附件單檔上限在 domain_spec 是 system_settings `leave.window` 可調（預設 10 MB），ATTACHMENT_RULE 寫死 10 MiB；家長端請假表單應以 GET /config 的值覆寫 maxBytes。"
       }
     },
     {
@@ -240,7 +240,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/shared/http/download.ts",
       "source_ref": "FE:src/utils/download.ts::saveBlobResponse",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012"
@@ -263,9 +263,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 4/4 綠，涵蓋 4 條 red_case；a57f7d6 測試先於 d48e675 實作。web-lint 對 12 個動到的檔案乾淨；以暫時 tsconfig（extends tsconfig.app.json、include 只列動到的檔與 src/*.d.ts，--listFilesOnly 確認涵蓋）跑 vue-tsc 無錯誤，暫時檔已刪除。規格變更合理：「filename* 解碼失敗時先退到 filename=，兩者都取不到才用 fallback」符合 RFC 6266（filename 是給無法處理 filename* 的情況使用的後備），原 red_case `filename*=UTF-8''%E0%A4%A`（沒有 filename=）→ fallback 仍成立，新增 red_case 驗證兩種順序與純 'attachment'。shared 未依賴 element-plus；saveBlob 測試斷言 click 當下 anchor 已掛在 document、download / href 值、結束後無殘留 anchor 與 revoke 參數。殘留：(a) 帶語言標記的 `filename*=UTF-8'zh-TW'...` 不會被解析（改用 filename= 或 fallback），後端目前不產生此格式。(b) click 後立即 revokeObjectURL（與 ivy 相同），少數舊版瀏覽器可能因此中斷下載。"
       }
     },
     {
@@ -275,7 +275,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/constants/permissions.ts",
       "source_ref": "FE:src/constants/permissions.ts::PERMISSION_NAMES",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012",
@@ -298,9 +298,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 4/4 綠，涵蓋 3 條 red_case（另加 ALL_PERMISSION_CODES 等於 PERMISSIONS 全部值）；0a11e1f 測試先於 5a7c641 實作。web-lint 對 12 個動到的檔案乾淨；以暫時 tsconfig（extends tsconfig.app.json、include 只列動到的檔與 src/*.d.ts，--listFilesOnly 確認涵蓋）跑 vue-tsc 無錯誤，暫時檔已刪除。一致性測試確實以 node:fs 讀 apps/api/app/core/permissions.py，擷取 class Permission(StrEnum) 區塊內的字串值，與前端以排序後陣列做集合相等比對，另斷言兩邊大小皆為 28，不是只寫死數量：後端多或少任何一碼都會失敗；檔案不存在時 throw 並含路徑。路徑改用 resolve(dirname(fileURLToPath(import.meta.url)), ...) 合理，不受 Vite 改寫 new URL(…, import.meta.url) 影響；5a7c641 只改了測試的路徑解析，斷言未變。e8c945e 權限碼總數 28 已核對：後端 enum 28 碼、domain_spec §3 列 29 碼（含 blocked 的 nfc:manage）、PERMISSION_GROUPS 的 students 組 7 碼與 PermissionPicker red_case「已選 2 / 7」一致；仍寫 27 的只剩「* 減去 revoked 一碼」的 BACKEND-072 red_case 與其單元測試，數值正確。無殘留。"
       }
     },
     {
@@ -1283,7 +1283,7 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/useFormDirty.ts",
       "source_ref": "FE:src/composables/useFormDirty.ts::useFormDirty",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012"
@@ -1305,9 +1305,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 6/6 綠，涵蓋 3 條 red_case（另加深拷貝快照、Date 以值比較與陣列順序、ref 整包重指派）；135b799 紅燈 commit 時 useFormDirty.ts 不存在，測試先於 ae0df91 實作，TDD 順序成立。web-lint 對 12 個動到的檔案乾淨；以暫時 tsconfig（extends tsconfig.app.json、include 只列動到的檔與 src/*.d.ts，--listFilesOnly 確認涵蓋）跑 vue-tsc 無錯誤，暫時檔已刪除。紅燈後在實作 commit 對測試的調整只有兩處：加 waitForDialog（原寫法在 ElMessageBox 掛載前就斷言 body 文字，時序上即使實作正確也會失敗）與新增 `.el-message-box__title` 文字精確等於「未儲存的變更」的斷言，屬於讓測試更嚴，未放寬任何既有斷言；按鈕以文字精確比對並取最後一顆，若實作把確認 / 取消文案對調，結果會反轉而失敗，斷言具體。confirmDiscardChanges 文案與按鈕字樣與 description 一致。殘留：form 內含 Map / Set 或自訂類別實例時，快照存的是 raw 參考、目前值是 reactive proxy，以 Object.is 比較會一建立就判為 dirty（已以 node 實測 Map 與類別實例皆回 true），且類別實例內部被修改也偵測不到；目前規劃的表單只用純資料、陣列、Date、File，不受影響，日後若有此類欄位需在 deepEqual 末段對 current 取 toRaw 並擴充支援。"
       }
     },
     {
@@ -4215,7 +4215,7 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/useSwipeReveal.ts",
       "source_ref": "FE:src/composables/useSwipeReveal.ts::useSwipeReveal",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012"
@@ -4243,9 +4243,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 9/9 綠，verbose 名稱逐一對應 9 條 red_case；56ed1f2 測試先於 5fec381 實作。web-lint 對 12 個動到的檔案乾淨；以暫時 tsconfig（extends tsconfig.app.json、include 只列動到的檔與 src/*.d.ts，--listFilesOnly 確認涵蓋）跑 vue-tsc 無錯誤，暫時檔已刪除。規格變更合理：onPointerCancel 是 ivy 原始碼已有的介面（description 原介面漏列），不綁的話觸控捲動被瀏覽器接管後 dragging 會卡在 true；新增的 4 條 red_case（第二指忽略、pointercancel 維持開合、close、reduced motion）都對應 description「保留」清單中原本沒有測試的行為；4e986e3 同步在 FRONTEND-195 註明四個事件都要綁。實作與 ivy 邏輯一致，另依 description 加入 disabled 與垂直捲動判定（方向鎖定前 |dy| > 10 且 > |dx| 才放棄），move / up 期間 disabled 轉 true 也會放棄手勢。殘留：測試以 vi.stubGlobal 替換 matchMedia 後未 unstub（vitest 設定未開 unstubGlobals），目前是檔內最後一個測試且檔案間隔離，無實際影響。"
       }
     },
     {
