@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 29,
-  "last_updated": "2026-10-03T15:26:30Z",
+  "version": 30,
+  "last_updated": "2026-10-03T15:28:16Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -99,7 +99,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db003_create_roles.py",
       "source_ref": "BE:models/permission_models.py::Role",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-041",
@@ -291,7 +291,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db008_create_subjects.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-041",
@@ -328,7 +328,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db009_create_exam_types.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-041",
@@ -365,7 +365,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db010_create_schools.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-041",
@@ -403,7 +403,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db011_create_closed_days.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-041",
@@ -440,7 +440,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db012_create_classes.py",
       "source_ref": "BE:models/classroom.py::Classroom",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-041",
