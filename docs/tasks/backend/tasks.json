@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 49,
-  "last_updated": "2026-10-03T12:47:46Z",
+  "version": 50,
+  "last_updated": "2026-10-03T12:49:39Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1711,7 +1711,7 @@
     {
       "id": "BACKEND-051",
       "title": "實作 LineIdTokenVerifier.verify：呼叫 LINE verify API、aud 嚴格比對、重放防護",
-      "description": "建立 `apps/api/app/services/auth/line_id_token.py`（移植 ivy `services/line_login_service.py::LineLoginService.verify_id_token` 與 `_check_id_token_replay`；去掉 tenant / env fallback）。\n\n```python\n@dataclass(frozen=True)\nclass LineProfile:\n    line_user_id: str\n    display_name: str | None\n    picture_url: str | None\n\nclass LineIdTokenVerifier(Protocol):\n    def verify(self, id_token: str, *, channel_id: str) -> LineProfile: ...\n\nclass HttpLineIdTokenVerifier:\n    def __init__(self, *, transport: httpx.BaseTransport | None = None, clock: Clock) -> None: ...\ndef get_line_verifier() -> LineIdTokenVerifier: ...            # FastAPI dependency；測試 override 成 tests/support/fake_line.py 的 FakeLineVerifier\n```\n**verify 規則**\n- `POST https://api.line.me/oauth2/v2.1/verify`，form `id_token`、`client_id=channel_id`，timeout 5 秒。\n- 連線失敗 / 5xx → `AppError('line_unavailable', 'LINE 驗證服務暫時無法連線', status=503)`。\n- 非 200 → 401 `invalid_id_token`；JSON 解析失敗 → 401。\n- `aud` 必須為非空字串且 == channel_id；`sub` 必須符合 `^U[0-9a-f]{32}$`；否則 401 `invalid_id_token`。\n- 重放：驗證成功後以 sha256(id_token) 記入記憶體 dict（TTL 5 分，時間取注入 clock），重複出現 → 401 `id_token_replayed`；只在全部檢查通過後才記錄。\n- display_name 取 `name` 去頭尾空白並截 100 字；picture_url 取 `picture`。\n- channel_id 由呼叫端從 system_settings `line.liff.channel_id`（BACKEND-106）讀取後傳入，不從 LIFF ID 推導（LIFF 所屬的 LINE Login channel ID 由後台明確設定）。\n\n**驗收標準**\n- 成功回 LineProfile；送出的 form 正確。\n- aud 不符 / sub 格式錯 / 非 200 → 401 invalid_id_token。\n- 連線錯誤 → 503 line_unavailable。\n- 同一 id_token 第二次 → 401 id_token_replayed；5 分鐘後可再用（LINE 本身會因過期拒絕，此處只驗 cache TTL）。\n- 送給 LINE 的 client_id 與比對 aud 都使用呼叫端傳入的 channel_id。",
+      "description": "建立 `apps/api/app/services/auth/line_id_token.py`（移植 ivy `services/line_login_service.py::LineLoginService.verify_id_token` 與 `_check_id_token_replay`；去掉 tenant / env fallback）。\n\n```python\n@dataclass(frozen=True)\nclass LineProfile:\n    line_user_id: str\n    display_name: str | None\n    picture_url: str | None\n\nclass LineIdTokenVerifier(Protocol):\n    def verify(self, id_token: str, *, channel_id: str) -> LineProfile: ...\n\nclass HttpLineIdTokenVerifier:\n    def __init__(self, *, transport: httpx.BaseTransport | None = None, clock: Clock) -> None: ...\ndef get_line_verifier() -> LineIdTokenVerifier: ...            # FastAPI dependency，回傳 module 單例（重放 cache 必須跨 request 共用；clock 用 SystemClock）；測試 override 成 tests/support/fake_line.py 的 FakeLineVerifier（本 task 建立）\n```\n**verify 規則**\n- `POST https://api.line.me/oauth2/v2.1/verify`，form `id_token`、`client_id=channel_id`，timeout 5 秒。\n- channel_id 為空字串（後台尚未設定 `line.liff.channel_id`）→ 不呼叫 LINE，`AppError('line_unavailable', 'LINE 登入尚未設定', status=503)`；id_token 為空 → 不呼叫 LINE，401 `invalid_id_token`。\n- 連線失敗 / 逾時（任何 `httpx.HTTPError`）/ 5xx / 429（LINE 端節流，非 token 問題）→ `AppError('line_unavailable', 'LINE 驗證服務暫時無法連線', status=503)`。\n- 其他非 200 → 401 `invalid_id_token`；JSON 解析失敗或不是物件 → 401。\n- `aud` 必須為非空字串且 == channel_id（非字串一律拒絕）；`sub` 必須是字串且整串符合 `^U[0-9a-f]{32}$`（fullmatch）；否則 401 `invalid_id_token`。\n- log 不得出現 id_token 原文（只記 sha256 前 8 碼）；LINE 的錯誤內容不回給用戶端。\n- 重放：驗證成功後以 sha256(id_token) 記入記憶體 dict（TTL 5 分，時間取注入 clock；滿 5 分鐘即過期），重複出現 → 401 `id_token_replayed`；只在全部檢查通過後才記錄。檢查與記錄在同一把 `threading.Lock` 內，同一 token 並行驗證只有一個成功；過期項目每次記錄時順手清掉。\n- display_name 取 `name` 去頭尾空白並截 100 字（缺值、非字串或空白 → None）；picture_url 取 `picture`（非字串或空字串 → None）。\n- channel_id 由呼叫端從 system_settings `line.liff.channel_id`（BACKEND-106）讀取後傳入，不從 LIFF ID 推導（LIFF 所屬的 LINE Login channel ID 由後台明確設定）。\n\n**驗收標準**\n- 成功回 LineProfile；送出的 form 正確。\n- aud 不符 / sub 格式錯 / 非 200 → 401 invalid_id_token。\n- 連線錯誤 → 503 line_unavailable。\n- 同一 id_token 第二次 → 401 id_token_replayed；5 分鐘後可再用（LINE 本身會因過期拒絕，此處只驗 cache TTL）。\n- 送給 LINE 的 client_id 與比對 aud 都使用呼叫端傳入的 channel_id。\n- channel_id 未設定 → 503 且不呼叫 LINE；LINE 429 / 逾時 → 503。\n- 同一 token 並行驗證只有一個成功。\n- `tests/support/fake_line.py` 的 FakeLineVerifier 與 Protocol 結構相容。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/line_id_token.py",
       "source_ref": "BE:services/line_login_service.py::LineLoginService.verify_id_token",
@@ -1736,7 +1736,16 @@
           "test_line_verify_non_200：回 400 {'error':'invalid_request'} → 401 'invalid_id_token'",
           "test_line_verify_unavailable：MockTransport 拋 httpx.ConnectError → AppError 503 'line_unavailable'；回 502 → 503",
           "test_line_verify_replay：同一 id_token 驗證兩次 → 第二次 401 'id_token_replayed'；fake_clock.advance(minutes=5, seconds=1) 後第三次 → 成功",
-          "test_line_verify_uses_given_channel_id：verify('tok1', channel_id='2000000001')，MockTransport 回 aud='2000000001' → 成功且請求 form client_id == '2000000001'；同一回應改以 channel_id='1657000000' 驗證 → 401 'invalid_id_token'"
+          "test_line_verify_uses_given_channel_id：verify('tok1', channel_id='2000000001')，MockTransport 回 aud='2000000001' → 成功且請求 form client_id == '2000000001'；同一回應改以 channel_id='1657000000' 驗證 → 401 'invalid_id_token'",
+          "test_line_verify_request_shape：請求為 POST https://api.line.me/oauth2/v2.1/verify、Content-Type application/x-www-form-urlencoded、timeout 各項皆 5 秒",
+          "test_line_verify_not_configured：channel_id='' → AppError 503 'line_unavailable'，MockTransport 未被呼叫；id_token='' → 401 'invalid_id_token'，未被呼叫",
+          "test_line_verify_rate_limited_or_timeout：LINE 回 429 → 503；MockTransport 拋 httpx.ReadTimeout → 503",
+          "test_line_verify_malformed_payload：回應非 JSON / JSON 為 list / aud 為整數 1657000000 / sub 為 'U'+'a'*32+'\\n' / sub 含大寫 → 皆 401 'invalid_id_token'",
+          "test_line_verify_failed_token_not_recorded：aud 不符的 token 被拒後，LINE 改回正確 aud 再驗同一 token → 成功（失敗不占重放槽）",
+          "test_line_verify_replay_concurrent：10 個執行緒同時驗證同一 token → 恰 1 個成功、9 個 'id_token_replayed'",
+          "test_line_verify_logs_never_contain_token：各種失敗路徑的 caplog 不含 id_token 原文",
+          "test_line_verify_get_line_verifier_singleton：get_line_verifier() is get_line_verifier()，且為 HttpLineIdTokenVerifier",
+          "test_line_fake_verifier：FakeLineVerifier({'tok':profile}) 可當 LineIdTokenVerifier 傳入；未知 token → 401 'invalid_id_token'；記錄 (id_token, channel_id) 呼叫"
         ],
         "run": "just test apps/api/tests/unit/services/auth/test_line_id_token.py -k \"test_line_\"",
         "notes": ""
