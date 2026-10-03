@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 45,
-  "last_updated": "2026-10-03T13:02:08Z",
+  "version": 46,
+  "last_updated": "2026-10-03T13:03:56Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -4627,7 +4627,7 @@
     {
       "id": "FRONTEND-196",
       "title": "實作 components/pickup/pos/CountdownBar.vue：5 秒倒數進度條",
-      "description": "建立 `apps/web/src/components/pickup/pos/CountdownBar.vue`。移植 ivy `FE:src/components/dismissal/pos/DismissalPosCountdownBar.vue`：scaleX 收縮動畫（transform-origin left）、雙層 requestAnimationFrame 觸發 transition、途中掛載依剩餘比例接續、剩餘時間 clamp 在 [0, durationMs]、reduced motion 時只在到期變色不做動畫。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-pickup-countdown.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸、觸控目標 ≥ 44px。元件外觀、狀態與互動以此元件稿為準；所屬頁面稿 `docs/mockups/page-pickup-pos.html` 只畫頁面版面並引用本元件，不另訂元件規格。\n\n**props**：`startedAt: number`、`durationMs?: number`（預設 5000）。\n- 根元素 `role=\"progressbar\"`、`aria-valuemin=0`、`aria-valuemax=durationMs`、`aria-valuenow` = 剩餘毫秒（掛載時計算）。\n\n**驗收標準**\n- 初始 scaleX 為剩餘比例；兩次 rAF 後 scaleX(0) 且 transitionDuration 為剩餘毫秒；reduced motion 到期變色。",
+      "description": "建立 `apps/web/src/components/pickup/pos/CountdownBar.vue`。移植 ivy `FE:src/components/dismissal/pos/DismissalPosCountdownBar.vue`：scaleX 收縮動畫（transform-origin left）、雙層 requestAnimationFrame 觸發 transition、途中掛載依剩餘比例接續、剩餘時間 clamp 在 [0, durationMs]、reduced motion 時只在到期變色不做動畫。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-pickup-countdown.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸、觸控目標 ≥ 44px。元件外觀、狀態與互動以此元件稿為準；所屬頁面稿 `docs/mockups/page-pickup-pos.html` 只畫頁面版面並引用本元件，不另訂元件規格。\n\n**props**：`startedAt: number`、`durationMs?: number`（預設 5000）。\n- 根元素 `role=\"progressbar\"`、`aria-valuemin=0`、`aria-valuemax=durationMs`、`aria-valuenow` = 剩餘毫秒（掛載時計算）。\n- 無障礙名稱由呼叫端以 attrs 傳 `aria-label`（QueueCard 傳「{姓名} 送出倒數」），元件不寫死文字。\n- 已過期（剩餘 0）時直接是空條（scaleX(0)），不排 rAF、不播動畫。\n- 元件不監聽 `startedAt` / `durationMs` 變更（重新倒數由呼叫端換 `:key`）；卸載時取消 rAF 與 timer。\n- 外觀（高 6px、全圓角、軌道 / 主色 / 到期灰色）以設計稿 `docs/mockups/component-pickup-countdown.html` 的 decisions 為準。\n\n**驗收標準**\n- 初始 scaleX 為剩餘比例；兩次 rAF 後 scaleX(0) 且 transitionDuration 為剩餘毫秒；reduced motion 到期變色。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/pickup/pos/CountdownBar.vue",
       "source_ref": "FE:src/components/dismissal/pos/DismissalPosCountdownBar.vue::default",
@@ -4647,7 +4647,10 @@
         "red_cases": [
           "CountdownBar resumes from remaining ratio：Date.now 固定、startedAt = now − 2000 → 掛載當下 fill style transform 'scaleX(0.6)'、transitionDuration '0ms'；執行兩次 rAF 後 transform 'scaleX(0)'、transitionDuration '3000ms'",
           "CountdownBar clamps future start：startedAt = now + 10000 → 初始 transform 'scaleX(1)'，aria-valuenow '5000'",
-          "CountdownBar reduced motion only changes color at expiry：matchMedia('(prefers-reduced-motion: reduce)') 為 true → fill 無 transform；4999ms 時 class 含 is-counting，5000ms 後含 is-done"
+          "CountdownBar reduced motion only changes color at expiry：matchMedia('(prefers-reduced-motion: reduce)') 為 true → fill 無 transform；4999ms 時 class 含 is-counting，5000ms 後含 is-done",
+          "CountdownBar aria attributes and label passthrough：startedAt = now − 1000、attrs aria-label '王小明 送出倒數' → role 'progressbar'、aria-valuemin '0'、aria-valuemax '5000'、aria-valuenow '4000'、aria-label '王小明 送出倒數'",
+          "CountdownBar expired start renders empty bar without animation：startedAt = now − 8000 → transform 'scaleX(0)'、transitionDuration '0ms'、aria-valuenow '0'，requestAnimationFrame 呼叫次數 0",
+          "CountdownBar ignores prop changes and cancels frames on unmount：setProps({startedAt: now}) 後 transform 仍為初始值；兩次 rAF 前 unmount → cancelAnimationFrame 收到已排的 id"
         ],
         "run": "just web-test src/components/pickup/pos/CountdownBar.spec.ts -t \"CountdownBar\"",
         "notes": ""
