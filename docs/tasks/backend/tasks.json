@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 48,
-  "last_updated": "2026-10-03T12:47:30Z",
+  "version": 49,
+  "last_updated": "2026-10-03T12:47:46Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1290,7 +1290,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/throttle.py",
       "source_ref": "BE:api/auth.py::_check_account_lockout",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-012"
