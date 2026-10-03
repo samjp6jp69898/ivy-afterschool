@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 41,
-  "last_updated": "2026-10-03T12:59:32Z",
+  "version": 42,
+  "last_updated": "2026-10-03T13:00:27Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -5147,7 +5147,7 @@
     {
       "id": "FRONTEND-236",
       "title": "實作 components/exams/ScoreCell.vue：單一成績格（分數、缺考、驗證、儲存狀態）",
-      "description": "建立 `apps/web/src/components/exams/ScoreCell.vue`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-exams.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。元件外觀、狀態與互動以此元件稿為準；所屬頁面稿 `docs/mockups/page-exam-detail.html` 只畫頁面版面並引用本元件，不另訂元件規格。\n\n**props / emits**：`score: number | null`、`isAbsent: boolean`、`fullScore: number`、`state: 'idle' | 'dirty' | 'saving' | 'saved' | 'error'`、`errorMessage?: string`、`readonly: boolean`；emits `change({score, is_absent})`。\n- 輸入框（inputmode decimal，寬 64px）：允許空白（= 未填）、0~fullScore、最多一位小數；不合法即時顯示紅框與 tooltip（「需介於 0~{fullScore}」「最多一位小數」），**不 emit**。合法且與 props 不同才 emit（blur 或 Enter 時）。\n- 缺考：小勾選「缺」；勾選 → emit `{score: null, is_absent: true}` 並停用輸入框；取消勾選 → `{score: null, is_absent: false}`。輸入「缺」或「-」字元等同勾選缺考。\n- 狀態樣式：dirty 黃色角標、saving 轉圈、saved 綠色勾 1 秒後淡出、error 紅框 + tooltip errorMessage。\n- readonly：只顯示文字（缺考顯示「缺考」、null 顯示「—」）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/exams/ScoreCell.vue`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-exams.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。元件外觀、狀態與互動以此元件稿為準；所屬頁面稿 `docs/mockups/page-exam-detail.html` 只畫頁面版面並引用本元件，不另訂元件規格。\n\n**props / emits**：`score: number | null`、`isAbsent: boolean`、`fullScore: number`、`state: 'idle' | 'dirty' | 'saving' | 'saved' | 'error'`、`errorMessage?: string`、`readonly: boolean`；emits `change({score, is_absent})`。\n- 輸入框（inputmode decimal，寬 64px）：允許空白（= 未填）、0~fullScore、最多一位小數；不合法即時顯示紅框與 tooltip（「需介於 0~{fullScore}」「最多一位小數」），**不 emit**。合法且與 props 不同才 emit（blur 或 Enter 時）。\n- 缺考：小勾選「缺」；勾選 → emit `{score: null, is_absent: true}` 並停用輸入框；取消勾選 → `{score: null, is_absent: false}`。輸入「缺」或「-」字元等同勾選缺考。\n- 狀態樣式：dirty 黃色角標、saving 轉圈、saved 綠色勾（state 由 saved 轉 idle 時淡出移除；轉換時機由 FRONTEND-237 決定，成功 1 秒後）、error 紅框 + tooltip errorMessage。本地驗證錯誤優先於後端 errorMessage 顯示；非數字輸入一律顯示「需介於 0~{fullScore}」。根元素 `title` 與 tooltip 內容相同。prefers-reduced-motion 時轉圈與淡出不做動畫。\n- 缺考勾選後輸入框清空、disabled（依 `isAbsent` prop）、placeholder「缺考」；已是缺考時再輸入「缺」不重複 emit。\n- readonly：只顯示文字（缺考顯示「缺考」、null 顯示「—」、分數照原值顯示，90 顯示「90」、88.5 顯示「88.5」，不補 .0）。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/exams/ScoreCell.vue",
       "source_ref": null,
@@ -5169,7 +5169,11 @@
           "ScoreCell rejects out of range and extra decimals：setValue('105') 並 blur → 文字或 title 含 '需介於 0~100'，emitted('change') 為 undefined；'88.25' → '最多一位小數'",
           "ScoreCell absent toggle clears score：勾選 '缺' → emit {score:null,is_absent:true} 且 input disabled；輸入 '缺' 並 blur → 同樣 emit is_absent true",
           "ScoreCell does not emit unchanged value：score 90 → setValue('90') 並 blur → 無 emit；setValue('') 並 blur → emit {score:null,is_absent:false}",
-          "ScoreCell readonly display and error state：readonly、isAbsent true → 文字 '缺考'、無 input；state 'error'、errorMessage '分數超出滿分' → 根元素 class 含 is-error 且 title 含該訊息"
+          "ScoreCell readonly display and error state：readonly、isAbsent true → 文字 '缺考'、無 input；state 'error'、errorMessage '分數超出滿分' → 根元素 class 含 is-error 且 title 含該訊息",
+          "ScoreCell commits on Enter and rejects non-numeric：setValue('77') 並按 Enter → emit {score:77,is_absent:false}；setValue('abc') 並 blur → title 含 '需介於 0~100'、無新 emit；本地錯誤時 state 'error'、errorMessage '儲存失敗，請重試' → title 顯示本地錯誤而非後端訊息",
+          "ScoreCell absent uncheck and placeholder：isAbsent true → input disabled、placeholder '缺考'；取消勾選 '缺' → emit {score:null,is_absent:false}；isAbsent true 時輸入 '缺' 並 blur → 無 emit",
+          "ScoreCell state marks：state 'dirty' → [data-test=mark-dirty] 存在；'saving' → [data-test=mark-saving]；'saved' → [data-test=mark-saved]；'idle' → 三者皆不存在",
+          "ScoreCell readonly number formatting：readonly、score 90 → 文字 '90'；88.5 → '88.5'；null → '—'"
         ],
         "run": "just web-test src/components/exams/ScoreCell.spec.ts -t \"ScoreCell\"",
         "notes": ""
