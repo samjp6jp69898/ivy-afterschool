@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 76,
-  "last_updated": "2026-10-03T14:48:56Z",
+  "version": 77,
+  "last_updated": "2026-10-03T14:49:30Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -540,7 +540,7 @@
       "granularity_unit": "script",
       "target_path": "scripts/dev_up.sh",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-002",
@@ -548,7 +548,7 @@
         "INFRA-008"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "測試在 CI 與本機都會開臨時 port，port 一律以 socket bind 0 取得後釋放再交給 http.server，避免撞 port。",
+      "risk_notes": "測試在 CI 與本機都會開臨時 port，port 一律以 socket bind 0 取得後釋放再交給 http.server，避免撞 port。 【review-r3-infra 打回 1】「已在執行」的判定可以把不是我們服務的行程（或從未就緒的服務）當成已就緒，dev_up 因此 exit 0 並印「全部就緒」。反例 1（已在 scratchpad 實測，pid 被重用）：預設 API 指令為 `just api`，放寬規則取「去掉第一個字的參數」= `api`，所以任何命令列以「 api」結尾的無關行程都會符合。實測把 api.pid 指向 `python3 -c 'import time; time.sleep(120)' api`（ps 顯示為 …/Python.app/…/Python -c import time; time.sleep(120) api），api.cmd 寫 `just api` → 印「api 已在執行」並 exit 0，但 8341 根本沒有監聽。web 同理（命令列以「 web」結尾即可）。反例 2（已實測，逾時後重跑）：DEV_UP_API_CMD='sleep 120'、DEV_UP_WAIT_SECONDS=2 → 第一次逾時 exit 1，但行程與 pid 檔都留著；第二次執行判定「api 已在執行」而跳過輪詢，印「全部就緒」，API port 從未開啟。修正方向：略過啟動的條件除了 pid 存活且命令列相符，還必須該 port 確實可連線；pid 存活、命令列相符但 port 未開時，進入同一套輪詢（逾時印 log 並 exit 1），不可直接視為就緒。另外收緊放寬規則：例如只在記錄指令的第一個字是直譯器路徑時才允許改比對參數，且比對「ps 去掉第一個字後的整串 == 記錄指令去掉第一個字」，不要用結尾比對；或改以 port 確認為主。兩個反例都要寫成測試（可用 python 起一個命令列以 ' api' 結尾的無關行程、以及 'sleep' 類不監聽的指令），同步更新 description 與 red_case。修好的判準：兩個反例都不得 exit 0、不得印「已在執行」後直接印「全部就緒」。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "scripts/tests/test_dev_up.py",
@@ -567,9 +567,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r3-infra",
+        "notes": "打回（1 項，見 risk_notes「review-r3-infra 打回」），其餘已驗證通過。紅燈 831c482、補紅燈 d17581f 先於實作 4046764；`just test scripts/tests/test_dev_up.py -k dev_up` 6 passed，--collect-only 對照 6 條 red_case 全選到；跑完沒有殘留 http.server 行程（teardown 依 pid 檔 SIGTERM，nohup sh -c \"exec ...\" 讓 pid 即服務本身）；lint / typecheck 乾淨。port 被其他行程占用 → exit 1 且不寫 pid（有測試）；服務提早結束 → 印 log 並 exit 1（有測試）；逾時 → 印「在 N 秒內沒有開始監聽」與 log 最後 20 行並 exit 1（scratchpad 實測）。實機驗證只在 scratchpad 與臨時 port 進行，未起 5341 / 8341。殘留（不擋）：(a) 逾時 exit 1 時已啟動的行程不會被收掉，留給下次執行判斷（修正打回項後會進入輪詢 / 重啟流程）；(b) pid 存活但命令列不符（判定為被重用）時只刪 pid 檔不 kill，這是正確的保守做法，但若是自己的服務被以不同指令重啟，舊行程會脫離追蹤。"
       }
     },
     {
