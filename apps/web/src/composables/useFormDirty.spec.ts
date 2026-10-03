@@ -3,9 +3,13 @@ import { describe, expect, it } from 'vitest'
 import { nextTick, reactive, ref } from 'vue'
 import { confirmDiscardChanges, useFormDirty } from './useFormDirty'
 
-async function clickDialogButton(text: string): Promise<void> {
+async function waitForDialog(): Promise<void> {
   await nextTick()
   await flushPromises()
+}
+
+async function clickDialogButton(text: string): Promise<void> {
+  await waitForDialog()
   const buttons = Array.from(document.body.querySelectorAll('button')).filter(
     (b) => b.textContent?.trim() === text,
   )
@@ -75,7 +79,9 @@ describe('useFormDirty', () => {
 
   it('useFormDirty confirmDiscardChanges resolves by user choice', async () => {
     const discarded = confirmDiscardChanges()
+    await waitForDialog()
     expect(document.body.textContent).toContain('尚未儲存的變更將會遺失，確定要關閉嗎？')
+    expect(document.body.querySelector('.el-message-box__title')?.textContent?.trim()).toBe('未儲存的變更')
     await clickDialogButton('放棄變更')
     expect(await discarded).toBe(true)
 
