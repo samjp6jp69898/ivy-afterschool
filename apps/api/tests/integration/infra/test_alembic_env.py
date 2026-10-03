@@ -6,6 +6,11 @@ database 與查驗結果）；revision 放在 tmp_path，不依賴 alembic/versi
 
 import configparser
 import importlib.util
+import json
+import os
+import shutil
+import subprocess
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -149,3 +154,51 @@ def test_alembic_ini_has_no_url() -> None:
     assert not parser.has_option("alembic", "sqlalchemy.url")
     assert parser.get("alembic", "file_template") == "%%(rev)s_%%(slug)s"
     assert parser.get("alembic", "script_location") == "%(here)s/alembic"
+
+
+_FAKE_UV = """#!{python}
+import json, os, sys
+keys = ("MIGRATION_DATABASE_URL", "PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE")
+with open({log!r}, "w", encoding="utf-8") as f:
+    json.dump({{"argv": sys.argv[1:], "env": {{k: os.environ.get(k) for k in keys}}}}, f)
+"""
+
+
+def test_alembic_db_migrate_recipe_ignores_libpq_env(tmp_path: Path) -> None:
+    """just db-migrate 不受呼叫端的 MIGRATION_DATABASE_URL 與 libpq 位址變數影響，只連本機。"""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "uv.json"
+    fake_uv = bin_dir / "uv"
+    fake_uv.write_text(_FAKE_UV.format(python=sys.executable, log=str(log)), encoding="utf-8")
+    fake_uv.chmod(0o755)
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        "MIGRATION_DATABASE_URL": "postgresql://postgres:postgres@db.example.com:5432/postgres",
+        "PGHOSTADDR": "192.0.2.1",
+        "PGSERVICE": "remote",
+        "PGSERVICEFILE": str(tmp_path / "pg_service.conf"),
+    }
+
+    just = shutil.which("just")
+    assert just is not None, "找不到 just"
+
+    result = subprocess.run(  # noqa: S603  固定參數呼叫 just
+        [just, "--justfile", str(API_DIR.parent.parent / "justfile"), "db-migrate"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+
+    assert result.returncode == 0, result.stderr
+    recorded = json.loads(log.read_text(encoding="utf-8"))
+    assert recorded["argv"][-3:] == ["alembic", "upgrade", "head"]
+    assert recorded["env"] == {
+        "MIGRATION_DATABASE_URL": "postgresql+psycopg://postgres:postgres@127.0.0.1:54342/postgres",
+        "PGHOSTADDR": None,
+        "PGSERVICE": None,
+        "PGSERVICEFILE": None,
+    }
