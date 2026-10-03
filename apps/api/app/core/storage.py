@@ -7,7 +7,8 @@
   之外才 raise，``__cause__`` 與 ``__context__`` 皆為 None——SignatureDoesNotMatch 等錯誤回應本文
   會帶 AWSAccessKeyId / StringToSign，不可隨例外鏈進 log。
 - ``client`` 內含憑證：不得 log 或序列化。
-- ``create_signed_url`` / ``delete`` 由 BACKEND-014 / 015 實作。
+- ``create_signed_url``（BACKEND-014）：SigV4 在本地簽章，不發網路請求、不檢查物件是否存在。
+- ``delete`` 由 BACKEND-015 實作。
 """
 
 from __future__ import annotations
@@ -31,6 +32,8 @@ Bucket = Literal["leave-attachments", "student-photos", "pickup-person-photos"]
 
 _BUCKETS: Final[frozenset[str]] = frozenset(get_args(Bucket))
 _EXTENSIONS: Final = frozenset({"jpg", "png", "webp", "heic", "pdf"})
+SIGNED_URL_MIN_SECONDS: Final = 30
+SIGNED_URL_MAX_SECONDS: Final = 3600
 _PATH = re.compile(r"[0-9a-f-]{36}/[0-9a-f]{32}\.(jpg|png|webp|heic|pdf)")
 
 
@@ -119,7 +122,19 @@ class R2Storage:
         )
 
     def create_signed_url(self, bucket: Bucket, path: str, expires_in: int = 300) -> str:
-        raise NotImplementedError("BACKEND-014 實作")
+        if not SIGNED_URL_MIN_SECONDS <= expires_in <= SIGNED_URL_MAX_SECONDS:
+            raise ValueError(
+                f"expires_in 必須介於 {SIGNED_URL_MIN_SECONDS}~{SIGNED_URL_MAX_SECONDS} 秒"
+            )
+        key = object_key(bucket, path)
+        return _s3_call(
+            "generate_presigned_url",
+            lambda: self.client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": self.bucket_name, "Key": key},
+                ExpiresIn=expires_in,
+            ),
+        )
 
     def delete(self, bucket: Bucket, paths: Sequence[str]) -> None:
         raise NotImplementedError("BACKEND-015 實作")
