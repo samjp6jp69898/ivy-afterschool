@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 44,
-  "last_updated": "2026-10-03T12:36:32Z",
+  "version": 45,
+  "last_updated": "2026-10-03T12:41:16Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -49,7 +49,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/clock.py",
       "source_ref": "BE:utils/taipei_time.py::today_taipei",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "INFRA-004",
@@ -75,9 +75,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 7/7 綠，6 條 red_case 皆有同名測試（另加 SystemClock.today 與台北日期一致）；6f50ff6 紅燈時 clock.py 不存在，fbef54b 才加入。just lint / just typecheck 對 app 與測試檔乾淨（mypy 也確認 FakeClock 等測試替身與介面相容）。SystemClock.now 為 UTC aware、today 以 Asia/Taipei 轉換；to_taipei 拒絕 naive（含 utcoffset 為 None 的 tzinfo）；combine_taipei / taipei_day_bounds 換算與 red_case 數值一致；get_clock 回傳 module 單例；ruff per-file-ignores 只豁免 app/core/clock.py。無殘留。"
       }
     },
     {
@@ -415,7 +415,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/rate_limit.py",
       "source_ref": "BE:utils/rate_limit.py::SlidingWindowLimiter",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-003"
@@ -446,9 +446,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 27/27 綠，12 條 red_case 皆有同名測試（另加 retry_after 進位、reset、精確准入的多執行緒、非法設定、naive now、鎖定期滿邊界、clear 解除鎖定等）；f2cc29e 紅燈時 rate_limit.py 不存在，40f9d81 才加入（測試只改了一個 noqa 註解）。just lint / just typecheck 對 app 與測試檔乾淨（mypy 也確認 FakeClock 等測試替身與介面相容）。f2cc29e 補的規則沒有放寬鎖定：以實際 FailureLockout(threshold=5, lockout_seconds=900) 模擬攻擊者在 7200 秒內的各種節奏（每秒嘗試、每 900/899/901 秒打 4、5、9 次、每 179/180 秒 1 次），任意 900 秒區間內被記錄的失敗次數上限都是 5（= threshold），總次數上限 40，與原「計數永不過期」規格的上限（每個鎖定週期 5 次）相同；閒置過期只讓「每 lockout_seconds 少於 threshold 次」的慢速失敗不再累積（每 900 秒最多 4 次且不觸發鎖定），速率不高於原規格。鎖定中的 record_failure 直接 return（不延長、不累計）、check 以 locked_until 計算剩餘秒數無條件進位；被拒的 hit 不記錄；全表清掃至多每視窗一次。殘留：hit 的 now 由呼叫端在取得 lock 前計算，多執行緒下 deque 可能有毫秒級的亂序，_drop_expired 只看隊首，影響可忽略。"
       }
     },
     {
@@ -562,7 +562,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/uploads.py",
       "source_ref": "BE:utils/file_upload.py::validate_file_signature",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-003"
@@ -586,9 +586,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 25/25 綠，5 條 red_case 皆有同名測試（另加 webp/heic、未知檔頭、AVIF / MP4 / WAV 等相似檔頭、client content_type 被忽略、大小邊界、超過上限即停止讀取、非 xlsx 的 zip 參數化、SpooledTemporaryFile）；59aac5e 紅燈時 uploads.py 不存在。just lint / just typecheck 對 app 與測試檔乾淨（mypy 也確認 FakeClock 等測試替身與介面相容）。以 64 KiB chunk 讀取並在超過 max_bytes 當下 413；空檔 422；格式只由檔頭判定，xlsx 只讀 central directory 不解壓，任何 zip 解析例外一律視為非 xlsx（415 而非 500）。殘留：(a) 從 file.file 目前位置開始讀，呼叫端若已讀過需先 seek(0)。(b) 註解與 description 提到「與 DB-034 bucket 一致」，儲存改用 Cloudflare R2 後需隨規格重新規劃更新引用。"
       }
     },
     {
@@ -997,7 +997,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security/passwords.py",
       "source_ref": "BE:utils/auth.py::validate_password_strength",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-031",
@@ -1023,9 +1023,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 8/8 綠（-k 選到 8 個，另 10 個為 BACKEND-031 的測試被 deselect），6 條 red_case 皆有同名測試（另加過長與多條同時違反）；bf6f3e9 紅燈時 passwords.py 不存在。just lint / just typecheck 對 app 與測試檔乾淨（mypy 也確認 FakeClock 等測試替身與介面相容）。長度 10~128、英文字母與數字各至少一、不等於 username（casefold）、內建 20 個常見弱密碼（casefold 比對），全部違反原因一次列出，訊息與 details 都不含密碼本身；generate_temp_password 以 secrets 產生 12 碼、保證大寫 / 小寫 / 數字各一並以 SystemRandom 洗牌，字元集排除 0 O 1 l I，並重抽避開清單。無殘留。"
       }
     },
     {
@@ -2393,7 +2393,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/permissions.py",
       "source_ref": "BE:utils/permissions.py::resolve_user_permissions",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-070"
@@ -2421,9 +2421,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過（含協調者裁定的 fail-closed）。tdd.run 14/14 綠，9 條 red_case 皆有對應測試，test_resolve_wildcard_in_revoked_fails_closed 以三組參數涵蓋 red_case 列的三種組合（單一角色碼 + revoked *、角色 * + extra + revoked *、revoked 同時含 * 與其他碼），各斷言結果為空集合且恰一則含 \"'*'\" 的 warning。commit 順序：7c6db21 測試 → 1670fa8 實作 → 34ac80e 更新 description / red_case / 測試（此時舊實作會把 revoked 的 * 當不合法碼略過、結果非空，測試為紅）→ ee67857 實作 fail-closed。BACKEND tasks.json 審查時無未提交改動。just lint / just typecheck 對 app 與測試檔乾淨（mypy 也確認 FakeClock 等測試替身與介面相容）。實作在任何合併之前先判斷 WILDCARD in revoked → 回 frozenset()；角色 * 展開 ALL_PERMISSIONS（28 碼）；extra 的 * 視為不合法碼丟棄，不能提權；三個來源的不合法碼合併成一則 warning，只含碼名。殘留：(a) 參數型別是 Iterable[str]，若呼叫端誤傳單一字串（例如 revoked='students:read'），會被逐字元迭代成不合法碼而沒有撤銷任何權限；目前資料來源是 DB 陣列欄位，BACKEND-077 等呼叫端應傳 list。(b) revoked 中帶空白的 ' *' 等變體被當成不合法碼，不觸發 fail-closed。"
       }
     },
     {
@@ -3619,7 +3619,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/settings_registry.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "INFRA-004",
@@ -3650,9 +3650,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 28/28 綠，11 條 red_case 皆有同名測試（另加 DB-038 seed 逐欄比對、範圍邊界參數化、欄位標題逐字、typed handle、預設值不可變）；1646d67 紅燈時 settings_registry.py 不存在，07fcea3 只把測試的一個 type: ignore 拿掉（typecheck 仍通過）。just lint / just typecheck 對 app 與測試檔乾淨（mypy 也確認 FakeClock 等測試替身與介面相容）。11 個 key 與 domain_spec M2 首批 key 表逐一相同，沒有遺漏或多出；DB-038 description 的 value 表也一致。secret 只有 line.messaging（channel_access_token、channel_secret 兩欄加密、回遮罩）；line.liff 的 channel_id 是 LINE Login 的公開識別碼、不公開給家長端，不屬 secret；architecture_decisions §4 列的 env（DATABASE_URL、APP_SECRET_KEY 等）沒有任何一個被搬進 registry，也沒有為業務參數新增 env。public_fields 與 description 表一致（line.liff 不含 channel_id）。殘留：(a) DB-038 尚未實作，seed 一致性測試目前比對的是測試內寫死的值，DB-038 落地後應改讀實際 seed。(b) description 中 DB-034 bucket 上限與 Supabase migration 的引用需隨 Railway Postgres / Alembic / R2 的規格重新規劃更新。"
       }
     },
     {
@@ -6483,7 +6483,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/channel_matrix.py",
       "source_ref": "BE:services/notification/channel_matrix.py::CHANNEL_MATRIX",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-201"
@@ -6505,9 +6505,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 10/10 綠，3 條 red_case 皆有同名測試（另加與 domain_spec 表逐列比對、唯讀、以及 d8af2f9 補的「不變式檢查函式擋下違規矩陣」參數化 5 例）；c070b77 / d8af2f9 紅燈時 channel_matrix.py 不存在。just lint / just typecheck 對 app 與測試檔乾淨（mypy 也確認 FakeClock 等測試替身與介面相容）。矩陣與 description / domain_spec M9 頻道欄逐列一致（pickup.cancelled 兩種收件人、pickup.arrived 只有 ws、binding.completed 只有 in_app）；三條不變式以 check_invariants 在載入時 raise AssertionError（不依賴 assert，不受 python -O 影響），另擋空頻道組合；channels_for 對不在 recipient_types 的類型 ValueError；對外為 MappingProxyType 唯讀。無殘留。"
       }
     },
     {
@@ -6517,7 +6517,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/templates.py",
       "source_ref": "BE:services/notification/renderers.py::render",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-201"
@@ -6546,9 +6546,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 28/28 綠，10 條 red_case 皆有同名測試（exact_copy 對 13 個事件逐字比對、另加每個事件缺 payload、非字串值 str()、根路徑連結與 base url 結尾斜線、body 截斷、剛好上限不截斷）；5d93765 紅燈時 templates.py 不存在，且 line_text 截斷與 exact_copy 的測試在紅燈 commit 已存在，82680d0 才把截斷規則與可選欄位寫回 description。just lint / just typecheck 對 app 與測試檔乾淨（mypy 也確認 FakeClock 等測試替身與介面相容）。截斷規則正確：_truncate 在超過上限時取 limit−1 字再補「…」，結果恰為上限（title 100、body 1000，與 DB-029 CHECK 以字元數計算一致）；line_text 先算連結長度，把 title + body 截到 5000 − len(link) − 1 後再接換行與完整連結，總長恰 5000 且連結不被切斷，base url 結尾斜線會先去掉；連結本身超長時才整段硬截。文案 13 個事件與 description 逐字相同，可選欄位 None 或空白視同沒有。殘留：(a) 必填 key 存在但值為 None 時會以字串 'None' 代入（只檢查 key 是否存在）。(b) 截斷以 Python 字元（code point）計；render 產出的 title + body 最多約 1100 字，line_text 的 5000 上限實務上碰不到，與 LINE 計數方式的差異無實際影響。"
       }
     },
     {
