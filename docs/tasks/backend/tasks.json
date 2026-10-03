@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 79,
-  "last_updated": "2026-10-03T15:27:13Z",
+  "version": 81,
+  "last_updated": "2026-10-03T15:28:11Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14582,11 +14582,11 @@
     {
       "id": "BACKEND-536",
       "title": "R2Storage 對本機 S3（SeaweedFS）的整合測試：上傳、presigned 下載、刪除往返",
-      "description": "以 compose 的本機 SeaweedFS S3（`127.0.0.1:54344`，bucket `afterschool-local`，INFRA-044）驗證 BACKEND-013~015 的 R2Storage 與真實 S3 相容服務的往返，補足 Stubber 單元測試看不到的簽章與 path-style 行為（architecture_decisions §10）。\n\n- fixture `local_s3_storage`：讀 `TEST_R2_ENDPOINT_URL`（預設 `http://127.0.0.1:54344`）、`TEST_R2_ACCESS_KEY_ID`（預設 `afterschool`）、`TEST_R2_SECRET_ACCESS_KEY`（預設 `afterschool-local-secret`）、`TEST_R2_BUCKET`（預設 `afterschool-local`）建立 R2Storage；endpoint 的 host 不是 `127.0.0.1` / `localhost` / `::1` 時 `pytest.exit(\"只允許本機 loopback 儲存服務：<host>\", returncode=2)`，且不建立 client；TCP 探測連不上時 `pytest.exit(\"本機 S3（SeaweedFS）未啟動，先跑 just db-start\", returncode=2)`。\n- 每個測試用新的 `build_object_path(uuid4(), ...)`，結束時刪除自己建立的物件。\n- 下載以 httpx 直接 GET presigned URL（pytest-socket 已放行 loopback）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "以 compose 的本機 SeaweedFS S3（`127.0.0.1:54344`，bucket `afterschool-local`，INFRA-044）驗證 BACKEND-013~015 的 R2Storage 與真實 S3 相容服務的往返，補足 Stubber 單元測試看不到的簽章與 path-style 行為（architecture_decisions §10）。\n\n- fixture `local_s3_storage`（`apps/api/tests/support/local_s3.py`，使用端以 import 註冊；pytester 產生的測試檔同樣 import）：讀 `TEST_R2_ENDPOINT_URL`（預設 `http://127.0.0.1:54344`）、`TEST_R2_ACCESS_KEY_ID`（預設 `afterschool`）、`TEST_R2_SECRET_ACCESS_KEY`（預設 `afterschool-local-secret`）、`TEST_R2_BUCKET`（預設 `afterschool-local`）建立 R2Storage；endpoint 的 host 不是 `127.0.0.1` / `localhost` / `::1` 時 `pytest.exit(\"只允許本機 loopback 儲存服務：<host>\", returncode=2)`，且不建立 client；TCP 探測連不上時 `pytest.exit(\"本機 S3（SeaweedFS）未啟動，先跑 just db-start\", returncode=2)`。\n- 每個測試用新的 `build_object_path(uuid4(), ...)`，結束時刪除自己建立的物件。\n- 下載以 httpx 直接 GET presigned URL（pytest-socket 已放行 loopback）。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/core/test_storage_local_s3.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-013",
@@ -14607,7 +14607,11 @@
           "test_storage_local_s3_unsigned_access_denied：同一物件以不帶簽章的 URL（<endpoint>/afterschool-local/student-photos/<p>）GET → 403",
           "test_storage_local_s3_tampered_signature_rejected：把 presigned URL 的 X-Amz-Signature 最後一個字元改成不同的 hex 字元 → GET 回 403",
           "test_storage_local_s3_delete：delete('student-photos', [p]) 後重新簽發 URL 並 GET → 404；再次 delete 同一 path → 不拋例外",
-          "test_storage_local_s3_rejects_remote_endpoint：pytester 以 TEST_R2_ENDPOINT_URL='https://acct.r2.cloudflarestorage.com' 執行使用 local_s3_storage 的測試 → ret == 2，輸出含 '只允許本機 loopback 儲存服務'"
+          "test_storage_local_s3_rejects_remote_endpoint：pytester 以 TEST_R2_ENDPOINT_URL='https://acct.r2.cloudflarestorage.com' 執行使用 local_s3_storage 的測試 → ret == 2，輸出含 '只允許本機 loopback 儲存服務'",
+          "test_storage_local_s3_round_trip_other_prefixes：leave-attachments（pdf）與 pickup-person-photos（png）各上傳後以 presigned URL 取回 → 200、內容與 content-type 相符，URL path 為 /<bucket_name>/<分區>/<path>",
+          "test_storage_local_s3_delete_batch_mixed：一次 delete 兩個已上傳 + 一個從未上傳的 path → 兩個已上傳的 GET 404、未列入刪除的另一個物件仍 200",
+          "test_storage_local_s3_bad_credentials_upload_fails：錯誤 secret 的 R2Storage upload → StorageError 含 '403'、不含錯誤與正確的 secret、__context__ is None",
+          "test_storage_local_s3_exits_when_not_listening：pytester 以 TEST_R2_ENDPOINT_URL='http://127.0.0.1:1' 執行使用 fixture 的測試 → ret == 2，輸出含 '本機 S3（SeaweedFS）未啟動，先跑 just db-start'；remote endpoint 案例另斷言未建立 boto3 client"
         ],
         "run": "just test-int apps/api/tests/integration/core/test_storage_local_s3.py -k storage_local_s3",
         "notes": "需要先 just db-start（storage 的 healthcheck 通過即代表 bucket afterschool-local 已建立）。"

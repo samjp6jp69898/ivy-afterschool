@@ -173,7 +173,11 @@ def test_storage_local_s3_rejects_remote_endpoint(
 ) -> None:
     monkeypatch.setenv("TEST_R2_ENDPOINT_URL", "https://acct.r2.cloudflarestorage.com")
     created_clients: list[object] = []
-    monkeypatch.setattr("boto3.client", lambda *a, **k: created_clients.append(a) or None)
+
+    def record_client(*args: object, **kwargs: object) -> None:
+        created_clients.append(args)
+
+    monkeypatch.setattr("boto3.client", record_client)
     pytester.makepyfile(_PYTESTER_TEST)
 
     result = pytester.runpytest("-p", "no:cacheprovider")
