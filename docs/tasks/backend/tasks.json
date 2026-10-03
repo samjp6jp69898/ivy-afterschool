@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 36,
-  "last_updated": "2026-10-03T12:17:49Z",
+  "version": 37,
+  "last_updated": "2026-10-03T12:18:40Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2389,7 +2389,7 @@
     {
       "id": "BACKEND-072",
       "title": "實作 resolve_effective_permissions：角色權限 + extra − revoked，展開萬用碼 *",
-      "description": "在 `apps/api/app/core/permissions.py` 新增（architecture_decisions §6、domain_spec §3 末段）。移植 ivy `utils/permissions.py::resolve_user_permissions` 的「DB 為單一事實來源、空清單不回退模板」原則；去掉 legacy snapshot、scope、tenant。\n\n```python\ndef resolve_effective_permissions(role_permissions: Iterable[str], extra_permissions: Iterable[str], revoked_permissions: Iterable[str]) -> frozenset[str]: ...\n```\n**規則**\n1. base = 角色權限；含 `*` → 展開為 `ALL_PERMISSIONS`（含日後新增的碼）。\n2. `effective = (base ∪ extra) − revoked`。revoked 可以撤掉 `*` 展開出來的單一碼（例如 admin 帳號 revoked `students:sensitive`）。\n3. 結果只保留 `is_valid_permission` 的碼；不合法的碼（DB 手動寫入、enum 改名殘留）丟棄並 `logger.warning` 一次（含碼名，不含帳號以外個資）。\n4. 純函式，不碰 DB。\n\n**驗收標準**\n- `*` 展開為全部 27 碼。\n- extra 加入、revoked 移除，revoked 優先於 extra。\n- 不合法碼被丟棄且有 warning。\n- 空角色 + 空 extra → 空集合（不回退任何預設）。",
+      "description": "在 `apps/api/app/core/permissions.py` 新增（architecture_decisions §6、domain_spec §3 末段）。移植 ivy `utils/permissions.py::resolve_user_permissions` 的「DB 為單一事實來源、空清單不回退模板」原則；去掉 legacy snapshot、scope、tenant。\n\n```python\ndef resolve_effective_permissions(role_permissions: Iterable[str], extra_permissions: Iterable[str], revoked_permissions: Iterable[str]) -> frozenset[str]: ...\n```\n**規則**\n1. base = 角色權限；含 `*` → 展開為 `ALL_PERMISSIONS`（含日後新增的碼）。\n2. `effective = (base ∪ extra) − revoked`。revoked 可以撤掉 `*` 展開出來的單一碼（例如 admin 帳號 revoked `students:sensitive`）。\n3. 結果只保留 `is_valid_permission` 的碼；不合法的碼（DB 手動寫入、enum 改名殘留）丟棄並 `logger.warning` 一次（含碼名，不含帳號以外個資）。\n4. 純函式，不碰 DB。\n\n**驗收標準**\n- `*` 展開為全部 28 碼（`ALL_PERMISSIONS`）。\n- extra 加入、revoked 移除，revoked 優先於 extra。\n- 不合法碼被丟棄且有 warning。\n- 空角色 + 空 extra → 空集合（不回退任何預設）。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/permissions.py",
       "source_ref": "BE:utils/permissions.py::resolve_user_permissions",
@@ -2410,7 +2410,7 @@
           "test_resolve_wildcard：resolve_effective_permissions(['*'], [], []) == ALL_PERMISSIONS",
           "test_resolve_extra_and_revoked：resolve_effective_permissions(['students:read','classes:read'], ['pickup:override'], ['classes:read']) == frozenset({'students:read','pickup:override'})",
           "test_resolve_revoked_beats_extra：extra=['exams:publish']、revoked=['exams:publish'] → 'exams:publish' not in 結果",
-          "test_resolve_wildcard_with_revoked：(['*'], [], ['students:sensitive']) → len == 26 且 'students:sensitive' 不在其中",
+          "test_resolve_wildcard_with_revoked：(['*'], [], ['students:sensitive']) → len == 27 且 'students:sensitive' 不在其中",
           "test_resolve_drops_invalid_with_warning：(['students:read','students:fly'], [], []) == frozenset({'students:read'})，caplog 含 'students:fly'",
           "test_resolve_empty：([], [], []) == frozenset()"
         ],
@@ -2568,7 +2568,7 @@
     {
       "id": "BACKEND-077",
       "title": "實作 RoleService.list_roles：角色清單（含有效權限與使用人數）",
-      "description": "建立 `apps/api/app/services/role_service.py`：\n```python\ndef list_roles(session: Session) -> list[RoleOut]: ...\n```\n- 依 `is_system desc, code` 排序（系統角色在前：admin、clerk、director、tutor，之後自訂角色依 code）。\n- `staff_count`：該角色**啟用中**員工數（一次 group by 查詢，不 N+1）。\n- `effective_permissions`：`resolve_effective_permissions(role.permissions, [], [])` 排序。\n\n**驗收標準**\n- 系統角色在前；自訂角色依 code 排序。\n- staff_count 只計啟用帳號。\n- admin 的 effective_permissions 為全部 27 碼，permissions 為 ['*']。",
+      "description": "建立 `apps/api/app/services/role_service.py`：\n```python\ndef list_roles(session: Session) -> list[RoleOut]: ...\n```\n- 依 `is_system desc, code` 排序（系統角色在前：admin、clerk、director、tutor，之後自訂角色依 code）。\n- `staff_count`：該角色**啟用中**員工數（一次 group by 查詢，不 N+1）。\n- `effective_permissions`：`resolve_effective_permissions(role.permissions, [], [])` 排序。\n\n**驗收標準**\n- 系統角色在前；自訂角色依 code 排序。\n- staff_count 只計啟用帳號。\n- admin 的 effective_permissions 為全部 28 碼，permissions 為 ['*']。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/role_service.py",
       "source_ref": "BE:api/permissions_admin.py::_role_query",
@@ -2590,7 +2590,7 @@
         ],
         "red_cases": [
           "test_list_roles_order_and_counts：make_role(code='front_desk') 並建 2 位啟用、1 位停用員工於該角色 → list_roles 前四筆 code 集合 == {'admin','director','clerk','tutor'}，front_desk 的 staff_count == 2",
-          "test_list_roles_admin_effective：admin 那筆 permissions == ['*']、len(effective_permissions) == 27"
+          "test_list_roles_admin_effective：admin 那筆 permissions == ['*']、len(effective_permissions) == 28"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_role_service.py -k \"test_list_roles_\"",
         "notes": ""
@@ -2865,7 +2865,7 @@
     {
       "id": "BACKEND-085",
       "title": "實作 GET /api/admin/permissions endpoint（權限碼目錄）",
-      "description": "建立 `apps/api/app/api/admin/roles.py`（`router = APIRouter(tags=['admin-roles'])`，掛到 admin_router；與 BACKEND-085 同檔）。\n- `GET /api/admin/permissions`，`Depends(require_any_permission(Permission.ROLES_READ, Permission.STAFF_READ))`。\n- 回 200 `PermissionCatalogOut`：依 `PERMISSION_GROUPS` 順序，每組含 code + label（domain_spec §2：權限碼目錄，含分組與說明）。純記憶體資料，不查 DB。\n- 移植 ivy `api/auth.py::get_permissions` 的用途；去掉 DB 權限定義表與 drift 檢查。\n\n**驗收標準**\n- 回 9 組、27 碼，順序與 BACKEND-070 一致。\n- 401、403。",
+      "description": "建立 `apps/api/app/api/admin/roles.py`（`router = APIRouter(tags=['admin-roles'])`，掛到 admin_router；與 BACKEND-085 同檔）。\n- `GET /api/admin/permissions`，`Depends(require_any_permission(Permission.ROLES_READ, Permission.STAFF_READ))`。\n- 回 200 `PermissionCatalogOut`：依 `PERMISSION_GROUPS` 順序，每組含 code + label（domain_spec §2：權限碼目錄，含分組與說明）。純記憶體資料，不查 DB。\n- 移植 ivy `api/auth.py::get_permissions` 的用途；去掉 DB 權限定義表與 drift 檢查。\n\n**驗收標準**\n- 回 9 組、28 碼，順序與 BACKEND-070 一致。\n- 401、403。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/roles.py",
       "source_ref": "BE:api/auth.py::get_permissions",
@@ -2885,7 +2885,7 @@
           "integration"
         ],
         "red_cases": [
-          "test_admin_permissions_catalog：staff_client(permissions=['roles:read']) → GET /api/admin/permissions 200，[g['key'] for g in groups] == ['dashboard','accounts','settings','students','attendance','leaves','homework','pickup','exams']，總 code 數 == 27",
+          "test_admin_permissions_catalog：staff_client(permissions=['roles:read']) → GET /api/admin/permissions 200，[g['key'] for g in groups] == ['dashboard','accounts','settings','students','attendance','leaves','homework','pickup','exams']，總 code 數 == 28",
           "test_admin_permissions_label：students 組含 {'code':'students:sensitive','label':'查看身分證、健康備註'}",
           "test_admin_permissions_401：無 cookie → 401",
           "test_admin_permissions_403：staff_client(permissions=['students:read']) → 403",

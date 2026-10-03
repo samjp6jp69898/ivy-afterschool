@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 11,
-  "last_updated": "2026-10-03T12:18:38Z",
+  "version": 12,
+  "last_updated": "2026-10-03T12:18:40Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1566,7 +1566,7 @@
           "vitest"
         ],
         "red_cases": [
-          "rolesApi lists roles and catalog：GET /admin/roles 回 [{id:'r1',code:'admin',name:'管理員',is_system:true,permissions:['*'],effective_permissions:[...27 碼],staff_count:1}] → [0].is_system === true；GET /admin/permissions 回 {groups:[{key:'dashboard',label:'儀表板',permissions:[{code:'dashboard:read',label:'首頁儀表板'}]}]} → groups[0].permissions[0].code === 'dashboard:read'",
+          "rolesApi lists roles and catalog：GET /admin/roles 回 [{id:'r1',code:'admin',name:'管理員',is_system:true,permissions:['*'],effective_permissions:[...28 碼],staff_count:1}] → [0].is_system === true；GET /admin/permissions 回 {groups:[{key:'dashboard',label:'儀表板',permissions:[{code:'dashboard:read',label:'首頁儀表板'}]}]} → groups[0].permissions[0].code === 'dashboard:read'",
           "rolesApi create update delete：POST /admin/roles body {code:'senior_tutor',name:'資深老師',description:'',permissions:['exams:publish']} 回 201 → 回傳 code === 'senior_tutor'；PATCH /admin/roles/r5 body {name:'資深課輔'}；DELETE /admin/roles/r5 回 204 → resolve undefined",
           "rolesApi surfaces grant error details：PATCH 回 403 {error:{code:'cannot_grant_permissions',message:'不可授出自己沒有的權限',details:{permissions:['staff:write']}}} → reject code 'cannot_grant_permissions'、details 深等於 {permissions:['staff:write']}"
         ],
@@ -2137,7 +2137,7 @@
           "vitest"
         ],
         "red_cases": [
-          "PermissionPicker groups permissions with counts：catalog 9 組 27 碼、modelValue ['students:read','students:write'] → '班級與學生' 組標題含 '已選 2 / 6'",
+          "PermissionPicker groups permissions with counts：catalog 9 組 28 碼、modelValue ['students:read','students:write'] → '班級與學生' 組標題含 '已選 2 / 7'",
           "PermissionPicker emits sorted selection：勾選 'guardians:write' → emitted('update:modelValue')[0][0] 深等於 ['guardians:write','students:read','students:write']",
           "PermissionPicker disables ungrantable additions but allows removal：grantable 不含 'staff:write'、modelValue 含 'staff:read' 不含 'staff:write' → 'staff:write' checkbox disabled；grantable 不含 'audit:read' 但 modelValue 含 → 'audit:read' 可取消，取消後 emit 陣列不含 'audit:read'",
           "PermissionPicker select-all only grantable codes：grantable 只含 pickup:read、pickup:operate → 點 '接送' 組全選 → emit 陣列含 'pickup:read','pickup:operate'，不含 'pickup:override'",
