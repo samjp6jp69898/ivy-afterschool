@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 53,
-  "last_updated": "2026-10-03T13:19:48Z",
+  "version": 54,
+  "last_updated": "2026-10-03T13:22:29Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1605,7 +1605,7 @@
       "granularity_unit": "config",
       "target_path": "compose.yaml",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-002",
@@ -1631,9 +1631,9 @@
         "notes": "另跑（需 Docker，包在 flock /tmp/afterschool_db.lock 內）：docker compose -f compose.yaml config -q && just db-start && apps/api/.venv/bin/python -c \"import psycopg; c = psycopg.connect('postgresql://postgres:postgres@127.0.0.1:54342/postgres'); print(c.execute('show server_version_num').fetchone()[0])\" | grep -q '^17' && test \"$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:54344/healthz)\" = 200 && test \"$(curl -s -o /dev/null -w '%{http_code}' --aws-sigv4 aws:amz:us-east-1:s3 --user afterschool:afterschool-local-secret http://127.0.0.1:54344/afterschool-local/)\" = 200 && test \"$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:54344/afterschool-local/)\" = 403"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-infra",
+        "notes": "通過。TDD：紅燈 195c549 先於實作 7f714d9；在紅燈 commit 快照實跑 6 紅 1 綠（test_compose_db_start_requires_docker_daemon 為 INFRA-002 既有的 docker info 守衛，紅燈時已綠，合理）。`just test scripts/tests/test_compose.py -k compose` 7 passed，--collect-only 對照 red_cases 全部選到（test_compose_db_start_invokes_compose 的 info exit 1 情境拆成 test_compose_db_start_requires_docker_daemon）。db-start / db-stop 測試以 fake_bin 前置 PATH 假造 docker 與 supabase，不會呼叫真 CLI；test_justfile.py 21 passed。實機（flock /tmp/afterschool_db.lock）：compose config -q 通過；重跑 just db-start 冪等（Running → Healthy，exit 0）；server_version_num 170011；/healthz 200；簽章 list 200；匿名 list / 根路徑 / PUT 物件 / GET 物件 / 建 bucket 全部 403；錯誤 secret 與不存在的 access key 簽章皆 403；docker ps 只有 127.0.0.1:54342->5432、127.0.0.1:54344->8333 兩個發佈 port，主機上 8888 / 9333 / 23646 等 filer / master / admin port 連不上；映像 postgres:17.11、chrislusf/seaweedfs:4.48。426aab9 規格修正逐欄比對：只把 MinIO 換成 SeaweedFS 並同步驗收細節（移除 console 54345 與 storage-init、bucket 改由 -bucket 建立、healthcheck 改 /healthz + filer /buckets/<bucket>/），下游介面（bucket afterschool-local、帳密 afterschool / afterschool-local-secret、S3 port 54344、DB 54342）未變；各文件未留歷史敘述，repo 內已無 MinIO / storage-init / 54345 殘字（supabase/config.toml 的 smtp_port 屬 INFRA-047 移除範圍）。lint / typecheck（test_compose.py）乾淨。殘留（不擋）：(1) port 結構測試只鎖 host port，不鎖 container port，把 127.0.0.1:54344 改映射到 filer 8888 時結構測試仍綠，只有 tdd.notes 的實機匿名 403 檢查能擋；(2) 結構測試未檢查 network_mode: host / -admin.ui=false；(3) justfile db-reset 的註解仍寫「套用全部 migration + seed」，屬 INFRA-046 改寫範圍。"
       }
     },
     {
