@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 27,
-  "last_updated": "2026-10-03T13:34:39Z",
+  "version": 28,
+  "last_updated": "2026-10-03T14:34:16Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -3123,7 +3123,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3Switch.vue",
       "source_ref": "FE:src/parent/components/m3/M3Switch.vue::emit",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r3",
       "depends_on": [
         "PARENT-001",
