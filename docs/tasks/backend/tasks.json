@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 77,
-  "last_updated": "2026-10-03T14:59:35Z",
+  "version": 78,
+  "last_updated": "2026-10-03T15:25:57Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14586,8 +14586,8 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/core/test_storage_local_s3.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-013",
         "BACKEND-014",
