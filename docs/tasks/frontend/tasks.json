@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 62,
-  "last_updated": "2026-10-03T13:32:45Z",
+  "version": 63,
+  "last_updated": "2026-10-03T13:36:30Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1082,7 +1082,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/FormDialog.vue",
       "source_ref": "FE:src/components/common/FormDialog.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013",
@@ -1112,9 +1112,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
-        "reviewer": "review-r3",
-        "notes": "打回。tdd.run 全綠；紅燈 commit 先於實作；web-lint 與暫時 tsconfig 的 vue-tsc 對本批 20 個檔案乾淨。稿 approved。逐條以突變驗證：在元件副本上破壞行為、以指向副本的 spec 副本執行，暫存檔皆已刪除。其餘 decisions 都有測試且突變皆紅（footer 順序、送出不自行關閉、sm/md/lg 寬度、<768 fullscreen、取消 / X / Esc / 遮罩的 dirty 確認、loading 時送出轉圈且停用、取消停用、X 隱藏、Esc 與遮罩無效、submitDisabled / hideFooter、opened 後 autofocus 並略過 disabled / readonly / checkbox / radio / 各種 picker，共 31 個突變）；before-close 改法在測試 commit 3f98907 就寫入 description 與 red_cases，實作 commit 只改了 spec 的 clickMessageBox 輔助函式（改取最後一個確認框），未放寬斷言；以不 stub transition 的暫時測試跑真實流程也正確。打回原因：已核可稿 component-common-extra.html 的 decision「視窗寬 < 768 時 fullscreen，footer 仍固定在底部」沒有落實。FormDialog.vue 的樣式只有 footer 的 flex 排列兩條；Element Plus 2.14.7 的 .el-dialog.is-fullscreen 只設 height:100%、overflow:auto，dialog 不是 flex column、footer 也不是 sticky。反例：寬 375px 下開只有一個欄位的表單，footer 緊貼欄位、停在畫面上半部；表單很長時整個 dialog 一起捲動，footer 被捲走。"
+        "status": "pass",
+        "reviewer": "review-r3-fe",
+        "notes": "初審（review-r3）打回：tdd.run 全綠；紅燈 commit 先於實作；web-lint 與暫時 tsconfig 的 vue-tsc 對本批 20 個檔案乾淨。稿 approved。逐條以突變驗證：在元件副本上破壞行為、以指向副本的 spec 副本執行，暫存檔皆已刪除。其餘 decisions 都有測試且突變皆紅（footer 順序、送出不自行關閉、sm/md/lg 寬度、<768 fullscreen、取消 / X / Esc / 遮罩的 dirty 確認、loading 時送出轉圈且停用、取消停用、X 隱藏、Esc 與遮罩無效、submitDisabled / hideFooter、opened 後 autofocus 並略過 disabled / readonly / checkbox / radio / 各種 picker，共 31 個突變）；before-close 改法在測試 commit 3f98907 就寫入 description 與 red_cases，實作 commit 只改了 spec 的 clickMessageBox 輔助函式（改取最後一個確認框），未放寬斷言；以不 stub transition 的暫時測試跑真實流程也正確。打回原因：已核可稿 component-common-extra.html 的 decision「視窗寬 < 768 時 fullscreen，footer 仍固定在底部」沒有落實。FormDialog.vue 的樣式只有 footer 的 flex 排列兩條；Element Plus 2.14.7 的 .el-dialog.is-fullscreen 只設 height:100%、overflow:auto，dialog 不是 flex column、footer 也不是 sticky。反例：寬 375px 下開只有一個欄位的表單，footer 緊貼欄位、停在畫面上半部；表單很長時整個 dialog 一起捲動，footer 被捲走。 【複審 review-r3-fe 通過】打回項已修正。Playwright（Chromium + Vite dev server + Element Plus 真實樣式，暫時 harness 已刪）：寬 375x667 單一欄位時 dialog 高 667、header 16-56、body 56-603、footer 603-651（貼底，底部 16px 為 el-dialog 自身 padding），不再停在上半部；30 個欄位時 body scrollHeight 1800 / clientHeight 547、overflow-y auto，body 捲到底後 footer 仍在 603-651，dialog 本身不捲動（scrollHeight == clientHeight == 667）。桌機寬度 1024 時 .el-dialog 為 display:block、無 is-fullscreen，版面與修正前相同。非 scoped 樣式的選擇器全部以 .el-dialog.form-dialog.is-fullscreen 限定，form-dialog class 只出現在 FormDialog.vue，TempPasswordDialog / RenotifyChoiceDialog 未使用，不外溢。tdd.run 10/10 全綠；web-lint 對 FormDialog.vue / spec 乾淨；測試 commit 7ba8a6d 先於實作 86e32d3；8bd60c4..86e32d3 對 040 的異動只有 form-dialog class、非 scoped style 與新增的一條測試，其餘未動。對 ?raw 斷言做 9 個字串突變：flex-direction column 改 row、container 或 body 選擇器拿掉 .is-fullscreen、body overflow-y 改 hidden、min-height 改非 0 全部抓得到。殘留（不打回，無法構造出行為錯誤的反例）：(1) header / footer 的 flex:none 規則被刪或選擇器寫錯時測試仍綠，但 header / footer 的 min-height:auto 本來就不會被壓縮，實測版面不變；(2) dialog 的 overflow:hidden 改回 auto 測試仍綠，body 已 min-height:0 且自己捲動，dialog 不會溢出；(3) 把規則整段放進 CSS 註解的突變抓不到，屬刻意破壞；(4) 版面行為只靠 ?raw 與 class 結構測試保護，沒有真實瀏覽器 e2e，日後改動樣式時需人工以 375px 重驗。"
       }
     },
     {
