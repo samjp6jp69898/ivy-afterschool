@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 32,
-  "last_updated": "2026-10-03T12:49:13Z",
+  "version": 33,
+  "last_updated": "2026-10-03T12:49:59Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1045,7 +1045,7 @@
     {
       "id": "FRONTEND-039",
       "title": "實作 components/common/PageHeader.vue：頁面標題、副標與動作區",
-      "description": "建立 `apps/web/src/components/common/PageHeader.vue`。移植 ivy `FE:src/components/common/PageHeader.vue`（props 相同）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-common.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。一張稿逐一展示 FRONTEND-039~043 各元件的全部狀態。\n\n**props / slots**：`title: string`、`subtitle?: string`；slot `actions`（右側按鈕群）、slot `default`（標題下方附加內容，例如篩選摘要）。手機寬度時 actions 換行到標題下方。\n\n**驗收標準**\n- 標題、副標、actions slot 正確渲染；沒有副標時不渲染副標元素。",
+      "description": "建立 `apps/web/src/components/common/PageHeader.vue`。移植 ivy `FE:src/components/common/PageHeader.vue`（props 相同）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-common.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。一張稿逐一展示 FRONTEND-039、041、042 各元件的全部狀態；040/043 在 `docs/mockups/component-common-extra.html`。\n\n**props / slots**：`title: string`、`subtitle?: string`；slot `actions`（右側按鈕群）、slot `default`（標題下方附加內容，例如篩選摘要）。手機寬度時 actions 換行到標題下方。\n\n**驗收標準**\n- 標題、副標、actions slot 正確渲染；沒有副標時不渲染副標元素。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/PageHeader.vue",
       "source_ref": "FE:src/components/common/PageHeader.vue::default",
@@ -1078,7 +1078,7 @@
     {
       "id": "FRONTEND-040",
       "title": "實作 components/common/FormDialog.vue：統一的表單對話框（送出 / 取消 / loading / 未儲存提醒）",
-      "description": "建立 `apps/web/src/components/common/FormDialog.vue`。移植 ivy `FE:src/components/common/FormDialog.vue` 的 size 分型、dirty 關閉確認（`confirmDiscardChanges`）、手機滿版；**去掉** requiredLegend、enterSubmit、autofocus 以外的進階選項。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-common.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。一張稿逐一展示 FRONTEND-039~043 各元件的全部狀態。\n\n**props / emits**\n- `modelValue: boolean`、`title: string`、`size?: 'sm' | 'md' | 'lg'`（寬 420 / 560 / 800，預設 md）、`loading?: boolean`、`submitText?: string`（預設「儲存」）、`cancelText?: string`（預設「取消」）、`submitDisabled?: boolean`、`dirty?: boolean`、`hideFooter?: boolean`、`autofocus?: boolean`（預設 true）。\n- emits `update:modelValue`、`submit`、`closed`。\n**行為**\n- 送出按鈕：loading 時顯示 loading 且 disabled；點擊 emit `submit`（不自己關閉，由父層成功後關）。\n- 關閉（取消、X、Esc、點遮罩）：`dirty` 為 true 時先呼叫 FRONTEND-046 `confirmDiscardChanges()`，使用者取消則保持開啟；loading 中不可關閉。\n- 視窗寬 < 768 時 fullscreen。\n- 開啟後聚焦第一個可輸入欄位（autofocus）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/common/FormDialog.vue`。移植 ivy `FE:src/components/common/FormDialog.vue` 的 size 分型、dirty 關閉確認（`confirmDiscardChanges`）、手機滿版；**去掉** requiredLegend、enterSubmit、autofocus 以外的進階選項。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-common-extra.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。一張稿逐一展示 FRONTEND-040、043 各元件的全部狀態；共用元件 039/041/042 在 `docs/mockups/component-common.html`。\n\n**props / emits**\n- `modelValue: boolean`、`title: string`、`size?: 'sm' | 'md' | 'lg'`（寬 420 / 560 / 800，預設 md）、`loading?: boolean`、`submitText?: string`（預設「儲存」）、`cancelText?: string`（預設「取消」）、`submitDisabled?: boolean`、`dirty?: boolean`、`hideFooter?: boolean`、`autofocus?: boolean`（預設 true）。\n- emits `update:modelValue`、`submit`、`closed`。\n**行為**\n- 送出按鈕：loading 時顯示 loading 且 disabled；點擊 emit `submit`（不自己關閉，由父層成功後關）。\n- 關閉（取消、X、Esc、點遮罩）：`dirty` 為 true 時先呼叫 FRONTEND-046 `confirmDiscardChanges()`，使用者取消則保持開啟；loading 中不可關閉。\n- 視窗寬 < 768 時 fullscreen。\n- 開啟後聚焦第一個可輸入欄位（autofocus）。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/FormDialog.vue",
       "source_ref": "FE:src/components/common/FormDialog.vue::default",
@@ -1114,7 +1114,7 @@
     {
       "id": "FRONTEND-041",
       "title": "實作 components/common/AdminListToolbar.vue：搜尋、篩選群組、筆數與動作區",
-      "description": "建立 `apps/web/src/components/common/AdminListToolbar.vue`。移植 ivy `FE:src/components/common/AdminListToolbar.vue` 的 FilterGroup 結構與「全部」選項；**去掉** export 按鈕內建（改由 actions slot）、mobile 卡片切換。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-common.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。一張稿逐一展示 FRONTEND-039~043 各元件的全部狀態。\n\n**props / emits**\n```ts\nexport interface FilterOption { label: string; value: string | number | boolean }\nexport interface FilterGroup { key: string; label: string; options: FilterOption[]; clearable?: boolean }   // 以 el-select 呈現；clearable 預設 true，清除 = 「全部」\nprops: { search?: string; searchPlaceholder?: string; filters?: FilterGroup[]; filterValues?: Record<string, unknown>; total?: number }\nemits: { 'update:search': [string]; 'update:filterValues': [Record<string, unknown>] }\nslots: extra-filters（下拉篩選之後、「共 N 筆」之前；放 StudentSelect、日期區間、「含封存」勾選等非下拉篩選）、actions（右側）\n```\n- 搜尋輸入 debounce 300ms 後 emit 去頭尾空白的值；按 Enter 立即 emit。\n- 選擇篩選 → emit 合併後的新物件（不修改 props 物件）；清除 → 該 key 設為 `undefined`。\n- `total` 有值時顯示「共 N 筆」。\n- `extra-filters` slot 有內容時渲染在最後一個下拉篩選之後、筆數之前；沒內容時不渲染容器。\n\n**驗收標準**：每一條對應下列 red_case（fake timers）。",
+      "description": "建立 `apps/web/src/components/common/AdminListToolbar.vue`。移植 ivy `FE:src/components/common/AdminListToolbar.vue` 的 FilterGroup 結構與「全部」選項；**去掉** export 按鈕內建（改由 actions slot）、mobile 卡片切換。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-common.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。一張稿逐一展示 FRONTEND-039、041、042 各元件的全部狀態；040/043 在 `docs/mockups/component-common-extra.html`。\n\n**props / emits**\n```ts\nexport interface FilterOption { label: string; value: string | number | boolean }\nexport interface FilterGroup { key: string; label: string; options: FilterOption[]; clearable?: boolean }   // 以 el-select 呈現；clearable 預設 true，清除 = 「全部」\nprops: { search?: string; searchPlaceholder?: string; filters?: FilterGroup[]; filterValues?: Record<string, unknown>; total?: number }\nemits: { 'update:search': [string]; 'update:filterValues': [Record<string, unknown>] }\nslots: extra-filters（下拉篩選之後、「共 N 筆」之前；放 StudentSelect、日期區間、「含封存」勾選等非下拉篩選）、actions（右側）\n```\n- 搜尋輸入 debounce 300ms 後 emit 去頭尾空白的值；按 Enter 立即 emit。\n- 選擇篩選 → emit 合併後的新物件（不修改 props 物件）；清除 → 該 key 設為 `undefined`。\n- `total` 有值時顯示「共 N 筆」。\n- `extra-filters` slot 有內容時渲染在最後一個下拉篩選之後、筆數之前；沒內容時不渲染容器。\n\n**驗收標準**：每一條對應下列 red_case（fake timers）。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/AdminListToolbar.vue",
       "source_ref": "FE:src/components/common/AdminListToolbar.vue::default",
@@ -1149,7 +1149,7 @@
     {
       "id": "FRONTEND-042",
       "title": "實作 components/common/EmptyState.vue：空狀態與錯誤狀態",
-      "description": "建立 `apps/web/src/components/common/EmptyState.vue`。移植 ivy `FE:src/components/common/EmptyState.vue` 的 variant 設計；**去掉** mobile variant。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-common.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。一張稿逐一展示 FRONTEND-039~043 各元件的全部狀態。\n\n**props / slots**：`title: string`、`description?: string`、`variant?: 'default' | 'error' | 'inline'`、`icon?: Component`；slot `action`（例如「新增學生」或「重試」按鈕）。`error` variant 使用 danger 色與警告 icon，`inline` 為表格內的精簡版（無大 icon）。\n\n**驗收標準**\n- 文字與 action slot 正確渲染；variant 套用對應 class。",
+      "description": "建立 `apps/web/src/components/common/EmptyState.vue`。移植 ivy `FE:src/components/common/EmptyState.vue` 的 variant 設計；**去掉** mobile variant。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-common.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。一張稿逐一展示 FRONTEND-039、041、042 各元件的全部狀態；040/043 在 `docs/mockups/component-common-extra.html`。\n\n**props / slots**：`title: string`、`description?: string`、`variant?: 'default' | 'error' | 'inline'`、`icon?: Component`；slot `action`（例如「新增學生」或「重試」按鈕）。`error` variant 使用 danger 色與警告 icon，`inline` 為表格內的精簡版（無大 icon）。\n\n**驗收標準**\n- 文字與 action slot 正確渲染；variant 套用對應 class。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/EmptyState.vue",
       "source_ref": "FE:src/components/common/EmptyState.vue::default",
@@ -1182,7 +1182,7 @@
     {
       "id": "FRONTEND-043",
       "title": "實作 components/common/StatCard.vue：統計卡（數值、語意色、提示、可點擊導頁）",
-      "description": "建立 `apps/web/src/components/common/StatCard.vue`，儀表板（FRONTEND-261）與出勤 / 作業頁摘要使用。移植 ivy `FE:src/components/common/StatCard.vue` 的 label / value / color；新增 `to` 與 `loading`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-common.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。一張稿逐一展示 FRONTEND-039~043 各元件的全部狀態。\n\n**props**：`label: string`、`value: string | number`、`tone?: Tone`（FRONTEND-005，預設 info）、`hint?: string`、`to?: RouteLocationRaw`、`loading?: boolean`、`active?: boolean`（作為篩選 chip 使用時的選中態）；emits `click`。\n- `to` 有值時整張卡為連結（`router.push`）；沒有時點擊 emit `click`。\n- loading 時以 skeleton 取代數值。\n\n**驗收標準**\n- 顯示 label / value / hint；tone 對應 class。\n- `to` 導頁；loading 不顯示數值。",
+      "description": "建立 `apps/web/src/components/common/StatCard.vue`，儀表板（FRONTEND-261）與出勤 / 作業頁摘要使用。移植 ivy `FE:src/components/common/StatCard.vue` 的 label / value / color；新增 `to` 與 `loading`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-common-extra.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。一張稿逐一展示 FRONTEND-040、043 各元件的全部狀態；共用元件 039/041/042 在 `docs/mockups/component-common.html`。\n\n**props**：`label: string`、`value: string | number`、`tone?: Tone`（FRONTEND-005，預設 info）、`hint?: string`、`to?: RouteLocationRaw`、`loading?: boolean`、`active?: boolean`（作為篩選 chip 使用時的選中態）；emits `click`。\n- `to` 有值時整張卡為連結（`router.push`）；沒有時點擊 emit `click`。\n- loading 時以 skeleton 取代數值。\n\n**驗收標準**\n- 顯示 label / value / hint；tone 對應 class。\n- `to` 導頁；loading 不顯示數值。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/StatCard.vue",
       "source_ref": "FE:src/components/common/StatCard.vue::default",
