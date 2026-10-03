@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 77,
-  "last_updated": "2026-10-03T14:49:30Z",
+  "version": 78,
+  "last_updated": "2026-10-03T14:51:12Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1686,7 +1686,7 @@
       "granularity_unit": "script",
       "target_path": "scripts/db_reset_local.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-008",
@@ -1716,9 +1716,9 @@
         "notes": "整合案例只操作 reset_probe_ 前綴的暫存 database，不碰共用的 postgres database；set_local_backend_password 設定的值與現值相同，不影響其他測試。另跑（包在 flock /tmp/afterschool_db.lock 內）：just db-reset --yes && just test-int apps/api/tests/integration/db/test_fixtures.py -k backend_conn_is_app_backend"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-infra",
+        "notes": "通過。紅燈 491b246 先於實作 60c2d77（紅燈時 scripts/db_reset_local.py 不存在）。tdd.run 兩段（flock db lock）：unit 4 passed、integration 2 passed，--collect-only 合計選到 6 條 red_case；跑完無殘留 reset_probe_* database；lint / typecheck 乾淨。只連本機：直接連線（reset_database、set_local_backend_password、upgrade_head 後的查詢）一律先以 db_urls.assert_loopback 依 os.environ 檢查、連線後以 hostaddr 複驗；alembic 子行程移除 PGHOST / PGHOSTADDR / PGSERVICE / PGSERVICEFILE 並以移除後的環境再檢查一次，兩邊一致。反例實測：`just db-reset --yes` 帶 PGHOSTADDR=10.0.0.8、PGSERVICE=remote 皆立即 exit 2（0 秒，未連線）；函式層以 URL ?hostaddr=、?host=、?service=、遠端 host、URL 無 host + PGHOST 呼叫 reset_database 與 upgrade_head 全部 ValueError，psycopg.connect 呼叫 0 次；只設 PGSERVICEFILE 不影響連線目標（無 service 名稱時 libpq 不讀），照常重建本機。justfile db-reset 不再呼叫 supabase / check-rls；--db-url、--linked 被白名單擋下，非 TTY 無 --yes exit 1；test_justfile.py 只有既知的 db_new_migration_validates_name（INFRA-021 範圍）失敗。實跑 just db-reset --yes：alembic head = db001，stdout 不含 app_backend_local；app_backend:app_backend_local 可登入；test_fixtures.py 由 2 中止 + 4 失敗變為 19 passed / 4 failed，剩下 4 條為 DB-042 範圍（anon 角色、secure_table）。殘留（不擋）：(a) 本機密碼以 SQL literal 送出，server 開 log_statement 時會出現在本機 log（固定開發值，已公開在 .env.example）；(b) UV_ENV_FILE 指定的 dotenv 會在子行程移除 PG* 之後由 uv 載入，需呼叫端刻意設定；(c) integration 測試的 _owner() 連線前不做 loopback 檢查（連線後以 hostaddr 斷言，且 reset fixture 已清除 PG* 變數）。"
       }
     },
     {
