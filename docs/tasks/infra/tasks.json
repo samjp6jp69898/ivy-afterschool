@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 47,
-  "last_updated": "2026-10-03T12:58:13Z",
+  "version": 48,
+  "last_updated": "2026-10-03T13:01:23Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -60,15 +60,13 @@
     {
       "id": "INFRA-003",
       "title": "初始化 Supabase CLI 並設定 supabase/config.toml（5434x port、啟用 storage）",
-      "description": "在 repo root 執行 `supabase init` 產生 `supabase/config.toml`，再依下列規格修改。可參考 `/Users/user/land/land_house_scraper/supabase/config.toml`（它用 5433x，本專案用 5434x）。\n\n**基本**：`project_id = \"afterschool\"`。`[db] major_version = 17`（與 Supabase 雲端新專案一致；若雲端專案版本不同，以雲端為準並同步修改）。\n\n**port 配置**（全部避開 5432x 與 5433x，其他專案在用）：\n| 設定 | port |\n|---|---|\n| `[db] shadow_port` | 54340 |\n| `[api] port` | 54341 |\n| `[db] port` | 54342 |\n| `[studio] port` | 54343 |\n| `[inbucket] port` / `smtp_port` / `pop3_port` | 54344 / 54345 / 54346 |\n| `[analytics] port` | 54347 |\n| `[edge_runtime] inspector_port` | 54348 |\n| `[db.pooler] port` | 54349 |\n\n**服務開關**：\n- `[storage] enabled = true`，`file_size_limit = \"10MiB\"`。\n- **不在 config.toml 宣告任何 `[storage.buckets.*]`**：bucket 一律由 DB-034 的 migration 建立，讓本機與雲端用同一份 SQL，避免兩處設定漂移。\n- `[realtime] enabled = false`（即時推送走 FastAPI WebSocket，不對外暴露 Realtime）。\n- `[edge_runtime] enabled = false`、`[analytics] enabled = false`、`[db.pooler] enabled = false`。\n- `[auth]`：本專案不使用 Supabase Auth（`docs/architecture_decisions.md` §2）。設 `enabled = false`；若關閉後 storage 無法啟動，改為 `enabled = true` 並設 `enable_signup = false`、`[auth.email] enable_signup = false`、`enable_anonymous_sign_ins = false`，並把原因寫進本 task 的 `risk_notes`。\n- `[db.seed] enabled = true`、`sql_paths = [\"./seed.sql\"]`（seed 內容由 DB 區域負責）。\n- `[studio] api_url = \"http://127.0.0.1\"`。\n\n建立 `supabase/migrations/.gitkeep`（migration 由 DB 區域新增）。\n\n**驗收標準**：\n- `supabase/config.toml` 不含任何 5432x / 5433x port。\n- `just db-start` 成功，`supabase status` 顯示 API URL `http://127.0.0.1:54341`、DB URL 含 `127.0.0.1:54342`、Studio `http://127.0.0.1:54343`。\n- `psql postgresql://postgres:postgres@127.0.0.1:54342/postgres -c 'select 1'` 回 1。\n- Realtime 容器沒有啟動（`docker ps` 無 `supabase_realtime_afterschool`）。\n- Storage 服務啟動：`curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:54341/storage/v1/version` 回 200，且 `storage.buckets` 表存在（`select to_regclass('storage.buckets')` 不為 NULL）。\n- config.toml 不含 `[storage.buckets.` 區塊。\n- 在沒有任何 migration 的情況下 `just db-reset --yes` 成功。",
+      "description": "由 INFRA-044（compose.yaml 的本機 Postgres / MinIO）負責；supabase/ 目錄的移除由 INFRA-047 負責。",
       "granularity_unit": "config",
       "target_path": "supabase/config.toml",
       "source_ref": null,
-      "status": "done",
+      "status": "superseded",
       "assignee_session": "impl-infra-r1",
-      "depends_on": [
-        "INFRA-001"
-      ],
+      "depends_on": [],
       "suggested_model": "sonnet-5",
       "risk_notes": "雲端 Supabase 專案的 Postgres 主版號與 Storage 版本需與本機 CLI 一致，否則 DB-034 的 storage.buckets 欄位可能不同。",
       "open_design_questions": [],
@@ -190,17 +188,13 @@
     {
       "id": "INFRA-007",
       "title": "實作 scripts/check_rls.py：找出未開 RLS 或對 anon / authenticated 開放的表",
-      "description": "新增 `scripts/check_rls.py`，連線到 Postgres，檢查指定 schema（預設 `public`）是否符合 `docs/architecture_decisions.md` §5「RLS 一律開啟且不給 anon / authenticated 任何 policy」。可參考 `/Users/user/land/land_house_scraper/scripts/check_rls.py` 的 DB 端檢查部分（本專案不做 migration 靜態掃描）。用 `apps/api/.venv` 的 python 執行（需要 psycopg），只跑 `select`，完全唯讀。\n\n**函式介面**（供測試直接呼叫）：\n```python\n@dataclass(frozen=True)\nclass Violation:\n    relation: str      # schema.name\n    kind: str          # 'rls_disabled' | 'policy' | 'grant'\n    detail: str        # 例如 'policy p_read to anon'、'SELECT to authenticated'\n\ndef find_violations(conn: psycopg.Connection, schema: str = \"public\") -> list[Violation]: ...\ndef main(argv: list[str] | None = None) -> int: ...\n```\n\n**檢查規則**（受檢集合一律從 `pg_catalog` 動態列舉，不寫死表名）：\n1. schema 內每一張 `relkind in ('r', 'p')` 的表：`relrowsecurity = false` → `rls_disabled`。\n2. 上述表在 `pg_policies` 中，`roles` 含 `anon`、`authenticated`、`service_role` 或 `public` 的 policy → `policy`。\n3. schema 內任何 relation（表、view、materialized view、sequence）對 `anon`、`authenticated`、`service_role` 或 `PUBLIC`（`aclexplode(relacl)` 的 grantee 0，等同授給 anon）有任何 privilege → `grant`，detail 為 `<PRIVILEGE> to <role>`（PUBLIC 顯示為 `public`）。\n結果依 relation、kind 排序。\n\n**CLI**：`python scripts/check_rls.py [--db-url URL] [--schema public] [--allow-empty] [--allow-remote]`。\n- `--db-url` 預設 `postgresql://postgres:postgres@127.0.0.1:54342/postgres`。host 不是 `127.0.0.1` / `localhost` / `::1` 時，沒帶 `--allow-remote` 就 exit 2（供 INFRA-038 對雲端驗證時明確開啟）。\n- schema 內沒有任何表：沒帶 `--allow-empty` 時 exit 2，訊息「schema public 沒有任何表，檢查結果無意義」（空集合上的「全部合格」是恆真）。\n- 有違規：逐行印 `relation  kind  detail`，exit 1；沒有違規：印受檢表數量，exit 0。\n- 連線失敗：exit 2，訊息提示 `just db-start`。\n\n**justfile**：新增 `check-rls *ARGS` recipe（`{{root}}/apps/api/.venv/bin/python {{root}}/scripts/check_rls.py \"$@\"`）；`db-reset` 在 `supabase db reset` 成功後執行 `check-rls --allow-empty`，違規時 db-reset exit 非 0。\n\n**驗收標準**：每一條對應下列 red_case。測試在本機 DB 開一個 transaction、建立唯一名稱的暫存 schema（例如 `rls_probe_<uuid8>`）並在其中建表，`find_violations(conn, schema=...)` 檢查後整個 rollback，不留下任何物件。",
+      "description": "由 DB-040（grant 收尾 revision 與整合測試）負責；check_rls 檔案與 recipe 的移除由 INFRA-047 負責。",
       "granularity_unit": "script",
       "target_path": "scripts/check_rls.py",
       "source_ref": null,
-      "status": "done",
+      "status": "superseded",
       "assignee_session": "impl-infra-r2",
-      "depends_on": [
-        "INFRA-003",
-        "INFRA-004",
-        "INFRA-008"
-      ],
+      "depends_on": [],
       "suggested_model": "fable-5",
       "risk_notes": "service_role 一併受檢，對齊 DB-001 收回 service_role 對 public 表權限的決策。Supabase 對 public schema 預設會把新表 grant 給 anon / authenticated / service_role，DB-001 以 alter default privileges 撤銷；若之後有物件不是以 postgres 角色建立，本檢查會對它報 grant，屬正確行為。",
       "open_design_questions": [],
@@ -314,21 +308,21 @@
     {
       "id": "INFRA-010",
       "title": "建立整合測試 DB fixture：交易 rollback 的 db_session 與需要 commit 時的 committing_db_session",
-      "description": "建立 `apps/api/tests/integration/conftest.py`，提供 BACKEND repository / service 整合測試用的 SQLAlchemy session fixture。只連本機 Supabase（`docs/testing_conventions.md` §3）。DB-002 的 `apps/api/tests/integration/db/conftest.py` 提供 psycopg 層級的 `owner_conn` 等 fixture，本 task 不重複那些功能。\n\n連線 URL 的解析與 loopback 守衛使用 INFRA-041 的 `apps/api/tests/support/db_urls.py`（`backend_url()`、`owner_url()`、`assert_loopback()`）。\n\n**apps/api/tests/integration/conftest.py**：\n- `db_engine`（session scope）：以 `backend_url()` 建 engine（`pool_pre_ping=True`）。建立前呼叫 `assert_loopback`，失敗時 `pytest.exit(訊息, returncode=2)`；第一次連線失敗時 `pytest.exit(\"本機 Supabase 未啟動或 app_backend 無法登入，先跑 just db-start 與 just db-reset --yes\", returncode=2)`，避免每個測試各自報一次錯。連線成功後先以 INFRA-041 的 `assert_connected_loopback(conn.connection.driver_connection.info.hostaddr)` 複驗實際連線位址（失敗時 `pytest.exit(訊息, returncode=2)`；判斷邏輯的反例由 INFRA-041 的單元測試涵蓋），再查 `select current_user, r.rolsuper, r.rolbypassrls from pg_roles r where r.rolname = current_user`：`current_user` 不是 `app_backend`，或角色帶 superuser / BYPASSRLS 時 `pytest.exit(\"db_session 必須以 app_backend 連線，禁止以 owner 角色繞過 RLS：<role>\", returncode=2)`。**不提供任何 fallback**：連不上 app_backend 就停止，不得改用 owner 連線執行（`docs/testing_conventions.md`）。\n- `db_session`（function scope）：`conn = engine.connect(); trans = conn.begin(); session = Session(bind=conn, join_transaction_mode=\"create_savepoint\", expire_on_commit=False)`；yield session；結束時 `session.close(); trans.rollback(); conn.close()`。被測程式碼呼叫 `session.commit()` 只會釋放 savepoint，測試結束仍全部 rollback。\n- `committing_db_session`（function scope）：給需要真 commit 語意的測試（outbox、after-commit 通知）。必須搭配 marker `@pytest.mark.cleanup_tables(\"notifications\", \"notification_outbox\", ...)`；沒有 marker 時 `pytest.fail(\"committing_db_session 必須搭配 cleanup_tables marker\")`。marker 與 seed 表檢查在建立 `db_engine` 之前執行（以 `request.getfixturevalue(\"db_engine\")` 延後取得），檢查失敗時不連 DB。yield 一個綁 `db_engine` 的一般 Session；測試結束後以 `owner_url()` 的連線執行 `truncate <tables> restart identity cascade` 並 commit。owner 連線只用於清表這個明確用途，被測程式碼拿到的 session 一律是 app_backend。\n- seed 表保護：`cleanup_tables` 列出 `roles`、`system_settings`、`subjects`、`exam_types` 任一個（含 `public.` 前綴寫法）時 `pytest.fail(\"不可清空 seed 表：<name>\")`，不執行 truncate。\n- 在本 conftest 註冊 marker `cleanup_tables`（`pytest_configure` 呼叫 `config.addinivalue_line`），配合 strict-markers。\n\n**驗收標準**：每一條對應下列 red_case。本 task 的測試不依賴任何業務表：用 owner 連線在 session 開始時建立 schema `infra_probe` 與表 `infra_probe.items(id serial primary key, name text)`（並 `grant usage on schema infra_probe to app_backend; grant all on infra_probe.items to app_backend; grant usage on sequence ...`），session 結束 `drop schema infra_probe cascade`。owner 連線只用於建立 / 刪除探針 schema 與驗證清表結果；`db_session` / `committing_db_session` 一律以 app_backend 執行（依賴 DB-001 建立角色、DB-039 的 seed 設定本機登入密碼）。",
+      "description": "建立 `apps/api/tests/integration/conftest.py`，提供 BACKEND repository / service 整合測試用的 SQLAlchemy session fixture。只連本機 Postgres（`docs/testing_conventions.md` §3）。DB-002 的 `apps/api/tests/integration/db/conftest.py` 提供 psycopg 層級的 `owner_conn` 等 fixture，本 task 不重複那些功能。\n\n連線 URL 的解析與 loopback 守衛使用 INFRA-041 的 `apps/api/tests/support/db_urls.py`（`backend_url()`、`owner_url()`、`assert_loopback()`）。\n\n**apps/api/tests/integration/conftest.py**：\n- `db_engine`（session scope）：以 `backend_url()` 建 engine（`pool_pre_ping=True`）。建立前呼叫 `assert_loopback`，失敗時 `pytest.exit(訊息, returncode=2)`；第一次連線失敗時 `pytest.exit(\"本機 DB 未啟動或 app_backend 無法登入，先跑 just db-start 與 just db-reset --yes\", returncode=2)`，避免每個測試各自報一次錯。連線成功後先以 INFRA-041 的 `assert_connected_loopback(conn.connection.driver_connection.info.hostaddr)` 複驗實際連線位址（失敗時 `pytest.exit(訊息, returncode=2)`；判斷邏輯的反例由 INFRA-041 的單元測試涵蓋），再查 `select current_user, r.rolsuper, r.rolbypassrls from pg_roles r where r.rolname = current_user`：`current_user` 不是 `app_backend`，或角色帶 superuser / BYPASSRLS 時 `pytest.exit(\"db_session 必須以 app_backend 連線，禁止以 owner 角色連線：<role>\", returncode=2)`。**不提供任何 fallback**：連不上 app_backend 就停止，不得改用 owner 連線執行（`docs/testing_conventions.md`）。\n- `db_session`（function scope）：`conn = engine.connect(); trans = conn.begin(); session = Session(bind=conn, join_transaction_mode=\"create_savepoint\", expire_on_commit=False)`；yield session；結束時 `session.close(); trans.rollback(); conn.close()`。被測程式碼呼叫 `session.commit()` 只會釋放 savepoint，測試結束仍全部 rollback。\n- `committing_db_session`（function scope）：給需要真 commit 語意的測試（outbox、after-commit 通知）。必須搭配 marker `@pytest.mark.cleanup_tables(\"notifications\", \"notification_outbox\", ...)`；沒有 marker 時 `pytest.fail(\"committing_db_session 必須搭配 cleanup_tables marker\")`。marker 與 seed 表檢查在建立 `db_engine` 之前執行（以 `request.getfixturevalue(\"db_engine\")` 延後取得），檢查失敗時不連 DB。yield 一個綁 `db_engine` 的一般 Session；測試結束後以 `owner_url()` 的連線執行 `truncate <tables> restart identity cascade` 並 commit。owner 連線只用於清表這個明確用途，被測程式碼拿到的 session 一律是 app_backend。\n- seed 表保護：`cleanup_tables` 列出 `roles`、`system_settings`、`subjects`、`exam_types` 任一個（含 `public.` 前綴寫法）時 `pytest.fail(\"不可清空 seed 表：<name>\")`，不執行 truncate。\n- 在本 conftest 註冊 marker `cleanup_tables`（`pytest_configure` 呼叫 `config.addinivalue_line`），配合 strict-markers。\n\n**驗收標準**：每一條對應下列 red_case。本 task 的測試不依賴任何業務表：用 owner 連線在 session 開始時建立 schema `infra_probe` 與表 `infra_probe.items(id serial primary key, name text)`（並 `grant usage on schema infra_probe to app_backend; grant all on infra_probe.items to app_backend; grant usage on sequence ...`），session 結束 `drop schema infra_probe cascade`。owner 連線只用於建立 / 刪除探針 schema 與驗證清表結果；`db_session` / `committing_db_session` 一律以 app_backend 執行（依賴 DB-041 的 baseline revision 建立角色、INFRA-046 的 `just db-reset` 設定本機登入密碼）。",
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/conftest.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
-        "INFRA-003",
+        "INFRA-044",
         "INFRA-009",
         "INFRA-041",
-        "DB-001",
-        "DB-039"
+        "DB-041",
+        "INFRA-046"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "BACKEND 的 get_db dependency override（讓 FastAPI TestClient 使用 db_session）屬 BACKEND 範圍；BACKEND 寫 endpoint 整合測試時直接 override 成本 task 的 db_session。truncate 需要表 owner 權限，因此清表一律走 owner 連線而非 app_backend。 整合測試禁止 fallback 到 owner：要讓測試能跑，正確做法是補 app_backend 的授權（secure_table），不是換連線角色。",
+      "risk_notes": "BACKEND 的 get_db dependency override（讓 FastAPI TestClient 使用 db_session）屬 BACKEND 範圍；BACKEND 寫 endpoint 整合測試時直接 override 成本 task 的 db_session。truncate 需要表 owner 權限，因此清表一律走 owner 連線而非 app_backend。 整合測試禁止 fallback 到 owner：要讓測試能跑，正確做法是在該表的 revision 補 app_backend 的授權（grant_backend），不是換連線角色。 現有實作依 Supabase 版完成，需依目前 description 改寫。 改寫範圍：模組 docstring 與錯誤訊息去掉 Supabase / RLS 字樣（「本機 DB」「禁止以 owner 角色連線」）、seed 表保護的註解改為 data migration；INFRA-044 / DB-041 / INFRA-046 完成後才能重跑 tdd.run。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/infra/test_db_fixtures.py",
@@ -342,7 +336,7 @@
           "test_db_fixtures_refuses_seed_table_cleanup：pytester 執行標 cleanup_tables('roles') 的測試 → errors=1（setup 階段失敗），輸出含 '不可清空 seed 表：roles'，且 roles 表筆數不變（若 roles 表尚不存在則只斷言訊息）",
           "test_db_fixtures_rejects_remote_url：pytester 以 TEST_DB_BACKEND_URL='postgresql+psycopg://u:p@db.example.com:5432/postgres' 執行任一使用 db_session 的測試 → ret == 2，輸出含 '只允許本機 loopback DB'",
           "test_db_fixtures_db_down_exits_once：pytester 以 TEST_DB_BACKEND_URL='postgresql+psycopg://app_backend:app_backend_local@127.0.0.1:1/postgres' 執行兩個使用 db_session 的測試 → ret == 2，輸出含 'just db-start' 恰好一次，且沒有任何測試改以 owner 連線執行（passed == 0）",
-          "test_db_fixtures_refuses_owner_role：pytester 以 TEST_DB_BACKEND_URL 設為 owner URL（postgres:postgres@127.0.0.1:54342）執行一個使用 db_session 的測試 → ret == 2，輸出含 '禁止以 owner 角色繞過 RLS' 與 'postgres'",
+          "test_db_fixtures_refuses_owner_role：pytester 以 TEST_DB_BACKEND_URL 設為 owner URL（postgres:postgres@127.0.0.1:54342）執行一個使用 db_session 的測試 → ret == 2，輸出含 '禁止以 owner 角色連線' 與 'postgres'",
           "test_db_fixtures_session_is_app_backend：db_session.execute(text('select current_user')).scalar() → 'app_backend'",
           "test_db_fixtures_rejects_connected_non_loopback：pytester 以 loopback 的 TEST_DB_BACKEND_URL（通過連線前 assert_loopback）執行一個使用 db_session 的測試，並在子行程 conftest 以 monkeypatch 讓連線後取得的 driver_connection.info.hostaddr 回 '10.0.0.11' → ret == 2，輸出含 '10.0.0.11'，passed == 0（驗證 assert_connected_loopback 確實接在連線之後、查角色之前）"
         ],
@@ -502,7 +496,7 @@
     {
       "id": "INFRA-015",
       "title": "實作 scripts/bootstrap.sh 與 just bootstrap：一次性、可重複執行的本機環境初始化",
-      "description": "新增 `scripts/bootstrap.sh`（bash，`set -euo pipefail`）與 justfile recipe `bootstrap`。可參考 `/Users/user/land/land_house_scraper/scripts/bootstrap.sh` 的冪等寫法。\n\n**步驟**（每一步印一行進度）：\n1. 檢查 `uv`、`pnpm` 在 PATH 上，缺少時印「找不到 <tool>，請先安裝（見 README）」並 exit 1。\n2. `cd apps/api && uv sync --frozen`。\n3. `cd apps/web && pnpm install --frozen-lockfile`。\n4. `apps/api/.env` 不存在時，從 `apps/api/.env.example` 複製，並把 `APP_SECRET_KEY=change-me` 替換成 `python3 -c \"import secrets; print(secrets.token_urlsafe(48))\"` 產生的值（檔案權限 600）；已存在則**完全不動**，印「apps/api/.env 已存在，略過」。\n5. 若 `supabase status -o env` 成功（本機 Supabase 已啟動），且 `apps/api/.env` 的 `SUPABASE_SERVICE_ROLE_KEY` 仍是 `change-me`，以輸出中的 `SERVICE_ROLE_KEY` 值取代；Supabase 未啟動則印提示「啟動 Supabase 後重跑 just bootstrap 以填入 SUPABASE_SERVICE_ROLE_KEY」，不視為失敗。\n6. 若 justfile 有 `install-hooks` recipe（INFRA-019 加入）則執行它；沒有就略過。\n7. 最後印下一步提示：`just db-start`、`just db-reset --yes`、`just up`。\n\n腳本以 `BOOTSTRAP_ROOT` 環境變數覆寫 repo root（預設由腳本位置推得），讓測試在暫存目錄執行。\n\n**驗收標準**：每一條對應下列 red_case。測試在 `tmp_path` 建立最小 repo 結構（複製 bootstrap.sh、兩份 .env.example、空的 apps/api 與 apps/web 目錄），用 INFRA-008 的 `fake_bin` 替換 uv / pnpm / just / supabase。",
+      "description": "新增 `scripts/bootstrap.sh`（bash，`set -euo pipefail`）與 justfile recipe `bootstrap`。可參考 `/Users/user/land/land_house_scraper/scripts/bootstrap.sh` 的冪等寫法。\n\n**步驟**（每一步印一行進度）：\n1. 檢查 `uv`、`pnpm` 在 PATH 上，缺少時印「找不到 <tool>，請先安裝（見 README）」並 exit 1。\n2. `cd apps/api && uv sync --frozen`。\n3. `cd apps/web && pnpm install --frozen-lockfile`。\n4. `apps/api/.env` 不存在時，從 `apps/api/.env.example` 複製，並把 `APP_SECRET_KEY=change-me` 替換成 `python3 -c \"import secrets; print(secrets.token_urlsafe(48))\"` 產生的值（檔案權限 600）；已存在則**完全不動**，印「apps/api/.env 已存在，略過」。其餘 key（本機 DB 與 MinIO 的開發用值，INFRA-049）直接沿用範本。\n5. 若 justfile 有 `install-hooks` recipe（INFRA-019 加入）則執行它；沒有就略過。\n6. 最後印下一步提示：`just db-start`、`just db-reset --yes`、`just up`。\n\n腳本以 `BOOTSTRAP_ROOT` 環境變數覆寫 repo root（預設由腳本位置推得），讓測試在暫存目錄執行。\n\n**驗收標準**：每一條對應下列 red_case。測試在 `tmp_path` 建立最小 repo 結構（複製 bootstrap.sh、兩份 .env.example、空的 apps/api 與 apps/web 目錄），用 INFRA-008 的 `fake_bin` 替換 uv / pnpm / just。",
       "granularity_unit": "script",
       "target_path": "scripts/bootstrap.sh",
       "source_ref": null,
@@ -511,7 +505,8 @@
       "depends_on": [
         "INFRA-002",
         "INFRA-006",
-        "INFRA-008"
+        "INFRA-008",
+        "INFRA-049"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -527,7 +522,7 @@
           "test_bootstrap_keeps_existing_env：預先寫入 apps/api/.env 內容 'APP_ENV=production\\n' → 執行後檔案 bytes 完全相同，stdout 含 '已存在，略過'",
           "test_bootstrap_invokes_package_managers：fake_bin.calls('uv') 含 argv ['sync', '--frozen'] 且 cwd 結尾為 'apps/api'；fake_bin.calls('pnpm') 含 ['install', '--frozen-lockfile'] 且 cwd 結尾為 'apps/web'",
           "test_bootstrap_missing_uv_fails：PATH 中沒有 uv → exit 1，stderr 含 '找不到 uv'，且 apps/api/.env 未被建立",
-          "test_bootstrap_fills_service_role_key_from_supabase：fake supabase 對 `status -o env` 輸出 'SERVICE_ROLE_KEY=\"local-srk-probe\"' → .env 的 SUPABASE_SERVICE_ROLE_KEY == 'local-srk-probe'；fake supabase exit 1 時 → 值維持 'change-me'、bootstrap exit 0 且 stdout 含 '重跑 just bootstrap'"
+          "test_bootstrap_prints_next_steps：執行成功 → stdout 中 'just db-start' 的位置 < 'just db-reset --yes' < 'just up'，且 stdout 不含 'supabase'（不分大小寫）"
         ],
         "run": "just test scripts/tests/test_bootstrap.py -k bootstrap",
         "notes": ""
@@ -540,8 +535,8 @@
     },
     {
       "id": "INFRA-016",
-      "title": "實作 scripts/dev_up.sh 與 just up：一鍵啟動 Supabase + API + Web",
-      "description": "新增 `scripts/dev_up.sh` 與 justfile recipe `up`。參考 `/Users/user/land/land_house_scraper/scripts/dev_up.sh`（簡化為三個服務）。\n\n**流程**（依序，任一步逾時就中止並以非 0 退出）：\n1. Supabase：`supabase status` 成功就略過，否則 `supabase start`（`DEV_UP_SKIP_SUPABASE=1` 時整步略過）。\n2. API：pid 檔 `var/run/api.pid` 指向的行程仍存活且命令列與 `var/run/api.cmd` 相同 → 印「api 已在執行（pid N）」略過；否則以 `nohup` 背景執行 API 指令（預設 `just api`），stdout/stderr 寫 `var/log/api.log`，寫入 pid 與 cmd 檔。\n3. Web：同上，pid/cmd/log 為 `var/run/web.*`、`var/log/web.log`，預設指令 `just web`。\n4. 每個背景服務啟動後輪詢對應 port（API 8341、Web 5341）直到可連線，最多 `DEV_UP_WAIT_SECONDS`（預設 30）秒；逾時則印該服務 log 最後 20 行到 stderr 並 exit 1。port 探測用 `python3 -c` 的 `socket.create_connection(timeout=1)`。\n5. 全部就緒後印網址：後台 `http://127.0.0.1:5341/`、家長端 `http://127.0.0.1:5341/parent/`、API `http://127.0.0.1:8341/docs`、Studio `http://127.0.0.1:54343`。\n\n**測試用覆寫**（環境變數）：`DEV_UP_ROOT`（repo root）、`DEV_UP_API_CMD`、`DEV_UP_WEB_CMD`、`DEV_UP_API_PORT`、`DEV_UP_WEB_PORT`、`DEV_UP_SKIP_SUPABASE`、`DEV_UP_WAIT_SECONDS`。`var/run`、`var/log` 不存在時自動建立。\n\n**驗收標準**：每一條對應下列 red_case。測試用 `python3 -m http.server <臨時 port> --bind 127.0.0.1` 當假 API / Web，teardown 依 pid 檔 kill 所有啟動的行程。",
+      "title": "實作 scripts/dev_up.sh 與 just up：一鍵啟動本機 DB / MinIO + API + Web",
+      "description": "新增 `scripts/dev_up.sh` 與 justfile recipe `up`。參考 `/Users/user/land/land_house_scraper/scripts/dev_up.sh`（簡化為三個服務）。\n\n**流程**（依序，任一步逾時就中止並以非 0 退出）：\n1. 本機 DB / MinIO：執行 `just db-start`（INFRA-044，`docker compose up -d --wait` 本身冪等，已在執行時立即返回）；`DEV_UP_SKIP_DB=1` 時整步略過。\n2. API：pid 檔 `var/run/api.pid` 指向的行程仍存活且命令列與 `var/run/api.cmd` 相同 → 印「api 已在執行（pid N）」略過；否則以 `nohup` 背景執行 API 指令（預設 `just api`），stdout/stderr 寫 `var/log/api.log`，寫入 pid 與 cmd 檔。\n3. Web：同上，pid/cmd/log 為 `var/run/web.*`、`var/log/web.log`，預設指令 `just web`。\n4. 每個背景服務啟動後輪詢對應 port（API 8341、Web 5341）直到可連線，最多 `DEV_UP_WAIT_SECONDS`（預設 30）秒；逾時則印該服務 log 最後 20 行到 stderr 並 exit 1。port 探測用 `python3 -c` 的 `socket.create_connection(timeout=1)`。\n5. 全部就緒後印網址：後台 `http://127.0.0.1:5341/`、家長端 `http://127.0.0.1:5341/parent/`、API `http://127.0.0.1:8341/docs`、MinIO console `http://127.0.0.1:54345`。\n\n**測試用覆寫**（環境變數）：`DEV_UP_ROOT`（repo root）、`DEV_UP_API_CMD`、`DEV_UP_WEB_CMD`、`DEV_UP_API_PORT`、`DEV_UP_WEB_PORT`、`DEV_UP_SKIP_DB`、`DEV_UP_WAIT_SECONDS`。`var/run`、`var/log` 不存在時自動建立。\n\n**驗收標準**：每一條對應下列 red_case。測試用 `python3 -m http.server <臨時 port> --bind 127.0.0.1` 當假 API / Web，teardown 依 pid 檔 kill 所有啟動的行程。",
       "granularity_unit": "script",
       "target_path": "scripts/dev_up.sh",
       "source_ref": null,
@@ -549,7 +544,7 @@
       "assignee_session": null,
       "depends_on": [
         "INFRA-002",
-        "INFRA-003",
+        "INFRA-044",
         "INFRA-008"
       ],
       "suggested_model": "sonnet-5",
@@ -561,10 +556,11 @@
           "unit"
         ],
         "red_cases": [
-          "test_dev_up_starts_services_and_writes_pids：DEV_UP_SKIP_SUPABASE=1、API/WEB 指令為 http.server 於兩個臨時 port → exit 0；var/run/api.pid 與 web.pid 內的 pid 存活（os.kill(pid, 0) 不拋錯）；stdout 含 'http://127.0.0.1:5341/parent/'",
+          "test_dev_up_starts_services_and_writes_pids：DEV_UP_SKIP_DB=1、API/WEB 指令為 http.server 於兩個臨時 port → exit 0；var/run/api.pid 與 web.pid 內的 pid 存活（os.kill(pid, 0) 不拋錯）；stdout 含 'http://127.0.0.1:5341/parent/'",
           "test_dev_up_is_idempotent：連續執行兩次 → 第二次 exit 0、stdout 含 'api 已在執行'，且 api.pid 內容與第一次相同",
           "test_dev_up_reports_crashed_service：DEV_UP_API_CMD='sh -c \"echo boom-marker >&2; exit 1\"'、DEV_UP_WAIT_SECONDS=2 → exit 1，stderr 含 'boom-marker'",
-          "test_dev_up_replaces_stale_pid：預先寫 api.pid 為已結束行程的 pid → 執行後 api.pid 被更新為新的存活 pid，exit 0"
+          "test_dev_up_replaces_stale_pid：預先寫 api.pid 為已結束行程的 pid → 執行後 api.pid 被更新為新的存活 pid，exit 0",
+          "test_dev_up_starts_db_unless_skipped：fake_bin 替換 just（對 db-start exit 0），DEV_UP_SKIP_DB 未設、API/WEB 為假服務 → fake_bin.calls('just') 的第一筆 argv == ['db-start']；設 DEV_UP_SKIP_DB=1 → 沒有任何 argv 含 'db-start' 的呼叫"
         ],
         "run": "just test scripts/tests/test_dev_up.py -k dev_up",
         "notes": ""
@@ -578,14 +574,15 @@
     {
       "id": "INFRA-017",
       "title": "實作 scripts/dev_down.sh 與 just down：安全停止 dev_up 啟動的服務",
-      "description": "新增 `scripts/dev_down.sh` 與 justfile recipe `down *ARGS`。\n\n**行為**：\n1. 對 `var/run/api.pid`、`var/run/web.pid`：pid 存活且 `ps -o command= -p <pid>` 與對應 `.cmd` 檔內容相符 → 送 SIGTERM，最多等 10 秒，仍存活則 SIGKILL；之後刪除 pid 與 cmd 檔。\n2. pid 存活但命令列不符（pid 已被系統重用）→ **不送訊號**，印警告「pid N 已不是 api，略過」，刪除 pid 與 cmd 檔。\n3. pid 檔不存在或行程已結束 → 刪除殘留檔案，印「api 未在執行」。\n4. 只有帶 `--all` 時才額外執行 `supabase stop`；其他參數印用法並 exit 1。\n5. 支援 `DEV_UP_ROOT` 覆寫（與 INFRA-016 共用）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "新增 `scripts/dev_down.sh` 與 justfile recipe `down *ARGS`。\n\n**行為**：\n1. 對 `var/run/api.pid`、`var/run/web.pid`：pid 存活且 `ps -o command= -p <pid>` 與對應 `.cmd` 檔內容相符 → 送 SIGTERM，最多等 10 秒，仍存活則 SIGKILL；之後刪除 pid 與 cmd 檔。\n2. pid 存活但命令列不符（pid 已被系統重用）→ **不送訊號**，印警告「pid N 已不是 api，略過」，刪除 pid 與 cmd 檔。\n3. pid 檔不存在或行程已結束 → 刪除殘留檔案，印「api 未在執行」。\n4. 只有帶 `--all` 時才額外執行 `just db-stop`（INFRA-044，compose stop，保留 volume）；其他參數印用法並 exit 1。\n5. 支援 `DEV_UP_ROOT` 覆寫（與 INFRA-016 共用）。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "script",
       "target_path": "scripts/dev_down.sh",
       "source_ref": null,
       "status": "pending",
       "assignee_session": null,
       "depends_on": [
-        "INFRA-016"
+        "INFRA-016",
+        "INFRA-044"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -598,8 +595,8 @@
         "red_cases": [
           "test_dev_down_stops_services_started_by_dev_up：先以 dev_up.sh（假服務）啟動，再執行 dev_down.sh → exit 0；原 pid 行程已結束（os.kill(pid, 0) 拋 ProcessLookupError），var/run/api.pid 與 web.pid 不存在",
           "test_dev_down_skips_reused_pid：啟動一個無關的 sleep 60 行程，把它的 pid 寫入 api.pid、api.cmd 寫 'just api' → 執行後 sleep 行程仍存活，stdout 或 stderr 含 '已不是 api'，api.pid 被刪除",
-          "test_dev_down_without_all_keeps_supabase：fake_bin 替換 supabase，執行 dev_down.sh → fake_bin.calls('supabase') == []",
-          "test_dev_down_all_stops_supabase：執行 dev_down.sh --all → fake_bin.calls('supabase') 的 argv 依序含 ['stop']",
+          "test_dev_down_without_all_keeps_db：fake_bin 替換 just，執行 dev_down.sh → fake_bin.calls('just') 中沒有任何 argv 含 'db-stop'",
+          "test_dev_down_all_stops_db：執行 dev_down.sh --all → fake_bin.calls('just') 恰有一筆 argv == ['db-stop']",
           "test_dev_down_rejects_unknown_flag：dev_down.sh --force → exit 1，stderr 含 '用法'"
         ],
         "run": "just test scripts/tests/test_dev_down.py -k dev_down",
@@ -614,19 +611,19 @@
     {
       "id": "INFRA-018",
       "title": "實作 scripts/doctor.sh 與 just doctor：檢查本機工具版本、Docker、port 與 env",
-      "description": "新增 `scripts/doctor.sh` 與 justfile recipe `doctor`。參考 `/Users/user/land/land_house_scraper/scripts/doctor.sh` 的設計（不用 `set -e`，一次列完所有問題；port 探測用 python3 socket 而非 `nc -z`）。\n\n**檢查項目**（每項印一行 `OK` / `WARN` / `FAIL` + 名稱 + 修復提示）：\n| 項目 | FAIL 條件 | 提示 |\n|---|---|---|\n| just | 不在 PATH | brew install just |\n| uv | 不在 PATH | 安裝 uv |\n| Python 3.13 | `uv python find 3.13` 失敗 | uv python install 3.13 |\n| node | 不在 PATH 或主版號不是 24 | 安裝 Node 24 |\n| pnpm | 不在 PATH 或主版號 < 10 | corepack enable |\n| supabase CLI | 不在 PATH 或主版號 < 2 | 安裝 Supabase CLI |\n| docker daemon | `docker info` 失敗 | 啟動 Docker Desktop |\n| apps/api/.venv | 不存在 | just bootstrap |\n| apps/web/node_modules | 不存在 | just bootstrap |\n| apps/api/.env | 不存在，或 `APP_SECRET_KEY` 為 `change-me` / 長度 < 32 | just bootstrap 或手動產生 |\n| apps/api/.env 的 SUPABASE_SERVICE_ROLE_KEY | 為 `change-me` → WARN（不算 FAIL，Storage 功能無法使用） | 啟動 Supabase 後重跑 just bootstrap |\n| port 8341 / 5341 | 被占用且不是 `var/run/*.pid` 記錄的行程 → WARN（不算 FAIL） | 關閉占用程式 |\n| Supabase 54341 / 54342 | 無法連線 → WARN | just db-start |\n\n**exit code** = FAIL 項數（上限 125）。`--help` 印用法 exit 0；其他參數 exit 1。以 `DOCTOR_ROOT` 覆寫 repo root（測試用）。\n\n**驗收標準**：每一條對應下列 red_case。測試以 `fake_bin` 提供假的 just / uv / node / pnpm / supabase / docker（各自對 `--version` 或 `info` 印出指定字串並回傳指定 exit code），PATH 只含假指令目錄與 `/usr/bin:/bin`。",
+      "description": "新增 `scripts/doctor.sh` 與 justfile recipe `doctor`。參考 `/Users/user/land/land_house_scraper/scripts/doctor.sh` 的設計（不用 `set -e`，一次列完所有問題；port 探測用 python3 socket 而非 `nc -z`）。\n\n**檢查項目**（每項印一行 `OK` / `WARN` / `FAIL` + 名稱 + 修復提示）：\n| 項目 | FAIL 條件 | 提示 |\n|---|---|---|\n| just | 不在 PATH | brew install just |\n| uv | 不在 PATH | 安裝 uv |\n| Python 3.13 | `uv python find 3.13` 失敗 | uv python install 3.13 |\n| node | 不在 PATH 或主版號不是 24 | 安裝 Node 24 |\n| pnpm | 不在 PATH 或主版號 < 10 | corepack enable |\n| docker daemon | `docker info` 失敗 | 啟動 Docker Desktop |\n| docker compose | `docker compose version` 失敗或主版號 < 2 | 安裝 Docker Desktop 或 compose plugin |\n| apps/api/.venv | 不存在 | just bootstrap |\n| apps/web/node_modules | 不存在 | just bootstrap |\n| apps/api/.env | 不存在，或 `APP_SECRET_KEY` 為 `change-me` / 長度 < 32 | just bootstrap 或手動產生 |\n| port 8341 / 5341 | 被占用且不是 `var/run/*.pid` 記錄的行程 → WARN（不算 FAIL） | 關閉占用程式 |\n| 本機 DB 54342 / MinIO 54344 | 無法連線 → WARN | just db-start |\n\n**exit code** = FAIL 項數（上限 125）。`--help` 印用法 exit 0；其他參數 exit 1。以 `DOCTOR_ROOT` 覆寫 repo root（測試用）。\n\n**驗收標準**：每一條對應下列 red_case。測試以 `fake_bin` 提供假的 just / uv / node / pnpm / docker（各自對 `--version`、`info` 或 `compose version` 印出指定字串並回傳指定 exit code），PATH 只含假指令目錄與 `/usr/bin:/bin`。",
       "granularity_unit": "script",
       "target_path": "scripts/doctor.sh",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-002",
-        "INFRA-003",
+        "INFRA-044",
         "INFRA-008"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "現有實作依 Supabase 版完成，需依目前 description 改寫。 改寫範圍：移除 supabase CLI 與 SUPABASE_SERVICE_ROLE_KEY 檢查，新增 docker compose 檢查，port 探測改為 54342 / 54344。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "scripts/tests/test_doctor.py",
@@ -634,12 +631,13 @@
           "unit"
         ],
         "red_cases": [
-          "test_doctor_all_ok：假工具全部回報合格版本（node v24.21.0、pnpm 11.25.0、supabase 2.98.2）、DOCTOR_ROOT 下有 .venv、node_modules、合格 .env → exit 0，stdout 無 'FAIL'",
+          "test_doctor_all_ok：假工具全部回報合格版本（node v24.21.0、pnpm 11.25.0、docker compose 'Docker Compose version v2.39.2'）、DOCTOR_ROOT 下有 .venv、node_modules、合格 .env → exit 0，stdout 無 'FAIL'",
           "test_doctor_wrong_node_major：假 node 回 v22.11.0 → exit 1，stdout 中含 'FAIL' 與 'node' 的那一行恰好一行",
           "test_doctor_docker_not_running：假 docker info exit 1 → exit 1，stdout 含 'FAIL' 與 'docker'",
           "test_doctor_placeholder_secret：.env 的 APP_SECRET_KEY=change-me → exit 1，stdout 含 'APP_SECRET_KEY'",
-          "test_doctor_counts_multiple_failures：同時缺 pnpm 與 supabase → exit 2",
-          "test_doctor_port_busy_is_warning：測試先以 socket 監聽 127.0.0.1 某臨時 port 並以 DOCTOR_API_PORT 指向它 → stdout 該 port 行為 'WARN'，exit code 不因此增加"
+          "test_doctor_counts_multiple_failures：同時缺 pnpm、且假 docker 對 `compose version` exit 1（`info` 仍 exit 0）→ exit 2",
+          "test_doctor_port_busy_is_warning：測試先以 socket 監聽 127.0.0.1 某臨時 port 並以 DOCTOR_API_PORT 指向它 → stdout 該 port 行為 'WARN'，exit code 不因此增加",
+          "test_doctor_no_supabase_check：stdout 不含 'supabase'（不分大小寫）；DOCTOR_ROOT 的 .env 不含 SUPABASE_ 開頭的 key 時不產生任何 WARN / FAIL"
         ],
         "run": "just test scripts/tests/test_doctor.py -k doctor",
         "notes": "port 測試需要 DOCTOR_API_PORT / DOCTOR_WEB_PORT 覆寫變數（預設 8341 / 5341）。"
@@ -691,20 +689,21 @@
     },
     {
       "id": "INFRA-020",
-      "title": "實作 scripts/check_schema_drift.py 與 just schema-drift：比對 SQLAlchemy metadata 與本機 DB",
-      "description": "新增 `scripts/check_schema_drift.py` 與 justfile recipe `schema-drift *ARGS`（`apps/api/.venv/bin/python scripts/check_schema_drift.py \"$@\"`）。Migration 用 Supabase SQL，SQLAlchemy model 必須與它一致（`docs/architecture_decisions.md` §2）。本 task 只做腳本與 recipe；以真實 models 跑 drift 的整合測試由 BACKEND 在 models 完成後加入。\n\n**函式介面**：\n```python\n@dataclass(frozen=True)\nclass Drift:\n    kind: str     # table_missing_in_db | table_missing_in_model | column_missing_in_db | column_missing_in_model\n                  # | type_mismatch | nullable_mismatch | pk_mismatch | fk_mismatch | unique_mismatch\n    target: str   # table 或 table.column\n    detail: str   # 例如 'model=TIMESTAMP WITH TIME ZONE db=TIMESTAMP WITHOUT TIME ZONE'\n\ndef compare(metadata: MetaData, conn: Connection, schema: str = \"public\", ignore_tables: frozenset[str] = frozenset()) -> list[Drift]: ...\ndef main(argv: list[str] | None = None) -> int: ...\n```\n\n**比對規則**（用 `sqlalchemy.inspect(conn)` 取 DB 端資訊）：\n- 表：metadata 有、DB 沒有 → `table_missing_in_db`；DB 有、metadata 沒有且不在 `ignore_tables` → `table_missing_in_model`。\n- 欄位：兩邊互缺各自報；共同欄位比 nullable 與型別。\n- 型別正規化：model 型別以 `type.compile(dialect=postgresql.dialect())` 取字串、DB 以 inspector 回傳型別 compile，兩邊轉大寫並把 `VARCHAR`（無長度）與 `TEXT` 視為不同、`TIMESTAMP WITH TIME ZONE` 與 `TIMESTAMP WITHOUT TIME ZONE` 視為不同、`UUID` 一致、`ARRAY` 比元素型別。\n- 主鍵欄位集合、外鍵（本地欄位 → 目標表.欄位）、unique constraint（欄位集合）兩邊比對。\n- 不比對：server default、check constraint、一般 index 與 partial unique index（這些由 DB 區域的 migration 測試負責）。\n- 結果依 kind、target 排序。\n\n**CLI**：`--db-url`（預設 `postgresql+psycopg://postgres:postgres@127.0.0.1:54342/postgres`，非 loopback 一律 exit 2）、`--schema`、`--ignore-table`（可重複）。把 `apps/api` 加進 `sys.path` 後 `from app.models import Base`；匯入失敗 exit 2，訊息「找不到 app.models.Base（BACKEND 尚未建立 models）」。有 drift 逐行印並 exit 1；無 drift 印比對表數並 exit 0。\n\n**驗收標準**：每一條對應下列 red_case。測試在 `local_db_conn` 的 transaction 內建立暫存 schema（`drift_probe_<uuid8>`）與表，以測試內定義的 `MetaData(schema=...)` 呼叫 `compare`，結束 rollback。",
+      "title": "實作 scripts/check_schema_drift.py 與 just schema-drift：以 Alembic autogenerate 比對 SQLAlchemy metadata 與本機 DB",
+      "description": "新增 `scripts/check_schema_drift.py` 與 justfile recipe `schema-drift *ARGS`（`{{root}}/apps/api/.venv/bin/python {{root}}/scripts/check_schema_drift.py \"$@\"`）。以 Alembic 的 autogenerate 比對機制（`alembic.autogenerate.compare_metadata`）比較 SQLAlchemy metadata 與套用全部 revision 後的 DB（`docs/architecture_decisions.md` §5「schema drift」）。本 task 只做腳本與 recipe；以真實 models 跑 drift 的整合測試由 BACKEND-024 在 models 完成後加入。\n\n**函式介面**：\n```python\n@dataclass(frozen=True)\nclass Drift:\n    kind: str     # table_missing_in_db | table_missing_in_model | column_missing_in_db | column_missing_in_model\n                  # | type_mismatch | nullable_mismatch | fk_mismatch | unique_mismatch | unsupported\n    target: str   # table 或 table.column；FK / unique 為 table.<欄位以逗號串接>\n    detail: str   # 例如 'model=TIMESTAMP db=TIMESTAMP WITH TIME ZONE'\n\ndef include_object(obj, name, type_, reflected, compare_to) -> bool: ...\ndef compare(metadata: MetaData, conn: Connection, schema: str = \"public\", ignore_tables: frozenset[str] = frozenset()) -> list[Drift]: ...\ndef main(argv: list[str] | None = None) -> int: ...\n```\n\n**比對規則**：\n- 以 `MigrationContext.configure(conn, opts={...})` 設定 `compare_type=True`、`compare_server_default=False`、`include_object`，`schema` 不是 public 時以 `include_schemas=True` + `include_name` 限定只比對該 schema（測試用暫存 schema），再呼叫 `compare_metadata(context, metadata)`。\n- Alembic diff 轉成 Drift：`add_table` → table_missing_in_db；`remove_table` → table_missing_in_model；`add_column` / `remove_column` → column_missing_in_db / column_missing_in_model；`modify_type` → type_mismatch；`modify_nullable` → nullable_mismatch；`add_fk` / `remove_fk` → fk_mismatch；UniqueConstraint 的 `add_constraint` / `remove_constraint` → unique_mismatch。其他無法對應的 diff 一律轉成 `unsupported`（detail 為原始 diff 字串），**不得靜默丟棄**。\n- `include_object` 排除：`alembic_version` 表、`ignore_tables`、所有 index（`type_ == 'index'`；partial / 運算式 index 由各表的 migration 測試負責）。不比對 server default、check constraint、trigger、function。\n- 結果依 kind、target 排序。\n\n**CLI**：`--db-url`（預設 `postgresql+psycopg://postgres:postgres@127.0.0.1:54342/postgres`，依 INFRA-041 的 libpq 規則檢查，非 loopback 一律 exit 2）、`--schema`、`--ignore-table`（可重複）。把 `apps/api` 加進 `sys.path` 後 `from app.models import Base`；匯入失敗 exit 2，訊息「找不到 app.models.Base」。有 drift 逐行印並 exit 1；無 drift 印比對表數並 exit 0。\n\n**驗收標準**：每一條對應下列 red_case。測試在 `local_db_conn` 的 transaction 內建立暫存 schema（`drift_probe_<uuid8>`）與表，以測試內定義的 `MetaData(schema=...)` 呼叫 `compare`，結束 rollback。",
       "granularity_unit": "script",
       "target_path": "scripts/check_schema_drift.py",
       "source_ref": null,
       "status": "pending",
       "assignee_session": null,
       "depends_on": [
-        "INFRA-003",
+        "INFRA-044",
+        "INFRA-045",
         "INFRA-004",
         "INFRA-008"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "BACKEND 必須讓 app/models/__init__.py 匯出 Base 並 import 全部 model 模組，metadata 才完整；BACKEND 的 models 基礎 task 要寫入這個契約。",
+      "risk_notes": "BACKEND 必須讓 app/models/__init__.py 匯出 Base 並 import 全部 model 模組，metadata 才完整（BACKEND-007 已建立此契約）。Alembic 對型別的比較依 dialect 實作，numeric 精度、陣列元素型別等差異若比對不到，在 risk_notes 記下並由各表 migration 測試補位。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "scripts/tests/test_check_schema_drift.py",
@@ -716,11 +715,13 @@
           "test_schema_drift_column_missing_in_db：metadata 多一欄 note text → [Drift('column_missing_in_db', 't.note', ...)]",
           "test_schema_drift_column_missing_in_model：DB 多一欄 extra int → [Drift('column_missing_in_model', 't.extra', ...)]",
           "test_schema_drift_nullable_mismatch：model name nullable=True、DB not null → 一筆 kind='nullable_mismatch'、target='t.name'",
-          "test_schema_drift_timestamptz_vs_naive：model created_at 為 DateTime()（無時區）、DB timestamptz → 一筆 kind='type_mismatch'，detail 含 'WITHOUT TIME ZONE'",
-          "test_schema_drift_fk_mismatch：DB 的 child.parent_id references parent(id)，metadata 中 parent_id 沒有 ForeignKey → 一筆 kind='fk_mismatch'、target='child.parent_id'",
+          "test_schema_drift_timestamptz_vs_naive：model created_at 為 DateTime()（無時區）、DB timestamptz → 一筆 kind='type_mismatch'、target='t.created_at'",
+          "test_schema_drift_fk_mismatch：DB 的 child.parent_id references parent(id)，metadata 中 parent_id 沒有 ForeignKey → 一筆 kind='fk_mismatch'，target 以 'child.' 開頭且含 'parent_id'",
+          "test_schema_drift_unique_mismatch：DB 的 u 有 unique (a, b)、metadata 沒有 → 一筆 kind='unique_mismatch'",
+          "test_schema_drift_ignores_indexes_and_alembic_version：DB 多一個 partial index（create index ... where name is not null）與一張 alembic_version(version_num varchar(32) primary key)，metadata 都沒有 → compare 回 []",
           "test_schema_drift_table_ignore_list：DB 多一張 orphan 表、ignore_tables={'orphan'} → 回 []；不傳 ignore_tables → 一筆 table_missing_in_model",
           "test_schema_drift_main_missing_models：monkeypatch 讓 import app.models 拋 ModuleNotFoundError，main([]) → 2，stderr 含 '找不到 app.models.Base'",
-          "test_schema_drift_main_rejects_remote：main(['--db-url', 'postgresql+psycopg://u:p@db.example.com/postgres']) → 2"
+          "test_schema_drift_main_rejects_remote：main(['--db-url', 'postgresql+psycopg://u:p@db.example.com/postgres']) → 2，且 psycopg.connect 未被呼叫"
         ],
         "run": "just test-int scripts/tests/test_check_schema_drift.py -k schema_drift",
         "notes": ""
@@ -734,20 +735,22 @@
     {
       "id": "INFRA-021",
       "title": "為 justfile 的參數守衛與路徑路由補回歸測試",
-      "description": "新增 `scripts/tests/test_justfile.py`，以自動化測試鎖住 INFRA-002 的守衛行為，避免日後修改 justfile 時默默放寬「禁止全量執行」。純補測試：依 `docs/testing_conventions.md` §1，用突變證明新測試會紅（例如把 `test` recipe 的無參數檢查暫時註解掉，確認對應測試失敗後還原），不得把 justfile 改壞後提交。\n\n測試以 `run_cmd(['just', '--justfile', <repo>/justfile, ...])` 執行，PATH 前置 `fake_bin`（假的 supabase / uv / pnpm / docker），確保不會真的啟動任何服務。\n\n**驗收標準**：每一條對應下列 red_case；`tdd.notes` 記錄突變驗證的做法與結果。",
+      "description": "新增 `scripts/tests/test_justfile.py`，以自動化測試鎖住 INFRA-002 的守衛行為，避免日後修改 justfile 時默默放寬「禁止全量執行」。純補測試：依 `docs/testing_conventions.md` §1，用突變證明新測試會紅（例如把 `test` recipe 的無參數檢查暫時註解掉，確認對應測試失敗後還原），不得把 justfile 改壞後提交。\n\n測試以 `run_cmd(['just', '--justfile', <repo>/justfile, ...])` 執行，PATH 前置 `fake_bin`（假的 uv / pnpm / docker），確保不會真的啟動任何服務或連線 DB。涵蓋 INFRA-002 的守衛，以及 INFRA-045（`db-migrate`、`db-new-migration`）與 INFRA-046（`db-reset`）改寫後的 recipe。\n\n**驗收標準**：每一條對應下列 red_case；`tdd.notes` 記錄突變驗證的做法與結果。",
       "granularity_unit": "test",
       "target_path": "scripts/tests/test_justfile.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-002",
-        "INFRA-007",
+        "INFRA-044",
+        "INFRA-045",
+        "INFRA-046",
         "INFRA-008",
         "INFRA-014"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "現有實作依 Supabase 版完成，需依目前 description 改寫。 改寫範圍：db-reset 改呼叫 scripts/db_reset_local.py（經 uv）、db-new-migration 改為 REV SLUG 兩參數並呼叫 alembic、新增 db-migrate；supabase 相關斷言全部移除，突變驗證需重做。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "scripts/tests/test_justfile.py",
@@ -758,14 +761,16 @@
           "test_justfile_guarded_recipes_require_args：對 test、test-int、lint、typecheck、web-test、web-lint、db-new-migration、e2e 逐一無參數執行（pytest.mark.parametrize）→ 每個 returncode == 1 且 stderr 含 '用法'",
           "test_justfile_rejects_full_run_paths：`just test apps/api/tests`、`just test apps/api/tests/unit/`、`just lint scripts`、`just test-int apps/api/tests/integration` → returncode == 1 且 stderr 含 '禁止全量'",
           "test_justfile_rejects_unknown_prefix：`just test foo/bar.py` → returncode == 1、stderr 含 '只支援'",
-          "test_justfile_db_reset_rejects_linked：`just db-reset --linked`、`just db-reset --db-url x`，以及同時帶 --yes 的 `just db-reset --yes --linked`、`just db-reset --yes --db-url x`（pytest.mark.parametrize）→ returncode == 1，fake_bin.calls('supabase') == []（不帶 --yes 時非 TTY 守衛也會擋下，帶 --yes 才能證明是參數白名單擋的）",
-          "test_justfile_db_reset_requires_yes_without_tty：stdin 非 TTY、`just db-reset` 不帶參數 → returncode == 1、stderr 含 '--yes'，fake_bin.calls('supabase') == []",
-          "test_justfile_db_new_migration_validates_name：`just db-new-migration Bad-Name` → 1 且 supabase 未被呼叫；`just db-new-migration create_probe` → 0，fake_bin.calls('supabase')[0]['argv'] == ['migration', 'new', 'create_probe']",
+          "test_justfile_db_reset_rejects_unknown_args：`just db-reset --linked`、`just db-reset --db-url x`、`just db-reset --yes --linked`、`just db-reset --yes --db-url x`（pytest.mark.parametrize）→ returncode == 1、stderr 含 '只接受 --yes'，fake_bin.calls('uv') == []（帶 --yes 的案例證明是參數白名單擋下）",
+          "test_justfile_db_reset_requires_yes_without_tty：stdin 非 TTY、`just db-reset` 不帶參數 → returncode == 1、stderr 含 '--yes'，fake_bin.calls('uv') == []",
+          "test_justfile_db_reset_yes_runs_local_script：`just db-reset --yes` → returncode == 0，fake_bin.calls('uv') 恰一筆，argv 含 'run'、'--frozen' 與以 'scripts/db_reset_local.py' 結尾的路徑，且不含任何 URL 參數",
+          "test_justfile_db_new_migration_validates_args：`just db-new-migration db004`（缺 SLUG）、`just db-new-migration DB004 create_x`、`just db-new-migration db004 Create-X` → 每個 returncode == 1 且 uv 未被呼叫；`just db-new-migration db004 create_staff_users` → 0，fake_bin.calls('uv')[0]['argv'] 以 ['run', '--frozen', 'alembic', 'revision', '--rev-id', 'db004', '-m', 'create_staff_users'] 結尾、cwd 結尾為 'apps/api'",
+          "test_justfile_db_migrate_forces_local_url：測試自建假 uv（把收到的 MIGRATION_DATABASE_URL 環境變數與 argv 寫入 tmp 檔）；呼叫端設 MIGRATION_DATABASE_URL='postgresql://x@db.example.com/p' 後 `just db-migrate` → 假 uv 收到的 MIGRATION_DATABASE_URL == 'postgresql+psycopg://postgres:postgres@127.0.0.1:54342/postgres'，argv 以 ['alembic', 'upgrade', 'head'] 結尾",
           "test_justfile_test_int_requires_local_db：沒有服務監聽 127.0.0.1:54342 的情況（以 monkeypatch 環境變數 JUST_TEST_INT_DB_PORT 指向一個未監聽的臨時 port）→ `just test-int apps/api/tests/integration/x.py` returncode == 1、stderr 含 'just db-start'",
           "test_justfile_list_documents_every_recipe：`just --list` 輸出中每個 recipe 行都帶 '#' 說明（不允許沒有說明的 recipe）"
         ],
         "run": "just test scripts/tests/test_justfile.py -k justfile",
-        "notes": "test-int 的 DB port 探測支援 JUST_TEST_INT_DB_PORT 覆寫（INFRA-002 已提供，預設 54342）。突變驗證在 scratchpad 的 repo 複本上進行（justfile、scripts/_pyroute.sh、scripts/tests 與 db_urls 複本 + apps/api/.venv 連結），不動共用工作樹的 justfile；每次只套一個突變，結果：移除 py_prepare 無參數區塊 → require_args[test/test-int/lint/typecheck] 4 紅；py_is_full_run 恆回 1 → rejects_full_run_paths 4 紅；未知前綴改為放行 → rejects_unknown_prefix 紅；db-reset 參數白名單改為放行 → rejects_linked[yes-linked / yes-db-url] 紅；db-reset 非 TTY 檢查移除 → requires_yes_without_tty 紅；migration 名稱檢查移除 → db_new_migration_validates_name 紅；test-int port 探測移除 → test_int_requires_local_db 紅；web-test 無參數檢查移除 → require_args[web-test] 紅；default recipe 說明移除 → list_documents_every_recipe 紅。基準（未突變）21 passed。"
+        "notes": "test-int 的 DB port 探測支援 JUST_TEST_INT_DB_PORT 覆寫（預設 54342）。純補測試：突變驗證在 scratchpad 的 repo 複本上進行（justfile、scripts/_pyroute.sh、scripts/tests 與 db_urls 複本 + apps/api/.venv 連結），不動共用工作樹的 justfile；每次只套一個突變，逐條記錄哪個突變讓哪條測試轉紅（含 db-reset 白名單 / TTY 檢查、db-new-migration 參數檢查、db-migrate 覆寫 URL）。"
       },
       "review": {
         "status": "pending",
@@ -776,11 +781,11 @@
     {
       "id": "INFRA-022",
       "title": "建立 CI 骨架：共用 setup composite action 與 ci.yml（含 validate-tasks job）",
-      "description": "建立 GitHub Actions 的 CI 骨架。CI 是唯一允許全量執行 lint / test 的地方（`docs/testing_conventions.md` §4）。參考 ivy `FE:.github/workflows/ci.yml` 的觸發條件與 concurrency 寫法，以及 `/Users/user/land/land_house_scraper/.gitlab-ci.yml` 的 job 切分。\n\n**.github/actions/setup/action.yml**（composite action），inputs：`python`（bool，預設 true）、`node`（bool，預設 true）、`supabase`（bool，預設 false）。步驟：\n- `python: true`：`astral-sh/setup-uv`（啟用 cache，cache key 含 `apps/api/uv.lock`）→ `uv python install 3.13` → `uv sync --frozen --project apps/api`。\n- `node: true`：`actions/setup-node`（node-version 24）→ `corepack enable` → `pnpm install --frozen-lockfile`（working-directory `apps/web`，pnpm store 快取 key 含 `apps/web/pnpm-lock.yaml`）。\n- 一律安裝 just（`extractions/setup-just`）。\n- `supabase: true`：`supabase/setup-cli`（version 與本機 `supabase --version` 主版號相同）。\n\n**.github/workflows/ci.yml**：\n- `on`: `pull_request`（全部分支）與 `push` 到 `main`；`paths-ignore`: `docs/mockups/**`。\n- `permissions: contents: read`；`concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: true }`。\n- 每個 job `runs-on: ubuntu-latest`、設 `timeout-minutes`。\n- 本 task 只放第一個 job `validate-tasks`：checkout → `python3 scripts/validate_tasks.py .`（只需系統 python，不用 setup action）。之後的 job 由 INFRA-023 ~ INFRA-029、INFRA-036 逐一加入同一檔案。\n\n**CI 結構測試** `scripts/tests/test_ci_workflow.py`：用 PyYAML 載入 `ci.yml`，提供 helper `job(name) -> dict`、`run_lines(name) -> list[str]`（展開所有 step 的 `run`），後續每個 CI job task 在此檔加自己的測試。在 `apps/api/pyproject.toml` 的 dev group 加 `pyyaml` 與 `types-PyYAML`。\n\n**驗收標準**：每一條對應下列 red_case；另外 `uvx --from actionlint-py actionlint .github/workflows/ci.yml` 無錯誤。",
+      "description": "建立 GitHub Actions 的 CI 骨架。CI 是唯一允許全量執行 lint / test 的地方（`docs/testing_conventions.md` §4）。參考 ivy `FE:.github/workflows/ci.yml` 的觸發條件與 concurrency 寫法，以及 `/Users/user/land/land_house_scraper/.gitlab-ci.yml` 的 job 切分。\n\n**.github/actions/setup/action.yml**（composite action），inputs：`python`（bool，預設 true）、`node`（bool，預設 true）。步驟：\n- `python: true`：`astral-sh/setup-uv`（啟用 cache，cache key 含 `apps/api/uv.lock`）→ `uv python install 3.13` → `uv sync --frozen --project apps/api`。\n- `node: true`：`actions/setup-node`（node-version 24）→ `corepack enable` → `pnpm install --frozen-lockfile`（working-directory `apps/web`，pnpm store 快取 key 含 `apps/web/pnpm-lock.yaml`）。\n- 一律安裝 just（`extractions/setup-just`）。\n- 需要本機 Postgres / MinIO 的 job 直接在 job 內以 `docker compose -f compose.yaml up -d --wait ...` 啟動（GitHub ubuntu runner 內建 docker compose），setup action 不負責啟動服務。\n\n**.github/workflows/ci.yml**：\n- `on`: `pull_request`（全部分支）與 `push` 到 `main`；`paths-ignore`: `docs/mockups/**`。\n- `permissions: contents: read`；`concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: true }`。\n- 每個 job `runs-on: ubuntu-latest`、設 `timeout-minutes`。\n- 本 task 只放第一個 job `validate-tasks`：checkout → `python3 scripts/validate_tasks.py .`（只需系統 python，不用 setup action）。之後的 job 由 INFRA-023 ~ INFRA-029、INFRA-036 逐一加入同一檔案。\n\n**CI 結構測試** `scripts/tests/test_ci_workflow.py`：用 PyYAML 載入 `ci.yml`，提供 helper `job(name) -> dict`、`run_lines(name) -> list[str]`（展開所有 step 的 `run`），後續每個 CI job task 在此檔加自己的測試。在 `apps/api/pyproject.toml` 的 dev group 加 `pyyaml` 與 `types-PyYAML`。\n\n**驗收標準**：每一條對應下列 red_case；另外 `uvx --from actionlint-py actionlint .github/workflows/ci.yml` 無錯誤。",
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": "FE:.github/workflows/ci.yml::concurrency",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-004",
@@ -788,7 +793,7 @@
         "INFRA-008"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "第三方 action 先用主版號 tag；正式上線前改為 commit SHA 釘選（ivy backend CI 的做法）。",
+      "risk_notes": "第三方 action 先用主版號 tag；正式上線前改為 commit SHA 釘選（ivy backend CI 的做法）。 現有實作依 Supabase 版完成，需依目前 description 改寫。 改寫範圍：setup action 移除 supabase input 與 supabase/setup-cli 步驟。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "scripts/tests/test_ci_workflow.py",
@@ -800,7 +805,7 @@
           "test_ci_permissions_read_only：頂層 permissions == {'contents': 'read'}",
           "test_ci_validate_tasks_job：jobs['validate-tasks'] 存在，run_lines('validate-tasks') 含 'python3 scripts/validate_tasks.py .'",
           "test_ci_every_job_has_timeout：所有 job 都有 timeout-minutes 且為正整數；以測試內構造的缺 timeout job dict 呼叫同一檢查函式 → 回報該 job 名稱",
-          "test_ci_setup_action_inputs：載入 .github/actions/setup/action.yml → runs.using == 'composite'，inputs 含 python、node、supabase 三個 key"
+          "test_ci_setup_action_inputs：載入 .github/actions/setup/action.yml → runs.using == 'composite'，inputs 的 key 集合 == {'python', 'node'}，且 action.yml 全文不含 'supabase'（不分大小寫）"
         ],
         "run": "just test scripts/tests/test_ci_workflow.py -k \"triggers or permissions or validate_tasks_job or timeout or setup_action\"",
         "notes": "另跑：uvx --from actionlint-py actionlint .github/workflows/ci.yml"
@@ -881,7 +886,7 @@
     {
       "id": "INFRA-025",
       "title": "新增 CI job unit：後端與 scripts 的單元測試全量",
-      "description": "在 `.github/workflows/ci.yml` 加入 job `unit`。\n\n步驟：checkout → setup（python，node: false）→\n- `uv run --frozen pytest -m \"not integration\"`（working-directory `apps/api`；CI 允許全量）\n- `apps/api/.venv/bin/pytest scripts/tests -m \"not integration\"`（repo root）\n`timeout-minutes: 15`。單元測試不需要 Supabase，job 不得安裝或啟動 supabase。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "在 `.github/workflows/ci.yml` 加入 job `unit`。\n\n步驟：checkout → setup（python，node: false）→\n- `uv run --frozen pytest -m \"not integration\"`（working-directory `apps/api`；CI 允許全量）\n- `apps/api/.venv/bin/pytest scripts/tests -m \"not integration\"`（repo root）\n`timeout-minutes: 15`。單元測試不需要 DB，job 不得啟動 docker compose。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": null,
@@ -901,7 +906,7 @@
         ],
         "red_cases": [
           "test_ci_unit_job_runs_api_and_scripts：run_lines('unit') 有一行含 'pytest' 與 '-m \"not integration\"' 且該 step working-directory == 'apps/api'；另一行含 'pytest scripts/tests'",
-          "test_ci_unit_job_has_no_supabase：unit job 中沒有任何 step 的 run 含 'supabase'，setup action 的 with.supabase 未設或為 false"
+          "test_ci_unit_job_has_no_db：unit job 中沒有任何 step 的 run 含 'docker compose' 或 'db-reset'"
         ],
         "run": "just test scripts/tests/test_ci_workflow.py -k unit_job",
         "notes": "另跑：uvx --from actionlint-py actionlint .github/workflows/ci.yml"
@@ -914,8 +919,8 @@
     },
     {
       "id": "INFRA-026",
-      "title": "新增 CI job integration：啟動本機 Supabase、重建 DB 後跑整合測試",
-      "description": "在 `.github/workflows/ci.yml` 加入 job `integration`。\n\n步驟：checkout → setup（python，supabase: true，node: false）→\n1. `supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,realtime,postgres-meta`（只留 db、rest、storage、kong 等測試需要的服務；排除清單以實際 CLI 支援的名稱為準）。\n2. 等待就緒：輪詢 `http://127.0.0.1:54341/rest/v1/` 回 200 或 401，最多 60 次、每次 5 秒，逾時 exit 1（參考 land_house_scraper `.gitlab-ci.yml` 的 integration-test）。\n3. `supabase db reset`（job 專屬 stack，直接呼叫 CLI，不經 `just db-reset` 的互動確認）。\n4. `uv run --frozen pytest -m integration`（working-directory `apps/api`）。\n5. `apps/api/.venv/bin/pytest scripts/tests -m integration`。\n6. `if: always()` 的最後一步 `supabase stop --no-backup`。\n`timeout-minutes: 25`。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "title": "新增 CI job integration：以 compose 啟動 Postgres / MinIO、重建 DB 後跑整合測試",
+      "description": "在 `.github/workflows/ci.yml` 加入 job `integration`。\n\n步驟：checkout → setup（python，node: false）→\n1. `docker compose -f compose.yaml up -d --wait db storage storage-init`（INFRA-044；`--wait` 等 healthcheck，storage-init 建好 bucket 才繼續）。\n2. `just db-reset --yes`（INFRA-046：在乾淨 DB 上套用全部 revision 並設定 app_backend 本機密碼；CI 非 TTY，必須帶 `--yes`）。\n3. `uv run --frozen pytest -m integration`（working-directory `apps/api`）。\n4. `apps/api/.venv/bin/pytest scripts/tests -m integration`。\n5. `if: always()` 的最後一步 `docker compose -f compose.yaml down -v`。\n`timeout-minutes: 25`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": null,
@@ -923,7 +928,9 @@
       "assignee_session": null,
       "depends_on": [
         "INFRA-022",
-        "INFRA-010"
+        "INFRA-010",
+        "INFRA-044",
+        "INFRA-046"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -934,9 +941,9 @@
           "unit"
         ],
         "red_cases": [
-          "test_ci_integration_job_order：run_lines('integration') 中 'supabase start' 的索引 < 'supabase db reset' 的索引 < 含 'pytest -m integration' 那一行的索引",
-          "test_ci_integration_job_waits_for_readiness：run_lines('integration') 有一段含 '54341' 的輪詢迴圈（字串含 'for' 與 'sleep'）",
-          "test_ci_integration_job_stops_supabase_always：最後一個 step 的 if == 'always()' 且 run 含 'supabase stop'",
+          "test_ci_integration_job_order：run_lines('integration') 中含 'docker compose' 與 'up' 的那一行索引 < 'just db-reset --yes' 的索引 < 含 'pytest -m integration' 那一行的索引",
+          "test_ci_integration_job_waits_for_services：含 'docker compose' 與 'up' 的那一行同時含 '--wait'、'db'、'storage' 與 'storage-init'",
+          "test_ci_integration_job_tears_down_always：最後一個 step 的 if == 'always()' 且 run 含 'docker compose' 與 'down'",
           "test_ci_integration_job_runs_scripts_integration：run_lines('integration') 含 'pytest scripts/tests -m integration'"
         ],
         "run": "just test scripts/tests/test_ci_workflow.py -k integration_job",
@@ -950,8 +957,8 @@
     },
     {
       "id": "INFRA-027",
-      "title": "新增 CI job db-checks：重建 DB 後跑 check_rls 與 schema drift",
-      "description": "在 `.github/workflows/ci.yml` 加入 job `db-checks`。\n\n步驟：checkout → setup（python，supabase: true，node: false）→ 與 INFRA-026 相同的 `supabase start`（同一排除清單）、就緒輪詢、`supabase db reset` →\n- `just check-rls`：只在有 migration 時執行（step `if: hashFiles('supabase/migrations/*.sql') != ''`）；不帶 `--allow-empty`，有 migration 卻沒有表時應該失敗。\n- `just schema-drift`：只在 `apps/api/app/models/__init__.py` 存在時執行（`if: hashFiles('apps/api/app/models/__init__.py') != ''`）。\n- `if: always()` 的 `supabase stop --no-backup`。\n`timeout-minutes: 20`。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "title": "新增 CI job db-checks：乾淨 DB 套用全部 revision、單一 head 與 schema drift",
+      "description": "在 `.github/workflows/ci.yml` 加入 job `db-checks`，在 PR 階段證明全部 revision 能在乾淨 DB 上依序套用、歷史只有一個 head，且 models 與 DB 沒有 drift（architecture_decisions §5）。\n\n步驟：checkout → setup（python，node: false）→\n1. `docker compose -f compose.yaml up -d --wait db`（只需要 Postgres）。\n2. `just db-reset --yes`（INFRA-046）。\n3. 單一 head：`cd apps/api && test \"$(uv run --frozen alembic heads | wc -l)\" -eq 1`（`alembic heads` 只讀 versions 目錄，不需連線）。\n4. `just schema-drift`（INFRA-020）。\n5. `if: always()` 的 `docker compose -f compose.yaml down -v`。\n`timeout-minutes: 20`。grant 與 schema 慣例由 DB-040 的整合測試在 integration job 把關，本 job 不另跑。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": null,
@@ -959,8 +966,9 @@
       "assignee_session": null,
       "depends_on": [
         "INFRA-022",
-        "INFRA-007",
-        "INFRA-020"
+        "INFRA-020",
+        "INFRA-044",
+        "INFRA-046"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -971,9 +979,9 @@
           "unit"
         ],
         "red_cases": [
-          "test_ci_db_checks_job_runs_rls_after_reset：run_lines('db-checks') 中 'supabase db reset' 的索引 < 'just check-rls' 的索引，且 check-rls 那一行不含 '--allow-empty'",
-          "test_ci_db_checks_job_conditions：check-rls step 的 if 含 \"hashFiles('supabase/migrations/*.sql')\"；schema-drift step 的 if 含 \"hashFiles('apps/api/app/models/__init__.py')\"",
-          "test_ci_db_checks_job_stops_supabase_always：最後一個 step 的 if == 'always()' 且 run 含 'supabase stop'"
+          "test_ci_db_checks_job_order：run_lines('db-checks') 中 'just db-reset --yes' 的索引 < 含 'alembic heads' 那一行的索引 < 'just schema-drift' 的索引",
+          "test_ci_db_checks_single_head：含 'alembic heads' 的那一行同時含 'wc -l' 與 '-eq 1'",
+          "test_ci_db_checks_job_tears_down_always：最後一個 step 的 if == 'always()' 且 run 含 'docker compose' 與 'down'"
         ],
         "run": "just test scripts/tests/test_ci_workflow.py -k db_checks_job",
         "notes": "另跑：uvx --from actionlint-py actionlint .github/workflows/ci.yml"
@@ -1058,7 +1066,7 @@
     {
       "id": "INFRA-030",
       "title": "新增 e2e workflow：手動與每日排程執行 Playwright",
-      "description": "新增 `.github/workflows/e2e.yml`，e2e 不放進每個 PR 的 CI（`docs/testing_conventions.md` §3：預設不執行）。\n\n- `on`: `workflow_dispatch` 與 `schedule`（`cron: '0 18 * * *'`，台北時間 02:00）。`permissions: contents: read`。\n- job `e2e`（`timeout-minutes: 30`）：checkout → setup（python + node + supabase）→ `supabase start`（排除 studio 等非必要服務）與就緒輪詢 → `supabase db reset` → 以 `apps/api/.env.example` 複製出 `apps/api/.env` 並把 `APP_SECRET_KEY` 換成 `openssl rand -base64 48` → `pnpm exec playwright install --with-deps chromium`（`apps/web`）→ `DEV_UP_SKIP_SUPABASE=1 scripts/dev_up.sh` → `pnpm exec playwright test`（`apps/web`，CI 允許全量）→ `if: failure()` 上傳 `apps/web/playwright-report` 與 `apps/web/test-results` artifact（保留 7 天）→ `if: always()` 執行 `scripts/dev_down.sh --all`。\n\n**驗收標準**：每一條對應下列 red_case（同樣寫在 `scripts/tests/test_ci_workflow.py`，helper 支援指定 workflow 檔名）。",
+      "description": "新增 `.github/workflows/e2e.yml`，e2e 不放進每個 PR 的 CI（`docs/testing_conventions.md` §3：預設不執行）。\n\n- `on`: `workflow_dispatch` 與 `schedule`（`cron: '0 18 * * *'`，台北時間 02:00）。`permissions: contents: read`。\n- job `e2e`（`timeout-minutes: 30`）：checkout → setup（python + node）→ `docker compose -f compose.yaml up -d --wait db storage storage-init` → `just db-reset --yes` → 以 `apps/api/.env.example` 複製出 `apps/api/.env` 並把 `APP_SECRET_KEY` 換成 `openssl rand -base64 48` → `pnpm exec playwright install --with-deps chromium`（`apps/web`）→ `DEV_UP_SKIP_DB=1 scripts/dev_up.sh` → `pnpm exec playwright test`（`apps/web`，CI 允許全量）→ `if: failure()` 上傳 `apps/web/playwright-report` 與 `apps/web/test-results` artifact（保留 7 天）→ `if: always()` 執行 `scripts/dev_down.sh --all`。\n\n**驗收標準**：每一條對應下列 red_case（同樣寫在 `scripts/tests/test_ci_workflow.py`，helper 支援指定 workflow 檔名）。",
       "granularity_unit": "config",
       "target_path": ".github/workflows/e2e.yml",
       "source_ref": null,
@@ -1068,7 +1076,9 @@
         "INFRA-022",
         "INFRA-014",
         "INFRA-016",
-        "INFRA-017"
+        "INFRA-017",
+        "INFRA-044",
+        "INFRA-046"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -1080,9 +1090,10 @@
         ],
         "red_cases": [
           "test_e2e_workflow_triggers：載入 e2e.yml → on 含 workflow_dispatch 與 schedule，schedule[0].cron == '0 18 * * *'，且不含 pull_request",
-          "test_e2e_workflow_order：e2e job 的 run 行中 'supabase db reset' < 'dev_up.sh' < 'playwright test' 的索引順序成立",
+          "test_e2e_workflow_order：e2e job 的 run 行中含 'docker compose' 與 'up' 的那一行 < 'just db-reset --yes' < 'dev_up.sh' < 'playwright test' 的索引順序成立",
           "test_e2e_workflow_uploads_report_on_failure：存在 uses 以 'actions/upload-artifact' 開頭、if == 'failure()' 的 step，with.path 含 'playwright-report'",
-          "test_e2e_workflow_generates_secret：run 行中有一行含 'APP_SECRET_KEY' 且含 'openssl rand'，沒有任何一行把 APP_SECRET_KEY 設成固定字串"
+          "test_e2e_workflow_generates_secret：run 行中有一行含 'APP_SECRET_KEY' 且含 'openssl rand'，沒有任何一行把 APP_SECRET_KEY 設成固定字串",
+          "test_e2e_workflow_no_supabase：e2e.yml 全文不含 'supabase'（不分大小寫）"
         ],
         "run": "just test scripts/tests/test_ci_workflow.py -k e2e_workflow",
         "notes": "另跑：uvx --from actionlint-py actionlint .github/workflows/e2e.yml"
@@ -1096,7 +1107,7 @@
     {
       "id": "INFRA-031",
       "title": "撰寫 apps/api/Dockerfile 與 .dockerignore（uv、非 root、單一 worker）",
-      "description": "建立後端正式部署映像。參考 ivy `BE:Dockerfile::CMD` 與 `BE:.dockerignore`（保留：tini、非 root、依賴層與程式碼層分離、`PORT` 由平台注入；改掉：pip + requirements.lock 換成 uv + uv.lock、去掉 build metadata / alembic / scheduler role）。Railway 服務的 Root Directory 設為 `apps/api`，build context 即 `apps/api/`。\n\n**Dockerfile**（multi-stage）：\n- builder：`python:3.13-slim` + 從 `ghcr.io/astral-sh/uv:<固定版本>` 複製 `uv` 執行檔；`ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy`；先只複製 `pyproject.toml`、`uv.lock` 執行 `uv sync --frozen --no-dev --no-install-project`（依賴層快取），再複製 `app/` 執行 `uv sync --frozen --no-dev`。\n- runtime：`python:3.13-slim`；`apt-get install --no-install-recommends tini`；從 builder 複製 `/app/.venv` 與 `/app/app`；`ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PORT=8080`；`useradd --uid 10001 app`、`USER app`；`EXPOSE 8080`；`ENTRYPOINT [\"/usr/bin/tini\", \"--\"]`；`ENV FORWARDED_ALLOW_IPS=fd12::/16`（uvicorn 原生讀取此變數）；`CMD [\"sh\", \"-c\", \"exec uvicorn app.main:create_app --factory --host :: --port ${PORT} --workers 1 --proxy-headers --forwarded-allow-ips \\\"${FORWARDED_ALLOW_IPS}\\\" --no-access-log\"]`。\n  - `--host ::` 同時監聽 IPv4 / IPv6（Railway private network 走 IPv6）。\n  - `--workers 1` 是硬性要求：WebSocket broadcaster 與 APScheduler 都在行程內（`docs/architecture_decisions.md` §7）。\n  - `--forwarded-allow-ips` 只信任 Railway private network 的位址範圍（預設 `fd12::/16`），**不得使用 `*`**。真實 client IP 由 web 服務的 nginx 以 real_ip 模組解析後，以 `X-Forwarded-For: $remote_addr` 覆寫轉送（INFRA-033）；來源不在信任範圍的請求，uvicorn 忽略其 `X-Forwarded-For`，`request.client.host` 維持實際連線位址。audit_logs.ip 取自 `request.client.host`。\n- 容器啟動**不跑 migration**；migration 由 INFRA-037 / INFRA-038 套用。\n\n**.dockerignore**：`.venv`、`__pycache__`、`*.pyc`、`.pytest_cache`、`.ruff_cache`、`.mypy_cache`、`tests/`、`.env`、`.env.*`（映像不需要任何 env 範本，全部排除）、`*.md`。\n\n**驗收標準**：\n- `docker build -t afterschool-api apps/api` 成功。\n- `docker run --rm afterschool-api id -u` 輸出 `10001`。\n- 映像內沒有 `tests/` 目錄、沒有 pytest（`python -c \"import pytest\"` 失敗）。\n- 映像內 `python -c \"import fastapi, sqlalchemy, psycopg, apscheduler\"` 成功。\n- CMD 含 `--workers 1` 與 `--factory`，`--forwarded-allow-ips` 不是 `*`。\n- 來源不在信任範圍的請求自填 `X-Forwarded-For` 時，app 看到的 client IP 是實際連線位址而非自填值。\n- 結構測試（red_cases）鎖住上述 Dockerfile 關鍵設定。",
+      "description": "建立後端正式部署映像。參考 ivy `BE:Dockerfile::CMD` 與 `BE:.dockerignore`（保留：tini、非 root、依賴層與程式碼層分離、`PORT` 由平台注入；改掉：pip + requirements.lock 換成 uv + uv.lock、去掉 build metadata / scheduler role；alembic 保留，pre-deploy 執行 migration 需要）。Railway 服務的 Root Directory 設為 `apps/api`，build context 即 `apps/api/`。\n\n**Dockerfile**（multi-stage）：\n- builder：`python:3.13-slim` + 從 `ghcr.io/astral-sh/uv:<固定版本>` 複製 `uv` 執行檔；`ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy`；先只複製 `pyproject.toml`、`uv.lock` 執行 `uv sync --frozen --no-dev --no-install-project`（依賴層快取），再複製 `app/`、`alembic.ini`、`alembic/` 執行 `uv sync --frozen --no-dev`。\n- runtime：`python:3.13-slim`；`apt-get install --no-install-recommends tini`；從 builder 複製 `/app/.venv`、`/app/app`、`/app/alembic.ini` 與 `/app/alembic`；`ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PORT=8080`；`useradd --uid 10001 app`、`USER app`；`EXPOSE 8080`；`ENTRYPOINT [\"/usr/bin/tini\", \"--\"]`；`ENV FORWARDED_ALLOW_IPS=fd12::/16`（uvicorn 原生讀取此變數）；`CMD [\"sh\", \"-c\", \"exec uvicorn app.main:create_app --factory --host :: --port ${PORT} --workers 1 --proxy-headers --forwarded-allow-ips \\\"${FORWARDED_ALLOW_IPS}\\\" --no-access-log\"]`。\n  - `--host ::` 同時監聽 IPv4 / IPv6（Railway private network 走 IPv6）。\n  - `--workers 1` 是硬性要求：WebSocket broadcaster 與 APScheduler 都在行程內（`docs/architecture_decisions.md` §7）。\n  - `--forwarded-allow-ips` 只信任 Railway private network 的位址範圍（預設 `fd12::/16`），**不得使用 `*`**。真實 client IP 由 web 服務的 nginx 以 real_ip 模組解析後，以 `X-Forwarded-For: $remote_addr` 覆寫轉送（INFRA-033）；來源不在信任範圍的請求，uvicorn 忽略其 `X-Forwarded-For`，`request.client.host` 維持實際連線位址。audit_logs.ip 取自 `request.client.host`。\n- 容器啟動**不跑 migration**；migration 由 Railway pre-deploy command（INFRA-032）以同一映像執行 `python -m app.cli migrate`（BACKEND-535），因此映像必須包含 `alembic.ini` 與 `alembic/`（含 `versions/`）。\n\n**.dockerignore**：`.venv`、`__pycache__`、`*.pyc`、`.pytest_cache`、`.ruff_cache`、`.mypy_cache`、`tests/`、`.env`、`.env.*`（映像不需要任何 env 範本，全部排除）、`*.md`。\n\n**驗收標準**：\n- `docker build -t afterschool-api apps/api` 成功。\n- `docker run --rm afterschool-api id -u` 輸出 `10001`。\n- 映像內沒有 `tests/` 目錄、沒有 pytest（`python -c \"import pytest\"` 失敗）。\n- 映像內 `python -c \"import fastapi, sqlalchemy, psycopg, apscheduler, alembic, boto3\"` 成功，且 `/app/alembic.ini`、`/app/alembic/env.py` 存在。\n- CMD 含 `--workers 1` 與 `--factory`，`--forwarded-allow-ips` 不是 `*`。\n- 來源不在信任範圍的請求自填 `X-Forwarded-For` 時，app 看到的 client IP 是實際連線位址而非自填值。\n- 結構測試（red_cases）鎖住上述 Dockerfile 關鍵設定。",
       "granularity_unit": "config",
       "target_path": "apps/api/Dockerfile",
       "source_ref": "BE:Dockerfile::CMD",
@@ -1104,7 +1115,8 @@
       "assignee_session": null,
       "depends_on": [
         "INFRA-004",
-        "INFRA-008"
+        "INFRA-008",
+        "INFRA-045"
       ],
       "suggested_model": "opus-5",
       "risk_notes": "GET /api/health 由 BACKEND 提供；尚未存在時 Railway healthcheck（INFRA-032）會失敗，部署前要確認 BACKEND 已完成 health endpoint。",
@@ -1122,10 +1134,11 @@
           "test_api_dockerfile_uses_frozen_no_dev：含 'uv sync --frozen --no-dev'，且不含 'pip install'",
           "test_api_dockerignore_excludes_tests_and_env：apps/api/.dockerignore 的行集合包含 'tests/'、'.env'、'.venv'",
           "test_api_dockerfile_forwarded_allow_ips_not_wildcard：Dockerfile 含 'ENV FORWARDED_ALLOW_IPS=fd12::/16'，CMD 行含 '--forwarded-allow-ips'，且整份 Dockerfile 不含 \"forwarded-allow-ips='*'\" 或 'forwarded-allow-ips=*'",
-          "test_api_uvicorn_ignores_spoofed_forwarded_for：測試在 tmp_path 寫一個回傳 scope['client'][0] 的最小 ASGI app，以 apps/api/.venv 的 uvicorn 於 127.0.0.1 臨時 port 啟動，旗標 `--proxy-headers --forwarded-allow-ips <從 Dockerfile 解析出的 FORWARDED_ALLOW_IPS 值>`；以 httpx 帶 'X-Forwarded-For: 6.6.6.6' 請求 → 回應 body == '127.0.0.1'（不是 '6.6.6.6'）；對照組改用 `--forwarded-allow-ips 127.0.0.1` 啟動 → body == '6.6.6.6'（證明測試確實能偵測信任設定）"
+          "test_api_uvicorn_ignores_spoofed_forwarded_for：測試在 tmp_path 寫一個回傳 scope['client'][0] 的最小 ASGI app，以 apps/api/.venv 的 uvicorn 於 127.0.0.1 臨時 port 啟動，旗標 `--proxy-headers --forwarded-allow-ips <從 Dockerfile 解析出的 FORWARDED_ALLOW_IPS 值>`；以 httpx 帶 'X-Forwarded-For: 6.6.6.6' 請求 → 回應 body == '127.0.0.1'（不是 '6.6.6.6'）；對照組改用 `--forwarded-allow-ips 127.0.0.1` 啟動 → body == '6.6.6.6'（證明測試確實能偵測信任設定）",
+          "test_api_dockerfile_includes_alembic：runtime stage 的 COPY 指令涵蓋 'alembic.ini' 與 'alembic'（目錄），且 apps/api/.dockerignore 的行集合不含 'alembic' 或 'alembic/'"
         ],
         "run": "just test scripts/tests/test_deploy_configs.py -k \"api_docker or api_uvicorn\"",
-        "notes": "另跑（需 Docker）：docker build -t afterschool-api apps/api && test \"$(docker run --rm afterschool-api id -u)\" = 10001 && ! docker run --rm afterschool-api python -c 'import pytest' && docker run --rm afterschool-api sh -c 'test ! -d /app/tests' && docker run --rm afterschool-api python -c 'import fastapi, sqlalchemy, psycopg, apscheduler'"
+        "notes": "另跑（需 Docker）：docker build -t afterschool-api apps/api && test \"$(docker run --rm afterschool-api id -u)\" = 10001 && ! docker run --rm afterschool-api python -c 'import pytest' && docker run --rm afterschool-api sh -c 'test ! -d /app/tests' && docker run --rm afterschool-api python -c 'import fastapi, sqlalchemy, psycopg, apscheduler, alembic, boto3' && docker run --rm afterschool-api sh -c 'test -f /app/alembic.ini && test -f /app/alembic/env.py'"
       },
       "review": {
         "status": "pending",
@@ -1136,14 +1149,15 @@
     {
       "id": "INFRA-032",
       "title": "撰寫 apps/api/railway.json：Dockerfile 建置、healthcheck、單一實例",
-      "description": "建立 api 服務的 Railway config-as-code。參考 ivy `BE:railway.json::deploy`。\n\n```json\n{\n  \"$schema\": \"https://railway.com/railway.schema.json\",\n  \"build\": { \"builder\": \"DOCKERFILE\", \"dockerfilePath\": \"Dockerfile\", \"watchPatterns\": [\"/apps/api/**\"] },\n  \"deploy\": {\n    \"healthcheckPath\": \"/api/health\",\n    \"healthcheckTimeout\": 120,\n    \"numReplicas\": 1,\n    \"restartPolicyType\": \"ON_FAILURE\",\n    \"restartPolicyMaxRetries\": 5,\n    \"overlapSeconds\": 30,\n    \"drainingSeconds\": 15\n  }\n}\n```\n- `numReplicas: 1`：單一實例是架構前提（in-process broadcaster），要開多實例需先決定 Redis broadcaster（domain_spec §5 open question）。\n- `watchPatterns` 讓只改前端的 commit 不觸發 api 重新部署。\n- `healthcheckPath` 對應 BACKEND 提供的 `GET /api/health`（回 200）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 api 服務的 Railway config-as-code。參考 ivy `BE:railway.json::deploy`。\n\n```json\n{\n  \"$schema\": \"https://railway.com/railway.schema.json\",\n  \"build\": { \"builder\": \"DOCKERFILE\", \"dockerfilePath\": \"Dockerfile\", \"watchPatterns\": [\"/apps/api/**\"] },\n  \"deploy\": {\n    \"healthcheckPath\": \"/api/health\",\n    \"healthcheckTimeout\": 120,\n    \"numReplicas\": 1,\n    \"restartPolicyType\": \"ON_FAILURE\",\n    \"restartPolicyMaxRetries\": 5,\n    \"preDeployCommand\": [\"python -m app.cli migrate\"],\n    \"overlapSeconds\": 30,\n    \"drainingSeconds\": 15\n  }\n}\n```\n- `numReplicas: 1`：單一實例是架構前提（in-process broadcaster），要開多實例需先決定 Redis broadcaster（domain_spec §5 open question）。\n- `watchPatterns` 讓只改前端的 commit 不觸發 api 重新部署。\n- `healthcheckPath` 對應 BACKEND 提供的 `GET /api/health`（回 200）。\n- `preDeployCommand`：每次部署前以同一映像執行 migration（BACKEND-535，architecture_decisions §5）；pre-deploy 使用 api 服務的環境變數（`DATABASE_URL`、`MIGRATION_DATABASE_URL`）與 private network，失敗時 Railway 中止這次部署、上一版部署繼續服務。欄位格式以當下 `railway.schema.json` 為準。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "config",
       "target_path": "apps/api/railway.json",
       "source_ref": "BE:railway.json::deploy",
       "status": "pending",
       "assignee_session": null,
       "depends_on": [
-        "INFRA-031"
+        "INFRA-031",
+        "BACKEND-535"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -1157,7 +1171,8 @@
           "test_api_railway_builder：載入 apps/api/railway.json → build.builder == 'DOCKERFILE'，build.dockerfilePath == 'Dockerfile'",
           "test_api_railway_single_replica：deploy.numReplicas == 1",
           "test_api_railway_healthcheck：deploy.healthcheckPath == '/api/health' 且 healthcheckTimeout 為介於 30~300 的整數",
-          "test_api_railway_watch_patterns：build.watchPatterns == ['/apps/api/**']"
+          "test_api_railway_watch_patterns：build.watchPatterns == ['/apps/api/**']",
+          "test_api_railway_pre_deploy_migrate：deploy.preDeployCommand == ['python -m app.cli migrate']（若 schema 只接受字串，則 == 'python -m app.cli migrate'，並同步修改本 red_case）"
         ],
         "run": "just test scripts/tests/test_deploy_configs.py -k api_railway",
         "notes": ""
@@ -1171,7 +1186,7 @@
     {
       "id": "INFRA-033",
       "title": "撰寫 nginx 設定範本：SPA 雙入口、/api 與 WebSocket 反向代理、安全標頭",
-      "description": "建立 web 服務的 nginx 設定：`apps/web/nginx/default.conf.template`（經官方映像 envsubst）與 `apps/web/nginx/security-headers.conf`（不經 envsubst，由各 location include）。參考 ivy `FE:nginx.conf.template::location /api/` 與 `FE:nginx-security-headers.conf::Content-Security-Policy`，**去掉**多租戶 host guard、品牌 `sub_filter`、`public.html`、build-metadata。\n\n**為什麼由 nginx 反代 /api**：前後端同源，httpOnly cookie 是 first-party，避免 LINE in-app webview 擋第三方 cookie；api 服務不開 public domain，只透過 Railway private network 被 nginx 存取。\n\n**default.conf.template**：\n- `listen ${PORT}; listen [::]:${PORT};`、`root /usr/share/nginx/html;`、`absolute_redirect off;`、`server_tokens off;`、gzip（text/css、application/javascript、application/json、image/svg+xml）。\n- `resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv6=on;` + `set $backend_upstream ${BACKEND_URL};`，`proxy_pass $backend_upstream;`（變數形式讓 nginx 依 TTL 重新解析 api 的 private DNS）。\n- `location /api/ws/`：HTTP/1.1 + `Upgrade` / `Connection \"upgrade\"`，`proxy_read_timeout 3600s`、`proxy_send_timeout 3600s`。\n- **真實 client IP**（server 層級）：`include /etc/nginx/real-ip.conf;`，該檔由 `apps/web/nginx/40-real-ip.sh`（放進 `/docker-entrypoint.d/`，nginx 官方映像啟動時執行）依環境變數 `TRUSTED_EDGE_CIDRS`（以空白分隔的 CIDR 清單，Railway edge 的來源範圍；預設值寫在 Dockerfile，實際範圍上線時實測，見 open_design_questions）逐一產生 `set_real_ip_from <cidr>;` 行；變數為空或含非 CIDR 字元時腳本 exit 1，容器不啟動、`real_ip_header X-Forwarded-For`、`real_ip_recursive on`。經過 real_ip 處理後 `$remote_addr` 即為真實 client IP；來源不在信任範圍時 `$remote_addr` 維持實際連線位址，用戶端自填的 `X-Forwarded-For` 不被採信。\n- `location /api/` 與 `location /api/ws/`：`proxy_set_header Host $host; X-Real-IP $remote_addr; X-Forwarded-For $remote_addr; X-Forwarded-Proto $http_x_forwarded_proto`（Railway edge 已終止 TLS）。`X-Forwarded-For` 一律以 `$remote_addr` **覆寫**，不得使用 `$proxy_add_x_forwarded_for`（append 會把用戶端自填值傳給 api）；`client_max_body_size 20m`（Excel 匯入、照片、請假附件）；`proxy_read_timeout 60s`。\n- `location = /healthz`：`return 200 \"ok\"`，不 include 安全標頭以外的邏輯，供 Railway healthcheck。\n- `location = /parent`：301 到 `/parent/`。`location /parent/`：`try_files $uri /parent/index.html;`，include 安全標頭，`Cache-Control: no-cache`。\n- `location /assets/`：`Cache-Control: public, max-age=31536000, immutable`，include 安全標頭。\n- `location /`：`try_files $uri /index.html;`，include 安全標頭，`index.html` 回 `Cache-Control: no-cache`。\n- `.map` 檔一律 404。\n\n**security-headers.conf**：`X-Content-Type-Options nosniff`、`X-Frame-Options DENY`、`Referrer-Policy strict-origin-when-cross-origin`、`Permissions-Policy \"camera=(), microphone=(), geolocation=(), payment=()\"`、`Strict-Transport-Security \"max-age=31536000; includeSubDomains\"`、`Content-Security-Policy`：`default-src 'self'; script-src 'self' https://static.line-scdn.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co https://profile.line-scdn.net https://sprofile.line-scdn.net; font-src 'self' data:; connect-src 'self' wss: https://api.line.me https://liffsdk.line-scdn.net https://*.supabase.co; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'`。全部加 `always`。\n\n**驗收標準**：\n- 以官方 nginx 映像渲染範本後 `nginx -t` 通過（見 notes）。\n- 結構測試鎖住：/api/ws/ 有 Upgrade 設定、/api/ 有 client_max_body_size、/healthz 存在、CSP 含 `frame-ancestors 'none'` 與 LINE 網域、每個靜態 location 都 include 安全標頭、real_ip 三項設定存在、X-Forwarded-For 以 `$remote_addr` 覆寫。\n- 行為測試：用戶端自填 `X-Forwarded-For` 時，後端收到的 client IP 不是自填值。",
+      "description": "建立 web 服務的 nginx 設定：`apps/web/nginx/default.conf.template`（經官方映像 envsubst）與 `apps/web/nginx/security-headers.conf`（不經 envsubst，由各 location include）。參考 ivy `FE:nginx.conf.template::location /api/` 與 `FE:nginx-security-headers.conf::Content-Security-Policy`，**去掉**多租戶 host guard、品牌 `sub_filter`、`public.html`、build-metadata。\n\n**為什麼由 nginx 反代 /api**：前後端同源，httpOnly cookie 是 first-party，避免 LINE in-app webview 擋第三方 cookie；api 服務不開 public domain，只透過 Railway private network 被 nginx 存取。\n\n**default.conf.template**：\n- `listen ${PORT}; listen [::]:${PORT};`、`root /usr/share/nginx/html;`、`absolute_redirect off;`、`server_tokens off;`、gzip（text/css、application/javascript、application/json、image/svg+xml）。\n- `resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv6=on;` + `set $backend_upstream ${BACKEND_URL};`，`proxy_pass $backend_upstream;`（變數形式讓 nginx 依 TTL 重新解析 api 的 private DNS）。\n- `location /api/ws/`：HTTP/1.1 + `Upgrade` / `Connection \"upgrade\"`，`proxy_read_timeout 3600s`、`proxy_send_timeout 3600s`。\n- **真實 client IP**（server 層級）：`include /etc/nginx/real-ip.conf;`，該檔由 `apps/web/nginx/40-real-ip.sh`（放進 `/docker-entrypoint.d/`，nginx 官方映像啟動時執行）依環境變數 `TRUSTED_EDGE_CIDRS`（以空白分隔的 CIDR 清單，Railway edge 的來源範圍；預設值寫在 Dockerfile，實際範圍上線時實測，見 open_design_questions）逐一產生 `set_real_ip_from <cidr>;` 行；變數為空或含非 CIDR 字元時腳本 exit 1，容器不啟動、`real_ip_header X-Forwarded-For`、`real_ip_recursive on`。經過 real_ip 處理後 `$remote_addr` 即為真實 client IP；來源不在信任範圍時 `$remote_addr` 維持實際連線位址，用戶端自填的 `X-Forwarded-For` 不被採信。\n- `location /api/` 與 `location /api/ws/`：`proxy_set_header Host $host; X-Real-IP $remote_addr; X-Forwarded-For $remote_addr; X-Forwarded-Proto $http_x_forwarded_proto`（Railway edge 已終止 TLS）。`X-Forwarded-For` 一律以 `$remote_addr` **覆寫**，不得使用 `$proxy_add_x_forwarded_for`（append 會把用戶端自填值傳給 api）；`client_max_body_size 20m`（Excel 匯入、照片、請假附件）；`proxy_read_timeout 60s`。\n- `location = /healthz`：`return 200 \"ok\"`，不 include 安全標頭以外的邏輯，供 Railway healthcheck。\n- `location = /parent`：301 到 `/parent/`。`location /parent/`：`try_files $uri /parent/index.html;`，include 安全標頭，`Cache-Control: no-cache`。\n- `location /assets/`：`Cache-Control: public, max-age=31536000, immutable`，include 安全標頭。\n- `location /`：`try_files $uri /index.html;`，include 安全標頭，`index.html` 回 `Cache-Control: no-cache`。\n- `.map` 檔一律 404。\n\n**security-headers.conf**：`X-Content-Type-Options nosniff`、`X-Frame-Options DENY`、`Referrer-Policy strict-origin-when-cross-origin`、`Permissions-Policy \"camera=(), microphone=(), geolocation=(), payment=()\"`、`Strict-Transport-Security \"max-age=31536000; includeSubDomains\"`、`Content-Security-Policy`：`default-src 'self'; script-src 'self' https://static.line-scdn.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.r2.cloudflarestorage.com https://profile.line-scdn.net https://sprofile.line-scdn.net; font-src 'self' data:; connect-src 'self' wss: https://api.line.me https://liffsdk.line-scdn.net; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'`。全部加 `always`。\n\n**驗收標準**：\n- 以官方 nginx 映像渲染範本後 `nginx -t` 通過（見 notes）。\n- 結構測試鎖住：/api/ws/ 有 Upgrade 設定、/api/ 有 client_max_body_size、/healthz 存在、CSP 含 `frame-ancestors 'none'` 與 LINE 網域、每個靜態 location 都 include 安全標頭、real_ip 三項設定存在、X-Forwarded-For 以 `$remote_addr` 覆寫。\n- 行為測試：用戶端自填 `X-Forwarded-For` 時，後端收到的 client IP 不是自填值。",
       "granularity_unit": "config",
       "target_path": "apps/web/nginx/default.conf.template",
       "source_ref": "FE:nginx.conf.template::location /api/",
@@ -1182,7 +1197,7 @@
         "INFRA-008"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "LIFF SDK 實際連線的網域與 CSP 需在真機（LINE in-app browser）驗證一次；被擋時在瀏覽器 console 會看到 CSP violation，依實際網域補進 connect-src / script-src，不要放寬成 *。 real_ip 的 set_real_ip_from 若設得過寬（例如 0.0.0.0/0），任何用戶端都能偽造 client IP，等同沒有防護；上線實測前預設值寧可過窄（只會讓 audit 記到 edge IP），不可過寬。",
+      "risk_notes": "LIFF SDK 實際連線的網域與 CSP 需在真機（LINE in-app browser）驗證一次；被擋時在瀏覽器 console 會看到 CSP violation，依實際網域補進 connect-src / script-src，不要放寬成 *。 real_ip 的 set_real_ip_from 若設得過寬（例如 0.0.0.0/0），任何用戶端都能偽造 client IP，等同沒有防護；上線實測前預設值寧可過窄（只會讓 audit 記到 edge IP），不可過寬。 R2 presigned URL 的網域為 `<account_id>.r2.cloudflarestorage.com`，CSP 以 `https://*.r2.cloudflarestorage.com` 放行圖片；PDF 以連結開新分頁，不受 connect-src 限制。",
       "open_design_questions": [
         "Railway 的實際網路行為需上線時實測（部署時驗證）：(1) Railway edge 轉送到 web 服務時，來源 IP 落在哪個範圍（決定 nginx `set_real_ip_from` 的值），以及真實 client IP 放在 `X-Forwarded-For` 還是 `X-Real-IP` / 其他標頭；(2) web 服務經 private network 連 api 時的來源位址範圍（決定 uvicorn `FORWARDED_ALLOW_IPS`，目前預設 `fd12::/16`，若環境為雙棧需加上對應 IPv4 範圍）。驗證方式：部署後在 api 暫時記錄 request.client 與原始標頭，用已知 IP 的裝置連線比對；確認後更新 nginx 範本與 Dockerfile 的值，並刪除本問題。"
       ],
@@ -1196,7 +1211,7 @@
           "test_nginx_api_location_body_limit：`location /api/` 區塊含 'client_max_body_size 20m' 與 'proxy_pass $backend_upstream'",
           "test_nginx_healthz_location：存在 `location = /healthz` 且含 'return 200'",
           "test_nginx_static_locations_include_security_headers：`location /`、`location /parent/`、`location /assets/` 三個區塊都含 'include /etc/nginx/security-headers.conf'；測試內構造一個缺 include 的設定字串餵給同一檢查函式 → 回報該 location",
-          "test_nginx_csp_directives：security-headers.conf 的 CSP 值含 \"frame-ancestors 'none'\"、'https://api.line.me'、\"object-src 'none'\"，且不含 \"'unsafe-eval'\"",
+          "test_nginx_csp_directives：security-headers.conf 的 CSP 值含 \"frame-ancestors 'none'\"、'https://api.line.me'、\"object-src 'none'\"，img-src 含 'https://*.r2.cloudflarestorage.com'（R2 presigned URL，architecture_decisions §10），且不含 \"'unsafe-eval'\" 與 'supabase'",
           "test_nginx_real_ip_config：default.conf.template 含 'include /etc/nginx/real-ip.conf'、'real_ip_header X-Forwarded-For'、'real_ip_recursive on'；以 TRUSTED_EDGE_CIDRS='10.0.0.0/8 fd00::/8' 執行 40-real-ip.sh（輸出路徑以環境變數覆寫到 tmp_path）→ 產生恰好兩行 'set_real_ip_from 10.0.0.0/8;'、'set_real_ip_from fd00::/8;'；TRUSTED_EDGE_CIDRS='' 或 '1.2.3.4/8; evil' → exit 1",
           "test_nginx_overwrites_forwarded_for：`location /api/` 與 `location /api/ws/` 區塊都含 'proxy_set_header X-Forwarded-For $remote_addr'，整份範本不含 '$proxy_add_x_forwarded_for'",
           "test_nginx_spoofed_forwarded_for_not_passed：測試在 127.0.0.1 臨時 port 起一個記錄請求標頭的 HTTP 伺服器，以 docker 執行 nginx:1.27-alpine 套用本範本（BACKEND_URL 指向 host.docker.internal:<port>，TRUSTED_EDGE_CIDRS 設為不含 docker bridge 的 203.0.113.0/24），從主機帶 'X-Forwarded-For: 6.6.6.6' 請求 /api/probe → 記錄到的 X-Forwarded-For 只有一個值且 != '6.6.6.6'、不含 '6.6.6.6'；對照組把 TRUSTED_EDGE_CIDRS 設為 docker bridge 網段（0.0.0.0/0）→ 記錄到的值 == '6.6.6.6'（證明測試能偵測信任設定）。環境沒有 docker 時 pytest.fail('此測試需要 Docker')，不得 skip"
@@ -1317,17 +1332,13 @@
     {
       "id": "INFRA-037",
       "title": "實作 scripts/db_push.sh 與 just db-push：安全地把 migration 套用到 Supabase 雲端",
-      "description": "新增 `scripts/db_push.sh` 與 justfile recipe `db-push *ARGS`，包裝 `supabase db push`，是套用雲端 migration 的唯一腳本：merge 到 `main` 時由 INFRA-038 的 workflow 自動以 `--yes` 呼叫；本機只用於 `--dry-run` 預覽或 workflow 無法使用時的緊急手動套用（本機 Supabase 用 `just db-reset`）。\n\n**參數白名單**：`--project-ref <ref>`（或環境變數 `SUPABASE_PROJECT_REF`，兩者皆無 → exit 1）、`--dry-run`、`--yes`。其他任何參數（含 `--db-url`、`--include-seed`、`--include-all`、`--linked`）印拒絕原因並 exit 1，且不呼叫 supabase。\n- 拒絕 `--include-seed`：雲端不執行 seed.sql，系統必要資料由 data migration 建立（`docs/architecture_decisions.md` §5）。\n\n**前置檢查**（任一失敗 exit 1、不呼叫 `db push`）：\n1. 環境變數 `SUPABASE_DB_PASSWORD` 必須存在（`supabase link` / `db push` 需要）；`SUPABASE_ACCESS_TOKEN` 或已執行 `supabase login` 擇一。\n2. `git status --porcelain -- supabase/migrations` 必須為空（禁止推送未提交的 migration）。\n3. 目前分支必須是 `main`，除非帶 `--dry-run`。分支以 `git rev-parse --abbrev-ref HEAD` 判斷；HEAD 為 detached 時改看 `GITHUB_REF_NAME`（GitHub Actions 提供）。\n\n**流程**：`supabase link --project-ref <ref>` → `supabase migration list`（印出本機與雲端差異）→ `supabase db push --dry-run` → 帶 `--dry-run` 時到此結束 exit 0 → 沒帶 `--yes` 時：TTY 下要求輸入 project ref 全文確認、非 TTY 直接 exit 1 → `supabase db push`。\n手動套用後印提醒：執行 `just check-rls --allow-remote --db-url <雲端 owner 連線字串>` 驗證（自動套用時由 INFRA-038 的 workflow 執行）。\n\n以 `DB_PUSH_ROOT` 環境變數覆寫 repo root（測試用）。\n\n**驗收標準**：每一條對應下列 red_case。測試在 `tmp_path` 建立 git repo（含 `supabase/migrations/` 與一支已提交的 migration、分支 main），用 `fake_bin` 替換 supabase。",
+      "description": "由 INFRA-032（Railway pre-deploy command）與 BACKEND-535（python -m app.cli migrate）負責。",
       "granularity_unit": "script",
       "target_path": "scripts/db_push.sh",
       "source_ref": null,
-      "status": "pending",
+      "status": "superseded",
       "assignee_session": null,
-      "depends_on": [
-        "INFRA-002",
-        "INFRA-003",
-        "INFRA-008"
-      ],
+      "depends_on": [],
       "suggested_model": "opus-5",
       "risk_notes": "supabase CLI 的 link / db push 旗標在大版本間可能變動，實作時以本機 `supabase db push --help` 為準並同步修改 red_cases 的 argv。",
       "open_design_questions": [],
@@ -1359,17 +1370,13 @@
     {
       "id": "INFRA-038",
       "title": "新增 deploy-migrations workflow：merge 到 main 自動驗證並套用雲端 migration",
-      "description": "新增 `.github/workflows/deploy-migrations.yml`：merge 到 `main` 時自動把 migration 套用到 Supabase 雲端；套用前必須先通過本機重建、RLS 檢查、`supabase db lint` 與雲端 dry-run，任一步失敗就不套用。\n\n**觸發**：\n- `push` 到 `main` 且 `paths` 含 `supabase/migrations/**`（沒有動到 migration 的 merge 不執行）。\n- `workflow_dispatch`（無 input）：手動重跑入口，例如套用失敗修正 secrets 後重跑，或首次建置雲端時套用全部既有 migration。\n- `permissions: contents: read`；`concurrency: { group: deploy-migrations, cancel-in-progress: false }`（連續 merge 時依序套用，不中斷進行中的套用）。\n\n**job `verify`**（`timeout-minutes: 20`，不使用任何雲端 secret）：checkout → setup（python + supabase，node: false）→ `supabase start`（與 INFRA-026 相同的排除清單）與就緒輪詢 → `supabase db reset`（證明全部 migration 能在乾淨 DB 上依序套用）→ `just check-rls` → `supabase db lint --local --level error --fail-on error`（旗標以當下 CLI 版本的 `supabase db lint --help` 為準）→ `if: always()` 的 `supabase stop --no-backup`。\n\n**job `apply`**（`needs: verify`，`timeout-minutes: 15`，job 層 `if: github.ref == 'refs/heads/main'`，`environment: production`）：\n- secrets（存放在 GitHub environment `production`，該 environment **不設 required reviewers**，否則會卡住自動套用）：`SUPABASE_ACCESS_TOKEN`、`SUPABASE_DB_PASSWORD`、`SUPABASE_PROJECT_REF`、`SUPABASE_OWNER_DB_URL`（雲端 postgres 角色連線字串，供 RLS 驗證）。\n- 步驟：checkout → setup（python + supabase，node: false）→ `scripts/db_push.sh --project-ref \"$SUPABASE_PROJECT_REF\" --yes`（INFRA-037：先 `db push --dry-run`，dry-run 失敗即退出、不執行真正的 push）→ `apps/api/.venv/bin/python scripts/check_rls.py --allow-remote --db-url \"$SUPABASE_OWNER_DB_URL\"`。\n- secrets 只透過 step 的 `env:` 傳入，`run` 內以環境變數引用，不得 echo 或寫入檔案。\n\n**與 Railway 部署的順序**：Railway 開啟「Wait for CI」，會等同一個 commit 的所有 GitHub checks（包含本 workflow）成功才部署 api；本 workflow 失敗時 api 不會部署新版（docs/deployment.md，INFRA-040）。\n\n**驗收標準**：每一條對應下列 red_case（寫在 `scripts/tests/test_ci_workflow.py`）。",
+      "description": "由 INFRA-032 / BACKEND-535（部署時套用 migration）與 INFRA-027（CI 在乾淨 DB 上套用全部 revision 並檢查單一 head 與 schema drift）負責。",
       "granularity_unit": "config",
       "target_path": ".github/workflows/deploy-migrations.yml",
       "source_ref": null,
-      "status": "pending",
+      "status": "superseded",
       "assignee_session": null,
-      "depends_on": [
-        "INFRA-022",
-        "INFRA-037",
-        "INFRA-007"
-      ],
+      "depends_on": [],
       "suggested_model": "opus-5",
       "risk_notes": "supabase db lint 依賴 plpgsql_check，旗標與輸出等級在 CLI 大版本間可能變動。合併多個含 migration 的 PR 時，concurrency 讓 workflow 依序執行；前一次套用失敗時，後一次的 dry-run 會一併顯示待套用的全部 migration。",
       "open_design_questions": [],
@@ -1436,20 +1443,19 @@
     },
     {
       "id": "INFRA-040",
-      "title": "撰寫 docs/deployment.md：Railway + Supabase 雲端部署流程與環境變數清單",
-      "description": "撰寫 `docs/deployment.md`（繁體中文，只寫目前有效的流程），並以測試確保它與 env 範本、Railway 設定同步。\n\n**章節**：\n1. **拓撲**：Railway 兩個服務——`web`（public domain，nginx 靜態站 + `/api` 反代，Root Directory `apps/web`）、`api`（**不開 public domain**，Root Directory `apps/api`，單一實例）；Supabase 雲端專案（Postgres + Storage）。附一張文字架構圖。說明 client IP 的傳遞鏈：Railway edge → nginx（real_ip 只信任 `TRUSTED_EDGE_CIDRS`，以 `$remote_addr` 覆寫 `X-Forwarded-For`）→ api（uvicorn 只信任 `FORWARDED_ALLOW_IPS` 的 private network 範圍）。\n2. **環境變數清單**（表格：服務 / 變數 / 必填 / 說明 / 範例或來源）：\n   - api：`apps/api/.env.example` 的全部 key（`APP_ENV=production`、`DATABASE_URL`、`APP_SECRET_KEY`、`CORS_ORIGINS`（同源時留空）、`PUBLIC_BASE_URL`、`SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`、`SENTRY_DSN`）；`PORT` 由 Railway 注入。\n   - web：`BACKEND_URL=http://${{api.RAILWAY_PRIVATE_DOMAIN}}:${{api.PORT}}`；`TRUSTED_EDGE_CIDRS`（Railway edge 來源範圍，預設值在 Dockerfile，上線實測後確認）；`PORT` 由 Railway 注入。\n   - api 映像內建：`FORWARDED_ALLOW_IPS`（預設 `fd12::/16`，Railway private network，上線實測後確認），一般不需在 Railway 覆寫。\n   - GitHub Actions secrets：`SUPABASE_ACCESS_TOKEN`、`SUPABASE_DB_PASSWORD`、`SUPABASE_PROJECT_REF`、`SUPABASE_OWNER_DB_URL`。\n3. **首次建置 Supabase 雲端**：建立專案（Postgres 主版號與 `supabase/config.toml` 一致）→ 在 GitHub environment `production` 設定四個 secrets（不設 required reviewers，否則會卡住自動套用）→ `just db-push --project-ref <ref> --dry-run` 預覽 → 以 workflow_dispatch 手動執行一次 deploy-migrations workflow（INFRA-038）套用全部既有 migration → 在 SQL editor 執行 `alter role app_backend login password '<隨機 32 字元以上>'`（DB-001 部署備忘）→ `DATABASE_URL` 使用 Supavisor session pooler（port 5432；Railway 對外連線走 IPv4，不使用只有 IPv6 的 direct connection）。\n   **DB 連線角色（部署時實測）**：\n   1. 實測連線池是否接受專用角色：`psql \"postgresql://app_backend.<project_ref>:<密碼>@<pooler host>:5432/postgres\" -c 'select current_user'`，回 `app_backend` 即採用，`DATABASE_URL` 的 user 為 `app_backend.<project_ref>`。\n   2. 連線池拒絕自訂角色時，改用 postgres 角色（使用者已裁定接受 RLS 縱深防禦失效，應用層權限守衛不變），切換步驟：(a) 在 SQL editor 查 `select rolbypassrls from pg_roles where rolname = 'postgres'`；為 false 時 FORCE RLS 會擋住 postgres，停止切換並交由 DB 區域以 migration 提供解法，不得在雲端手改 policy；(b) Railway 的 `DATABASE_URL` 改為 `postgres.<project_ref>` 的 pooler 連線字串並 redeploy api；(c) `just smoke https://<web 網域>` 通過；(d) 執行 `alter role app_backend nologin` 收回不再使用的登入；(e) 在本文件記錄實測結果與採用的角色。\n   3. 無論採用哪個角色，deploy-migrations 的雲端 check-rls 照常執行（RLS 與 grant 設定仍須正確）。Storage bucket 由 migration 建立，不需在 Dashboard 手動建立。\n4. **LINE 設定**（全部在 LINE Developers Console / LINE Official Account Manager 操作；產生的 ID 與 secret 一律填入後台「系統設定」頁的 `line.liff` 與 `line.messaging`，**不是 env**）：\n   1. 建立 Provider，底下建立 **LINE Login channel**，記下 channel ID（後端驗證 id_token 用）。\n   2. 在 Login channel 建立 **LIFF app**：Endpoint URL `https://<web 網域>/parent/`、Size `Full`、Scopes `openid` 與 `profile`、**`bot_prompt` 設為 `aggressive`**（登入時詢問家長加官方帳號好友，加好友是 LINE 推播的前提），記下 LIFF ID。\n   3. 建立 **Messaging API channel**（即官方帳號），發行 long-lived channel access token，記下 channel secret；webhook 不啟用（本系統只主動推播）。\n   4. 在 Login channel 的 **Linked LINE Official Account（bot link）** 選擇上一步的官方帳號，`bot_prompt` 才會生效。\n   5. 取得官方帳號加好友 URL（`https://line.me/R/ti/p/@<basic id>`）。\n   6. 以 admin 登入後台 → 系統設定：`line.liff` 填 LIFF ID、Login channel ID、加好友 URL；`line.messaging` 填 channel access token、channel secret（加密存放，畫面只顯示遮罩值）。\n   7. 驗證：用手機 LINE 開啟 LIFF URL，確認登入時出現加好友提示，綁定後能收到 `binding.completed` 之外的一則測試推播（例如到班通知）。\n5. **首次建置 Railway**：建立兩個服務並設定 Root Directory、環境變數；GitHub 連動 main 分支自動部署；開啟「Wait for CI」，讓同一個 commit 的所有 checks（含 deploy-migrations）成功後才部署。api 部署完成後在 Railway shell 執行一次 `uv run python -m app.cli create-admin --username <name> --display-name <name>` 建立初始管理員（CLI 由 BACKEND 提供）。\n6. **例行部署順序**：PR merge 到 `main` → 若動到 `supabase/migrations/**`，deploy-migrations workflow 自動執行（verify：本機重建 + check-rls + db lint → apply：雲端 dry-run → db push → 雲端 check-rls）→ Railway 等所有 checks 成功後部署 api 與 web → `just smoke https://<web 網域>`（INFRA-039）。workflow 失敗時 Railway 不會部署新版 api；修正後以新的 PR merge，或在 secrets 等環境問題排除後以 workflow_dispatch 重跑。migration 必須向後相容於部署切換期間仍在執行的上一版 api（先加欄位、後改程式、最後才刪欄位）。\n7. **回滾**：Railway 對服務 redeploy 上一個成功的 deployment；migration 不回滾，以新的 forward migration 修正。\n8. **Secret 管理**：`APP_SECRET_KEY` 同時用於 JWT 簽章、DB 內 secret 加密與學生敏感欄位加密 / HMAC，**不可任意輪替**（輪替會讓所有登入失效、既有加密資料無法解密）；外洩時的處置步驟列為待辦並標明需另行規劃重新加密工具。`SUPABASE_SERVICE_ROLE_KEY` 只能操作 Storage（public schema 權限已收回），外洩時在 Supabase Dashboard 重新產生並更新 Railway 變數。\n9. **單一實例限制**：`numReplicas` 必須為 1；要擴充需先實作 Redis broadcaster（domain_spec §5 open question）。\n\n**測試** `scripts/tests/test_deployment_doc.py`（unit）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "title": "撰寫 docs/deployment.md：Railway（web / api / Postgres）+ Cloudflare R2 部署流程與環境變數清單",
+      "description": "撰寫 `docs/deployment.md`（繁體中文，只寫目前有效的流程），並以測試確保它與 env 範本、Railway 設定同步。\n\n**章節**：\n1. **拓撲**：Railway 專案內三個服務——`web`（public domain，nginx 靜態站 + `/api` 反代，Root Directory `apps/web`）、`api`（**不開 public domain**，Root Directory `apps/api`，單一實例，pre-deploy 執行 migration）、`Postgres`（Railway Postgres，只走 private network，不開 TCP proxy）；外部的 Cloudflare R2 私有 bucket。附一張文字架構圖。說明 client IP 的傳遞鏈：Railway edge → nginx（real_ip 只信任 `TRUSTED_EDGE_CIDRS`，以 `$remote_addr` 覆寫 `X-Forwarded-For`）→ api（uvicorn 只信任 `FORWARDED_ALLOW_IPS` 的 private network 範圍）。\n2. **環境變數清單**（表格：服務 / 變數 / 必填 / 說明 / 範例或來源）：\n   - api：`apps/api/.env.example` 的全部 key——`APP_ENV=production`；`DATABASE_URL=postgresql://app_backend:<部署者產生的密碼>@${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}`（執行期唯一 DB 角色）；`MIGRATION_DATABASE_URL=${{Postgres.DATABASE_URL}}`（owner，只給 pre-deploy 的 migrate 使用）；`APP_SECRET_KEY`；`CORS_ORIGINS`（同源時留空）；`PUBLIC_BASE_URL`；`R2_ENDPOINT_URL=https://<account_id>.r2.cloudflarestorage.com`；`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`（R2 API token）；`R2_BUCKET`；`SENTRY_DSN`；`PORT` 由 Railway 注入。\n   - web：`BACKEND_URL=http://${{api.RAILWAY_PRIVATE_DOMAIN}}:${{api.PORT}}`；`TRUSTED_EDGE_CIDRS`（Railway edge 來源範圍，預設值在 Dockerfile，上線實測後確認）；`PORT` 由 Railway 注入。\n   - api 映像內建：`FORWARDED_ALLOW_IPS`（預設 `fd12::/16`，Railway private network，上線實測後確認），一般不需在 Railway 覆寫。\n3. **首次建置 Railway Postgres**：在 Railway 專案新增 Postgres 服務 → 以其連線執行 `select current_setting('server_version_num')`（主版本須為 17，不同時同步修改 `compose.yaml` 的映像）與 `select rolsuper from pg_roles where rolname = current_user`（須為 true，baseline revision 需要建立角色）→ 以 `python3 -c \"import secrets; print(secrets.token_urlsafe(32))\"` 產生 `app_backend` 密碼（URL-safe，放進 URL 不需編碼）→ 在 api 服務設定 `DATABASE_URL` 與 `MIGRATION_DATABASE_URL`。**不需要手動執行任何 SQL**：第一次部署的 pre-deploy（`python -m app.cli migrate`，BACKEND-535）會套用全部 revision、建立 `app_backend` 角色並把 `DATABASE_URL` 中的密碼同步到 DB。開啟 Railway Postgres 的備份排程。\n4. **首次建置 Cloudflare R2**：建立 bucket（不開 public access、不啟用 r2.dev 與自訂網域）→ 建立 R2 API token：權限 Object Read & Write、只限該 bucket → 記下 Access Key ID / Secret Access Key 與 account ID，填入 api 服務的 `R2_*`。不需設定 CORS：瀏覽器只以 `<img>` / 連結開啟後端簽發的 presigned URL（architecture_decisions §10）。\n5. **LINE 設定**（全部在 LINE Developers Console / LINE Official Account Manager 操作；產生的 ID 與 secret 一律填入後台「系統設定」頁的 `line.liff` 與 `line.messaging`，**不是 env**）：\n   1. 建立 Provider，底下建立 **LINE Login channel**，記下 channel ID（後端驗證 id_token 用）。\n   2. 在 Login channel 建立 **LIFF app**：Endpoint URL `https://<web 網域>/parent/`、Size `Full`、Scopes `openid` 與 `profile`、**`bot_prompt` 設為 `aggressive`**（登入時詢問家長加官方帳號好友，加好友是 LINE 推播的前提），記下 LIFF ID。\n   3. 建立 **Messaging API channel**（即官方帳號），發行 long-lived channel access token，記下 channel secret；webhook 不啟用（本系統只主動推播）。\n   4. 在 Login channel 的 **Linked LINE Official Account（bot link）** 選擇上一步的官方帳號，`bot_prompt` 才會生效。\n   5. 取得官方帳號加好友 URL（`https://line.me/R/ti/p/@<basic id>`）。\n   6. 以 admin 登入後台 → 系統設定：`line.liff` 填 LIFF ID、Login channel ID、加好友 URL；`line.messaging` 填 channel access token、channel secret（加密存放，畫面只顯示遮罩值）。\n   7. 驗證：用手機 LINE 開啟 LIFF URL，確認登入時出現加好友提示，綁定後能收到 `binding.completed` 之外的一則測試推播（例如到班通知）。\n6. **首次建置 Railway 服務**：建立 web 與 api 服務並設定 Root Directory、環境變數；`apps/api/railway.json` 的 `preDeployCommand` 會在每次部署前執行 migration；GitHub 連動 main 分支自動部署並開啟「Wait for CI」（同一個 commit 的 CI 全綠才部署）。api 第一次部署完成後在 Railway shell 執行一次 `python -m app.cli create-admin --username <name> --display-name <name>` 建立初始管理員（BACKEND-065）。\n7. **例行部署順序**：PR merge 到 `main` → CI 全綠（含 db-checks：乾淨 DB 套用全部 revision、單一 head、schema drift）→ Railway 建置 api 映像 → pre-deploy `python -m app.cli migrate`（advisory lock 串行化；失敗則本次部署中止、上一版部署繼續服務，依 deploy log 修正後以新 commit 重新部署）→ 新版本通過 healthcheck 後切換 → `just smoke https://<web 網域>`（INFRA-039）。migration 必須向後相容於切換期間仍在執行的上一版 api（先加欄位、後改程式、最後才刪欄位）。\n8. **回滾**：Railway 對服務 redeploy 上一個成功的 deployment；migration 為 forward-only，不回滾，以新的 revision 修正（向後相容規則保證上一版程式能在新 schema 上執行）。\n9. **Secret 管理**：`APP_SECRET_KEY` 同時用於 JWT 簽章、DB 內 secret 加密與學生敏感欄位加密 / HMAC，**不可任意輪替**（輪替會讓所有登入失效、既有加密資料無法解密）；外洩時的處置步驟列為待辦並標明需另行規劃重新加密工具。`app_backend` 密碼輪替：產生新密碼 → 更新 `DATABASE_URL` → redeploy（pre-deploy 先把新密碼寫進 DB；切換期間上一版部署的新連線會失敗，選離峰時段）。`MIGRATION_DATABASE_URL` 是 owner 憑證，只以 Railway 變數參照 Postgres 服務，不複製到其他地方。R2 token 外洩：在 Cloudflare 撤銷並重建 token、更新 `R2_*`、redeploy。\n10. **單一實例限制**：`numReplicas` 必須為 1；要擴充需先實作 Redis broadcaster（domain_spec §5 open question）。\n\n**測試** `scripts/tests/test_deployment_doc.py`（unit）。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "doc",
       "target_path": "docs/deployment.md",
       "source_ref": null,
       "status": "pending",
       "assignee_session": null,
       "depends_on": [
-        "INFRA-006",
+        "INFRA-049",
         "INFRA-032",
         "INFRA-035",
-        "INFRA-037",
-        "INFRA-038",
-        "INFRA-039"
+        "INFRA-039",
+        "BACKEND-535"
       ],
       "suggested_model": "opus-5",
       "risk_notes": "",
@@ -1461,14 +1467,16 @@
         ],
         "red_cases": [
           "test_deployment_doc_lists_all_api_env：讀 apps/api/.env.example 的 key 集合，每個 key 都出現在 docs/deployment.md；測試內以多一個 key 的範本呼叫同一檢查函式 → 回傳缺漏的該 key",
-          "test_deployment_doc_lists_web_and_ci_vars：deployment.md 含 'BACKEND_URL'、'RAILWAY_PRIVATE_DOMAIN'、'SUPABASE_ACCESS_TOKEN'、'SUPABASE_DB_PASSWORD'、'SUPABASE_PROJECT_REF'、'SUPABASE_OWNER_DB_URL'",
-          "test_deployment_doc_references_commands：deployment.md 含 'just db-push'、'just smoke'、'app.cli create-admin'、'alter role app_backend login password'",
+          "test_deployment_doc_lists_web_vars：deployment.md 含 'BACKEND_URL'、'RAILWAY_PRIVATE_DOMAIN'、'TRUSTED_EDGE_CIDRS'",
+          "test_deployment_doc_references_commands：deployment.md 含 'just smoke'、'app.cli create-admin'、'app.cli migrate'、'preDeployCommand'、'Wait for CI'",
+          "test_deployment_doc_pre_deploy_matches_railway_json：apps/api/railway.json 的 deploy.preDeployCommand（字串或陣列的每一項）都出現在 deployment.md",
           "test_deployment_doc_healthcheck_paths_match：deployment.md 提到的 healthcheck 路徑集合 ⊇ {apps/api/railway.json 的 healthcheckPath, apps/web/railway.json 的 healthcheckPath}（測試讀兩個 json 取值）",
           "test_deployment_doc_single_replica_note：deployment.md 含 'numReplicas' 且與 apps/api/railway.json 的 numReplicas 值同時為 1",
-          "test_deployment_doc_auto_migration_flow：deployment.md 含 'Wait for CI'、'workflow_dispatch'、'supabase/migrations/**'，且不含 '需 reviewer 核可才套用' 這類把套用寫成人工核可的字樣",
+          "test_deployment_doc_database_setup：deployment.md 含 '${{Postgres.DATABASE_URL}}'、'app_backend'、'server_version_num'、'rolsuper'，且不含 'alter role app_backend login password'（密碼由 migrate 同步，不手動下 SQL）",
+          "test_deployment_doc_r2_setup：deployment.md 含 'Object Read & Write'、'r2.cloudflarestorage.com'、'R2_BUCKET'、'不需設定 CORS'",
           "test_deployment_doc_line_setup：deployment.md 含 'LINE Login channel'、'LIFF'、'/parent/'、'bot_prompt'、'aggressive'、'Messaging API'、'bot link'（或 'Linked LINE Official Account'）、'line.liff'、'line.messaging'、'channel access token'、'channel secret'",
           "test_deployment_doc_line_values_not_env：apps/api/.env.example 的 key 中沒有任何以 'LINE_' 開頭者，且 deployment.md 的環境變數表格段落不含 'LINE_' 開頭的變數名（LINE 設定只在系統設定頁）",
-          "test_deployment_doc_db_role_fallback：deployment.md 含 'app_backend.<project_ref>'、'postgres.<project_ref>'、'rolbypassrls'、'alter role app_backend nologin'，且 'app_backend.<project_ref>' 第一次出現的位置在 'postgres.<project_ref>' 之前（先實測專用角色，再寫備案）"
+          "test_deployment_doc_no_supabase：deployment.md 不含 'supabase'（不分大小寫）與 'db push'"
         ],
         "run": "just test scripts/tests/test_deployment_doc.py -k deployment_doc",
         "notes": ""
@@ -1587,6 +1595,249 @@
         "status": "pass",
         "reviewer": "review-r3",
         "notes": "通過。tdd.run 2/2 綠，名稱對應 2 條 red_case；f751490 測試（含把 red_case 改為 .vue 測試元件的規格修正）先於 9a2b0ce 實作。web-lint 對 spec、fixture、vitest.config.ts 乾淨；vue-tsc 以暫時 tsconfig 檢查 spec + fixture、以 tsconfig.node.json 檢查 vitest.config.ts 皆無錯誤（tsconfig.node.json 已開 allowImportingTsExtensions，'./vite.config.ts' 合法）。紅燈原因實測確認：在 scratchpad 以 vitest.config.ts 的副本拿掉 server.deps.inline 後跑同一個 spec，收集即失敗，錯誤為 TypeError: Unknown file extension \".css\"（element-plus/theme-chalk/base.css）；同一份副本加回 inline 則 2 passed，證明差異只在這一行。改用 .vue 測試元件合理：unplugin-vue-components 只轉換經 vite 編譯的 SFC，.ts 裡 defineComponent({ template }) 的字串在執行期才編譯，不會觸發 ElementPlusResolver 的自動 import（也就不會載入 theme-chalk CSS），舊寫法無法重現要修的問題。回歸：just web-test src/test/setup.spec.ts -t harness 8 passed、src/test/helpers.spec.ts -t helpers 6 passed，三次執行的輸出都不再出現「import ./vite.config without a file extension」警告。inline 只列 'element-plus' 一項，沒有放寬其他套件。無殘留。"
+      }
+    },
+    {
+      "id": "INFRA-044",
+      "title": "建立 compose.yaml：本機 Postgres 17 與 MinIO（R2 模擬），just db-start / db-stop 改接 docker compose",
+      "description": "在 repo root 建立 `compose.yaml`（Compose v2，頂層 `name: afterschool`），提供本機開發與整合測試用的 Postgres 與 S3 相容儲存（architecture_decisions §5、§10，testing_conventions §5）。\n\n**services**\n- `db`：Postgres 官方映像，主版本 17（與 Railway Postgres 一致，見 architecture_decisions §11），以完整次版號固定（例如 `postgres:17.6`），不得用浮動 tag；`environment`：`POSTGRES_USER=postgres`、`POSTGRES_PASSWORD=postgres`、`POSTGRES_DB=postgres`；`ports: [\"127.0.0.1:54342:5432\"]`（只綁 loopback，沿用既有 port，`apps/api/tests/support/db_urls.py` 與 `.env.example` 的預設值不變）；具名 volume `db-data`；`healthcheck` 用 `pg_isready -U postgres -d postgres`（interval 2s、retries 30）。不放任何 init SQL：`app_backend` 角色由 baseline revision（DB-041）建立，本機密碼由 `just db-reset`（INFRA-046）設定。\n- `storage`：MinIO，固定 `RELEASE.<日期>` tag（不得用 `latest`）；`command: server /data --console-address :9001`；`environment`：`MINIO_ROOT_USER=afterschool`、`MINIO_ROOT_PASSWORD=afterschool-local-secret`（本機固定開發值，只綁 loopback，與 INFRA-049 的 `.env.example` 一致）；`ports: [\"127.0.0.1:54344:9000\", \"127.0.0.1:54345:9001\"]`；具名 volume `storage-data`；healthcheck 打 `http://localhost:9000/minio/health/live`。\n- `storage-init`：一次性容器（`minio/mc` 固定 tag），`depends_on: {storage: {condition: service_healthy}}`，以 `mc mb --ignore-existing` 建立 bucket `afterschool-local`，並 `mc anonymous set none` 確保不可匿名存取；成功 exit 0，`restart: \"no\"`。\n\n**justfile**（改寫 INFRA-002 的 `db-start` / `db-stop`）：\n- `db-start`：先 `docker info` 檢查 daemon（失敗印「Docker 未啟動」並 exit 1），再 `docker compose -f {{root}}/compose.yaml up -d --wait db storage storage-init`。recipe 說明改為「啟動本機 Postgres（54342）與 MinIO（54344 / console 54345）」。\n- `db-stop`：`docker compose -f {{root}}/compose.yaml stop`（保留 volume）。不提供刪 volume 的 recipe；需要乾淨 DB 用 `just db-reset`。\n\n**驗收標準**\n- `docker compose -f compose.yaml config -q` 通過。\n- 所有對外 port 都綁 `127.0.0.1`，且恰為 54342 / 54344 / 54345。\n- db 映像主版本為 17 且不是浮動 tag；MinIO 與 mc 映像不是 `latest`。\n- `just db-start` 後 `127.0.0.1:54342` 可用 `postgres` / `postgres` 連線、`server_version_num` 以 17 開頭；`http://127.0.0.1:54344/minio/health/live` 回 200；bucket `afterschool-local` 存在且匿名讀取被拒（403）。\n- `just db-start` / `db-stop` 呼叫的 docker 參數如 red_cases。",
+      "granularity_unit": "config",
+      "target_path": "compose.yaml",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "INFRA-002",
+        "INFRA-008"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "MinIO 社群版已停止發布新的 Docker 映像，固定使用最後一個可取得的 RELEASE tag；若無法拉取，改用其他 S3 相容實作（例如 SeaweedFS、Garage）並維持相同 port、bucket 與帳密介面，改動前回報協調者。Postgres 主版本以 Railway 實測為準（architecture_decisions §11），不同時同步改 tag。",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "scripts/tests/test_compose.py",
+        "markers": [
+          "unit"
+        ],
+        "red_cases": [
+          "test_compose_ports_loopback_only：載入 compose.yaml → 每個 service 的 ports 每一項都以 '127.0.0.1:' 開頭，且 host port 集合 == {54342, 54344, 54345}；測試內構造含 '54342:5432'（未綁 loopback）的 dict 餵給同一檢查函式 → 回報該 service 名稱",
+          "test_compose_images_pinned：services.db.image 符合 ^postgres:17\\.\\d+ 開頭；storage 與 storage-init 的 image 都帶 tag 且 tag 不是 'latest'；測試內以 'postgres:latest' 餵給同一檢查函式 → 回報 db",
+          "test_compose_db_env_and_healthcheck：db.environment 的 POSTGRES_USER == 'postgres'、POSTGRES_DB == 'postgres'；db.healthcheck.test 展開後的字串含 'pg_isready'；db 沒有掛載任何 /docker-entrypoint-initdb.d",
+          "test_compose_storage_init_creates_private_bucket：storage-init.depends_on.storage.condition == 'service_healthy'，其 entrypoint / command 展開後的字串含 'afterschool-local'、'mb --ignore-existing' 與 'anonymous set none'",
+          "test_compose_db_start_invokes_compose：fake_bin 提供 docker（info exit 0）→ `just db-start` exit 0，fake_bin.calls('docker') 中有一筆 argv 依序含 'compose'、'-f'、<repo>/compose.yaml、'up'、'-d'、'--wait'；docker info exit 1 → `just db-start` exit 1、stderr 含 'Docker 未啟動'，且沒有任何 argv 含 'compose' 的呼叫",
+          "test_compose_db_stop_keeps_volumes：`just db-stop` → docker argv 含 'compose' 與 'stop'，且所有呼叫都不含 'down' 與 '-v'"
+        ],
+        "run": "just test scripts/tests/test_compose.py -k compose",
+        "notes": "另跑（需 Docker）：docker compose -f compose.yaml config -q && just db-start && apps/api/.venv/bin/python -c \"import psycopg; c = psycopg.connect('postgresql://postgres:postgres@127.0.0.1:54342/postgres'); print(c.execute('show server_version_num').fetchone()[0])\" | grep -q '^17' && test \"$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:54344/minio/health/live)\" = 200 && test \"$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:54344/afterschool-local/)\" = 403"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "INFRA-045",
+      "title": "建立 Alembic 骨架：alembic.ini、env.py、revision 範本，新增 alembic / boto3 依賴與 just db-migrate、db-new-migration",
+      "description": "在 `apps/api/` 建立 Alembic 設定（architecture_decisions §5「Migration（Alembic）」）。移植 ivy `BE:alembic/env.py::run_migrations_online` 的兩個細節：連線後先設 `lock_timeout`，再 commit 掉 autobegin 的隱式交易才交給 `context.begin_transaction()`（否則 migration 跑在從未 commit 的交易裡，連線關閉時整批 rollback）；去掉 ivy 的 tenant / maintenance engine。\n\n**依賴**（`apps/api/pyproject.toml`，同步 `uv.lock`）：執行期 `alembic`、`boto3`（R2 storage，BACKEND-013 使用）；dev group `boto3-stubs[s3]`（mypy）。\n\n**apps/api/alembic.ini**：`script_location = %(here)s/alembic`、`file_template = %%(rev)s_%%(slug)s`、`prepend_sys_path = .`、`path_separator = os`；**不寫** `sqlalchemy.url`（連線字串只從環境變數來）。logging 區段同 ivy（alembic logger INFO、sqlalchemy WARNING）。\n\n**apps/api/alembic/env.py**\n- URL 只讀環境變數 `MIGRATION_DATABASE_URL`（owner 連線）；未設定 → `RuntimeError(\"未設定 MIGRATION_DATABASE_URL（migration 以 owner 連線執行，不使用 DATABASE_URL）\")`，**不得**退回讀 `DATABASE_URL`。`postgresql://` 自動補成 `postgresql+psycopg://`。\n- `target_metadata = Base.metadata`（`from app.models import Base`），供 INFRA-020 的 drift 比對使用；revision 不以 autogenerate 產生。\n- online：`NullPool` engine；連線後 `select set_config('lock_timeout', :ms, false)`，`ms` 為模組常數 `MIGRATION_LOCK_TIMEOUT_MS = 10000`（程式常數，不是 env）；接著 `connection.commit()`；`context.configure(connection=..., target_metadata=..., compare_type=True, compare_server_default=False)`；`with context.begin_transaction(): context.run_migrations()`（全部待套用的 revision 在同一個交易內）。\n- offline（`--sql`）：同樣只讀 `MIGRATION_DATABASE_URL`，`literal_binds=True`。\n\n**apps/api/alembic/script.py.mako**：產生的 revision 含 `revision` / `down_revision` 型別註記、`upgrade() -> None`，`downgrade() -> None` 的內容固定為 `raise NotImplementedError(\"forward-only：以新的 revision 修正，不回滾\")`。\n\n**apps/api/alembic/versions/**：放 `.gitkeep`；第一支 revision 由 DB-041 建立。\n\n**justfile**\n- `db-migrate`：只對本機套用：`cd apps/api && MIGRATION_DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:54342/postgres uv run --frozen alembic upgrade head`（recipe 內明確覆寫，不採用呼叫端的 `MIGRATION_DATABASE_URL`，避免誤打雲端）。\n- ★`db-new-migration REV SLUG`（改寫 INFRA-002 的同名 recipe）：參數必須恰為兩個；`REV` 符合 `^[a-z]+[0-9]{3}[a-z0-9_]*$`（例如 `db004`）、`SLUG` 符合 `^[a-z][a-z0-9_]*$`，否則印用法 exit 1 且不呼叫 uv；通過後 `cd apps/api && uv run --frozen alembic revision --rev-id REV -m SLUG`（不需要連 DB）。\nrecipe 的守衛回歸測試由 INFRA-021 負責。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "granularity_unit": "config",
+      "target_path": "apps/api/alembic/env.py",
+      "source_ref": "BE:alembic/env.py::run_migrations_online",
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "INFRA-004",
+        "INFRA-008",
+        "INFRA-041",
+        "INFRA-044"
+      ],
+      "suggested_model": "opus-5",
+      "risk_notes": "Alembic 的 --rev-id 不檢查與既有 revision 重複；revision id 由 task 決定（DB-004 → db004），實作 DB task 時以 `uv run --frozen alembic heads` 確認單一 head。",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/infra/test_alembic_env.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_alembic_env_applies_and_commits：以 owner_url() 連線建立暫存 database `alembic_probe_<uuid8>`；tmp_path 放一支 probe revision（upgrade 建表 probe(v text) 並 insert current_setting('lock_timeout')），Config(apps/api/alembic.ini) 的 version_locations 指向 tmp_path、環境變數 MIGRATION_DATABASE_URL 指向暫存 database，呼叫 command.upgrade(cfg, 'head') → 另開連線查 `select v from probe` == '10s'，且 alembic_version.version_num == probe revision id（證明 migration 確實 commit）；測試結束 drop 暫存 database",
+          "test_alembic_env_requires_migration_url：移除 MIGRATION_DATABASE_URL、DATABASE_URL 設為本機 app_backend URL，呼叫 command.upgrade → RuntimeError 訊息含 'MIGRATION_DATABASE_URL'，且暫存 database 中沒有 alembic_version 表",
+          "test_alembic_env_normalizes_plain_scheme：MIGRATION_DATABASE_URL 以 'postgresql://' 開頭時 command.upgrade 成功，alembic_version 有 probe revision",
+          "test_alembic_revision_template_is_forward_only：command.revision(cfg, message='probe', rev_id='zz999')（version_locations 指向 tmp_path）→ 產生檔名 'zz999_probe.py'，importlib 載入後呼叫 downgrade() → NotImplementedError",
+          "test_alembic_ini_has_no_url：configparser（interpolation=None）讀 apps/api/alembic.ini → [alembic] 區段沒有 sqlalchemy.url，file_template == '%%(rev)s_%%(slug)s'"
+        ],
+        "run": "just test-int apps/api/tests/integration/infra/test_alembic_env.py -k alembic",
+        "notes": "暫存 database 以 INFRA-041 的 owner_url() 連 postgres database 建立 / 刪除（名稱前綴 alembic_probe_），測試結束一律 `drop database ... with (force)`；MIGRATION_DATABASE_URL 以 monkeypatch 設定且只指向 loopback。另跑：cd apps/api && uv run --frozen python -c \"import alembic, boto3\"；just lint apps/api/alembic/env.py；just typecheck apps/api/alembic/env.py"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "INFRA-046",
+      "title": "改寫 just db-reset：以 scripts/db_reset_local.py 重建本機 DB（drop / create → alembic upgrade head → app_backend 本機密碼）",
+      "description": "新增 `scripts/db_reset_local.py`，並把 justfile 的 `db-reset` 改為呼叫它（改寫 INFRA-002 的 `supabase db reset` 與 check-rls 步驟）。只重置 `compose.yaml` 的本機 Postgres，不提供任何連遠端的參數（architecture_decisions §5、testing_conventions §5）。\n\n**函式介面**\n```python\nLOCAL_OWNER_URL = \"postgresql://postgres:postgres@127.0.0.1:54342/postgres\"\nLOCAL_BACKEND_PASSWORD = \"app_backend_local\"   # 與 apps/api/.env.example、tests/support/db_urls.py 預設值一致\n\ndef reset_database(dbname: str, *, owner_url: str = LOCAL_OWNER_URL) -> None: ...\n    # 連 owner_url 指向的 template1 database（autocommit）：drop database if exists <dbname> with (force); create database <dbname>\ndef upgrade_head(dbname: str, *, owner_url: str = LOCAL_OWNER_URL) -> str: ...\n    # 子行程 `uv run --frozen --project apps/api alembic -c apps/api/alembic.ini upgrade head`，\n    # 環境變數 MIGRATION_DATABASE_URL 指向 <dbname>，並移除子行程的 PGHOST / PGHOSTADDR / PGSERVICE；\n    # 非 0 → RuntimeError（訊息含子行程 stderr）；成功回傳套用後的 alembic_version\ndef set_local_backend_password(*, owner_url: str = LOCAL_OWNER_URL) -> None: ...\n    # alter role app_backend login password 'app_backend_local'；\n    # role 不存在 → RuntimeError「app_backend 不存在，baseline revision（DB-041）未套用」\ndef main(argv: list[str] | None = None) -> int: ...\n    # 不接受任何參數（有參數 → exit 2）；依序執行三步，dbname 固定 'postgres'\n```\n- **只連本機**：連線前以 INFRA-041 的規則檢查（以 importlib 依檔案路徑載入 `apps/api/tests/support/db_urls.py` 的 `assert_loopback` / `assert_connected_loopback`，與 INFRA-042 在 scripts/tests 的做法相同），連線後以 `conn.info.hostaddr` 複驗；違規一律 exit 2，訊息含「只允許本機 loopback DB」。\n- 執行前先探測 `127.0.0.1:54342`，連不上印「本機 DB 未啟動，先跑 just db-start」並 exit 1。\n- 每一步印一行進度；成功最後印「本機 DB 已重建：alembic head = <revision>」。\n\n**justfile `db-reset [--yes]`**：參數白名單與 TTY 確認沿用 INFRA-002（只認 `--yes`，其他參數印「只接受 --yes」並 exit 1；非 TTY 無 `--yes` exit 1；TTY 要求輸入 yes），確認文字改為「這會清空本機 Postgres（127.0.0.1:54342）的 postgres database 並重跑全部 migration」；確認後執行 `uv run --frozen --project {{root}}/apps/api python {{root}}/scripts/db_reset_local.py`（uv 從 PATH 找，讓 INFRA-021 能以假執行檔驗證）。不再呼叫 supabase 與 check-rls。\n\n**驗收標準**：每一條對應下列 red_case；`just db-start && just db-reset --yes` 後，`tests/support/db_urls.py` 的預設 backend URL（`app_backend:app_backend_local@127.0.0.1:54342/postgres`）可登入，DB-002 / INFRA-010 的 fixture 照常運作。",
+      "granularity_unit": "script",
+      "target_path": "scripts/db_reset_local.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "INFRA-008",
+        "INFRA-041",
+        "INFRA-044",
+        "INFRA-045",
+        "DB-041"
+      ],
+      "suggested_model": "opus-5",
+      "risk_notes": "drop database ... with (force) 會中斷其他連線：多個 agent 共用本機 DB 時，just db-reset 一律包在 flock /tmp/afterschool_db.lock 內。app_backend 是 cluster 層級的角色，drop database 不會刪除它，baseline revision 以「不存在才建」處理。",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "scripts/tests/test_db_reset_local.py",
+        "markers": [
+          "unit",
+          "integration"
+        ],
+        "red_cases": [
+          "test_db_reset_recreates_probe_database（integration）：owner 先建 `reset_probe_<uuid8>` 並在其中建表 junk；reset_database(該名稱) 後 → junk 不存在；upgrade_head(該名稱) 回傳值 == `alembic heads` 的唯一 head，且該 database 中 to_regprocedure('app_private.grant_backend(regclass,text)') 不為 NULL；測試結束 drop 該 database",
+          "test_db_reset_sets_local_backend_password（integration）：set_local_backend_password() 後以 'postgresql://app_backend:app_backend_local@127.0.0.1:54342/postgres' 連線 → current_user == 'app_backend'，pg_roles 的 rolsuper / rolbypassrls 皆 false",
+          "test_db_reset_rejects_remote_owner_url（unit）：reset_database('x', owner_url='postgresql://postgres:p@db.example.com:5432/postgres') → 例外訊息含 '只允許本機 loopback DB'，且 psycopg.connect 未被呼叫（monkeypatch 計數 0）；以預設 owner_url 但環境變數 PGHOSTADDR=10.0.0.8 → 同樣被拒且未連線",
+          "test_db_reset_main_rejects_args（unit）：main(['--db-url', 'x']) → 2，且沒有任何連線或子行程",
+          "test_db_reset_db_down_message（unit）：monkeypatch port 探測為不可連線 → main([]) == 1，stderr 含 'just db-start'",
+          "test_db_reset_upgrade_failure_surfaces_stderr（unit）：monkeypatch subprocess.run 回傳 returncode 1、stderr 'boom-marker' → upgrade_head 拋 RuntimeError 且訊息含 'boom-marker'；子行程收到的環境變數不含 PGHOSTADDR"
+        ],
+        "run": "just test scripts/tests/test_db_reset_local.py -k db_reset && just test-int scripts/tests/test_db_reset_local.py -k db_reset",
+        "notes": "整合案例只操作 reset_probe_ 前綴的暫存 database，不碰共用的 postgres database；set_local_backend_password 設定的值與現值相同，不影響其他測試。另跑（包在 flock /tmp/afterschool_db.lock 內）：just db-reset --yes && just test-int apps/api/tests/integration/db/test_fixtures.py -k backend_conn_is_app_backend"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "INFRA-047",
+      "title": "移除 Supabase 產物：supabase/ 目錄、check_rls、check-rls recipe 與殘留設定，並以掃描測試鎖住",
+      "description": "DB 改為 Railway Postgres + Alembic、檔案改為 R2 之後（architecture_decisions §2、§5、§10），清除 Supabase 時期留下的產物：\n- 刪除 `supabase/` 整個目錄（`config.toml`、`.gitignore`、`.branches/`、`.temp/` 與 `migrations/` 殘留；各表 SQL 由 DB-041 / DB-003 / DB-008~012 改寫成 revision 時刪除，本 task 確認已無殘留）。\n- 刪除 `scripts/check_rls.py`、`scripts/tests/test_check_rls.py` 與 justfile 的 `check-rls` recipe；grant 的持續把關由 DB-040 的整合測試負責。\n- root `.gitignore` 移除 `supabase/.temp/`、`supabase/.branches/` 條目。\n- `apps/api/pyproject.toml` 的 pytest marker 說明改為 `integration: 整合測試，只連本機 Postgres 127.0.0.1:54342 與 MinIO 127.0.0.1:54344`；`scripts/tests/pytest.ini` 同步。\n- justfile 檔頭註解改為「pnpm / uv / docker 一律從 PATH 找執行檔」，`test-int` 的錯誤訊息改為「本機 DB 未啟動（127.0.0.1:<port> 連不上），先跑 just db-start」。\n- `scripts/tests/conftest.py` 的 docstring / 錯誤訊息改為「本機 DB」；`scripts/tests/test_scripts_conftest.py` 以 `supabase` 當假指令名稱的案例改用 `probe-tool`（行為不變，純改名）。\n- `apps/api/app/models/base.py` 模組 docstring 的「與 supabase/migrations 的約束命名一致」改為「與 Alembic revision 的約束命名一致」（純註解，不改程式行為）。\n\n**掃描測試** `scripts/tests/test_no_supabase_artifacts.py`：以 `git ls-files` 列出受版控檔案，排除 `docs/tasks/`（task 的判決紀錄）與 `docs/mockups/`，其餘檔案內容（不分大小寫）不得含 `supabase`、`check_rls`、`check-rls`、`service_role`。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "granularity_unit": "test",
+      "target_path": "scripts/tests/test_no_supabase_artifacts.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "INFRA-046",
+        "INFRA-048",
+        "INFRA-049",
+        "INFRA-018",
+        "INFRA-021",
+        "INFRA-022",
+        "DB-041",
+        "DB-042",
+        "DB-003",
+        "DB-008",
+        "DB-009",
+        "DB-010",
+        "DB-011",
+        "DB-012",
+        "BACKEND-001"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "掃描範圍含 root 的 CLAUDE.md 與 docs/*.md：CLAUDE.md 由協調者維護，本 task 開工前需確認協調者已移除其中的 Supabase 字樣。",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "scripts/tests/test_no_supabase_artifacts.py",
+        "markers": [
+          "unit"
+        ],
+        "red_cases": [
+          "test_no_supabase_dir：repo_root / 'supabase' 不存在，且 `git ls-files supabase` 輸出為空",
+          "test_no_check_rls_artifacts：scripts/check_rls.py 與 scripts/tests/test_check_rls.py 不存在；`just --list` 輸出不含 'check-rls'",
+          "test_no_supabase_mentions：掃描結果的違規清單 == []；測試內在 tmp_path 寫入含 'SUPABASE_URL=x' 的檔案餵給同一掃描函式 → 回傳該檔路徑；docs/tasks/ 底下的檔案不被掃描",
+          "test_pytest_marker_text：apps/api/pyproject.toml 與 scripts/tests/pytest.ini 的 integration marker 說明都含 '127.0.0.1:54342' 且不含 'Supabase'"
+        ],
+        "run": "just test scripts/tests/test_no_supabase_artifacts.py -k \"no_supabase or no_check_rls or pytest_marker\"",
+        "notes": ""
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "INFRA-048",
+      "title": "改寫 root README.md：本機環境改為 compose（Postgres / MinIO）、Alembic 指令與 port 表",
+      "description": "改寫 INFRA-001 建立的 `README.md` 中與 DB / 檔案儲存相關的段落，其他段落保留：\n1. 專案說明：後端為 FastAPI + PostgreSQL（雲端 Railway Postgres，Alembic migration），檔案存 Cloudflare R2，前端為 Vue 3，部署在 Railway。\n2. 必要工具：just、uv、Python 3.13（由 uv 管理）、Node 24、pnpm、Docker（含 compose v2）；移除 Supabase CLI。指向 `just doctor`。\n3. 快速開始：`just bootstrap` → `just db-start` → `just db-reset --yes` → `just api` / `just web`（或 `just up`）。\n4. 本機 port 表：Postgres 54342、MinIO S3 API 54344、MinIO console 54345、FastAPI 8341、Vite dev server 5341；說明全部只綁 127.0.0.1、避開 5432x / 5433x，設定來源是 `compose.yaml`。\n5. 新增「資料庫 migration」小節：`just db-migrate`、`just db-new-migration <rev> <slug>`（revision id 用 task id，例如 `db004`）、revision 手寫且 forward-only，細節見 `docs/architecture_decisions.md` §5。\n6. 文件索引中 `docs/deployment.md` 的說明改為「Railway（web / api / Postgres）+ Cloudflare R2 部署流程」。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "granularity_unit": "doc",
+      "target_path": "README.md",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "INFRA-044",
+        "INFRA-045",
+        "INFRA-046"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "scripts/tests/test_readme.py",
+        "markers": [
+          "unit"
+        ],
+        "red_cases": [
+          "test_readme_ports_match_compose：解析 compose.yaml 的 host port 集合 → 每個 port 都出現在 README.md；README 另含 '8341' 與 '5341'",
+          "test_readme_quickstart_order：README 中 'just db-start' 第一次出現的位置 < 'just db-reset --yes' < 'just api'",
+          "test_readme_migration_section：README 含 'just db-migrate'、'just db-new-migration' 與 'forward-only'",
+          "test_readme_tools：README 含 'Docker' 與 'compose'，且不含 'supabase'（不分大小寫）"
+        ],
+        "run": "just test scripts/tests/test_readme.py -k readme",
+        "notes": ""
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "INFRA-049",
+      "title": "改寫 apps/api/.env.example 與 test_env_examples：移除 SUPABASE_*，加入 MIGRATION_DATABASE_URL 與 R2_*",
+      "description": "改寫 INFRA-006 建立的 `apps/api/.env.example` 與 `scripts/tests/test_env_examples.py`，使 key 集合符合 architecture_decisions §4。`apps/web/.env.example` 與前端不得使用 `VITE_*` 的規則不變。\n\n**apps/api/.env.example**：key 恰為下列 11 項、順序固定，每一項上方至少一行 `#` 註解：\n| key | 範本值 | 註解要點 |\n|---|---|---|\n| `APP_ENV` | `development` | 允許值 `development` / `test` / `production` |\n| `DATABASE_URL` | `postgresql+psycopg://app_backend:app_backend_local@127.0.0.1:54342/postgres` | 執行期唯一 DB 角色 app_backend；本機密碼由 `just db-reset` 設定；雲端指向 Railway Postgres 的 private host，密碼由部署者產生，pre-deploy 的 migrate 會同步到 DB（docs/deployment.md） |\n| `MIGRATION_DATABASE_URL` | `postgresql+psycopg://postgres:postgres@127.0.0.1:54342/postgres` | owner 連線，只給 alembic 與 `python -m app.cli migrate` 使用，執行期 Settings 不讀；雲端為 Railway 的 `${{Postgres.DATABASE_URL}}` |\n| `APP_SECRET_KEY` | `change-me` | 同 INFRA-006（至少 32 bytes、產生方式、輪替影響） |\n| `CORS_ORIGINS` | `http://127.0.0.1:5341,http://localhost:5341` | 逗號分隔；正式環境同源時留空 |\n| `PUBLIC_BASE_URL` | `http://127.0.0.1:5341` | 對外網址，用於 LINE 通知內的連結 |\n| `R2_ENDPOINT_URL` | `http://127.0.0.1:54344` | S3 相容 endpoint；本機為 compose 的 MinIO，雲端為 `https://<account_id>.r2.cloudflarestorage.com` |\n| `R2_ACCESS_KEY_ID` | `afterschool` | 本機為 MinIO root user（compose.yaml）；雲端為只授權該 bucket Object Read & Write 的 R2 API token |\n| `R2_SECRET_ACCESS_KEY` | `afterschool-local-secret` | 本機 MinIO 固定開發值，只對 127.0.0.1:54344 有效；雲端值為 secret |\n| `R2_BUCKET` | `afterschool-local` | 雲端填 R2 bucket 名稱 |\n| `SENTRY_DSN` | （空） | 留空即停用 |\n\n**驗收標準**\n- api 範本的 key 集合恰好等於上表 11 項，不含任何 `SUPABASE_` 開頭的 key。\n- 每一個 key 的上一行是註解行。\n- `APP_SECRET_KEY` 範本值為 `change-me`。\n- 本機值與 `compose.yaml` 一致：`R2_ENDPOINT_URL` 的 port、MinIO root 帳密、bucket 名稱、兩個 DB URL 的 host:port。\n- web 範本沒有任何 `KEY=VALUE` 行；`apps/web/src` 沒有 `import.meta.env.VITE_` 的使用。",
+      "granularity_unit": "config",
+      "target_path": "apps/api/.env.example",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "INFRA-006",
+        "INFRA-044"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "BACKEND-001 的 Settings 欄位必須與本範本同步（R2_* 四項、不含 MIGRATION_DATABASE_URL）。",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "scripts/tests/test_env_examples.py",
+        "markers": [
+          "unit"
+        ],
+        "red_cases": [
+          "test_env_examples_api_keys_exact：解析 apps/api/.env.example 的 KEY=VALUE 行 → key 集合 == {APP_ENV, DATABASE_URL, MIGRATION_DATABASE_URL, APP_SECRET_KEY, CORS_ORIGINS, PUBLIC_BASE_URL, R2_ENDPOINT_URL, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, SENTRY_DSN}；以 tmp 檔多加一行 `SUPABASE_URL=x` 餵給同一解析函式 → 斷言失敗訊息列出多出的 'SUPABASE_URL'",
+          "test_env_examples_api_each_key_has_comment：每個 KEY= 行的前一行 → 以 '#' 開頭；tmp 檔中缺註解的 key → 被列在違規清單中",
+          "test_env_examples_api_secret_placeholder：APP_SECRET_KEY 的值 → 'change-me'",
+          "test_env_examples_local_values_match_compose：R2_ENDPOINT_URL 的 port == compose.yaml storage 對外的 54344；R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY == storage 的 MINIO_ROOT_USER / MINIO_ROOT_PASSWORD；R2_BUCKET 出現在 storage-init 的指令中；DATABASE_URL 與 MIGRATION_DATABASE_URL 的 host:port == '127.0.0.1:54342'",
+          "test_env_examples_web_has_no_keys：apps/web/.env.example 中符合 ^[A-Z_][A-Z0-9_]*= 的行數 → 0",
+          "test_env_examples_web_src_no_vite_env：掃描 apps/web/src 的 .ts/.vue，正則 import\\.meta\\.env\\.VITE_ 的命中清單 → 空；tmp 目錄放一個含 import.meta.env.VITE_API 的檔案餵給同一掃描函式 → 回傳該檔路徑"
+        ],
+        "run": "just test scripts/tests/test_env_examples.py -k env_examples",
+        "notes": ""
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
       }
     }
   ]
