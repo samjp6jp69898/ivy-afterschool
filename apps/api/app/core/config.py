@@ -1,14 +1,18 @@
 """BACKEND-001：env Settings（architecture_decisions §4）。
 
-env 只放基礎設施與 secret，恰為下列八項；營運參數一律走 DB ``system_settings``
+env 只放基礎設施與 secret，執行期恰為下列十項；營運參數一律走 DB ``system_settings``
 （``app/core/settings_registry.py``），不得在此新增業務設定。JWT TTL、cookie 名稱、
 節流門檻等屬於各模組的程式常數。
+
+``MIGRATION_DATABASE_URL``（owner 連線）刻意不是欄位：執行期程式碼不讀 owner 連線，只給
+BACKEND-535 的 migrate 指令；env 中有它時因 ``extra="ignore"`` 被忽略。
 
 模組 import 時不讀 env：只有呼叫 ``get_settings()`` 才建立實例。
 """
 
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from typing import Annotated, Final, Literal
 
@@ -19,6 +23,9 @@ _PLACEHOLDER: Final = "change-me"
 _MIN_SECRET_BYTES: Final = 32
 _DB_SCHEME: Final = "postgresql+psycopg://"
 _PLAIN_DB_SCHEME: Final = "postgresql://"
+_R2_BUCKET = re.compile(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]")
+# 本機 SeaweedFS 固定開發值（apps/api/.env.example、architecture_decisions §10），正式環境不得沿用
+_LOCAL_R2_SECRET: Final = "afterschool-local-secret"  # noqa: S105
 
 
 class Settings(BaseSettings):
@@ -32,8 +39,11 @@ class Settings(BaseSettings):
     # 逗號分隔字串；NoDecode 關掉 pydantic-settings 對 list 的 JSON 解碼，交給 validator 切
     cors_origins: Annotated[list[str], NoDecode] = []
     public_base_url: AnyHttpUrl
-    supabase_url: AnyHttpUrl
-    supabase_service_role_key: SecretStr
+    # S3 相容 endpoint（本機 SeaweedFS / 雲端 Cloudflare R2）
+    r2_endpoint_url: AnyHttpUrl
+    r2_access_key_id: str
+    r2_secret_access_key: SecretStr
+    r2_bucket: str
     sentry_dsn: str | None = None
 
     @field_validator("app_secret_key")
@@ -62,6 +72,13 @@ class Settings(BaseSettings):
         # 去空白、去空項、去重保序
         return list(dict.fromkeys(s for item in items if (s := str(item).strip())))
 
+    @field_validator("r2_bucket")
+    @classmethod
+    def _check_r2_bucket(cls, value: str) -> str:
+        if not _R2_BUCKET.fullmatch(value):
+            raise ValueError("R2_BUCKET 必須符合 S3 bucket 命名（3~63 字元小寫英數、. 與 -）")
+        return value
+
     @field_validator("sentry_dsn", mode="before")
     @classmethod
     def _empty_dsn_is_none(cls, value: object) -> object:
@@ -70,9 +87,13 @@ class Settings(BaseSettings):
         return value
 
     @model_validator(mode="after")
-    def _check_production_secrets(self) -> Settings:
-        if self.is_production and self.supabase_service_role_key.get_secret_value() == _PLACEHOLDER:
-            raise ValueError("正式環境的 SUPABASE_SERVICE_ROLE_KEY 不可為 change-me")
+    def _check_production_r2(self) -> Settings:
+        if not self.is_production:
+            return self
+        if self.r2_endpoint_url.scheme != "https":
+            raise ValueError("正式環境的 R2_ENDPOINT_URL 必須是 https")
+        if self.r2_secret_access_key.get_secret_value() in (_PLACEHOLDER, _LOCAL_R2_SECRET):
+            raise ValueError("正式環境的 R2_SECRET_ACCESS_KEY 不可為 change-me 或本機開發值")
         return self
 
     @property
