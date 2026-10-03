@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 28,
-  "last_updated": "2026-10-03T12:45:51Z",
+  "version": 29,
+  "last_updated": "2026-10-03T12:46:27Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -722,7 +722,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/constants/navigation.ts",
       "source_ref": "FE:src/constants/navigation/index.ts::SIDEBAR_TREE",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-024"
