@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="FRONTEND-151,FRONTEND-153,FRONTEND-154,FRONTEND-155,FRONTEND-156,FRONTEND-157">
 <meta name="preview-route" content="/homework">
 <meta name="preview-updated" content="2026-10-03">
@@ -1015,19 +1015,10 @@ const app = createApp({
       '即時：ws reconnecting 由外框顯示整寬橫幅（page-admin-shell 稿）；homework topic 訂閱被拒（wsDenied）時本頁在篩選列下方顯示 warning「沒有即時更新權限，請手動重新整理」+「重新整理」按鈕。',
       '空與錯誤：選了班級但沒有學生 → EmptyState「{班級} 今天沒有預計到班的學生」；全部班級沒有資料 → 「沒有學生資料」；有資料但篩選後沒有卡片 → inline「沒有符合條件的學生」+「清除篩選」；載入中 → 摘要 skeleton + 4 張骨架卡；載入失敗 → EmptyState error +「重試」。',
       '「隱藏請假 / 缺席 / 已離班」預設開（存 localStorage）。狀態切換為樂觀更新，失敗還原並 ElMessage.error（FRONTEND-152）。',
+      '卡片上的 ETA 那一列：今天且有 homework:write 時整列是按鈕（高 ≥ 44px），點擊同 ⋮ →「設定預計可接送時間」；⋮ 選單保留；唯讀或非今天時純顯示。',
+      '整班新增選「全班」時送出鈕「新增給 N 位學生」的 N = 該班看板上的全部學生數（與後端實際新增人數一致），「全班」旁灰字「（含今天請假 / 缺席 k 位）」，k 為 0 時不顯示；指定學生時 N = 勾選人數。',
     ]
-    const openQuestions = [
-      {
-        question: '「設定預計可接送時間」的入口：規格只放在卡片 ⋮ 選單裡。平板上這是最常用的操作之一（家長按「我要來接」時系統用它自動回覆），要不要讓卡片上的「預計 … 可接送 / 尚未設定預計時間」那一列本身也可點？（本稿照 A 畫）',
-        optionA: '（推薦）那一列本身也是按鈕（今天且有 homework:write 時才可點，44px 高），點擊同 ⋮ →「設定預計可接送時間」；⋮ 選單照樣保留。需在 FRONTEND-153 補一條 red case。',
-        optionB: '照規格只放在 ⋮ 選單，那一列純顯示。',
-      },
-      {
-        question: '整班新增選「全班」時，送出按鈕「新增給 N 位學生」的 N：規格寫「students 中非請假者人數，僅供提示」，但後端（BACKEND-378）「全班」會新增給該班所有在學學生，包含今天請假 / 缺席的，實際 created 會比 N 大。（本稿照 A 畫）',
-        optionA: '（推薦）N 改為該班看板上全部學生數（與後端實際新增人數一致），「全班」選項旁加灰字「含今天請假 / 缺席 {k} 位」。需改 FRONTEND-156 description。',
-        optionB: '照規格 N = 非請假者人數，只當提示；成功訊息用後端回傳的 created 數。',
-      },
-    ]
+    const openQuestions = []
 
     // ---- 資料與篩選 ----
     const dataState = ref('data')

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="FRONTEND-085,FRONTEND-086,FRONTEND-087,FRONTEND-088,FRONTEND-089,FRONTEND-090,FRONTEND-091,FRONTEND-092,FRONTEND-093,FRONTEND-094,FRONTEND-095,FRONTEND-100,FRONTEND-240">
 <meta name="preview-route" content="/students">
 <meta name="preview-updated" content="2026-10-03">
@@ -659,7 +659,7 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
     </template>
   </el-dialog>
 
-  <!-- ============ StudentPurgeDialog（FRONTEND-100）：危險操作用 danger 按鈕，見待裁定 ============ -->
+  <!-- ============ StudentPurgeDialog（FRONTEND-100）：危險操作用 danger 按鈕，不用 FormDialog ============ -->
   <el-dialog v-model="pg.open" title="永久刪除學生資料" width="480px" :close-on-click-modal="false" :close-on-press-escape="!pg.loading"
              :show-close="!pg.loading" :before-close="(done) => { if (!pg.loading) done() }" append-to-body>
     <el-alert type="error" :closable="false" show-icon
@@ -1672,7 +1672,7 @@ const app = createApp({
     })
 
     const decisions = [
-      '版面：左列表、右詳情。詳情面板固定寬 520px，隨內容區捲動時黏在頂端。雙欄只在視窗寬 ≥ 1440 時出現（見待裁定）；更窄時詳情改為右側抽屜（寬 640，關閉即清掉 query.student）。沒選學生時右側顯示「從左側選擇學生以檢視詳情」。',
+      '版面：左列表、右詳情。詳情面板固定寬 520px，隨內容區捲動時黏在頂端。雙欄只在視窗寬 ≥ 1440 時出現；更窄時詳情改為右側抽屜（寬 640，關閉即清掉 query.student）。沒選學生時右側顯示「從左側選擇學生以檢視詳情」。',
       '列表工具列沿用已核可的 AdminListToolbar：搜尋（學號 / 姓名）、班級、年級、狀態（預設「在學」，可選「全部」）、就讀國小四個下拉，「含封存」勾選放 extra-filters slot。右側 actions：primary「新增學生」+「批次作業 ▾」下拉（匯入 Excel、學年升級）；缺 students:write 時三者都不出現。',
       '列表欄位：學號、姓名（封存學生加「已封存」tag 且整列淡化）、年級、就讀國小 / 班級（溢出 tooltip）、安親班班級（溢出 tooltip）、狀態 tag。後端固定依年級、班級名、學號排序，表格不提供點欄排序。點整列選取，選中列主色淡底。每頁 20 筆。',
       '列表空狀態：沒有任何篩選時「還沒有學生」（有寫入權限時附「新增學生」「匯入 Excel」），有篩選時「沒有符合條件的學生」+「清除篩選」（狀態維持預設「在學」不算篩選）。載入失敗用 EmptyState error +「重試」。',
@@ -1689,19 +1689,10 @@ const app = createApp({
       'GradePromotionDialog 用 FormDialog lg：來源學年度（預設今年 −1，切換即重新預覽）、退班日、摘要粗體一行、info 提示「升級不會變更安親班班級」、升級 / 轉退班兩個分頁表格。「執行升級」先開輸入確認框，輸入「確認升級」四字才可按確定。已升級過：error alert 且「執行升級」停用。preview_stale：warning alert 並自動重新預覽。',
       'StudentPurgeDialog（480px）：最上方 error alert 列出不可復原的影響，下方「請輸入學號 {學號} 以確認」+ 輸入框，去頭尾空白後完全相同才啟用 danger「永久刪除」。送出中取消、X、Esc 都無效。409 錯誤以 alert 顯示在 dialog 內；422 學號不符時輸入框下紅字並清空輸入。',
       '封存確認框：標題「封存學生」、內容照規格、確定鈕「封存」為 danger。重新產生綁定碼、解除綁定、刪除監護人也都用確認框（刪除沿用 useConfirmDelete 的「確認刪除」/「刪除」）。',
+      '雙欄 / 抽屜斷點：視窗寬 ≥ 1440 雙欄（列表約 610px，六欄以最小寬度放得下），< 1440 詳情改右側抽屜。',
+      'StudentPurgeDialog 不用 FormDialog，直接用 el-dialog，footer「取消」+ danger「永久刪除」，寬度、間距等版面數值照 FormDialog md；已核可的 FormDialog 不加 prop。',
     ]
-    const openQuestions = [
-      {
-        question: '學生工作台何時從「左右雙欄」切成「詳情抽屜」？規格寫視窗寬 < 1200 改抽屜，但 1200 的視窗扣掉側欄 220 與邊距後，左側列表只剩約 400px，六個欄位的表格放不下（要橫向捲動）。',
-        optionA: '（推薦）斷點改為視窗寬 < 1440 改抽屜；1440 以上雙欄，列表約 610px，六欄以最小寬度剛好放得下（學校與班級欄溢出時 tooltip）。本稿照此畫（切「桌機 1200」看抽屜模式）。需改 FRONTEND-085 description 與 red case 的斷點值。',
-        optionB: '維持 < 1200：1200~1439 之間也雙欄，列表表格橫向捲動（或只留學號、姓名、狀態三欄，其餘欄位隱藏）。',
-      },
-      {
-        question: '「永久刪除」是破壞性操作，需要紅色（danger）按鈕；但已核可的 FormDialog 送出鈕固定是 primary（藍色），沒有改色的 prop。StudentPurgeDialog 要怎麼做？',
-        optionA: '（推薦）StudentPurgeDialog 不用 FormDialog，直接用 el-dialog 自己排 footer（取消 + danger「永久刪除」），版面數值與 FormDialog 一致。本稿照此畫。不需要動已核可的 FormDialog。',
-        optionB: '幫 FormDialog 加 submitType?: \'primary\' | \'danger\' prop，Purge 用 FormDialog + danger。需改 FRONTEND-040 description 並重送 component-common-extra 核可。',
-      },
-    ]
+    const openQuestions = []
 
     return {
       meta, decisions, openQuestions, roles: ROLES, viewAs, perms, can, user, device, drawerMode, onNavigate, notesOpen: ref(false),
