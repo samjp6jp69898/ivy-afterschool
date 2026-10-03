@@ -351,6 +351,22 @@ def test_cli_migrate_reserved_password_not_printed(
     assert "DATABASE_URL" in out.err
 
 
+def test_migrate_short_password_does_not_garble_message() -> None:
+    # 遮罩只處理 4 字元以上的片段：1 字元密碼不可把訊息裡所有同字母換成 ***
+    with pytest.raises(MigrationConfigError) as exc_info:
+        load_migration_urls(
+            {
+                "MIGRATION_DATABASE_URL": "postgresql://postgres:s@db.internal:5432/railway?hostaddr=10.0.0.1",
+                "DATABASE_URL": "postgresql://app_backend:s@db.internal:5432/railway?hostaddr=10.0.0.2",
+            }
+        )
+
+    message = str(exc_info.value)
+    assert "hostaddr" in message
+    assert "postgres@db.internal" in message
+    assert "***" not in message
+
+
 def test_migrate_lock_key_formula() -> None:
     import hashlib
 
