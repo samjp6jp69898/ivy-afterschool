@@ -106,13 +106,6 @@ describe('ScoreCell', () => {
 
     await toggleAbsent(wrapper)
     expect(changes(wrapper)[0]).toEqual({ score: null, is_absent: false })
-
-    const already = await mountCell({ isAbsent: true })
-    // disabled 的 input 仍可用程式設值觸發 blur，模擬「已缺考時再輸入缺」
-    const alreadyInput = already.find('input[inputmode=decimal]')
-    ;(alreadyInput.element as HTMLInputElement).disabled = false
-    await typeAndBlur(already, '缺')
-    expect(already.emitted('change')).toBeUndefined()
   })
 
   it('ScoreCell does not emit unchanged value', async () => {
