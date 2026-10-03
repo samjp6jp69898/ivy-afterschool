@@ -98,10 +98,10 @@ afterschool/
 
 ### Migration（Alembic）
 
-- 位置：`apps/api/alembic.ini`、`apps/api/alembic/env.py`、`apps/api/alembic/versions/`。檔名 `<revision>_<slug>.py`；revision id 以負責的 task 命名（例如 DB-004 → `db004`），`down_revision` 指向實作當下的 head，維持單一線性歷史。
+- 位置：`apps/api/alembic.ini`、`apps/api/alembic/env.py`、`apps/api/alembic/versions/`。檔名 `<revision>_<slug>.py`；revision id 以負責的 task 命名（例如 DB-004 → `db004`；baseline 固定為 `db001`），`down_revision` 指向實作當下的 head，維持單一線性歷史。
 - revision 手寫，`upgrade()` 以 `op.execute` 寫原生 SQL；data migration 把 SQL 定義為模組常數（例如 `SEED_SQL`），測試可載入同一常數重跑驗證冪等。**forward-only**：`downgrade()` 一律 `raise NotImplementedError`；修正以新的 revision 前進，不回滾。已部署的 revision 不再修改。
 - `env.py` 只讀 `MIGRATION_DATABASE_URL`；連線後設定 `lock_timeout`（DDL 等鎖有上限，逾時失敗而不是無限期卡住），並先 commit 掉 autobegin 的隱式交易再交給 Alembic（移植 ivy `alembic/env.py` 的做法）。
-- **雲端執行時機：Railway pre-deploy command**（api 服務的 `railway.json`：`python -m app.cli migrate`）。不在 api 開機時跑：pre-deploy 失敗會中止這次部署、舊版本繼續服務，不需要維護模式，且執行期行程不必開 owner 連線。migrate 以 session 級 `pg_advisory_lock` 串行化（等待有上限，逾時失敗並提示查 `pg_stat_activity`），移植 ivy `startup/migrations.py` 的 `_alembic_upgrade_lock` 與 `apply_migration_lock_timeout`；ivy 的空 DB / legacy baseline 四態偵測不移植（本專案從空 DB 以 revision 建起）。
+- **雲端執行時機：Railway pre-deploy command**（api 服務的 `railway.json`：`python -m app.cli migrate`）。不在 api 開機時跑：pre-deploy 失敗會中止這次部署、上一版部署繼續服務，不需要維護模式，且執行期行程不必開 owner 連線。migrate 以 session 級 `pg_advisory_lock` 串行化（等待有上限，逾時失敗並提示查 `pg_stat_activity`），移植 ivy `startup/migrations.py` 的 `_alembic_upgrade_lock` 與 `apply_migration_lock_timeout`；ivy 的空 DB / legacy baseline 四態偵測不移植（本專案從空 DB 以 revision 建起）。
 - 本機：`just db-migrate`（對本機 DB `alembic upgrade head`）、`just db-reset`（drop / create 本機 `postgres` database → `alembic upgrade head` → 設定本機 `app_backend` 密碼）、`just db-new-migration <rev> <slug>`。這些 recipe 一律只連 `127.0.0.1:54342`。
 - migration 必須向後相容於部署切換期間仍在執行的上一版 api（先加欄位、後改程式、最後才刪欄位）。
 - **schema drift**：`scripts/check_schema_drift.py`（`just schema-drift`）以 Alembic `autogenerate.compare_metadata` 比對 `app.models.Base.metadata` 與套用全部 revision 後的 DB；比對表、欄位（型別、nullable）、FK、unique constraint，不比對 index、check constraint、server default、trigger 與 function（由各表的 migration 測試負責）。
