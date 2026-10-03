@@ -2,7 +2,7 @@
 # 本機開發環境健康檢查（INFRA-018）：just doctor
 #
 # 每項印一行 OK / WARN / FAIL + 名稱 + 修復提示；exit code = FAIL 項數（上限 125）。
-# WARN 不計入 exit code（port 被占用、Supabase 未啟動、service role key 未設定）。
+# WARN 不計入 exit code（port 被占用、本機 DB / SeaweedFS 未啟動）。
 #
 # 用法：
 #   just doctor            檢查本機環境
@@ -118,14 +118,26 @@ fi
 
 check_tool_version node eq 24 "安裝 Node 24"
 check_tool_version pnpm ge 10 "corepack enable"
-check_tool_version supabase ge 2 "安裝 Supabase CLI"
 
 if ! command -v docker >/dev/null 2>&1; then
     fail "docker daemon" "docker 不在 PATH；安裝並啟動 Docker Desktop"
-elif docker info >/dev/null 2>&1; then
-    ok "docker daemon"
+    fail "docker compose" "docker 不在 PATH；安裝 Docker Desktop 或 compose plugin"
 else
-    fail "docker daemon" "docker info 失敗；啟動 Docker Desktop"
+    if docker info >/dev/null 2>&1; then
+        ok "docker daemon"
+    else
+        fail "docker daemon" "docker info 失敗；啟動 Docker Desktop"
+    fi
+    if compose_version="$(docker compose version 2>/dev/null | head -n 1)"; then
+        compose_major="$(major_of "$compose_version")"
+        if [ -n "$compose_major" ] && [ "$compose_major" -ge 2 ]; then
+            ok "docker compose ${compose_version}"
+        else
+            fail "docker compose" "需要 Compose v2，目前 ${compose_version:-無輸出}；安裝 Docker Desktop 或 compose plugin"
+        fi
+    else
+        fail "docker compose" "docker compose version 失敗；安裝 Docker Desktop 或 compose plugin"
+    fi
 fi
 
 # --- 專案目錄與 .env ---------------------------------------------------------
@@ -151,12 +163,6 @@ else
         fail "apps/api/.env 的 APP_SECRET_KEY" "仍是 change-me 或長度 < 32；just bootstrap 或手動產生"
     else
         ok "apps/api/.env 的 APP_SECRET_KEY"
-    fi
-    service_key="$(read_env_value "$API_ENV" SUPABASE_SERVICE_ROLE_KEY)"
-    if [ "$service_key" = "change-me" ]; then
-        warn "apps/api/.env 的 SUPABASE_SERVICE_ROLE_KEY" "仍是 change-me，Storage 功能無法使用；啟動 Supabase 後重跑 just bootstrap"
-    else
-        ok "apps/api/.env 的 SUPABASE_SERVICE_ROLE_KEY"
     fi
 fi
 
@@ -210,13 +216,17 @@ check_app_port() {
 check_app_port "API" "$API_PORT"
 check_app_port "Web" "$WEB_PORT"
 
-for port in 54341 54342; do
+check_local_service() {
+    local label="$1" port="$2"
     if tcp_open 127.0.0.1 "$port"; then
-        ok "Supabase port ${port}"
+        ok "${label} port ${port}"
     else
-        warn "Supabase port ${port} 無法連線" "just db-start"
+        warn "${label} port ${port} 無法連線" "just db-start"
     fi
-done
+}
+
+check_local_service "本機 DB（Postgres）" 54342
+check_local_service "SeaweedFS S3" 54344
 
 printf '\n失敗 %d 項、警告 %d 項。\n' "$FAIL_COUNT" "$WARN_COUNT"
 if [ "$FAIL_COUNT" -gt 125 ]; then
