@@ -38,9 +38,10 @@ function button(text: string): HTMLButtonElement {
 
 async function clickMessageBox(text: string): Promise<void> {
   await settle()
-  const b = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.el-message-box button')).find(
-    (x) => x.textContent?.trim() === text,
-  )
+  // 已關閉的訊息框可能仍留在 DOM，取最後（最新）一個
+  const b = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.el-message-box button'))
+    .filter((x) => x.textContent?.trim() === text)
+    .at(-1)
   if (!b) throw new Error(`確認框找不到按鈕「${text}」`)
   b.click()
   await settle()
