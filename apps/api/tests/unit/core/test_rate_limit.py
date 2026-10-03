@@ -141,7 +141,7 @@ def test_rate_limit_thread_safe(fake_clock: FakeClock) -> None:
         for _ in range(10):
             try:
                 limiter.hit("k", now)
-            except BaseException as exc:  # noqa: BLE001  收集後在主執行緒斷言
+            except BaseException as exc:  # 收集後在主執行緒斷言
                 errors.append(exc)
 
     threads = [threading.Thread(target=worker) for _ in range(10)]
