@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 46,
-  "last_updated": "2026-10-03T12:55:42Z",
+  "version": 47,
+  "last_updated": "2026-10-03T12:58:13Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1563,7 +1563,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/vitest.config.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-012"
@@ -1584,9 +1584,9 @@
         "notes": "回歸：just web-test src/test/setup.spec.ts -t \"harness\" 與 just web-test src/test/helpers.spec.ts -t \"helpers\" 全綠；並確認輸出無 vite.config 副檔名警告。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 2/2 綠，名稱對應 2 條 red_case；f751490 測試（含把 red_case 改為 .vue 測試元件的規格修正）先於 9a2b0ce 實作。web-lint 對 spec、fixture、vitest.config.ts 乾淨；vue-tsc 以暫時 tsconfig 檢查 spec + fixture、以 tsconfig.node.json 檢查 vitest.config.ts 皆無錯誤（tsconfig.node.json 已開 allowImportingTsExtensions，'./vite.config.ts' 合法）。紅燈原因實測確認：在 scratchpad 以 vitest.config.ts 的副本拿掉 server.deps.inline 後跑同一個 spec，收集即失敗，錯誤為 TypeError: Unknown file extension \".css\"（element-plus/theme-chalk/base.css）；同一份副本加回 inline 則 2 passed，證明差異只在這一行。改用 .vue 測試元件合理：unplugin-vue-components 只轉換經 vite 編譯的 SFC，.ts 裡 defineComponent({ template }) 的字串在執行期才編譯，不會觸發 ElementPlusResolver 的自動 import（也就不會載入 theme-chalk CSS），舊寫法無法重現要修的問題。回歸：just web-test src/test/setup.spec.ts -t harness 8 passed、src/test/helpers.spec.ts -t helpers 6 passed，三次執行的輸出都不再出現「import ./vite.config without a file extension」警告。inline 只列 'element-plus' 一項，沒有放寬其他套件。無殘留。"
       }
     }
   ]
