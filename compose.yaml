@@ -1,0 +1,60 @@
+# 本機開發與整合測試用服務（INFRA-044；architecture_decisions §5、§10，testing_conventions §5）。
+# 啟停一律透過 just db-start / just db-stop；全部只綁 127.0.0.1。
+name: afterschool
+
+services:
+  # PostgreSQL 17（與 Railway Postgres 同主版本）。不放 init SQL：app_backend 角色由 baseline revision 建立，
+  # 本機密碼由 just db-reset 設定。
+  db:
+    image: postgres:17.11
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "127.0.0.1:54342:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "postgres"]
+      interval: 2s
+      retries: 30
+
+  # SeaweedFS（R2 的本機 S3 相容模擬）：weed mini 單容器跑 master / volume / filer / S3。
+  # 只發佈 S3 API；filer / master / admin UI 不對外（filer UI 不經 S3 驗證即可讀寫所有檔案）。
+  # -bucket 在啟動時建立 bucket（已存在則略過）；S3 設定不定義 anonymous identity，未簽章請求一律 403。
+  storage:
+    image: chrislusf/seaweedfs:4.48
+    command: ["mini", "-s3.config=/etc/seaweedfs/s3.json", "-bucket=afterschool-local", "-admin.ui=false"]
+    configs:
+      - source: seaweedfs-s3
+        target: /etc/seaweedfs/s3.json
+    ports:
+      - "127.0.0.1:54344:8333"
+    volumes:
+      - storage-data:/data
+    healthcheck:
+      # S3 可回應且 bucket 已建立（filer 上的 /buckets/<bucket>/ 存在）才算 healthy
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://127.0.0.1:8333/healthz && wget -q -O /dev/null http://127.0.0.1:8888/buckets/afterschool-local/
+      interval: 2s
+      retries: 30
+
+configs:
+  # 本機固定開發帳密，與 apps/api/.env.example 的 R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY 一致
+  seaweedfs-s3:
+    content: |
+      {
+        "identities": [
+          {
+            "name": "afterschool",
+            "credentials": [{"accessKey": "afterschool", "secretKey": "afterschool-local-secret"}],
+            "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+          }
+        ]
+      }
+
+volumes:
+  db-data:
+  storage-data:

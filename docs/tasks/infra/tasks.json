@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 52,
-  "last_updated": "2026-10-03T13:16:54Z",
+  "version": 53,
+  "last_updated": "2026-10-03T13:19:48Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1605,7 +1605,7 @@
       "granularity_unit": "config",
       "target_path": "compose.yaml",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-002",

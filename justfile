@@ -127,10 +127,10 @@ e2e *ARGS:
     pnpm exec playwright test "$@"
 
 # ---------------------------------------------------------------------------
-# 本機 Supabase
+# 本機 DB 與 S3（compose.yaml：Postgres + SeaweedFS）
 # ---------------------------------------------------------------------------
 
-# 啟動本機 Supabase（API 54341 / DB 54342 / Studio 54343）
+# 啟動本機 Postgres（54342）與 SeaweedFS S3（54344），等 healthcheck 通過才返回（compose.yaml，INFRA-044）
 db-start:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -138,10 +138,9 @@ db-start:
         echo "錯誤：Docker 未啟動，先啟動 Docker Desktop（或相容的 daemon）。" >&2
         exit 1
     fi
-    cd "{{ root }}"
-    supabase start
+    docker compose -f "{{ root }}/compose.yaml" up -d --wait db storage
 
-# 停止本機 Supabase（保留 volume，資料下次啟動還在）
+# 停止本機 Postgres 與 SeaweedFS（保留 volume，資料下次啟動還在；需要乾淨 DB 用 just db-reset）
 db-stop:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -149,8 +148,7 @@ db-stop:
         echo "錯誤：Docker 未啟動，先啟動 Docker Desktop（或相容的 daemon）。" >&2
         exit 1
     fi
-    cd "{{ root }}"
-    supabase stop
+    docker compose -f "{{ root }}/compose.yaml" stop
 
 # 重建本機 DB（套用全部 migration + seed）：just db-reset [--yes]，只會動本機
 db-reset *ARGS:
