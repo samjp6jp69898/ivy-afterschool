@@ -1,11 +1,12 @@
 """DB 整合測試共用 fixture（DB-002）：psycopg 層級的連線、角色切換、SQLSTATE 斷言。
 
-給 migration / 約束 / RLS 測試使用；SQLAlchemy `db_session` 由 INFRA-010 的上層 conftest 提供。
+給 migration / 約束 / grant 測試使用；SQLAlchemy `db_session` 由 INFRA-010 的上層 conftest 提供。
 helper 以 `from tests.integration.db.conftest import ...` 取用。
 
 連線原則：測資一律經 `backend_conn`（app_backend 實際登入）寫入；app_backend 登入失敗就中止整個
-測試，絕不改用 owner。`owner_conn` 只限 DB-002 description 列出的五種場合（角色被拒驗證、測試內
-DDL、Supabase 管理的 schema、真 commit 後清表、查 app_backend 讀不到的 pg_catalog 資訊）。
+測試，絕不改用 owner。`owner_conn` 只限三種場合：測試內需要 DDL（臨時物件只在未 commit 的 owner
+transaction 內可見，以 `as_role(owner_conn, 'app_backend')` 驗證）、真 commit 後清表、查
+app_backend 讀不到的 pg_catalog 資訊（其他角色的權限、ACL）。
 
 兩種連線都只連本機 loopback：連線前以 `db_urls` 依 libpq 規則檢查 URL 與環境變數，連線後再以
 `conn.info.hostaddr` 複驗，違規一律 `pytest.exit`。每個測試在 transaction 內執行，結束一律
@@ -39,8 +40,9 @@ RAISE_EXCEPTION = "P0001"
 # 各表 trigger 測試插入時指定的 updated_at，update 後必須被 trigger 改成 now()
 SEEDED_UPDATED_AT = datetime(2026, 1, 1, tzinfo=timezone(timedelta(hours=8)))
 
-# app_backend 只用於 owner transaction 內驗證臨時物件（DDL 情境）
-_SWITCHABLE_ROLES = frozenset({"anon", "authenticated", "service_role", "app_backend"})
+# 只用於 owner transaction 內驗證臨時物件（DDL 情境）
+_SWITCHABLE_ROLES = frozenset({"app_backend"})
+_BACKEND_PRIVILEGES = frozenset({"SELECT", "INSERT", "UPDATE", "DELETE"})
 _EXIT_CODE = 2
 
 
@@ -73,7 +75,7 @@ def connect_owner() -> Conn:
     """以 owner（本機 postgres）連線；只限 module docstring 列出的場合。"""
     return _connect(
         db_urls.owner_url,
-        "本機 Supabase 的 owner 連線失敗，先跑 just db-start 與 just db-reset --yes",
+        "本機 DB 的 owner 連線失敗，先跑 just db-start 與 just db-reset --yes",
     )
 
 
@@ -140,34 +142,42 @@ def pg_error(conn: Conn, sqlstate: str) -> Iterator[PgErrorInfo]:
         raise AssertionError(f"預期 SQLSTATE {sqlstate}，實際 {raised.sqlstate}：{raised}")
 
 
-def assert_table_secured(owner_conn: Conn, table: str) -> None:
-    """斷言表已套用 secure_table。
-
-    RLS 與 force RLS 皆開啟、`app_backend_all` policy 存在、anon / authenticated select 得到 42501。
-    """
+def assert_backend_grants(
+    owner_conn: Conn, table: str, privileges: frozenset[str] = _BACKEND_PRIVILEGES
+) -> None:
+    """斷言表的 ACL 只有 owner 與 app_backend、app_backend 權限恰為 `privileges`、未開 RLS。"""
     schema, name = split_table(table)
     row = owner_conn.execute(
         """
-        select c.relrowsecurity, c.relforcerowsecurity
+        select pg_get_userbyid(c.relowner), c.relrowsecurity
         from pg_class c join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = %s and c.relname = %s
         """,
         (schema, name),
     ).fetchone()
     assert row is not None, f"找不到表 {schema}.{name}"
-    assert row == (True, True), f"{schema}.{name} 的 (relrowsecurity, relforcerowsecurity) = {row}"
-    policy = owner_conn.execute(
+    owner, row_security = row
+    acl: dict[str, set[str]] = {}
+    for grantee, privilege in owner_conn.execute(
         """
-        select 1 from pg_policies
-        where schemaname = %s and tablename = %s and policyname = 'app_backend_all'
+        select coalesce(r.rolname, 'PUBLIC'), a.privilege_type
+        from pg_class c
+        cross join lateral aclexplode(c.relacl) a
+        left join pg_roles r on r.oid = a.grantee
+        where c.oid = %s::regclass
         """,
-        (schema, name),
-    ).fetchone()
-    assert policy is not None, f"{schema}.{name} 沒有 app_backend_all policy"
-    select = sql.SQL("select * from {}").format(sql.Identifier(schema, name))
-    for role in ("anon", "authenticated"):
-        with as_role(owner_conn, role), pg_error(owner_conn, INSUFFICIENT_PRIVILEGE):
-            owner_conn.execute(select)
+        (f"{schema}.{name}",),
+    ).fetchall():
+        acl.setdefault(grantee, set()).add(privilege)
+    actual = f"{schema}.{name} 的實際 ACL：{ {k: sorted(v) for k, v in sorted(acl.items())} }"
+
+    extra = set(acl) - {owner, "app_backend"}
+    assert not extra, f"ACL 只能有 owner 與 app_backend，多出 {sorted(extra)}；{actual}"
+    expected = set(privileges)
+    assert acl.get("app_backend", set()) == expected, (
+        f"app_backend 權限應為 {sorted(expected)}；{actual}"
+    )
+    assert row_security is False, f"{schema}.{name} 的 relrowsecurity 應為 false（不使用 RLS）"
 
 
 def _set_clause(changes: dict[str, Any]) -> sql.Composable:
