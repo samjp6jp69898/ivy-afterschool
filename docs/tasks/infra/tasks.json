@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 67,
-  "last_updated": "2026-10-03T14:38:42Z",
+  "version": 68,
+  "last_updated": "2026-10-03T14:39:23Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -500,8 +500,8 @@
       "granularity_unit": "script",
       "target_path": "scripts/bootstrap.sh",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-002",
         "INFRA-006",
@@ -540,8 +540,8 @@
       "granularity_unit": "script",
       "target_path": "scripts/dev_up.sh",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-002",
         "INFRA-044",
@@ -694,8 +694,8 @@
       "granularity_unit": "script",
       "target_path": "scripts/check_schema_drift.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-044",
         "INFRA-045",
