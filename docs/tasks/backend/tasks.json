@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 67,
-  "last_updated": "2026-10-03T14:48:06Z",
+  "version": 68,
+  "last_updated": "2026-10-03T14:49:17Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14532,7 +14532,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/migrate.py",
       "source_ref": "BE:startup/migrations.py::_alembic_upgrade_lock",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "INFRA-045",

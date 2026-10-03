@@ -16,6 +16,7 @@ from uuid import uuid4
 
 import psycopg
 import pytest
+from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from psycopg import sql
@@ -322,7 +323,7 @@ def test_migrate_releases_lock_on_failure(
     def boom(*args: Any, **kwargs: Any) -> None:
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(migrate.command, "upgrade", boom)
+    monkeypatch.setattr(command, "upgrade", boom)
 
     with pytest.raises(RuntimeError, match="boom"):
         run_migrations(probe_urls, alembic_ini=ALEMBIC_INI)
