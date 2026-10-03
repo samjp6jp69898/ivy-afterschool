@@ -281,6 +281,109 @@ def test_signed_url_signing_error(storage: R2Storage, monkeypatch: pytest.Monkey
     assert exc_info.value.__context__ is None
 
 
+# --- delete（BACKEND-015） -----------------------------------------------------------------
+
+
+def _delete_params(bucket: str, paths: list[str]) -> dict[str, object]:
+    return {
+        "Bucket": _BUCKET_NAME,
+        "Delete": {"Objects": [{"Key": f"{bucket}/{p}"} for p in paths], "Quiet": True},
+    }
+
+
+def test_storage_delete_request(storage: R2Storage, stubber: Stubber) -> None:
+    p1, p2 = _valid_path("jpg"), _valid_path("png")
+    stubber.add_response("delete_objects", {}, _delete_params("student-photos", [p1, p2]))
+
+    storage.delete("student-photos", [p1, p2])
+
+
+def test_storage_delete_empty_noop(storage: R2Storage, stubber: Stubber) -> None:
+    storage.delete("student-photos", [])
+
+
+def test_storage_delete_batches_over_1000(storage: R2Storage, stubber: Stubber) -> None:
+    paths = [_valid_path("pdf") for _ in range(1001)]
+    stubber.add_response("delete_objects", {}, _delete_params("leave-attachments", paths[:1000]))
+    stubber.add_response("delete_objects", {}, _delete_params("leave-attachments", paths[1000:]))
+
+    storage.delete("leave-attachments", paths)
+
+
+def test_storage_delete_exactly_1000_is_one_batch(storage: R2Storage, stubber: Stubber) -> None:
+    paths = [_valid_path("pdf") for _ in range(1000)]
+    stubber.add_response("delete_objects", {}, _delete_params("leave-attachments", paths))
+
+    storage.delete("leave-attachments", paths)
+
+
+def test_storage_delete_upstream_error(storage: R2Storage, stubber: Stubber) -> None:
+    p1 = _valid_path()
+    stubber.add_response(
+        "delete_objects",
+        {"Errors": [{"Key": "student-photos/" + p1, "Code": "AccessDenied", "Message": "denied"}]},
+        _delete_params("student-photos", [p1]),
+    )
+    with pytest.raises(StorageError) as exc_info:
+        storage.delete("student-photos", [p1])
+    assert "AccessDenied" in str(exc_info.value)
+    assert p1 in str(exc_info.value)
+
+    stubber.add_client_error(
+        "delete_objects", service_error_code="AccessDenied", http_status_code=403
+    )
+    with pytest.raises(StorageError) as exc_info:
+        storage.delete("student-photos", [p1])
+    assert "403" in str(exc_info.value)
+    assert exc_info.value.__context__ is None
+
+    with pytest.raises(ValueError, match="path"):
+        storage.delete("student-photos", [p1, "x/y.jpg"])
+
+
+def test_storage_delete_invalid_path_sends_nothing(storage: R2Storage, stubber: Stubber) -> None:
+    # 第 1001 個 path 不合法：第一批也不可送出
+    paths = [_valid_path() for _ in range(1000)] + ["../etc/passwd"]
+
+    with pytest.raises(ValueError, match="path"):
+        storage.delete("student-photos", paths)
+
+
+def test_storage_delete_partial_failure_continues_batches(
+    storage: R2Storage, stubber: Stubber
+) -> None:
+    paths = [_valid_path() for _ in range(1001)]
+    failed = paths[3]
+    stubber.add_response(
+        "delete_objects",
+        {"Errors": [{"Key": "student-photos/" + failed, "Code": "InternalError", "Message": "x"}]},
+        _delete_params("student-photos", paths[:1000]),
+    )
+    stubber.add_response("delete_objects", {}, _delete_params("student-photos", paths[1000:]))
+
+    with pytest.raises(StorageError) as exc_info:
+        storage.delete("student-photos", paths)
+
+    # 第二批仍送出（fixture 的 assert_no_pending_responses 驗證）；錯誤彙整後才拋
+    assert failed in str(exc_info.value)
+    assert "InternalError" in str(exc_info.value)
+
+
+def test_storage_delete_error_message_is_bounded(storage: R2Storage, stubber: Stubber) -> None:
+    paths = [_valid_path() for _ in range(50)]
+    errors = [{"Key": "student-photos/" + p, "Code": "AccessDenied", "Message": "x"} for p in paths]
+    stubber.add_response(
+        "delete_objects", {"Errors": errors}, _delete_params("student-photos", paths)
+    )
+
+    with pytest.raises(StorageError) as exc_info:
+        storage.delete("student-photos", paths)
+
+    message = str(exc_info.value)
+    assert "50" in message
+    assert sum(p in message for p in paths) == 10
+
+
 # --- object_key / build_object_path ---------------------------------------------------------
 
 

@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 71,
-  "last_updated": "2026-10-03T14:52:03Z",
+  "version": 72,
+  "last_updated": "2026-10-03T14:52:39Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -534,7 +534,7 @@
     {
       "id": "BACKEND-015",
       "title": "實作 R2Storage.delete：批次刪除物件",
-      "description": "在 `apps/api/app/core/storage.py` 實作 `delete(bucket, paths)`：\n- `client.delete_objects(Bucket=bucket_name, Delete={\"Objects\": [{\"Key\": object_key(bucket, p)} for p in paths], \"Quiet\": True})`；一次最多 1000 個 key，超過依序分批。\n- paths 為空 → 不呼叫 S3 直接 return；每個 path 同樣過 BACKEND-013 的格式檢查（任一不合法 → ValueError，不送出任何請求）。\n- 刪除不存在的物件視為成功（S3 / R2 對不存在的 key 回成功）；回應的 `Errors` 非空或 `ClientError` → StorageError（訊息列出失敗的 key 與錯誤碼）。\n- 呼叫端（例如學生換照片）應以 BACKEND-006 `run_after_commit` 在 DB commit 後刪舊檔，刪除失敗只記 log（孤兒檔可接受，不可反過來刪了檔但 DB 回滾）。\n\n**驗收標準**\n- 請求參數正確；空清單不呼叫 S3；超過 1000 個分批。\n- 非法 path 被拒。\n- 上游錯誤（含部分失敗）→ StorageError。",
+      "description": "在 `apps/api/app/core/storage.py` 實作 `delete(bucket, paths)`：\n- `client.delete_objects(Bucket=bucket_name, Delete={\"Objects\": [{\"Key\": object_key(bucket, p)} for p in paths], \"Quiet\": True})`；一次最多 1000 個 key，超過依序分批。\n- paths 為空 → 不呼叫 S3 直接 return；每個 path 同樣過 BACKEND-013 的格式檢查（任一不合法 → ValueError，不送出任何請求）。\n- 刪除不存在的物件視為成功（S3 / R2 對不存在的 key 回成功）；回應的 `Errors` 非空或 `ClientError` → StorageError（訊息列出失敗的 key 與錯誤碼）。上游錯誤一律經 BACKEND-538 的 `_s3_call`（`__cause__` / `__context__` 皆為 None）。\n- 多批時：整個請求失敗（`ClientError` / `BotoCoreError`）立即拋出；個別 key 失敗（`Errors`）則繼續送完後續批次、全部彙整後才拋（盡量多刪）。訊息列出總筆數與前 10 筆失敗的 key 與錯誤碼，避免上千筆失敗時訊息無界。\n- 呼叫端（例如學生換照片）應以 BACKEND-006 `run_after_commit` 在 DB commit 後刪舊檔，刪除失敗只記 log（孤兒檔可接受，不可反過來刪了檔但 DB 回滾）。\n\n**驗收標準**\n- 請求參數正確；空清單不呼叫 S3；超過 1000 個分批。\n- 非法 path 被拒。\n- 上游錯誤（含部分失敗）→ StorageError。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/storage.py",
       "source_ref": null,
@@ -555,7 +555,11 @@
           "test_storage_delete_request：Stubber 預期 delete_objects(Bucket='afterschool-test', Delete={'Objects': [{'Key': 'student-photos/' + p1}, {'Key': 'student-photos/' + p2}], 'Quiet': True}) 回 {} → delete('student-photos', [p1, p2]) 完成且 stubber.assert_no_pending_responses() 通過",
           "test_storage_delete_empty_noop：delete('student-photos', []) → 完成，Stubber 未登記 response（有呼叫會拋錯）",
           "test_storage_delete_batches_over_1000：1001 個合法 path → Stubber 依序收到兩次 delete_objects，Objects 長度分別為 1000 與 1",
-          "test_storage_delete_upstream_error：回應 {'Errors': [{'Key': 'student-photos/' + p1, 'Code': 'AccessDenied', 'Message': 'denied'}]} → StorageError 訊息含 'AccessDenied'；add_client_error('delete_objects', http_status_code=403) → StorageError；paths 含 'x/y.jpg' → ValueError"
+          "test_storage_delete_upstream_error：回應 {'Errors': [{'Key': 'student-photos/' + p1, 'Code': 'AccessDenied', 'Message': 'denied'}]} → StorageError 訊息含 'AccessDenied'；add_client_error('delete_objects', http_status_code=403) → StorageError；paths 含 'x/y.jpg' → ValueError",
+          "test_storage_delete_exactly_1000_is_one_batch：1000 個 path → 只送一次 delete_objects",
+          "test_storage_delete_invalid_path_sends_nothing：前 1000 個合法、第 1001 個 '../etc/passwd' → ValueError，第一批也不送出",
+          "test_storage_delete_partial_failure_continues_batches：1001 個 path，第一批回應 Errors 含一個 key → 第二批仍送出，最後 StorageError 含該 key 與錯誤碼",
+          "test_storage_delete_error_message_is_bounded：50 個 key 都失敗 → 訊息含總數 50，且只列出 10 個 key"
         ],
         "run": "just test apps/api/tests/unit/core/test_storage.py -k \"test_storage_delete_\"",
         "notes": ""
