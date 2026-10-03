@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 58,
-  "last_updated": "2026-10-03T14:41:51Z",
+  "version": 59,
+  "last_updated": "2026-10-03T14:42:19Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -460,8 +460,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/storage.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-001",
         "INFRA-045"
@@ -14593,6 +14593,39 @@
         ],
         "run": "just test-int apps/api/tests/integration/core/test_storage_local_s3.py -k storage_local_s3",
         "notes": "需要先 just db-start（storage 的 healthcheck 通過即代表 bucket afterschool-local 已建立）。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-537",
+      "title": "Settings 的 database_url 與 sentry_dsn 不得出現在 repr / str",
+      "description": "BACKEND-001 的 `Settings.database_url`（含 app_backend 密碼）與 `sentry_dsn`（含 DSN key）目前是一般 `str`，`repr(settings)` / `str(settings)` 會露出密碼與 key。日後任何 log、例外訊息或除錯輸出帶出 Settings 時即成為洩漏。\n\n**修改**（`apps/api/app/core/config.py`）：兩個欄位改為 `Field(repr=False)`（保留 `str` 型別，下游讀取方式不變；不改成 SecretStr 以免影響 BACKEND-005 等建 engine 的呼叫端）。其餘欄位與 validator 不變。\n\n**驗收標準**：\n- `repr(settings)` 與 `str(settings)` 不含 DATABASE_URL 的密碼與 SENTRY_DSN 的 key，但 `settings.database_url` / `settings.sentry_dsn` 仍回傳原字串。\n- BACKEND-001 既有測試全綠。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/core/config.py",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r3",
+      "depends_on": [
+        "BACKEND-001"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/unit/core/test_config.py",
+        "markers": [
+          "unit"
+        ],
+        "red_cases": [
+          "test_config_repr_hides_database_url_password：DATABASE_URL='postgresql+psycopg://app_backend:Pw123@127.0.0.1:54342/postgres' → repr(settings) 與 str(settings) 皆不含 'Pw123'；settings.database_url 仍含 'Pw123'",
+          "test_config_repr_hides_sentry_dsn：SENTRY_DSN='https://abcdef123456@o1.ingest.sentry.io/9' → repr(settings) 不含 'abcdef123456'；settings.sentry_dsn 等於原字串"
+        ],
+        "run": "just test apps/api/tests/unit/core/test_config.py -k \"test_config_\"",
+        "notes": "review-r3-fe 審 BACKEND-001 時發現的殘留。"
       },
       "review": {
         "status": "pending",
