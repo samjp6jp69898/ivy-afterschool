@@ -157,3 +157,35 @@ def test_dev_up_rejects_port_taken_by_other_process(dev_up: DevUp, root: Path) -
     assert result.returncode == 1
     assert f"port {busy}" in result.stderr
     assert not (root / "var" / "run" / "api.pid").exists()
+
+
+def test_dev_up_unrelated_process_with_same_suffix_is_not_ours(dev_up: DevUp, root: Path) -> None:
+    # 無關行程：命令列以「 api」結尾，但不是 `just api`，也沒有監聽 API port
+    decoy = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)", "api"])
+    try:
+        run_dir = root / "var" / "run"
+        run_dir.mkdir(parents=True)
+        (run_dir / "api.pid").write_text(f"{decoy.pid}\n", encoding="utf-8")
+        (run_dir / "api.cmd").write_text("just api", encoding="utf-8")
+
+        result = dev_up(DEV_UP_API_CMD="just api", DEV_UP_WAIT_SECONDS="2")
+
+        assert result.returncode != 0
+        assert "api 已在執行" not in result.stdout
+        assert "全部就緒" not in result.stdout
+    finally:
+        decoy.kill()
+        decoy.wait()
+
+
+def test_dev_up_rerun_after_timeout_still_requires_port(dev_up: DevUp, root: Path) -> None:
+    first = dev_up(DEV_UP_API_CMD="sleep 120", DEV_UP_WAIT_SECONDS="2")
+    assert first.returncode == 1
+    assert _alive(_read_pid(root, "api"))
+
+    second = dev_up(DEV_UP_API_CMD="sleep 120", DEV_UP_WAIT_SECONDS="2")
+
+    # 行程還活著、命令列也相符，但 port 從未開啟 → 不可視為就緒
+    assert second.returncode == 1
+    assert "全部就緒" not in second.stdout
+    assert "沒有開始監聽" in second.stderr

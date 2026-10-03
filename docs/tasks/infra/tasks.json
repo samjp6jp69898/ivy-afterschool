@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 81,
-  "last_updated": "2026-10-03T15:01:41Z",
+  "version": 82,
+  "last_updated": "2026-10-03T15:03:05Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -536,7 +536,7 @@
     {
       "id": "INFRA-016",
       "title": "實作 scripts/dev_up.sh 與 just up：一鍵啟動本機 DB / SeaweedFS + API + Web",
-      "description": "新增 `scripts/dev_up.sh` 與 justfile recipe `up`。參考 `/Users/user/land/land_house_scraper/scripts/dev_up.sh`（簡化為三個服務）。\n\n**流程**（依序，任一步逾時就中止並以非 0 退出）：\n1. 本機 DB / SeaweedFS：執行 `just db-start`（INFRA-044，`docker compose up -d --wait` 本身冪等，已在執行時立即返回）；`DEV_UP_SKIP_DB=1` 時整步略過。\n2. API：pid 檔 `var/run/api.pid` 指向的行程仍存活且命令列與 `var/run/api.cmd` 相同 → 印「api 已在執行（pid N）」略過；否則以 `nohup` 背景執行 API 指令（預設 `just api`），stdout/stderr 寫 `var/log/api.log`，寫入 pid 與 cmd 檔。\n3. Web：同上，pid/cmd/log 為 `var/run/web.*`、`var/log/web.log`，預設指令 `just web`。\n（啟動前若該 port 已可連線、而且不是 pid 檔記錄的行程 → 印「port 已被其他程式占用」exit 1，避免新行程 bind 失敗卻被輪詢誤判為就緒；「命令列相同」以 ps 的命令列等於記錄指令、或以空白加上記錄指令（或去掉第一個字的參數部分，直譯器被換成實際執行檔時）結尾判定。）\n4. 每個背景服務啟動後輪詢對應 port（API 8341、Web 5341）直到可連線，最多 `DEV_UP_WAIT_SECONDS`（預設 30）秒；逾時則印該服務 log 最後 20 行到 stderr 並 exit 1。port 探測用 `python3 -c` 的 `socket.create_connection(timeout=1)`。\n5. 全部就緒後印網址：後台 `http://127.0.0.1:5341/`、家長端 `http://127.0.0.1:5341/parent/`、API `http://127.0.0.1:8341/docs`。\n\n**測試用覆寫**（環境變數）：`DEV_UP_ROOT`（repo root）、`DEV_UP_API_CMD`、`DEV_UP_WEB_CMD`、`DEV_UP_API_PORT`、`DEV_UP_WEB_PORT`、`DEV_UP_SKIP_DB`、`DEV_UP_WAIT_SECONDS`。`var/run`、`var/log` 不存在時自動建立。\n\n**驗收標準**：每一條對應下列 red_case。測試用 `python3 -m http.server <臨時 port> --bind 127.0.0.1` 當假 API / Web，teardown 依 pid 檔 kill 所有啟動的行程。",
+      "description": "新增 `scripts/dev_up.sh` 與 justfile recipe `up`。參考 `/Users/user/land/land_house_scraper/scripts/dev_up.sh`（簡化為三個服務）。\n\n**流程**（依序，任一步逾時就中止並以非 0 退出）：\n1. 本機 DB / SeaweedFS：執行 `just db-start`（INFRA-044，`docker compose up -d --wait` 本身冪等，已在執行時立即返回）；`DEV_UP_SKIP_DB=1` 時整步略過。\n2. API：pid 檔 `var/run/api.pid` 指向的行程仍存活、命令列與 `var/run/api.cmd` 相同，**且 port 可連線** → 印「api 已在執行（pid N）」略過；行程存活、命令列相符但 port 未開（例如上次逾時後留下的行程）→ 不重新啟動，進入第 4 步同一套輪詢，逾時印 log 並 exit 1；否則以 `nohup` 背景執行 API 指令（預設 `just api`），stdout/stderr 寫 `var/log/api.log`，寫入 pid 與 cmd 檔。\n3. Web：同上，pid/cmd/log 為 `var/run/web.*`、`var/log/web.log`，預設指令 `just web`。\n（啟動前若該 port 已可連線、而且不是 pid 檔記錄的行程 → 印「port 已被其他程式占用」exit 1，避免新行程 bind 失敗卻被輪詢誤判為就緒。「命令列相同」的判定：ps 的命令列與記錄指令完全相同；或 ps 去掉第一個字後整串等於記錄指令（shebang 腳本前面多一個直譯器）；或記錄指令的第一個字是直譯器（python* / node），且雙方去掉第一個字後整串相等（直譯器被換成實際執行檔，例如 venv 的 python 顯示為框架內的 Python.app）。一律整串相等，不用結尾比對。）\n4. 每個背景服務啟動後輪詢對應 port（API 8341、Web 5341）直到可連線，最多 `DEV_UP_WAIT_SECONDS`（預設 30）秒；逾時則印該服務 log 最後 20 行到 stderr 並 exit 1。port 探測用 `python3 -c` 的 `socket.create_connection(timeout=1)`。\n5. 全部就緒後印網址：後台 `http://127.0.0.1:5341/`、家長端 `http://127.0.0.1:5341/parent/`、API `http://127.0.0.1:8341/docs`。\n\n**測試用覆寫**（環境變數）：`DEV_UP_ROOT`（repo root）、`DEV_UP_API_CMD`、`DEV_UP_WEB_CMD`、`DEV_UP_API_PORT`、`DEV_UP_WEB_PORT`、`DEV_UP_SKIP_DB`、`DEV_UP_WAIT_SECONDS`。`var/run`、`var/log` 不存在時自動建立。\n\n**驗收標準**：每一條對應下列 red_case。測試用 `python3 -m http.server <臨時 port> --bind 127.0.0.1` 當假 API / Web，teardown 依 pid 檔 kill 所有啟動的行程。",
       "granularity_unit": "script",
       "target_path": "scripts/dev_up.sh",
       "source_ref": null,
@@ -561,7 +561,9 @@
           "test_dev_up_reports_crashed_service：DEV_UP_API_CMD='sh -c \"echo boom-marker >&2; exit 1\"'、DEV_UP_WAIT_SECONDS=2 → exit 1，stderr 含 'boom-marker'",
           "test_dev_up_replaces_stale_pid：預先寫 api.pid 為已結束行程的 pid → 執行後 api.pid 被更新為新的存活 pid，exit 0",
           "test_dev_up_starts_db_unless_skipped：fake_bin 替換 just（對 db-start exit 0），DEV_UP_SKIP_DB 未設、API/WEB 為假服務 → fake_bin.calls('just') 的第一筆 argv == ['db-start']；設 DEV_UP_SKIP_DB=1 → 沒有任何 argv 含 'db-start' 的呼叫",
-          "test_dev_up_rejects_port_taken_by_other_process：測試自己 listen 一個臨時 port 並把 DEV_UP_API_PORT / API 指令指向它 → exit 1，stderr 含 'port <該 port>'，且 var/run/api.pid 不存在"
+          "test_dev_up_rejects_port_taken_by_other_process：測試自己 listen 一個臨時 port 並把 DEV_UP_API_PORT / API 指令指向它 → exit 1，stderr 含 'port <該 port>'，且 var/run/api.pid 不存在",
+          "test_dev_up_unrelated_process_with_same_suffix_is_not_ours：api.pid 指向命令列以 ' api' 結尾的無關行程（python -c 'import time; time.sleep(120)' api，未監聽 port）、api.cmd 為 'just api'，以 DEV_UP_API_CMD='just api'、DEV_UP_WAIT_SECONDS=2 執行 → exit 非 0，stdout 不含 'api 已在執行' 也不含 '全部就緒'",
+          "test_dev_up_rerun_after_timeout_still_requires_port：DEV_UP_API_CMD='sleep 120'、DEV_UP_WAIT_SECONDS=2 → 第一次 exit 1 且行程仍存活；第二次同條件執行 → exit 1，stdout 不含 '全部就緒'，stderr 含 '沒有開始監聽'"
         ],
         "run": "just test scripts/tests/test_dev_up.py -k dev_up",
         "notes": ""
