@@ -233,6 +233,10 @@ db-new-migration *ARGS:
 # 開發伺服器與工具
 # ---------------------------------------------------------------------------
 
+# 一鍵啟動本機 DB / SeaweedFS + API + Web（背景執行，pid 在 var/run/、log 在 var/log/，可重複執行）
+up:
+    @bash "{{ root }}/scripts/dev_up.sh"
+
 # 啟動 FastAPI（http://127.0.0.1:8341，--reload）
 api:
     #!/usr/bin/env bash
