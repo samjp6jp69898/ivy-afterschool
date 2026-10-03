@@ -5,8 +5,8 @@ from tests.integration.db.conftest import (
     SEEDED_UPDATED_AT,
     UNIQUE_VIOLATION,
     Conn,
+    assert_backend_grants,
     assert_backend_read_write,
-    assert_table_secured,
     assert_updated_at_trigger,
     pg_error,
 )
@@ -45,8 +45,8 @@ def test_schools_defaults(backend_conn: Conn) -> None:
     assert row["short_name"] is None
 
 
-def test_schools_secured(owner_conn: Conn, backend_conn: Conn) -> None:
-    assert_table_secured(owner_conn, "public.schools")
+def test_schools_grants(owner_conn: Conn, backend_conn: Conn) -> None:
+    assert_backend_grants(owner_conn, "public.schools")
 
     row = make_schools(backend_conn)
     assert_backend_read_write(backend_conn, "public.schools", row, short_name="新生")

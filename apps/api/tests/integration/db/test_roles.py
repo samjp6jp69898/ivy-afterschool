@@ -5,8 +5,8 @@ from tests.integration.db.conftest import (
     SEEDED_UPDATED_AT,
     UNIQUE_VIOLATION,
     Conn,
+    assert_backend_grants,
     assert_backend_read_write,
-    assert_table_secured,
     assert_updated_at_trigger,
     pg_error,
 )
@@ -74,8 +74,8 @@ def test_roles_defaults(backend_conn: Conn) -> None:
     assert row["description"] is None
 
 
-def test_roles_secured(owner_conn: Conn, backend_conn: Conn) -> None:
-    assert_table_secured(owner_conn, "public.roles")
+def test_roles_grants(owner_conn: Conn, backend_conn: Conn) -> None:
+    assert_backend_grants(owner_conn, "public.roles")
 
     row = make_roles(backend_conn)
     assert_backend_read_write(backend_conn, "public.roles", row, name="主任助理")

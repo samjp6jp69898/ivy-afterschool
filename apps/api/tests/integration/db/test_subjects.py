@@ -5,8 +5,8 @@ from tests.integration.db.conftest import (
     SEEDED_UPDATED_AT,
     UNIQUE_VIOLATION,
     Conn,
+    assert_backend_grants,
     assert_backend_read_write,
-    assert_table_secured,
     assert_updated_at_trigger,
     pg_error,
 )
@@ -36,8 +36,8 @@ def test_subjects_defaults(backend_conn: Conn) -> None:
     assert row["is_active"] is True
 
 
-def test_subjects_secured(owner_conn: Conn, backend_conn: Conn) -> None:
-    assert_table_secured(owner_conn, "public.subjects")
+def test_subjects_grants(owner_conn: Conn, backend_conn: Conn) -> None:
+    assert_backend_grants(owner_conn, "public.subjects")
 
     row = make_subjects(backend_conn)
     assert_backend_read_write(backend_conn, "public.subjects", row, sort_order=5)

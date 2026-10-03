@@ -5,8 +5,8 @@ from tests.integration.db.conftest import (
     SEEDED_UPDATED_AT,
     UNIQUE_VIOLATION,
     Conn,
+    assert_backend_grants,
     assert_backend_read_write,
-    assert_table_secured,
     assert_updated_at_trigger,
     pg_error,
 )
@@ -73,8 +73,8 @@ def test_classes_defaults(backend_conn: Conn) -> None:
     assert row["archived_at"] is None
 
 
-def test_classes_secured(owner_conn: Conn, backend_conn: Conn) -> None:
-    assert_table_secured(owner_conn, "public.classes")
+def test_classes_grants(owner_conn: Conn, backend_conn: Conn) -> None:
+    assert_backend_grants(owner_conn, "public.classes")
 
     row = make_classes(backend_conn)
     assert_backend_read_write(backend_conn, "public.classes", row, sort_order=5)
