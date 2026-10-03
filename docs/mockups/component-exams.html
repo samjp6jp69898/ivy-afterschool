@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="FRONTEND-236,FRONTEND-238">
 <meta name="preview-route" content="component:components/exams/{ScoreCell,RenotifyChoiceDialog}.vue">
 <meta name="preview-updated" content="2026-10-03">
@@ -182,7 +182,7 @@ body { font-family: var(--el-font-family); background: var(--el-bg-color-page); 
       <!-- ============ FRONTEND-238 RenotifyChoiceDialog ============ -->
       <el-card shadow="never">
         <h2 class="section-title">RenotifyChoiceDialog<el-tag size="small" disable-transitions>FRONTEND-238</el-tag></h2>
-        <p class="section-desc">props：<code>modelValue</code>、<code>pendingCount</code>；emits <code>update:modelValue</code>、<code>choose(notify)</code>。「通知家長」emit true、「不通知」emit false，兩者都關閉。點遮罩不關；Esc 不 emit choose（關不關見待裁定第 1 題，本稿照 A 畫）。</p>
+        <p class="section-desc">props：<code>modelValue</code>、<code>pendingCount</code>；emits <code>update:modelValue</code>、<code>choose(notify)</code>。「通知家長」emit true、「不通知」emit false，兩者都關閉。點遮罩不關；Esc 或右上 X 關閉對話框但不 emit choose。</p>
         <div class="demo-box" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap">
           <span class="text-secondary">pendingCount</span>
           <el-input-number v-model="standalone.count" :min="1" :max="99" size="small"></el-input-number>
@@ -331,14 +331,9 @@ const app = createApp({
       'ScoreCell saving 轉圈與 saved 淡出在 prefers-reduced-motion 時不做動畫（轉圈 icon 靜止、勾直接消失）。',
       'RenotifyChoiceDialog 寬 440px、標題「修改已發布的成績」；內文照規格，「目前有 {n} 格等待儲存」用 warning 深色粗體單獨一行，下方灰字「本次編輯期間都會套用此選擇，可在工具列切換。」。footer：左「不通知」（default）、右「通知家長」（primary）。',
       '情境中的工具列（屬 FRONTEND-235）：已發布時顯示「修改後通知家長：開 / 關」切換，尚未選擇時兩個都不亮並加橘色「尚未選擇」tag；在工具列點開 / 關等同在 dialog 裡選擇。',
+      'RenotifyChoiceDialog 按 Esc 或右上 X：關閉對話框、不 emit choose；格子維持未儲存，工具列顯示「尚未選擇」，使用者可在工具列選，或下一次自動儲存觸發時再跳出。',
     ]
-    const openQuestions = [
-      {
-        question: 'RenotifyChoiceDialog 按 Esc（或右上 X）時要不要關掉對話框？規格只寫「保持等待、不 emit、格子維持未儲存」。',
-        optionA: '（推薦）關閉對話框、不 emit choose；格子維持未儲存，工具列顯示「尚未選擇」，使用者可在工具列選，或下一次自動儲存觸發時再跳出。本稿照此畫（有 X）。',
-        optionB: '不關閉：沒有 X、Esc 無作用，一定要在「通知家長 / 不通知」二選一才能繼續操作。',
-      },
-    ]
+    const openQuestions = []
 
     const subjects = [
       { id: 'sub1', name: '國語', full: 100 },

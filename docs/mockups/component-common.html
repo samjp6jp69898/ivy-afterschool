@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="FRONTEND-039,FRONTEND-041,FRONTEND-042">
 <meta name="preview-route" content="component:components/common/{PageHeader,AdminListToolbar,EmptyState}.vue">
 <meta name="preview-updated" content="2026-10-03">
@@ -244,7 +244,7 @@ body { font-family: var(--el-font-family); background: var(--el-bg-color-page); 
           </div>
         </div>
 
-        <div class="demo-label">2. 不可清除的篩選（clearable: false，無「全部」）+ 自訂篩選控制項<span class="note" title="待裁定第 1 題">?</span></div>
+        <div class="demo-label">2. 不可清除的篩選（clearable: false，無「全部」）+ 自訂篩選控制項</div>
         <div class="demo-box">
           <admin-list-toolbar
             v-model:search="demo2.search"
@@ -264,7 +264,7 @@ body { font-family: var(--el-font-family); background: var(--el-bg-color-page); 
               <el-button v-if="can('leaves:write')" type="primary"><el-icon><icon-plus></icon-plus></el-icon>代登記請假</el-button>
             </template>
           </admin-list-toolbar>
-          <p class="text-secondary" style="margin: 0">「狀態」設 clearable: false：沒有「全部」選項、沒有清除 icon，永遠有值（預設「生效中」）。日期區間是 view 自帶的控制項，位置見待裁定第 1 題。</p>
+          <p class="text-secondary" style="margin: 0">「狀態」設 clearable: false：沒有「全部」選項、沒有清除 icon，永遠有值（預設「生效中」）。日期區間是 view 自帶的控制項，放在 extra-filters slot（下拉篩選之後、筆數之前）。</p>
         </div>
 
         <div class="demo-label">3. 只有搜尋（沒有 filters、沒有 total）</div>
@@ -498,15 +498,10 @@ const app = createApp({
       'EmptyState 預設 icon：default 用 FolderOpened、error 用 WarningFilled（danger 色），48px；標題 16px regular 色，說明 13px 次要色、最寬 360px 置中。inline 無 icon、標題 14px、上下 padding 16px，給表格 #empty 用。',
       'EmptyState 的 error variant 只把 icon 改成 danger 色，標題不變紅；搭配 action slot 放「重試」（重試一律是 default 按鈕，不是 primary）。',
       '空清單文案分兩種：完全沒有資料用「還沒有 X」+ 引導（有寫入權限時才提新增），篩選後沒有結果用「沒有符合條件的 X」+「試著調整搜尋文字或篩選條件」。各頁實際文案以各 view task 為準。',
-      '本稿 preview-tasks 只列 039 / 041 / 042；同一張稿的 FRONTEND-040（FormDialog）與 043（StatCard）尚未 ready，之後補畫時本稿會改回 draft 重送。',
+      'AdminListToolbar 提供具名 slot extra-filters，渲染在下拉篩選之後、筆數之前；StudentSelect、日期區間、「含封存」勾選等非下拉篩選由 view 放進這個 slot（示範 2）。',
+      'FRONTEND-040（FormDialog）與 043（StatCard）畫在 component-common-extra.html。',
     ]
-    const openQuestions = [
-      {
-        question: 'AdminListToolbar 只有 el-select 型篩選與右側 actions slot，但請假（FRONTEND-129）、學生（FRONTEND-086）、考試（FRONTEND-231）列表還要放 StudentSelect、日期區間、「含封存」勾選等非下拉的篩選。這些控制項放哪裡？',
-        optionA: '（推薦）新增具名 slot extra-filters，渲染在下拉篩選之後、筆數之前（左側篩選區）；需同步改 FRONTEND-041 description 並加一條 red case。本稿示範 2 即為此做法。',
-        optionB: '不改元件，view 把這些控制項塞進 actions slot（右側，與「新增」按鈕同區）。',
-      },
-    ]
+    const openQuestions = []
 
     const staffFilters = [
       { key: 'role_id', label: '角色', options: [

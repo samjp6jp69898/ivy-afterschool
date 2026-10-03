@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="FRONTEND-056,FRONTEND-066">
 <meta name="preview-route" content="component:components/settings/{SecretInput,TempPasswordDialog}.vue">
 <meta name="preview-updated" content="2026-10-03">
@@ -345,14 +345,9 @@ const app = createApp({
       'TempPasswordDialog 寬 440px、標題「臨時密碼」（三種入口共用，不分建立 / 重設 / 重新啟用）。上方 warning alert 放「此密碼只會顯示這一次。{displayName}（帳號 {username}）首次登入後必須修改密碼。」，下方密碼框 26px 等寬粗體、可整段選取，右側「複製」。',
       'TempPasswordDialog 複製成功：按鈕變綠「已複製」+ 下方綠字「已複製到剪貼簿，請交給本人。」；失敗：下方紅字「無法複製，請手動抄寫」，按鈕維持「複製」可再試。',
       'TempPasswordDialog footer 只有一個 primary「我已記下」。未複製時「我已記下」、X、Esc 都先跳確認框「關閉後將無法再次查看此密碼，確定已記下了嗎？」（按鈕「確定關閉」/「取消」）；已複製則直接關。點遮罩不關。',
+      'SecretInput 修改中把輸入框清成空字串時視同未修改，emit 初始值（遮罩或 null）；要清除只能走「清除」按鈕。',
     ]
-    const openQuestions = [
-      {
-        question: 'SecretInput 按了「修改」後，輸入框打了字又全部刪掉（變成空字串）時，要 emit 什麼？（task 規格只寫「輸入時 emit 新字串」，空字串送到後端會被當成新明文。）',
-        optionA: '（推薦）空字串視同未修改，emit 初始值（遮罩或 null）；要清除只能走「清除」按鈕。本稿目前照此做。需在 FRONTEND-056 補一條 red case。',
-        optionB: '照送空字串，交給後端 schema 驗證，422 時錯誤顯示在欄位下方。',
-      },
-    ]
+    const openQuestions = []
 
     const lineInitial = reactive({ token: '****a91f', secret: null })
     const line = reactive({ token: lineInitial.token, secret: lineInitial.secret })
