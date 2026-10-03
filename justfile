@@ -150,7 +150,7 @@ db-stop:
     fi
     docker compose -f "{{ root }}/compose.yaml" stop
 
-# 重建本機 DB（套用全部 migration + seed）：just db-reset [--yes]，只會動本機
+# 重建本機 DB（drop / create postgres → alembic upgrade head → app_backend 本機密碼）：just db-reset [--yes]，只動 127.0.0.1:54342
 db-reset *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -170,16 +170,14 @@ db-reset *ARGS:
             echo "錯誤：非互動環境必須明確帶 --yes 才會執行：just db-reset --yes" >&2
             exit 1
         fi
-        read -r -p "這會清空本機 Supabase 的所有資料並重跑 migration + seed，輸入 yes 繼續：" reply
+        read -r -p "這會清空本機 Postgres（127.0.0.1:54342）的 postgres database 並重跑全部 migration，輸入 yes 繼續：" reply
         if [ "$reply" != "yes" ]; then
             echo "已取消，資料未被更動。" >&2
             exit 1
         fi
     fi
-    cd "{{ root }}"
-    supabase db reset
-    # migration + seed 套用成功後立刻驗 RLS（還沒有任何表時允許為空）；違規時 db-reset 以非 0 結束
-    just --justfile "{{ root }}/justfile" check-rls --allow-empty
+    # uv 從 PATH 找（回歸測試以假執行檔替換）；腳本本身不接受參數、只連本機
+    uv run --frozen --project "{{ root }}/apps/api" python "{{ root }}/scripts/db_reset_local.py"
 
 # RLS / 權限檢查（INFRA-007）：just check-rls [--db-url URL] [--schema public] [--allow-empty] [--allow-remote]
 check-rls *ARGS:
