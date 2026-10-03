@@ -3,6 +3,7 @@
 import io
 import tempfile
 import zipfile
+from typing import BinaryIO, cast
 
 import pytest
 from openpyxl import Workbook
@@ -241,7 +242,9 @@ def test_uploads_reads_spooled_file() -> None:
         spooled.seek(0)
 
         result = read_validated_upload(
-            UploadFile(file=spooled, filename="a.png"), allowed=IMAGE_TYPES, max_bytes=_MB
+            UploadFile(file=cast(BinaryIO, spooled), filename="a.png"),
+            allowed=IMAGE_TYPES,
+            max_bytes=_MB,
         )
 
     assert (result.ext, result.size) == ("png", len(_PNG))
