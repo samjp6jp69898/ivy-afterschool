@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 24,
-  "last_updated": "2026-10-03T14:41:27Z",
+  "version": 25,
+  "last_updated": "2026-10-03T14:43:46Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -1587,7 +1587,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db001_base.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "INFRA-045",
@@ -1617,9 +1617,9 @@
         "notes": "測試使用 DB-002 conftest 的 owner_conn（DDL 探針與查其他角色權限屬允許的 owner 場合）。本機套用方式：just db-start（INFRA-044）後 just db-migrate（INFRA-045）；app_backend 的本機登入要等 INFRA-046 的 just db-reset。DB-042 完成前 test_fixtures.py 中以 secure_table 建探針的案例會失敗，屬預期，由 DB-042 改寫。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-infra",
+        "notes": "通過。紅燈 9f74d81 先於實作 d0b8ece（紅燈時 alembic/versions 只有 .gitkeep）。`just test-int apps/api/tests/integration/db/test_base.py -k base`（flock db lock）13 passed，--collect-only 對照 10 條 red_case（rejects_bad_privileges 參數化 4 筆）全選到；lint / typecheck 乾淨。對照 architecture_decisions §5 與 description：app_backend 以 nologin noinherit nobypassrls nocreatedb nocreaterole 且「不存在才建」，revision 不含密碼；grant_backend 先驗證權限字串（去空白、去重、不分大小寫，空字串 / null / 非 select·insert·update·delete 一律 P0001）再 revoke public、grant app_backend，表名以 regclass %s 輸出（實測名為 we;ird 的表可正確授權）；alter default privileges（不帶 in schema / for role）收回 function 對 PUBLIC 的 EXECUTE（pg_default_acl = {postgres=X/postgres}）；pgcrypto 在 extensions schema；downgrade raise。冪等性以拋棄式 postgres:17.11 容器（127.0.0.1 臨時 port，不碰共用 DB）實測：app_backend 不存在時 alembic upgrade head 成功（rolcanlogin / rolsuper / rolinherit / rolbypassrls / rolcreatedb / rolcreaterole 皆 false、rolpassword 為 null）；同 cluster 第二個 database（app_backend 已存在）upgrade 成功；在已套用的 database 上重跑全部語句不報錯。測試只經 DB-002 conftest 的 owner_conn（loopback 前後檢查），不依賴尚未存在的 db-reset；實作者以 template1 重建 postgres database 屬手動準備，未寫入任何程式。預期失敗確認：test_fixtures.py 的 step2_table_not_visible、backend_conn_is_app_backend 因 app_backend 尚無本機密碼而 pytest.exit（INFRA-046）；as_role_switches_and_resets（role anon 不存在）、assert_table_secured_passes、assert_backend_read_write_round_trip / fails_without_update_privilege（secure_table 不存在）4 條失敗（DB-042）；其餘 17 條通過，無其他意外失敗。DB-003 / 008~012（in_progress）的測試同樣在 app_backend 登入時中止，屬 INFRA-046 前置。殘留（不擋）：(a) red_case 未鎖 rolcanlogin = false 與 revision 不含 password（本機 db-reset 後會給 login，無法在共用 DB 斷言），本次以拋棄式容器人工驗證；(b) grant_backend 只 revoke PUBLIC、只 grant，不收回 app_backend 既有權限，無法用來把已授權的表縮成 append-only，後續 revision 需要縮權時要自行 revoke；(c) supabase/config.toml 的 sql_paths = ['./seed.sql'] 與 tests/integration/conftest.py 的 seed.sql 註解仍在，屬 INFRA-047 的移除範圍；(d) 角色已存在但屬性不符（例如被手動加了 inherit）時 revision 不會修正，由 test_base_app_backend_role_attributes 在本機揭露。"
       }
     },
     {
