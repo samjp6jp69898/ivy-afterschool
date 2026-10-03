@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 55,
-  "last_updated": "2026-10-03T13:22:51Z",
+  "version": 56,
+  "last_updated": "2026-10-03T13:25:28Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1190,14 +1190,14 @@
       "granularity_unit": "config",
       "target_path": "apps/web/nginx/default.conf.template",
       "source_ref": "FE:nginx.conf.template::location /api/",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-005",
         "INFRA-008"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "LIFF SDK 實際連線的網域與 CSP 需在真機（LINE in-app browser）驗證一次；被擋時在瀏覽器 console 會看到 CSP violation，依實際網域補進 connect-src / script-src，不要放寬成 *。 real_ip 的 set_real_ip_from 若設得過寬（例如 0.0.0.0/0），任何用戶端都能偽造 client IP，等同沒有防護；上線實測前預設值寧可過窄（只會讓 audit 記到 edge IP），不可過寬。 R2 presigned URL 的網域為 `<account_id>.r2.cloudflarestorage.com`，CSP 以 `https://*.r2.cloudflarestorage.com` 放行圖片；PDF 以連結開新分頁，不受 connect-src 限制。",
+      "risk_notes": "LIFF SDK 實際連線的網域與 CSP 需在真機（LINE in-app browser）驗證一次；被擋時在瀏覽器 console 會看到 CSP violation，依實際網域補進 connect-src / script-src，不要放寬成 *。 real_ip 的 set_real_ip_from 若設得過寬（例如 0.0.0.0/0），任何用戶端都能偽造 client IP，等同沒有防護；上線實測前預設值寧可過窄（只會讓 audit 記到 edge IP），不可過寬。 R2 presigned URL 的網域為 `<account_id>.r2.cloudflarestorage.com`，CSP 以 `https://*.r2.cloudflarestorage.com` 放行圖片；PDF 以連結開新分頁，不受 connect-src 限制。 【review-r3-infra 打回 1】description 驗收要求「結構測試鎖住每個靜態 location 都 include 安全標頭」，但實作多了 `location = /index.html`（/、/index.html 與所有後台 SPA 路由的 HTML 外殼最後都由它回應），test_nginx_static_locations_include_security_headers 的 STATIC_LOCATIONS 卻只檢查 /、/parent/、/assets/。反例：拿掉 `location = /index.html` 內的 include /etc/nginx/security-headers.conf，11 條測試仍全綠，但後台所有 HTML 都不再帶 CSP、X-Frame-Options、HSTS。修正方向：把 `= /index.html` 納入檢查清單，並同步更新 red_case 文字；或在 docker 行為測試中實際 GET / 與一條 SPA 路由，斷言回應含 Content-Security-Policy。修好的判準：上述反例要讓測試轉紅。 【review-r3-infra 打回 2】test_nginx_spoofed_forwarded_for_not_passed 的記錄後端綁在 127.0.0.1，nginx 容器經 `--add-host host.docker.internal:host-gateway` 連過去。這只在 Docker Desktop 上可行，因為它會把 host-gateway 轉到主機的 loopback。Linux 的 docker（CI 的 ubuntu runner，INFRA-025 會全量跑 scripts 單元測試）上，host-gateway 是 bridge 閘道 IP，綁在 127.0.0.1 的 socket 收不到容器的連線，nginx 只會回 502，測試在 30 秒後一定 fail。修正方向：讓記錄後端與 nginx 容器在同一個 user-defined docker network 上互連（例如後端也以容器執行），或改用其他在 Linux 與 Docker Desktop 都可行的方式，但不要讓後端綁 0.0.0.0 對外。同步修改 red_case 文字。對照組（信任 0.0.0.0/0 時要收到 6.6.6.6）必須保留。修好的判準：在 Linux docker 上同樣是 11 passed（若本機無法驗證 Linux，在回報中說明設計上為何兩邊都成立）。",
       "open_design_questions": [
         "Railway 的實際網路行為需上線時實測（部署時驗證）：(1) Railway edge 轉送到 web 服務時，來源 IP 落在哪個範圍（決定 nginx `set_real_ip_from` 的值），以及真實 client IP 放在 `X-Forwarded-For` 還是 `X-Real-IP` / 其他標頭；(2) web 服務經 private network 連 api 時的來源位址範圍（決定 uvicorn `FORWARDED_ALLOW_IPS`，目前預設 `fd12::/16`，若環境為雙棧需加上對應 IPv4 範圍）。驗證方式：部署後在 api 暫時記錄 request.client 與原始標頭，用已知 IP 的裝置連線比對；確認後更新 nginx 範本與 Dockerfile 的值，並刪除本問題。"
       ],
@@ -1221,9 +1221,9 @@
         "notes": "語法驗證由 test_nginx_config_syntax_valid 執行（需 Docker）；等效手動指令：docker run --rm -e PORT=8080 -e BACKEND_URL=http://127.0.0.1:9 -e NGINX_ENTRYPOINT_LOCAL_RESOLVERS=true -e TRUSTED_EDGE_CIDRS=10.0.0.0/8 -v \"$PWD/apps/web/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro\" -v \"$PWD/apps/web/nginx/security-headers.conf:/etc/nginx/security-headers.conf:ro\" -v \"$PWD/apps/web/nginx/40-real-ip.sh:/docker-entrypoint.d/40-real-ip.sh:ro\" nginx:1.27-alpine nginx -t（範本 include /etc/nginx/real-ip.conf，必須同時掛載 40-real-ip.sh 並設定 TRUSTED_EDGE_CIDRS 才會產生該檔）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r3-infra",
+        "notes": "打回（2 項，見 risk_notes「review-r3-infra 打回」）。已確認的部分：紅燈 71f16c3 先於實作 54f4d2a，在紅燈 commit 快照上 11 條全紅，而且沒有在主機建出空目錄；`just test scripts/tests/test_deploy_configs.py -k nginx` 11 passed，--collect-only 對照每條 red_case 都有選到；lint / typecheck 乾淨。CSP 字串與 description 逐字相同（img-src 含 https://*.r2.cloudflarestorage.com，不含 supabase / unsafe-eval），6 個安全標頭都加了 always。用假靜態檔起 nginx 實測：/、/index.html、/students/1、/parent/、/parent/leave、/assets/a.js 都帶 CSP 與 X-Frame-Options，HTML 回 no-cache，assets 回 immutable；/parent 301 到相對路徑 /parent/；.map 回 404。TRUSTED_EDGE_CIDRS 為空、全空白、含 ';evil'、含非 CIDR 字詞或未設定時，entrypoint 都 exit 1，容器不啟動。原 notes 的 nginx -t 沒掛 40-real-ip.sh，include real-ip.conf 必定失敗；改規格並補 test_nginx_config_syntax_valid 是合理的：它用 nginx -T 的 stdout 確認載入的是本範本，掛載來源不存在時在 docker 之前就 fail，防住空目錄假綠。X-Forwarded-For 對照實驗的設計能區分兩種情況：不信任時收到 docker gateway IP（≠ 6.6.6.6）；信任 0.0.0.0/0 時收到 6.6.6.6。改成 append 寫法或拿掉 real_ip 都會被抓到。殘留（不擋）：(a) 正規式 location `~ \\.map$` 的優先序高於 /api/ prefix，/api/ 底下以 .map 結尾的路徑會被 nginx 回 404，不會轉給 api；(b) /assets/ 的 Cache-Control 有加 always，所以 404 也帶一年 immutable；(c) 40-real-ip.sh 的 `for cidr in $cidrs` 沒有 set -f，值含 glob 字元時會先做路徑展開（展開結果仍要通過 CIDR 檢查，目前不可利用）；(d) 結構測試沒鎖 X-Frame-Options / HSTS / Referrer-Policy / Permissions-Policy 的值，只鎖了數量與 always；(e) .map 404、/parent 301、/healthz 不帶安全標頭（不是內容回應）。"
       }
     },
     {
