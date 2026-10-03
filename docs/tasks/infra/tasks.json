@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 64,
-  "last_updated": "2026-10-03T14:36:20Z",
+  "version": 65,
+  "last_updated": "2026-10-03T14:36:43Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1812,7 +1812,7 @@
       "granularity_unit": "config",
       "target_path": "apps/api/.env.example",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-006",
@@ -1830,12 +1830,12 @@
           "test_env_examples_api_keys_exact：解析 apps/api/.env.example 的 KEY=VALUE 行 → key 集合 == {APP_ENV, DATABASE_URL, MIGRATION_DATABASE_URL, APP_SECRET_KEY, CORS_ORIGINS, PUBLIC_BASE_URL, R2_ENDPOINT_URL, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, SENTRY_DSN}；以 tmp 檔多加一行 `SUPABASE_URL=x` 餵給同一解析函式 → 斷言失敗訊息列出多出的 'SUPABASE_URL'",
           "test_env_examples_api_each_key_has_comment：每個 KEY= 行的前一行 → 以 '#' 開頭；tmp 檔中缺註解的 key → 被列在違規清單中",
           "test_env_examples_api_secret_placeholder：APP_SECRET_KEY 的值 → 'change-me'",
-          "test_env_examples_local_values_match_compose：R2_ENDPOINT_URL 的 port == compose.yaml storage 對外的 54344；R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY == compose.yaml 頂層 configs.seaweedfs-s3.content（JSON）中唯一 identity 的 accessKey / secretKey；R2_BUCKET 出現在 storage 的 command 中（-bucket=<R2_BUCKET>）；DATABASE_URL 與 MIGRATION_DATABASE_URL 的 host:port == '127.0.0.1:54342'",
+          "test_env_examples_local_values_match_compose：以檢查函式 local_value_mismatches(values, compose) 逐項做完整相等比較 → 真實檔案回傳 []：R2_ENDPOINT_URL 的 port == compose.yaml storage 對外的 54344；R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY == compose.yaml 頂層 configs.seaweedfs-s3.content（JSON）中唯一 identity 的 accessKey / secretKey；R2_BUCKET == storage.command 拆成 token 後唯一一個 `-bucket=` token 的值（不得以子字串比對）；DATABASE_URL 與 MIGRATION_DATABASE_URL 的 host:port == '127.0.0.1:54342'。測試內以 R2_BUCKET='afterschool' 與 'afterschool-local-x'（compose 值的前綴 / 延伸）餵給同一函式 → 各回傳 ['R2_BUCKET']；DATABASE_URL 改為 port 5432 → ['DATABASE_URL']",
           "test_env_examples_web_has_no_keys：apps/web/.env.example 中符合 ^[A-Z_][A-Z0-9_]*= 的行數 → 0",
           "test_env_examples_web_src_no_vite_env：掃描 apps/web/src 的 .ts/.vue，正則 import\\.meta\\.env\\.VITE_ 的命中清單 → 空；tmp 目錄放一個含 import.meta.env.VITE_API 的檔案餵給同一掃描函式 → 回傳該檔路徑"
         ],
         "run": "just test scripts/tests/test_env_examples.py -k env_examples",
-        "notes": ""
+        "notes": "打回修正的突變驗證（scratchpad 複本）：apps/api/.env.example 的 R2_BUCKET 改為 afterschool 或 afterschool-local-x 時，local_values_match_compose 都轉紅，其餘 5 條綠；基準 6 passed。"
       },
       "review": {
         "status": "concern",
