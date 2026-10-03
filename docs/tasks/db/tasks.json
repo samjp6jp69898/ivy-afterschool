@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 28,
-  "last_updated": "2026-10-03T14:56:40Z",
+  "version": 29,
+  "last_updated": "2026-10-03T15:26:30Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -124,7 +124,7 @@
           "test_roles_updated_at_trigger：backend_conn 以 make_roles(updated_at=SEEDED_UPDATED_AT，即 2026-01-01T00:00:00+08:00) 插入，assert_updated_at_trigger(backend_conn, 'public.roles', id, name='課輔組長') → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
         ],
         "run": "just test-int apps/api/tests/integration/db/test_roles.py -k roles",
-        "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。DB-035 會以 data migration seed admin / director / clerk / tutor，非 admin 案例避開這些 code，admin 案例用 on conflict upsert，seed 落地後測試仍成立；secured 測試不假設表為空。"
+        "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。DB-035 會以 data migration seed admin / director / clerk / tutor，非 admin 案例避開這些 code，admin 案例用 on conflict upsert，seed 落地後測試仍成立；grants 測試不假設表為空。"
       },
       "review": {
         "status": "pending",
@@ -313,7 +313,7 @@
           "test_subjects_updated_at_trigger：backend_conn 以 make_subjects(updated_at=SEEDED_UPDATED_AT，即 2026-01-01T00:00:00+08:00) 插入，assert_updated_at_trigger(backend_conn, 'public.subjects', id, sort_order=5) → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
         ],
         "run": "just test-int apps/api/tests/integration/db/test_subjects.py -k subjects",
-        "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。DB-036 會 seed 國語 / 數學 / 英語 / 自然 / 社會，測試名稱避開這些值；secured 測試不假設表為空。"
+        "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。DB-036 會 seed 國語 / 數學 / 英語 / 自然 / 社會，測試名稱避開這些值；grants 測試不假設表為空。"
       },
       "review": {
         "status": "pending",
@@ -350,7 +350,7 @@
           "test_exam_types_updated_at_trigger：backend_conn 以 make_exam_types(updated_at=SEEDED_UPDATED_AT，即 2026-01-01T00:00:00+08:00) 插入，assert_updated_at_trigger(backend_conn, 'public.exam_types', id, sort_order=5) → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
         ],
         "run": "just test-int apps/api/tests/integration/db/test_exam_types.py -k exam_types",
-        "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。DB-037 會 seed 段考 / 小考 / 複習考，測試名稱避開這些值；secured 測試不假設表為空。"
+        "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。DB-037 會 seed 段考 / 小考 / 複習考，測試名稱避開這些值；grants 測試不假設表為空。"
       },
       "review": {
         "status": "pending",
@@ -388,7 +388,7 @@
           "test_schools_updated_at_trigger：backend_conn 以 make_schools(updated_at=SEEDED_UPDATED_AT，即 2026-01-01T00:00:00+08:00) 插入，assert_updated_at_trigger(backend_conn, 'public.schools', id, short_name='新生') → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
         ],
         "run": "just test-int apps/api/tests/integration/db/test_schools.py -k schools",
-        "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。secured 測試不假設表為空。"
+        "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。grants 測試不假設表為空。"
       },
       "review": {
         "status": "pending",
@@ -425,7 +425,7 @@
           "test_closed_days_updated_at_trigger：backend_conn 以 make_closed_days(updated_at=SEEDED_UPDATED_AT，即 2026-01-01T00:00:00+08:00) 插入，assert_updated_at_trigger(backend_conn, 'public.closed_days', id, reason='國慶日') → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
         ],
         "run": "just test-int apps/api/tests/integration/db/test_closed_days.py -k closed_days",
-        "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。secured 測試不假設表為空。"
+        "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。grants 測試不假設表為空。"
       },
       "review": {
         "status": "pending",
@@ -465,7 +465,7 @@
           "test_classes_updated_at_trigger：backend_conn 以 make_classes(updated_at=SEEDED_UPDATED_AT，即 2026-01-01T00:00:00+08:00) 插入，assert_updated_at_trigger(backend_conn, 'public.classes', id, sort_order=5) → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
         ],
         "run": "just test-int apps/api/tests/integration/db/test_classes.py -k classes",
-        "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。secured 測試不假設表為空。"
+        "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。grants 測試不假設表為空。"
       },
       "review": {
         "status": "pending",
