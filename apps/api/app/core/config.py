@@ -16,7 +16,7 @@ import re
 from functools import lru_cache
 from typing import Annotated, Final, Literal
 
-from pydantic import AnyHttpUrl, SecretStr, field_validator, model_validator
+from pydantic import AnyHttpUrl, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 _PLACEHOLDER: Final = "change-me"
@@ -34,7 +34,8 @@ class Settings(BaseSettings):
     )
 
     app_env: Literal["development", "test", "production"] = "development"
-    database_url: str
+    # 含 app_backend 密碼：維持 str（建 engine 的呼叫端不變），但不進 repr / str
+    database_url: str = Field(repr=False)
     app_secret_key: SecretStr
     # 逗號分隔字串；NoDecode 關掉 pydantic-settings 對 list 的 JSON 解碼，交給 validator 切
     cors_origins: Annotated[list[str], NoDecode] = []
@@ -44,7 +45,8 @@ class Settings(BaseSettings):
     r2_access_key_id: str
     r2_secret_access_key: SecretStr
     r2_bucket: str
-    sentry_dsn: str | None = None
+    # DSN 內含 key，同樣不進 repr / str
+    sentry_dsn: str | None = Field(default=None, repr=False)
 
     @field_validator("app_secret_key")
     @classmethod
