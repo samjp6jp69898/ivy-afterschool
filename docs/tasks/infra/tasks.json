@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 65,
-  "last_updated": "2026-10-03T14:36:43Z",
+  "version": 66,
+  "last_updated": "2026-10-03T14:37:40Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1644,7 +1644,7 @@
       "granularity_unit": "config",
       "target_path": "apps/api/alembic/env.py",
       "source_ref": "BE:alembic/env.py::run_migrations_online",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-004",
@@ -1653,7 +1653,7 @@
         "INFRA-044"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "Alembic 的 --rev-id 不檢查與既有 revision 重複；revision id 由 task 決定（DB-004 → db004），實作 DB task 時以 `uv run --frozen alembic heads` 確認單一 head。 【review-r3-infra 打回 1】`just db-migrate` 可被 libpq 環境變數導向遠端，違反 description「只對本機套用」。recipe 只覆寫了 MIGRATION_DATABASE_URL；URL 未指定 hostaddr，libpq 會採用呼叫端的 PGHOSTADDR（PGSERVICE 也能補上 URL 未指定的參數），實際連線位址因此被改寫。反例（已實測）：`PGHOSTADDR=192.0.2.1` 時，以同一條 `postgresql://postgres:postgres@127.0.0.1:54342/postgres` 連線，結果是對 192.0.2.1 連線逾時，不是連到本機。換成任何接受 postgres/postgres 的主機，revision 就會套用到那台 DB。本專案已把這類威脅列為規格：INFRA-041 db_urls.loopback_violation、INFRA-046 的 test_db_reset_rejects_remote_owner_url（PGHOSTADDR=10.0.0.8 須被拒）與「子行程環境變數不含 PGHOSTADDR」，db-migrate 應一致。修正方向：recipe 以 `env -u PGHOSTADDR -u PGSERVICE -u PGSERVICEFILE` 執行 uv，或在 URL 補 `?hostaddr=127.0.0.1`（URL 參數優先於環境變數）。要有測試鎖住：可擴充 INFRA-021 的 test_justfile_db_migrate_forces_local_url（呼叫端設 PGHOSTADDR=10.0.0.8 / PGSERVICE=x → 假 uv 收到的環境不含這兩個變數，或 URL 含 hostaddr=127.0.0.1）。依 README「把驗收標準移交給別的 task」，須同步寫進 INFRA-021 的 description 與 red_case，並在本 task 註明去向；若改放在本 task 的測試檔也可以。修好的判準：上述反例實跑時不會離開 127.0.0.1。",
+      "risk_notes": "Alembic 的 --rev-id 不檢查與既有 revision 重複；revision id 由 task 決定（DB-004 → db004），實作 DB task 時以 `uv run --frozen alembic heads` 確認單一 head。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/infra/test_alembic_env.py",
@@ -1672,9 +1672,9 @@
         "notes": "暫存 database 以 INFRA-041 的 owner_url() 連 postgres database 建立 / 刪除（名稱前綴 alembic_probe_），測試結束一律 `drop database ... with (force)`；MIGRATION_DATABASE_URL 以 monkeypatch 設定且只指向 loopback。另跑：cd apps/api && uv run --frozen python -c \"import alembic, boto3\"；just lint apps/api/alembic/env.py；just typecheck apps/api/alembic/env.py"
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r3-infra",
-        "notes": "打回（1 項，見 risk_notes「review-r3-infra 打回」），其餘已驗證通過。紅燈 95e5509 先於實作 2421e59，紅燈快照 5 條全紅；`just test-int apps/api/tests/integration/infra/test_alembic_env.py -k alembic`（flock db lock）5 passed，--collect-only 對照 red_case 全選到，跑完無殘留 alembic_probe_* database、postgres database 無 alembic_version。突變驗證：拿掉 connection.commit() → applies_and_commits / normalizes_plain_scheme 紅（probe 與 alembic_version 不存在）；拿掉 lock_timeout → applies_and_commits 紅；env.py 退回讀 DATABASE_URL → requires_migration_url 紅。env.py 與 ivy alembic/env.py::run_migrations_online、startup/migrations.py::apply_migration_lock_timeout 對照：set_config('lock_timeout', :ms, false) → commit → configure → begin_transaction 順序一致，去掉 tenant / maintenance 與 settings 讀值，改為程式常數 10000ms，移植正確。`just db-migrate` 以假 uv 驗證：呼叫端 MIGRATION_DATABASE_URL 設遠端時 uv 收到的仍是 127.0.0.1:54342 owner URL、cwd apps/api。db-new-migration 以假 uv 驗證：db004 create_students 送出 `run --frozen alembic revision --rev-id db004 -m create_students`；缺參數、REV 大寫、REV 兩位數、SLUG 大寫、三個參數、SLUG 含 ';' 皆 exit 1。範本產生 db001 / db004 兩支 revision：雙引號識別、Revises 行無結尾空白，ruff format --check 通過，ruff check 只剩預期的 F401（op 未用）。實作者自行補充的三件事合理：known-third-party=[\"alembic\"]（apps/api/alembic/ 目錄會讓 ruff 誤判 first-party）、fileConfig(disable_existing_loggers=False)（同行程呼叫 command.upgrade 時不關掉其他 logger，CLI 行為無差異）、範本 quoting（如上驗證）；三者已寫回 description。`uv run --frozen python -c \"import alembic, boto3\"` 成功；lint / typecheck（env.py、test_alembic_env.py）乾淨。殘留（不擋）：(a) scripts/tests/test_justfile.py::test_justfile_db_new_migration_validates_name 因 db-new-migration 介面改為 REV SLUG 而紅，實跑確認 test_justfile.py 只壞這一條（1 failed / 20 passed），INFRA-021（in_progress）的 red_case test_justfile_db_new_migration_validates_args 已改寫為新介面，屬其待重做範圍；(b) offline（--sql）模式沒有測試（red_cases 未要求）；(c) 實作 commit 2421e59 同時改了 description（補 ruff 段落），規格修正與實作未分 commit。"
+        "notes": "通過。初審已確認：紅燈 95e5509 先於實作 2421e59；env.py 只讀 MIGRATION_DATABASE_URL（不退回 DATABASE_URL）、set_config lock_timeout → commit autobegin → begin_transaction 與 ivy 一致，突變（拿掉 commit / lock_timeout、退回 DATABASE_URL）皆轉紅；範本 forward-only 且符合 ruff format；db-new-migration 參數守衛正確；known-third-party、disable_existing_loggers=False、範本 quoting 合理。打回項（db-migrate 可被 PGHOSTADDR / PGSERVICE 導向遠端）於 efc07ee（紅燈）→ 6ceced2（實作）修正並複核：recipe 以 `env -u PGHOSTADDR -u PGSERVICE -u PGSERVICEFILE` 執行；新增 test_alembic_db_migrate_recipe_ignores_libpq_env，在紅燈快照實跑轉紅（PGHOSTADDR 仍為 192.0.2.1），HEAD 6 passed、--collect-only 全選到。重放初審反例：PGHOSTADDR=192.0.2.1 直接帶入時 alembic current 連線逾時；套上 recipe 的 env -u 寫法後成功連到本機（以不寫入的 alembic current 驗證，未建立 alembic_version）。db-new-migration：alembic.ini 未設 revision_environment，在未設 MIGRATION_DATABASE_URL 且 PGHOSTADDR=192.0.2.1 下 command.revision 仍成功，證明不執行 env.py、不連 DB，不需比照處理（已寫入 description）。lint / typecheck 乾淨。殘留（不擋）：(a) scripts/tests/test_justfile.py::test_justfile_db_new_migration_validates_name 因 db-new-migration 介面改為 REV SLUG 而紅，實跑確認 test_justfile.py 只壞這一條（1 failed / 20 passed），INFRA-021（in_progress）的 red_case test_justfile_db_new_migration_validates_args 已改寫為新介面，屬其待重做範圍；(b) offline（--sql）模式沒有測試（red_cases 未要求）；(c) 實作 commit 2421e59 同時改了 description（補 ruff 段落），規格修正與實作未分 commit。（d）UV_ENV_FILE 指定的 dotenv 檔會在 env -u 之後由 uv 載入，可重新帶入 PGHOSTADDR；需呼叫端刻意設定，不擋。"
       }
     },
     {
