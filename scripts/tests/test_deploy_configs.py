@@ -394,3 +394,186 @@ def test_nginx_html_responses_carry_security_headers(start_probe: StartProbe) ->
         assert "frame-ancestors 'none'" in headers.get("Content-Security-Policy", ""), path
         assert headers.get("X-Frame-Options") == "DENY", path
         assert headers.get("Cache-Control") == "no-cache", path
+
+
+# ---------------------------------------------------------------------------
+# apps/api/Dockerfile（INFRA-031）與 apps/web/Dockerfile（INFRA-034）
+# ---------------------------------------------------------------------------
+
+API_DIR = REPO_ROOT / "apps" / "api"
+WEB_DIR = REPO_ROOT / "apps" / "web"
+
+
+def dockerfile_stages(path: Path) -> list[str]:
+    """依 FROM 切出各 stage 的內容（續行 `\\` 合併成一行，註解行去掉）。"""
+    joined = re.sub(r"\\\n\s*", " ", path.read_text(encoding="utf-8"))
+    lines = [
+        line for line in joined.splitlines() if line.strip() and not line.lstrip().startswith("#")
+    ]
+    stages: list[list[str]] = []
+    for line in lines:
+        if line.upper().startswith("FROM "):
+            stages.append([])
+        if stages:
+            stages[-1].append(line.strip())
+    return ["\n".join(stage) for stage in stages]
+
+
+def _instructions(stage: str, keyword: str) -> list[str]:
+    return [line for line in stage.splitlines() if line.upper().startswith(keyword + " ")]
+
+
+def _dockerignore(path: Path) -> set[str]:
+    return {
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+
+
+def test_api_dockerfile_runs_as_non_root() -> None:
+    runtime = dockerfile_stages(API_DIR / "Dockerfile")[-1]
+    lines = runtime.splitlines()
+
+    user_lines = [i for i, line in enumerate(lines) if line.startswith("USER ")]
+    cmd_lines = [i for i, line in enumerate(lines) if line.startswith("CMD ")]
+    assert user_lines, "runtime stage 沒有 USER"
+    assert lines[user_lines[-1]] in ("USER app", "USER 10001")
+    assert cmd_lines
+    assert user_lines[-1] < cmd_lines[-1]
+    assert "--uid 10001" in runtime
+
+
+def test_api_dockerfile_single_worker() -> None:
+    cmd = _instructions(dockerfile_stages(API_DIR / "Dockerfile")[-1], "CMD")[-1]
+
+    for token in ("--workers 1", "--factory", "app.main:create_app", "${PORT}"):
+        assert token in cmd, token
+
+
+def test_api_dockerfile_uses_frozen_no_dev() -> None:
+    text = (API_DIR / "Dockerfile").read_text(encoding="utf-8")
+
+    assert "uv sync --frozen --no-dev" in text
+    assert "pip install" not in text
+
+
+def test_api_dockerignore_excludes_tests_and_env() -> None:
+    assert {"tests/", ".env", ".venv"} <= _dockerignore(API_DIR / ".dockerignore")
+
+
+def _forwarded_allow_ips() -> str:
+    match = re.search(
+        r"^ENV FORWARDED_ALLOW_IPS=(\S+)$", (API_DIR / "Dockerfile").read_text(), re.M
+    )
+    assert match is not None, "Dockerfile 沒有 ENV FORWARDED_ALLOW_IPS=..."
+    return match.group(1)
+
+
+def test_api_dockerfile_forwarded_allow_ips_not_wildcard() -> None:
+    text = (API_DIR / "Dockerfile").read_text(encoding="utf-8")
+    cmd = _instructions(dockerfile_stages(API_DIR / "Dockerfile")[-1], "CMD")[-1]
+
+    assert _forwarded_allow_ips() == "fd12::/16"
+    assert "--forwarded-allow-ips" in cmd
+    assert "forwarded-allow-ips='*'" not in text
+    assert "forwarded-allow-ips=*" not in text
+    assert '--forwarded-allow-ips "*"' not in text
+
+
+_CLIENT_APP = """
+async def app(scope, receive, send):
+    assert scope["type"] == "http"
+    body = scope["client"][0].encode()
+    await send({"type": "http.response.start", "status": 200,
+                "headers": [(b"content-type", b"text/plain")]})
+    await send({"type": "http.response.body", "body": body})
+"""
+
+
+def _client_seen_by_uvicorn(tmp_path: Path, allow_ips: str) -> str:
+    import httpx
+
+    (tmp_path / "client_app.py").write_text(_CLIENT_APP, encoding="utf-8")
+    port = _free_port()
+    uvicorn = API_DIR / ".venv" / "bin" / "uvicorn"
+    proc = subprocess.Popen(  # noqa: S603  固定參數啟動 venv 內的 uvicorn
+        [
+            str(uvicorn),
+            "client_app:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--proxy-headers",
+            "--forwarded-allow-ips",
+            allow_ips,
+        ],
+        cwd=tmp_path,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        deadline = time.monotonic() + 20
+        while True:
+            try:
+                response = httpx.get(
+                    f"http://127.0.0.1:{port}/", headers={"X-Forwarded-For": "6.6.6.6"}, timeout=2
+                )
+                return response.text
+            except httpx.TransportError:
+                if time.monotonic() > deadline:
+                    pytest.fail("uvicorn 未就緒")
+                time.sleep(0.2)
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)
+
+
+def test_api_uvicorn_ignores_spoofed_forwarded_for(tmp_path: Path) -> None:
+    assert _client_seen_by_uvicorn(tmp_path, _forwarded_allow_ips()) == "127.0.0.1"
+    # 對照組：信任 127.0.0.1 時採信自填值（證明測試能偵測信任設定）
+    assert _client_seen_by_uvicorn(tmp_path, "127.0.0.1") == "6.6.6.6"
+
+
+def test_api_dockerfile_includes_alembic() -> None:
+    runtime = dockerfile_stages(API_DIR / "Dockerfile")[-1]
+    copies = " ".join(_instructions(runtime, "COPY"))
+
+    assert "/app/alembic.ini" in copies
+    assert re.search(r"/app/alembic(\s|/\s|$)", copies), copies
+    ignored = _dockerignore(API_DIR / ".dockerignore")
+    assert "alembic" not in ignored
+    assert "alembic/" not in ignored
+
+
+def test_web_dockerfile_frozen_lockfile() -> None:
+    text = (WEB_DIR / "Dockerfile").read_text(encoding="utf-8")
+
+    assert "pnpm install --frozen-lockfile" in text
+    assert "npm ci" not in text
+    assert "ARG VITE_" not in text
+
+
+def test_web_dockerfile_copies_nginx_templates() -> None:
+    runtime = dockerfile_stages(WEB_DIR / "Dockerfile")[-1]
+    copies = _instructions(runtime, "COPY")
+
+    assert "COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template" in copies
+    assert "COPY nginx/security-headers.conf /etc/nginx/security-headers.conf" in copies
+    assert "COPY --chmod=755 nginx/40-real-ip.sh /docker-entrypoint.d/40-real-ip.sh" in copies
+    assert runtime.splitlines()[0].startswith(f"FROM {NGINX_IMAGE}")
+
+
+def test_web_dockerfile_runtime_env() -> None:
+    runtime = dockerfile_stages(WEB_DIR / "Dockerfile")[-1]
+    env_text = " ".join(_instructions(runtime, "ENV"))
+
+    assert "NGINX_ENTRYPOINT_LOCAL_RESOLVERS=true" in env_text
+    assert "TRUSTED_EDGE_CIDRS=" in env_text
+    assert "BACKEND_URL" not in env_text
+    assert "0.0.0.0/0" not in env_text
+
+
+def test_web_dockerignore_excludes_node_modules() -> None:
+    assert {"node_modules", "dist", ".env"} <= _dockerignore(WEB_DIR / ".dockerignore")
