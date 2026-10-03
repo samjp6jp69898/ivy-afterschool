@@ -104,10 +104,10 @@ def test_ci_setup_action_inputs() -> None:
 
     assert action["runs"]["using"] == "composite"
     inputs = action["inputs"]
-    assert {"python", "node", "supabase"} <= set(inputs)
+    assert set(inputs) == {"python", "node"}
     assert inputs["python"]["default"] == "true"
     assert inputs["node"]["default"] == "true"
-    assert inputs["supabase"]["default"] == "false"
+    assert "supabase" not in SETUP_ACTION.read_text(encoding="utf-8").lower()
 
 
 @pytest.mark.parametrize(
