@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 60,
-  "last_updated": "2026-10-03T13:36:24Z",
+  "version": 61,
+  "last_updated": "2026-10-03T13:37:39Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1811,14 +1811,14 @@
       "granularity_unit": "config",
       "target_path": "apps/api/.env.example",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-006",
         "INFRA-044"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "BACKEND-001 的 Settings 欄位必須與本範本同步（R2_* 四項、不含 MIGRATION_DATABASE_URL）。",
+      "risk_notes": "BACKEND-001 的 Settings 欄位必須與本範本同步（R2_* 四項、不含 MIGRATION_DATABASE_URL）。 【review-r3-infra 打回 1】test_env_examples_local_values_match_compose 對 bucket 的比對是子字串（`f\"-bucket={R2_BUCKET}\" in command_text`），R2_BUCKET 是 compose bucket 名稱的前綴時抓不到不一致。反例（已在副本實測）：.env.example 改成 `R2_BUCKET=afterschool`，6 條測試仍全綠，但 compose 建立的 bucket 是 afterschool-local，本機上傳會遇到 NoSuchBucket。修正方向：把 storage.command 拆成 token，斷言 `f\"-bucket={R2_BUCKET}\"` 是其中一個完整 token（或解析出 -bucket= 的值後做相等比較），red_case 文字同步改成「== storage command 中 -bucket= 的值」。修好的判準：R2_BUCKET=afterschool 與 R2_BUCKET=afterschool-local-x 都要讓測試轉紅。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "scripts/tests/test_env_examples.py",
@@ -1837,9 +1837,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r3-infra",
+        "notes": "打回（1 項，見 risk_notes「review-r3-infra 打回」），其餘已驗證通過。紅燈 92c2d77 先於實作 f52a444；紅燈快照 2 紅 4 綠（綠的 4 條是 INFRA-006 既有、本 task 未改行為的 red_case，合理）；`just test scripts/tests/test_env_examples.py -k env_examples` 6 passed，--collect-only 對照 red_case 全選到。key 恰為 architecture_decisions §4 的 11 項且順序與 description 一致，每個 key 上一行都是註解，APP_SECRET_KEY=change-me，範本內只有本機固定開發值（app_backend_local、postgres、afterschool-local-secret），沒有真實 secret。突變驗證（scratchpad 副本）：R2_ENDPOINT_URL port、access key、secret、bucket 換成完全不同的名稱、DB port、MIGRATION host 改成 localhost、compose 端的 secret / bucket / S3 port、刪掉 SENTRY_DSN、加上 SUPABASE_URL 都會讓測試轉紅；唯一存活的突變見打回項。lint / typecheck（test_env_examples.py）乾淨。殘留（不擋）：apps/api/app/core/config.py、tests/unit/core/test_config.py、scripts/doctor.sh 與 test_doctor.py 仍使用 SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY，分屬 BACKEND-001 與 INFRA-018（皆 in_progress）的改寫範圍；在它們完成之前，從新範本複製出的 apps/api/.env 會缺 Settings 目前要求的 SUPABASE_* key。"
       }
     }
   ]
