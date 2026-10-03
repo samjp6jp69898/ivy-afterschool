@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 57,
-  "last_updated": "2026-10-03T14:40:40Z",
+  "version": 58,
+  "last_updated": "2026-10-03T14:41:51Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10,14 +10,14 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/config.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "INFRA-004",
         "INFRA-049"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "現有實作依 Supabase 版完成，需依目前 description 改寫。 改寫範圍：移除 supabase_url / supabase_service_role_key 與對應驗證，改為 r2_endpoint_url / r2_access_key_id / r2_secret_access_key / r2_bucket；單元測試的必填 env 清單同步改寫。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/core/test_config.py",
@@ -39,9 +39,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-fe",
+        "notes": "通過（Railway / R2 改寫版）。just test apps/api/tests/unit/core/test_config.py -k test_config_ 共 41 項全綠（9 條 red_case 都有對應測試，外加每個必填 env 缺漏、欄位集合恰好 10 個、bucket 邊界等補充）；ruff check / format 對 config.py 與測試乾淨；紅燈 commit 29f11c0 先於實作 7179bea。欄位恰為 architecture_decisions §4 的執行期 env（migration_database_url 不在 model_fields，env 帶 MIGRATION_DATABASE_URL 時照常建立且 repr 不含其密碼）；app_secret_key、r2_secret_access_key 為 SecretStr，repr 與 model_dump 均不露明文。production 規則：r2_endpoint_url 非 https、r2_secret_access_key 為 change-me 或 afterschool-local-secret 皆拒，development / test 允許。與重做前 776be80 逐條比對：舊版 production 唯一規則是 supabase_service_role_key 不可為 change-me，已由 R2 secret 規則承接，其餘 validator（secret key 長度、database_url scheme、cors、sentry_dsn）原樣保留，無遺漏。r2_bucket 以 fullmatch 驗證 S3 命名，測試涵蓋長度邊界、首尾 - / .、大寫、底線、空白、結尾換行。突變驗證 8 個皆被抓到：新增 migration_database_url 欄位、拿掉 https 檢查、從黑名單移除本機值或 change-me、r2 secret 改成一般 str、fullmatch 改 match、production 檢查恆啟用 / 恆停用。本次一併清掉已過時的 risk_notes（Supabase 版改寫提示）。殘留（不打回，需另案決定）：database_url 與 sentry_dsn 規格定義為 str，repr(settings) 會露出 DATABASE_URL 內 app_backend 的密碼與 Sentry DSN 的 key（實測 repr 含 app_backend:Pw123@）。目前沒有程式 log Settings，但日後若 log / 例外訊息帶出 settings 會洩漏；建議之後改為 Field(repr=False) 或 SecretStr 並補一條測試，這需要同步改 description 與 red_case。"
       }
     },
     {
