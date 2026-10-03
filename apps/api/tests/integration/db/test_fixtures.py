@@ -12,10 +12,13 @@ from tests.integration.db.conftest import (
     INSUFFICIENT_PRIVILEGE,
     NOT_NULL_VIOLATION,
     RAISE_EXCEPTION,
+    SEEDED_UPDATED_AT,
     UNIQUE_VIOLATION,
     Conn,
     as_role,
+    assert_backend_read_write,
     assert_table_secured,
+    assert_updated_at_trigger,
     connect_backend,
     connect_owner,
     pg_error,
@@ -189,3 +192,68 @@ def test_fixture_insert_row_returns_inserted_row(owner_conn: Conn) -> None:
 
     assert row == {"id": 1, "name": "王小明", "phone": "0912-000-001"}
     assert _scalar(owner_conn, "select name from public._ins where id = 1") == "王小明"
+
+
+def test_fixture_pg_error_exposes_constraint_name(owner_conn: Conn) -> None:
+    owner_conn.execute("create table public._pg_named(code text constraint uq_pg_named unique)")
+    owner_conn.execute("insert into public._pg_named values ('A')")
+
+    with pg_error(owner_conn, UNIQUE_VIOLATION) as err:
+        owner_conn.execute("insert into public._pg_named values ('A')")
+
+    assert err.constraint_name == "uq_pg_named"
+    assert err.error is not None
+    assert err.error.sqlstate == "23505"
+
+
+_UPD_TABLE = (
+    "create table public._upd(id uuid primary key default gen_random_uuid(), name text, "
+    "updated_at timestamptz not null default now())"
+)
+
+
+def test_fixture_assert_updated_at_trigger_passes_with_trigger(owner_conn: Conn) -> None:
+    owner_conn.execute(_UPD_TABLE)
+    owner_conn.execute(
+        "create trigger trg_upd_updated_at before update on public._upd "
+        "for each row execute function public.set_updated_at()"
+    )
+    row = insert_row(owner_conn, "public._upd", name="x", updated_at=SEEDED_UPDATED_AT)
+
+    assert_updated_at_trigger(owner_conn, "public._upd", row["id"], name="y")
+
+    assert _scalar(owner_conn, "select name from public._upd") == "y"
+
+
+def test_fixture_assert_updated_at_trigger_fails_without_trigger(owner_conn: Conn) -> None:
+    owner_conn.execute(_UPD_TABLE)
+    row = insert_row(owner_conn, "public._upd", name="x", updated_at=SEEDED_UPDATED_AT)
+
+    with pytest.raises(AssertionError, match="updated_at"):
+        assert_updated_at_trigger(owner_conn, "public._upd", row["id"], name="y")
+
+
+def test_fixture_assert_backend_read_write_round_trip(owner_conn: Conn) -> None:
+    owner_conn.execute(
+        "create table public._rw(id uuid primary key default gen_random_uuid(), name text)"
+    )
+    owner_conn.execute("call app_private.secure_table('public._rw')")
+
+    with as_role(owner_conn, "app_backend"):
+        row = insert_row(owner_conn, "public._rw", name="x")
+        assert_backend_read_write(owner_conn, "public._rw", row, name="y")
+        assert _scalar(owner_conn, "select count(*) from public._rw") == 0
+
+
+def test_fixture_assert_backend_read_write_fails_without_update_privilege(
+    owner_conn: Conn,
+) -> None:
+    owner_conn.execute(
+        "create table public._ro(id uuid primary key default gen_random_uuid(), name text)"
+    )
+    owner_conn.execute("call app_private.secure_table('public._ro', 'select, insert')")
+
+    with as_role(owner_conn, "app_backend"):
+        row = insert_row(owner_conn, "public._ro", name="x")
+        with pg_error(owner_conn, INSUFFICIENT_PRIVILEGE):
+            assert_backend_read_write(owner_conn, "public._ro", row, name="y")
