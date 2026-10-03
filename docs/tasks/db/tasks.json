@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 16,
-  "last_updated": "2026-10-03T12:15:35Z",
+  "version": 17,
+  "last_updated": "2026-10-03T12:20:33Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -50,7 +50,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/db/conftest.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-001",
@@ -84,9 +84,9 @@
         "notes": "單一守衛驗收：grep -nE '_owner_dsn|_backend_dsn|LOOPBACK|conninfo_to_dict' apps/api/tests/integration/db/test_base.py apps/api/tests/integration/db/test_seed_local.py 應無輸出；just test-int apps/api/tests/integration/db/test_base.py apps/api/tests/integration/db/test_seed_local.py 全綠。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 實跑（flock supabase lock）18 passed；--collect-only 對照 13 條 red_case 全部選到（as_role 拒絕 4 個參數化、非 loopback 連線 backend / owner 兩個參數化）。收斂驗收：grep -nE '_owner_dsn|_backend_dsn|LOOPBACK|conninfo_to_dict' 兩檔無輸出，test_base.py + test_seed_local.py 13 passed。just lint / just typecheck 對 5 個動到的檔案皆乾淨。e4b9e65 的 tree 只有測試檔、沒有 conftest.py / factories.py，65c2522 才加入，TDD 順序成立。規格變更合理：pg_error 改為 pg_error(conn, sqlstate) 是必要修正（建 savepoint、rollback to savepoint 都需要連線，原簽章無法在不靠全域狀態下實作）；connect_backend() / connect_owner() 只是替原文「連線建構函式」定名；rollback 隔離拆成 step1 / step2 是跨測試驗證的必然寫法，step2 同時以 owner 與 backend 查更嚴；新增常數值、無拋錯也失敗、assert_table_secured 通過 / 失敗、insert_row 回傳整列等 red_case，補齊了 description 原本有規格但沒有 red_case 的 helper。原驗收標準（rollback 隔離、pg_error 精確比對、backend 為 app_backend 且不降級、as_role 切換與還原、非本機 host 被拒）全部仍有對應測試。DB-001 / DB-039 的 tdd.notes 改為使用共用 fixture，與收斂後的程式一致；DB-039 登入失敗由 pytest.fail 變成 pytest.exit，符合 DB-002「整體中止並提示 just db-reset」的連線原則，DB-039 驗收標準未受影響。重點檢查：(1) backend 不降級：_connect 只呼叫傳入的 db_urls.backend_url，OperationalError 一律 pytest.exit(returncode=2)，沒有任何 owner 分支；測試以 monkeypatch db_urls.owner_url 爆炸驗證。另以錯誤密碼與非法 sslmode 實測，exit 訊息只含 libpq 錯誤、不含密碼。(2) as_role 白名單：frozenset 精確比對（大小寫敏感，'ANON'、''、'postgres'、'postgres; drop' 皆 ValueError），檢查在任何 execute 之前，再以 sql.Identifier 組 set local role，無法注入。(3) 連線後複驗：psycopg.connect 之後立即 assert_connected_loopback(conn.info.hostaddr)，失敗先 conn.close() 再 pytest.exit，backend / owner 兩條路徑都有假連線測試斷言 closed。(4) owner_conn 用途：test_fixtures 全為 DDL 臨時表或 as_role 切換驗證（第 1、2 種），test_base 為 DDL 與 pg_catalog 查詢，test_seed_local 只用 backend_conn，所有測資寫入都沒有用 owner 掩蓋授權。pg_error / as_role 搭配順序（任一層在外）都會正確還原角色與 transaction，已逐一推演。殘留（不打回）：(a) test_base 的 test_base_pgcrypto_in_extensions_schema、test_base_app_backend_role_attributes 只做唯讀 pg_extension / pg_roles 查詢，app_backend 其實讀得到，嚴格說不屬第 5 種場合；唯讀查詢不會掩蓋授權缺漏，且 DB-001 規格明訂整檔使用 owner_conn。(b) 若在 as_role 區塊內自建 savepoint、錯誤逃出 as_role 後才在外層 rollback to 該 savepoint，reset role 已被略過而角色會停留在切換後的角色；以 pg_error 包在 as_role 內或外的正常用法不受影響。(c) rollback 隔離測試依賴定義順序，目前未安裝 pytest-randomly / xdist；日後若導入亂序執行，step2 可能先跑而變成恆真。(d) 規格改動（red_case 改名、簽章）在 ea64191 於實作之後才提交，但測試 commit 已使用新名稱，順序上應讓規格改動先於或併入測試 commit。"
       }
     },
     {
