@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 33,
-  "last_updated": "2026-10-03T12:49:59Z",
+  "version": 34,
+  "last_updated": "2026-10-03T12:51:13Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -354,7 +354,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/http.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-001",
@@ -378,9 +378,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 9/9 綠，4 條 red_case 皆有同名測試（另加 baseURL / withCredentials、handler 於呼叫時讀取、四個 auth 端點皆不 refresh、refresh 內呼叫 refresh 端點回 401 不循環、password_change_required 有注入走 handler 無注入走 #/change-password）；8234e3f 測試先於 8ecf0b4 實作。web-lint 對動到的檔案乾淨；以暫時 tsconfig（只 include 本批動到的檔與 src/*.d.ts）跑 vue-tsc 無錯誤，暫時檔已刪除。noRefreshPaths 恰為 description 的 ['/admin/auth/login','/admin/auth/refresh','/admin/auth/logout','/admin/auth/change-password']，包含 refresh 端點，FRONTEND-001 risk_notes 的主要防線成立；refresh / onAuthFailure / onPasswordChangeRequired 都以箭頭函式在呼叫當下讀取目前 handler；預設 refresh 一律 reject（未注入視同 refresh 失敗 → authFailure → #/login），預設 passwordChangeRequired 導向 #/change-password，403 password_change_required 的驗收標準有測試涵蓋。無殘留。"
       }
     },
     {
@@ -722,7 +722,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/constants/navigation.ts",
       "source_ref": "FE:src/constants/navigation/index.ts::SIDEBAR_TREE",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-024"
@@ -744,9 +744,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 6/6 綠，3 條 red_case 皆有同名測試（另加選單結構逐項比對、icon 名稱存在、過濾不改動 manifest）；d90ec22 測試先於 7beeea3 實作。web-lint 對動到的檔案乾淨；以暫時 tsconfig（只 include 本批動到的檔與 src/*.d.ts）跑 vue-tsc 無錯誤，暫時檔已刪除。選單分組與項目和 description 逐項一致，每個 item 的 permission 以 ROUTE_PERMISSIONS[path] 比對（路由表沒有的 path 也會失敗）；tutor 預設權限與 domain_spec §3 預設授予欄一致，過濾後為 home / daily / students / exams；15 個 icon 名稱另以 node 確認都存在於 @element-plus/icons-vue。無殘留。"
       }
     },
     {
@@ -1257,7 +1257,7 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/usePagedList.ts",
       "source_ref": "FE:src/composables/useTableFilters.ts::useTableFilters",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-009",
@@ -1287,9 +1287,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 11/11 綠，10 條 red_case 皆有同名測試（另加未知錯誤 fallback 文字）；f07f6ea 測試與規格補充先於 06016aa 實作，實作 commit 對測試只改 vi.fn 的泛型寫法。web-lint 對動到的檔案乾淨；以暫時 tsconfig（只 include 本批動到的檔與 src/*.d.ts）跑 vue-tsc 無錯誤，暫時檔已刪除。自行構造反例實測（暫時 spec 跑完已刪除）：(1) 連續三次 setFilters 加一次 reload 共 4 個請求，最新的先成功，其餘三個以相反順序晚到且成功、失敗交錯 → items / total 維持最新結果、error 為 null、loading false，所有 reload() promise 都 resolve。(2) 最新請求失敗、較舊請求之後才成功 → error 維持最新的失敗訊息、items 不被舊結果覆蓋、loading false。(3) syncQuery 以 '?academic_year=0x10&archived=1&status=a%26page_size%3D9999&page_size=9999&__proto__=x&constructor=y' 初始化 → 只讀 initialFilters 有的 key，number 欄位仍是 number、boolean 欄位非 'true'/'false' 保留初始值、status 的值只是字串（由 axios 編碼成單一參數，不會變成額外參數）、page_size 維持 20、filters 原型未被汙染；重複 key 取第一個。殘留：(a) number 欄位依規格用 Number() 轉換，會接受 '0x10'（16）、'1e3' 等寫法，型別仍正確。(b) page 只檢查全為數字，'99999999999999999999' 會成為 1e20 送給後端（由後端 422 擋下，畫面顯示錯誤訊息）。(c) 陣列型篩選值寫回 query 時以 String() 串接、讀回時是字串，目前規格沒有陣列篩選。"
       }
     },
     {
@@ -2529,7 +2529,7 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/utils/academicYear.ts",
       "source_ref": "FE:src/utils/academic.ts::currentRocYear",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-003"
@@ -2551,9 +2551,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 3/3 綠，名稱對應 3 條 red_case（另加台北元旦與 7/31 23:59:59 邊界、before/after 為 0、gradeLabel 0 與 7）；de0e1a9 測試先於 2c8c2ff 實作。web-lint 對動到的檔案乾淨；以暫時 tsconfig（只 include 本批動到的檔與 src/*.d.ts）跑 vue-tsc 無錯誤，暫時檔已刪除。currentAcademicYear 以 FRONTEND-003 todayTaipei 取台北日期，8/1 切換正確；academicYearOptions 新到舊；GRADE_OPTIONS 一~六年級。關於 1~6 以外年級：gradeLabel 範圍外回 `${level} 年級` 是 description 明文規定；gradeLevelsLabel 對範圍外的值 description 沒有規定，實作以數字直接代入（例如 [1,7] → '一、7年級'）。domain_spec 的 grade_level 限 1~6（students、exams 皆是），合法資料到不了這個分支，判為殘留不打回。殘留：gradeLevelsLabel 混入範圍外值時以數字呈現，且與 gradeLabel 的「數字 + 空格 + 年級」格式不一致；若日後放寬年級範圍需一併定義。"
       }
     },
     {
