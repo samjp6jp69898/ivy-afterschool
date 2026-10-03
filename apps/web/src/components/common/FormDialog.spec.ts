@@ -191,7 +191,8 @@ describe('FormDialog', () => {
   it('FormDialog autofocus first editable field after opened', async () => {
     const slot = `
       <input id="locked" disabled />
-      <el-select model-value="" placeholder="班級"></el-select>
+      <div class="el-select"><input id="picker" /></div>
+      <div class="el-date-editor"><input id="date" /></div>
       <input id="ro" readonly />
       <input id="agree" type="checkbox" />
       <input id="name" />
