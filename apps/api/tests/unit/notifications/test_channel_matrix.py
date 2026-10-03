@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.notifications.channel_matrix import CHANNEL_MATRIX, channels_for
+from app.notifications.channel_matrix import CHANNEL_MATRIX, channels_for, check_invariants
 from app.notifications.events import EVENTS, Event
 
 # domain_spec M9「頻道」欄逐列對照
@@ -65,3 +65,33 @@ def test_channel_matrix_is_read_only() -> None:
         CHANNEL_MATRIX[Event.HOMEWORK_DONE] = {}  # type: ignore[index]
     with pytest.raises(TypeError):
         CHANNEL_MATRIX[Event.HOMEWORK_DONE]["parent"] = ("in_app",)  # type: ignore[index]
+
+
+def _matrix_with(
+    event: Event, by_type: dict[str, tuple[str, ...]]
+) -> dict[Event, dict[str, tuple[str, ...]]]:
+    return {**_EXPECTED, event: by_type}
+
+
+@pytest.mark.parametrize(
+    ("matrix", "fragment"),
+    [
+        ({e: v for e, v in _EXPECTED.items() if e != Event.HOMEWORK_DONE}, "homework.done"),
+        (_matrix_with(Event.EXAM_PUBLISHED, {"parent": ("line",)}), "in_app"),
+        (
+            _matrix_with(
+                Event.PICKUP_CANCELLED, {"staff": ("in_app", "line"), "parent": ("in_app",)}
+            ),
+            "parent",
+        ),
+        (_matrix_with(Event.PICKUP_CANCELLED, {"staff": ("in_app", "ws")}), "recipient_types"),
+        (_matrix_with(Event.HOMEWORK_DONE, {"parent": ()}), "空"),
+    ],
+)
+def test_channel_matrix_invariant_checker_rejects_bad_matrix(
+    matrix: dict[Event, dict[str, tuple[str, ...]]], fragment: str
+) -> None:
+    # 模組載入時以同一個函式檢查 CHANNEL_MATRIX；這裡證明它真的會擋
+    check_invariants(CHANNEL_MATRIX)
+    with pytest.raises(AssertionError, match=fragment):
+        check_invariants(matrix)  # type: ignore[arg-type]
