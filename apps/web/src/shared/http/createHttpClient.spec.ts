@@ -253,9 +253,8 @@ describe('createHttpClient', () => {
 
   it('createHttpClient does not loop when refresh endpoint returns 401', async () => {
     for (const noRefreshPaths of [ADMIN_NO_REFRESH, ['/admin/auth/login']]) {
-      let client!: AxiosInstance
       const onAuthFailure = vi.fn()
-      client = createHttpClient({
+      const client: AxiosInstance = createHttpClient({
         refresh: () => client.post('/admin/auth/refresh').then(() => undefined),
         noRefreshPaths,
         onAuthFailure,

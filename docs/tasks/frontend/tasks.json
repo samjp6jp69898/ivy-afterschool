@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 24,
-  "last_updated": "2026-10-03T12:35:25Z",
+  "version": 25,
+  "last_updated": "2026-10-03T12:36:15Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -10,7 +10,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/shared/http/createHttpClient.ts",
       "source_ref": "FE:src/api/index.ts::api",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-005",
@@ -18,7 +18,7 @@
         "FRONTEND-002"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "",
+      "risk_notes": "refresh() 期間請求的標記靠 synchronous request interceptor 在 instance.get() 呼叫當下執行：前提是 refresh() 同步發出 refresh 請求，且此 instance 沒有被加上非 synchronous 的 request interceptor（axios 只要有一個非同步 interceptor 就整串改走 promise 鏈，標記會失效）。主要防線仍是 noRefreshPaths 必須列出 refresh 端點（FRONTEND-020 與家長端 client）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/shared/http/createHttpClient.spec.ts",
