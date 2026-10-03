@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 64,
-  "last_updated": "2026-10-03T14:45:16Z",
+  "version": 65,
+  "last_updated": "2026-10-03T14:47:32Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -460,7 +460,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/storage.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-001",
@@ -491,9 +491,9 @@
         "notes": "註解更新驗收：grep -n 'DB-034' apps/api/app/core/uploads.py apps/api/app/core/settings_registry.py apps/api/tests/unit/core/test_uploads.py 應無輸出，且 just test apps/api/tests/unit/core/test_uploads.py apps/api/tests/unit/core/test_settings_registry.py 仍全綠。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-fe",
+        "notes": "通過。just test apps/api/tests/unit/core/test_storage.py -k test_storage_ 26 項全綠（test_path 檔內的 26 項全數被 -k 選到，-k 擴大後沒有混進其他 task；11 條 red_case 都有對應測試）；test_uploads / test_settings_registry / test_config 共 96 項全綠；storage.py、fake_storage.py、test_storage.py、uploads.py、settings_registry.py、config.py 的 ruff 乾淨；紅燈 3ede843 先於實作 9118e85；pytest 設定 --disable-socket 只允許 127.0.0.1，全程無網路。實作 commit 唯一改動測試處：retries 斷言由 {max_attempts:3} 改為 botocore 正規化後的 {mode:standard,total_max_attempts:4}（description 與 red_case 已同步），語意相同，並非放寬。註解三處只改註解：DB-034 grep 無輸出，數值（5 MiB / 10 MiB / le=10）未動。審查者以 Stubber 造 SignatureDoesNotMatch（Error 帶 AWSAccessKeyId、StringToSign）：StorageError 的 str / repr / args 只有「S3 put_object 失敗：SignatureDoesNotMatch（HTTP 403）」，__cause__ is None、__suppress_context__ is True，traceback.format_exception 輸出不含兩者；R2Storage 的屬性只有 client 與 bucket_name，repr 只含 endpoint 與 bucket，不含 access key / secret。object_key / path 檢查實測拒絕：未知 bucket、../x、絕對路徑、空字串、結尾換行、重複前綴、大寫副檔名、含 /../ 的路徑；build_object_path 用 uuid4().hex，不接受使用者檔名，ext 限五種。FakeStorage：失敗注入 upload_error / sign_error / delete_error 與 description 一致，path 與 R2Storage 共用 object_key，create_signed_url 格式與下游 BACKEND-150、348、350、354、417 的 red_case 一致，delete 忽略不存在的 path。突變驗證 13 個皆被抓到：拿掉 from None、改 from exc、訊息含原例外字串、拿掉 bucket 檢查、fullmatch 改 match、拿掉 path 檢查、secret 存成屬性、不攔 BotoCoreError、ext 不檢查、加 ACL、region / addressing / timeout 改值、get_storage 不快取。殘留（不打回）：(1) from None 只切斷 __cause__ 並設 __suppress_context__，原 ClientError 仍掛在 __context__（含 AWSAccessKeyId、StringToSign），直接讀 __context__ 才看得到；traceback、logging、Sentry 都尊重 suppress，目前沒有路徑會印出。若要徹底，改成在 except 外面 raise；規格寫的是 from None，故不打回。(2) R2Storage.client 為公開屬性，boto3 client 內部持有憑證，不要 log 或序列化它。(3) BACKEND-150 / 417 的 red_case 以「FakeStorage 設定 create_signed_url 拋 StorageError」描述，實作時應使用 sign_error 屬性。(4) path 檢查的 owner 段只驗 36 個 [0-9a-f-]，不驗證真的是 UUID，規格如此。"
       }
     },
     {
@@ -14612,7 +14612,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/config.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-001"
@@ -14633,9 +14633,9 @@
         "notes": "review-r3-fe 審 BACKEND-001 時發現的殘留。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-fe",
+        "notes": "通過。just test apps/api/tests/unit/core/test_config.py -k test_config_ 全綠（含 2 條新 red_case）；config.py / test_config.py 的 ruff 乾淨；紅燈 53afc13 先於實作 d0efb9b。實測 repr(settings) 與 str(settings) 都不再含 database_url / sentry_dsn 欄位，Pw123 與 DSN key 不出現，settings.database_url 與 settings.sentry_dsn 仍回傳原字串；欄位型別維持 str，其餘欄位與 validator 未動。突變驗證：拿掉 database_url 的 repr=False、拿掉 sentry_dsn 的 repr=False 各被對應測試抓到；改成 SecretStr 會讓既有測試紅。殘留（不打回）：database_url 格式不合（例如 mysql://u:密碼@h/db）時 Settings 拋出的 ValidationError 訊息仍帶 input_value，會把密碼寫進啟動失敗的 log；建議 model_config 加 hide_input_in_errors=True 並補一條測試（需另開 task 或併入 BACKEND-535 之前處理）。"
       }
     }
   ]
