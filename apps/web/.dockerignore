@@ -1,0 +1,13 @@
+# build context 精簡（映像只需要原始碼、lockfile 與 nginx/）
+node_modules
+dist
+coverage
+test-results
+playwright-report
+blob-report
+e2e
+.vite
+.vitest
+.env
+.env.*
+*.md

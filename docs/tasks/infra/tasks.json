@@ -1,6 +1,6 @@
 {
   "area": "infra",
-  "version": 80,
+  "version": 81,
   "last_updated": "2026-10-03T15:01:41Z",
   "tasks": [
     {
@@ -1236,7 +1236,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/Dockerfile",
       "source_ref": "FE:Dockerfile::runtime",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-033"
