@@ -1,13 +1,16 @@
 """INFRA-021：justfile 的參數守衛與路徑路由回歸測試（鎖住 INFRA-002「禁止全量執行」的行為）。
 
-一律以 `just --justfile <repo>/justfile` 執行，PATH 前置 fake_bin（假的 supabase / uv / pnpm /
-docker），守衛失效時也只會呼叫到假指令，不會真的啟動任何服務。
+一律以 `just --justfile <repo>/justfile` 執行，PATH 前置 fake_bin（假的 uv / pnpm / docker），
+守衛失效時也只會呼叫到假指令，不會真的啟動任何服務或連線 DB。涵蓋 INFRA-002 的守衛，以及
+INFRA-045（db-migrate、db-new-migration）與 INFRA-046（db-reset）改寫後的 recipe。
 """
 
 from __future__ import annotations
 
+import json
 import socket
 import subprocess
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
@@ -17,7 +20,7 @@ import pytest
 if TYPE_CHECKING:
     from conftest import FakeBin, RunCmd
 
-_FAKE_TOOLS = ("supabase", "uv", "pnpm", "docker")
+_FAKE_TOOLS = ("uv", "pnpm", "docker")
 
 
 class Just(Protocol):
@@ -93,13 +96,14 @@ def test_justfile_rejects_unknown_prefix(just: Just, fake_bin: FakeBin) -> None:
     [("--linked",), ("--db-url", "x"), ("--yes", "--linked"), ("--yes", "--db-url", "x")],
     ids=["linked", "db-url", "yes-linked", "yes-db-url"],
 )
-def test_justfile_db_reset_rejects_linked(
+def test_justfile_db_reset_rejects_unknown_args(
     just: Just, fake_bin: FakeBin, args: tuple[str, ...]
 ) -> None:
     result = just("db-reset", *args)
 
     assert result.returncode == 1
-    assert fake_bin.calls("supabase") == []
+    assert "只接受 --yes" in result.stderr
+    assert fake_bin.calls("uv") == []
 
 
 def test_justfile_db_reset_requires_yes_without_tty(just: Just, fake_bin: FakeBin) -> None:
@@ -107,23 +111,76 @@ def test_justfile_db_reset_requires_yes_without_tty(just: Just, fake_bin: FakeBi
 
     assert result.returncode == 1
     assert "--yes" in result.stderr
-    assert fake_bin.calls("supabase") == []
+    assert fake_bin.calls("uv") == []
 
 
-def test_justfile_db_new_migration_validates_name(
-    just: Just, fake_bin: FakeBin, repo_root: Path
+def test_justfile_db_reset_yes_runs_local_script(just: Just, fake_bin: FakeBin) -> None:
+    result = just("db-reset", "--yes")
+
+    assert result.returncode == 0, result.stderr
+    calls = fake_bin.calls("uv")
+    assert len(calls) == 1
+    argv = calls[0]["argv"]
+    assert argv[:2] == ["run", "--frozen"]
+    assert argv[-1].endswith("scripts/db_reset_local.py")
+    assert not any("://" in arg for arg in argv)
+
+
+@pytest.mark.parametrize(
+    "args",
+    [("db004",), ("DB004", "create_x"), ("db004", "Create-X"), ("db004", "create_x", "extra")],
+    ids=["missing-slug", "upper-rev", "bad-slug", "extra-arg"],
+)
+def test_justfile_db_new_migration_validates_args(
+    just: Just, fake_bin: FakeBin, args: tuple[str, ...]
 ) -> None:
-    bad = just("db-new-migration", "Bad-Name")
+    result = just("db-new-migration", *args)
 
-    assert bad.returncode == 1
-    assert fake_bin.calls("supabase") == []
+    assert result.returncode == 1
+    assert "用法" in result.stderr
+    assert fake_bin.calls("uv") == []
 
-    good = just("db-new-migration", "create_probe")
 
-    assert good.returncode == 0, good.stderr
-    calls = fake_bin.calls("supabase")
-    assert calls[0]["argv"] == ["migration", "new", "create_probe"]
-    assert Path(calls[0]["cwd"]).resolve() == repo_root.resolve()
+def test_justfile_db_new_migration_runs_alembic_revision(just: Just, fake_bin: FakeBin) -> None:
+    result = just("db-new-migration", "db004", "create_staff_users")
+
+    assert result.returncode == 0, result.stderr
+    call = fake_bin.calls("uv")[0]
+    assert call["argv"][-8:] == [
+        "run",
+        "--frozen",
+        "alembic",
+        "revision",
+        "--rev-id",
+        "db004",
+        "-m",
+        "create_staff_users",
+    ]
+    assert call["cwd"].endswith("apps/api")
+
+
+_ENV_RECORDING_UV = """#!{python}
+import json, os, sys
+with open({log!r}, "w", encoding="utf-8") as f:
+    json.dump({{"argv": sys.argv[1:], "url": os.environ.get("MIGRATION_DATABASE_URL")}}, f)
+"""
+
+
+def test_justfile_db_migrate_forces_local_url(
+    just: Just, fake_bin: FakeBin, tmp_path: Path
+) -> None:
+    log = tmp_path / "uv-env.json"
+    fake_uv = fake_bin.bin_dir / "uv"
+    fake_uv.write_text(
+        _ENV_RECORDING_UV.format(python=sys.executable, log=str(log)), encoding="utf-8"
+    )
+
+    result = just("db-migrate", env={"MIGRATION_DATABASE_URL": "postgresql://x@db.example.com/p"})
+
+    assert result.returncode == 0, result.stderr
+    recorded = json.loads(log.read_text(encoding="utf-8"))
+    assert recorded["url"] == "postgresql+psycopg://postgres:postgres@127.0.0.1:54342/postgres"
+    assert recorded["argv"][-3:] == ["alembic", "upgrade", "head"]
 
 
 def _unused_local_port() -> int:

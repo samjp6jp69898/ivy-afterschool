@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 84,
-  "last_updated": "2026-10-03T15:04:39Z",
+  "version": 85,
+  "last_updated": "2026-10-03T15:07:58Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -743,7 +743,7 @@
       "granularity_unit": "test",
       "target_path": "scripts/tests/test_justfile.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-002",
@@ -768,13 +768,13 @@
           "test_justfile_db_reset_rejects_unknown_args：`just db-reset --linked`、`just db-reset --db-url x`、`just db-reset --yes --linked`、`just db-reset --yes --db-url x`（pytest.mark.parametrize）→ returncode == 1、stderr 含 '只接受 --yes'，fake_bin.calls('uv') == []（帶 --yes 的案例證明是參數白名單擋下）",
           "test_justfile_db_reset_requires_yes_without_tty：stdin 非 TTY、`just db-reset` 不帶參數 → returncode == 1、stderr 含 '--yes'，fake_bin.calls('uv') == []",
           "test_justfile_db_reset_yes_runs_local_script：`just db-reset --yes` → returncode == 0，fake_bin.calls('uv') 恰一筆，argv 含 'run'、'--frozen' 與以 'scripts/db_reset_local.py' 結尾的路徑，且不含任何 URL 參數",
-          "test_justfile_db_new_migration_validates_args：`just db-new-migration db004`（缺 SLUG）、`just db-new-migration DB004 create_x`、`just db-new-migration db004 Create-X` → 每個 returncode == 1 且 uv 未被呼叫；`just db-new-migration db004 create_staff_users` → 0，fake_bin.calls('uv')[0]['argv'] 以 ['run', '--frozen', 'alembic', 'revision', '--rev-id', 'db004', '-m', 'create_staff_users'] 結尾、cwd 結尾為 'apps/api'",
+          "test_justfile_db_new_migration_validates_args：`just db-new-migration db004`（缺 SLUG）、`just db-new-migration DB004 create_x`、`just db-new-migration db004 Create-X`、`just db-new-migration db004 create_x extra`（多一個參數）→ 每個 returncode == 1、stderr 含 '用法' 且 uv 未被呼叫；成功案例 test_justfile_db_new_migration_runs_alembic_revision：`just db-new-migration db004 create_staff_users` → 0，fake_bin.calls('uv')[0]['argv'] 以 ['run', '--frozen', 'alembic', 'revision', '--rev-id', 'db004', '-m', 'create_staff_users'] 結尾、cwd 結尾為 'apps/api'",
           "test_justfile_db_migrate_forces_local_url：測試自建假 uv（把收到的 MIGRATION_DATABASE_URL 環境變數與 argv 寫入 tmp 檔）；呼叫端設 MIGRATION_DATABASE_URL='postgresql://x@db.example.com/p' 後 `just db-migrate` → 假 uv 收到的 MIGRATION_DATABASE_URL == 'postgresql+psycopg://postgres:postgres@127.0.0.1:54342/postgres'，argv 以 ['alembic', 'upgrade', 'head'] 結尾",
           "test_justfile_test_int_requires_local_db：沒有服務監聽 127.0.0.1:54342 的情況（以 monkeypatch 環境變數 JUST_TEST_INT_DB_PORT 指向一個未監聽的臨時 port）→ `just test-int apps/api/tests/integration/x.py` returncode == 1、stderr 含 'just db-start'",
           "test_justfile_list_documents_every_recipe：`just --list` 輸出中每個 recipe 行都帶 '#' 說明（不允許沒有說明的 recipe）"
         ],
         "run": "just test scripts/tests/test_justfile.py -k justfile",
-        "notes": "test-int 的 DB port 探測支援 JUST_TEST_INT_DB_PORT 覆寫（預設 54342）。純補測試：突變驗證在 scratchpad 的 repo 複本上進行（justfile、scripts/_pyroute.sh、scripts/tests 與 db_urls 複本 + apps/api/.venv 連結），不動共用工作樹的 justfile；每次只套一個突變，逐條記錄哪個突變讓哪條測試轉紅（含 db-reset 白名單 / TTY 檢查、db-new-migration 參數檢查、db-migrate 覆寫 URL）。"
+        "notes": "test-int 的 DB port 探測支援 JUST_TEST_INT_DB_PORT 覆寫（預設 54342）。純補測試：突變驗證在 scratchpad 的 repo 複本上進行（justfile、scripts/_pyroute.sh、scripts/tests 與 db_urls 複本 + apps/api/.venv 連結），不動共用工作樹的 justfile；每次只套一個突變。結果（基準 27 passed）：移除 py_prepare 無參數區塊 → require_args[test/test-int/lint/typecheck] 4 紅；py_is_full_run 恆回 1 → rejects_full_run_paths 4 紅；未知前綴放行 → rejects_unknown_prefix 紅；db-reset 白名單放行 → db_reset_rejects_unknown_args 4 紅；db-reset 非 TTY 檢查移除 → requires_yes_without_tty 紅；db-reset 改呼叫其他腳本 → db_reset_yes_runs_local_script 紅；db-new-migration 參數個數檢查放寬為 $# -lt 1 → validates_args[missing-slug / extra-arg] 2 紅；db-new-migration 正則檢查移除 → validates_args[upper-rev / bad-slug] 2 紅；db-migrate 移除 MIGRATION_DATABASE_URL 覆寫 → db_migrate_forces_local_url 紅；test-int port 探測移除 → test_int_requires_local_db 紅；web-test 無參數檢查移除 → require_args[web-test] 紅；default recipe 說明移除 → list_documents_every_recipe 紅。"
       },
       "review": {
         "status": "pending",
