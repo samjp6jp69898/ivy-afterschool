@@ -111,7 +111,8 @@ describe('AdminListToolbar', () => {
       total: 37,
     })
 
-    await wrapper.find('.el-select__wrapper').trigger('mouseenter')
+    // 清除 icon 只在滑鼠移入 el-select 根元素時出現
+    await wrapper.find('.el-select').trigger('mouseenter')
     await nextTick()
     await wrapper.find('.el-select__clear').trigger('click')
     await flushPromises()
@@ -144,7 +145,8 @@ describe('AdminListToolbar', () => {
   it('AdminListToolbar non-clearable filter has no all option or clear icon', async () => {
     const wrapper = await mountToolbar({ filters: [STATUS_FILTER], filterValues: { status: 'active' } })
 
-    await wrapper.find('.el-select__wrapper').trigger('mouseenter')
+    // 清除 icon 只在滑鼠移入 el-select 根元素時出現
+    await wrapper.find('.el-select').trigger('mouseenter')
     await nextTick()
     expect(wrapper.find('.el-select__clear').exists()).toBe(false)
     const labels = (await openSelect(wrapper, 0)).map((o) => o.textContent?.trim())
