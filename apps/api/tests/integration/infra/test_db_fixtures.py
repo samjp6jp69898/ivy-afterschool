@@ -234,7 +234,10 @@ def test_db_fixtures_db_down_exits_once(
     result = _run(project)
 
     assert result.ret == 2
-    assert _output(result).count("just db-start") == 1
+    output = _output(result)
+    assert output.count("just db-start") == 1
+    assert "本機 DB 未啟動" in output
+    assert "Supabase" not in output
     assert result.parseoutcomes().get("passed", 0) == 0
 
 
@@ -255,7 +258,7 @@ def test_db_fixtures_refuses_owner_role(
 
     assert result.ret == 2
     output = _output(result)
-    assert "禁止以 owner 角色繞過 RLS" in output
+    assert "禁止以 owner 角色連線" in output
     assert "postgres" in output
     assert result.parseoutcomes().get("passed", 0) == 0
 
