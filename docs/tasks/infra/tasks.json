@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 48,
-  "last_updated": "2026-10-03T13:01:23Z",
+  "version": 49,
+  "last_updated": "2026-10-03T13:06:13Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1190,8 +1190,8 @@
       "granularity_unit": "config",
       "target_path": "apps/web/nginx/default.conf.template",
       "source_ref": "FE:nginx.conf.template::location /api/",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-005",
         "INFRA-008"
@@ -1604,8 +1604,8 @@
       "granularity_unit": "config",
       "target_path": "compose.yaml",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-002",
         "INFRA-008"
