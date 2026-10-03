@@ -47,6 +47,17 @@ describe('M3Card', () => {
     expect(event.defaultPrevented).toBe(true)
   })
 
+  it('M3Card ignores keys from nested controls', () => {
+    const wrapper = mount(M3Card, {
+      props: { clickable: true },
+      slots: { default: '<input class="inner" />' },
+    })
+    const event = new KeyboardEvent('keydown', { key: ' ', cancelable: true, bubbles: true })
+    wrapper.get('.inner').element.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    expect(wrapper.emitted('click')).toBeUndefined()
+  })
+
   it('M3Card non clickable ignores click', async () => {
     const wrapper = mount(M3Card)
     await wrapper.trigger('click')
