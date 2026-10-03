@@ -8,14 +8,15 @@
   會帶 AWSAccessKeyId / StringToSign，不可隨例外鏈進 log。
 - ``client`` 內含憑證：不得 log 或序列化。
 - ``create_signed_url``（BACKEND-014）：SigV4 在本地簽章，不發網路請求、不檢查物件是否存在。
-- ``delete`` 由 BACKEND-015 實作。
+- ``delete``（BACKEND-015）：每批最多 1000 個 key；整個請求失敗立即拋出，個別 key 失敗則送完
+  後續批次再彙整拋出（盡量多刪）。
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Callable, Sequence
-from functools import lru_cache
+from functools import lru_cache, partial
 from typing import TYPE_CHECKING, Final, Literal, Protocol, get_args, runtime_checkable
 from uuid import UUID, uuid4
 
@@ -32,6 +33,8 @@ Bucket = Literal["leave-attachments", "student-photos", "pickup-person-photos"]
 
 _BUCKETS: Final[frozenset[str]] = frozenset(get_args(Bucket))
 _EXTENSIONS: Final = frozenset({"jpg", "png", "webp", "heic", "pdf"})
+DELETE_BATCH_SIZE: Final = 1000
+_DELETE_ERRORS_SHOWN: Final = 10
 SIGNED_URL_MIN_SECONDS: Final = 30
 SIGNED_URL_MAX_SECONDS: Final = 3600
 _PATH = re.compile(r"[0-9a-f-]{36}/[0-9a-f]{32}\.(jpg|png|webp|heic|pdf)")
@@ -137,7 +140,26 @@ class R2Storage:
         )
 
     def delete(self, bucket: Bucket, paths: Sequence[str]) -> None:
-        raise NotImplementedError("BACKEND-015 實作")
+        # 全部先過格式檢查：任一不合法就一個請求都不送
+        keys = [object_key(bucket, path) for path in paths]
+        failures: list[str] = []
+        for start in range(0, len(keys), DELETE_BATCH_SIZE):
+            batch = keys[start : start + DELETE_BATCH_SIZE]
+            response = _s3_call(
+                "delete_objects",
+                partial(
+                    self.client.delete_objects,
+                    Bucket=self.bucket_name,
+                    Delete={"Objects": [{"Key": key} for key in batch], "Quiet": True},
+                ),
+            )
+            failures += [
+                f"{err.get('Key', '?')}（{err.get('Code', '?')}）"
+                for err in response.get("Errors", [])
+            ]
+        if failures:
+            shown = "、".join(failures[:_DELETE_ERRORS_SHOWN])
+            raise StorageError(f"S3 delete_objects 有 {len(failures)} 個物件刪除失敗：{shown}")
 
 
 @lru_cache(maxsize=1)
