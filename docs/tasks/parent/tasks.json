@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 18,
-  "last_updated": "2026-10-03T13:08:34Z",
+  "version": 19,
+  "last_updated": "2026-10-03T13:09:11Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -490,8 +490,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3Icon.vue",
       "source_ref": "FE:src/parent/components/m3/M3Icon.vue::props",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r3",
       "depends_on": [
         "PARENT-001",
         "INFRA-012"
@@ -596,8 +596,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3Card.vue",
       "source_ref": "FE:src/parent/components/m3/M3Card.vue::props",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r3",
       "depends_on": [
         "PARENT-001",
         "INFRA-012"
@@ -632,8 +632,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3TextField.vue",
       "source_ref": "FE:src/parent/components/m3/M3TextField.vue::props",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r3",
       "depends_on": [
         "PARENT-001",
         "INFRA-012"
@@ -810,8 +810,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3Snackbar.vue",
       "source_ref": "FE:src/parent/components/m3/M3Snackbar.vue::props",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r3",
       "depends_on": [
         "PARENT-001",
         "PARENT-011",
@@ -896,7 +896,8 @@
       "assignee_session": null,
       "depends_on": [
         "PARENT-001",
-        "INFRA-012"
+        "INFRA-012",
+        "PARENT-016"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -967,8 +968,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/PullToRefresh.vue",
       "source_ref": "FE:src/parent/components/PullToRefresh.vue::props",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r3",
       "depends_on": [
         "PARENT-001",
         "INFRA-012"
@@ -1003,8 +1004,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/SkeletonBlock.vue",
       "source_ref": "FE:src/parent/components/SkeletonBlock.vue::props",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r3",
       "depends_on": [
         "PARENT-001",
         "INFRA-012"
@@ -3113,8 +3114,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3Switch.vue",
       "source_ref": "FE:src/parent/components/m3/M3Switch.vue::emit",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r3",
       "depends_on": [
         "PARENT-001",
         "INFRA-012"
