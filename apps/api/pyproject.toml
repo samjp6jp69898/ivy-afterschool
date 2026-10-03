@@ -28,6 +28,8 @@ dev = [
   "pytest-socket>=0.8",
   "ruff>=0.16",
   "mypy>=2.4",
+  # starlette.testclient 優先使用 httpx2；只有 httpx 時會發 StarletteDeprecationWarning
+  "httpx2>=2.13",
 ]
 
 [tool.uv]
@@ -42,6 +44,10 @@ line-length = 100
 select = ["E", "F", "W", "I", "UP", "B", "DTZ", "SIM", "RUF", "PT", "S", "TID"]
 # 註解與字串以繁體中文書寫，全形標點不是混淆字元（RUF001~003）
 allowed-confusables = ["，", "：", "；", "（", "）", "！", "？", "～"]
+
+[tool.ruff.lint.isort]
+# 從 repo root 以 --config 執行時 src 推不到 apps/api，明確指定 first-party
+known-first-party = ["app", "tests"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]

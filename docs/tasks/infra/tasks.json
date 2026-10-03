@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 33,
-  "last_updated": "2026-10-03T12:12:25Z",
+  "version": 34,
+  "last_updated": "2026-10-03T12:14:33Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1525,7 +1525,7 @@
       "granularity_unit": "config",
       "target_path": "apps/api/pyproject.toml",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r3",
       "depends_on": [
         "INFRA-004",
@@ -1548,7 +1548,7 @@
           "test_tooling_anyio_backend_defaults_to_asyncio：pytester 以本專案根 conftest 執行一個未定義 anyio_backend 的 @pytest.mark.anyio async 測試（另有一個 session scope fixture 依賴 anyio_backend）→ --collect-only 只有 1 個 item 且 nodeid 為 'tests/unit/test_async.py::test_async'（不帶 anyio 外掛預設 fixture 的參數化後綴 [asyncio]），anyio_backend == 'asyncio'，不發生 ScopeMismatch，passed == 1"
         ],
         "run": "just test apps/api/tests/unit/infra/test_tooling_config.py -k tooling",
-        "notes": "第 4 項以 scripts/tests 既有 loopback 守衛測試驗收：just test scripts/tests/<對應 conftest 守衛測試檔>（實作者回報實際指令與綠燈數）；另以 grep -n '_LOOPBACK_ADDRS' scripts/tests/conftest.py 應無輸出。"
+        "notes": "第 4 項以 scripts/tests 既有 loopback 守衛測試驗收：just test scripts/tests/test_scripts_conftest.py（21 passed），另以 flock /tmp/afterschool_supabase.lock just test-int scripts/tests/test_check_rls.py 驗證 local_db_conn 實連本機 DB；grep -n '_LOOPBACK_ADDRS' scripts/tests/conftest.py 應無輸出。db_urls 以 importlib 依檔案路徑載入；test_scripts_conftest.py 的 pytester project fixture 複製 conftest 時把 _REPO_ROOT 釘回真實 repo root。"
       },
       "review": {
         "status": "pending",

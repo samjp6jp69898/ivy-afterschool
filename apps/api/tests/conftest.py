@@ -6,6 +6,8 @@
 4. unit 測試完全禁網（含 loopback，unix socket 仍允許）；integration 只放行 loopback。
 5. `fake_clock` fixture（INFRA-011）：預設 2026-09-01T09:00:00+08:00，
    `@pytest.mark.clock("<ISO8601 含時區>")` 覆寫起始時間。
+6. `anyio_backend` fixture（INFRA-042，session scope）：`@pytest.mark.anyio` 測試一律只跑 asyncio，
+   模組內不必各自定義。
 
 業務 fixture 由各子目錄的 conftest 提供。
 """
@@ -84,6 +86,11 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers", "clock(iso8601): 覆寫 fake_clock 的起始時間（ISO 8601，必須含時區）"
     )
+
+
+@pytest.fixture(scope="session")
+def anyio_backend() -> str:
+    return "asyncio"
 
 
 @pytest.fixture

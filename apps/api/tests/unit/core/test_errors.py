@@ -3,16 +3,17 @@
 import logging
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
+
 from app.core.errors import (
     AppError,
     NotFoundError,
     RateLimitedError,
     register_exception_handlers,
 )
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from pydantic import BaseModel
-from sqlalchemy.exc import IntegrityError
 
 
 class _Payload(BaseModel):

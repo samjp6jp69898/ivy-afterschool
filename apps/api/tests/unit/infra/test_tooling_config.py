@@ -59,6 +59,8 @@ def _fixed_source_from_diff(diff: str) -> list[str]:
             lines.append(line[1:])
         elif line == "":
             lines.append("")
+    while lines and lines[-1] == "":
+        lines.pop()
     return lines
 
 

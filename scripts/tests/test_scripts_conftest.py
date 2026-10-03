@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from conftest import FakeBin, RunCmd
 
 TESTS_DIR = Path(__file__).resolve().parent
+REPO_ROOT = TESTS_DIR.parents[1]
 LOCAL_URL = "postgresql://postgres:postgres@127.0.0.1:54342/postgres"
 # libpq 會用來補未指定連線參數、可把連線導向他處的環境變數
 LIBPQ_ADDRESS_ENV = ("PGHOST", "PGHOSTADDR", "PGSERVICE", "SCRIPTS_TEST_DATABASE_URL")
@@ -24,7 +25,11 @@ def project(pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch) -> pytes
     for name in LIBPQ_ADDRESS_ENV:
         monkeypatch.delenv(name, raising=False)
     pytester.makefile(".ini", pytest=(TESTS_DIR / "pytest.ini").read_text(encoding="utf-8"))
-    pytester.makeconftest((TESTS_DIR / "conftest.py").read_text(encoding="utf-8"))
+    # 複製到暫存目錄後 __file__ 不在 repo 內，把 repo root 釘回真實位置（conftest 由此載入 db_urls）
+    source = (TESTS_DIR / "conftest.py").read_text(encoding="utf-8")
+    root_line = "_REPO_ROOT = Path(__file__).resolve().parents[2]"
+    assert source.count(root_line) == 1
+    pytester.makeconftest(source.replace(root_line, f"_REPO_ROOT = Path({str(REPO_ROOT)!r})"))
     return pytester
 
 
