@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 42,
-  "last_updated": "2026-10-03T12:38:13Z",
+  "version": 43,
+  "last_updated": "2026-10-03T12:54:01Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1554,6 +1554,38 @@
         "status": "pass",
         "reviewer": "review-r3",
         "notes": "通過。tdd.run 4/4 綠（-v 名稱對應 4 條 red_case）；d4301b6 測試（含規格修正）先於 46d3743 實作。just lint / just typecheck 對動到的檔案乾淨；另以 apps/api 內與 repo root `--config` 兩種方式跑 ruff --select I 掃 apps/api/app、apps/api/tests 皆無 I001。第 2 項規格修正合理：starlette 1.7.0 的 testclient 在 `import httpx2` 拋 ModuleNotFoundError 時才改用 httpx 並發 StarletteDeprecationWarning（繼承 UserWarning），原驗收「-W error::DeprecationWarning 下通過」在缺 httpx2 時仍會通過，攔不到回歸；改為同時升級 StarletteDeprecationWarning、並以加 httpx2 從源頭消除而非 filterwarnings，是更嚴的做法，正式依賴 httpx 不變。回歸偵測實測：在 scratchpad 以 PYTHONPATH shim 讓 `import httpx2` 拋 ModuleNotFoundError（模擬未安裝），同一個 TestClient 測試在兩個 -W 下收集即 error（assert_outcomes(passed=1) 會失敗），只升級 DeprecationWarning 時則 1 passed + 1 warning，證明新 red_case 能抓到回歸、舊寫法不能。test_tooling_deprecation_filter_not_too_broad 以本專案 ini 設定斷言 failed == 1 且含 'DeprecationWarning: x'，沒有過寬忽略。第 3 項：根 conftest 的 session scope anyio_backend，測試同時以 session fixture 依賴驗證無 ScopeMismatch、nodeid 不帶參數化後綴。第 4 項：scripts/tests/conftest.py 以 importlib.util.spec_from_file_location 依檔案路徑載入 db_urls（module 名 _afterschool_db_urls，不改 sys.path），local_db_url 用 assert_loopback、local_db_conn 用 to_psycopg_dsn 與連線後 assert_connected_loopback（失敗先 close），_LOOPBACK_* 與 conninfo_to_dict 副本已刪除（grep 無輸出）；just test scripts/tests/test_scripts_conftest.py 21 passed，flock 下 just test-int scripts/tests/test_check_rls.py 13 passed。test_errors.py 的改動只有 import 順序，屬第 1 項允許範圍。無殘留。"
+      }
+    },
+    {
+      "id": "INFRA-043",
+      "title": "vitest 設定 inline element-plus，讓自動 import 的 Element Plus 元件與樣式可在測試中載入",
+      "description": "`apps/web/vite.config.ts` 的 unplugin-vue-components（ElementPlusResolver）在元件使用 `<el-*>` 時會同時自動 import 對應的 theme-chalk CSS。vitest 在 Node 端載入 element-plus 時不經 vite 轉譯，遇到 `.css` 會拋 `TypeError: Unknown file extension \".css\"`，導致任何用到 Element Plus 元件的 spec 無法執行。\n\n**修改**：`apps/web/vitest.config.ts` 的 `test` 區塊加 `server: { deps: { inline: ['element-plus'] } }`，讓 element-plus 經 vite 轉譯（CSS 由 vite 處理）。同時把 `import viteConfig from './vite.config'` 改為帶副檔名的 `'./vite.config.ts'`（或依 TS 設定可接受的寫法），消除 vitest 執行時的「import 未帶副檔名」警告；若 tsconfig 不允許 `.ts` 副檔名 import，改用不觸發警告的等效寫法並註明。\n\n**驗收標準**：\n- 一個以 `mount` 渲染 template 內使用 `<el-button>`、`<el-icon>`（自動 import，不手動 import 元件）的測試元件的 spec 可執行並通過，且渲染結果含 `.el-button`。\n- 既有 `src/test/setup.spec.ts`、`src/test/helpers.spec.ts` 仍全綠。\n- 執行 vitest 時不再出現 vite.config import 未帶副檔名的警告。",
+      "granularity_unit": "config",
+      "target_path": "apps/web/vitest.config.ts",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r3",
+      "depends_on": [
+        "INFRA-012"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "inline 整個 element-plus 會讓測試啟動變慢；若明顯變慢，評估只 inline 必要子路徑並在 description 註明。",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/web/src/test/elementPlus.spec.ts",
+        "markers": [
+          "vitest"
+        ],
+        "red_cases": [
+          "elementPlus auto-imported components render in tests：以 defineComponent({ template: '<el-button type=\"primary\">送出</el-button><el-icon><Search /></el-icon>' }) 為測試元件（Search 由 @element-plus/icons-vue 匯入），mount 後 wrapper.find('.el-button').exists() === true 且文字含 '送出'；修改前此 spec 因 Unknown file extension \".css\" 失敗"
+        ],
+        "run": "just web-test src/test/elementPlus.spec.ts -t \"elementPlus\"",
+        "notes": "回歸：just web-test src/test/setup.spec.ts -t \"harness\" 與 just web-test src/test/helpers.spec.ts -t \"helpers\" 全綠；並確認輸出無 vite.config 副檔名警告。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
       }
     }
   ]
