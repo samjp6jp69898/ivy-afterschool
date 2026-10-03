@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 51,
-  "last_updated": "2026-10-03T12:50:25Z",
+  "version": 52,
+  "last_updated": "2026-10-03T12:53:36Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1290,7 +1290,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/throttle.py",
       "source_ref": "BE:api/auth.py::_check_account_lockout",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-012"
@@ -1318,9 +1318,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 12/12 綠，9 條 red_case 皆有同名測試（另加全部預設值、視窗到期、大小寫變體共用鎖定）；17b8224 紅燈時 throttle.py 不存在，規格修正（default_factory、login_keys 正規化與單射）在測試 commit 內、早於 a37826f 實作。just lint / just typecheck 對 app、tests/support 與測試檔乾淨。自行構造反例實測：(1) 對 AuthThrottles 的 6 個欄位逐一確認兩個實例是不同物件，且一個實例鎖定 / 用滿後，另一個實例同 key 不受影響。(2) username 變體：'AMY'、' amy '、'\\tamy\\n'、'Amy' 都正規化成 'amy'，共用同一組計數；全形 'ａｍｙ'、西里爾字母 'у'、含零寬空白的 'amy\\u200b' 得到不同 key，但 BACKEND-041 第 1 步用同樣的 strip().lower() 查帳號，這些字串查不到 'amy'，等同猜不存在的帳號，無法繞過 amy 的鎖定；Kelvin 符號 'K' 經 lower() 變成 'k'，查帳號與計數兩邊一致，也沒有落差。(3) 單射：以含 '|' 的 username（'amy|1.2.3.4'、'amy|-'、'a|b'、'|amy'）搭配 None / IPv4 / IPv6 / '-' 窮舉，沒有任何兩組不同的 (帳號, IP) 撞到同一個 key；攻擊者無法藉特製 username 鎖住別人的 (帳號, IP) 計數。正規化不會把本來不同的合法帳號併在一起：DB-004 的 CHECK 規定 staff_users.username 必須等於 lower(username) 且符合 ^[a-z0-9][a-z0-9._-]{2,31}$，合法帳號本來就沒有大寫與空白。殘留（規格本身的取捨，未構造出比描述更嚴重的情況）：(a) login_account 以帳號為維度，任何人知道帳號名稱就能以 20 次失敗把它鎖 15 分鐘；單一 IP 的 login_ip 上限也是 5 分鐘 20 次，因此一個 IP 每 15 分鐘重複一次即可讓特定帳號持續無法登入。(b) login_ip / liff_ip 以完整 IP 為 key，擁有整段 IPv6 /64 的攻擊者可輪換位址繞過 IP 維度，仍受 login_account（每帳號每 15 分鐘 20 次）限制。"
       }
     },
     {
@@ -1715,7 +1715,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/line_id_token.py",
       "source_ref": "BE:services/line_login_service.py::LineLoginService.verify_id_token",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-003",
@@ -1751,9 +1751,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 26/26 綠，16 條 red_case 皆有同名測試（另加 profile 欄位參數化、TTL 邊界、不同 token 互不影響、實例間獨立、錯誤不回顯 LINE 回應、LineProfile 不可變）；099fe70 紅燈時 line_id_token.py 不存在（含 FakeLineVerifier 與規格補充），23102c1 對測試只改了一個型別註記。just lint / just typecheck 對 app、tests/support 與測試檔乾淨。自行構造反例實測：(1) 並行重放：MockTransport 每次延遲 20ms，30 個執行緒以 Barrier 同時驗證同一 token，重複 5 輪，每輪恰 1 個成功、其餘 29 個都是 id_token_replayed；檢查與記錄在同一把 threading.Lock 內，LINE 呼叫在鎖外不影響原子性。(2) 失敗分類：ConnectError、ReadTimeout、429、500 → 503 line_unavailable；400、非 JSON、aud 不符、302（httpx 預設不跟隨轉址）→ 401 invalid_id_token，與 description 一致。(3) 以含特徵字串的 token 跑上述各路徑：AppError 的 code / message / details 都不含 token，例外以 from None 切斷鏈結；log 只記 sha256 前 8 碼與 status，唯一出現特徵字串的是我刻意讓 LINE 回傳的 aud 等於 token 的人造情境（aud 由 LINE 回傳、正常為 channel ID）。aud 先檢查型別為非空字串再與呼叫端傳入的 channel_id 嚴格相等；sub 以 fullmatch 比對。下游一致：BACKEND-052 在呼叫前先檢查 channel_id，空字串時自己回 503 line_login_not_configured，之後的 503 line_unavailable / 401 invalid_id_token / 401 id_token_replayed 原樣往上拋；BACKEND-053 的 FakeLineVerifier 401 情境與本 task 的介面相同。fake_line.py 依協調者判定屬 BACKEND 測試替身。殘留：channel_id 為空時，本 verifier 回 503 line_unavailable（訊息「LINE 登入尚未設定」），BACKEND-052 對同一狀況回 503 line_login_not_configured；正常流程由 052 先擋，兩個錯誤碼只在呼叫端漏檢時才會不一致。"
       }
     },
     {
@@ -10084,7 +10084,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/auto_reply.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-106"
@@ -10108,9 +10108,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 11/11 綠，5 條 red_case 皆有同名測試（另加 done 不受自動回覆設定影響、note 為 None / 空字串 / 空白、使用設定文案、剛好 200 字不截斷）；c29bcfc 紅燈時 auto_reply.py 不存在。just lint / just typecheck 對 app、tests/support 與測試檔乾淨。三種情境與設定關閉時的輸出逐欄符合 description；note 空白視同沒有；reply_message 截 200 字（DB-025 CHECK），no_eta_reply_text 也一併截斷。殘留：OverallStatus 型別取自 BACKEND-372 的 app/services/homework_rules.py（已 done），depends_on 未列 BACKEND-372，介面值與 description 的 Literal 相同。"
       }
     },
     {
