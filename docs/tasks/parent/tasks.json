@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 26,
-  "last_updated": "2026-10-03T13:34:04Z",
+  "version": 27,
+  "last_updated": "2026-10-03T13:34:39Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -3119,7 +3119,7 @@
     {
       "id": "PARENT-175",
       "title": "移植 M3Switch 元件",
-      "description": "建立 `apps/web/src/parent/components/m3/M3Switch.vue`（移植 ivy `FE:src/parent/components/m3/M3Switch.vue`）：\n```ts\nprops: { modelValue: boolean; disabled?: boolean; label: string /* 作為 aria-label */ ; busy?: boolean }\nemits: { 'update:modelValue': [boolean] }\n```\n- `<button role=\"switch\" :aria-checked>`；點擊或 Space / Enter 切換並 emit；disabled 或 busy 時不 emit，busy 時 `aria-busy=\"true\"` 並顯示小轉圈。觸控區 ≥ 44px；樣式只用 `--m3-*`。\n- **新增** label（必填）與 busy（ivy 無）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-m3-kit.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：on / off / disabled / busy。可與其他 M3 元件共用 `docs/mockups/parent-component-m3-kit.html`。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/m3/M3Switch.vue`（移植 ivy `FE:src/parent/components/m3/M3Switch.vue`）：\n```ts\nprops: { modelValue: boolean; disabled?: boolean; label: string /* 作為 aria-label */ ; busy?: boolean }\nemits: { 'update:modelValue': [boolean] }\n```\n- `<button type=\"button\" role=\"switch\" :aria-checked>`；點擊或 Space / Enter 切換並 emit（keydown 時 preventDefault、Space 的 keyup 也 preventDefault，避免與原生按鈕啟動重複切換；按住不放的重複 keydown 不切換）；disabled（原生 `disabled` 屬性）或 busy 時不 emit。\n- busy：`aria-busy=\"true\"`、不加原生 disabled（保留焦點、不淡化），thumb 留在目前位置（`is-on` 仍依 modelValue），thumb 內顯示小轉圈（`.m3-switch__spinner`）。開啟且非 busy 時 thumb 內顯示 `check` 圖示（不只靠顏色表達開關）；關閉時沒有圖示。\n- 軌道 52×32、整顆按鈕 52×48 點擊區；樣式只用 `--m3-*`。\n- **新增** label（必填）與 busy（ivy 無）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-m3-kit.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：on / off / disabled / busy。可與其他 M3 元件共用 `docs/mockups/parent-component-m3-kit.html`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3Switch.vue",
       "source_ref": "FE:src/parent/components/m3/M3Switch.vue::emit",
@@ -3139,8 +3139,10 @@
         ],
         "red_cases": [
           "M3Switch toggles and emits：modelValue false、label '作業完成' → role 'switch'、aria-checked 'false'、aria-label '作業完成'；點擊 → emitted('update:modelValue')[0] 深等於 [true]",
-          "M3Switch blocked when disabled or busy：disabled=true 點擊 → 無 emit；busy=true 點擊 → 無 emit 且 aria-busy === 'true'",
-          "M3Switch keyboard toggle：keydown Space → emit [true]（modelValue false 時）"
+          "M3Switch blocked when disabled or busy：disabled=true → 有 disabled 屬性、點擊無 emit；busy=true 點擊、keydown Space / Enter → 無 emit，aria-busy === 'true' 且無 disabled 屬性；非 busy 時無 aria-busy",
+          "M3Switch keyboard toggle：modelValue false，keydown Space → emit [true] 且 defaultPrevented；keyup Space defaultPrevented；keydown Enter → 第二次 emit 且 defaultPrevented；repeat 的 keydown 與其他按鍵不 emit",
+          "M3Switch shows check when on：modelValue true → 含 'is-on' class，thumb 內 M3Icon 文字 'check'；false → 無 'is-on'、thumb 內無圖示",
+          "M3Switch busy keeps thumb position and shows spinner：modelValue true + busy → classes 含 'is-on' 與 'is-busy'，thumb 內有 '.m3-switch__spinner' 且無 check 圖示；modelValue false + busy → 有 spinner、無 'is-on'；非 busy 無 spinner"
         ],
         "run": "just web-test src/parent/components/m3/M3Switch.spec.ts -t \"M3Switch\"",
         "notes": ""
