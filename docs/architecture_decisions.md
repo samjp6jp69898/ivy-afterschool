@@ -22,7 +22,7 @@
 | 後端 | Python 3.13 + FastAPI + SQLAlchemy 2（sync，psycopg 3）+ Pydantic v2 | 與 ivy 一致，方便移植 service 層 |
 | DB | PostgreSQL 17（雲端 Railway Postgres） | 本機用 repo 內 `compose.yaml` 起同主版本的 Postgres（`127.0.0.1:54342`）；不使用任何 DB 廠商的 Auth / Storage / REST 附加服務 |
 | Migration | Alembic（`apps/api/alembic/`） | revision 手寫，`upgrade()` 以 `op.execute` 寫原生 SQL；forward-only。SQLAlchemy model 必須與 migration 一致，由 schema drift 檢查（Alembic autogenerate 比對）把關。見 §5 |
-| 檔案儲存 | Cloudflare R2（S3 相容 API，boto3） | 單一私有 bucket，後端上傳並簽發短效 presigned URL；本機用 `compose.yaml` 的 MinIO 模擬。見 §10 |
+| 檔案儲存 | Cloudflare R2（S3 相容 API，boto3） | 單一私有 bucket，後端上傳並簽發短效 presigned URL；本機用 `compose.yaml` 的 SeaweedFS 模擬（S3 API）。見 §10 |
 | 認證 | 自建 JWT（HS256）放 httpOnly cookie + refresh token family | 移植 ivy `utils/auth.py`、`utils/cookie.py` |
 | 家長登入 | LINE LIFF id_token → 後端驗證 → 綁定碼綁定學生 | 移植 ivy `services/line_login_service.py`、`models/parent_binding.py` |
 | 即時推送 | FastAPI WebSocket + 本機 broadcaster | 接送佇列、作業進度看板。Railway 單一實例；多實例時才加 Redis（見 §7） |
@@ -33,7 +33,7 @@
 | 套件管理 | 後端 uv（`apps/api/pyproject.toml` + `uv.lock`）；前端 pnpm | |
 | 指令入口 | root `justfile` | 所有 lint / test 指令都帶路徑參數 |
 | 部署 | Railway（api service + web service + Postgres）+ Cloudflare R2 | api 不開 public domain，由 web 的 nginx 經 Railway private network 反代 `/api` 與 `/api/ws`，cookie 同源（避免 LINE webview 擋第三方 cookie）；api 固定單一實例、uvicorn 單 worker；migration 由 api 服務的 Railway pre-deploy command 執行（§5） |
-| CI | GitHub Actions | lint / typecheck / 全量測試；integration 與 db-checks job 以 `compose.yaml` 起 Postgres 與 MinIO，在乾淨 DB 上套用全部 revision |
+| CI | GitHub Actions | lint / typecheck / 全量測試；integration 與 db-checks job 以 `compose.yaml` 起 Postgres 與 SeaweedFS，在乾淨 DB 上套用全部 revision |
 
 ## 3. Repo 結構
 
@@ -64,7 +64,7 @@ afterschool/
 │           ├── api/ components/ composables/ layouts/ router/ stores/ views/ utils/ constants/   # 後台
 │           ├── shared/      # 後台與家長端共用（型別、日期工具、http 基底）
 │           └── parent/      # 家長端（api/ components/ views/ stores/ router.ts）
-├── compose.yaml             # 本機 Postgres 17 + MinIO（R2 模擬）
+├── compose.yaml             # 本機 Postgres 17 + SeaweedFS（R2 模擬）
 ├── docs/                    # 規格、tasks、mockups
 ├── scripts/                 # validate_tasks.py、開發腳本
 └── justfile
@@ -139,7 +139,7 @@ NFC 機器尚未到貨，**整段 task 標 `blocked`**：裝置註冊、卡號�
 - 一個私有 bucket（不開 public access、不綁自訂網域），以 key 前綴區分用途：`leave-attachments/`、`student-photos/`、`pickup-person-photos/`。物件 key 為 `<前綴><owner_id>/<uuid4 32 碼 hex>.<ext>`，不使用使用者提供的檔名；DB 欄位只存前綴之後的路徑。
 - 後端以 boto3（S3 API，path-style、region `auto`、SigV4）上傳、刪除，並簽發短效 presigned GET URL（預設 300 秒）給前端；瀏覽器只以 `<img>` / 連結開啟該 URL，不直接上傳，因此 bucket 不需要 CORS。檔案大小與格式由後端上傳驗證把關。
 - 憑證：R2 API token 只授權該 bucket 的 Object Read & Write；放在 env `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`，`R2_ENDPOINT_URL`（`https://<account_id>.r2.cloudflarestorage.com`）與 `R2_BUCKET` 同屬 env。
-- 本機：`compose.yaml` 的 MinIO（S3 API `127.0.0.1:54344`、console `127.0.0.1:54345`），啟動時由一次性 init 容器建立私有 bucket `afterschool-local`。本機帳密是固定的開發用值，寫在 `apps/api/.env.example`。
+- 本機：`compose.yaml` 的 SeaweedFS（`chrislusf/seaweedfs`，版本號 tag 固定；`weed mini` 單容器），只發佈 S3 API `127.0.0.1:54344`；filer / master / admin UI 不對外（filer UI 不經 S3 驗證即可讀寫所有檔案）。啟動時以 `-bucket` 參數建立 bucket `afterschool-local`，S3 設定只定義一組固定帳密（access key `afterschool`、secret `afterschool-local-secret`，寫在 `apps/api/.env.example`），不定義匿名 identity，未簽章的請求一律 403。
 - DB 與 R2 不在同一個交易：先上傳、DB 寫入失敗時刪除剛上傳的物件；刪舊檔一律在 DB commit 之後（`run_after_commit`），刪除失敗只記 log（孤兒檔可接受，不可反過來刪了檔但 DB 回滾）。
 
 ## 11. 部署時實測（已知待驗證）

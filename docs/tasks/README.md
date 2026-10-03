@@ -8,7 +8,7 @@
 
 | 區域 | 前綴 | 最小單位 | 範圍 |
 |---|---|---|---|
-| infra | `INFRA-` | 一個設定檔 / 腳本 / CI job | repo 骨架、justfile、`compose.yaml`（本機 Postgres / MinIO）、Alembic 設定（`alembic.ini`、`env.py`）、Python/前端專案設定、CI、Railway 部署 |
+| infra | `INFRA-` | 一個設定檔 / 腳本 / CI job | repo 骨架、justfile、`compose.yaml`（本機 Postgres / SeaweedFS）、Alembic 設定（`alembic.ini`、`env.py`）、Python/前端專案設定、CI、Railway 部署 |
 | db | `DB-` | 一支 Alembic revision（通常一張表）/ 一支 data migration | `apps/api/alembic/versions/*.py`、表的 grant、`apps/api/tests/integration/db/` |
 | backend | `BACKEND-` | 一個方法（service 方法、endpoint handler、guard、model、schema 群組） | `apps/api/` |
 | frontend | `FRONTEND-` | 一個元件 / view / composable / store / api client 模組 | `apps/web/src/`（後台與共用，不含 `src/parent/`） |

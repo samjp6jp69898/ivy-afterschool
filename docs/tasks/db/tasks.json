@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 21,
-  "last_updated": "2026-10-03T13:01:23Z",
+  "version": 22,
+  "last_updated": "2026-10-03T13:16:54Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -1303,7 +1303,7 @@
     {
       "id": "DB-034",
       "title": "建立 Storage 私有 bucket migration（請假附件、學生照片、接送人照片）",
-      "description": "由 BACKEND-013（R2Storage：單一私有 bucket 與 key 前綴）、INFRA-044（本機 MinIO bucket）與 INFRA-040（R2 bucket 建立步驟）負責。",
+      "description": "由 BACKEND-013（R2Storage：單一私有 bucket 與 key 前綴）、INFRA-044（本機 SeaweedFS bucket）與 INFRA-040（R2 bucket 建立步驟）負責。",
       "granularity_unit": "migration",
       "target_path": "supabase/migrations/20261002003400_create_storage_buckets.sql",
       "source_ref": null,

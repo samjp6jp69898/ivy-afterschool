@@ -24,7 +24,7 @@
 | 層級 | marker | 可碰 DB | 預設執行 | 位置 |
 |---|---|---|---|---|
 | 後端單元 | `unit`（未標視同 unit） | 否（repository 以 fake 取代；不用 SQLite 冒充 Postgres） | 是 | `apps/api/tests/unit/` |
-| 後端整合 | `integration` | 只能碰**本機** Postgres（`127.0.0.1:54342`）與本機 MinIO（`127.0.0.1:54344`） | 否，需 `-m integration` | `apps/api/tests/integration/` |
+| 後端整合 | `integration` | 只能碰**本機** Postgres（`127.0.0.1:54342`）與本機 SeaweedFS S3（`127.0.0.1:54344`） | 否，需 `-m integration` | `apps/api/tests/integration/` |
 | 前端元件/邏輯 | `vitest` | — | 是 | 與被測檔同目錄 `*.spec.ts` |
 | 端對端 | `playwright` | 本地全套 | 否 | `apps/web/e2e/` |
 
@@ -32,7 +32,7 @@
 - 單元測試由 `pytest-socket` 擋外部網路（只放行 loopback 給 integration）。
 - 整合測試每個測試在 transaction 內執行並 rollback；需要 commit 語意的（outbox、after-commit 通知）用獨立 fixture 清表。
 - migration（含 grant）/ schema drift 的測試屬 integration。migration 測試以 owner 連線只限 DDL 探針、清表、查其他角色權限等明確場合，測資一律經 `app_backend` 寫入。
-- R2 storage：單元測試以 botocore Stubber 或 FakeStorage 取代；與本機 MinIO 的往返只在 storage 本身的整合測試驗證，其他 service / endpoint 測試一律用 FakeStorage。
+- R2 storage：單元測試以 botocore Stubber 或 FakeStorage 取代；與本機 SeaweedFS 的往返只在 storage 本身的整合測試驗證，其他 service / endpoint 測試一律用 FakeStorage。
 - 前端 API 呼叫用 axios-mock-adapter，元件測試用真實 DOM 互動（`setValue`、`trigger('click')`）斷言 emit payload 與畫面文字。
 
 ## 4. 禁止全量執行
@@ -51,6 +51,6 @@ just web-lint src/components/pickup/QueueCard.vue
 
 ## 5. 本機環境
 
-- 本機服務由 repo root 的 `compose.yaml` 提供：Postgres 17（`127.0.0.1:54342`，owner `postgres` / `postgres`）、MinIO（S3 API `127.0.0.1:54344`、console `127.0.0.1:54345`，bucket `afterschool-local`）。全部只綁 loopback，port 避開 5432x / 5433x。
+- 本機服務由 repo root 的 `compose.yaml` 提供：Postgres 17（`127.0.0.1:54342`，owner `postgres` / `postgres`）、SeaweedFS（S3 API `127.0.0.1:54344`，bucket `afterschool-local`，帳密 `afterschool` / `afterschool-local-secret`；只發佈 S3 port）。全部只綁 loopback，port 避開 5432x / 5433x。
 - `just db-start` / `just db-stop` 啟停上述服務（停止保留 volume）；`just db-reset --yes` 重建本機 DB（drop / create `postgres` database → `alembic upgrade head` → 設定 `app_backend` 本機密碼 `app_backend_local`）；`just db-migrate` 只套用尚未套用的 revision。
 - 測試用員工 / 家長帳號由 integration fixture 建立，不寫在任何 migration。
