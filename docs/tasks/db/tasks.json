@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 27,
-  "last_updated": "2026-10-03T14:53:03Z",
+  "version": 28,
+  "last_updated": "2026-10-03T14:56:40Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -1629,7 +1629,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/db/conftest.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-041",
@@ -1657,9 +1657,9 @@
         "notes": "本 task 只改 conftest.py 與 test_fixtures.py；各表測試中的 assert_table_secured 由各表 task（DB-003、DB-008~012 等）改寫。另跑：grep -nE 'anon|authenticated|service_role|secure_table|assert_table_secured|Supabase' apps/api/tests/integration/db/conftest.py 應無輸出；grep -nE 'secure_table|assert_table_secured|Supabase' apps/api/tests/integration/db/test_fixtures.py 應無輸出（test_fixtures.py 的 as_role 拒絕清單刻意含 anon / authenticated / service_role）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-infra",
+        "notes": "通過。紅燈 2b5f2b7 先於 conftest 改寫 f9a92b6；`just test-int apps/api/tests/integration/db/test_fixtures.py -k fixture`（flock db lock）28 passed，--collect-only 對照 8 條 red_case 與 DB-002 原有案例全選到；test_base.py 13 passed 不受影響；lint / typecheck 乾淨；tdd.notes 的兩條 grep 皆無輸出。as_role：anon / postgres / '' 皆 ValueError，攔截 conn.execute 實測送出 SQL 0 次。assert_backend_grants 以拋棄式交易（rollback、無殘留角色與表）探針驗證：多一個具名角色（含交易內建立的角色）、PUBLIC 授權、app_backend 多 TRUNCATE、少 DELETE、開啟 RLS、owner 改成 app_backend 皆 AssertionError，訊息列出實際 ACL；正常授權通過。owner_conn 縮成三種場合（測試內 DDL 與 as_role 驗證、真 commit 後清表、查 app_backend 讀不到的 pg_catalog 資訊）合理：原本的「角色被拒驗證」與「Supabase 管理的 schema」在無 anon 等角色、無 Supabase 的模型下已不存在。tdd.notes 的 grep 範圍調整合理：red_case 要求 as_role 拒絕清單含 anon / authenticated / service_role，這些字只能出現在 test_fixtures.py；conftest.py 仍以完整清單檢查。預期中斷：DB-003、DB-008~012 的測試檔仍 import assert_table_secured，collect 會失敗，由各表 task 重做時處理。殘留（不擋）：(a) 「多一個具名角色」只有 PUBLIC 的測試案例，具名角色由探針人工確認；(b) 不檢查 is_grantable，app_backend 帶 with grant option 時仍通過。"
       }
     }
   ]
