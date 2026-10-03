@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 30,
-  "last_updated": "2026-10-03T12:47:16Z",
+  "version": 31,
+  "last_updated": "2026-10-03T12:48:25Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1253,7 +1253,7 @@
     {
       "id": "FRONTEND-045",
       "title": "實作 composables/usePagedList.ts：分頁列表狀態、篩選、過期回應防護、URL query 同步",
-      "description": "建立 `apps/web/src/composables/usePagedList.ts`，學生、請假、考試、員工、稽核等分頁列表共用。移植 ivy `FE:src/composables/useTableFilters.ts::useTableFilters` 的 page / filters / debounce；改用 `Page<T>`（FRONTEND-002）並加入序號防護。\n\n**介面**\n```ts\nexport function usePagedList<T, F extends Record<string, unknown>>(opts: {\n  fetch: (params: F & { page: number; page_size: number }) => Promise<Page<T>>\n  initialFilters: F\n  pageSize?: number            // 預設 20\n  syncQuery?: boolean          // true：page 與 filters 雙向同步到 route.query（預設 false）\n  immediate?: boolean          // 預設 true\n}): { items: Ref<T[]>; total: Ref<number>; page: Ref<number>; pageSize: Ref<number>; filters: F (reactive); loading: Ref<boolean>; error: Ref<string | null>; reload(): Promise<void>; setPage(n: number): void; setFilters(patch: Partial<F>): void }\n```\n- `setFilters` 合併後 page 回 1 並重抓；`setPage` 重抓。\n- 送出參數時移除 `undefined` / `''` / `null` 的篩選值。\n- 每次 fetch 帶遞增序號，只採用最後一次請求的結果（舊回應丟棄）。\n- 失敗：`error = errorMessage(err, '載入失敗')`、items 保留上一次結果。\n- `syncQuery`：初始化時從 `route.query` 讀回 page 與 filters（數字欄位依 initialFilters 型別轉換）；變更時 `router.replace({ query })`。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/composables/usePagedList.ts`，學生、請假、考試、員工、稽核等分頁列表共用。移植 ivy `FE:src/composables/useTableFilters.ts::useTableFilters` 的 page / filters 與序號防護；改用 `Page<T>`（FRONTEND-002）。搜尋框輸入的 debounce 不在本 composable（介面沒有對應參數），由使用端 debounce 後呼叫 `setFilters`。\n\n**介面**\n```ts\nexport function usePagedList<T, F extends Record<string, unknown>>(opts: {\n  fetch: (params: F & { page: number; page_size: number }) => Promise<Page<T>>\n  initialFilters: F\n  pageSize?: number            // 預設 20\n  syncQuery?: boolean          // true：page 與 filters 雙向同步到 route.query（預設 false）\n  immediate?: boolean          // 預設 true\n}): { items: Ref<T[]>; total: Ref<number>; page: Ref<number>; pageSize: Ref<number>; filters: F (reactive); loading: Ref<boolean>; error: Ref<string | null>; reload(): Promise<void>; setPage(n: number): void; setFilters(patch: Partial<F>): void }\n```\n- `setFilters` 合併後 page 回 1 並重抓；`setPage` 重抓。\n- 送出參數時移除 `undefined` / `''` / `null` 的篩選值。\n- 每次 fetch 帶遞增序號，只採用最後一次請求的結果（舊回應丟棄）。\n- 失敗：`error = errorMessage(err, '載入失敗')`、items 保留上一次結果。\n- `loading` 與 `error` 只反映最新一次請求：過期請求的成功或失敗都不改 items / total / error / loading；最新請求成功時 `error` 清為 null。\n- `reload()` 回傳的 promise 在該次請求結束（含被丟棄的過期請求）時 resolve，不 reject。`immediate: false` 時建立後不抓資料，直到 `reload` / `setPage` / `setFilters`。\n- `syncQuery`：初始化時從 `route.query` 讀回 page 與 filters（只讀 initialFilters 有的 key；initialFilters 值為 number 的欄位以 `Number()` 轉換，非有限數字則保留初始值；boolean 欄位接受 `'true'` / `'false'`；其他視為字串；重複 key 取第一個；page 非正整數視為 1）；`setPage` / `setFilters` 時 `router.replace({ query })`，query 為清理後的 filters（值轉字串）加上 `page`（字串，含 1），不含 `page_size`。只在初始化讀回，之後不監聽外部 query 變化。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/usePagedList.ts",
       "source_ref": "FE:src/composables/useTableFilters.ts::useTableFilters",
@@ -1276,7 +1276,12 @@
           "usePagedList setFilters resets page：setPage(3) 後 setFilters({q:'王'}) → 最後一次 fetch 參數 page === 1 且 q === '王'",
           "usePagedList ignores stale responses：第一次 fetch 200ms 後回 [{id:'old'}]、第二次 10ms 後回 [{id:'new'}]，先 setFilters({q:'a'}) 再 setFilters({q:'b'}) → 全部 resolve 後 items[0].id === 'new'",
           "usePagedList keeps items and sets error on failure：第二次 fetch reject ApiError(500,'x','伺服器錯誤') → error.value === '伺服器錯誤'、items 仍為第一次結果、loading false",
-          "usePagedList syncs with route query：syncQuery true、initialRoute '/students?page=2&status=suspended' → 第一次參數 page 2、status 'suspended'；setFilters({status:'active'}) 後 router.currentRoute.value.query 深等於 {status:'active',page:'1'}"
+          "usePagedList syncs with route query：syncQuery true、initialRoute '/students?page=2&status=suspended' → 第一次參數 page 2、status 'suspended'；setFilters({status:'active'}) 後 router.currentRoute.value.query 深等於 {status:'active',page:'1'}",
+          "usePagedList setPage refetches the requested page：setPage(3) → 最後一次 fetch 參數 page === 3，page.value === 3",
+          "usePagedList stale results never touch loading or error：第一次（慢）reject、第二次（快）resolve [{id:'new'}] → items[0].id === 'new'、error null；第二次未回前 loading 為 true，回來後 false",
+          "usePagedList clears error after a later success：先失敗 error '伺服器錯誤'，reload 成功後 error === null",
+          "usePagedList waits for reload when immediate is false：immediate false → 建立後 fetch 0 次；await reload() → 1 次且 items 已更新",
+          "usePagedList converts query values by initialFilters type：initialFilters {status:'active',academic_year:115,archived:false}、initialRoute '/s?academic_year=114&archived=true&page=x&unknown=1' → 第一次參數 academic_year 114（number）、archived true、page 1、不含 unknown；academic_year=abc → 115；setPage(2) 後 query 深等於 {status:'active',academic_year:'114',archived:'true',page:'2'}"
         ],
         "run": "just web-test src/composables/usePagedList.spec.ts -t \"usePagedList\"",
         "notes": ""
