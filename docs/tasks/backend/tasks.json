@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 31,
-  "last_updated": "2026-10-03T12:12:52Z",
+  "version": 32,
+  "last_updated": "2026-10-03T12:13:21Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -49,7 +49,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/clock.py",
       "source_ref": "BE:utils/taipei_time.py::today_taipei",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "INFRA-004",
