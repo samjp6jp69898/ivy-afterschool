@@ -1,4 +1,5 @@
 """BACKEND-031：argon2id 密碼雜湊、恆定時間驗證、needs_rehash。
+BACKEND-032：密碼強度規則（domain_spec M2 固定業務規則）與臨時密碼產生。
 
 - hash 一律 ``$argon2id$`` 開頭（DB-004 的 CHECK ``password_hash like '$argon2id$%'``）。
 - hashed 格式非法時先對預先算好的假 hash 做一次 verify，再回 False，
@@ -9,10 +10,14 @@
 from __future__ import annotations
 
 import contextlib
+import re
 import secrets
+from typing import Final
 
 from argon2 import PasswordHasher, Type
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
+
+from app.core.errors import AppError
 
 _HASH_PREFIX = "$argon2id$"
 
@@ -59,3 +64,87 @@ def needs_rehash(hashed: str) -> bool:
         return _hasher.check_needs_rehash(hashed)
     except InvalidHashError:
         return True
+
+
+PASSWORD_MIN_LENGTH: Final = 10
+PASSWORD_MAX_LENGTH: Final = 128
+
+# 比對時不分大小寫；長度不足的項目仍列入，讓原因清單同時指出「過於常見」
+COMMON_PASSWORDS: Final = frozenset(
+    {
+        "password1",
+        "password123",
+        "passw0rd123",
+        "12345678ab",
+        "abcd123456",
+        "abc1234567",
+        "aa12345678",
+        "a1234567890",
+        "1234567890a",
+        "qwerty123",
+        "qwerty12345",
+        "qwertyuiop1",
+        "1qaz2wsx3edc",
+        "1q2w3e4r5t",
+        "zxcvbnm123",
+        "iloveyou123",
+        "welcome123",
+        "letmein123",
+        "admin12345",
+        "administrator1",
+    }
+)
+
+_ASCII_LETTER = re.compile(r"[A-Za-z]")
+_ASCII_DIGIT = re.compile(r"[0-9]")
+
+# 臨時密碼排除易混淆字元 0 O 1 l I
+_TEMP_UPPER: Final = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+_TEMP_LOWER: Final = "abcdefghijkmnopqrstuvwxyz"
+_TEMP_DIGITS: Final = "23456789"
+_TEMP_LENGTH: Final = 12
+
+
+def validate_password_strength(password: str, *, username: str | None = None) -> None:
+    """不符 → AppError('weak_password', 422)，details['reasons'] 列出全部違反的規則。
+
+    移植 ivy ``utils/auth.py::validate_password_strength`` 的條列式訊息；不做 HIBP 外部查詢。
+    """
+    reasons: list[str] = []
+    if len(password) < PASSWORD_MIN_LENGTH:
+        reasons.append(f"至少 {PASSWORD_MIN_LENGTH} 個字元")
+    if len(password) > PASSWORD_MAX_LENGTH:
+        reasons.append(f"最多 {PASSWORD_MAX_LENGTH} 個字元")
+    if not _ASCII_LETTER.search(password):
+        reasons.append("至少一個英文字母")
+    if not _ASCII_DIGIT.search(password):
+        reasons.append("至少一個數字")
+    if username and password.casefold() == username.casefold():
+        reasons.append("不可與帳號相同")
+    if password.casefold() in COMMON_PASSWORDS:
+        reasons.append("過於常見")
+    if reasons:
+        raise AppError(
+            "weak_password",
+            "密碼強度不足：" + "、".join(reasons),
+            status=422,
+            details={"reasons": reasons},
+        )
+
+
+def generate_temp_password() -> str:
+    """12 碼臨時密碼：至少各一個大寫、小寫、數字，不含易混淆字元，以 secrets 產生。"""
+    pool = _TEMP_UPPER + _TEMP_LOWER + _TEMP_DIGITS
+    rng = secrets.SystemRandom()
+    while True:
+        chars = [
+            secrets.choice(_TEMP_UPPER),
+            secrets.choice(_TEMP_LOWER),
+            secrets.choice(_TEMP_DIGITS),
+        ]
+        chars += [secrets.choice(pool) for _ in range(_TEMP_LENGTH - len(chars))]
+        rng.shuffle(chars)
+        candidate = "".join(chars)
+        # 目前清單沒有 12 碼且不含易混淆字元的項目；保留重抽防日後清單擴充
+        if candidate.casefold() not in COMMON_PASSWORDS:
+            return candidate

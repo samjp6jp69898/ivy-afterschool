@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 35,
-  "last_updated": "2026-10-03T12:16:55Z",
+  "version": 36,
+  "last_updated": "2026-10-03T12:17:49Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -997,7 +997,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security/passwords.py",
       "source_ref": "BE:utils/auth.py::validate_password_strength",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-031",
