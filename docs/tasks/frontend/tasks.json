@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 31,
-  "last_updated": "2026-10-03T12:48:25Z",
+  "version": 32,
+  "last_updated": "2026-10-03T12:49:13Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1257,7 +1257,7 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/usePagedList.ts",
       "source_ref": "FE:src/composables/useTableFilters.ts::useTableFilters",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-009",

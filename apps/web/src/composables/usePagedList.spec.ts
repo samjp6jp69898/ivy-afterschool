@@ -10,6 +10,7 @@ interface Row {
 }
 
 type Params = Record<string, unknown> & { page: number; page_size: number }
+type Fetch = (params: Params) => Promise<Page<Row>>
 
 function pageOf(...ids: string[]): Page<Row> {
   return { items: ids.map((id) => ({ id })), total: ids.length }
@@ -47,7 +48,7 @@ describe('usePagedList', () => {
   })
 
   it('usePagedList loads first page with cleaned params', async () => {
-    const fetch = vi.fn((_: Params) => Promise.resolve<Page<Row>>({ items: [{ id: 's1' }], total: 41 }))
+    const fetch = vi.fn<Fetch>(() => Promise.resolve<Page<Row>>({ items: [{ id: 's1' }], total: 41 }))
 
     const list = usePagedList<Row, { q: string; status: string; class_id: string | undefined }>({
       fetch,
@@ -64,7 +65,7 @@ describe('usePagedList', () => {
   })
 
   it('usePagedList setFilters resets page', async () => {
-    const fetch = vi.fn((_: Params) => Promise.resolve(pageOf('s1')))
+    const fetch = vi.fn<Fetch>(() => Promise.resolve(pageOf('s1')))
     const list = usePagedList<Row, { q: string }>({ fetch, initialFilters: { q: '' }, pageSize: 50 })
     await flushPromises()
 
@@ -80,7 +81,7 @@ describe('usePagedList', () => {
   })
 
   it('usePagedList setPage refetches the requested page', async () => {
-    const fetch = vi.fn((_: Params) => Promise.resolve(pageOf('s1')))
+    const fetch = vi.fn<Fetch>(() => Promise.resolve(pageOf('s1')))
     const list = usePagedList<Row, { q: string }>({ fetch, initialFilters: { q: '' } })
     await flushPromises()
 
@@ -95,7 +96,7 @@ describe('usePagedList', () => {
   it('usePagedList ignores stale responses', async () => {
     vi.useFakeTimers()
     const fetch = vi
-      .fn((_: Params) => Promise.resolve(pageOf()))
+      .fn<Fetch>(() => Promise.resolve(pageOf()))
       .mockImplementationOnce(() => delayed(200, pageOf('old')))
       .mockImplementationOnce(() => delayed(10, pageOf('new')))
     const list = usePagedList<Row, { q: string }>({ fetch, initialFilters: { q: '' }, immediate: false })
@@ -113,7 +114,7 @@ describe('usePagedList', () => {
   it('usePagedList stale results never touch loading or error', async () => {
     vi.useFakeTimers()
     const fetch = vi
-      .fn((_: Params) => Promise.resolve(pageOf()))
+      .fn<Fetch>(() => Promise.resolve(pageOf()))
       .mockImplementationOnce(() => delayed(50, new ApiError(500, 'x', '伺服器錯誤'), true) as Promise<never>)
       .mockImplementationOnce(() => delayed(100, pageOf('new')))
     const list = usePagedList<Row, { q: string }>({ fetch, initialFilters: { q: '' }, immediate: false })
@@ -132,7 +133,7 @@ describe('usePagedList', () => {
 
   it('usePagedList keeps items and sets error on failure', async () => {
     const fetch = vi
-      .fn((_: Params) => Promise.resolve(pageOf('s1')))
+      .fn<Fetch>(() => Promise.resolve(pageOf('s1')))
       .mockImplementationOnce(() => Promise.resolve(pageOf('s1')))
       .mockImplementationOnce(() => Promise.reject(new ApiError(500, 'x', '伺服器錯誤')))
     const list = usePagedList<Row, { q: string }>({ fetch, initialFilters: { q: '' } })
@@ -148,7 +149,7 @@ describe('usePagedList', () => {
 
   it('usePagedList clears error after a later success', async () => {
     const fetch = vi
-      .fn((_: Params) => Promise.resolve(pageOf('s2')))
+      .fn<Fetch>(() => Promise.resolve(pageOf('s2')))
       .mockImplementationOnce(() => Promise.reject(new ApiError(500, 'x', '伺服器錯誤')))
     const list = usePagedList<Row, { q: string }>({ fetch, initialFilters: { q: '' } })
     await flushPromises()
@@ -161,7 +162,7 @@ describe('usePagedList', () => {
   })
 
   it('usePagedList uses fallback message for unknown errors', async () => {
-    const fetch = vi.fn((_: Params) => Promise.reject(new Error('boom')))
+    const fetch = vi.fn<Fetch>(() => Promise.reject(new Error('boom')))
     const list = usePagedList<Row, { q: string }>({ fetch, initialFilters: { q: '' } })
     await flushPromises()
 
@@ -169,7 +170,7 @@ describe('usePagedList', () => {
   })
 
   it('usePagedList waits for reload when immediate is false', async () => {
-    const fetch = vi.fn((_: Params) => Promise.resolve(pageOf('s1')))
+    const fetch = vi.fn<Fetch>(() => Promise.resolve(pageOf('s1')))
     const list = usePagedList<Row, { q: string }>({ fetch, initialFilters: { q: '' }, immediate: false })
     await flushPromises()
     expect(fetch).toHaveBeenCalledTimes(0)
@@ -181,7 +182,7 @@ describe('usePagedList', () => {
   })
 
   it('usePagedList syncs with route query', async () => {
-    const fetch = vi.fn((_: Params) => Promise.resolve(pageOf('s1')))
+    const fetch = vi.fn<Fetch>(() => Promise.resolve(pageOf('s1')))
     const { list, router } = await mountList<{ status: string; q: string }>(
       { fetch, initialFilters: { status: 'active', q: '' }, syncQuery: true },
       '/students?page=2&status=suspended',
@@ -201,7 +202,7 @@ describe('usePagedList', () => {
     type F = { status: string; academic_year: number; archived: boolean }
     const initialFilters: F = { status: 'active', academic_year: 115, archived: false }
 
-    const fetch = vi.fn((_: Params) => Promise.resolve(pageOf('s1')))
+    const fetch = vi.fn<Fetch>(() => Promise.resolve(pageOf('s1')))
     const { list, router } = await mountList<F>(
       { fetch, initialFilters, syncQuery: true },
       '/s?academic_year=114&archived=true&page=x&unknown=1',
@@ -223,7 +224,7 @@ describe('usePagedList', () => {
       page: '2',
     })
 
-    const fetch2 = vi.fn((_: Params) => Promise.resolve(pageOf('s1')))
+    const fetch2 = vi.fn<Fetch>(() => Promise.resolve(pageOf('s1')))
     await mountList<F>({ fetch: fetch2, initialFilters, syncQuery: true }, '/s?academic_year=abc')
     expect(fetch2.mock.calls[0]?.[0]).toMatchObject({ academic_year: 115, page: 1 })
   })
