@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import socket
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
@@ -24,9 +25,40 @@ _TOOL_VERSIONS = {
     "uv": "uv 0.9.0",
     "node": "v24.21.0",
     "pnpm": "11.25.0",
-    "supabase": "2.98.2",
-    "docker": "",
 }
+_COMPOSE_VERSION = "Docker Compose version v2.39.2"
+
+# 假 docker：`info` 與 `compose version` 各自回指定的 exit code 與輸出
+_FAKE_DOCKER = """#!{python}
+import sys
+args = sys.argv[1:]
+if args[:1] == ["info"]:
+    sys.exit({info_exit})
+if args[:2] == ["compose", "version"]:
+    print({compose_stdout!r})
+    sys.exit({compose_exit})
+sys.exit(0)
+"""
+
+
+def add_fake_docker(
+    fake_bin: FakeBin,
+    *,
+    info_exit: int = 0,
+    compose_exit: int = 0,
+    compose_stdout: str = _COMPOSE_VERSION,
+) -> None:
+    path = fake_bin.bin_dir / "docker"
+    path.write_text(
+        _FAKE_DOCKER.format(
+            python=sys.executable,
+            info_exit=info_exit,
+            compose_exit=compose_exit,
+            compose_stdout=compose_stdout,
+        ),
+        encoding="utf-8",
+    )
+    path.chmod(0o755)
 
 
 class Doctor(Protocol):
@@ -46,7 +78,7 @@ def doctor_root(tmp_path: Path) -> Path:
     (root / "apps" / "api" / ".venv").mkdir(parents=True)
     (root / "apps" / "web" / "node_modules").mkdir(parents=True)
     (root / "apps" / "api" / ".env").write_text(
-        f"APP_SECRET_KEY={GOOD_SECRET}\nSUPABASE_SERVICE_ROLE_KEY=local-service-role-key\n",
+        f"APP_ENV=development\nAPP_SECRET_KEY={GOOD_SECRET}\nR2_BUCKET=afterschool-local\n",
         encoding="utf-8",
     )
     return root
@@ -55,7 +87,8 @@ def doctor_root(tmp_path: Path) -> Path:
 @pytest.fixture
 def tools(fake_bin: FakeBin) -> FakeBin:
     for name, version in _TOOL_VERSIONS.items():
-        fake_bin.add(name, stdout=version + "\n" if version else "")
+        fake_bin.add(name, stdout=version + "\n")
+    add_fake_docker(fake_bin)
     return fake_bin
 
 
@@ -100,7 +133,7 @@ def test_doctor_wrong_node_major(doctor: Doctor, tools: FakeBin) -> None:
 
 
 def test_doctor_docker_not_running(doctor: Doctor, tools: FakeBin) -> None:
-    tools.add("docker", exit_code=1)
+    add_fake_docker(tools, info_exit=1)
 
     result = doctor()
 
@@ -110,7 +143,7 @@ def test_doctor_docker_not_running(doctor: Doctor, tools: FakeBin) -> None:
 
 def test_doctor_placeholder_secret(doctor: Doctor, doctor_root: Path) -> None:
     (doctor_root / "apps" / "api" / ".env").write_text(
-        "APP_SECRET_KEY=change-me\nSUPABASE_SERVICE_ROLE_KEY=local-service-role-key\n",
+        "APP_ENV=development\nAPP_SECRET_KEY=change-me\n",
         encoding="utf-8",
     )
 
@@ -122,13 +155,40 @@ def test_doctor_placeholder_secret(doctor: Doctor, doctor_root: Path) -> None:
 
 def test_doctor_counts_multiple_failures(doctor: Doctor, tools: FakeBin) -> None:
     (tools.bin_dir / "pnpm").unlink()
-    (tools.bin_dir / "supabase").unlink()
+    add_fake_docker(tools, compose_exit=1)
 
     result = doctor()
 
     assert result.returncode == 2, result.stdout
     assert len(_lines_with(result.stdout, "FAIL", "pnpm")) == 1
-    assert len(_lines_with(result.stdout, "FAIL", "supabase")) == 1
+    assert len(_lines_with(result.stdout, "FAIL", "docker compose")) == 1
+    assert _lines_with(result.stdout, "FAIL", "docker daemon") == []
+
+
+def test_doctor_old_compose_major_fails(doctor: Doctor, tools: FakeBin) -> None:
+    add_fake_docker(tools, compose_stdout="docker-compose version 1.29.2")
+
+    result = doctor()
+
+    assert result.returncode == 1, result.stdout
+    assert len(_lines_with(result.stdout, "FAIL", "docker compose")) == 1
+
+
+def test_doctor_no_supabase_check(doctor: Doctor) -> None:
+    result = doctor()
+
+    assert result.returncode == 0, result.stdout
+    assert "supabase" not in result.stdout.lower()
+    problems = [line for line in result.stdout.splitlines() if line.startswith(("WARN", "FAIL"))]
+    # .env 沒有 SUPABASE_ key：唯一可能的 WARN 只剩本機服務未啟動的 port 探測
+    assert all("port" in line for line in problems), problems
+
+
+def test_doctor_probes_local_db_and_s3_ports(doctor: Doctor) -> None:
+    result = doctor()
+
+    assert len(_lines_with(result.stdout, "54342")) == 1
+    assert len(_lines_with(result.stdout, "54344")) == 1
 
 
 @pytest.fixture

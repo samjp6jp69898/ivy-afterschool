@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 85,
-  "last_updated": "2026-10-03T15:07:58Z",
+  "version": 86,
+  "last_updated": "2026-10-03T15:08:56Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -640,7 +640,9 @@
           "test_doctor_placeholder_secret：.env 的 APP_SECRET_KEY=change-me → exit 1，stdout 含 'APP_SECRET_KEY'",
           "test_doctor_counts_multiple_failures：同時缺 pnpm、且假 docker 對 `compose version` exit 1（`info` 仍 exit 0）→ exit 2",
           "test_doctor_port_busy_is_warning：測試先以 socket 監聽 127.0.0.1 某臨時 port 並以 DOCTOR_API_PORT 指向它 → stdout 該 port 行為 'WARN'，exit code 不因此增加",
-          "test_doctor_no_supabase_check：stdout 不含 'supabase'（不分大小寫）；DOCTOR_ROOT 的 .env 不含 SUPABASE_ 開頭的 key 時不產生任何 WARN / FAIL"
+          "test_doctor_no_supabase_check：所有工具合格、DOCTOR_ROOT 的 .env 不含 SUPABASE_ 開頭的 key → exit 0，stdout 不含 'supabase'（不分大小寫），所有 WARN / FAIL 行都只是 port 探測（本機服務未啟動），沒有任何與 SUPABASE_ key 相關的 WARN / FAIL",
+          "test_doctor_old_compose_major_fails：假 docker 對 `compose version` 印 'docker-compose version 1.29.2'（exit 0）→ exit 1，含 'FAIL' 與 'docker compose' 的行恰好一行",
+          "test_doctor_probes_local_db_and_s3_ports：stdout 中含 '54342' 的行恰好一行、含 '54344' 的行恰好一行"
         ],
         "run": "just test scripts/tests/test_doctor.py -k doctor",
         "notes": "port 測試需要 DOCTOR_API_PORT / DOCTOR_WEB_PORT 覆寫變數（預設 8341 / 5341）。"
