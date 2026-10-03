@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 64,
-  "last_updated": "2026-10-03T14:35:15Z",
+  "version": 65,
+  "last_updated": "2026-10-03T14:35:37Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1231,8 +1231,8 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/useConfirmDelete.ts",
       "source_ref": "FE:src/composables/useConfirmDelete.ts::useConfirmDelete",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-009",
         "FRONTEND-020"
