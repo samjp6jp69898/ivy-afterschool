@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 42,
-  "last_updated": "2026-10-03T13:00:27Z",
+  "version": 43,
+  "last_updated": "2026-10-03T13:01:28Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -5706,7 +5706,7 @@
           "e2e support fails fast without credentials：刪除 E2E_ADMIN_USERNAME 後呼叫 loginAsAdmin → throw message 含 '缺少 E2E_ADMIN_USERNAME'"
         ],
         "run": "just e2e e2e/admin/support.spec.ts -g \"e2e support\"",
-        "notes": "執行前：`just up` 啟動 Supabase + API + Web（INFRA-016），並以 `uv run python -m app.cli create-admin`（BACKEND-065）建立 e2e 專用 admin，帳密放在 `E2E_ADMIN_USERNAME` / `E2E_ADMIN_PASSWORD` 環境變數。"
+        "notes": "執行前：`just up` 啟動本機 DB / MinIO + API + Web（INFRA-016），並以 `uv run python -m app.cli create-admin`（BACKEND-065）建立 e2e 專用 admin，帳密放在 `E2E_ADMIN_USERNAME` / `E2E_ADMIN_PASSWORD` 環境變數。"
       },
       "review": {
         "status": "pending",
@@ -5741,7 +5741,7 @@
           "attendance flow batch check-in：選取第二位學生並確認 → 頁面出現 '已到班 1 位'，該卡片含 '已到班'"
         ],
         "run": "just e2e e2e/admin/attendance.spec.ts -g \"attendance flow\"",
-        "notes": "執行前：`just up` 啟動 Supabase + API + Web（INFRA-016），並以 `uv run python -m app.cli create-admin`（BACKEND-065）建立 e2e 專用 admin，帳密放在 `E2E_ADMIN_USERNAME` / `E2E_ADMIN_PASSWORD` 環境變數。"
+        "notes": "執行前：`just up` 啟動本機 DB / MinIO + API + Web（INFRA-016），並以 `uv run python -m app.cli create-admin`（BACKEND-065）建立 e2e 專用 admin，帳密放在 `E2E_ADMIN_USERNAME` / `E2E_ADMIN_PASSWORD` 環境變數。"
       },
       "review": {
         "status": "pending",
@@ -5779,7 +5779,7 @@
           "pickup flow realtime update in second context：第二個 context 在步驟 3 前已開啟 /#/pickup，不重新整理 → 10 秒內該卡片含 '已確認'"
         ],
         "run": "just e2e e2e/admin/pickup.spec.ts -g \"pickup flow\"",
-        "notes": "執行前：`just up` 啟動 Supabase + API + Web（INFRA-016），並以 `uv run python -m app.cli create-admin`（BACKEND-065）建立 e2e 專用 admin，帳密放在 `E2E_ADMIN_USERNAME` / `E2E_ADMIN_PASSWORD` 環境變數。"
+        "notes": "執行前：`just up` 啟動本機 DB / MinIO + API + Web（INFRA-016），並以 `uv run python -m app.cli create-admin`（BACKEND-065）建立 e2e 專用 admin，帳密放在 `E2E_ADMIN_USERNAME` / `E2E_ADMIN_PASSWORD` 環境變數。"
       },
       "review": {
         "status": "pending",
@@ -5816,7 +5816,7 @@
           "exams flow publish then edit asks renotify：發布後 header 含 '已發布'；修改分數後出現 '是否在修改後通知家長分數已更新？'，選 '不通知' 後工具列含 '所有變更已儲存'"
         ],
         "run": "just e2e e2e/admin/exams.spec.ts -g \"exams flow\"",
-        "notes": "執行前：`just up` 啟動 Supabase + API + Web（INFRA-016），並以 `uv run python -m app.cli create-admin`（BACKEND-065）建立 e2e 專用 admin，帳密放在 `E2E_ADMIN_USERNAME` / `E2E_ADMIN_PASSWORD` 環境變數。"
+        "notes": "執行前：`just up` 啟動本機 DB / MinIO + API + Web（INFRA-016），並以 `uv run python -m app.cli create-admin`（BACKEND-065）建立 e2e 專用 admin，帳密放在 `E2E_ADMIN_USERNAME` / `E2E_ADMIN_PASSWORD` 環境變數。"
       },
       "review": {
         "status": "pending",
