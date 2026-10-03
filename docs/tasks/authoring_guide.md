@@ -15,7 +15,7 @@
 
 - **backend：一個方法一個 task**。service 的每個公開方法、每個 endpoint handler、每個 guard / dependency 各自是一個 task。一個模組的 SQLAlchemy models 合成一個 task，一個模組的 Pydantic schemas 也合成一個 task。純 repository 查詢併入使用它的 service 方法 task；被多個 service 共用的 repository 方法才獨立成 task。
 - **frontend / parent：一個元件一個 task**。每個 `.vue` 元件、view、composable、store 各自是一個 task；api client 模組以一個資源一個檔案為一個 task。
-- **db：一支 migration 一個 task**（通常是一張表加上它的索引、constraint、trigger、RLS）。一份 seed 一個 task。
+- **db：一支 Alembic revision 一個 task**（通常是一張表加上它的索引、constraint、trigger、grant）。一支 data migration 一個 task。revision 檔為 `apps/api/alembic/versions/<rev>_<slug>.py`，revision id 用 task id（`DB-004` → `db004`），`down_revision` 不在規劃時寫死，由實作者指向當下的 head。
 - **infra：一個設定檔、腳本或 CI job 一個 task**。
 
 ## 欄位寫法

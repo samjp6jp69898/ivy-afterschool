@@ -8,8 +8,8 @@
 
 | 區域 | 前綴 | 最小單位 | 範圍 |
 |---|---|---|---|
-| infra | `INFRA-` | 一個設定檔 / 腳本 / CI job | repo 骨架、justfile、Supabase CLI、Python/前端專案設定、CI、Railway 部署 |
-| db | `DB-` | 一支 migration（通常一張表）/ 一份 seed | `supabase/migrations/*.sql`、`supabase/seed.sql`、RLS |
+| infra | `INFRA-` | 一個設定檔 / 腳本 / CI job | repo 骨架、justfile、`compose.yaml`（本機 Postgres / MinIO）、Alembic 設定（`alembic.ini`、`env.py`）、Python/前端專案設定、CI、Railway 部署 |
+| db | `DB-` | 一支 Alembic revision（通常一張表）/ 一支 data migration | `apps/api/alembic/versions/*.py`、表的 grant、`apps/api/tests/integration/db/` |
 | backend | `BACKEND-` | 一個方法（service 方法、endpoint handler、guard、model、schema 群組） | `apps/api/` |
 | frontend | `FRONTEND-` | 一個元件 / view / composable / store / api client 模組 | `apps/web/src/`（後台與共用，不含 `src/parent/`） |
 | parent | `PARENT-` | 一個元件 / view / composable / store / api client 模組 | `apps/web/src/parent/`（家長端） |
@@ -20,8 +20,8 @@
 
 用 `python3 scripts/validate_tasks.py . --ready [AREA]` 查詢依賴已滿足的 task，不要憑感覺挑。大方向：
 
-1. **INFRA** 的骨架（repo、justfile、Supabase CLI、`apps/api` 與 `apps/web` 專案設定）先做完，其他區域全部直接或間接依賴它。
-2. **DB** 的基礎 migration（extensions、`updated_at` trigger、RLS 慣例）→ 各模組表。
+1. **INFRA** 的骨架（repo、justfile、`compose.yaml`、Alembic 設定、`apps/api` 與 `apps/web` 專案設定）先做完，其他區域全部直接或間接依賴它。
+2. **DB** 的 baseline revision（extensions、`updated_at` trigger、`app_backend` 角色與 `grant_backend`）→ 各模組表。
 3. **BACKEND** 的框架（Settings、DB session、錯誤處理、認證、權限守衛）→ 各模組 service → endpoint。
 4. **FRONTEND / PARENT** 在對應 BACKEND endpoint 的形狀穩定後開始；UI task 先過設計稿關卡。
 5. `blocked` 的 task（NFC 打卡等）等 `open_design_questions` 有答案再處理：`--blocked` 可列出全部待決事項。
@@ -55,6 +55,8 @@ pending → in_progress → in_review → done
 ```
 
 外加 `superseded`：職責已移交給另一個 task，`description` 只留一句「由 X 負責」。
+
+- `done` 的 task 遇到架構決策變更：產物被刪除或整個由新 task 取代時改成 `superseded`（`description` 只留「由 X 負責」，`review` 保留原判決）；產物仍在、只被新 task 部分改寫時保留 `done`，由新 task 的 `description` 寫明它改寫的範圍。依賴 superseded task 的未完成 task 改依賴接手的 task。
 
 - 認領：`status` 改 `in_progress`、`assignee_session` 填識別。
 - **實作者做完只能改成 `in_review`，不可以自己標 `done`**。`done` 一律由 reviewer 核可後寫入（`review.status = pass`、`review.reviewer` 填 reviewer 識別），單人操作也一樣，沒有例外。驗證腳本會擋 `done` 但 `review.status != pass` 的狀態。

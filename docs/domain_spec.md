@@ -15,7 +15,7 @@
 
 ## 1. 模組與資料模型
 
-所有表共用欄位：`id uuid pk`、`created_at`、`updated_at`（trigger 維護）。下列只寫業務欄位。`enum` 一律用 PostgreSQL `text + CHECK`（方便擴充），值域即下列括號內容。
+所有表共用欄位：`id uuid pk`、`created_at`、`updated_at`（trigger 維護）。下列只寫業務欄位。檔案（請假附件、學生照片、常用接送人照片）存 Cloudflare R2 私有 bucket，表內只存物件路徑（`storage_path` / `photo_path`，不含使用者提供的檔名），前端只拿後端簽發的短效 presigned URL。`enum` 一律用 PostgreSQL `text + CHECK`（方便擴充），值域即下列括號內容。
 
 ### M1 帳號與權限
 
@@ -88,7 +88,7 @@ expected ──到班──▶ present ──離班/接送完成──▶ left
 ### M5 請假
 
 **student_leaves**：`student_id`、`leave_type`（`sick` / `personal` / `other`）、`start_date`、`end_date`、`reason`、`status`（`active` / `cancelled`）、`created_by_type`（`parent` / `staff`）、`created_by_id`、`cancelled_at`、`cancelled_by_type`、`cancelled_by_id`。
-**student_leave_attachments**：`leave_id`、`storage_path`、`mime_type`、`size_bytes`。檔案存 Supabase Storage 私有 bucket `leave-attachments`，後端簽發短效 URL。
+**student_leave_attachments**：`leave_id`、`storage_path`、`mime_type`、`size_bytes`。檔案存 R2 私有 bucket 的 `leave-attachments/` 前綴下，後端簽發短效 URL。
 
 - 同一學生的 `active` 請假期間不可重疊（DB exclusion constraint，API 回 409 `leave_overlap`），同時防止重複送出。
 - 家長送出即生效（沿用 ivy），同時把期間內的出勤改 `leave`（移植 `BE:services/student_leave_service.py::apply_attendance_for_leave` / `revert_attendance_for_leave`）。員工可在後台代登記與取消。
@@ -302,4 +302,4 @@ NFC 管理權限碼 `nfc:manage`（預設只有 admin）在 NFC 解除 blocked �
 ## 5. Open questions（尚未決定，已記錄在對應 task 的 `open_design_questions`）
 
 - NFC 機型、通訊協定、離線佇列、刷卡判斷規則（M10 全部 blocked）。
-- 部署時實測：Railway edge 的來源 IP 範圍與標頭（INFRA-031 / 033）；Supabase 連線池是否接受專用後端角色 `app_backend`（DB-001，不接受時改用 postgres 角色，見 architecture_decisions §5）。
+- 部署時實測：Railway edge 的來源 IP 範圍與標頭（INFRA-031 / 033）；Railway Postgres 的主版本與 owner 角色屬性（見 architecture_decisions §11）。
