@@ -4,6 +4,7 @@
 （學生「王小明」、電話 `0912-000-001`），寫入一律經 `backend_conn`。
 """
 
+from datetime import date
 from typing import Any
 
 import psycopg
@@ -35,3 +36,35 @@ def insert_row(conn: psycopg.Connection[Any], table: str, **cols: Any) -> dict[s
         row = cur.execute(query, list(cols.values())).fetchone()
     assert row is not None, f"insert into {table} 沒有回傳列"
     return row
+
+
+# 各表 factory：預設值避開 data migration seed 的值（DB-035~037），可直接在已 seed 的 DB 上插入
+
+
+def make_roles(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    return insert_row(
+        conn, "public.roles", **{"code": "counselor", "name": "輔導老師", **overrides}
+    )
+
+
+def make_subjects(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    return insert_row(conn, "public.subjects", **{"name": "書法", **overrides})
+
+
+def make_exam_types(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    return insert_row(conn, "public.exam_types", **{"name": "週考", **overrides})
+
+
+def make_schools(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    return insert_row(conn, "public.schools", **{"name": "臺北市大安區新生國小", **overrides})
+
+
+def make_closed_days(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    return insert_row(
+        conn, "public.closed_days", **{"date": date(2026, 10, 10), "reason": "國慶日", **overrides}
+    )
+
+
+def make_classes(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    defaults = {"name": "低年級 A 班", "grade_levels": [1, 2], "academic_year": 115}
+    return insert_row(conn, "public.classes", **{**defaults, **overrides})
