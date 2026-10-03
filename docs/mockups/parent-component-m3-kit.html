@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+
+<meta name="preview-status" content="draft">
+<meta name="preview-tasks" content="PARENT-014,PARENT-015,PARENT-016,PARENT-017,PARENT-018,PARENT-019,PARENT-020,PARENT-021,PARENT-022,PARENT-023,PARENT-098,PARENT-175">
+<meta name="preview-route" content="component:parent/components/m3/{M3Icon,M3Button,M3IconButton,M3Card,M3TextField,M3Chip,M3ListItem,M3TopAppBar,M3NavigationBar,M3Snackbar,M3SegmentedButton,M3Switch}.vue">
+<meta name="preview-updated" content="2026-10-03">
+
+<title>設計稿：家長端 M3 元件庫</title>
+
+<script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&display=block">
+
+<style>
+/* ============================================================
+   色票：複本，權威為 apps/web/src/parent/styles/m3-tokens.css（含 dark）。
+   --preview-* 只給稿件框架用。手機框內一律用 --m3-*。
+   ============================================================ */
+:root {
+  --m3-primary: #006d3d;
+  --m3-on-primary: #ffffff;
+  --m3-primary-container: #89f9b1;
+  --m3-on-primary-container: #00210f;
+  --m3-secondary: #4f6353;
+  --m3-on-secondary: #ffffff;
+  --m3-secondary-container: #d2e8d4;
+  --m3-on-secondary-container: #0d1f13;
+  --m3-tertiary: #3a646f;
+  --m3-on-tertiary: #ffffff;
+  --m3-tertiary-container: #beeaf7;
+  --m3-on-tertiary-container: #001f26;
+  --m3-error: #ba1a1a;
+  --m3-on-error: #ffffff;
+  --m3-error-container: #ffdad6;
+  --m3-on-error-container: #410002;
+  --m3-background: #fbfdf8;
+  --m3-on-background: #191c19;
+  --m3-surface: #fbfdf8;
+  --m3-on-surface: #191c19;
+  --m3-surface-variant: #dce5db;
+  --m3-on-surface-variant: #414942;
+  --m3-outline: #717971;
+  --m3-outline-variant: #c0c9bf;
+  --m3-shadow: #000000;
+  --m3-scrim: #000000;
+  --m3-inverse-surface: #2e312e;
+  --m3-inverse-on-surface: #f0f1ec;
+  --m3-inverse-primary: #6ddc97;
+  --m3-surface-container-lowest: #ffffff;
+  --m3-surface-container-low: #f3f4ef;
+  --m3-surface-container: #edeee9;
+  --m3-surface-container-high: #e7e9e4;
+  --m3-surface-container-highest: #e1e3de;
+}
+:root[data-theme='dark'] {
+  --m3-primary: #6ddc97;
+  --m3-on-primary: #00391d;
+  --m3-primary-container: #00522c;
+  --m3-on-primary-container: #89f9b1;
+  --m3-secondary: #b6ccb9;
+  --m3-on-secondary: #223527;
+  --m3-secondary-container: #384b3d;
+  --m3-on-secondary-container: #d2e8d4;
+  --m3-tertiary: #a2cdda;
+  --m3-on-tertiary: #023640;
+  --m3-tertiary-container: #214c57;
+  --m3-on-tertiary-container: #beeaf7;
+  --m3-error: #ffb4ab;
+  --m3-on-error: #690005;
+  --m3-error-container: #93000a;
+  --m3-on-error-container: #ffb4ab;
+  --m3-background: #191c19;
+  --m3-on-background: #e1e3de;
+  --m3-surface: #191c19;
+  --m3-on-surface: #e1e3de;
+  --m3-surface-variant: #414942;
+  --m3-on-surface-variant: #c0c9bf;
+  --m3-outline: #8b938a;
+  --m3-outline-variant: #414942;
+  --m3-shadow: #000000;
+  --m3-scrim: #000000;
+  --m3-inverse-surface: #e1e3de;
+  --m3-inverse-on-surface: #2e312e;
+  --m3-inverse-primary: #006d3d;
+  --m3-surface-container-lowest: #0c0f0c;
+  --m3-surface-container-low: #191c19;
+  --m3-surface-container: #1d201d;
+  --m3-surface-container-high: #282b28;
+  --m3-surface-container-highest: #333532;
+}
+:root {
+  --m3-state-hover: 0.08;
+  --m3-state-focus: 0.12;
+  --m3-state-pressed: 0.12;
+  --m3-state-dragged: 0.16;
+  --m3-shape-extra-small: 4px;
+  --m3-shape-small: 8px;
+  --m3-shape-medium: 12px;
+  --m3-shape-large: 16px;
+  --m3-shape-extra-large: 28px;
+  --m3-shape-full: 9999px;
+  --m3-elev-1: 0px 1px 2px 0px rgba(0, 0, 0, 0.3), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --m3-elev-2: 0px 1px 2px 0px rgba(0, 0, 0, 0.3), 0px 2px 6px 2px rgba(0, 0, 0, 0.15);
+  --m3-elev-3: 0px 1px 3px 0px rgba(0, 0, 0, 0.3), 0px 4px 8px 3px rgba(0, 0, 0, 0.15);
+  --m3-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --m3-easing-standard-accel: cubic-bezier(0.3, 0, 1, 1);
+  --m3-easing-standard-decel: cubic-bezier(0, 0, 0, 1);
+  --m3-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --m3-easing-emphasized-accel: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --m3-easing-emphasized-decel: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --m3-dur-short-1: 50ms;
+  --m3-dur-short-2: 100ms;
+  --m3-dur-short-3: 150ms;
+  --m3-dur-short-4: 200ms;
+  --m3-dur-medium-1: 250ms;
+  --m3-dur-medium-2: 300ms;
+  --m3-dur-medium-3: 350ms;
+  --m3-dur-medium-4: 400ms;
+  --m3-font: 'Roboto', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Helvetica Neue', sans-serif;
+
+  /* 稿件框架專用 */
+  --preview-page-bg: #f2f3f5;
+  --preview-panel-bg: #ffffff;
+  --preview-bar-bg: #f4f4f5;
+  --preview-bar-text: #73767a;
+  --preview-border: #dcdfe6;
+  --preview-text: #303133;
+  --preview-text-secondary: #909399;
+  --preview-primary: #409eff;
+  --preview-on-primary: #ffffff;
+  --preview-warning: #e6a23c;
+  --preview-warning-bg: #fdf6ec;
+  --preview-warning-border: #f3d19e;
+  --preview-success: #67c23a;
+  --preview-device: #1f1f1f;
+  --preview-hit: #f56c6c;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { font-family: var(--m3-font); background: var(--preview-page-bg); color: var(--preview-text); }
+#app { display: flex; flex-direction: column; min-height: 100%; }
+button { font: inherit; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+/* ---- 稿件框架 ---- */
+.preview-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 6px 16px; font-size: 12px; color: var(--preview-bar-text); background: var(--preview-bar-bg); border-bottom: 1px dashed var(--preview-border); }
+.preview-bar__spacer { flex: 1; }
+.preview-tag { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 4px; font-size: 12px; color: var(--preview-on-primary); background: var(--preview-warning); }
+.preview-tag.is-approved { background: var(--preview-success); }
+.stage { flex: 1; display: flex; align-items: flex-start; justify-content: center; gap: 32px; flex-wrap: wrap; padding: 32px 16px; }
+.device { flex: none; width: 390px; height: 844px; border-radius: 44px; overflow: hidden; outline: 10px solid var(--preview-device); box-shadow: var(--m3-elev-3); margin: 10px; }
+.screen { position: relative; display: flex; flex-direction: column; height: 100%; overflow: hidden; background: var(--m3-surface); color: var(--m3-on-surface); }
+.screen__content { flex: 1; overflow-y: auto; padding: 0 16px 24px; }
+.notes { flex: 0 1 420px; min-width: 300px; max-width: 100%; padding: 20px; border-radius: 8px; background: var(--preview-panel-bg); border: 1px solid var(--preview-border); font-size: 14px; line-height: 1.6; }
+.notes h3 { margin: 0 0 12px; font-size: 16px; }
+.notes h4 { margin: 20px 0 8px; font-size: 14px; }
+.notes ol { margin: 0; padding-left: 20px; }
+.notes__alert { padding: 8px 12px; margin-bottom: 16px; border-radius: 4px; font-size: 13px; color: var(--preview-warning); background: var(--preview-warning-bg); border: 1px solid var(--preview-warning-border); }
+.notes__option { color: var(--preview-text-secondary); font-size: 13px; }
+.notes__group { margin: 12px 0 4px; font-weight: 600; font-size: 13px; }
+.notes__row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; font-size: 13px; }
+.state-switch { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--preview-border); border-radius: 4px; overflow: hidden; }
+.state-switch button { padding: 4px 10px; font-size: 12px; border: none; cursor: pointer; background: var(--preview-panel-bg); color: var(--preview-text); border-right: 1px solid var(--preview-border); }
+.state-switch button:last-child { border-right: none; }
+.state-switch button.is-active { background: var(--preview-primary); color: var(--preview-on-primary); }
+.state-switch--wrap { display: flex; border: none; gap: 4px; }
+.state-switch--wrap button { border: 1px solid var(--preview-border); border-radius: 4px; }
+.state-switch--wrap button:last-child { border-right: 1px solid var(--preview-border); }
+
+/* ---- 稿內示範排版（只存在於稿，不是元件） ---- */
+.kit-head { padding: 8px 0 4px; }
+.kit-head__task { color: var(--m3-on-surface-variant); }
+.demo__caption { margin: 20px 0 8px; color: var(--m3-on-surface-variant); }
+.demo-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.demo-col { display: flex; flex-direction: column; gap: 12px; }
+.demo-code { margin-top: 6px; padding: 6px 8px; border-radius: var(--m3-shape-extra-small); background: var(--m3-surface-container); color: var(--m3-on-surface-variant); font: 11px/16px ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+.demo-legend { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 64px; color: var(--m3-on-surface-variant); }
+.bleed { margin-left: -16px; margin-right: -16px; }
+.bleed + .bleed { margin-top: 8px; }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.show-hit .hit-target::after,
+.show-hit .m3-chip::after,
+.show-hit .m3-icon-button,
+.show-hit .m3-switch,
+.show-hit .m3-snackbar__action { outline: 1px dashed var(--preview-hit); }
+
+/* ============================================================
+   M3 元件樣式
+   ============================================================ */
+/* Typography（同 m3-tokens.css） */
+.m3-title-large { font-size: 22px; line-height: 28px; font-weight: 400; }
+.m3-title-medium { font-size: 16px; line-height: 24px; font-weight: 500; letter-spacing: 0.15px; }
+.m3-title-small { font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: 0.1px; }
+.m3-body-large { font-size: 16px; line-height: 24px; letter-spacing: 0.5px; }
+.m3-body-medium { font-size: 14px; line-height: 20px; letter-spacing: 0.25px; }
+.m3-body-small { font-size: 12px; line-height: 16px; letter-spacing: 0.4px; }
+.m3-label-large { font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: 0.1px; }
+.m3-label-medium { font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: 0.5px; }
+.m3-label-small { font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: 0.5px; }
+
+/* M3Icon（PARENT-014）：1em 夾盒，字型未就緒時 ligature 原文被裁在盒內 */
+.material-symbols-rounded {
+  font-family: 'Material Symbols Rounded'; font-weight: normal; font-style: normal;
+  line-height: 1; letter-spacing: normal; text-transform: none; white-space: nowrap;
+  direction: ltr; font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1em; height: 1em; overflow: hidden; flex-shrink: 0; vertical-align: middle; user-select: none;
+}
+.icon-fallback-demo { font-family: 'NoSuchFont-preview', sans-serif !important; }
+.icon-fallback-demo--unclamped { width: auto !important; overflow: visible !important; }
+.icon-frame { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border: 1px dashed var(--m3-outline-variant); border-radius: var(--m3-shape-extra-small); }
+
+/* State layer：hover 0.08 / focus 0.12 / pressed 0.12，顏色取 currentColor */
+.m3-state { position: relative; }
+.m3-state::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; background: currentColor;
+  opacity: 0; pointer-events: none; transition: opacity var(--m3-dur-short-2) var(--m3-easing-standard);
+}
+.m3-state:hover::before, .m3-state.force-hover::before { opacity: var(--m3-state-hover); }
+.m3-state:focus-visible::before, .m3-state.force-focus::before { opacity: var(--m3-state-focus); }
+.m3-state:active::before, .m3-state.force-pressed::before { opacity: var(--m3-state-pressed); }
+.m3-state:disabled::before, .m3-state[aria-disabled='true']::before { opacity: 0 !important; }
+
+/* 轉圈（Button loading / Switch busy 共用） */
+.m3-spinner { width: 18px; height: 18px; flex: none; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: m3-spin 0.8s linear infinite; }
+@keyframes m3-spin { to { transform: rotate(360deg); } }
+
+/* M3Button（PARENT-015） */
+.m3-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 48px; min-width: 48px; padding: 0 24px; border: none; border-radius: var(--m3-shape-full);
+  cursor: pointer; white-space: nowrap; -webkit-tap-highlight-color: transparent;
+}
+.m3-button.has-icon { padding-left: 16px; }
+.m3-button--filled { background: var(--m3-primary); color: var(--m3-on-primary); }
+.m3-button--tonal { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.m3-button--outlined { background: transparent; color: var(--m3-primary); box-shadow: inset 0 0 0 1px var(--m3-outline); }
+.m3-button--text { background: transparent; color: var(--m3-primary); padding: 0 12px; }
+.m3-button--text.has-icon { padding-left: 12px; }
+.m3-button.is-block { display: flex; width: 100%; }
+.m3-button:disabled { opacity: 0.38; cursor: not-allowed; }
+.m3-button.is-loading { cursor: progress; }
+.m3-button:focus-visible, .m3-button.force-focus { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+
+/* M3IconButton（PARENT-016）：48 點擊區、40 視覺 */
+.m3-icon-button {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 48px; height: 48px; padding: 0; border: none; border-radius: var(--m3-shape-full);
+  background: transparent; color: var(--m3-on-surface-variant); cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.m3-icon-button__container { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: var(--m3-shape-full); }
+.m3-icon-button__container::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: currentColor; opacity: 0; pointer-events: none; transition: opacity var(--m3-dur-short-2) var(--m3-easing-standard); }
+.m3-icon-button:hover .m3-icon-button__container::before, .m3-icon-button.force-hover .m3-icon-button__container::before { opacity: var(--m3-state-hover); }
+.m3-icon-button:focus-visible .m3-icon-button__container::before, .m3-icon-button.force-focus .m3-icon-button__container::before { opacity: var(--m3-state-focus); }
+.m3-icon-button:active .m3-icon-button__container::before, .m3-icon-button.force-pressed .m3-icon-button__container::before { opacity: var(--m3-state-pressed); }
+.m3-icon-button--filled .m3-icon-button__container { background: var(--m3-primary); color: var(--m3-on-primary); }
+.m3-icon-button--tonal .m3-icon-button__container { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.m3-icon-button:focus-visible, .m3-icon-button.force-focus { outline: 2px solid var(--m3-primary); outline-offset: -2px; }
+.m3-icon-button:disabled { opacity: 0.38; cursor: not-allowed; }
+.m3-icon-button:disabled .m3-icon-button__container::before { opacity: 0; }
+
+/* M3Card（PARENT-017）：配色依待裁定 1，data-card-scheme 切換 */
+.m3-card { position: relative; display: block; border-radius: var(--m3-shape-medium); color: var(--m3-on-surface); }
+.m3-card--pad-none { padding: 0; }
+.m3-card--pad-sm { padding: 12px; }
+.m3-card--pad-md { padding: 16px; }
+.m3-card--filled { background: var(--m3-surface-container-low); }
+.m3-card--elevated { background: var(--m3-surface-container-lowest); box-shadow: var(--m3-elev-1); }
+[data-card-scheme='b'] .m3-card--filled { background: var(--m3-surface-container-highest); }
+[data-card-scheme='b'] .m3-card--elevated { background: var(--m3-surface-container-low); }
+.m3-card--outlined { background: var(--m3-surface); border: 1px solid var(--m3-outline-variant); }
+.m3-card.is-clickable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.m3-card.is-clickable::before { background: var(--m3-on-surface); }
+.m3-card.is-clickable:focus-visible, .m3-card.force-focus { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+.m3-card__header { margin-bottom: 8px; }
+.m3-card__actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.m3-card p { margin: 0; }
+
+/* M3TextField（PARENT-018）：outlined、fieldset/legend 挖缺口 */
+.m3-tf { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+.m3-tf__control { position: relative; display: flex; align-items: center; min-height: 56px; }
+.m3-tf__input {
+  position: relative; z-index: 1; width: 100%; height: 56px; margin: 0; padding: 0 16px;
+  border: none; outline: none; background: transparent; color: var(--m3-on-surface);
+  font: 400 16px/24px var(--m3-font); letter-spacing: 0.5px; caret-color: var(--m3-primary);
+  -webkit-appearance: none; appearance: none;
+}
+.m3-tf.has-trailing .m3-tf__input { padding-right: 48px; }
+.m3-tf.is-textarea .m3-tf__control { align-items: stretch; }
+textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: none; }
+.m3-tf__input::placeholder { color: var(--m3-on-surface-variant); opacity: 0; }
+.m3-tf.is-focused .m3-tf__input::placeholder { opacity: 1; }
+.m3-tf.is-error .m3-tf__input { caret-color: var(--m3-error); }
+.m3-tf__label {
+  position: absolute; z-index: 2; left: 16px; top: 28px; transform: translateY(-50%);
+  max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--m3-on-surface-variant); font: 400 16px/24px var(--m3-font); pointer-events: none;
+  transition: top var(--m3-dur-short-3) var(--m3-easing-standard), font-size var(--m3-dur-short-3) var(--m3-easing-standard), line-height var(--m3-dur-short-3) var(--m3-easing-standard);
+}
+.m3-tf.is-floating .m3-tf__label { top: 0; font-size: 12px; line-height: 16px; }
+.m3-tf.is-focused .m3-tf__label { color: var(--m3-primary); }
+.m3-tf.is-error .m3-tf__label { color: var(--m3-error); }
+.m3-tf__outline {
+  position: absolute; inset: -5px 0 0; z-index: 0; margin: 0; padding: 0 12px; min-width: 0;
+  border: 1px solid var(--m3-outline); border-radius: var(--m3-shape-extra-small); pointer-events: none; text-align: left;
+}
+.m3-tf__outline legend { display: block; float: none; width: auto; max-width: 0.01px; height: 11px; padding: 0; font-size: 12px; visibility: hidden; white-space: nowrap; overflow: hidden; }
+.m3-tf__outline legend span { display: inline-block; padding: 0 4px; opacity: 0; }
+.m3-tf.is-floating .m3-tf__outline legend { max-width: 100%; }
+.m3-tf__control:hover .m3-tf__outline { border-color: var(--m3-on-surface); }
+.m3-tf.is-focused .m3-tf__outline { border-width: 2px; border-color: var(--m3-primary); padding: 0 11px; }
+.m3-tf.is-error .m3-tf__outline { border-color: var(--m3-error); }
+.m3-tf__trailing { position: absolute; z-index: 1; right: 12px; top: 16px; color: var(--m3-error); }
+.m3-tf__supporting { display: flex; gap: 16px; padding: 0 16px; color: var(--m3-on-surface-variant); }
+.m3-tf__supporting-text { flex: 1; }
+.m3-tf.is-error .m3-tf__supporting-text { color: var(--m3-error); }
+.m3-tf__counter { margin-left: auto; flex: none; }
+.m3-tf.is-disabled { opacity: 0.38; }
+.m3-tf.is-disabled .m3-tf__control { pointer-events: none; }
+
+/* M3Chip（PARENT-019）：32 視覺、透明延伸到 48 點擊高 */
+.m3-chip {
+  display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 16px;
+  border: 1px solid var(--m3-outline); border-radius: var(--m3-shape-small);
+  background: transparent; color: var(--m3-on-surface-variant); cursor: pointer; white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+.m3-chip--assist { color: var(--m3-on-surface); }
+.m3-chip--assist .m3-chip__icon { color: var(--m3-primary); }
+.m3-chip.has-icon { padding-left: 8px; }
+.m3-chip.is-selected { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); border-color: transparent; }
+.m3-chip::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 48px; transform: translateY(-50%); }
+.m3-chip:focus-visible, .m3-chip.force-focus { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+.m3-chip:disabled { opacity: 0.38; cursor: not-allowed; }
+
+/* M3ListItem（PARENT-020） */
+.m3-list { list-style: none; margin: 0; padding: 0; }
+.m3-list-item { list-style: none; }
+.m3-list-item__inner {
+  position: relative; display: flex; align-items: center; gap: 16px; min-height: 56px; padding: 8px 16px;
+  color: inherit; text-decoration: none; outline: none; -webkit-tap-highlight-color: transparent;
+}
+.m3-list-item.is-two-line .m3-list-item__inner { min-height: 72px; }
+.m3-list-item__inner.is-interactive { cursor: pointer; }
+.m3-list-item__inner.is-interactive::before { background: var(--m3-on-surface); }
+.m3-list-item__inner.is-interactive:focus-visible, .force-focus > .m3-list-item__inner { outline: 2px solid var(--m3-primary); outline-offset: -2px; }
+.force-hover > .m3-list-item__inner::before { opacity: var(--m3-state-hover); }
+.force-pressed > .m3-list-item__inner::before { opacity: var(--m3-state-pressed); }
+.force-focus > .m3-list-item__inner::before { opacity: var(--m3-state-focus); }
+.m3-list-item__leading { display: inline-flex; align-items: center; justify-content: center; flex: none; color: var(--m3-on-surface-variant); }
+.m3-list-item__leading.is-icon { width: 40px; height: 40px; border-radius: var(--m3-shape-full); background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.m3-list-item__content { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.m3-list-item__headline { color: var(--m3-on-surface); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m3-list-item__supporting { color: var(--m3-on-surface-variant); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.m3-list-item__trailing { display: inline-flex; align-items: center; flex: none; color: var(--m3-on-surface-variant); }
+.m3-list-item.is-disabled { opacity: 0.38; }
+.m3-list-item.is-disabled .m3-list-item__inner { cursor: not-allowed; }
+.m3-list-item.is-disabled .m3-list-item__inner::before { opacity: 0 !important; }
+
+/* M3TopAppBar（PARENT-021）：small，標題靠左 */
+.m3-top-app-bar {
+  position: sticky; top: 0; z-index: 5; flex: none;
+  display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 4px;
+  min-height: 64px; padding: 0 4px; background: var(--m3-surface); color: var(--m3-on-surface);
+  transition: background-color var(--m3-dur-short-3) var(--m3-easing-standard);
+}
+.m3-top-app-bar.is-scrolled { background: var(--m3-surface-container); }
+.m3-top-app-bar__leading { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; }
+.m3-top-app-bar__title { margin: 0; padding-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m3-top-app-bar__actions { display: inline-flex; align-items: center; }
+.logo-mark { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: var(--m3-shape-full); background: var(--m3-primary-container); color: var(--m3-on-primary-container); }
+
+/* M3NavigationBar（PARENT-022） */
+.m3-navigation-bar { display: flex; flex: none; height: 80px; background: var(--m3-surface-container); color: var(--m3-on-surface-variant); }
+.m3-nav-tab {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  padding: 12px 0 16px; border: none; background: transparent; color: inherit; cursor: pointer; outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.m3-nav-tab__icon { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 32px; border-radius: var(--m3-shape-full); transition: background-color var(--m3-dur-short-3) var(--m3-easing-standard); }
+.m3-nav-tab__icon::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: currentColor; opacity: 0; pointer-events: none; }
+.m3-nav-tab:hover .m3-nav-tab__icon::before { opacity: var(--m3-state-hover); }
+.m3-nav-tab:active .m3-nav-tab__icon::before { opacity: var(--m3-state-pressed); }
+.m3-nav-tab:focus-visible .m3-nav-tab__icon { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+.m3-nav-tab.is-active .m3-nav-tab__icon { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.m3-nav-tab.is-active .m3-nav-tab__label { color: var(--m3-on-surface); font-weight: 700; }
+.m3-nav-tab__badge {
+  position: absolute; top: -2px; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px;
+  display: inline-flex; align-items: center; justify-content: center; border-radius: var(--m3-shape-full);
+  font-size: 11px; line-height: 16px; font-weight: 500; background: var(--m3-error); color: var(--m3-on-error);
+}
+
+/* M3Snackbar（PARENT-023） */
+.m3-snackbar {
+  position: absolute; z-index: 20; left: 16px; right: 16px; bottom: 96px;
+  display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 4px 8px 4px 16px;
+  border-radius: var(--m3-shape-extra-small); background: var(--m3-inverse-surface); color: var(--m3-inverse-on-surface);
+  box-shadow: var(--m3-elev-3);
+}
+.m3-snackbar.is-inline { position: relative; left: auto; right: auto; bottom: auto; z-index: auto; }
+.m3-snackbar__icon { color: var(--m3-error-container); }
+.m3-snackbar__message { flex: 1; min-width: 0; padding: 10px 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.m3-snackbar__action { flex: none; min-height: 44px; padding: 0 12px; border: none; border-radius: var(--m3-shape-full); background: transparent; color: var(--m3-inverse-primary); cursor: pointer; }
+.m3-snackbar__action:focus-visible { outline: 2px solid var(--m3-inverse-primary); outline-offset: 0; }
+[data-snack-scheme='b'] .m3-snackbar--error { background: var(--m3-error-container); color: var(--m3-on-error-container); }
+[data-snack-scheme='b'] .m3-snackbar--error .m3-snackbar__icon { color: var(--m3-error); }
+[data-snack-scheme='b'] .m3-snackbar--error .m3-snackbar__action { color: var(--m3-on-error-container); }
+.m3-snackbar-enter-active { transition: opacity var(--m3-dur-medium-1) var(--m3-easing-emphasized-decel), transform var(--m3-dur-medium-1) var(--m3-easing-emphasized-decel); }
+.m3-snackbar-leave-active { transition: opacity var(--m3-dur-short-3) var(--m3-easing-emphasized-accel); }
+.m3-snackbar-enter-from { opacity: 0; transform: translateY(16px); }
+.m3-snackbar-leave-to { opacity: 0; }
+
+/* M3SegmentedButton（PARENT-098） */
+.m3-segmented { display: grid; width: 100%; height: 48px; border: 1px solid var(--m3-outline); border-radius: var(--m3-shape-full); overflow: hidden; }
+.m3-segment {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; padding: 0 12px;
+  border: none; border-left: 1px solid var(--m3-outline); background: transparent; color: var(--m3-on-surface);
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.m3-segment:first-child { border-left: none; }
+.m3-segment.is-checked { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.m3-segment__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m3-segment:focus-visible { outline: 2px solid var(--m3-primary); outline-offset: -4px; border-radius: var(--m3-shape-full); }
+.m3-segment:disabled { cursor: not-allowed; }
+.m3-segment:disabled > * { opacity: 0.38; }
+
+/* M3Switch（PARENT-175）：52×32 軌道、52×48 點擊區 */
+.m3-switch { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; width: 52px; height: 48px; padding: 0; border: none; background: transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.m3-switch__track { position: relative; width: 52px; height: 32px; border-radius: var(--m3-shape-full); border: 2px solid var(--m3-outline); background: var(--m3-surface-container-highest); transition: background-color var(--m3-dur-short-3) var(--m3-easing-standard), border-color var(--m3-dur-short-3) var(--m3-easing-standard); }
+.m3-switch__thumb {
+  position: absolute; left: 14px; top: 14px; width: 16px; height: 16px; transform: translate(-50%, -50%);
+  display: inline-flex; align-items: center; justify-content: center; border-radius: 50%;
+  background: var(--m3-outline); color: var(--m3-on-primary-container);
+  transition: left var(--m3-dur-medium-1) var(--m3-easing-standard), width var(--m3-dur-short-2) var(--m3-easing-standard), height var(--m3-dur-short-2) var(--m3-easing-standard);
+}
+.m3-switch__thumb::before { content: ''; position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: var(--m3-on-surface); opacity: 0; pointer-events: none; }
+.m3-switch:hover .m3-switch__thumb::before { opacity: var(--m3-state-hover); }
+.m3-switch:active .m3-switch__thumb::before { opacity: var(--m3-state-pressed); }
+.m3-switch.is-on .m3-switch__track { background: var(--m3-primary); border-color: var(--m3-primary); }
+.m3-switch.is-on .m3-switch__thumb { left: 34px; width: 24px; height: 24px; background: var(--m3-on-primary); }
+.m3-switch.is-on .m3-switch__thumb::before { background: var(--m3-primary); }
+.m3-switch:active:not(:disabled):not(.is-busy) .m3-switch__thumb { width: 28px; height: 28px; }
+.m3-switch.is-busy { cursor: progress; }
+.m3-switch.is-busy .m3-switch__thumb { width: 24px; height: 24px; }
+.m3-switch.is-busy .m3-switch__thumb::before { opacity: 0; }
+.m3-switch__spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--m3-surface-container-highest); border-right-color: transparent; animation: m3-spin 0.8s linear infinite; }
+.m3-switch.is-on .m3-switch__spinner { border-color: var(--m3-primary); border-right-color: transparent; }
+.m3-switch:focus-visible { outline: none; }
+.m3-switch:focus-visible .m3-switch__track { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+.m3-switch:disabled { opacity: 0.38; cursor: not-allowed; }
+.m3-switch:disabled .m3-switch__thumb::before { opacity: 0; }
+.pref-row { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 0 0 16px; }
+.pref-row__label { flex: 1; min-width: 0; }
+</style>
+</head>
+
+<body>
+<div id="app">
+
+  <div class="preview-bar">
+    <span class="preview-tag" :class="{ 'is-approved': meta.status === 'approved' }">
+      {{ meta.status === 'approved' ? '已核可' : '待核可' }}
+    </span>
+    <span>{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span class="preview-bar__spacer"></span>
+    <span>更新 {{ meta.updated }}</span>
+    <span>設計說明 / 待裁定（{{ openQuestions.length }}）在手機框右側</span>
+  </div>
+
+  <div class="stage">
+    <div class="device" :data-card-scheme="cardScheme" :data-snack-scheme="snackScheme" :class="{ 'show-hit': showHit }">
+      <div class="screen">
+
+        <m3-top-app-bar :title="currentSection.label" :show-back="true" :scrolled="scrolled" @back="snack.show('back 事件：由 ParentLayout 決定返回行為')">
+          <template v-slot:actions>
+            <m3-icon-button icon="help" label="說明" @click="snack.show('actions slot 的 icon button')"></m3-icon-button>
+          </template>
+        </m3-top-app-bar>
+
+        <main class="screen__content" ref="contentEl" @scroll="onScroll">
+          <div class="kit-head">
+            <div class="kit-head__task m3-label-medium">{{ currentSection.task }} · {{ currentSection.file }}</div>
+          </div>
+
+          <!-- ============ M3Icon ============ -->
+          <template v-if="section === 'icon'">
+            <div class="demo__caption m3-label-medium">預設（FILL 0）/ filled（FILL 1）</div>
+            <div class="demo-row">
+              <div class="demo-legend m3-label-small" v-for="n in ['home', 'assignment', 'directions_walk', 'grading', 'notifications']" :key="n">
+                <span class="demo-row"><m3-icon :name="n"></m3-icon><m3-icon :name="n" :filled="true"></m3-icon></span>{{ n }}
+              </div>
+            </div>
+
+            <div class="demo__caption m3-label-medium">三種尺寸：18 / 24（預設）/ 48</div>
+            <div class="demo-row" style="gap: 24px">
+              <div class="demo-legend m3-label-small"><m3-icon name="check" :size="18"></m3-icon>18 · Chip、分段、按鈕內</div>
+              <div class="demo-legend m3-label-small"><m3-icon name="schedule"></m3-icon>24 · 一般</div>
+              <div class="demo-legend m3-label-small"><m3-icon name="event_available" :size="48"></m3-icon>48 · 空狀態</div>
+            </div>
+
+            <div class="demo__caption m3-label-medium">無障礙：裝飾用（無 label）</div>
+            <div class="demo-row m3-body-medium"><m3-icon name="schedule"></m3-icon>預計可接送 17:30</div>
+            <div class="demo-code">&lt;span class="m3-icon" aria-hidden="true"&gt;schedule&lt;/span&gt; — 旁邊已有文字，讀屏略過圖示</div>
+
+            <div class="demo__caption m3-label-medium">無障礙：帶 label（圖示單獨表意）</div>
+            <div class="demo-row m3-body-medium">王小明 <m3-icon name="check_circle" :filled="true" label="已到班" style="color: var(--m3-primary)"></m3-icon></div>
+            <div class="demo-code">&lt;span class="m3-icon" role="img" aria-label="已到班"&gt;check_circle&lt;/span&gt;</div>
+
+            <div class="demo__caption m3-label-medium">字型未載入時（1em 夾盒 vs 沒有夾盒）</div>
+            <div class="demo-row m3-body-medium">
+              <span class="icon-frame"><span class="material-symbols-rounded icon-fallback-demo" style="font-size: 24px">check_circle</span>已到班</span>
+              <span class="icon-frame"><span class="material-symbols-rounded icon-fallback-demo icon-fallback-demo--unclamped" style="font-size: 24px">check_circle</span>已到班</span>
+            </div>
+            <div class="demo-code">左：有夾盒 + font-display: block，載入期間隱形、載不到也只佔 1em。右：沒夾盒時原文撐爆版面（ivy LIFF 曾發生）。</div>
+          </template>
+
+          <!-- ============ M3Button ============ -->
+          <template v-if="section === 'button'">
+            <template v-for="v in ['filled', 'tonal', 'outlined', 'text']" :key="v">
+              <div class="demo__caption m3-label-medium">{{ v }}：一般 / disabled / loading</div>
+              <div class="demo-row">
+                <m3-button :variant="v" icon="send">送出</m3-button>
+                <m3-button :variant="v" icon="send" :disabled="true">送出</m3-button>
+                <m3-button :variant="v" icon="send" :loading="true">送出</m3-button>
+              </div>
+            </template>
+
+            <div class="demo__caption m3-label-medium">無圖示 / filled 的 hover、pressed、鍵盤焦點</div>
+            <div class="demo-row">
+              <m3-button>確認</m3-button>
+              <m3-button class="force-hover">hover</m3-button>
+              <m3-button class="force-pressed">pressed</m3-button>
+              <m3-button class="force-focus">焦點</m3-button>
+            </div>
+
+            <div class="demo__caption m3-label-medium">block + loading 實際互動（點了會轉圈 1.5 秒防連點）</div>
+            <m3-button :block="true" icon="directions_walk" :loading="pickupLoading" @click="notifyPickup">我要來接</m3-button>
+          </template>
+
+          <!-- ============ M3IconButton ============ -->
+          <template v-if="section === 'iconButton'">
+            <template v-for="v in ['standard', 'filled', 'tonal']" :key="v">
+              <div class="demo__caption m3-label-medium">{{ v }}：一般 / disabled</div>
+              <div class="demo-row">
+                <m3-icon-button :variant="v" icon="arrow_back" label="返回" @click="snack.show('click：返回')"></m3-icon-button>
+                <m3-icon-button :variant="v" icon="add" label="新增接送人" @click="snack.show('click：新增接送人')"></m3-icon-button>
+                <m3-icon-button :variant="v" icon="done_all" label="全部標為已讀" @click="snack.show('click：全部標為已讀')"></m3-icon-button>
+                <m3-icon-button :variant="v" icon="done_all" label="全部標為已讀" :disabled="true"></m3-icon-button>
+              </div>
+            </template>
+            <div class="demo__caption m3-label-medium">standard 的 hover / pressed / 鍵盤焦點</div>
+            <div class="demo-row">
+              <m3-icon-button icon="arrow_back" label="返回" class="force-hover"></m3-icon-button>
+              <m3-icon-button icon="arrow_back" label="返回" class="force-pressed"></m3-icon-button>
+              <m3-icon-button icon="arrow_back" label="返回" class="force-focus"></m3-icon-button>
+            </div>
+            <div class="demo-code">&lt;button aria-label="返回"&gt; — label 必填；右側「顯示點擊區」可看 48×48 範圍</div>
+          </template>
+
+          <!-- ============ M3Card ============ -->
+          <template v-if="section === 'card'">
+            <div class="demo__caption m3-label-medium">filled（預設）+ header / actions slot</div>
+            <m3-card>
+              <template v-slot:header><div class="m3-title-medium">今日狀態</div></template>
+              <p class="m3-body-medium">王小明 15:42 已到班，作業完成 2 / 3。</p>
+              <template v-slot:actions>
+                <m3-button variant="text">查看作業</m3-button>
+                <m3-button variant="tonal" icon="directions_walk">我要來接</m3-button>
+              </template>
+            </m3-card>
+
+            <div class="demo__caption m3-label-medium">elevated</div>
+            <m3-card variant="elevated">
+              <template v-slot:header><div class="m3-title-medium">期中考 數學</div></template>
+              <p class="m3-body-medium">92 分 · 班平均 84 分</p>
+            </m3-card>
+
+            <div class="demo__caption m3-label-medium">outlined</div>
+            <m3-card variant="outlined">
+              <p class="m3-body-medium">代理接送：陳阿姨 · 10/05（日）</p>
+            </m3-card>
+
+            <div class="demo__caption m3-label-medium">clickable（點點看，Enter / Space 也可以）</div>
+            <m3-card :clickable="true" @click="snack.show('click：開啟請假詳情')">
+              <div class="demo-row" style="justify-content: space-between">
+                <div><div class="m3-title-medium">病假 10/06 – 10/07</div><div class="m3-body-medium" style="color: var(--m3-on-surface-variant)">2 天 · 家長申請</div></div>
+                <m3-icon name="chevron_right" style="color: var(--m3-on-surface-variant)"></m3-icon>
+              </div>
+            </m3-card>
+            <div class="demo__caption m3-label-medium">clickable 的 hover / pressed / 鍵盤焦點</div>
+            <div class="demo-col">
+              <m3-card :clickable="true" class="force-hover" padding="sm"><span class="m3-body-medium">hover</span></m3-card>
+              <m3-card :clickable="true" class="force-pressed" padding="sm"><span class="m3-body-medium">pressed</span></m3-card>
+              <m3-card :clickable="true" class="force-focus" padding="sm"><span class="m3-body-medium">鍵盤焦點</span></m3-card>
+            </div>
+
+            <div class="demo__caption m3-label-medium">padding：none / sm（12）/ md（16，預設）</div>
+            <div class="demo-col">
+              <m3-card variant="outlined" padding="none"><span class="m3-body-medium">none</span></m3-card>
+              <m3-card variant="outlined" padding="sm"><span class="m3-body-medium">sm</span></m3-card>
+              <m3-card variant="outlined" padding="md"><span class="m3-body-medium">md</span></m3-card>
+            </div>
+          </template>
+
+          <!-- ============ M3TextField ============ -->
+          <template v-if="section === 'textField'">
+            <div class="demo-col" style="gap: 8px">
+              <div class="demo__caption m3-label-medium">空值 + supportingText</div>
+              <m3-text-field v-model="tf.bindCode" label="綁定碼" supporting-text="請輸入安親班提供的 8 碼綁定碼" autocomplete="one-time-code"></m3-text-field>
+              <div class="demo__caption m3-label-medium">有值</div>
+              <m3-text-field v-model="tf.name" label="接送人姓名"></m3-text-field>
+              <div class="demo__caption m3-label-medium">focus（固定示範；上面欄位點進去也一樣）</div>
+              <m3-text-field v-model="tf.focusDemo" label="與學生關係" placeholder="例如：外婆" :force-focus="true"></m3-text-field>
+              <div class="demo__caption m3-label-medium">錯誤（errorText 取代 supportingText）</div>
+              <m3-text-field v-model="tf.badCode" label="綁定碼" supporting-text="請輸入安親班提供的 8 碼綁定碼" error-text="綁定碼格式錯誤"></m3-text-field>
+              <div class="demo__caption m3-label-medium">disabled</div>
+              <m3-text-field v-model="tf.student" label="學生" :disabled="true"></m3-text-field>
+              <div class="demo__caption m3-label-medium">tel / date</div>
+              <m3-text-field v-model="tf.phone" label="聯絡電話" type="tel" inputmode="tel" autocomplete="tel"></m3-text-field>
+              <m3-text-field v-model="tf.date" label="請假開始日" type="date"></m3-text-field>
+              <div class="demo__caption m3-label-medium">textarea + 字數（maxlength 200）</div>
+              <m3-text-field v-model="tf.reason" label="事由" type="textarea" :maxlength="200" supporting-text="選填"></m3-text-field>
+              <div class="demo__caption m3-label-medium">Enter 觸發 enter 事件（注音組字中不觸發）</div>
+              <m3-text-field v-model="tf.live" label="輸入後按 Enter" @enter="snack.show('enter：' + (tf.live || '（空白）'))"></m3-text-field>
+            </div>
+          </template>
+
+          <!-- ============ M3Chip ============ -->
+          <template v-if="section === 'chip'">
+            <div class="demo__caption m3-label-medium">assist（含圖示 / 無圖示）</div>
+            <div class="demo-row">
+              <m3-chip label="撥打安親班" icon="call" @click="snack.show('click：撥打安親班')"></m3-chip>
+              <m3-chip label="查看作業"></m3-chip>
+            </div>
+            <div class="demo__caption m3-label-medium">filter 單選（呼叫端控制 selected，點點看）</div>
+            <div class="demo-row">
+              <m3-chip v-for="o in etaOptions" :key="o" variant="filter" :label="'約 ' + o + ' 分鐘'" :selected="eta === o" @click="eta = o"></m3-chip>
+            </div>
+            <div class="demo__caption m3-label-medium">filter 未選 / 已選 / disabled</div>
+            <div class="demo-row">
+              <m3-chip variant="filter" label="未讀"></m3-chip>
+              <m3-chip variant="filter" label="未讀" :selected="true"></m3-chip>
+              <m3-chip variant="filter" label="未讀" :disabled="true"></m3-chip>
+              <m3-chip label="撥打安親班" icon="call" :disabled="true"></m3-chip>
+            </div>
+            <div class="demo__caption m3-label-medium">hover / 鍵盤焦點</div>
+            <div class="demo-row">
+              <m3-chip variant="filter" label="hover" class="force-hover"></m3-chip>
+              <m3-chip variant="filter" label="焦點" class="force-focus"></m3-chip>
+            </div>
+            <div class="demo-code">filter：aria-pressed="true|false"；assist 不帶 aria-pressed。</div>
+          </template>
+
+          <!-- ============ M3ListItem ============ -->
+          <template v-if="section === 'listItem'">
+            <div class="demo__caption m3-label-medium">「更多」頁的用法：leading + to（導頁）+ trailing chevron</div>
+            <ul class="m3-list bleed" role="list">
+              <m3-list-item headline="通知" supporting-text="3 則未讀" leading-icon="notifications" trailing-icon="chevron_right" to="/notifications" @click="snack.show('導頁 → /notifications')"></m3-list-item>
+              <m3-list-item headline="出勤紀錄" supporting-text="月曆檢視" leading-icon="calendar_month" trailing-icon="chevron_right" to="/attendance" @click="snack.show('導頁 → /attendance')"></m3-list-item>
+              <m3-list-item headline="請假" leading-icon="event_busy" trailing-icon="chevron_right" to="/leaves" @click="snack.show('導頁 → /leaves')"></m3-list-item>
+              <m3-list-item headline="加入官方帳號" supporting-text="安親班尚未設定 LINE 官方帳號" leading-icon="person_add" :clickable="true" :disabled="true"></m3-list-item>
+            </ul>
+            <div class="demo__caption m3-label-medium">一行 / 二行、無 leading（不可點）</div>
+            <ul class="m3-list bleed" role="list">
+              <m3-list-item headline="版本"><template v-slot:trailing><span class="m3-body-medium">1.0.0</span></template></m3-list-item>
+              <m3-list-item headline="陳阿姨" supporting-text="外婆 · 0912-000-123，接送前請先在 App 建立代理接送，現場出示接送碼"></m3-list-item>
+            </ul>
+            <div class="demo__caption m3-label-medium">clickable（role=button）：一般 / hover / pressed / 鍵盤焦點</div>
+            <ul class="m3-list bleed" role="list">
+              <m3-list-item headline="登出" leading-icon="logout" :clickable="true" @click="snack.show('click：登出')"></m3-list-item>
+              <m3-list-item headline="hover" leading-icon="logout" :clickable="true" class="force-hover"></m3-list-item>
+              <m3-list-item headline="pressed" leading-icon="logout" :clickable="true" class="force-pressed"></m3-list-item>
+              <m3-list-item headline="鍵盤焦點" leading-icon="logout" :clickable="true" class="force-focus"></m3-list-item>
+            </ul>
+            <div class="demo__caption m3-label-medium">trailing slot 放 M3Switch（列本身不可點）</div>
+            <ul class="m3-list bleed" role="list">
+              <m3-list-item headline="到班通知" supporting-text="LINE 推播">
+                <template v-slot:trailing><m3-switch v-model="listSwitch" label="到班通知"></m3-switch></template>
+              </m3-list-item>
+            </ul>
+          </template>
+
+          <!-- ============ M3TopAppBar ============ -->
+          <template v-if="section === 'topAppBar'">
+            <div class="demo__caption m3-label-medium">有返回鍵（深層頁）</div>
+            <div class="bleed"><m3-top-app-bar title="請假" :show-back="true" @back="snack.show('back')"></m3-top-app-bar></div>
+            <div class="demo__caption m3-label-medium">無返回鍵 + Logo（leading slot；無 logo 圖時用名稱首字）</div>
+            <div class="bleed">
+              <m3-top-app-bar title="首頁"><template v-slot:leading><span class="logo-mark m3-title-medium" aria-hidden="true">向</span></template></m3-top-app-bar>
+            </div>
+            <div class="demo__caption m3-label-medium">有 actions</div>
+            <div class="bleed">
+              <m3-top-app-bar title="通知" :show-back="true">
+                <template v-slot:actions>
+                  <m3-icon-button icon="done_all" label="全部標為已讀" @click="snack.show('全部標為已讀')"></m3-icon-button>
+                  <m3-icon-button icon="settings" label="通知設定" @click="snack.show('通知設定')"></m3-icon-button>
+                </template>
+              </m3-top-app-bar>
+            </div>
+            <div class="demo__caption m3-label-medium">捲動前（surface）/ 捲動後（surface-container）</div>
+            <div class="bleed"><m3-top-app-bar title="成績" :show-back="true"></m3-top-app-bar></div>
+            <div class="bleed"><m3-top-app-bar title="成績" :show-back="true" :scrolled="true"></m3-top-app-bar></div>
+            <div class="demo__caption m3-label-medium">長標題單行省略</div>
+            <div class="bleed"><m3-top-app-bar title="113 學年度第一學期期中考 數學 單次明細" :show-back="true"></m3-top-app-bar></div>
+            <div class="demo-code">手機框最上方是真的 M3TopAppBar：往下捲這一頁，底色會換成 surface-container。</div>
+            <div style="height: 320px"></div>
+          </template>
+
+          <!-- ============ M3NavigationBar ============ -->
+          <template v-if="section === 'navigationBar'">
+            <div class="demo__caption m3-label-medium">五個項目各自 active；「更多」徽章 0 / 3 / 120</div>
+            <div class="bleed" v-for="(row, i) in navDemoRows" :key="i">
+              <m3-navigation-bar :items="navItemsWithBadge(row.badge)" :current-key="row.key"></m3-navigation-bar>
+            </div>
+            <div class="demo-code">徽章：0 不渲染、120 顯示「99+」；徽章本身 aria-hidden，項目另帶視覺隱藏文字「，3 則未讀」。</div>
+            <div class="demo__caption m3-label-medium">底部真實導覽的「更多」徽章</div>
+            <m3-segmented-button v-model="navBadgeKey" :items="navBadgeOptions" aria-label="徽章數"></m3-segmented-button>
+          </template>
+
+          <!-- ============ M3Snackbar ============ -->
+          <template v-if="section === 'snackbar'">
+            <div class="demo__caption m3-label-medium">靜態：一般 / 有 action / error tone / 兩行</div>
+            <div class="demo-col">
+              <m3-snackbar :inline="true" :item="{ id: -1, message: '已通知安親班', tone: 'info', duration: 4000 }"></m3-snackbar>
+              <m3-snackbar :inline="true" :item="{ id: -2, message: '資料更新失敗', tone: 'info', duration: 4000, action: { label: '重試', onClick: noop } }"></m3-snackbar>
+              <m3-snackbar :inline="true" :item="{ id: -3, message: '儲存失敗，請稍後再試', tone: 'error', duration: 4000 }"></m3-snackbar>
+              <m3-snackbar :inline="true" :item="{ id: -4, message: '請假已送出，但有 2 個附件上傳失敗，可在請假詳情重新上傳', tone: 'info', duration: 4000 }"></m3-snackbar>
+            </div>
+            <div class="demo__caption m3-label-medium">實際觸發（照 PARENT-011 佇列：一次一則、最多 3 則、只為第一則計時）</div>
+            <div class="demo-col">
+              <m3-button variant="tonal" :block="true" @click="snack.show('已通知安親班')">一般訊息</m3-button>
+              <m3-button variant="tonal" :block="true" @click="snack.show('資料更新失敗', { action: { label: '重試', onClick: () => snack.show('重試中…') } })">有 action（重試）</m3-button>
+              <m3-button variant="tonal" :block="true" @click="snack.show('儲存失敗，請稍後再試', { tone: 'error' })">error tone</m3-button>
+              <m3-button variant="outlined" :block="true" @click="pushFour">連續送 4 則（看佇列丟棄最舊未顯示）</m3-button>
+            </div>
+            <div class="demo-code">佇列：{{ snack.items.length ? snack.items.map(x => x.message).join(' → ') : '（空）' }}</div>
+          </template>
+
+          <!-- ============ M3SegmentedButton ============ -->
+          <template v-if="section === 'segmented'">
+            <div class="demo__caption m3-label-medium">2 段 + 圖示（代理接送授權表單）</div>
+            <m3-segmented-button v-model="proxyMode" :items="proxyItems" aria-label="接送人來源"></m3-segmented-button>
+            <div class="demo__caption m3-label-medium">3 段（請假假別）— 點選或聚焦後按 ← →</div>
+            <m3-segmented-button v-model="leaveType" :items="leaveItems" aria-label="假別"></m3-segmented-button>
+            <div class="demo__caption m3-label-medium">含 disabled 段（事假停用，→ 會跳過）</div>
+            <m3-segmented-button v-model="leaveType2" :items="leaveItemsDisabled" aria-label="假別"></m3-segmented-button>
+            <div class="demo__caption m3-label-medium">通知收件匣篩選</div>
+            <m3-segmented-button v-model="inboxFilter" :items="inboxItems" aria-label="通知篩選"></m3-segmented-button>
+            <div class="demo-code">role="radiogroup" / 每段 role="radio" aria-checked；選中：{{ leaveType }}、{{ leaveType2 }}</div>
+          </template>
+
+          <!-- ============ M3Switch ============ -->
+          <template v-if="section === 'switch'">
+            <div class="demo__caption m3-label-medium">on / off / disabled / busy</div>
+            <div class="demo-row" style="gap: 16px">
+              <div class="demo-legend m3-label-small"><m3-switch :model-value="true" label="示範 on"></m3-switch>on</div>
+              <div class="demo-legend m3-label-small"><m3-switch :model-value="false" label="示範 off"></m3-switch>off</div>
+              <div class="demo-legend m3-label-small"><m3-switch :model-value="true" :disabled="true" label="示範 disabled on"></m3-switch>disabled on</div>
+              <div class="demo-legend m3-label-small"><m3-switch :model-value="false" :disabled="true" label="示範 disabled off"></m3-switch>disabled off</div>
+              <div class="demo-legend m3-label-small"><m3-switch :model-value="true" :busy="true" label="示範 busy on"></m3-switch>busy on</div>
+              <div class="demo-legend m3-label-small"><m3-switch :model-value="false" :busy="true" label="示範 busy off"></m3-switch>busy off</div>
+            </div>
+            <div class="demo__caption m3-label-medium">通知設定頁的用法：樂觀切換 → 儲存中 busy → 完成</div>
+            <div class="demo-row m3-body-small" style="color: var(--m3-on-surface-variant)">
+              <label><input type="checkbox" v-model="failSave"> 模擬儲存失敗（回滾 + error snackbar）</label>
+            </div>
+            <div class="bleed">
+              <div class="pref-row" v-for="p in prefs" :key="p.event">
+                <span class="pref-row__label m3-body-large">{{ p.label }}</span>
+                <m3-switch :model-value="p.on" :busy="p.busy" :label="p.label" @update:model-value="v => togglePref(p, v)"></m3-switch>
+                <span style="width: 8px"></span>
+              </div>
+            </div>
+          </template>
+        </main>
+
+        <m3-snackbar :item="snack.items[0] || null" @dismiss="snack.dismiss"></m3-snackbar>
+
+        <m3-navigation-bar :items="liveNavItems" :current-key="currentTab" @select="onNavSelect"></m3-navigation-bar>
+      </div>
+    </div>
+
+    <aside class="notes">
+      <h3>設計說明 / 待裁定</h3>
+      <div class="notes__alert" v-if="openQuestions.length">以下項目需要你裁定，未回覆前這張稿不會進入實作</div>
+
+      <h4>預覽元件</h4>
+      <div class="state-switch state-switch--wrap" role="group" aria-label="預覽元件">
+        <button v-for="s in sections" :key="s.key" type="button" :class="{ 'is-active': section === s.key }" @click="section = s.key">{{ s.label }}</button>
+      </div>
+
+      <h4>預覽選項</h4>
+      <div class="notes__row">主題
+        <span class="state-switch"><button type="button" :class="{ 'is-active': theme === 'light' }" @click="theme = 'light'">淺色</button><button type="button" :class="{ 'is-active': theme === 'dark' }" @click="theme = 'dark'">深色</button></span>
+      </div>
+      <div class="notes__row">點擊區虛線
+        <span class="state-switch"><button type="button" :class="{ 'is-active': !showHit }" @click="showHit = false">隱藏</button><button type="button" :class="{ 'is-active': showHit }" @click="showHit = true">顯示</button></span>
+      </div>
+      <div class="notes__row">待裁定 1 卡片配色
+        <span class="state-switch"><button type="button" :class="{ 'is-active': cardScheme === 'a' }" @click="cardScheme = 'a'">A</button><button type="button" :class="{ 'is-active': cardScheme === 'b' }" @click="cardScheme = 'b'">B</button></span>
+      </div>
+      <div class="notes__row">待裁定 2 snackbar error
+        <span class="state-switch"><button type="button" :class="{ 'is-active': snackScheme === 'a' }" @click="snackScheme = 'a'">A</button><button type="button" :class="{ 'is-active': snackScheme === 'b' }" @click="snackScheme = 'b'">B</button></span>
+      </div>
+
+      <h4>設計決策</h4>
+      <div class="notes__row">
+        <span class="state-switch"><button type="button" :class="{ 'is-active': !showAllDecisions }" @click="showAllDecisions = false">通用 + 目前元件</button><button type="button" :class="{ 'is-active': showAllDecisions }" @click="showAllDecisions = true">全部</button></span>
+      </div>
+      <template v-for="g in visibleDecisionGroups" :key="g.group">
+        <div class="notes__group">{{ g.group }}</div>
+        <ol><li v-for="(d, i) in g.items" :key="i">{{ d }}</li></ol>
+      </template>
+
+      <h4 v-if="openQuestions.length">待裁定（編號與其他家長端元件稿連號）</h4>
+      <ol :start="questionStart">
+        <li v-for="(q, i) in openQuestions" :key="i" style="margin-bottom: 8px">
+          <div>{{ q.question }}</div>
+          <div class="notes__option">A. {{ q.optionA }}<br>B. {{ q.optionB }}</div>
+        </li>
+      </ol>
+    </aside>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch, nextTick } = Vue
+
+/* ---------------- 元件（對照實作介面；稿只為呈現外觀與互動） ---------------- */
+
+/** PARENT-014 M3Icon：label 有值 → role=img + aria-label；無 → aria-hidden */
+const M3Icon = {
+  props: {
+    name: { type: String, required: true },
+    size: { type: [Number, String], default: 24 },
+    filled: { type: Boolean, default: false },
+    label: { type: String, default: '' },
+  },
+  computed: {
+    iconStyle() {
+      const fontSize = typeof this.size === 'number' ? `${this.size}px` : this.size
+      return { fontSize, fontVariationSettings: `'FILL' ${this.filled ? 1 : 0}, 'wght' 400, 'GRAD' 0, 'opsz' 24` }
+    },
+  },
+  template: `<span class="material-symbols-rounded m3-icon" :style="iconStyle" :role="label ? 'img' : null" :aria-label="label || null" :aria-hidden="label ? null : 'true'">{{ name }}</span>`,
+}
+
+/** PARENT-015 M3Button：loading 用 aria-disabled 擋點擊並保留焦點；disabled 用原生屬性 */
+const M3Button = {
+  props: {
+    variant: { type: String, default: 'filled' },
+    type: { type: String, default: 'button' },
+    disabled: { type: Boolean, default: false },
+    loading: { type: Boolean, default: false },
+    block: { type: Boolean, default: false },
+    icon: { type: String, default: '' },
+  },
+  emits: ['click'],
+  methods: {
+    onClick(e) { if (this.disabled || this.loading) return; this.$emit('click', e) },
+  },
+  template: `<button :type="type" class="m3-button m3-state m3-label-large"
+    :class="['m3-button--' + variant, { 'is-block': block, 'has-icon': !!icon || loading, 'is-loading': loading }]"
+    :disabled="disabled" :aria-disabled="loading ? 'true' : null" :aria-busy="loading ? 'true' : null" @click="onClick">
+    <span v-if="loading" class="m3-spinner" aria-hidden="true"></span>
+    <m3-icon v-else-if="icon" :name="icon" :size="18"></m3-icon>
+    <span><slot></slot></span>
+  </button>`,
+}
+
+/** PARENT-016 M3IconButton：label 必填 */
+const M3IconButton = {
+  props: {
+    icon: { type: String, required: true },
+    label: { type: String, required: true },
+    variant: { type: String, default: 'standard' },
+    disabled: { type: Boolean, default: false },
+  },
+  emits: ['click'],
+  template: `<button type="button" class="m3-icon-button" :class="'m3-icon-button--' + variant" :aria-label="label" :disabled="disabled"
+    @click="!disabled && $emit('click', $event)"><span class="m3-icon-button__container"><m3-icon :name="icon"></m3-icon></span></button>`,
+}
+
+/** PARENT-017 M3Card */
+const M3Card = {
+  props: {
+    variant: { type: String, default: 'filled' },
+    clickable: { type: Boolean, default: false },
+    padding: { type: String, default: 'md' },
+  },
+  emits: ['click'],
+  methods: {
+    onClick(e) { if (this.clickable) this.$emit('click', e) },
+    onKeydown(e) {
+      if (!this.clickable || (e.key !== 'Enter' && e.key !== ' ')) return
+      e.preventDefault()
+      this.$emit('click', e)
+    },
+  },
+  template: `<div class="m3-card" :class="['m3-card--' + variant, 'm3-card--pad-' + padding, { 'is-clickable m3-state': clickable }]"
+    :role="clickable ? 'button' : null" :tabindex="clickable ? 0 : null" @click="onClick" @keydown="onKeydown">
+    <div v-if="$slots.header" class="m3-card__header"><slot name="header"></slot></div>
+    <slot></slot>
+    <div v-if="$slots.actions" class="m3-card__actions"><slot name="actions"></slot></div>
+  </div>`,
+}
+
+/** PARENT-018 M3TextField（forceFocus 只為稿件示範，實作沒有這個 prop） */
+let tfUid = 0
+const M3TextField = {
+  props: {
+    modelValue: { type: String, default: '' },
+    label: { type: String, required: true },
+    type: { type: String, default: 'text' },
+    placeholder: { type: String, default: '' },
+    supportingText: { type: String, default: '' },
+    errorText: { type: String, default: '' },
+    disabled: { type: Boolean, default: false },
+    maxlength: { type: Number, default: undefined },
+    inputmode: { type: String, default: undefined },
+    autocomplete: { type: String, default: undefined },
+    id: { type: String, default: undefined },
+    forceFocus: { type: Boolean, default: false },
+  },
+  emits: ['update:modelValue', 'enter'],
+  data() { return { focused: false, uid: ++tfUid } },
+  computed: {
+    inputId() { return this.id || `m3-tf-${this.uid}` },
+    descId() { return `${this.inputId}-desc` },
+    hasError() { return !!this.errorText },
+    isFocused() { return this.focused || this.forceFocus },
+    floating() { return this.isFocused || !!this.modelValue || this.type === 'date' || this.type === 'time' },
+    supportText() { return this.errorText || this.supportingText },
+  },
+  methods: {
+    onInput(e) { this.$emit('update:modelValue', e.target.value) },
+    onKeydown(e) {
+      if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return
+      this.$emit('enter')
+    },
+  },
+  template: `<div class="m3-tf" :class="{ 'is-focused': isFocused, 'is-floating': floating, 'is-error': hasError, 'is-disabled': disabled, 'is-textarea': type === 'textarea', 'has-trailing': hasError }">
+    <div class="m3-tf__control">
+      <textarea v-if="type === 'textarea'" :id="inputId" class="m3-tf__input" rows="4" :value="modelValue" :placeholder="placeholder"
+        :disabled="disabled" :maxlength="maxlength" :aria-invalid="hasError ? 'true' : 'false'" :aria-describedby="supportText ? descId : null"
+        @input="onInput" @focus="focused = true" @blur="focused = false"></textarea>
+      <input v-else :id="inputId" class="m3-tf__input" :type="type" :value="modelValue" :placeholder="placeholder" :disabled="disabled"
+        :maxlength="maxlength" :inputmode="inputmode" :autocomplete="autocomplete" :aria-invalid="hasError ? 'true' : 'false'"
+        :aria-describedby="supportText ? descId : null" @input="onInput" @keydown="onKeydown" @focus="focused = true" @blur="focused = false">
+      <label class="m3-tf__label" :for="inputId">{{ label }}</label>
+      <fieldset class="m3-tf__outline" aria-hidden="true"><legend><span>{{ label }}</span></legend></fieldset>
+      <m3-icon v-if="hasError" class="m3-tf__trailing" name="error" :filled="true"></m3-icon>
+    </div>
+    <div v-if="supportText || maxlength" class="m3-tf__supporting m3-body-small">
+      <span v-if="supportText" :id="descId" class="m3-tf__supporting-text">{{ supportText }}</span>
+      <span v-if="maxlength" class="m3-tf__counter">{{ (modelValue || '').length }}/{{ maxlength }}</span>
+    </div>
+  </div>`,
+}
+
+/** PARENT-019 M3Chip */
+const M3Chip = {
+  props: {
+    label: { type: String, required: true },
+    variant: { type: String, default: 'assist' },
+    selected: { type: Boolean, default: false },
+    icon: { type: String, default: '' },
+    disabled: { type: Boolean, default: false },
+  },
+  emits: ['click'],
+  computed: {
+    isSelected() { return this.variant === 'filter' && this.selected },
+    leading() { return this.isSelected ? 'check' : this.icon },
+  },
+  template: `<button type="button" class="m3-chip m3-state" :class="['m3-chip--' + variant, { 'is-selected': isSelected, 'has-icon': !!leading }]"
+    :aria-pressed="variant === 'filter' ? String(selected) : null" :disabled="disabled" @click="!disabled && $emit('click', $event)">
+    <m3-icon v-if="leading" class="m3-chip__icon" :name="leading" :size="18"></m3-icon><span class="m3-label-large">{{ label }}</span>
+  </button>`,
+}
+
+/** PARENT-020 M3ListItem：li 保持 listitem 語意，互動元素是 li 內的 a（to）或 div[role=button]（clickable） */
+const M3ListItem = {
+  props: {
+    headline: { type: String, required: true },
+    supportingText: { type: String, default: '' },
+    leadingIcon: { type: String, default: '' },
+    trailingIcon: { type: String, default: '' },
+    clickable: { type: Boolean, default: false },
+    disabled: { type: Boolean, default: false },
+    to: { type: String, default: '' },
+  },
+  emits: ['click'],
+  computed: {
+    interactive() { return this.clickable || !!this.to },
+    tag() { return this.to ? 'a' : 'div' },
+  },
+  methods: {
+    onClick(e) {
+      if (this.to) e.preventDefault() // 稿內沒有 router；實作用 RouterLink
+      if (this.disabled || !this.interactive) return
+      this.$emit('click', e)
+    },
+    onKeydown(e) {
+      if (this.to || !this.clickable || (e.key !== 'Enter' && e.key !== ' ')) return
+      e.preventDefault()
+      this.onClick(e)
+    },
+  },
+  template: `<li class="m3-list-item" :class="{ 'is-two-line': !!supportingText, 'is-disabled': disabled }">
+    <component :is="tag" class="m3-list-item__inner" :class="{ 'is-interactive m3-state': interactive }"
+      :href="to ? '#' + to : null" :role="interactive && !to ? 'button' : null"
+      :tabindex="interactive && !to ? (disabled ? -1 : 0) : null" :aria-disabled="interactive && disabled ? 'true' : null"
+      @click="onClick" @keydown="onKeydown">
+      <span v-if="$slots.leading || leadingIcon" class="m3-list-item__leading" :class="{ 'is-icon': !$slots.leading }"><slot name="leading"><m3-icon v-if="leadingIcon" :name="leadingIcon"></m3-icon></slot></span>
+      <span class="m3-list-item__content">
+        <span class="m3-list-item__headline m3-body-large">{{ headline }}</span>
+        <span v-if="supportingText" class="m3-list-item__supporting m3-body-medium">{{ supportingText }}</span>
+      </span>
+      <span v-if="$slots.trailing || trailingIcon" class="m3-list-item__trailing"><slot name="trailing"><m3-icon v-if="trailingIcon" :name="trailingIcon"></m3-icon></slot></span>
+    </component>
+  </li>`,
+}
+
+/** PARENT-021 M3TopAppBar（scrolled 只為稿件示範；實作自行偵測捲動） */
+const M3TopAppBar = {
+  props: {
+    title: { type: String, required: true },
+    showBack: { type: Boolean, default: false },
+    scrolled: { type: Boolean, default: false },
+  },
+  emits: ['back'],
+  template: `<header class="m3-top-app-bar" :class="{ 'is-scrolled': scrolled }">
+    <div class="m3-top-app-bar__leading">
+      <m3-icon-button v-if="showBack" icon="arrow_back" label="返回" @click="$emit('back')"></m3-icon-button>
+      <slot v-else name="leading"></slot>
+    </div>
+    <h1 class="m3-top-app-bar__title m3-title-large">{{ title }}</h1>
+    <div class="m3-top-app-bar__actions"><slot name="actions"></slot></div>
+  </header>`,
+}
+
+/** PARENT-022 M3NavigationBar */
+const M3NavigationBar = {
+  props: {
+    items: { type: Array, required: true },
+    currentKey: { type: String, required: true },
+  },
+  emits: ['select'],
+  methods: {
+    badgeText(b) { if (!b || b < 1) return null; return b > 99 ? '99+' : String(b) },
+  },
+  template: `<nav class="m3-navigation-bar" aria-label="主要功能">
+    <button v-for="item in items" :key="item.key" type="button" class="m3-nav-tab" :class="{ 'is-active': item.key === currentKey }"
+      :aria-current="item.key === currentKey ? 'page' : null" @click="$emit('select', item.key, item)">
+      <span class="m3-nav-tab__icon">
+        <m3-icon :name="item.icon" :filled="item.key === currentKey"></m3-icon>
+        <span v-if="badgeText(item.badge)" class="m3-nav-tab__badge" aria-hidden="true">{{ badgeText(item.badge) }}</span>
+      </span>
+      <span class="m3-nav-tab__label m3-label-medium">{{ item.label }}</span>
+      <span v-if="badgeText(item.badge)" class="visually-hidden">，{{ item.badge }} 則未讀</span>
+    </button>
+  </nav>`,
+}
+
+/** PARENT-023 M3Snackbar（inline 只為稿件靜態示範） */
+const M3Snackbar = {
+  props: {
+    item: { type: Object, default: null },
+    inline: { type: Boolean, default: false },
+  },
+  emits: ['dismiss'],
+  methods: {
+    onAction() { this.item.action.onClick(); this.$emit('dismiss', this.item.id) },
+  },
+  template: `<transition name="m3-snackbar" mode="out-in">
+    <div v-if="item" :key="item.id" class="m3-snackbar" :class="['m3-snackbar--' + item.tone, { 'is-inline': inline }]"
+      :role="item.tone === 'error' ? 'alert' : 'status'" :aria-live="item.tone === 'error' ? null : 'polite'">
+      <m3-icon v-if="item.tone === 'error'" class="m3-snackbar__icon" name="error" :filled="true"></m3-icon>
+      <span class="m3-snackbar__message m3-body-medium">{{ item.message }}</span>
+      <button v-if="item.action" type="button" class="m3-snackbar__action m3-state m3-label-large" @click="onAction">{{ item.action.label }}</button>
+    </div>
+  </transition>`,
+}
+
+/** PARENT-098 M3SegmentedButton：radiogroup、roving tabindex、方向鍵略過 disabled 並循環 */
+const M3SegmentedButton = {
+  props: {
+    modelValue: { type: String, required: true },
+    items: { type: Array, required: true },
+    ariaLabel: { type: String, required: true },
+  },
+  emits: ['update:modelValue'],
+  computed: {
+    focusIndex() {
+      const i = this.items.findIndex((x) => x.value === this.modelValue)
+      return i >= 0 ? i : this.items.findIndex((x) => !x.disabled)
+    },
+  },
+  methods: {
+    select(item) { if (!item.disabled) this.$emit('update:modelValue', item.value) },
+    onKeydown(e, idx) {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+      e.preventDefault()
+      const dir = e.key === 'ArrowRight' ? 1 : -1
+      const n = this.items.length
+      let i = idx
+      for (let k = 0; k < n; k++) {
+        i = (i + dir + n) % n
+        if (!this.items[i].disabled) break
+      }
+      if (i === idx || this.items[i].disabled) return
+      this.$emit('update:modelValue', this.items[i].value)
+      nextTick(() => this.$refs.seg[i].focus())
+    },
+  },
+  template: `<div class="m3-segmented" role="radiogroup" :aria-label="ariaLabel" :style="{ gridTemplateColumns: 'repeat(' + items.length + ', minmax(0, 1fr))' }">
+    <button v-for="(item, idx) in items" :key="item.value" ref="seg" type="button" role="radio" class="m3-segment m3-state m3-label-large"
+      :class="{ 'is-checked': item.value === modelValue }" :aria-checked="String(item.value === modelValue)" :disabled="item.disabled"
+      :tabindex="idx === focusIndex ? 0 : -1" @click="select(item)" @keydown="onKeydown($event, idx)">
+      <m3-icon v-if="item.value === modelValue" name="check" :size="18"></m3-icon>
+      <m3-icon v-else-if="item.icon" :name="item.icon" :size="18"></m3-icon>
+      <span class="m3-segment__label">{{ item.label }}</span>
+    </button>
+  </div>`,
+}
+
+/** PARENT-175 M3Switch：disabled 或 busy 時不 emit */
+const M3Switch = {
+  props: {
+    modelValue: { type: Boolean, required: true },
+    disabled: { type: Boolean, default: false },
+    label: { type: String, required: true },
+    busy: { type: Boolean, default: false },
+  },
+  emits: ['update:modelValue'],
+  methods: {
+    toggle() { if (this.disabled || this.busy) return; this.$emit('update:modelValue', !this.modelValue) },
+  },
+  template: `<button type="button" role="switch" class="m3-switch" :class="{ 'is-on': modelValue, 'is-busy': busy }"
+    :aria-checked="String(modelValue)" :aria-label="label" :aria-busy="busy ? 'true' : null" :disabled="disabled" @click="toggle">
+    <span class="m3-switch__track"><span class="m3-switch__thumb">
+      <span v-if="busy" class="m3-switch__spinner" aria-hidden="true"></span>
+      <m3-icon v-else-if="modelValue" name="check" :size="16"></m3-icon>
+    </span></span>
+  </button>`,
+}
+
+/* ---------------- 稿件資料 ---------------- */
+
+const SECTIONS = [
+  { key: 'icon', label: 'M3Icon', task: 'PARENT-014', file: 'm3/M3Icon.vue' },
+  { key: 'button', label: 'M3Button', task: 'PARENT-015', file: 'm3/M3Button.vue' },
+  { key: 'iconButton', label: 'M3IconButton', task: 'PARENT-016', file: 'm3/M3IconButton.vue' },
+  { key: 'card', label: 'M3Card', task: 'PARENT-017', file: 'm3/M3Card.vue' },
+  { key: 'textField', label: 'M3TextField', task: 'PARENT-018', file: 'm3/M3TextField.vue' },
+  { key: 'chip', label: 'M3Chip', task: 'PARENT-019', file: 'm3/M3Chip.vue' },
+  { key: 'listItem', label: 'M3ListItem', task: 'PARENT-020', file: 'm3/M3ListItem.vue' },
+  { key: 'topAppBar', label: 'M3TopAppBar', task: 'PARENT-021', file: 'm3/M3TopAppBar.vue' },
+  { key: 'navigationBar', label: 'M3NavigationBar', task: 'PARENT-022', file: 'm3/M3NavigationBar.vue' },
+  { key: 'snackbar', label: 'M3Snackbar', task: 'PARENT-023', file: 'm3/M3Snackbar.vue' },
+  { key: 'segmented', label: 'M3SegmentedButton', task: 'PARENT-098', file: 'm3/M3SegmentedButton.vue' },
+  { key: 'switch', label: 'M3Switch', task: 'PARENT-175', file: 'm3/M3Switch.vue' },
+]
+
+/** 底部導覽五項，照 PARENT-024 */
+const NAV_ITEMS = [
+  { key: 'home', label: '首頁', icon: 'home', path: '/' },
+  { key: 'homework', label: '作業', icon: 'assignment', path: '/homework' },
+  { key: 'pickup', label: '接送', icon: 'directions_walk', path: '/pickup' },
+  { key: 'exams', label: '成績', icon: 'grading', path: '/exams' },
+  { key: 'more', label: '更多', icon: 'menu', path: '/more' },
+]
+
+const DECISIONS = {
+  通用: [
+    '所有元件只用 --m3-* token；稿右側可切深色檢查色票（目前沒有深色切換的 task，只是預先檢查）。',
+    '鍵盤焦點統一只在 :focus-visible 顯示 2px primary 外框（offset 2px；滿版清單列與分段按鈕改內縮）；TextField 以 2px primary 邊框當焦點指示。',
+    '觸控目標：視覺尺寸照 M3（IconButton 40、Chip 32、Switch 軌道 32 高），點擊區由元件本體或透明延伸補到 48px；右側「點擊區虛線」可檢查。',
+    'State layer：hover 0.08 / focus 0.12 / pressed 0.12，顏色 currentColor；不沿用 ivy 按下時 scale(0.96) 縮放（清單與卡片會晃）。',
+    '停用態一律整體 opacity 0.38、拿掉 state layer、cursor not-allowed（沿用 ivy；不用 color-mix，避免舊版 LINE WebView 不支援）。',
+    'Button loading 與 Switch busy 的轉圈在 reduced-motion 時由 base.css 全域規則停成靜止弧形，狀態仍以 aria-busy 表達。',
+  ],
+  M3Icon: [
+    '建議三種尺寸：18（Chip / 分段按鈕 / 按鈕內）、24（預設）、48（空狀態）；size 也接受字串（例如 1.5em）。',
+    'label 有值 → role="img" + aria-label；無 → aria-hidden="true"。ivy 用 attrs 的 aria-label 判斷，改成明確的 label prop。',
+    '1em 夾盒 + @font-face 的 font-display: block：字型載入期間隱形，載不到也只是 1em 空盒，不會露出 check_circle 原文撐版。',
+    '稿從 Google Fonts 載入圖示只是方便預覽；實作用自架子集 woff2，icons.css 註解列出家長端用到的圖示名稱，新增圖示時一起更新。',
+    'M3Icon 本身不可互動、不拿焦點；44px 觸控與 :focus-visible 由外層 IconButton / Button 負責（task 通用句不適用於本元件）。',
+  ],
+  M3Button: [
+    '高 48px（不是 M3 的 40px），四種 variant 同高、圓角 full；有圖示時左 padding 16px、圖示 18px。',
+    'filled = primary；tonal = secondary-container；outlined = 1px outline 邊 + primary 字；text = 透明底 + primary 字、左右 padding 12px。',
+    'loading：圖示位置換成 18px 轉圈（沒圖示也補上），文字不變、顏色不淡化；以 aria-disabled + aria-busy 擋點擊並保留焦點。disabled 用原生 disabled 屬性。',
+    'block = 寬 100%；頁面主要動作（我要來接、送出請假）用 filled + block。',
+  ],
+  M3IconButton: [
+    '48×48 點擊區、40×40 圓形視覺；standard 透明 + on-surface-variant，filled = primary，tonal = secondary-container。',
+    '圖示固定 24px、不提供 filled 切換；label 必填，寫入 aria-label。',
+  ],
+  M3Card: [
+    '圓角 12px（medium），不沿用 ivy 的 26px；padding none 0 / sm 12px / md 16px。',
+    'header slot 下方 8px；actions slot 靠右、上方 16px、按鈕間距 8px，空間不夠時換行。',
+    'clickable：role=button + tabindex=0、Enter / Space 觸發、on-surface 色 state layer、cursor pointer。不可點的卡片完全沒有 role。',
+    'variant 配色見待裁定 1（右側可切 A / B）。',
+  ],
+  M3TextField: [
+    'outlined、高 56px、圓角 4px（M3 extra-small）；浮動 label 用 fieldset / legend 在邊框挖缺口，放在卡片或 BottomSheet 等任何底色上都不用補底色。',
+    '狀態：一般 outline、hover on-surface、focus 2px primary 且 label 變 primary、錯誤時 error 邊框 + error label + 右側 error 圖示 + errorText 取代 supportingText、disabled opacity 0.38。',
+    'placeholder 只在 focus 且空值時出現；type 為 date / time 時 label 永遠浮起（瀏覽器原生會顯示格式字）。',
+    'maxlength 有值就在支援文字列右側顯示「n/max」（不限 textarea）；textarea 固定 4 行高、超過在框內捲動、不可拖曳縮放。',
+    'Enter：input 按 Enter emit enter，注音等輸入法組字中（isComposing 或 keyCode 229）不觸發；textarea 不 emit。',
+    'aria-describedby 指向支援 / 錯誤文字元素；aria-invalid 隨 errorText 為 true / false。',
+  ],
+  M3Chip: [
+    '高 32px、圓角 8px（M3 small），以透明延伸補到 48px 點擊高。',
+    'assist：outline 邊、圖示 primary 色；filter 未選：outline 邊；filter 已選：secondary-container 底、無邊、leading 換成 check。',
+    'aria-pressed 只出現在 filter；單選 / 多選由呼叫端控制 selected，元件只 emit click。',
+  ],
+  M3ListItem: [
+    '一行 56px、二行 72px；左右 padding 16px、元素間距 16px；headline 單行省略、supportingText 最多兩行。',
+    'leadingIcon 放在 40px secondary-container 圓底；trailingIcon on-surface-variant 色，導頁項目用 chevron_right。',
+    'li 保持 listitem 語意：to 有值時 li 內渲染 RouterLink，clickable 時 li 內渲染 div[role=button][tabindex=0]；aria-disabled 放在這個互動元素上。',
+    'disabled：opacity 0.38、不 emit、不導頁、tabindex -1。只有可互動的列有 state layer 與焦點。',
+  ],
+  M3TopAppBar: [
+    'small 版面：64px 高、標題 title-large 靠左單行省略；左側 48px 欄放返回鍵或 leading slot，右側 actions。',
+    '返回鍵 arrow_back、aria-label「返回」，只 emit back。',
+    'sticky 置頂；內容捲動 > 0 時底色由 surface 換成 surface-container（M3 on-scroll），150ms 過渡，不加陰影。',
+    'Logo 為 leading slot 內容（PARENT-024 傳入）：40px 圓；沒有 logo 圖時用安親班名稱首字、primary-container 底。',
+  ],
+  M3NavigationBar: [
+    '80px 高 + safe-area-inset-bottom、surface-container 底；每項都顯示文字；active：64×32 secondary-container 膠囊、filled 圖示、文字 on-surface 粗體。',
+    '徽章：error 底 16px 高膠囊，貼在圖示右上；0 不渲染、>99 顯示 99+。徽章 aria-hidden，按鈕內另放視覺隱藏文字「，n 則未讀」。',
+    '點目前分頁照樣 emit select（捲回頂端由 PARENT-024 處理）。',
+  ],
+  M3Snackbar: [
+    '在底部導覽上方 16px、左右各 16px（最大寬跟 layout 的 560px）；inverse-surface 底、圓角 4px、elev-3。',
+    '訊息最多兩行；action 是 inverse-primary 色文字按鈕、44px 點擊高、靠右。',
+    '進場：由下 16px 淡入 250ms（emphasized-decel）；出場：淡出 150ms；換下一則時先出後進；reduced-motion 無動畫。',
+    'info → role=status + aria-live=polite；error → role=alert；error 的視覺見待裁定 2。',
+    '不加關閉鈕：目前沒有呼叫端用 duration 0，常駐訊息由呼叫端 dismiss。',
+  ],
+  M3SegmentedButton: [
+    '高 48px、1px outline 外框、圓角 full、撐滿父層寬度且各段等寬；文字過長時段內省略。',
+    '選中段 secondary-container 底，並以 check 取代原圖示；disabled 段內容 opacity 0.38、不可點。',
+    'role=radiogroup + aria-label；每段 role=radio + aria-checked；roving tabindex（只有選中段在 Tab 順序內）。',
+    '← → 移到下一個非 disabled 段並立即選取，兩端循環。',
+  ],
+  M3Switch: [
+    '軌道 52×32、整顆按鈕 52×48 點擊區。off：surface-container-highest 軌道 + 2px outline 邊 + 16px outline 色 thumb；on：primary 軌道 + 24px on-primary thumb，thumb 內有 check 圖示（不只靠顏色表達開關）。',
+    '按住時 thumb 放大到 28px；hover / pressed 在 thumb 周圍 40px 圓形 state layer。',
+    'busy：thumb 留在原位、固定 24px，內含轉圈；aria-busy="true"、點擊與鍵盤都不 emit，不淡化。disabled：整體 opacity 0.38。',
+    '用在清單列時，列上的文字是可見標籤，label prop 寫入 aria-label（內容與可見文字一致）。',
+  ],
+}
+
+const app = createApp({
+  setup() {
+    const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
+    const meta = { status: readMeta('preview-status'), tasks: readMeta('preview-tasks'), route: readMeta('preview-route'), updated: readMeta('preview-updated') }
+
+    const openQuestions = [
+      {
+        question: 'M3Card 的 filled / elevated 用哪組底色？（右側可切換預覽）',
+        optionA: '照設計稿模板：filled = surface-container-low、elevated = surface-container-lowest + elev-1。【推薦】之後的家長端頁面稿都從模板出發；淺色下卡片多時對比較柔和。代價：深色色票裡 surface-container-low 與 surface 同色，filled 卡會融進背景（目前沒有深色模式的 task，日後要做時再調）',
+        optionB: '照 M3 原規格 / ivy：filled = surface-container-highest、elevated = surface-container-low + elev-1。淺色下 filled 卡偏灰較重，但深色也分得出來；設計稿模板要跟著改',
+      },
+      {
+        question: 'M3Snackbar 的 error tone 長什麼樣？（右側可切換預覽，到 M3Snackbar 頁按「error tone」）',
+        optionA: '與一般訊息同為 inverse-surface 底，訊息前加 error 圖示。【推薦】與一般訊息一致，淺色 / 深色都清楚',
+        optionB: '改用 error-container 底 + on-error-container 字，整條變紅',
+      },
+    ]
+
+    /* 稿內模擬 PARENT-011 snackbar store 的佇列規則 */
+    let nextId = 1
+    let headTimer = null
+    const snack = reactive({
+      items: [],
+      show(message, opts = {}) {
+        const item = { id: nextId++, message, tone: opts.tone || 'info', duration: opts.duration ?? 4000, action: opts.action }
+        snack.items.push(item)
+        if (snack.items.length > 3) snack.items.splice(1, 1)
+        if (snack.items.length === 1) startHeadTimer()
+        return item.id
+      },
+      dismiss(id) {
+        const i = snack.items.findIndex((x) => x.id === id)
+        if (i < 0) return
+        snack.items.splice(i, 1)
+        if (i === 0) startHeadTimer()
+      },
+    })
+    function startHeadTimer() {
+      clearTimeout(headTimer)
+      const head = snack.items[0]
+      if (head && head.duration > 0) headTimer = setTimeout(() => snack.dismiss(head.id), head.duration)
+    }
+    const pushFour = () => { ['A：已通知安親班', 'B：已取消接送', 'C：已複製接送碼', 'D：請假已送出'].forEach((m) => snack.show(m)) }
+
+    const section = ref('icon')
+    const currentSection = computed(() => SECTIONS.find((s) => s.key === section.value))
+    const contentEl = ref(null)
+    const scrolled = ref(false)
+    const onScroll = (e) => { scrolled.value = e.target.scrollTop > 0 }
+    watch(section, () => nextTick(() => { if (contentEl.value) contentEl.value.scrollTop = 0; scrolled.value = false }))
+
+    const theme = ref('light')
+    watch(theme, (v) => {
+      if (v === 'dark') document.documentElement.setAttribute('data-theme', 'dark')
+      else document.documentElement.removeAttribute('data-theme')
+    })
+    const showHit = ref(false)
+    const cardScheme = ref('a')
+    const snackScheme = ref('a')
+    const showAllDecisions = ref(false)
+    const visibleDecisionGroups = computed(() => Object.entries(DECISIONS)
+      .filter(([group]) => showAllDecisions.value || group === '通用' || group === currentSection.value.label)
+      .map(([group, items]) => ({ group, items })))
+
+    // 底部導覽
+    const currentTab = ref('home')
+    const navBadgeKey = ref('3')
+    const navBadgeOptions = [{ value: '0', label: '0' }, { value: '3', label: '3' }, { value: '120', label: '120' }]
+    const navItemsWithBadge = (badge) => NAV_ITEMS.map((x) => (x.key === 'more' ? { ...x, badge } : x))
+    const liveNavItems = computed(() => navItemsWithBadge(Number(navBadgeKey.value)))
+    const navDemoRows = [
+      { key: 'home', badge: 0 }, { key: 'homework', badge: 3 }, { key: 'pickup', badge: 120 }, { key: 'exams', badge: 3 }, { key: 'more', badge: 3 },
+    ]
+    const onNavSelect = (key) => { currentTab.value = key }
+
+    // Button
+    const pickupLoading = ref(false)
+    const notifyPickup = () => {
+      pickupLoading.value = true
+      setTimeout(() => { pickupLoading.value = false; snack.show('已通知安親班') }, 1500)
+    }
+
+    // TextField
+    const tf = reactive({ bindCode: '', name: '王大明', focusDemo: '', badCode: 'AB12', student: '王小明', phone: '0912-000-123', date: '', reason: '生病', live: '' })
+
+    // Chip
+    const etaOptions = ['10', '20', '30']
+    const eta = ref('10')
+
+    // ListItem
+    const listSwitch = ref(true)
+
+    // Segmented
+    const proxyMode = ref('saved')
+    const proxyItems = [{ value: 'saved', label: '常用接送人', icon: 'group' }, { value: 'adhoc', label: '臨時填寫', icon: 'edit' }]
+    const leaveType = ref('sick')
+    const leaveItems = [{ value: 'sick', label: '病假' }, { value: 'personal', label: '事假' }, { value: 'other', label: '其他' }]
+    const leaveType2 = ref('sick')
+    const leaveItemsDisabled = [{ value: 'sick', label: '病假' }, { value: 'personal', label: '事假', disabled: true }, { value: 'other', label: '其他' }]
+    const inboxFilter = ref('all')
+    const inboxItems = [{ value: 'all', label: '全部' }, { value: 'unread', label: '未讀' }]
+
+    // Switch：照 PARENT-178 的樂觀更新 + busy + 失敗回滾
+    const failSave = ref(false)
+    const prefs = reactive([
+      { event: 'attendance.checked_in', label: '到班通知', on: true, busy: false },
+      { event: 'attendance.checked_out', label: '離班通知', on: true, busy: false },
+      { event: 'homework.eta_updated', label: '作業預計完成時間更新', on: false, busy: false },
+      { event: 'homework.done', label: '作業完成', on: true, busy: false },
+      { event: 'pickup.replied', label: '接送回覆', on: true, busy: false },
+      { event: 'pickup.completed', label: '接送完成', on: true, busy: false },
+      { event: 'exam.published', label: '成績公布', on: true, busy: false },
+    ])
+    const togglePref = (p, v) => {
+      const prev = p.on
+      p.on = v
+      p.busy = true
+      setTimeout(() => {
+        p.busy = false
+        if (failSave.value) { p.on = prev; snack.show('儲存失敗，請稍後再試', { tone: 'error' }) }
+      }, 900)
+    }
+
+    return {
+      meta, openQuestions, questionStart: 1, sections: SECTIONS, section, currentSection, contentEl, scrolled, onScroll,
+      theme, showHit, cardScheme, snackScheme, showAllDecisions, visibleDecisionGroups,
+      snack, pushFour, noop: () => {},
+      currentTab, navBadgeKey, navBadgeOptions, navItemsWithBadge, liveNavItems, navDemoRows, onNavSelect,
+      pickupLoading, notifyPickup, tf, etaOptions, eta, listSwitch,
+      proxyMode, proxyItems, leaveType, leaveItems, leaveType2, leaveItemsDisabled, inboxFilter, inboxItems,
+      failSave, prefs, togglePref,
+    }
+  },
+})
+
+app.component('M3Icon', M3Icon)
+app.component('M3Button', M3Button)
+app.component('M3IconButton', M3IconButton)
+app.component('M3Card', M3Card)
+app.component('M3TextField', M3TextField)
+app.component('M3Chip', M3Chip)
+app.component('M3ListItem', M3ListItem)
+app.component('M3TopAppBar', M3TopAppBar)
+app.component('M3NavigationBar', M3NavigationBar)
+app.component('M3Snackbar', M3Snackbar)
+app.component('M3SegmentedButton', M3SegmentedButton)
+app.component('M3Switch', M3Switch)
+app.mount('#app')
+</script>
+</body>
+</html>
