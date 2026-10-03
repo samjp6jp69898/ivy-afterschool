@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createWsClient, type WsClientOptions } from './createWsClient'
+import { createWsClient, type WsClient, type WsClientOptions } from './createWsClient'
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = []
@@ -49,6 +49,9 @@ const lastSocket = (): FakeWebSocket => {
   return s
 }
 
+// 每個測試結束時 stop，避免 visibilitychange 監聽殘留到下一個測試
+const activeClients: WsClient[] = []
+
 function makeClient(overrides: Partial<WsClientOptions> = {}) {
   const onPoll = vi.fn()
   const onOpen = vi.fn()
@@ -61,6 +64,7 @@ function makeClient(overrides: Partial<WsClientOptions> = {}) {
     createSocket: (url) => new FakeWebSocket(url) as unknown as WebSocket,
     ...overrides,
   })
+  activeClients.push(client)
   return { client, onPoll, onOpen, onAuthClose }
 }
 
@@ -90,6 +94,7 @@ describe('createWsClient', () => {
   })
 
   afterEach(() => {
+    for (const c of activeClients.splice(0)) c.stop()
     vi.useRealTimers()
     delete (document as { hidden?: boolean }).hidden
   })
