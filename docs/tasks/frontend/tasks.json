@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 44,
-  "last_updated": "2026-10-03T13:01:46Z",
+  "version": 45,
+  "last_updated": "2026-10-03T13:02:08Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -5225,7 +5225,7 @@
     {
       "id": "FRONTEND-238",
       "title": "實作 components/exams/RenotifyChoiceDialog.vue：已發布考試修改分數時選擇是否重新通知家長",
-      "description": "建立 `apps/web/src/components/exams/RenotifyChoiceDialog.vue`（domain_spec M8：發布後修改分數寫 audit，且可選擇是否重新通知）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-exams.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。元件外觀、狀態與互動以此元件稿為準；所屬頁面稿 `docs/mockups/page-exam-detail.html` 只畫頁面版面並引用本元件，不另訂元件規格。\n\n**props / emits**：`modelValue: boolean`（由 ScoreGrid 在 `awaitingNotifyChoice` 時開啟）、`pendingCount: number`；emits `update:modelValue`、`choose(notify: boolean)`。\n- 內容：「此考試已發布，修改分數會記錄於稽核紀錄。是否在修改後通知家長分數已更新？」+「目前有 {pendingCount} 格等待儲存」。\n- 按鈕：「通知家長」（emit true）、「不通知」（emit false）；兩者都會關閉。說明「本次編輯期間都會套用此選擇，可在工具列切換」。\n- 不可點遮罩關閉。右上有關閉鈕 X；按 Esc 或 X → emit `update:modelValue(false)` 關閉、不 emit `choose`，格子維持未儲存（是否再次開啟由 FRONTEND-235 決定）。\n\n**驗收標準**\n- 文案含格數；兩個選擇 emit 對應值；Esc / X 關閉但不 emit choose。",
+      "description": "建立 `apps/web/src/components/exams/RenotifyChoiceDialog.vue`（domain_spec M8：發布後修改分數寫 audit，且可選擇是否重新通知）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-exams.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。元件外觀、狀態與互動以此元件稿為準；所屬頁面稿 `docs/mockups/page-exam-detail.html` 只畫頁面版面並引用本元件，不另訂元件規格。\n\n**props / emits**：`modelValue: boolean`（由 ScoreGrid 在 `awaitingNotifyChoice` 時開啟）、`pendingCount: number`；emits `update:modelValue`、`choose(notify: boolean)`。\n- 內容：「此考試已發布，修改分數會記錄於稽核紀錄。是否在修改後通知家長分數已更新？」+「目前有 {pendingCount} 格等待儲存」。\n- 按鈕：「通知家長」（emit true）、「不通知」（emit false）；兩者都會關閉。說明「本次編輯期間都會套用此選擇，可在工具列切換」。\n- 外觀以設計稿 `docs/mockups/component-exams.html` 的 decisions 為準：標題「修改已發布的成績」、寬 440px；footer 左「不通知」（default）、右「通知家長」（primary）。\n- 不可點遮罩關閉。右上有關閉鈕 X；按 Esc 或 X → emit `update:modelValue(false)` 關閉、不 emit `choose`，格子維持未儲存（是否再次開啟由 FRONTEND-235 決定）。\n\n**驗收標準**\n- 文案含格數；兩個選擇 emit 對應值；Esc / X 關閉但不 emit choose。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/exams/RenotifyChoiceDialog.vue",
       "source_ref": null,
@@ -5245,7 +5245,9 @@
         "red_cases": [
           "RenotifyChoiceDialog shows pending count：pendingCount 3 → 文字含 '此考試已發布，修改分數會記錄於稽核紀錄。' 與 '目前有 3 格等待儲存'",
           "RenotifyChoiceDialog emits choices：點 '通知家長' → emitted('choose')[0] 深等於 [true]；另一次點 '不通知' → 深等於 [false]",
-          "RenotifyChoiceDialog escape and close keep waiting：按 Esc → emitted('choose') 為 undefined 且 emitted('update:modelValue') 最後一筆 [false]；另一次點右上關閉鈕 X → 同樣不 emit choose、update:modelValue 最後一筆 [false]"
+          "RenotifyChoiceDialog escape and close keep waiting：按 Esc → emitted('choose') 為 undefined 且 emitted('update:modelValue') 最後一筆 [false]；另一次點右上關閉鈕 X → 同樣不 emit choose、update:modelValue 最後一筆 [false]",
+          "RenotifyChoiceDialog choosing also closes：點 '通知家長' → emitted('update:modelValue') 最後一筆 [false]",
+          "RenotifyChoiceDialog title footer and overlay：標題 '修改已發布的成績'、footer 按鈕依序 ['不通知','通知家長']、含 '本次編輯期間都會套用此選擇，可在工具列切換'；點遮罩 → 沒有任何 emit"
         ],
         "run": "just web-test src/components/exams/RenotifyChoiceDialog.spec.ts -t \"RenotifyChoiceDialog\"",
         "notes": ""
