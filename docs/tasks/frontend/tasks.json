@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 58,
-  "last_updated": "2026-10-03T13:16:54Z",
+  "version": 59,
+  "last_updated": "2026-10-03T13:24:29Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1049,7 +1049,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/PageHeader.vue",
       "source_ref": "FE:src/components/common/PageHeader.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013"
@@ -1070,9 +1070,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 全綠；紅燈 commit 先於實作；web-lint 與暫時 tsconfig 的 vue-tsc 對本批 20 個檔案乾淨。稿 approved。逐條以突變驗證：在元件副本上破壞行為、以指向副本的 spec 副本執行，暫存檔皆已刪除。decisions：<h1> 標題、無副標不渲染、actions slot 空時不渲染容器、default slot 在標題下方皆有測試且突變（h1→h2、拿掉各 v-if、slot 移位）都會紅；字級 / 間距與 <768px actions 換行（@media max-width 767.98px：flex-wrap、__body flex-basis 100%、__actions width 100%）寫在樣式。殘留：default slot 為空時不渲染 .page-header__extra 沒有測試（只有 margin-top 8px 的空 div）。稿 CSS 照抄：元件 scoped 樣式的選擇器與宣告與稿的元件規則幾乎逐條相同（只改排版 / 命名），未帶入稿的 demo、預覽列或全域樣式，也沒有寫死色碼；數值即稿的決策，觀測不到差異，列為殘留（SKILL「不要把稿的 CSS 複製進 src/」的流程規範）。"
       }
     },
     {
@@ -1082,14 +1082,14 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/FormDialog.vue",
       "source_ref": "FE:src/components/common/FormDialog.vue::default",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013",
         "FRONTEND-046"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "【review-r3 打回】稿 decision「視窗寬 < 768 時 fullscreen，footer 仍固定在底部」未落實：fullscreen 時 footer 會跟著內容位置（短表單停在畫面中段、長表單被捲走）。需補樣式讓 fullscreen 時 footer 固定在視窗底部、body 區捲動；happy-dom 驗不到版面，至少以測試鎖住 fullscreen 時套用的 class，並在回報中說明樣式寫法。若決定不做，需改稿 decision 並送使用者重新核可。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/components/common/FormDialog.spec.ts",
@@ -1111,9 +1111,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r3",
+        "notes": "打回。tdd.run 全綠；紅燈 commit 先於實作；web-lint 與暫時 tsconfig 的 vue-tsc 對本批 20 個檔案乾淨。稿 approved。逐條以突變驗證：在元件副本上破壞行為、以指向副本的 spec 副本執行，暫存檔皆已刪除。其餘 decisions 都有測試且突變皆紅（footer 順序、送出不自行關閉、sm/md/lg 寬度、<768 fullscreen、取消 / X / Esc / 遮罩的 dirty 確認、loading 時送出轉圈且停用、取消停用、X 隱藏、Esc 與遮罩無效、submitDisabled / hideFooter、opened 後 autofocus 並略過 disabled / readonly / checkbox / radio / 各種 picker，共 31 個突變）；before-close 改法在測試 commit 3f98907 就寫入 description 與 red_cases，實作 commit 只改了 spec 的 clickMessageBox 輔助函式（改取最後一個確認框），未放寬斷言；以不 stub transition 的暫時測試跑真實流程也正確。打回原因：已核可稿 component-common-extra.html 的 decision「視窗寬 < 768 時 fullscreen，footer 仍固定在底部」沒有落實。FormDialog.vue 的樣式只有 footer 的 flex 排列兩條；Element Plus 2.14.7 的 .el-dialog.is-fullscreen 只設 height:100%、overflow:auto，dialog 不是 flex column、footer 也不是 sticky。反例：寬 375px 下開只有一個欄位的表單，footer 緊貼欄位、停在畫面上半部；表單很長時整個 dialog 一起捲動，footer 被捲走。"
       }
     },
     {
@@ -1123,7 +1123,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/AdminListToolbar.vue",
       "source_ref": "FE:src/components/common/AdminListToolbar.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013"
@@ -1146,9 +1146,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 全綠；紅燈 commit 先於實作；web-lint 與暫時 tsconfig 的 vue-tsc 對本批 20 個檔案乾淨。稿 approved。逐條以突變驗證：在元件副本上破壞行為、以指向副本的 spec 副本執行，暫存檔皆已刪除。decisions 共 14 項可驗行為全部突變為紅：debounce 300ms（改 299 / 301 皆紅）、trim、Enter 立即送出且取消計時、清除搜尋視同 Enter（拿掉 clearable 亦紅，證明真的點到 .el-input__clear）、篩選合併新物件不改 props、清除為 undefined、clearable 時首項「全部」、非 clearable 無「全部」與清除 icon、total undefined 不顯示且 0 顯示「共 0 筆」、actions 空時不渲染。使用者裁定 extra-filters：位置（最後一個下拉之後、筆數之前，compareDocumentPosition 斷言）與無內容不渲染容器都有測試，突變皆紅。Element Plus 陷阱：139316a 把 mouseenter 從 .el-select__wrapper 改成 .el-select 根元素是收緊——以舊寫法加 :clearable=true 突變時「不可清除」測試仍綠（舊寫法恆真），新寫法兩向都會紅；找不到清除 icon 時 VTU 直接 throw，不會靜默略過。版面寬度、灰字標籤、窄寬度兩兩一列寫在樣式（L158-221），class 落在 el-input / el-select 根元素且帶 scope id。殘留：(a) 稿示範在 extra-filters slot 內直接用 .list-toolbar__filter 等 class，但元件樣式是 scoped，slot 內容拿不到，使用端需自備樣式或元件補 :deep。(b) 值為「全部」時不顯示清除 icon、卸載時取消 debounce 計時器沒有測試。(c) option 值為 '' 或 '__all__' 會與清除 / 全部相撞，現有資料不會出現。稿 CSS 照抄：元件 scoped 樣式的選擇器與宣告與稿的元件規則幾乎逐條相同（只改排版 / 命名），未帶入稿的 demo、預覽列或全域樣式，也沒有寫死色碼；數值即稿的決策，觀測不到差異，列為殘留（SKILL「不要把稿的 CSS 複製進 src/」的流程規範）。"
       }
     },
     {
@@ -1158,7 +1158,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/EmptyState.vue",
       "source_ref": "FE:src/components/common/EmptyState.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013"
@@ -1179,9 +1179,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 全綠；紅燈 commit 先於實作；web-lint 與暫時 tsconfig 的 vue-tsc 對本批 20 個檔案乾淨。稿 approved。逐條以突變驗證：在元件副本上破壞行為、以指向副本的 spec 副本執行，暫存檔皆已刪除。role=status、is-error / is-inline、inline 無 icon、自訂 icon、無說明 / action 不渲染容器皆有測試且突變為紅；error 只把 icon 改 danger 色、48px icon、說明最寬 360 置中、inline 精簡 padding 寫在樣式。殘留：(a) 預設 icon 的測試只斷言元件自報的 data-icon 字串，若把 DEFAULT_ICONS 的 component 換錯但 name 不變（例如 default 配 WarningFilled），測試仍綠；建議改以 findComponent(FolderOpened / WarningFilled) 斷言。(b) 與稿數值的小差異：icon 下方間距 12px（稿 16px）、標題缺 font-weight 500、說明缺 line-height 1.6、action 區缺 gap 8px、inline padding 16px（稿 16px 8px）。"
       }
     },
     {
@@ -1191,7 +1191,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/StatCard.vue",
       "source_ref": "FE:src/components/common/StatCard.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013",
@@ -1218,9 +1218,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 全綠；紅燈 commit 先於實作；web-lint 與暫時 tsconfig 的 vue-tsc 對本批 20 個檔案乾淨。稿 approved。逐條以突變驗證：在元件副本上破壞行為、以指向副本的 spec 副本執行，暫存檔皆已刪除。使用者裁定 clickable 完整落實：靜態卡（無 to 且非 clickable）不 emit click、無 tabindex、無 role=button、無 is-interactive、Enter 不觸發，clickable 預設 false，is-active 只限 clickable——各項突變皆紅。to 卡導頁、role=link、Enter、箭頭；chip 的 aria-pressed 與 Space；tone 只改數值色；loading 顯示 skeleton、隱藏 hint、aria-busy 且仍可點——皆有測試、突變皆紅。版面數值與選中態（主色框 + light-9 底）寫在樣式。殘留：(a) link 卡按 Space 導頁、同時傳 to 與 clickable 以連結為準，這兩個組合沒有測試（實作正確）。(b) 98b23de 對 components.d.ts 的改動是自動產生的 ElSkeleton / ElSkeletonItem 宣告。稿 CSS 照抄：元件 scoped 樣式的選擇器與宣告與稿的元件規則幾乎逐條相同（只改排版 / 命名），未帶入稿的 demo、預覽列或全域樣式，也沒有寫死色碼；數值即稿的決策，觀測不到差異，列為殘留（SKILL「不要把稿的 CSS 複製進 src/」的流程規範）。"
       }
     },
     {
@@ -1686,7 +1686,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/SecretInput.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013"
@@ -1714,9 +1714,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 全綠；紅燈 commit 先於實作；web-lint 與暫時 tsconfig 的 vue-tsc 對本批 20 個檔案乾淨。稿 approved。逐條以突變驗證：在元件副本上破壞行為、以指向副本的 spec 副本執行，暫存檔皆已刪除。使用者裁定「留空視同沒修改」：留空送出空字串、或留空送出 null 兩種突變都讓 empty edit keeps initial value 變紅，且該測試斷言沒有任何一次 emit 空字串；只有確認框按「確定」才送 null，遮罩只以初始值身分送出、從不放進 input。父層重設以「外部值不等於元件最後一次 emit 的值」判斷：回聲不觸發、儲存後換新遮罩與父層還原都正確重設（拿掉 watch、回聲誤判等突變皆紅）。在 FRONTEND-057 加註「儲存成功後以 :key 重建」合理且必要：只看值的 watch 無法區分「清除後的回聲 null」與「儲存後回來的 null」，以 key 重建時舊元件直接卸載，與 watch 不衝突。殘留：(a) 「清除 → 儲存 → 顯示未設定」目前沒有任何測試，057 的 red_cases 需補一條（後端回 null 後文字含「未設定」、不含「將於儲存後清除」），否則父層若漏 :key，畫面會停在「將於儲存後清除」，按「復原」還會把舊遮罩寫回。(b) 父層回寫 secret 時若改動值（trim、大小寫、'' 轉 null）會誤觸發重設，FRONTEND-055 JsonSchemaForm 應保證 secret 欄位原樣同步寫回。(c) 確定鈕 danger 與 show-password 沒有測試；只含空白的輸入會被當成新 secret（規格只處理空字串）；稿 decision 5 寫 FRONTEND-058，應為 057。稿 CSS 照抄：元件 scoped 樣式的選擇器與宣告與稿的元件規則幾乎逐條相同（只改排版 / 命名），未帶入稿的 demo、預覽列或全域樣式，也沒有寫死色碼；數值即稿的決策，觀測不到差異，列為殘留（SKILL「不要把稿的 CSS 複製進 src/」的流程規範）。"
       }
     },
     {
@@ -2084,7 +2084,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/TempPasswordDialog.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013"
@@ -2110,9 +2110,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 全綠；紅燈 commit 先於實作；web-lint 與暫時 tsconfig 的 vue-tsc 對本批 20 個檔案乾淨。稿 approved。逐條以突變驗證：在元件副本上破壞行為、以指向副本的 spec 副本執行，暫存檔皆已刪除。安全實測：以不清空 prop 的 v-model 父層（最壞情況），對「複製後我已記下」「X + 確定」「Esc + 確定」「未複製我已記下 + 確定」四條關閉路徑，分別在 stub transition 與真實 transition 下，於下一個 tick、settle 後、400ms 後檢查 document.body.innerHTML 皆不含密碼，確認框內也不含；console 的 log / info / warn / error / debug / trace 全程零呼叫（含複製失敗路徑）；localStorage / sessionStorage 未寫入密碼。同一份安全測試換成拿掉 v-if 的副本 8 項全紅。規格變更（destroy-on-close 改為 modelValue 變 false 當下移除）合理且不違反 TDD：「setProps({modelValue:false}) 後 body 不含密碼」的測試在 77df5de 就存在，只靠 destroy-on-close 會讓它紅，實作 commit 是讓 description 文字對齊既有測試。decisions：標題 / 說明 / 單一 footer 鈕、複製成功「已複製」與綠字、失敗紅字且按鈕維持「複製」、未複製時三種關閉都先確認、遮罩不關、重開重置——突變皆紅；clipboard 斷言 writeText('Tmp-8f3K2q9x') 具體值。殘留：(a) 快速連點兩下 X 會疊出兩個確認框。(b) 以 v-if 移除內容後，約 300ms 關閉動畫期間對話框本體是空的。(c) 寬 440px 沒有測試。稿 CSS 照抄：元件 scoped 樣式的選擇器與宣告與稿的元件規則幾乎逐條相同（只改排版 / 命名），未帶入稿的 demo、預覽列或全域樣式，也沒有寫死色碼；數值即稿的決策，觀測不到差異，列為殘留（SKILL「不要把稿的 CSS 複製進 src/」的流程規範）。"
       }
     },
     {
@@ -4639,7 +4639,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/pickup/pos/CountdownBar.vue",
       "source_ref": "FE:src/components/dismissal/pos/DismissalPosCountdownBar.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013"
@@ -4664,9 +4664,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 全綠；紅燈 commit 先於實作；web-lint 與暫時 tsconfig 的 vue-tsc 對本批 20 個檔案乾淨。稿 approved。逐條以突變驗證：在元件副本上破壞行為、以指向副本的 spec 副本執行，暫存檔皆已刪除。decisions：scaleX + transform-origin left + linear、雙層 rAF、時長為剩餘毫秒、途中掛載接續（改單層 rAF、時長用 durationMs、一律從滿版開始皆紅）；clamp 上下限、過期為空條且不排 rAF；reduced motion 不做 transform、到期 is-counting → is-done（提早 1ms 亦紅）；role / valuemin / valuemax / valuenow；不監聽 props（改 computed 即紅）；樣式高 6px、全圓角、軌道 / 主色 / 到期灰色寫在 CSS。殘留：(a) description 要求「卸載時取消 rAF 與 timer」，red_case 只涵蓋外層 rAF；內層 rAF 與 reduced motion 的 timer 清除沒有測試（實作 L61-65 有清）。(b)「元件不寫死 aria-label」沒有測試保護（現有測試都傳 label，會蓋過寫死值）。稿 CSS 照抄：元件 scoped 樣式的選擇器與宣告與稿的元件規則幾乎逐條相同（只改排版 / 命名），未帶入稿的 demo、預覽列或全域樣式，也沒有寫死色碼；數值即稿的決策，觀測不到差異，列為殘留（SKILL「不要把稿的 CSS 複製進 src/」的流程規範）。"
       }
     },
     {
@@ -5162,7 +5162,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/exams/ScoreCell.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013"
@@ -5190,9 +5190,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 全綠；紅燈 commit 先於實作；web-lint 與暫時 tsconfig 的 vue-tsc 對本批 20 個檔案乾淨。稿 approved。逐條以突變驗證：在元件副本上破壞行為、以指向副本的 spec 副本執行，暫存檔皆已刪除。decisions：不合法（超過滿分、超過一位小數、非數字）不 emit 且顯示訊息、title 與 tooltip 同訊息、本地錯誤優先於後端 errorMessage、缺考勾選 / 輸入「缺」或「-」、取消勾選 emit {null,false}、readonly 文字、dirty / saving / saved / error 標記——突變皆紅。邊界實測：100、100.0、088、' 88 '、' 缺 ' 正確；.5、5.、1e2、全形 ９０、-5 擋下並顯示「需介於 0~100」；100.05 顯示「最多一位小數」。實作 commit 刪除的 7 行測試與 description 規則（已是缺考時再輸入「缺」不重複 emit）合理：還原該測試對著沒有防護的實作仍綠（恆真，因 Element Plus useFocusController 在 disabled 時不發 blur），以 Chromium 開設計稿實測也確認輸入框 disabled 後走不到這條路徑；屬刪除恆真測試，不是放寬可達的驗收。殘留：(a) description 寫「不合法即時顯示紅框」，測試都先 blur 才斷言，改成 blur 後才顯示錯誤的突變仍綠（實作以 computed 即時計算，行為正確）。(b) 0 分沒有測試（實測 '0'、'0.0' 正確 emit 0）。(c) 父層若未同步更新 props，Enter 後再 blur 會 emit 兩次，輸入「缺」Enter 後 blur 會取消缺考，FRONTEND-235 / 237 需同步更新 props。(d) 規格刪除寫在實作 commit，已核可稿的 JS 仍保留該防護（decisions 文字沒有這條）。"
       }
     },
     {
@@ -5240,7 +5240,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/exams/RenotifyChoiceDialog.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-013"
@@ -5264,9 +5264,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3",
+        "notes": "通過。tdd.run 全綠；紅燈 commit 先於實作；web-lint 與暫時 tsconfig 的 vue-tsc 對本批 20 個檔案乾淨。稿 approved。逐條以突變驗證：在元件副本上破壞行為、以指向副本的 spec 副本執行，暫存檔皆已刪除。使用者裁定：Esc / X 只關閉、不 emit choose，點遮罩不關；選「通知家長」/「不通知」emit 對應值並關閉——Esc 時也 emit choose、關掉 Esc、不顯示 X、拿掉 before-close、值反轉、選完不關等突變皆紅。before-close 由元件自行 emit 合理：不用 before-close 時 update:modelValue 要等關閉動畫 afterLeave，改用稿寫法（監聽 el-dialog 的 update:model-value）時 Esc / X 測試會紅，證明測試不是恆真；元件從不呼叫 done，父層忽略事件時對話框維持開啟，符合受控語意。TDD 順序：description 與 red_cases 在測試 commit fc15608 寫入，之後未再改動，「Esc 或 X 時 emit update:modelValue(false)、不 emit choose」在 fc15608 之前即存在。55fbf3d 對 components.d.ts 的 9 行是自動產生的 Element Plus 元件型別宣告。殘留：寬 440px 與按鈕 type（default / primary）沒有測試。"
       }
     },
     {
