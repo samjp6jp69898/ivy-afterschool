@@ -1,4 +1,4 @@
-"""BACKEND-001：env Settings（architecture_decisions §4 的八個 env）。"""
+"""BACKEND-001：env Settings（architecture_decisions §4 的執行期 env）。"""
 
 import pytest
 from pydantic import ValidationError
@@ -6,32 +6,45 @@ from pydantic import ValidationError
 from app.core.config import Settings, get_settings
 
 _SECRET = "s" * 48
+_LOCAL_R2_KEY = "afterschool-local-secret"  # 本機 SeaweedFS 固定開發值（apps/api/.env.example）
+_CLOUD_R2_SECRET = "k" * 40
+_CLOUD_R2_ENDPOINT = "https://acct.r2.cloudflarestorage.com"
 _ENV_KEYS = (
     "APP_ENV",
     "DATABASE_URL",
+    "MIGRATION_DATABASE_URL",
     "APP_SECRET_KEY",
     "CORS_ORIGINS",
     "PUBLIC_BASE_URL",
-    "SUPABASE_URL",
-    "SUPABASE_SERVICE_ROLE_KEY",
+    "R2_ENDPOINT_URL",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "R2_BUCKET",
     "SENTRY_DSN",
 )
 
 
 @pytest.fixture(autouse=True)
 def base_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """清掉開發者 shell 既有的值，只留下一組合法的必填 env。"""
+    """清掉開發者 shell 既有的值，只留下一組合法的必填 env（本機 SeaweedFS 值）。"""
     for key in _ENV_KEYS:
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@127.0.0.1:54342/postgres")
     monkeypatch.setenv("APP_SECRET_KEY", _SECRET)
     monkeypatch.setenv("PUBLIC_BASE_URL", "http://127.0.0.1:5341")
-    monkeypatch.setenv("SUPABASE_URL", "http://127.0.0.1:54341")
-    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role-key-for-test")
+    monkeypatch.setenv("R2_ENDPOINT_URL", "http://127.0.0.1:54344")
+    monkeypatch.setenv("R2_ACCESS_KEY_ID", "afterschool")
+    monkeypatch.setenv("R2_SECRET_ACCESS_KEY", _LOCAL_R2_KEY)
+    monkeypatch.setenv("R2_BUCKET", "afterschool-local")
 
 
 def _settings() -> Settings:
     return Settings(_env_file=None)
+
+
+def _use_cloud_r2(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("R2_ENDPOINT_URL", _CLOUD_R2_ENDPOINT)
+    monkeypatch.setenv("R2_SECRET_ACCESS_KEY", _CLOUD_R2_SECRET)
 
 
 def test_config_missing_required_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -41,6 +54,41 @@ def test_config_missing_required_env(monkeypatch: pytest.MonkeyPatch) -> None:
         _settings()
 
     assert "database_url" in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "APP_SECRET_KEY",
+        "PUBLIC_BASE_URL",
+        "R2_ENDPOINT_URL",
+        "R2_ACCESS_KEY_ID",
+        "R2_SECRET_ACCESS_KEY",
+        "R2_BUCKET",
+    ],
+)
+def test_config_missing_each_required_env(monkeypatch: pytest.MonkeyPatch, key: str) -> None:
+    monkeypatch.delenv(key)
+
+    with pytest.raises(ValidationError) as exc_info:
+        _settings()
+
+    assert key.lower() in str(exc_info.value)
+
+
+def test_config_fields_exact() -> None:
+    assert set(Settings.model_fields) == {
+        "app_env",
+        "database_url",
+        "app_secret_key",
+        "cors_origins",
+        "public_base_url",
+        "r2_endpoint_url",
+        "r2_access_key_id",
+        "r2_secret_access_key",
+        "r2_bucket",
+        "sentry_dsn",
+    }
 
 
 @pytest.mark.parametrize("value", ["short", "change-me", "x" * 31])
@@ -90,23 +138,82 @@ def test_config_cors_origins_parse(monkeypatch: pytest.MonkeyPatch) -> None:
     assert _settings().cors_origins == []
 
 
-def test_config_production_rejects_placeholder_service_key(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "change-me")
-    monkeypatch.setenv("APP_ENV", "production")
+def test_config_local_r2_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = _settings()
+
+    assert str(settings.r2_endpoint_url).rstrip("/") == "http://127.0.0.1:54344"
+    assert settings.r2_access_key_id == "afterschool"
+    assert settings.r2_secret_access_key.get_secret_value() == _LOCAL_R2_KEY
+    assert settings.r2_bucket == "afterschool-local"
+
+    monkeypatch.setenv("R2_ENDPOINT_URL", "not-a-url")
     with pytest.raises(ValidationError) as exc_info:
         _settings()
-    assert "SUPABASE_SERVICE_ROLE_KEY" in str(exc_info.value)
+    assert "r2_endpoint_url" in str(exc_info.value)
 
-    monkeypatch.setenv("APP_ENV", "development")
-    settings = _settings()
-    assert settings.supabase_service_role_key.get_secret_value() == "change-me"
-    assert settings.is_production is False
 
-    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "real-service-role-key")
+def test_config_r2_bucket_format(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("R2_BUCKET", "Afterschool_Bucket")
+    with pytest.raises(ValidationError) as exc_info:
+        _settings()
+    assert "r2_bucket" in str(exc_info.value)
+
+    monkeypatch.setenv("R2_BUCKET", "afterschool-local")
+    assert _settings().r2_bucket == "afterschool-local"
+
+
+@pytest.mark.parametrize("bucket", ["abc", "a.b-c", "0" * 63, "afterschool-prod"])
+def test_config_r2_bucket_accepts(monkeypatch: pytest.MonkeyPatch, bucket: str) -> None:
+    monkeypatch.setenv("R2_BUCKET", bucket)
+
+    assert _settings().r2_bucket == bucket
+
+
+@pytest.mark.parametrize(
+    "bucket",
+    ["ab", "a" * 64, "-abc", "abc-", ".abc", "abc.", "ab_c", "ABC", "ab c", "afterschool\n", ""],
+)
+def test_config_r2_bucket_rejects(monkeypatch: pytest.MonkeyPatch, bucket: str) -> None:
+    monkeypatch.setenv("R2_BUCKET", bucket)
+
+    with pytest.raises(ValidationError) as exc_info:
+        _settings()
+
+    assert "r2_bucket" in str(exc_info.value)
+
+
+def test_config_production_r2_rules(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "production")
-    assert _settings().is_production is True
+    _use_cloud_r2(monkeypatch)
+
+    for secret in ("change-me", _LOCAL_R2_KEY):
+        monkeypatch.setenv("R2_SECRET_ACCESS_KEY", secret)
+        with pytest.raises(ValidationError) as exc_info:
+            _settings()
+        assert "R2_SECRET_ACCESS_KEY" in str(exc_info.value)
+
+    monkeypatch.setenv("R2_SECRET_ACCESS_KEY", _CLOUD_R2_SECRET)
+    monkeypatch.setenv("R2_ENDPOINT_URL", "http://127.0.0.1:54344")
+    with pytest.raises(ValidationError) as exc_info:
+        _settings()
+    assert "R2_ENDPOINT_URL" in str(exc_info.value)
+
+    monkeypatch.setenv("R2_ENDPOINT_URL", _CLOUD_R2_ENDPOINT)
+    settings = _settings()
+    assert settings.is_production is True
+    assert settings.r2_secret_access_key.get_secret_value() == _CLOUD_R2_SECRET
+
+
+@pytest.mark.parametrize("env", ["development", "test"])
+def test_config_non_production_allows_local_r2(monkeypatch: pytest.MonkeyPatch, env: str) -> None:
+    monkeypatch.setenv("APP_ENV", env)
+
+    settings = _settings()
+    assert settings.is_production is False
+    assert settings.r2_secret_access_key.get_secret_value() == _LOCAL_R2_KEY
+
+    monkeypatch.setenv("R2_SECRET_ACCESS_KEY", "change-me")
+    assert _settings().r2_secret_access_key.get_secret_value() == "change-me"
 
 
 def test_config_app_env_rejects_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -120,14 +227,29 @@ def test_config_app_env_rejects_unknown(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_config_repr_hides_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_SECRET_KEY", "x" * 40)
-    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "y" * 40)
+    monkeypatch.setenv("R2_SECRET_ACCESS_KEY", "y" * 40)
 
     settings = _settings()
 
     assert "x" * 40 not in repr(settings)
     assert "y" * 40 not in repr(settings)
     assert "x" * 40 not in str(settings.model_dump())
+    assert "y" * 40 not in str(settings.model_dump())
     assert settings.app_secret_key.get_secret_value() == "x" * 40
+    assert settings.r2_secret_access_key.get_secret_value() == "y" * 40
+
+
+def test_config_ignores_migration_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        "MIGRATION_DATABASE_URL", "postgresql://postgres:pw@127.0.0.1:54342/postgres"
+    )
+
+    settings = _settings()
+
+    assert "migration_database_url" not in Settings.model_fields
+    assert not hasattr(settings, "migration_database_url")
+    assert "pw" not in repr(settings)
+    assert settings.database_url == "postgresql+psycopg://u:p@127.0.0.1:54342/postgres"
 
 
 def test_config_public_base_url_strip(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -163,6 +285,7 @@ def test_config_get_settings_reads_env_at_call_time(monkeypatch: pytest.MonkeyPa
         assert get_settings() is first
 
         monkeypatch.setenv("APP_ENV", "production")
+        _use_cloud_r2(monkeypatch)
         get_settings.cache_clear()
         assert get_settings().app_env == "production"
     finally:
