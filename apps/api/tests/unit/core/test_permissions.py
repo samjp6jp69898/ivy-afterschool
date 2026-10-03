@@ -212,15 +212,23 @@ def test_resolve_wildcard_only_expands_in_role(caplog: pytest.LogCaptureFixture)
     assert "'*'" in warnings[0]
 
 
-def test_resolve_wildcard_in_revoked_is_ignored_with_warning(
-    caplog: pytest.LogCaptureFixture,
+@pytest.mark.parametrize(
+    ("role", "extra", "revoked"),
+    [
+        (["students:read"], [], ["*"]),
+        (["*"], ["exams:read"], ["*"]),
+        (["*"], [], ["*", "students:read"]),
+    ],
+)
+def test_resolve_wildcard_in_revoked_fails_closed(
+    caplog: pytest.LogCaptureFixture, role: list[str], extra: list[str], revoked: list[str]
 ) -> None:
     caplog.set_level(logging.WARNING, logger=_LOGGER)
 
-    # revoked 只認合法碼；* 不展開（依公式 base + extra 再扣 revoked），但要留下 warning
-    result = resolve_effective_permissions(["students:read"], [], ["*"])
+    # revoked 的 * 採 fail-closed：撤銷全部權限
+    result = resolve_effective_permissions(role, extra, revoked)
 
-    assert result == frozenset({"students:read"})
+    assert result == frozenset()
     warnings = _warnings(caplog)
     assert len(warnings) == 1
     assert "'*'" in warnings[0]
