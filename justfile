@@ -247,6 +247,10 @@ web:
     cd "{{ root }}/apps/web"
     pnpm exec vite --host 127.0.0.1 --port 5341 --strictPort
 
+# 一次性本機初始化（uv sync、pnpm install、建立 apps/api/.env、安裝 git hooks），可重複執行
+bootstrap:
+    @bash "{{ root }}/scripts/bootstrap.sh"
+
 # 檢查本機工具版本、Docker、port 與 env（exit code = FAIL 項數）：just doctor [--help]
 doctor *ARGS:
     @bash "{{ root }}/scripts/doctor.sh" "$@"
