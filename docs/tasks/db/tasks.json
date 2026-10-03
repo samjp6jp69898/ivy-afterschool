@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 18,
-  "last_updated": "2026-10-03T12:21:01Z",
+  "version": 19,
+  "last_updated": "2026-10-03T12:23:01Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -46,7 +46,7 @@
     {
       "id": "DB-002",
       "title": "建立 DB 整合測試 fixture：owner / backend 連線、角色切換、SQLSTATE 斷言、factories",
-      "description": "建立 DB 整合測試共用 fixture `apps/api/tests/integration/db/conftest.py`，供 DB-003 之後每張表的整合測試使用。只連本機 Supabase（`127.0.0.1:54342`），不碰雲端。\n\n**fixture / helper**\n**連線原則：整合測試一律以 app_backend 實際登入連線，禁止 fallback 到 owner。** 約束、預設值、trigger、upsert 等測試的測資全部經 `backend_conn` 寫入，走的是正式環境後端的同一條權限路徑；漏授權的表會直接失敗，而不是被 superuser 掩蓋。\n- 連線建構函式 `connect_backend()` / `connect_owner()`：fixture 以它們建立連線，測試也可直接呼叫（驗證守衛行為）。helper、常數與 `Conn` 型別以 `from tests.integration.db.conftest import ...` 取用（pytest 以同一個 module 名稱載入 conftest，測試檔 import 到的是同一份）。\n- `backend_conn`：以 `connect_backend()`，即 INFRA-041 `db_urls.backend_url()`（`TEST_DB_BACKEND_URL`，預設 `app_backend:app_backend_local@127.0.0.1:54342`，密碼由 DB-039 的 seed.sql 設定）用 psycopg 3 連線，每個測試開 transaction，結束一律 rollback。連線失敗時 `pytest.exit(\"app_backend 無法登入，先跑 just db-start 與 just db-reset --yes\", returncode=2)`，**不得**改用 owner URL 重試或降級。\n- `owner_conn`：以 `connect_owner()`，即 `owner_url()`（本機 `postgres`）連線、transaction + rollback。**只限下列明確需要的場合**，其他情況使用即視為違規（reviewer 檢查）：\n  1. 以 `as_role(owner_conn, 'anon' | 'authenticated' | 'service_role')` 驗證這些角色被拒（app_backend 不是這些角色的成員，無法 set role）；\n  2. 測試內需要 DDL 的情況（DB-001 對臨時表驗證 `secure_table`、DB-040 驗證 fail-closed）：臨時物件在未 commit 的 transaction 內，別的連線看不到，只能在同一 owner transaction 內 `as_role(owner_conn, 'app_backend')` 驗證；\n  3. 讀寫 Supabase 管理的 schema（`storage.objects` 等，DB-034）；\n  4. 需要真 commit 的測試結束後清表（`truncate`）；\n  5. 查 `pg_catalog` 中 app_backend 沒有權限讀的資訊（例如其他角色的 `has_table_privilege`）。\n- `as_role(conn, role)`：context manager，執行 `set local role <role>`，離開時 `reset role`。role 只接受 `anon`、`authenticated`、`service_role`、`app_backend`（最後一個只用於上述第 2 種情況），其他值 raise ValueError 且不執行任何 SQL。區塊內 transaction 已失敗時不執行 `reset role`（`set local` 隨 rollback 一起失效）。\n- `pg_error(conn, sqlstate)`：context manager，進入時在 `conn` 建 savepoint；區塊內拋出 `psycopg.Error` 時先 rollback 到 savepoint（同一測試可以繼續），再斷言 `e.sqlstate == sqlstate`；SQLSTATE 不符或區塊內沒有拋錯都 raise AssertionError（訊息含預期與實際 SQLSTATE）。常數：`UNIQUE_VIOLATION = '23505'`、`CHECK_VIOLATION = '23514'`、`FK_VIOLATION = '23503'`、`NOT_NULL_VIOLATION = '23502'`、`INSUFFICIENT_PRIVILEGE = '42501'`、`EXCLUSION_VIOLATION = '23P01'`、`RAISE_EXCEPTION = 'P0001'`。\n- `assert_table_secured(owner_conn, table)`：`table` 可寫 `schema.name`（未帶 schema 為 `public`），斷言 relrowsecurity / relforcerowsecurity 皆 true、`app_backend_all` policy 存在、anon 與 authenticated select 得到 42501。\n- `factories.py`（同目錄）：`insert_row(conn, table, **cols) -> dict`（`insert ... returning *`；`table` 可寫 `schema.name`，沒有欄位時以 `default values` 插入）。各表 task 在此檔補自己的 `make_<table>(conn, **overrides)`，預設值用擬真假資料（學生「王小明」、電話 `0912-000-001`）。\n- marker：`apps/api/tests/integration/` 底下由 INFRA-009 依目錄自動標 `integration`，本目錄不另外標。\n- 連線參數重用 INFRA-041 的 `apps/api/tests/support/db_urls.py`：`backend_url()` / `owner_url()`（`TEST_DB_OWNER_URL`，預設本機 54342 的 postgres），連線前先呼叫 `assert_loopback()`（依 libpq 規則檢查 URL query 的 host / hostaddr / service 與 PGHOST / PGHOSTADDR / PGSERVICE，見 INFRA-041），再以 `to_psycopg_dsn()` 去掉 `+psycopg` 後交給 psycopg；連線後以 `assert_connected_loopback(conn.info.hostaddr)` 複驗實際位址（判斷邏輯的反例由 INFRA-041 的單元測試涵蓋）。`assert_loopback` 失敗時 `pytest.exit(訊息, returncode=2)`，防止誤連雲端。\n- 與 INFRA-010 的分工：INFRA-010 提供 SQLAlchemy `db_session`（給 BACKEND repository 測試），本 task 提供 psycopg 層級、可切換角色與比對 SQLSTATE 的 fixture（給 migration / 約束 / RLS 測試）。\n\n**單一 loopback 守衛**：DB-001 的 `apps/api/tests/integration/db/test_base.py` 與 DB-039 的 `apps/api/tests/integration/db/test_seed_local.py` 使用本 conftest 的 `owner_conn` / `backend_conn`，不自帶連線函式與 loopback 判斷。\n\n**驗收標準**\n- rollback 隔離：一個測試插入的列在下一個測試看不到。\n- `pg_error` 能精確比對 SQLSTATE，錯誤碼不符或沒有拋錯時測試失敗；比對後同一 transaction 可繼續使用。\n- `backend_conn` 的 `current_user` 是 `app_backend`；app_backend 無法登入時測試整體中止並提示 `just db-reset`，不會改用 owner。\n- `as_role(conn, 'anon')` 之後 `select current_user` 回 `anon`，離開後回 `postgres`。\n- 非本機 host 被拒（連線前不嘗試連線；連線後實際位址非 loopback 時關閉連線再中止）。\n- `assert_table_secured` 對已 secure 的表通過、對沒開 RLS 的表失敗；`insert_row` 回傳插入後的整列。\n- `test_base.py`、`test_seed_local.py` 不再自帶 loopback 判斷副本，兩檔測試仍綠。",
+      "description": "建立 DB 整合測試共用 fixture `apps/api/tests/integration/db/conftest.py`，供 DB-003 之後每張表的整合測試使用。只連本機 Supabase（`127.0.0.1:54342`），不碰雲端。\n\n**fixture / helper**\n**連線原則：整合測試一律以 app_backend 實際登入連線，禁止 fallback 到 owner。** 約束、預設值、trigger、upsert 等測試的測資全部經 `backend_conn` 寫入，走的是正式環境後端的同一條權限路徑；漏授權的表會直接失敗，而不是被 superuser 掩蓋。\n- 連線建構函式 `connect_backend()` / `connect_owner()`：fixture 以它們建立連線，測試也可直接呼叫（驗證守衛行為）。helper、常數與 `Conn` 型別以 `from tests.integration.db.conftest import ...` 取用（pytest 以同一個 module 名稱載入 conftest，測試檔 import 到的是同一份）。\n- `backend_conn`：以 `connect_backend()`，即 INFRA-041 `db_urls.backend_url()`（`TEST_DB_BACKEND_URL`，預設 `app_backend:app_backend_local@127.0.0.1:54342`，密碼由 DB-039 的 seed.sql 設定）用 psycopg 3 連線，每個測試開 transaction，結束一律 rollback。連線失敗時 `pytest.exit(\"app_backend 無法登入，先跑 just db-start 與 just db-reset --yes\", returncode=2)`，**不得**改用 owner URL 重試或降級。\n- `owner_conn`：以 `connect_owner()`，即 `owner_url()`（本機 `postgres`）連線、transaction + rollback。**只限下列明確需要的場合**，其他情況使用即視為違規（reviewer 檢查）：\n  1. 以 `as_role(owner_conn, 'anon' | 'authenticated' | 'service_role')` 驗證這些角色被拒（app_backend 不是這些角色的成員，無法 set role）；\n  2. 測試內需要 DDL 的情況（DB-001 對臨時表驗證 `secure_table`、DB-040 驗證 fail-closed）：臨時物件在未 commit 的 transaction 內，別的連線看不到，只能在同一 owner transaction 內 `as_role(owner_conn, 'app_backend')` 驗證；\n  3. 讀寫 Supabase 管理的 schema（`storage.objects` 等，DB-034）；\n  4. 需要真 commit 的測試結束後清表（`truncate`）；\n  5. 查 `pg_catalog` 中 app_backend 沒有權限讀的資訊（例如其他角色的 `has_table_privilege`）。\n- `as_role(conn, role)`：context manager，執行 `set local role <role>`，離開時 `reset role`。role 只接受 `anon`、`authenticated`、`service_role`、`app_backend`（最後一個只用於上述第 2 種情況），其他值 raise ValueError 且不執行任何 SQL。區塊內 transaction 已失敗時不執行 `reset role`（`set local` 隨 rollback 一起失效）。\n- `pg_error(conn, sqlstate)`：context manager，進入時在 `conn` 建 savepoint；區塊內拋出 `psycopg.Error` 時先 rollback 到 savepoint（同一測試可以繼續），再斷言 `e.sqlstate == sqlstate`；SQLSTATE 不符或區塊內沒有拋錯都 raise AssertionError（訊息含預期與實際 SQLSTATE）。`with pg_error(...) as err` 取得 `PgErrorInfo`：`err.error` 為捕捉到的例外、`err.constraint_name` 為 `diag.constraint_name`，各表測試以它斷言是哪一個約束擋下（例如 `uq_roles_code`）。常數：`UNIQUE_VIOLATION = '23505'`、`CHECK_VIOLATION = '23514'`、`FK_VIOLATION = '23503'`、`NOT_NULL_VIOLATION = '23502'`、`INSUFFICIENT_PRIVILEGE = '42501'`、`EXCLUSION_VIOLATION = '23P01'`、`RAISE_EXCEPTION = 'P0001'`。\n- `assert_table_secured(owner_conn, table)`：`table` 可寫 `schema.name`（未帶 schema 為 `public`），斷言 relrowsecurity / relforcerowsecurity 皆 true、`app_backend_all` policy 存在、anon 與 authenticated select 得到 42501。\n- `SEEDED_UPDATED_AT`（`2026-01-01T00:00:00+08:00`）與 `assert_updated_at_trigger(conn, table, row_id, **changes)`：先斷言該列 `updated_at` 等於 `SEEDED_UPDATED_AT`，再 `update <table> set <changes> where id = row_id`，斷言新的 `updated_at` 等於該 transaction 的 `now()`。各表的 trigger 測試以 `make_<table>(backend_conn, updated_at=SEEDED_UPDATED_AT)` 插入後呼叫它。\n- `assert_backend_read_write(conn, table, row, **changes)`：以 `row['id']` select 回同一列、update `changes` 後回傳值相符、delete 後查無此列。各表的 secured 測試以 `backend_conn` 呼叫，驗證 app_backend 實際可讀寫（不假設表是空的，data migration seed 的預設列不影響）。\n- `factories.py`（同目錄）：`insert_row(conn, table, **cols) -> dict`（`insert ... returning *`；`table` 可寫 `schema.name`，沒有欄位時以 `default values` 插入）。各表 task 在此檔補自己的 `make_<table>(conn, **overrides)`，預設值用擬真假資料（學生「王小明」、電話 `0912-000-001`）。\n- marker：`apps/api/tests/integration/` 底下由 INFRA-009 依目錄自動標 `integration`，本目錄不另外標。\n- 連線參數重用 INFRA-041 的 `apps/api/tests/support/db_urls.py`：`backend_url()` / `owner_url()`（`TEST_DB_OWNER_URL`，預設本機 54342 的 postgres），連線前先呼叫 `assert_loopback()`（依 libpq 規則檢查 URL query 的 host / hostaddr / service 與 PGHOST / PGHOSTADDR / PGSERVICE，見 INFRA-041），再以 `to_psycopg_dsn()` 去掉 `+psycopg` 後交給 psycopg；連線後以 `assert_connected_loopback(conn.info.hostaddr)` 複驗實際位址（判斷邏輯的反例由 INFRA-041 的單元測試涵蓋）。`assert_loopback` 失敗時 `pytest.exit(訊息, returncode=2)`，防止誤連雲端。\n- 與 INFRA-010 的分工：INFRA-010 提供 SQLAlchemy `db_session`（給 BACKEND repository 測試），本 task 提供 psycopg 層級、可切換角色與比對 SQLSTATE 的 fixture（給 migration / 約束 / RLS 測試）。\n\n**單一 loopback 守衛**：DB-001 的 `apps/api/tests/integration/db/test_base.py` 與 DB-039 的 `apps/api/tests/integration/db/test_seed_local.py` 使用本 conftest 的 `owner_conn` / `backend_conn`，不自帶連線函式與 loopback 判斷。\n\n**驗收標準**\n- rollback 隔離：一個測試插入的列在下一個測試看不到。\n- `pg_error` 能精確比對 SQLSTATE，錯誤碼不符或沒有拋錯時測試失敗；比對後同一 transaction 可繼續使用。\n- `backend_conn` 的 `current_user` 是 `app_backend`；app_backend 無法登入時測試整體中止並提示 `just db-reset`，不會改用 owner。\n- `as_role(conn, 'anon')` 之後 `select current_user` 回 `anon`，離開後回 `postgres`。\n- 非本機 host 被拒（連線前不嘗試連線；連線後實際位址非 loopback 時關閉連線再中止）。\n- `assert_table_secured` 對已 secure 的表通過、對沒開 RLS 的表失敗；`insert_row` 回傳插入後的整列。\n- `pg_error` 對外提供觸發的約束名稱；`assert_updated_at_trigger` 對沒有 trigger 的表失敗；`assert_backend_read_write` 在缺少 update 權限時失敗（42501）。\n- `test_base.py`、`test_seed_local.py` 不再自帶 loopback 判斷副本，兩檔測試仍綠。",
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/db/conftest.py",
       "source_ref": null,
@@ -78,7 +78,12 @@
           "test_fixture_rejects_connected_non_loopback[backend|owner]：monkeypatch psycopg.connect 回傳 info.hostaddr='10.0.0.11' 的假連線後呼叫 connect_backend() / connect_owner() → 觸發 pytest.exit（returncode 2），訊息含 '10.0.0.11'，且該假連線已被 close（驗證 assert_connected_loopback 確實接在連線之後）",
           "test_fixture_assert_table_secured_passes_for_secured_table：owner_conn 建 public._sec 並 call app_private.secure_table('public._sec') → assert_table_secured(owner_conn, 'public._sec') 不拋錯，之後 current_user 為 'postgres'",
           "test_fixture_assert_table_secured_fails_without_rls：owner_conn 建 public._unsec（未 secure）→ assert_table_secured 拋 AssertionError 且訊息含 '_unsec'，之後 current_user 為 'postgres'",
-          "test_fixture_insert_row_returns_inserted_row：owner_conn 建 public._ins(id identity, name text, phone text default '0912-000-001')，insert_row(owner_conn, 'public._ins', name='王小明') → {'id': 1, 'name': '王小明', 'phone': '0912-000-001'}"
+          "test_fixture_insert_row_returns_inserted_row：owner_conn 建 public._ins(id identity, name text, phone text default '0912-000-001')，insert_row(owner_conn, 'public._ins', name='王小明') → {'id': 1, 'name': '王小明', 'phone': '0912-000-001'}",
+          "test_fixture_pg_error_exposes_constraint_name：owner_conn 建 public._pg_named(code text constraint uq_pg_named unique) 並插入 'A'；with pg_error(owner_conn, '23505') as err 內再插入 'A' → err.constraint_name == 'uq_pg_named'，err.error.sqlstate == '23505'",
+          "test_fixture_assert_updated_at_trigger_passes_with_trigger：owner_conn 建 public._upd(id uuid pk default gen_random_uuid(), name text, updated_at timestamptz not null default now()) 並掛 set_updated_at trigger，以 updated_at=SEEDED_UPDATED_AT 插入後 assert_updated_at_trigger(owner_conn, 'public._upd', id, name='y') 不拋錯",
+          "test_fixture_assert_updated_at_trigger_fails_without_trigger：同上但不掛 trigger → AssertionError",
+          "test_fixture_assert_backend_read_write_round_trip：owner_conn 建 public._rw 並 secure_table，as_role(owner_conn, 'app_backend') 內 insert_row 後 assert_backend_read_write(owner_conn, 'public._rw', row, name='y') 不拋錯，之後依 id 查無此列",
+          "test_fixture_assert_backend_read_write_fails_without_update_privilege：public._ro 以 secure_table(..., 'select, insert') 只授權 select / insert，as_role(owner_conn, 'app_backend') 內 insert_row 後 assert_backend_read_write → psycopg.errors.InsufficientPrivilege（42501）"
         ],
         "run": "just test-int apps/api/tests/integration/db/test_fixtures.py -k fixture",
         "notes": "單一守衛驗收：grep -nE '_owner_dsn|_backend_dsn|LOOPBACK|conninfo_to_dict' apps/api/tests/integration/db/test_base.py apps/api/tests/integration/db/test_seed_local.py 應無輸出；just test-int apps/api/tests/integration/db/test_base.py apps/api/tests/integration/db/test_seed_local.py 全綠。"
@@ -111,16 +116,17 @@
           "integration"
         ],
         "red_cases": [
-          "test_roles_code_unique：插入 code='director' 兩次 → 第二次 SQLSTATE 23505（uq_roles_code）",
-          "test_roles_code_format：插入 code='Director' → 23514；code='a' → 23514；code='front_desk' → 成功",
-          "test_roles_wildcard_only_for_admin：插入 code='clerk', permissions='{*}' → 23514（ck_roles_wildcard_admin_only）；code='admin', permissions='{*}' → 成功",
-          "test_roles_permissions_reject_null_element：permissions = array['students:read', null] → 23514",
-          "test_roles_defaults：只給 code/name 插入 → permissions = '{}'、is_system = false",
-          "test_roles_secured：用 DB-002 的 assert_table_secured('roles') → pg_class.relrowsecurity = true 且 relforcerowsecurity = true；`set local role anon` 後 `select * from public.roles` → SQLSTATE 42501（insufficient_privilege）；backend_conn（app_backend 實際登入）select → 成功、回 0 筆",
-          "test_roles_updated_at_trigger：插入時指定 updated_at = '2026-01-01T00:00:00+08:00'，update 任一業務欄位 → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
+          "test_roles_code_unique：插入 code='counselor' 兩次 → 第二次 23505，constraint_name = 'uq_roles_code'",
+          "test_roles_code_format：code='Director' → 23514；code='a' → 23514；code='front_desk' → 成功",
+          "test_roles_wildcard_only_for_admin：插入 code='front_desk', permissions='{*}' → 23514，constraint_name = 'ck_roles_wildcard_admin_only'；既有非 admin 角色 update permissions = '{*}' → 23514（同一約束）；`insert ... values ('admin', '系統管理員', '{*}') on conflict (code) do update set permissions = excluded.permissions returning permissions` → 成功且回 ['*']",
+          "test_roles_permissions_reject_null_element：permissions = array['students:read', null] → 23514，constraint_name = 'ck_roles_permissions_no_null'",
+          "test_roles_name_not_blank：name='   ' → 23514；name 為 51 字 → 23514",
+          "test_roles_defaults：只給 code/name 插入 → permissions = '{}'、is_system = false、description 為 null",
+          "test_roles_secured：assert_table_secured(owner_conn, 'public.roles')（relrowsecurity / relforcerowsecurity 皆 true、app_backend_all policy 存在、anon 與 authenticated select → 42501）；backend_conn（app_backend 實際登入）以 make_roles 插入一列後 assert_backend_read_write(backend_conn, 'public.roles', row, name='主任助理') → 依 id select 回同一列、update 成功、delete 後查無此列",
+          "test_roles_updated_at_trigger：backend_conn 以 make_roles(updated_at=SEEDED_UPDATED_AT，即 2026-01-01T00:00:00+08:00) 插入，assert_updated_at_trigger(backend_conn, 'public.roles', id, name='課輔組長') → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
         ],
         "run": "just test-int apps/api/tests/integration/db/test_roles.py -k roles",
-        "notes": ""
+        "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。DB-035 會以 data migration seed admin / director / clerk / tutor，非 admin 案例避開這些 code，admin 案例用 on conflict upsert，seed 落地後測試仍成立；secured 測試不假設表為空。"
       },
       "review": {
         "status": "pending",
@@ -302,14 +308,14 @@
           "integration"
         ],
         "red_cases": [
-          "test_subjects_name_unique_case_insensitive：插入 name='數學' 後再插入 name=' 數學 ' → 23505（uq_subjects_name）；插入 'English' 後插入 'english' → 23505",
-          "test_subjects_name_not_blank：name='   ' → 23514",
+          "test_subjects_name_unique_case_insensitive：插入 name='書法' 後再插入 name=' 書法 ' → 23505，constraint_name = 'uq_subjects_name'；插入 'Art' 後插入 'art' → 23505",
+          "test_subjects_name_not_blank：name='   ' → 23514；name 為 21 字 → 23514",
           "test_subjects_defaults：只給 name → sort_order=0、is_active=true",
-          "test_subjects_secured：用 DB-002 的 assert_table_secured('subjects') → pg_class.relrowsecurity = true 且 relforcerowsecurity = true；`set local role anon` 後 `select * from public.subjects` → SQLSTATE 42501（insufficient_privilege）；backend_conn（app_backend 實際登入）select → 成功、回 0 筆",
-          "test_subjects_updated_at_trigger：插入時指定 updated_at = '2026-01-01T00:00:00+08:00'，update 任一業務欄位 → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
+          "test_subjects_secured：assert_table_secured(owner_conn, 'public.subjects')（relrowsecurity / relforcerowsecurity 皆 true、app_backend_all policy 存在、anon 與 authenticated select → 42501）；backend_conn（app_backend 實際登入）以 make_subjects 插入一列後 assert_backend_read_write(backend_conn, 'public.subjects', row, sort_order=5) → 依 id select 回同一列、update 成功、delete 後查無此列",
+          "test_subjects_updated_at_trigger：backend_conn 以 make_subjects(updated_at=SEEDED_UPDATED_AT，即 2026-01-01T00:00:00+08:00) 插入，assert_updated_at_trigger(backend_conn, 'public.subjects', id, sort_order=5) → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
         ],
         "run": "just test-int apps/api/tests/integration/db/test_subjects.py -k subjects",
-        "notes": ""
+        "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。DB-036 會 seed 國語 / 數學 / 英語 / 自然 / 社會，測試名稱避開這些值；secured 測試不假設表為空。"
       },
       "review": {
         "status": "pending",
@@ -339,14 +345,14 @@
           "integration"
         ],
         "red_cases": [
-          "test_exam_types_name_unique_case_insensitive：插入 name='段考' 後插入 name='段考 ' → 23505（uq_exam_types_name）",
-          "test_exam_types_name_not_blank：name='' → 23514",
+          "test_exam_types_name_unique_case_insensitive：插入 name='週考' 後插入 name='週考 ' → 23505，constraint_name = 'uq_exam_types_name'；插入 'Quiz' 後插入 'quiz' → 23505",
+          "test_exam_types_name_not_blank：name='' → 23514；name 為 21 字 → 23514",
           "test_exam_types_defaults：只給 name → sort_order=0、is_active=true",
-          "test_exam_types_secured：用 DB-002 的 assert_table_secured('exam_types') → pg_class.relrowsecurity = true 且 relforcerowsecurity = true；`set local role anon` 後 `select * from public.exam_types` → SQLSTATE 42501（insufficient_privilege）；backend_conn（app_backend 實際登入）select → 成功、回 0 筆",
-          "test_exam_types_updated_at_trigger：插入時指定 updated_at = '2026-01-01T00:00:00+08:00'，update 任一業務欄位 → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
+          "test_exam_types_secured：assert_table_secured(owner_conn, 'public.exam_types')（relrowsecurity / relforcerowsecurity 皆 true、app_backend_all policy 存在、anon 與 authenticated select → 42501）；backend_conn（app_backend 實際登入）以 make_exam_types 插入一列後 assert_backend_read_write(backend_conn, 'public.exam_types', row, sort_order=5) → 依 id select 回同一列、update 成功、delete 後查無此列",
+          "test_exam_types_updated_at_trigger：backend_conn 以 make_exam_types(updated_at=SEEDED_UPDATED_AT，即 2026-01-01T00:00:00+08:00) 插入，assert_updated_at_trigger(backend_conn, 'public.exam_types', id, sort_order=5) → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
         ],
         "run": "just test-int apps/api/tests/integration/db/test_exam_types.py -k exam_types",
-        "notes": ""
+        "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。DB-037 會 seed 段考 / 小考 / 複習考，測試名稱避開這些值；secured 測試不假設表為空。"
       },
       "review": {
         "status": "pending",
@@ -376,14 +382,15 @@
           "integration"
         ],
         "red_cases": [
-          "test_schools_name_unique：插入 name='新生國小' 兩次 → 23505（uq_schools_name）",
-          "test_schools_short_name_not_blank：short_name='  ' → 23514；short_name=null → 成功",
-          "test_schools_defaults：只給 name → is_active=true",
-          "test_schools_secured：用 DB-002 的 assert_table_secured('schools') → pg_class.relrowsecurity = true 且 relforcerowsecurity = true；`set local role anon` 後 `select * from public.schools` → SQLSTATE 42501（insufficient_privilege）；backend_conn（app_backend 實際登入）select → 成功、回 0 筆",
-          "test_schools_updated_at_trigger：插入時指定 updated_at = '2026-01-01T00:00:00+08:00'，update 任一業務欄位 → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
+          "test_schools_name_unique：插入 name='新生國小' 後再插入 ' 新生國小' → 23505，constraint_name = 'uq_schools_name'；插入 'Xinsheng' 後插入 'xinsheng' → 23505",
+          "test_schools_name_not_blank：name='  ' → 23514；name 為 51 字 → 23514",
+          "test_schools_short_name_not_blank：short_name='  ' → 23514；short_name 為 21 字 → 23514；short_name=null → 成功",
+          "test_schools_defaults：只給 name → is_active=true、short_name 為 null",
+          "test_schools_secured：assert_table_secured(owner_conn, 'public.schools')（relrowsecurity / relforcerowsecurity 皆 true、app_backend_all policy 存在、anon 與 authenticated select → 42501）；backend_conn（app_backend 實際登入）以 make_schools 插入一列後 assert_backend_read_write(backend_conn, 'public.schools', row, short_name='新生') → 依 id select 回同一列、update 成功、delete 後查無此列",
+          "test_schools_updated_at_trigger：backend_conn 以 make_schools(updated_at=SEEDED_UPDATED_AT，即 2026-01-01T00:00:00+08:00) 插入，assert_updated_at_trigger(backend_conn, 'public.schools', id, short_name='新生') → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
         ],
         "run": "just test-int apps/api/tests/integration/db/test_schools.py -k schools",
-        "notes": ""
+        "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。secured 測試不假設表為空。"
       },
       "review": {
         "status": "pending",
@@ -413,14 +420,14 @@
           "integration"
         ],
         "red_cases": [
-          "test_closed_days_date_unique：插入 date='2026-10-10' 兩次 → 23505（uq_closed_days_date）",
-          "test_closed_days_reason_length：reason 為 101 個「休」字 → 23514；100 個 → 成功",
+          "test_closed_days_date_unique：插入 date='2026-10-10' 兩次 → 23505，constraint_name = 'uq_closed_days_date'",
+          "test_closed_days_reason_length：reason 為 101 個「休」字 → 23514；100 個 → 成功；reason=null → 成功",
           "test_closed_days_date_required：date=null → 23502",
-          "test_closed_days_secured：用 DB-002 的 assert_table_secured('closed_days') → pg_class.relrowsecurity = true 且 relforcerowsecurity = true；`set local role anon` 後 `select * from public.closed_days` → SQLSTATE 42501（insufficient_privilege）；backend_conn（app_backend 實際登入）select → 成功、回 0 筆",
-          "test_closed_days_updated_at_trigger：插入時指定 updated_at = '2026-01-01T00:00:00+08:00'，update 任一業務欄位 → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
+          "test_closed_days_secured：assert_table_secured(owner_conn, 'public.closed_days')（relrowsecurity / relforcerowsecurity 皆 true、app_backend_all policy 存在、anon 與 authenticated select → 42501）；backend_conn（app_backend 實際登入）以 make_closed_days 插入一列後 assert_backend_read_write(backend_conn, 'public.closed_days', row, reason='國慶日') → 依 id select 回同一列、update 成功、delete 後查無此列",
+          "test_closed_days_updated_at_trigger：backend_conn 以 make_closed_days(updated_at=SEEDED_UPDATED_AT，即 2026-01-01T00:00:00+08:00) 插入，assert_updated_at_trigger(backend_conn, 'public.closed_days', id, reason='國慶日') → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
         ],
         "run": "just test-int apps/api/tests/integration/db/test_closed_days.py -k closed_days",
-        "notes": ""
+        "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。secured 測試不假設表為空。"
       },
       "review": {
         "status": "pending",
@@ -450,15 +457,17 @@
           "integration"
         ],
         "red_cases": [
-          "test_classes_name_unique_per_year：academic_year=115 插入 name='A班' 後再插入 'a班' → 23505（uq_classes_year_name）；academic_year=116 同名 → 成功",
+          "test_classes_name_unique_per_year：academic_year=115 插入 name='A班' 後再插入 ' a班' → 23505，constraint_name = 'uq_classes_year_name'；academic_year=116 同名 → 成功",
           "test_classes_archived_name_reusable：115 學年 'A班' 設 archived_at=now() 後再插入 115 學年 'A班' → 成功",
-          "test_classes_grade_levels_domain：grade_levels='{7}' → 23514；'{}' → 23514；'{1,null}' → 23514；'{1,2}' → 成功",
-          "test_classes_academic_year_range：academic_year=2026 → 23514；99 → 23514",
-          "test_classes_secured：用 DB-002 的 assert_table_secured('classes') → pg_class.relrowsecurity = true 且 relforcerowsecurity = true；`set local role anon` 後 `select * from public.classes` → SQLSTATE 42501（insufficient_privilege）；backend_conn（app_backend 實際登入）select → 成功、回 0 筆",
-          "test_classes_updated_at_trigger：插入時指定 updated_at = '2026-01-01T00:00:00+08:00'，update 任一業務欄位 → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
+          "test_classes_grade_levels_domain：grade_levels='{7}' → 23514（constraint_name = 'ck_classes_grade_levels'）；'{0}' → 23514；'{}' → 23514；'{1,null}' → 23514；'{1,2}' → 成功；'{6}' → 成功",
+          "test_classes_academic_year_range：academic_year=2026 → 23514；99 → 23514；100 與 200 → 成功",
+          "test_classes_name_not_blank：name='  ' → 23514；name 為 31 字 → 23514",
+          "test_classes_defaults：只給 name / grade_levels / academic_year → sort_order=0、archived_at 為 null",
+          "test_classes_secured：assert_table_secured(owner_conn, 'public.classes')（relrowsecurity / relforcerowsecurity 皆 true、app_backend_all policy 存在、anon 與 authenticated select → 42501）；backend_conn（app_backend 實際登入）以 make_classes 插入一列後 assert_backend_read_write(backend_conn, 'public.classes', row, sort_order=5) → 依 id select 回同一列、update 成功、delete 後查無此列",
+          "test_classes_updated_at_trigger：backend_conn 以 make_classes(updated_at=SEEDED_UPDATED_AT，即 2026-01-01T00:00:00+08:00) 插入，assert_updated_at_trigger(backend_conn, 'public.classes', id, sort_order=5) → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
         ],
         "run": "just test-int apps/api/tests/integration/db/test_classes.py -k classes",
-        "notes": ""
+        "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。secured 測試不假設表為空。"
       },
       "review": {
         "status": "pending",
