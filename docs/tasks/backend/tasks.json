@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 37,
-  "last_updated": "2026-10-03T12:18:40Z",
+  "version": 39,
+  "last_updated": "2026-10-03T12:19:44Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2389,11 +2389,11 @@
     {
       "id": "BACKEND-072",
       "title": "實作 resolve_effective_permissions：角色權限 + extra − revoked，展開萬用碼 *",
-      "description": "在 `apps/api/app/core/permissions.py` 新增（architecture_decisions §6、domain_spec §3 末段）。移植 ivy `utils/permissions.py::resolve_user_permissions` 的「DB 為單一事實來源、空清單不回退模板」原則；去掉 legacy snapshot、scope、tenant。\n\n```python\ndef resolve_effective_permissions(role_permissions: Iterable[str], extra_permissions: Iterable[str], revoked_permissions: Iterable[str]) -> frozenset[str]: ...\n```\n**規則**\n1. base = 角色權限；含 `*` → 展開為 `ALL_PERMISSIONS`（含日後新增的碼）。\n2. `effective = (base ∪ extra) − revoked`。revoked 可以撤掉 `*` 展開出來的單一碼（例如 admin 帳號 revoked `students:sensitive`）。\n3. 結果只保留 `is_valid_permission` 的碼；不合法的碼（DB 手動寫入、enum 改名殘留）丟棄並 `logger.warning` 一次（含碼名，不含帳號以外個資）。\n4. 純函式，不碰 DB。\n\n**驗收標準**\n- `*` 展開為全部 28 碼（`ALL_PERMISSIONS`）。\n- extra 加入、revoked 移除，revoked 優先於 extra。\n- 不合法碼被丟棄且有 warning。\n- 空角色 + 空 extra → 空集合（不回退任何預設）。",
+      "description": "在 `apps/api/app/core/permissions.py` 新增（architecture_decisions §6、domain_spec §3 末段）。移植 ivy `utils/permissions.py::resolve_user_permissions` 的「DB 為單一事實來源、空清單不回退模板」原則；去掉 legacy snapshot、scope、tenant。\n\n```python\ndef resolve_effective_permissions(role_permissions: Iterable[str], extra_permissions: Iterable[str], revoked_permissions: Iterable[str]) -> frozenset[str]: ...\n```\n**規則**\n1. base = 角色權限；含 `*` → 展開為 `ALL_PERMISSIONS`（含日後新增的碼）。\n2. `effective = (base ∪ extra) − revoked`。revoked 可以撤掉 `*` 展開出來的單一碼（例如 admin 帳號 revoked `students:sensitive`）。\n3. 結果只保留 `is_valid_permission` 的碼；不合法的碼（DB 手動寫入、enum 改名殘留）丟棄並 `logger.warning` 一次（含碼名，不含帳號以外個資）。\n4. `*` 只在角色權限中展開；extra / revoked 中的 `*` 屬不合法碼（extra 不可藉此提權，revoked 的 `*` 不展開、依公式不影響結果），同樣丟棄並 warning。warning 每次呼叫合併成一則，列出三個來源的全部不合法碼。\n5. 純函式，不碰 DB。\n\n**驗收標準**\n- `*` 展開為全部 28 碼（`ALL_PERMISSIONS`）。\n- extra 加入、revoked 移除，revoked 優先於 extra。\n- 不合法碼被丟棄且有 warning。\n- 空角色 + 空 extra → 空集合（不回退任何預設）。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/permissions.py",
       "source_ref": "BE:utils/permissions.py::resolve_user_permissions",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-070"
@@ -2412,7 +2412,9 @@
           "test_resolve_revoked_beats_extra：extra=['exams:publish']、revoked=['exams:publish'] → 'exams:publish' not in 結果",
           "test_resolve_wildcard_with_revoked：(['*'], [], ['students:sensitive']) → len == 27 且 'students:sensitive' 不在其中",
           "test_resolve_drops_invalid_with_warning：(['students:read','students:fly'], [], []) == frozenset({'students:read'})，caplog 含 'students:fly'",
-          "test_resolve_empty：([], [], []) == frozenset()"
+          "test_resolve_empty：([], [], []) == frozenset()",
+          "test_resolve_wildcard_only_expands_in_role：([], ['*'], []) == frozenset()，且一則 warning 含 \"'*'\"",
+          "test_resolve_invalid_codes_from_all_sources_one_warning：role / extra / revoked 各有不合法碼 → 結果只含合法碼，warning 恰一則且列出全部不合法碼"
         ],
         "run": "just test apps/api/tests/unit/core/test_permissions.py -k \"test_resolve_\"",
         "notes": ""

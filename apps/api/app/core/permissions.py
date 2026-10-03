@@ -1,4 +1,5 @@
 """BACKEND-070：權限碼（architecture_decisions §6、domain_spec §3，共 28 碼）。
+BACKEND-072：有效權限計算 ``resolve_effective_permissions``。
 
 - 扁平字串權限碼 ``<module>:<action>``；前端 ``apps/web/src/constants/permissions.ts`` 同步一份，
   有一致性測試。
@@ -10,9 +11,13 @@
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
+
+logger = logging.getLogger(__name__)
 
 WILDCARD: Final = "*"
 
@@ -152,3 +157,37 @@ PERMISSION_GROUPS: Final[list[PermissionGroup]] = [
 def is_valid_permission(code: str) -> bool:
     """只認 enum 中的值；``*`` 不是權限碼（展開由有效權限計算負責）。"""
     return code in ALL_PERMISSIONS
+
+
+def resolve_effective_permissions(
+    role_permissions: Iterable[str],
+    extra_permissions: Iterable[str],
+    revoked_permissions: Iterable[str],
+) -> frozenset[str]:
+    """有效權限 = (角色權限 | extra) - revoked，純函式。
+
+    移植 ivy ``utils/permissions.py::resolve_user_permissions`` 的「DB 為單一事實來源、
+    空清單不回退任何預設」原則。
+
+    - 只有角色權限中的 ``*`` 會展開成 ``ALL_PERMISSIONS``（含日後新增的碼）；
+      extra / revoked 中的 ``*`` 視為不合法碼（extra 不可藉此提權）。
+    - 結果只含合法碼；三個來源中的不合法碼（DB 手動寫入、enum 改名殘留）合併成一則 warning。
+    """
+    role = [str(code) for code in role_permissions]
+    extra = [str(code) for code in extra_permissions]
+    revoked = [str(code) for code in revoked_permissions]
+
+    invalid = {
+        "role": sorted({c for c in role if c != WILDCARD and not is_valid_permission(c)}),
+        "extra": sorted({c for c in extra if not is_valid_permission(c)}),
+        "revoked": sorted({c for c in revoked if not is_valid_permission(c)}),
+    }
+    if any(invalid.values()):
+        logger.warning(
+            "忽略不合法的權限碼：%s",
+            " ".join(f"{source}={codes!r}" for source, codes in invalid.items() if codes),
+        )
+
+    base = set(ALL_PERMISSIONS) if WILDCARD in role else set(role)
+    effective = (base | set(extra)) - set(revoked)
+    return frozenset(code for code in effective if is_valid_permission(code))
