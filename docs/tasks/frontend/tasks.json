@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 55,
-  "last_updated": "2026-10-03T13:07:49Z",
+  "version": 56,
+  "last_updated": "2026-10-03T13:08:16Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1187,7 +1187,7 @@
     {
       "id": "FRONTEND-043",
       "title": "實作 components/common/StatCard.vue：統計卡（數值、語意色、提示、可點擊導頁）",
-      "description": "建立 `apps/web/src/components/common/StatCard.vue`，儀表板（FRONTEND-261）與出勤 / 作業頁摘要使用。移植 ivy `FE:src/components/common/StatCard.vue` 的 label / value / color；新增 `to` 與 `loading`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-common-extra.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。一張稿逐一展示 FRONTEND-040、043 各元件的全部狀態；共用元件 039/041/042 在 `docs/mockups/component-common.html`。\n\n**props**：`label: string`、`value: string | number`、`tone?: Tone`（FRONTEND-005，預設 info）、`hint?: string`、`to?: RouteLocationRaw`、`loading?: boolean`、`active?: boolean`（作為篩選 chip 使用時的選中態）、`clickable?: boolean`（預設 false）；emits `click`。\n- `to` 有值時整張卡為連結（`router.push`，role=link、可 Tab 聚焦）。\n- 沒有 `to` 但 `clickable` 為 true 時可點：role=button、tabindex=0、`aria-pressed` 反映 `active`，點擊或 Enter / Space emit `click`。\n- 沒有 `to` 且 `clickable` 不為 true 時一律為靜態卡：沒有 role、沒有 tabindex、沒有 hover 樣式，點擊不 emit（例如儀表板缺權限時的卡）。\n- loading 時以 skeleton 取代數值。\n\n**驗收標準**\n- 顯示 label / value / hint；tone 對應 class。\n- `to` 導頁；loading 不顯示數值。\n- 無 `to` 時只有 `clickable` 為 true 才可點並 emit click；否則為靜態卡。",
+      "description": "建立 `apps/web/src/components/common/StatCard.vue`，儀表板（FRONTEND-261）與出勤 / 作業頁摘要使用。移植 ivy `FE:src/components/common/StatCard.vue` 的 label / value / color；新增 `to` 與 `loading`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-common-extra.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。一張稿逐一展示 FRONTEND-040、043 各元件的全部狀態；共用元件 039/041/042 在 `docs/mockups/component-common.html`。\n\n**props**：`label: string`、`value: string | number`、`tone?: Tone`（FRONTEND-005，預設 info）、`hint?: string`、`to?: RouteLocationRaw`、`loading?: boolean`、`active?: boolean`（作為篩選 chip 使用時的選中態）、`clickable?: boolean`（預設 false）；emits `click`。\n- `to` 有值時整張卡為連結（`router.push`，role=link、可 Tab 聚焦）。\n- 沒有 `to` 但 `clickable` 為 true 時可點：role=button、tabindex=0、`aria-pressed` 反映 `active`，點擊或 Enter / Space emit `click`。\n- 沒有 `to` 且 `clickable` 不為 true 時一律為靜態卡：沒有 role、沒有 tabindex、沒有 hover 樣式，點擊不 emit（例如儀表板缺權限時的卡）。\n- loading 時以 skeleton 取代數值、不顯示 hint、根元素 `aria-busy=\"true\"`；標籤照常顯示，仍可點（導頁或 emit click 照常）。\n- 外觀以設計稿 `docs/mockups/component-common-extra.html` 的 decisions 為準：`to` 有值時標籤列右側顯示箭頭、Enter 觸發導頁（只導頁、不 emit click）；`active` 的選中樣式（`is-active`）只在 clickable 卡套用；tone 只改數值顏色（info 不上色）。\n\n**驗收標準**\n- 顯示 label / value / hint；tone 對應 class。\n- `to` 導頁；loading 不顯示數值。\n- 無 `to` 時只有 `clickable` 為 true 才可點並 emit click；否則為靜態卡。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/StatCard.vue",
       "source_ref": "FE:src/components/common/StatCard.vue::default",
@@ -1209,7 +1209,10 @@
           "StatCard renders label value hint and tone：props {label:'未到',value:12,tone:'warning',hint:'含 3 位尚未點名'} → 文字含 '未到'、'12'、'含 3 位尚未點名'，根元素 class 含 'tone-warning'",
           "StatCard navigates when to is set：props {label:'待回覆接送',value:2,to:'/pickup'} → 點擊後 router.currentRoute.value.path === '/pickup'",
           "StatCard shows skeleton while loading：loading true、value 99 → 文字不含 '99'，[data-test=stat-skeleton] 存在",
-          "StatCard clickable emits click and static card does not：props {label:'未交',value:4,clickable:true,active:true} → 根元素 role === 'button'、tabindex '0'、aria-pressed 'true'，點擊後 emitted('click').length === 1；另以 {label:'接送',value:2}（無 to、無 clickable）→ 根元素沒有 role 與 tabindex 屬性，點擊後 emitted('click') 為 undefined"
+          "StatCard clickable emits click and static card does not：props {label:'未交',value:4,clickable:true,active:true} → 根元素 role === 'button'、tabindex '0'、aria-pressed 'true'，點擊後 emitted('click').length === 1；另以 {label:'接送',value:2}（無 to、無 clickable）→ 根元素沒有 role 與 tabindex 屬性，點擊後 emitted('click') 為 undefined",
+          "StatCard link card shows chevron and handles Enter：props {label:'待回覆接送',value:2,to:'/pickup'} → role 'link'、tabindex '0'、[data-test=stat-chevron] 存在、沒有 aria-pressed；keydown Enter → 路由 '/pickup'；emitted('click') 為 undefined",
+          "StatCard clickable keyboard and active style：clickable true、active false → aria-pressed 'false'、class 不含 is-active；keydown Enter 與 Space 各 emit 一次 click（共 2）；靜態卡（active true、無 clickable）→ class 不含 is-active / is-interactive、沒有 [data-test=stat-chevron]",
+          "StatCard loading hides hint and stays clickable：loading true、hint '含 3 位尚未點名'、clickable true → 文字含標籤、不含 hint、aria-busy 'true'；點擊 → emitted('click').length === 1"
         ],
         "run": "just web-test src/components/common/StatCard.spec.ts -t \"StatCard\"",
         "notes": ""
