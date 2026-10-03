@@ -17,15 +17,16 @@ const props = withDefaults(
 
 const total = computed(() => Math.max(1, Math.floor(props.count)))
 
+// height 同時寫進 min-height，才蓋得過 .skeleton-row 的 72px 下限
 const blockStyle = computed<StyleValue | undefined>(() => {
   if (!props.width && !props.height) return undefined
-  return { width: props.width, height: props.height }
+  return { width: props.width, height: props.height, minHeight: props.height }
 })
 
 // 沒指定寬度時最後一行縮短，看起來像一段文字
 function lineStyle(index: number): StyleValue | undefined {
   if (!props.width && total.value > 1 && index === total.value) {
-    return { width: '60%', height: props.height }
+    return { width: '60%', height: props.height, minHeight: props.height }
   }
   return blockStyle.value
 }

@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 37,
-  "last_updated": "2026-10-03T15:22:08Z",
+  "version": 38,
+  "last_updated": "2026-10-03T15:25:37Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -1024,7 +1024,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/SkeletonBlock.vue",
       "source_ref": "FE:src/parent/components/SkeletonBlock.vue::props",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r3",
       "depends_on": [
         "PARENT-001",
