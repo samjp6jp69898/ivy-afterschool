@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 27,
-  "last_updated": "2026-10-03T12:45:12Z",
+  "version": 28,
+  "last_updated": "2026-10-03T12:45:51Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -2524,7 +2524,7 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/utils/academicYear.ts",
       "source_ref": "FE:src/utils/academic.ts::currentRocYear",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "FRONTEND-003"
