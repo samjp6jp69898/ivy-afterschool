@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 21,
-  "last_updated": "2026-10-03T12:32:56Z",
+  "version": 22,
+  "last_updated": "2026-10-03T12:32:57Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -131,7 +131,7 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/shared/ws/createWsClient.ts",
       "source_ref": "FE:src/composables/useInboxNotifications.ts::useInboxNotifications",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r3",
       "depends_on": [
         "INFRA-012",
