@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 12,
-  "last_updated": "2026-10-03T12:13:00Z",
+  "version": 13,
+  "last_updated": "2026-10-03T12:13:36Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -388,7 +388,9 @@
           "snackbarStore auto dismisses after duration：show('已送出') → items[0].message === '已送出'；advanceTimersByTime(3999) 仍有 1 則；再 advance 1ms → items.length === 0",
           "snackbarStore queues and times sequentially：show('A'); show('B') → advance 4000 → items[0].message === 'B'；再 advance 4000 → 空",
           "snackbarStore caps queue at three：連續 show A、B、C、D → items 的 message 依序為 ['A','C','D']（正在顯示的 A 保留，丟棄最舊未顯示的 B）",
-          "snackbarStore sticky when duration zero：show('網路中斷', {duration:0}) → advance 60000 後仍存在；dismiss(id) 後為空"
+          "snackbarStore sticky when duration zero：show('網路中斷', {duration:0}) → advance 60000 後仍存在；dismiss(id) 後為空",
+          "snackbarStore dismissing head starts next timer：show('A',{duration:0}); show('B',{duration:2000,tone:'error'}) → advance 10000 → dismiss(A 的 id) → items[0] 為 {message:'B',tone:'error',duration:2000}；advance 1999 仍有 1 則；再 advance 1ms → 空",
+          "snackbarStore clear empties queue and cancels timer：show('A'); show('B'); clear() → items 為空；advance 2000 後 show('C')，再 advance 2000 仍為 ['C']（舊計時器已取消），再 advance 2000 → 空"
         ],
         "run": "just web-test src/parent/stores/snackbar.spec.ts -t \"snackbarStore\"",
         "notes": ""
