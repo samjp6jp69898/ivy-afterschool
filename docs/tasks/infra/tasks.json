@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 88,
-  "last_updated": "2026-10-03T15:09:52Z",
+  "version": 89,
+  "last_updated": "2026-10-03T15:10:19Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1797,7 +1797,7 @@
           "unit"
         ],
         "red_cases": [
-          "test_readme_ports_match_compose：解析 compose.yaml 的 host port 集合 → 每個 port 都出現在 README.md；README 另含 '8341' 與 '5341'",
+          "test_readme_ports_match_compose：解析 compose.yaml 的 host port 集合 → 每個 port 都出現在 README.md，且 README 中出現的 543xx port 集合恰等於 compose 的 host port 集合（不得殘留舊 port）；README 另含 '8341' 與 '5341'",
           "test_readme_quickstart_order：README 中 'just db-start' 第一次出現的位置 < 'just db-reset --yes' < 'just api'",
           "test_readme_migration_section：README 含 'just db-migrate'、'just db-new-migration' 與 'forward-only'",
           "test_readme_tools：README 含 'Docker' 與 'compose'，且不含 'supabase'（不分大小寫）"
