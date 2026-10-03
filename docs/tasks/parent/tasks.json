@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 10,
-  "last_updated": "2026-10-03T12:10:10Z",
+  "version": 11,
+  "last_updated": "2026-10-03T12:12:36Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -63,7 +63,7 @@
     {
       "id": "PARENT-003",
       "title": "實作 parent/utils/safeRedirect.ts：登入 / 綁定後導回的站內路徑驗證",
-      "description": "建立 `apps/web/src/parent/utils/safeRedirect.ts`：\n```ts\nexport function isSafeRedirectPath(raw: unknown): raw is string\nexport function resolveSafeRedirect(raw: unknown, fallback = '/'): string\n```\n`redirect` query 與通知的 `deep_link` 都是外部可控輸入（LINE 推播連結），在 `router.replace()` / `router.push()` 之前一律經此驗證。\n\n**規則**（移植 ivy `FE:src/parent/utils/safeRedirect.ts::isSafeRedirectPath`，保留全部擋法）：非字串或空字串、前後有空白、含控制字元（≤0x1F、0x7F）、不以 `/` 開頭、以 `//` 或 `/\\\\` 開頭 → 不安全。**新增**：路徑部分（去掉 `?` 與 `#` 之後）為 `/login` 或 `/bind` → 不安全（避免登入後又被導回登入頁形成迴圈）。fallback 改為 `/`（本專案首頁路由）。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/utils/safeRedirect.ts`：\n```ts\nexport function isSafeRedirectPath(raw: unknown): raw is string\nexport function resolveSafeRedirect(raw: unknown, fallback = '/'): string\n```\n`redirect` query 與通知的 `deep_link` 都是外部可控輸入（LINE 推播連結），在 `router.replace()` / `router.push()` 之前一律經此驗證。\n\n**規則**（移植 ivy `FE:src/parent/utils/safeRedirect.ts::isSafeRedirectPath`，保留全部擋法）：非字串或空字串、前後有空白、含控制字元（≤0x1F、0x7F）、不以 `/` 開頭、以 `//` 或 `/\\\\` 開頭 → 不安全。**新增**：路徑部分（去掉 `?` 與 `#` 之後）為 `/login` 或 `/bind` → 不安全（避免登入後又被導回登入頁形成迴圈）；比對不分大小寫並容許單一結尾斜線（與 vue-router 預設的 `sensitive: false`、`strict: false` 匹配一致，`/LOGIN`、`/login/` 同樣會進登入頁），前綴相同的其他路徑（`/login-help`、`/binding/...`）不受影響。fallback 改為 `/`（本專案首頁路由）。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "method",
       "target_path": "apps/web/src/parent/utils/safeRedirect.ts",
       "source_ref": "FE:src/parent/utils/safeRedirect.ts::isSafeRedirectPath",
@@ -85,8 +85,9 @@
           "safeRedirect rejects absolute and protocol-relative url：resolveSafeRedirect('https://evil.com') → '/'；resolveSafeRedirect('//evil.com') → '/'；resolveSafeRedirect('/\\\\evil.com') → '/'",
           "safeRedirect rejects javascript and bare host：resolveSafeRedirect('javascript:alert(1)') → '/'；resolveSafeRedirect('evil.com/x') → '/'",
           "safeRedirect rejects whitespace and control chars：resolveSafeRedirect(' /pickup') → '/'；resolveSafeRedirect('/pickup\\n') → '/'；resolveSafeRedirect('/pi\\u0000ckup') → '/'",
-          "safeRedirect rejects login and bind loop：resolveSafeRedirect('/login?redirect=/x') → '/'；resolveSafeRedirect('/bind') → '/'；resolveSafeRedirect('/leaves', '/more') → '/leaves'",
-          "safeRedirect rejects non string：resolveSafeRedirect(['/a']) → '/'；resolveSafeRedirect(undefined, '/more') → '/more'；isSafeRedirectPath('') → false"
+          "safeRedirect rejects login and bind loop：resolveSafeRedirect('/login?redirect=/x') → '/'；resolveSafeRedirect('/bind') → '/'；resolveSafeRedirect('/LOGIN') → '/'；resolveSafeRedirect('/login/') → '/'；resolveSafeRedirect('/login-help') → '/login-help'；resolveSafeRedirect('/leaves', '/more') → '/leaves'",
+          "safeRedirect rejects non string：resolveSafeRedirect(['/a']) → '/'；resolveSafeRedirect(undefined, '/more') → '/more'；isSafeRedirectPath('') → false",
+          "safeRedirect keeps same origin for encoded bypass payloads：'/%2F%2Fevil.com'、'/%5Cevil.com'、'/%09/evil.com'、'/@evil.com'、'//evil.com'、'/\\t/evil.com'、'https:evil.com' 等經 resolveSafeRedirect 後以 new URL(結果, 'https://afterschool.example/parent/') 解析，origin 一律為 'https://afterschool.example'；resolveSafeRedirect('/%2F%2Fevil.com') → '/%2F%2Fevil.com'（編碼斜線不被當成路徑分隔，原樣保留為站內路徑）"
         ],
         "run": "just web-test src/parent/utils/safeRedirect.spec.ts -t \"safeRedirect\"",
         "notes": ""
