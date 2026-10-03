@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 23,
-  "last_updated": "2026-10-03T12:35:01Z",
+  "version": 24,
+  "last_updated": "2026-10-03T12:35:25Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1114,7 +1114,7 @@
     {
       "id": "FRONTEND-041",
       "title": "實作 components/common/AdminListToolbar.vue：搜尋、篩選群組、筆數與動作區",
-      "description": "建立 `apps/web/src/components/common/AdminListToolbar.vue`。移植 ivy `FE:src/components/common/AdminListToolbar.vue` 的 FilterGroup 結構與「全部」選項；**去掉** export 按鈕內建（改由 actions slot）、mobile 卡片切換。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-common.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。一張稿逐一展示 FRONTEND-039~043 各元件的全部狀態。\n\n**props / emits**\n```ts\nexport interface FilterOption { label: string; value: string | number | boolean }\nexport interface FilterGroup { key: string; label: string; options: FilterOption[]; clearable?: boolean }   // 以 el-select 呈現；clearable 預設 true，清除 = 「全部」\nprops: { search?: string; searchPlaceholder?: string; filters?: FilterGroup[]; filterValues?: Record<string, unknown>; total?: number }\nemits: { 'update:search': [string]; 'update:filterValues': [Record<string, unknown>] }\nslots: actions（右側）\n```\n- 搜尋輸入 debounce 300ms 後 emit 去頭尾空白的值；按 Enter 立即 emit。\n- 選擇篩選 → emit 合併後的新物件（不修改 props 物件）；清除 → 該 key 設為 `undefined`。\n- `total` 有值時顯示「共 N 筆」。\n\n**驗收標準**：每一條對應下列 red_case（fake timers）。",
+      "description": "建立 `apps/web/src/components/common/AdminListToolbar.vue`。移植 ivy `FE:src/components/common/AdminListToolbar.vue` 的 FilterGroup 結構與「全部」選項；**去掉** export 按鈕內建（改由 actions slot）、mobile 卡片切換。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-common.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。一張稿逐一展示 FRONTEND-039~043 各元件的全部狀態。\n\n**props / emits**\n```ts\nexport interface FilterOption { label: string; value: string | number | boolean }\nexport interface FilterGroup { key: string; label: string; options: FilterOption[]; clearable?: boolean }   // 以 el-select 呈現；clearable 預設 true，清除 = 「全部」\nprops: { search?: string; searchPlaceholder?: string; filters?: FilterGroup[]; filterValues?: Record<string, unknown>; total?: number }\nemits: { 'update:search': [string]; 'update:filterValues': [Record<string, unknown>] }\nslots: extra-filters（下拉篩選之後、「共 N 筆」之前；放 StudentSelect、日期區間、「含封存」勾選等非下拉篩選）、actions（右側）\n```\n- 搜尋輸入 debounce 300ms 後 emit 去頭尾空白的值；按 Enter 立即 emit。\n- 選擇篩選 → emit 合併後的新物件（不修改 props 物件）；清除 → 該 key 設為 `undefined`。\n- `total` 有值時顯示「共 N 筆」。\n- `extra-filters` slot 有內容時渲染在最後一個下拉篩選之後、筆數之前；沒內容時不渲染容器。\n\n**驗收標準**：每一條對應下列 red_case（fake timers）。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/common/AdminListToolbar.vue",
       "source_ref": "FE:src/components/common/AdminListToolbar.vue::default",
@@ -1134,7 +1134,8 @@
         "red_cases": [
           "AdminListToolbar debounces search：input setValue('  王小明 ') → 299ms 時 emitted('update:search') 為 undefined；300ms 後 emitted('update:search')[0] 深等於 ['王小明']；按 Enter → 立即 emit",
           "AdminListToolbar merges filter values：filterValues {status:'active'}、filters [{key:'class_id',label:'班級',options:[{label:'低年級A班',value:'c1'}]}] → 選 '低年級A班' → emitted('update:filterValues')[0][0] 深等於 {status:'active',class_id:'c1'}，原 props 物件不變",
-          "AdminListToolbar clears filter to undefined and shows total：清除 class_id → emit 的物件 class_id === undefined；total 37 → 文字含 '共 37 筆'"
+          "AdminListToolbar clears filter to undefined and shows total：清除 class_id → emit 的物件 class_id === undefined；total 37 → 文字含 '共 37 筆'",
+          "AdminListToolbar renders extra-filters slot between filters and total：filters 一組、total 5、extra-filters slot 傳入 '<label class=\"archived\">含封存</label>' → .archived 存在，DOM 順序位於最後一個 el-select 之後、'共 5 筆' 文字節點之前；不傳 slot 時沒有 extra-filters 容器"
         ],
         "run": "just web-test src/components/common/AdminListToolbar.spec.ts -t \"AdminListToolbar\"",
         "notes": ""
@@ -1667,7 +1668,7 @@
     {
       "id": "FRONTEND-056",
       "title": "實作 components/settings/SecretInput.vue：secret 欄位遮罩顯示、修改與清除",
-      "description": "建立 `apps/web/src/components/settings/SecretInput.vue`。後端回傳的 secret 值已遮罩（例如 `****abcd`，未設定為 `null`）；送回遮罩值代表「不修改」、`null` 代表清除、其他字串為新值（BACKEND-110）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-system.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：各分組表單、secret 欄位（已設定 / 未設定 / 修改中）、欄位驗證錯誤、只有 settings:read 時的唯讀樣式、儲存中與儲存成功。\n\n**props / emits**：`modelValue: string | null`、`disabled?: boolean`；emits `update:modelValue`。\n**行為**\n- 初始值為遮罩字串：顯示唯讀文字「已設定（****abcd）」+「修改」「清除」按鈕；不把遮罩值放進可編輯 input。\n- 初始值 null：顯示「未設定」+「設定」按鈕。\n- 點「修改」/「設定」→ 顯示 password input（show-password）+「取消」；輸入時 emit 新字串；按「取消」→ emit 回初始值（遮罩或 null）並收起。\n- 點「清除」→ 確認框「清除後 LINE 推播將無法運作，確定要清除嗎？」→ emit `null`，顯示「將於儲存後清除」與「復原」（復原 emit 初始值）。\n- disabled 時只顯示狀態文字，不顯示按鈕。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/settings/SecretInput.vue`。後端回傳的 secret 值已遮罩（例如 `****abcd`，未設定為 `null`）；送回遮罩值代表「不修改」、`null` 代表清除、其他字串為新值（BACKEND-110）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-settings.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。元件外觀、狀態與互動以此元件稿為準；所屬頁面稿 `docs/mockups/page-settings-system.html` 只畫頁面版面並引用本元件，不另訂元件規格。\n\n**props / emits**：`modelValue: string | null`、`disabled?: boolean`；emits `update:modelValue`。\n**行為**\n- 初始值為遮罩字串：顯示唯讀文字「已設定（****abcd）」+「修改」「清除」按鈕；不把遮罩值放進可編輯 input。\n- 初始值 null：顯示「未設定」+「設定」按鈕。\n- 點「修改」/「設定」→ 顯示 password input（show-password）+「取消」；輸入時 emit 新字串；按「取消」→ emit 回初始值（遮罩或 null）並收起。\n- 修改中 input 為空字串時視同未修改：emit 初始值（遮罩或 null），不送出空字串；要清除只能經「清除」。\n- 點「清除」→ 確認框「清除後 LINE 推播將無法運作，確定要清除嗎？」→ emit `null`，顯示「將於儲存後清除」與「復原」（復原 emit 初始值）。\n- disabled 時只顯示狀態文字，不顯示按鈕。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/SecretInput.vue",
       "source_ref": null,
@@ -1688,7 +1689,8 @@
           "SecretInput shows masked state without exposing value in input：modelValue '****abcd' → 文字含 '已設定（****abcd）'，wrapper.findAll('input').length === 0",
           "SecretInput edits new value and cancel restores mask：點 '修改' → password input 出現；setValue('new-token-xyz') → emitted('update:modelValue') 最後一筆 ['new-token-xyz']；點 '取消' → 最後一筆 ['****abcd'] 且 input 消失",
           "SecretInput clears after confirmation and can undo：點 '清除' 並在確認框點 '確定' → 最後 emit [null]、文字含 '將於儲存後清除'；點 '復原' → 最後 emit ['****abcd']",
-          "SecretInput unset and disabled states：modelValue null → 文字含 '未設定' 與 '設定' 按鈕；disabled true → 沒有任何 button"
+          "SecretInput unset and disabled states：modelValue null → 文字含 '未設定' 與 '設定' 按鈕；disabled true → 沒有任何 button",
+          "SecretInput empty edit keeps initial value：modelValue '****abcd'，點 '修改' → setValue('new') → setValue('') → emitted('update:modelValue') 最後一筆 ['****abcd']（不是 ['']）"
         ],
         "run": "just web-test src/components/settings/SecretInput.spec.ts -t \"SecretInput\"",
         "notes": ""
@@ -2060,7 +2062,7 @@
     {
       "id": "FRONTEND-066",
       "title": "實作 components/settings/TempPasswordDialog.vue：臨時密碼只顯示一次（複製、關閉前確認）",
-      "description": "建立 `apps/web/src/components/settings/TempPasswordDialog.vue`，建立帳號、重設密碼、重新啟用後顯示後端產生的臨時密碼。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-accounts.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：列表（啟用 / 停用 / 需改密碼 tag）、篩選、建立 / 編輯 dialog（含個別權限調整）、臨時密碼只顯示一次的 dialog、停用與重新啟用確認、只有 staff:read 時的唯讀樣式、空清單。\n\n**props / emits**：`modelValue: boolean`、`username: string`、`displayName: string`、`tempPassword: string`；emits `update:modelValue`。\n**行為**\n- 大字等寬顯示臨時密碼 +「複製」（`navigator.clipboard.writeText`，成功「已複製」，失敗「無法複製，請手動抄寫」）。\n- 說明：「此密碼只會顯示這一次。{displayName}（帳號 {username}）首次登入後必須修改密碼。」\n- 關閉（按鈕、X、Esc）前若尚未按過「複製」→ 確認框「關閉後將無法再次查看此密碼，確定已記下了嗎？」；已複製則直接關閉。`close-on-click-modal` 為 false。\n- 關閉後元件內部不保留密碼字串（父層應同時清空 prop）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/settings/TempPasswordDialog.vue`，建立帳號、重設密碼、重新啟用後顯示後端產生的臨時密碼。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-settings.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。元件外觀、狀態與互動以此元件稿為準；所屬頁面稿 `docs/mockups/page-settings-accounts.html` 只畫頁面版面並引用本元件，不另訂元件規格。\n\n**props / emits**：`modelValue: boolean`、`username: string`、`displayName: string`、`tempPassword: string`；emits `update:modelValue`。\n**行為**\n- 大字等寬顯示臨時密碼 +「複製」（`navigator.clipboard.writeText`，成功「已複製」，失敗「無法複製，請手動抄寫」）。\n- 說明：「此密碼只會顯示這一次。{displayName}（帳號 {username}）首次登入後必須修改密碼。」\n- 關閉（按鈕、X、Esc）前若尚未按過「複製」→ 確認框「關閉後將無法再次查看此密碼，確定已記下了嗎？」；已複製則直接關閉。`close-on-click-modal` 為 false。\n- 關閉後元件內部不保留密碼字串（父層應同時清空 prop）。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/TempPasswordDialog.vue",
       "source_ref": null,
@@ -4612,7 +4614,7 @@
     {
       "id": "FRONTEND-196",
       "title": "實作 components/pickup/pos/CountdownBar.vue：5 秒倒數進度條",
-      "description": "建立 `apps/web/src/components/pickup/pos/CountdownBar.vue`。移植 ivy `FE:src/components/dismissal/pos/DismissalPosCountdownBar.vue`：scaleX 收縮動畫（transform-origin left）、雙層 requestAnimationFrame 觸發 transition、途中掛載依剩餘比例接續、剩餘時間 clamp 在 [0, durationMs]、reduced motion 時只在到期變色不做動畫。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-pickup-pos.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸、觸控目標 ≥ 44px。稿需呈現：三欄 POS（左班級欄含待處理徽章、中學生卡七種狀態、右佇列）、佇列卡各狀態（待回覆 / 等待確認 / 已確認 / 家長已到含等候分鐘與急迫色 / 已結束）、員工代建 5 秒倒數卡、左滑取消、回覆預計可接送時間 dialog、完成交付 dialog（監護人 / 代理人 / 主管確認交付）、代建請求 dialog、靜音切換、即時連線中斷提示、只有 pickup:read 時的唯讀樣式、空佇列、載入中。\n\n**props**：`startedAt: number`、`durationMs?: number`（預設 5000）。\n- 根元素 `role=\"progressbar\"`、`aria-valuemin=0`、`aria-valuemax=durationMs`、`aria-valuenow` = 剩餘毫秒（掛載時計算）。\n\n**驗收標準**\n- 初始 scaleX 為剩餘比例；兩次 rAF 後 scaleX(0) 且 transitionDuration 為剩餘毫秒；reduced motion 到期變色。",
+      "description": "建立 `apps/web/src/components/pickup/pos/CountdownBar.vue`。移植 ivy `FE:src/components/dismissal/pos/DismissalPosCountdownBar.vue`：scaleX 收縮動畫（transform-origin left）、雙層 requestAnimationFrame 觸發 transition、途中掛載依剩餘比例接續、剩餘時間 clamp 在 [0, durationMs]、reduced motion 時只在到期變色不做動畫。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-pickup-countdown.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸、觸控目標 ≥ 44px。元件外觀、狀態與互動以此元件稿為準；所屬頁面稿 `docs/mockups/page-pickup-pos.html` 只畫頁面版面並引用本元件，不另訂元件規格。\n\n**props**：`startedAt: number`、`durationMs?: number`（預設 5000）。\n- 根元素 `role=\"progressbar\"`、`aria-valuemin=0`、`aria-valuemax=durationMs`、`aria-valuenow` = 剩餘毫秒（掛載時計算）。\n\n**驗收標準**\n- 初始 scaleX 為剩餘比例；兩次 rAF 後 scaleX(0) 且 transitionDuration 為剩餘毫秒；reduced motion 到期變色。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/pickup/pos/CountdownBar.vue",
       "source_ref": "FE:src/components/dismissal/pos/DismissalPosCountdownBar.vue::default",
@@ -5090,7 +5092,7 @@
     {
       "id": "FRONTEND-235",
       "title": "實作 components/exams/ScoreGrid.vue：學生 × 科目成績輸入格（鍵盤導覽、逐格自動儲存）",
-      "description": "建立 `apps/web/src/components/exams/ScoreGrid.vue`（domain_spec M8：後台以「學生 × 科目」格狀表格輸入，逐格自動儲存）。鍵盤導覽參考 ivy `FE:src/composables/useGridKeyboardNav.ts::useGridKeyboardNav`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exam-detail.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試 header（狀態、發布 / 取消發布 / 編輯 / 刪除依權限）、成績輸入格（學生 × 科目，格子五種狀態：未填 / 編輯中 / 儲存中 / 已儲存 / 錯誤，缺考勾選、超出滿分錯誤、已不在名單的學生）、已發布後修改的重新通知選擇、各科平均表、科目設定（草稿可改 / 已發布唯讀）、只有 exams:read 時唯讀、無科目時的引導、載入中。\n\n**props / emits / expose**：`examId: string`、`canWrite: boolean`；emits `dirty-change(hasUnsaved: boolean)`；expose `hasUnsaved`、`flush(): Promise<void>`。\n**內容**\n- 載入 `fetchScoreGrid(examId)`；列 = students（依班級、學號），欄 = subjects（依 sort_order，表頭「{subject_name}（滿分 {full_score}）」）；左側固定「學號 / 姓名 / 班級」。`in_roster === false` 的學生列淡化並標「已不在名單」（仍可編輯既有分數）。\n- 每格 `ScoreCell`（FRONTEND-236），狀態由 `useScoreAutosave`（FRONTEND-237）提供。\n- 鍵盤：Enter / ↓ 往下一列同科、↑ 上一列、Tab / → 右一格（在輸入框游標位於結尾時）、Shift+Tab / ← 左一格；Esc 還原該格輸入。\n- 工具列：儲存狀態摘要（「所有變更已儲存」/「儲存中…」/「{n} 格儲存失敗（重試）」）、`exam.status === 'published'` 時「修改後通知家長：{開 / 關 / 尚未選擇}」切換（FRONTEND-238）。\n- `!canWrite`：所有格唯讀。\n- 無科目：EmptyState「尚未設定科目」+「前往科目設定」（`router.replace({query: {tab: 'subjects'}})`）；無學生：「此考試沒有應考學生，請確認年級或班級設定」。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/exams/ScoreGrid.vue`（domain_spec M8：後台以「學生 × 科目」格狀表格輸入，逐格自動儲存）。鍵盤導覽參考 ivy `FE:src/composables/useGridKeyboardNav.ts::useGridKeyboardNav`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exam-detail.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試 header（狀態、發布 / 取消發布 / 編輯 / 刪除依權限）、成績輸入格（學生 × 科目，格子五種狀態：未填 / 編輯中 / 儲存中 / 已儲存 / 錯誤，缺考勾選、超出滿分錯誤、已不在名單的學生）、已發布後修改的重新通知選擇、各科平均表、科目設定（草稿可改 / 已發布唯讀）、只有 exams:read 時唯讀、無科目時的引導、載入中。\n\n**props / emits / expose**：`examId: string`、`canWrite: boolean`；emits `dirty-change(hasUnsaved: boolean)`；expose `hasUnsaved`、`flush(): Promise<void>`。\n**內容**\n- 載入 `fetchScoreGrid(examId)`；列 = students（依班級、學號），欄 = subjects（依 sort_order，表頭「{subject_name}（滿分 {full_score}）」）；左側固定「學號 / 姓名 / 班級」。`in_roster === false` 的學生列淡化並標「已不在名單」（仍可編輯既有分數）。\n- 每格 `ScoreCell`（FRONTEND-236），狀態由 `useScoreAutosave`（FRONTEND-237）提供。\n- 鍵盤：Enter / ↓ 往下一列同科、↑ 上一列、Tab / → 右一格（在輸入框游標位於結尾時）、Shift+Tab / ← 左一格；Esc 還原該格輸入。\n- 工具列：儲存狀態摘要（「所有變更已儲存」/「儲存中…」/「{n} 格儲存失敗（重試）」）、`exam.status === 'published'` 時「修改後通知家長：{開 / 關 / 尚未選擇}」切換（FRONTEND-238）。\n- RenotifyChoiceDialog 以 Esc / X 關閉（未選擇）後，格子維持未儲存、工具列顯示「尚未選擇」；之後再有格子變更觸發自動儲存且仍 `awaitingNotifyChoice` 時重新開啟 dialog；使用者也可直接在工具列切換選擇（選擇後立即 flush）。\n- `!canWrite`：所有格唯讀。\n- 無科目：EmptyState「尚未設定科目」+「前往科目設定」（`router.replace({query: {tab: 'subjects'}})`）；無學生：「此考試沒有應考學生，請確認年級或班級設定」。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/exams/ScoreGrid.vue",
       "source_ref": "FE:src/composables/useGridKeyboardNav.ts::useGridKeyboardNav",
@@ -5117,7 +5119,8 @@
           "ScoreGrid autosaves edited cell：王小明數學輸入 88 → 800ms 後 PUT /admin/exams/e1/scores body.cells 深等於 [{student_id:'s1',subject_id:'sub2',score:88,is_absent:false}]、notify_parents false；成功後工具列文字 '所有變更已儲存'",
           "ScoreGrid readonly without write permission：canWrite false → 所有 input 為 readonly 或 disabled，沒有通知切換",
           "ScoreGrid empty states：subjects [] → 文字含 '尚未設定科目'，點 '前往科目設定' → query.tab === 'subjects'；students [] → '此考試沒有應考學生，請確認年級或班級設定'",
-          "ScoreGrid reports unsaved state：輸入後尚未送出 → emitted('dirty-change') 最後一筆 [true]；儲存成功 → [false]"
+          "ScoreGrid reports unsaved state：輸入後尚未送出 → emitted('dirty-change') 最後一筆 [true]；儲存成功 → [false]",
+          "ScoreGrid reopens renotify dialog after dismiss：exam.status 'published'、notifyParents null，王小明數學輸入 88 → dialog 開啟；按 Esc → dialog 關閉、沒有 PUT、工具列含 '尚未選擇'；再把林小華數學輸入 70 → dialog 再次開啟"
         ],
         "run": "just web-test src/components/exams/ScoreGrid.spec.ts -t \"ScoreGrid\"",
         "notes": ""
@@ -5131,7 +5134,7 @@
     {
       "id": "FRONTEND-236",
       "title": "實作 components/exams/ScoreCell.vue：單一成績格（分數、缺考、驗證、儲存狀態）",
-      "description": "建立 `apps/web/src/components/exams/ScoreCell.vue`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exam-detail.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試 header（狀態、發布 / 取消發布 / 編輯 / 刪除依權限）、成績輸入格（學生 × 科目，格子五種狀態：未填 / 編輯中 / 儲存中 / 已儲存 / 錯誤，缺考勾選、超出滿分錯誤、已不在名單的學生）、已發布後修改的重新通知選擇、各科平均表、科目設定（草稿可改 / 已發布唯讀）、只有 exams:read 時唯讀、無科目時的引導、載入中。\n\n**props / emits**：`score: number | null`、`isAbsent: boolean`、`fullScore: number`、`state: 'idle' | 'dirty' | 'saving' | 'saved' | 'error'`、`errorMessage?: string`、`readonly: boolean`；emits `change({score, is_absent})`。\n- 輸入框（inputmode decimal，寬 64px）：允許空白（= 未填）、0~fullScore、最多一位小數；不合法即時顯示紅框與 tooltip（「需介於 0~{fullScore}」「最多一位小數」），**不 emit**。合法且與 props 不同才 emit（blur 或 Enter 時）。\n- 缺考：小勾選「缺」；勾選 → emit `{score: null, is_absent: true}` 並停用輸入框；取消勾選 → `{score: null, is_absent: false}`。輸入「缺」或「-」字元等同勾選缺考。\n- 狀態樣式：dirty 黃色角標、saving 轉圈、saved 綠色勾 1 秒後淡出、error 紅框 + tooltip errorMessage。\n- readonly：只顯示文字（缺考顯示「缺考」、null 顯示「—」）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/exams/ScoreCell.vue`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-exams.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。元件外觀、狀態與互動以此元件稿為準；所屬頁面稿 `docs/mockups/page-exam-detail.html` 只畫頁面版面並引用本元件，不另訂元件規格。\n\n**props / emits**：`score: number | null`、`isAbsent: boolean`、`fullScore: number`、`state: 'idle' | 'dirty' | 'saving' | 'saved' | 'error'`、`errorMessage?: string`、`readonly: boolean`；emits `change({score, is_absent})`。\n- 輸入框（inputmode decimal，寬 64px）：允許空白（= 未填）、0~fullScore、最多一位小數；不合法即時顯示紅框與 tooltip（「需介於 0~{fullScore}」「最多一位小數」），**不 emit**。合法且與 props 不同才 emit（blur 或 Enter 時）。\n- 缺考：小勾選「缺」；勾選 → emit `{score: null, is_absent: true}` 並停用輸入框；取消勾選 → `{score: null, is_absent: false}`。輸入「缺」或「-」字元等同勾選缺考。\n- 狀態樣式：dirty 黃色角標、saving 轉圈、saved 綠色勾 1 秒後淡出、error 紅框 + tooltip errorMessage。\n- readonly：只顯示文字（缺考顯示「缺考」、null 顯示「—」）。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/exams/ScoreCell.vue",
       "source_ref": null,
@@ -5205,7 +5208,7 @@
     {
       "id": "FRONTEND-238",
       "title": "實作 components/exams/RenotifyChoiceDialog.vue：已發布考試修改分數時選擇是否重新通知家長",
-      "description": "建立 `apps/web/src/components/exams/RenotifyChoiceDialog.vue`（domain_spec M8：發布後修改分數寫 audit，且可選擇是否重新通知）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exam-detail.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試 header（狀態、發布 / 取消發布 / 編輯 / 刪除依權限）、成績輸入格（學生 × 科目，格子五種狀態：未填 / 編輯中 / 儲存中 / 已儲存 / 錯誤，缺考勾選、超出滿分錯誤、已不在名單的學生）、已發布後修改的重新通知選擇、各科平均表、科目設定（草稿可改 / 已發布唯讀）、只有 exams:read 時唯讀、無科目時的引導、載入中。\n\n**props / emits**：`modelValue: boolean`（由 ScoreGrid 在 `awaitingNotifyChoice` 時開啟）、`pendingCount: number`；emits `update:modelValue`、`choose(notify: boolean)`。\n- 內容：「此考試已發布，修改分數會記錄於稽核紀錄。是否在修改後通知家長分數已更新？」+「目前有 {pendingCount} 格等待儲存」。\n- 按鈕：「通知家長」（emit true）、「不通知」（emit false）；兩者都會關閉。說明「本次編輯期間都會套用此選擇，可在工具列切換」。\n- 不可點遮罩關閉；按 Esc 視同「不通知」以外的取消——保持等待（不 emit），格子維持未儲存。\n\n**驗收標準**\n- 文案含格數；兩個選擇 emit 對應值；Esc 不 emit。",
+      "description": "建立 `apps/web/src/components/exams/RenotifyChoiceDialog.vue`（domain_spec M8：發布後修改分數寫 audit，且可選擇是否重新通知）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/component-exams.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。元件外觀、狀態與互動以此元件稿為準；所屬頁面稿 `docs/mockups/page-exam-detail.html` 只畫頁面版面並引用本元件，不另訂元件規格。\n\n**props / emits**：`modelValue: boolean`（由 ScoreGrid 在 `awaitingNotifyChoice` 時開啟）、`pendingCount: number`；emits `update:modelValue`、`choose(notify: boolean)`。\n- 內容：「此考試已發布，修改分數會記錄於稽核紀錄。是否在修改後通知家長分數已更新？」+「目前有 {pendingCount} 格等待儲存」。\n- 按鈕：「通知家長」（emit true）、「不通知」（emit false）；兩者都會關閉。說明「本次編輯期間都會套用此選擇，可在工具列切換」。\n- 不可點遮罩關閉。右上有關閉鈕 X；按 Esc 或 X → emit `update:modelValue(false)` 關閉、不 emit `choose`，格子維持未儲存（是否再次開啟由 FRONTEND-235 決定）。\n\n**驗收標準**\n- 文案含格數；兩個選擇 emit 對應值；Esc / X 關閉但不 emit choose。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/exams/RenotifyChoiceDialog.vue",
       "source_ref": null,
@@ -5225,7 +5228,7 @@
         "red_cases": [
           "RenotifyChoiceDialog shows pending count：pendingCount 3 → 文字含 '此考試已發布，修改分數會記錄於稽核紀錄。' 與 '目前有 3 格等待儲存'",
           "RenotifyChoiceDialog emits choices：點 '通知家長' → emitted('choose')[0] 深等於 [true]；另一次點 '不通知' → 深等於 [false]",
-          "RenotifyChoiceDialog escape keeps waiting：按 Esc → emitted('choose') 為 undefined"
+          "RenotifyChoiceDialog escape and close keep waiting：按 Esc → emitted('choose') 為 undefined 且 emitted('update:modelValue') 最後一筆 [false]；另一次點右上關閉鈕 X → 同樣不 emit choose、update:modelValue 最後一筆 [false]"
         ],
         "run": "just web-test src/components/exams/RenotifyChoiceDialog.spec.ts -t \"RenotifyChoiceDialog\"",
         "notes": ""
