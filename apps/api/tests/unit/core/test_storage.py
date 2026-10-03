@@ -4,6 +4,7 @@ S3 呼叫一律以 botocore.stub.Stubber 攔截，不連網路。
 """
 
 import re
+import traceback
 from collections.abc import Iterator
 from typing import Any
 from uuid import UUID, uuid4
@@ -157,7 +158,7 @@ def test_storage_upload_error_hides_credentials(storage: R2Storage, stubber: Stu
     assert _ACCESS_KEY not in str(exc)
     assert _SECRET_VALUE not in str(exc)
     assert exc.__cause__ is None
-    assert exc.__suppress_context__ is True
+    assert exc.__context__ is None
 
 
 def test_storage_upload_connection_error(
@@ -173,6 +174,27 @@ def test_storage_upload_connection_error(
 
     assert "EndpointConnectionError" in str(exc_info.value)
     assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+
+
+def test_storage_error_has_no_context(storage: R2Storage, stubber: Stubber) -> None:
+    stubber.add_client_error(
+        "put_object",
+        service_error_code="SignatureDoesNotMatch",
+        http_status_code=403,
+        service_message="AWSAccessKeyId AKIDLEAK StringToSign STSLEAK",
+    )
+
+    with pytest.raises(StorageError) as exc_info:
+        storage.upload("student-photos", _valid_path(), b"\xff\xd8", "image/jpeg")
+
+    err = exc_info.value
+    assert err.__cause__ is None
+    assert err.__context__ is None
+    rendered = "".join(traceback.format_exception(err))
+    assert "AKIDLEAK" not in rendered
+    assert "STSLEAK" not in rendered
+    assert "SignatureDoesNotMatch" in rendered
 
 
 # --- object_key / build_object_path ---------------------------------------------------------

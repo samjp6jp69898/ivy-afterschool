@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 68,
-  "last_updated": "2026-10-03T14:49:17Z",
+  "version": 69,
+  "last_updated": "2026-10-03T14:51:03Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14646,7 +14646,7 @@
     {
       "id": "BACKEND-538",
       "title": "秘密不經例外外洩：Settings 驗證錯誤隱藏輸入值、StorageError 不掛原 ClientError",
-      "description": "review-r3-fe 審 BACKEND-537 / 013 時發現兩條仍可外洩 secret 的例外路徑，本 task 一併收斂。\n\n1. **Settings 驗證錯誤**（`apps/api/app/core/config.py`）：`DATABASE_URL` 格式不合（例如 `mysql://u:Pw123@h/db`）時，pydantic `ValidationError` 的訊息帶 `input_value`，密碼會寫進啟動失敗的 log。`model_config` 加 `hide_input_in_errors=True`。\n2. **StorageError 的 `__context__`**（`apps/api/app/core/storage.py`）：目前 `raise StorageError(...) from None` 只切斷 `__cause__`，原 `ClientError`（含 AWSAccessKeyId、StringToSign）仍掛在 `__context__`。改為在 `except` 區塊內只擷取錯誤碼與 HTTP status，離開 `except` 後才 `raise StorageError(...)`，使 `__cause__` 與 `__context__` 皆為 `None`。BACKEND-014 / 015 新增的 S3 呼叫一律沿用同一個 helper。\n\n**驗收標準**：\n- `DATABASE_URL='mysql://u:Pw123@h/db'` 建立 Settings → 拋 ValidationError，`str(e)` 與 `repr(e.errors())` 都不含 'Pw123'。\n- Stubber 造 SignatureDoesNotMatch（Error 帶 AWSAccessKeyId='AKIDLEAK'、StringToSign='STSLEAK'）→ StorageError 的 `__cause__` 與 `__context__` 皆為 None；`traceback.format_exception` 輸出不含 'AKIDLEAK' 與 'STSLEAK'。\n- BACKEND-001 / 537 / 013 既有測試全綠。",
+      "description": "review-r3-fe 審 BACKEND-537 / 013 時發現兩條仍可外洩 secret 的例外路徑，本 task 一併收斂。\n\n1. **Settings 驗證錯誤**（`apps/api/app/core/config.py`）：`DATABASE_URL` 格式不合（例如 `mysql://u:Pw123@h/db`）時，pydantic `ValidationError` 的訊息帶 `input_value`，密碼會寫進啟動失敗的 log。`model_config` 加 `hide_input_in_errors=True`（只影響 `str(e)`）。pydantic 的 `e.errors()` 不受此設定影響，仍帶原始 `input`；model_validator（production 規則）失敗時 `input` 是整包設定值，含 DATABASE_URL 密碼與 APP_SECRET_KEY。因此另覆寫 `Settings.__init__`：捕捉 ValidationError 後以 `ValidationError.from_exception_data` 重建，每筆錯誤的 `input` 換成 `'***'`（type、loc、ctx、msg 保留），並在 `except` 之外 raise，使 `__cause__` 與 `__context__` 皆為 None。\n2. **StorageError 的 `__context__`**（`apps/api/app/core/storage.py`）：目前 `raise StorageError(...) from None` 只切斷 `__cause__`，原 `ClientError`（含 AWSAccessKeyId、StringToSign）仍掛在 `__context__`。改為在 `except` 區塊內只擷取錯誤碼與 HTTP status，離開 `except` 後才 `raise StorageError(...)`，使 `__cause__` 與 `__context__` 皆為 `None`。BACKEND-014 / 015 新增的 S3 呼叫一律沿用同一個 helper。\n\n**驗收標準**：\n- `DATABASE_URL='mysql://u:Pw123@h/db'` 建立 Settings → 拋 ValidationError，`str(e)` 與 `repr(e.errors())` 都不含 'Pw123'。\n- production 規則失敗（R2_SECRET_ACCESS_KEY=change-me）時 `str(e)` 與 `repr(e.errors())` 不含 DATABASE_URL 密碼與 APP_SECRET_KEY；APP_SECRET_KEY 過短時錯誤不含該值；錯誤的 `__context__` 為 None；欄位名與錯誤訊息仍保留。\n- Stubber 造 SignatureDoesNotMatch（Error 帶 AWSAccessKeyId='AKIDLEAK'、StringToSign='STSLEAK'）→ StorageError 的 `__cause__` 與 `__context__` 皆為 None；`traceback.format_exception` 輸出不含 'AKIDLEAK' 與 'STSLEAK'。\n- BACKEND-001 / 537 / 013 既有測試全綠。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/storage.py",
       "source_ref": null,
@@ -14666,9 +14666,11 @@
         ],
         "red_cases": [
           "test_config_validation_error_hides_input：（寫在 tests/unit/core/test_config.py）DATABASE_URL='mysql://u:Pw123@h/db' → pytest.raises(ValidationError) as e，'Pw123' not in str(e.value) 且 not in repr(e.value.errors())",
-          "test_storage_error_has_no_context：Stubber add_client_error('put_object', service_error_code='SignatureDoesNotMatch', http_status_code=403, service_message='AWSAccessKeyId AKIDLEAK StringToSign STSLEAK') → upload 拋 StorageError，err.__cause__ is None 且 err.__context__ is None，''.join(traceback.format_exception(err)) 不含 'AKIDLEAK' 與 'STSLEAK'"
+          "test_storage_error_has_no_context：Stubber add_client_error('put_object', service_error_code='SignatureDoesNotMatch', http_status_code=403, service_message='AWSAccessKeyId AKIDLEAK StringToSign STSLEAK') → upload 拋 StorageError，err.__cause__ is None 且 err.__context__ is None，''.join(traceback.format_exception(err)) 不含 'AKIDLEAK' 與 'STSLEAK'",
+          "test_config_validation_error_hides_model_level_input：（test_config.py）APP_ENV=production、R2_SECRET_ACCESS_KEY='change-me'、DATABASE_URL 密碼 'DbPw999'、APP_SECRET_KEY 40 字元 → ValidationError，str 與 repr(errors()) 不含 'DbPw999' 與 APP_SECRET_KEY 值，__context__ is None，str 仍含 'R2_SECRET_ACCESS_KEY'",
+          "test_config_validation_error_hides_short_secret：（test_config.py）APP_SECRET_KEY='short-secret-value' → str 與 repr(errors()) 不含該值，仍含 '至少 32 bytes'"
         ],
-        "run": "just test apps/api/tests/unit/core/test_storage.py apps/api/tests/unit/core/test_config.py -k \"test_storage_error_has_no_context or test_config_validation_error_hides_input\"",
+        "run": "just test apps/api/tests/unit/core/test_storage.py apps/api/tests/unit/core/test_config.py -k \"test_storage_error_has_no_context or test_config_validation_error_hides\"",
         "notes": ""
       },
       "review": {

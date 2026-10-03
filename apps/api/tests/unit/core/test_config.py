@@ -261,6 +261,48 @@ def test_config_repr_hides_sentry_dsn(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.sentry_dsn == dsn
 
 
+def test_config_validation_error_hides_input(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "mysql://u:Pw123@h/db")
+
+    with pytest.raises(ValidationError) as exc_info:
+        _settings()
+
+    assert "Pw123" not in str(exc_info.value)
+    assert "Pw123" not in repr(exc_info.value.errors())
+    assert "database_url" in str(exc_info.value)
+
+
+def test_config_validation_error_hides_model_level_input(monkeypatch: pytest.MonkeyPatch) -> None:
+    app_secret = "A" * 40
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("APP_SECRET_KEY", app_secret)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://app_backend:DbPw999@db.internal/railway")
+    _use_cloud_r2(monkeypatch)
+    monkeypatch.setenv("R2_SECRET_ACCESS_KEY", "change-me")
+
+    with pytest.raises(ValidationError) as exc_info:
+        _settings()
+
+    exc = exc_info.value
+    for secret in ("DbPw999", app_secret, _CLOUD_R2_SECRET):
+        assert secret not in str(exc)
+        assert secret not in repr(exc.errors())
+    assert "R2_SECRET_ACCESS_KEY" in str(exc)
+    assert exc.__cause__ is None
+    assert exc.__context__ is None
+
+
+def test_config_validation_error_hides_short_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_SECRET_KEY", "short-secret-value")
+
+    with pytest.raises(ValidationError) as exc_info:
+        _settings()
+
+    assert "short-secret-value" not in str(exc_info.value)
+    assert "short-secret-value" not in repr(exc_info.value.errors())
+    assert "至少 32 bytes" in str(exc_info.value)
+
+
 def test_config_ignores_migration_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(
         "MIGRATION_DATABASE_URL", "postgresql://postgres:pw@127.0.0.1:54342/postgres"
