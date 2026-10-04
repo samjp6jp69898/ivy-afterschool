@@ -14,10 +14,11 @@ from sqlalchemy.orm import Session
 
 from app.core.storage import Storage, StorageError
 from app.models.classes import SchoolClass
+from app.models.parents import Guardian
 from app.models.reference import School
 from app.models.students import Student
-from app.schemas.parent_children import ChildSummaryOut
-from app.services.parent_scope import get_parent_student_ids
+from app.schemas.parent_children import ChildDetailOut, ChildGuardianOut, ChildSummaryOut
+from app.services.parent_scope import assert_parent_owns_student, get_parent_student_ids
 
 logger = logging.getLogger(__name__)
 
@@ -71,3 +72,33 @@ def _photo_url(storage: Storage, student_id: UUID, photo_path: str | None) -> st
     except StorageError:
         logger.warning("學生照片簽名 URL 產生失敗 student_id=%s", student_id)
         return None
+
+
+def get_child(
+    session: Session, parent_id: UUID, student_id: UUID, *, storage: Storage
+) -> ChildDetailOut:
+    """自己的小孩詳情（IDOR：不屬於自己 → 404）；不含健康、過敏、備註等欄位。"""
+    student = assert_parent_owns_student(session, parent_id, student_id)
+    summary = next(
+        c for c in list_children(session, parent_id, storage=storage) if c.id == student_id
+    )
+    mine = session.execute(
+        select(Guardian)
+        .where(
+            Guardian.student_id == student_id,
+            Guardian.parent_account_id == parent_id,
+            Guardian.archived_at.is_(None),
+        )
+        .limit(1)
+    ).scalar_one()
+    return ChildDetailOut(
+        **summary.model_dump(),
+        school_class=student.school_class,
+        enrolled_on=student.enrolled_on,
+        my_guardian=ChildGuardianOut(
+            relation=mine.relation,
+            is_primary=mine.is_primary,
+            can_pickup=mine.can_pickup,
+            receives_notifications=mine.receives_notifications,
+        ),
+    )
