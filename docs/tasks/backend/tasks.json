@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 200,
-  "last_updated": "2026-10-04T16:45:25Z",
+  "version": 201,
+  "last_updated": "2026-10-04T16:45:40Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -694,7 +694,7 @@
     {
       "id": "BACKEND-019",
       "title": "實作 app/core/security_middleware.py：Origin 檢查（CSRF 縱深防禦）與安全標頭",
-      "description": "建立 `apps/api/app/core/security_middleware.py`。cookie 認證 + SameSite=Lax 為主要 CSRF 防線，本 middleware 為第二道。移植 ivy `middleware/csrf_origin.py::CSRFOriginCheckMiddleware` 與 `middleware/ws_origin.py::WSOriginCheckMiddleware`；去掉 tenant subdomain regex。\n\n**行為**（純 ASGI middleware，同時處理 http 與 websocket）\n- 允許來源集合 = `Settings.cors_origins` ∪ {`public_base_url` 的 origin}。\n- HTTP 不安全方法（POST/PUT/PATCH/DELETE）：有 `Origin` header 且不在允許集合 → 403 `{\"error\":{\"code\":\"origin_forbidden\",...}}`；沒有 Origin 但有 `Referer` → 取其 origin 比對；兩者皆無 → 放行（非瀏覽器客戶端、伺服器內部呼叫）。\n- WebSocket handshake：`Origin` 存在且不在允許集合 → 在 accept 前以 close code 4403 拒絕。\n- `GET /api/parent/config` 與 `/api/health` 為 GET，不受影響。\n- 所有 http 回應加：`X-Content-Type-Options: nosniff`、`Referrer-Policy: same-origin`、`X-Frame-Options: DENY`、`Cache-Control: no-store`（只加在 `/api/` 路徑的 JSON 回應，避免瀏覽器快取個資）。\n\n**驗收標準**\n- 外站 Origin 的 POST → 403 origin_forbidden；允許的 Origin → 通過；無 Origin/Referer → 通過；外站 Referer → 403。\n- 外站 Origin 的 WS handshake 被 4403 拒絕。\n- 回應帶上述安全標頭。",
+      "description": "建立 `apps/api/app/core/security_middleware.py`。cookie 認證 + SameSite=Lax 為主要 CSRF 防線，本 middleware 為第二道。移植 ivy `middleware/csrf_origin.py::CSRFOriginCheckMiddleware` 與 `middleware/ws_origin.py::WSOriginCheckMiddleware`；去掉 tenant subdomain regex。\n\n**行為**（純 ASGI middleware，同時處理 http 與 websocket）\n- 允許來源集合 = `Settings.cors_origins` ∪ {`public_base_url` 的 origin}。\n- HTTP 不安全方法（POST/PUT/PATCH/DELETE）：有 `Origin` header 且不在允許集合 → 403 `{\"error\":{\"code\":\"origin_forbidden\",...}}`；沒有 Origin 但有 `Referer` → 取其 origin 比對；兩者皆無 → 放行（非瀏覽器客戶端、伺服器內部呼叫）。\n- WebSocket handshake：`Origin` 存在且不在允許集合 → 在 accept 前以 close code 4403 拒絕。\n- `GET /api/parent/config` 與 `/api/health` 為 GET，不受影響。\n- 所有 http 回應加：`X-Content-Type-Options: nosniff`、`Referrer-Policy: same-origin`、`X-Frame-Options: DENY`、`Cache-Control: no-store`（只加在 `/api/` 路徑的 JSON 回應，避免瀏覽器快取個資；`PUBLIC_CACHEABLE_PATHS`（目前只有 `/api/parent/config`，不含個資的公開資源）例外：不加 no-store，保留 handler 自訂的 Cache-Control，BACKEND-125）。\n\n**驗收標準**\n- 外站 Origin 的 POST → 403 origin_forbidden；允許的 Origin → 通過；無 Origin/Referer → 通過；外站 Referer → 403。\n- 外站 Origin 的 WS handshake 被 4403 拒絕。\n- 回應帶上述安全標頭。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security_middleware.py",
       "source_ref": "BE:middleware/csrf_origin.py::CSRFOriginCheckMiddleware",
@@ -786,7 +786,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/health.py",
       "source_ref": "BE:api/health.py::readiness",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-020",
@@ -1408,7 +1408,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/auth.py",
       "source_ref": "BE:api/auth.py::login",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-041",
@@ -1417,7 +1417,7 @@
         "BACKEND-023"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "回傳 StaffAuthOut / StaffMeOut 時 permissions 要先排序再傳入（BACKEND-039 的 StaffMeOut 不自行排序）。",
+      "risk_notes": "回傳 StaffAuthOut / StaffMeOut 時 permissions 要先排序再傳入（BACKEND-039 的 StaffMeOut 不自行排序）。\n協調者待使用者確認：login 回應組裝抽成 app/api/admin/auth.py 的 staff_auth_out（permissions 先排序），後續 refresh / change-password endpoint 重用。測試每個案例以 autouse fixture 換成獨立的 AuthThrottles（module 單例在 fake clock 固定時間下會跨測試累計）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_auth_endpoints.py",
@@ -2256,7 +2256,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/me.py",
       "source_ref": "BE:api/parent_portal/profile.py::get_me",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-063",
@@ -2772,7 +2772,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/roles.py",
       "source_ref": "BE:api/permissions_admin.py::_role_query",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-077",
@@ -3630,7 +3630,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/audit_logs.py",
       "source_ref": "BE:api/audit.py::get_audit_logs",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-103",
@@ -3638,7 +3638,7 @@
         "BACKEND-023"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：AuditLogQuery 拒絕未知參數，FastAPI 的 Annotated[Model, Query()] 會把 page / page_size 也當成未知參數 422，所以新增 app/api/admin/_query.py 的 query_model(model)：排除 page / page_size 後驗證並轉成一般 422 validation_error（loc 前綴 query）；後續帶分頁的列表 endpoint（例如 159）共用。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_audit_logs_endpoint.py",
@@ -3650,7 +3650,7 @@
           "test_admin_audit_logs_422：actor_type=robot → 422；date_from=2026-09-02&date_to=2026-09-01 → 422",
           "test_admin_audit_logs_401：無 cookie → 401",
           "test_admin_audit_logs_403：staff_client(permissions=['settings:read']) → 403",
-          "test_admin_audit_logs_masked：line.messaging 更新後的 audit after.channel_access_token 以 '****' 開頭，回應文字不含原 token"
+          "test_admin_audit_logs_masked：line.messaging 更新後的 audit after.channel_access_token 為 '***'（BACKEND-102 寫入端以 audit 遮罩規則處理 token / secret key），回應文字不含原 token"
         ],
         "run": "just test-int apps/api/tests/integration/api/admin/test_audit_logs_endpoint.py -k \"test_admin_audit_logs_\"",
         "notes": ""
@@ -3891,11 +3891,11 @@
     {
       "id": "BACKEND-112",
       "title": "實作 GET /api/admin/settings endpoint",
-      "description": "建立 `apps/api/app/api/admin/settings.py`，`GET /api/admin/settings`，`Depends(require_permission(Permission.SETTINGS_READ))` → BACKEND-109 → 200 `SettingsListOut`。\n\n**驗收標準**\n- 200，7 個 key、secret 遮罩。\n- 401、403。",
+      "description": "建立 `apps/api/app/api/admin/settings.py`，`GET /api/admin/settings`，`Depends(require_permission(Permission.SETTINGS_READ))` → BACKEND-109 → 200 `SettingsListOut`。\n\n**驗收標準**\n- 200，registry 全部 11 個 key、secret 遮罩。\n- 401、403。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/settings.py",
       "source_ref": "BE:api/system_config.py::list_configs",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-109",
@@ -3911,7 +3911,7 @@
           "integration"
         ],
         "red_cases": [
-          "test_admin_settings_list_success：staff_client(permissions=['settings:read']) → 200，len(items) == 7",
+          "test_admin_settings_list_success：staff_client(permissions=['settings:read']) → 200，[i.key for i in items] == list(REGISTRY)（11 個）",
           "test_admin_settings_list_masked：DB 已存 token 'tok-abcdefgh9999'（加密）→ 回應文字不含 'tok-abcdefgh9999' 且含 '****9999'",
           "test_admin_settings_list_401：無 cookie → 401",
           "test_admin_settings_list_403：staff_client(permissions=['students:read']) → 403",
@@ -4142,7 +4142,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/reference.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-115",
@@ -4150,7 +4150,7 @@
         "BACKEND-023"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：四個資源由 build_reference_router(spec) 以同一組權限（settings:read、students:read、exams:read、homework:read 任一）建立 GET；BACKEND-120~122 的 POST / PATCH / DELETE 日後在同一個 builder 內加 handler。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_reference_endpoints.py",
@@ -4358,18 +4358,18 @@
     {
       "id": "BACKEND-125",
       "title": "實作 GET /api/parent/config endpoint（公開設定，不需登入）",
-      "description": "建立 `apps/api/app/api/parent/config.py`，`GET /api/parent/config`（domain_spec §2：LIFF ID、安親班名稱 / 電話 / Logo，不需登入）→ BACKEND-124 → 200 `PublicConfigOut`。回應加 `Cache-Control: public, max-age=60`（覆寫 BACKEND-019 的 no-store）。\n\n**驗收標準**\n- 無 cookie 200 並回 liff_id、add_friend_url、org_name、org_phone、logo_url、limits。\n- 帶任意（含無效）cookie 仍 200。\n- 回應不含 secret。\n- Cache-Control 為 public, max-age=60。",
+      "description": "建立 `apps/api/app/api/parent/config.py`，`GET /api/parent/config`（domain_spec §2：LIFF ID、安親班名稱 / 電話 / Logo，不需登入）→ BACKEND-124 → 200 `PublicConfigOut`。回應加 `Cache-Control: public, max-age=60`（覆寫 BACKEND-019 的 no-store：security_middleware 的 PUBLIC_CACHEABLE_PATHS 對此路徑不加 no-store，保留 handler 的 Cache-Control）。\n\n**驗收標準**\n- 無 cookie 200 並回 liff_id、add_friend_url、org_name、org_phone、logo_url、limits。\n- 帶任意（含無效）cookie 仍 200。\n- 回應不含 secret。\n- Cache-Control 為 public, max-age=60。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/config.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-124",
         "BACKEND-023"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：BACKEND-019 的 SecurityMiddleware 會剝掉 handler 的 Cache-Control 並一律補 no-store，與本 task 要求的 public, max-age=60 衝突。已改 security_middleware.py：新增 PUBLIC_CACHEABLE_PATHS = {/api/parent/config}，這些路徑不加 no-store、保留 handler 的 Cache-Control（其餘 /api/ 路徑不變，單元測試 test_security_mw_public_cacheable_path_keeps_handler_cache_control 涵蓋），並同步更新 BACKEND-019 的 description。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/parent/test_parent_config_endpoint.py",
@@ -5473,7 +5473,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::get_students",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-149",
@@ -6388,7 +6388,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/children.py",
       "source_ref": "BE:api/parent_portal/profile.py::get_my_children",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-182",
