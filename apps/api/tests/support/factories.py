@@ -15,9 +15,9 @@ from __future__ import annotations
 import itertools
 import secrets
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Final
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -25,6 +25,13 @@ from sqlalchemy.orm import Session
 from app.core.security.passwords import hash_password
 from app.models.account import Role, StaffUser
 from app.models.classes import ClassStaff, ClassStaffRole, SchoolClass
+from app.models.leaves import (
+    LeaveActorType,
+    LeaveStatus,
+    LeaveType,
+    StudentLeave,
+    StudentLeaveAttachment,
+)
 from app.models.parents import Guardian, GuardianRelation, ParentAccount, ParentStatus
 from app.models.reference import School
 from app.models.students import Student, StudentStatus
@@ -208,3 +215,57 @@ def make_class_staff(
     link = ClassStaff(class_id=class_.id, staff_user_id=staff.id, role=role)
     _add(session, link)
     return link
+
+
+_ATTACHMENT_MIME: Final = {
+    "jpg": "image/jpeg",
+    "png": "image/png",
+    "webp": "image/webp",
+    "heic": "image/heic",
+    "pdf": "application/pdf",
+}
+
+
+def make_leave(
+    session: Session,
+    student: Student,
+    *,
+    start_date: date,
+    end_date: date | None = None,
+    leave_type: LeaveType = "sick",
+    status: LeaveStatus = "active",
+    created_by_type: LeaveActorType = "staff",
+    created_by_id: UUID | None = None,
+    reason: str | None = None,
+) -> StudentLeave:
+    """end_date 預設等於 start_date；status='cancelled' 時自動補 cancelled_* 三欄。"""
+    creator = created_by_id or uuid4()
+    leave = StudentLeave(
+        student_id=student.id,
+        leave_type=leave_type,
+        start_date=start_date,
+        end_date=end_date or start_date,
+        reason=reason,
+        status=status,
+        created_by_type=created_by_type,
+        created_by_id=creator,
+    )
+    if status == "cancelled":
+        leave.cancelled_at = ARCHIVED_AT
+        leave.cancelled_by_type = created_by_type
+        leave.cancelled_by_id = creator
+    _add(session, leave)
+    return leave
+
+
+def make_leave_attachment(
+    session: Session, leave: StudentLeave, *, ext: str = "pdf"
+) -> StudentLeaveAttachment:
+    attachment = StudentLeaveAttachment(
+        leave_id=leave.id,
+        storage_path=f"{leave.id}/{uuid4().hex}.{ext}",
+        mime_type=_ATTACHMENT_MIME[ext],
+        size_bytes=1024,
+    )
+    _add(session, attachment)
+    return attachment
