@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 107,
-  "last_updated": "2026-10-04T06:39:24Z",
+  "version": 108,
+  "last_updated": "2026-10-04T06:41:55Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1064,7 +1064,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security/tokens.py",
       "source_ref": "BE:utils/auth.py::create_access_token",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-009",
