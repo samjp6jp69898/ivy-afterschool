@@ -10,15 +10,25 @@ BACKEND-534：``assert_can_manage_staff``（移植 ivy ``api/auth.py::_assert_ca
 「目標最終權限 ⊆ caller 權限」；去掉 scope / super_admin 旗標）。目標帳號的有效權限 ⊄ actor 有效
 權限 → 403 ``cannot_manage_staff``（主任不能修改 / 重設密碼 / 停用 / 啟用 admin）；admin 自然通過、
 目標為空集合通過。使用者：BACKEND-090 / 091 / 092 / 521。
+
+BACKEND-075：``assert_admin_capabilities_retained``（移植 ivy
+``api/permissions_admin.py::_assert_roles_manage_retained``；去掉 tenant，判準擴充為 roles:write 與
+staff:write）。角色權限變更 / 刪除、員工改角色 / 改個別權限 / 停用之後、commit 之前呼叫（query 會
+autoflush）：所有啟用員工的有效權限中沒有人持有 roles:write → 409 ``last_role_manager``；沒有人持有
+staff:write → 409 ``last_staff_manager``。以帳號為準（留著沒人用的角色不算），停用帳號不算。
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from app.api.deps import CurrentStaff
-from app.core.errors import AppError, ForbiddenError
-from app.core.permissions import is_valid_permission
+from app.core.errors import AppError, ConflictError, ForbiddenError
+from app.core.permissions import Permission, is_valid_permission, resolve_effective_permissions
+from app.models.account import StaffUser
 
 
 def assert_valid_permission_codes(codes: Iterable[str]) -> list[str]:
@@ -44,3 +54,20 @@ def assert_can_grant(actor: CurrentStaff, codes: Iterable[str]) -> None:
 def assert_can_manage_staff(actor: CurrentStaff, target_effective: frozenset[str]) -> None:
     if not target_effective <= actor.permissions:
         raise ForbiddenError("無法管理權限比您大的帳號", code="cannot_manage_staff")
+
+
+def assert_admin_capabilities_retained(session: Session) -> None:
+    # StaffUser.role 為 lazy='joined'：一次查詢同時帶出角色，不 N+1
+    active_staff = session.execute(select(StaffUser).where(StaffUser.is_active.is_(True))).scalars()
+    has_roles_write = has_staff_write = False
+    for staff in active_staff:
+        effective = resolve_effective_permissions(
+            staff.role.permissions, staff.extra_permissions, staff.revoked_permissions
+        )
+        has_roles_write = has_roles_write or Permission.ROLES_WRITE in effective
+        has_staff_write = has_staff_write or Permission.STAFF_WRITE in effective
+        if has_roles_write and has_staff_write:
+            return
+    if not has_roles_write:
+        raise ConflictError("last_role_manager", "此變更會讓系統沒有任何可管理角色權限的啟用帳號")
+    raise ConflictError("last_staff_manager", "此變更會讓系統沒有任何可管理員工帳號的啟用帳號")
