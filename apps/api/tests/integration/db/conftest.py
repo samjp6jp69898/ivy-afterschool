@@ -229,14 +229,23 @@ def assert_backend_read_write(conn: Conn, table: str, row: dict[str, Any], **cha
         assert cur.execute(by_id, (row["id"],)).fetchone() is None
 
 
-def load_seed_sql(revision_file: str) -> str:
-    """載入 `alembic/versions/<revision_file>` 的 SEED_SQL（檔名不是合法模組名，不能 import）。"""
+def load_revision_sql(revision_file: str, constant: str) -> str:
+    """載入 `alembic/versions/<revision_file>` 的 SQL 模組常數（檔名不是合法模組名，不能 import）。
+
+    `constant` 例如 data migration 的 SEED_SQL、db040 的 VERIFY_SQL；不是字串就 assert 失敗。
+    """
     path = _VERSIONS_DIR / revision_file
+    assert path.is_file(), f"找不到 revision 檔 {path}"
     spec = importlib.util.spec_from_file_location(path.stem, path)
     assert spec is not None, f"載入不了 {path}"
     assert spec.loader is not None, f"載入不了 {path}"
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    seed_sql: Any = module.SEED_SQL
-    assert isinstance(seed_sql, str), f"{path} 的 SEED_SQL 應為字串"
-    return seed_sql
+    value: Any = getattr(module, constant, None)
+    assert isinstance(value, str), f"{path} 的 {constant} 應為字串：{value!r}"
+    return value
+
+
+def load_seed_sql(revision_file: str) -> str:
+    """載入 data migration 的 SEED_SQL。"""
+    return load_revision_sql(revision_file, "SEED_SQL")
