@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 46,
-  "last_updated": "2026-10-04T04:17:41Z",
+  "version": 47,
+  "last_updated": "2026-10-04T04:22:10Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -598,7 +598,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3Card.vue",
       "source_ref": "FE:src/parent/components/m3/M3Card.vue::props",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r3",
       "depends_on": [
         "PARENT-001",
@@ -628,9 +628,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r3",
-        "notes": "tdd.run 全綠；紅燈 commit（含規格修正）先於實作；web-lint 乾淨。稿 approved，decisions 逐條對照，happy-dom 驗得到的行為以突變驗證（元件副本改壞一處、以指向副本的 spec 副本執行，暫存檔皆已刪除），純樣式項逐一確認 CSS 有寫。vue-tsc 以只含本批 14 個檔案的暫時 tsconfig 執行。vue-tsc 對本元件無錯誤。decisions 中圓角、padding class、header / actions 外框、clickable 時 role=button + tabindex、Enter / Space 觸發、Space 防捲動、filled 預設、三種 variant 底色（與 ivy M3Card 的 token 相同，使用者裁定已落實）皆有測試或 CSS，Chromium 實量 filled 底色 #e1e3de、focus-visible 2px 外框。打回原因（Chromium 實測，可構造反例）：(1) 卡片內控制項的 click 會冒泡觸發卡片 click：焦點在卡片內 button 按 Enter 或 Space，button 自己 click 1 次、卡片 click 也 1 次；滑鼠點卡片內 button / input / Switch，卡片 click 各 1 次。0b6933a 新增的「卡片內控制項的按鍵不攔截」只處理了 keydown，click 冒泡仍讓卡片 emit；例如 clickable 的請假卡 actions 內放「我要來接」按鈕，按下會同時打開卡片詳情。role=button 內含可互動元素本身也違反 nested-interactive。如何處理需使用者裁定，已寫入 open_design_questions。(2) 在卡片上按住 Space（1 次按下加 8 次 repeat）卡片 click emit 9 次；卡片通常用於導頁，會重複 push 路由；原生按鈕按住只觸發一次，M3Switch 已有 repeat 判斷。殘留：鍵盤觸發的 payload 是 KeyboardEvent 沒有測試（改 emit 合成 MouseEvent 仍綠）。"
+        "notes": "複審（只核對打回項與新增 red_case）：tdd.run 全綠；web-lint 乾淨；vue-tsc 以只含本批 5 個元件與 spec 的暫時 tsconfig 執行 exit 0。新增的紅燈測試另以修正前版本的元件（git show <fix>^ 取出副本、spec 副本改指向副本）執行，確認會紅，非恆真；暫存檔已刪除。通過。使用者裁定 A 已寫進 description（列出 button、a[href]、input、select、textarea、label、role=button / switch / link / checkbox、contenteditable，以 closest() 判斷），open_design_questions 已清空；d613315 測試先於 f385231 實作。修正前版本跑新測試：ignores clicks from nested controls、ignores key repeat 皆紅。真實 Chromium（390×844、頁高 3000）重跑初審反例：卡片本身 Space / Enter / 滑鼠點各 +1，按住 Space（CDP autoRepeat 8 次、或連續 down 9 次）只 +1，scrollY 皆 0（對照：焦點在背景按 Space 會捲到 804）；卡片內 button 的滑鼠點 / Enter / Space 只觸發 button 自己、卡片 0；input 滑鼠點 / Space（值多一個空白，未被攔）/ Enter 卡片 0；M3Switch（role=switch 的 button）滑鼠點 / Space / Enter 各切換一次、按住 Space 只切一次、卡片 0；label 包住的 checkbox 點文字 / 點方塊 / Space 都正常勾選、卡片 0。另測卡片外層被 <a href> 或 <label> 包住時點卡片仍會 emit：卡片根元素自身是 role=button，closest() 會停在卡片本身，不會誤判外層祖先。殘留：卡片被 <a href> 包住時點擊會同時 emit 與觸發外層連結，屬使用端巢狀互動元素的問題。"
       }
     },
     {
@@ -640,7 +640,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3TextField.vue",
       "source_ref": "FE:src/parent/components/m3/M3TextField.vue::props",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r3",
       "depends_on": [
         "PARENT-001",
@@ -671,9 +671,9 @@
         "notes": "型別驗收（vue-tsc 只能整專案跑，改以只含本元件與其 spec 的暫時 tsconfig 執行）：在 apps/web 建立暫時 tsconfig，extends ./tsconfig.app.json、include 為 src/parent/components/m3/M3TextField.vue、src/parent/components/m3/M3TextField.spec.ts、src/*.d.ts，執行 pnpm exec vue-tsc --noEmit -p <暫時 tsconfig> 必須 exit 0，跑完刪除暫時檔。"
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r3",
-        "notes": "tdd.run 全綠；紅燈 commit（含規格修正）先於實作；web-lint 乾淨。稿 approved，decisions 逐條對照，happy-dom 驗得到的行為以突變驗證（元件副本改壞一處、以指向副本的 spec 副本執行，暫存檔皆已刪除），純樣式項逐一確認 CSS 有寫。vue-tsc 以只含本批 14 個檔案的暫時 tsconfig 執行。decisions：outlined 外觀、focus / error / disabled 狀態、errorText 取代 supportingText 並帶 trailing error 圖示、placeholder 只在聚焦時、date / time label 浮起、maxlength 計數（不限 textarea）、textarea 4 行不可縮放、Enter emit enter 且組字中（isComposing / keyCode 229）不觸發、textarea 不 emit、aria-describedby / aria-invalid、label for 以 useId 關聯——20 個突變全部轉紅。02eae7d 是修正寫錯的測試：useId 只保證同一個 app 內唯一，原測試以兩次獨立 mount 比對與規格（id 用 useId 產生）矛盾；修正後在同一頁比對兩個欄位並多驗 label for，沒有放寬；家長端只有一個 createApp，實際使用不受影響。打回原因：vue-tsc 對 M3TextField.vue 報兩個錯誤：(1) 第 88 行 textarea 綁定的 'aria-invalid' 型別為 string，不符 TextareaHTMLAttributes 的 Booleanish | 'grammar' | 'spelling'；(2) 第 100 行 inputmode 的 prop 型別為 string，不符 HTMLAttributes 的 inputmode 字面型別。實作者本次未跑 vue-tsc。殘留：(a) 稿有 -webkit-appearance: none，實作只留 appearance: none，專案無 autoprefixer，iOS 15.4 以前的 WKWebView 上 date / time 欄位可能顯示原生外觀。(b) modelValue 為 null 時 modelValue.length 會 TypeError（型別宣告為 string）。(c) description 寫「:focus-visible 外框」，decision 與實作以聚焦時 2px primary 邊框為焦點指示，description 該句不精確。"
+        "notes": "複審（只核對打回項與新增 red_case）：tdd.run 全綠；web-lint 乾淨；vue-tsc 以只含本批 5 個元件與 spec 的暫時 tsconfig 執行 exit 0。新增的紅燈測試另以修正前版本的元件（git show <fix>^ 取出副本、spec 副本改指向副本）執行，確認會紅，非恆真；暫存檔已刪除。通過。280fbef 先把 vue-tsc 型別驗收寫進 tdd.notes（修正前為紅），0194628 以 HTMLAttributes['inputmode'] 與 'true' / 'false' 字面型別修正，暫時 tsconfig 的 vue-tsc 現為 exit 0；同時補上 -webkit-appearance: none（初審殘留 a）。description 的焦點指示敘述已改為與 decision 一致。11 個測試維持全綠。"
       }
     },
     {
@@ -825,7 +825,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3Snackbar.vue",
       "source_ref": "FE:src/parent/components/m3/M3Snackbar.vue::props",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r3",
       "depends_on": [
         "PARENT-001",
@@ -851,9 +851,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r3",
-        "notes": "tdd.run 全綠；紅燈 commit（含規格修正）先於實作；web-lint 乾淨。稿 approved，decisions 逐條對照，happy-dom 驗得到的行為以突變驗證（元件副本改壞一處、以指向副本的 spec 副本執行，暫存檔皆已刪除），純樣式項逐一確認 CSS 有寫。vue-tsc 以只含本批 14 個檔案的暫時 tsconfig 執行。vue-tsc 對本元件無錯誤。decisions：info 為 role=status + aria-live=polite、error 為 role=alert 且不帶 aria-live、error 維持 inverse-surface 深色底並在訊息前加 filled error 圖示（使用者裁定已落實）、tone class、action 執行 onClick 後 emit dismiss、無關閉鈕——突變皆紅；版面與進出場動畫（out-in、250ms / 150ms、reduced-motion）寫在 CSS。與 PARENT-011 store 的介面用法正確（items[0]、dismiss(id) 對不存在的 id 直接 return）。打回原因（實測可重現）：舊的一則淡出期間點它的 action，執行到的是下一則的 action。以真實 Transition 掛載 item A（action「重試A」）後改成 item B（action「復原B」），A 進入 leave、畫面仍顯示「重試A」按鈕，此時點擊：A 的 onClick 0 次、B 的 onClick 1 次、emitted('dismiss') 為 [[B 的 id]]。原因是 onAction 在點擊當下才讀 props.item，此時已是新的一則；A 到期瞬間使用者剛好點下（150ms 窗口）就會誤執行 B 的動作（例如「復原」）。殘留：:key 與 out-in 沒有測試鎖住（可在 stub 下比對換則後 .m3-snackbar 不是同一個元素）；action 按鈕無 min-width，單字 label 寬約 38px（< 44）；live region 隨 v-if 插入，iOS VoiceOver 朗讀可能不穩，建議實機驗證。"
+        "notes": "複審（只核對打回項與新增 red_case）：tdd.run 全綠；web-lint 乾淨；vue-tsc 以只含本批 5 個元件與 spec 的暫時 tsconfig 執行 exit 0。新增的紅燈測試另以修正前版本的元件（git show <fix>^ 取出副本、spec 副本改指向副本）執行，確認會紅，非恆真；暫存檔已刪除。通過。a48b7ac 測試先於 47b3728 實作。新測試 leaving item action does not run next item 以 stubs: { transition: false } 使用真實 Transition，先斷言畫面上唯一的 .m3-snackbar 是正在出場的舊一則（文字含「重試A」、class 含 m3-snackbar-leave-active），再點它的按鈕，斷言 A、B 的 onClick 都沒被呼叫且沒有 emit dismiss；以修正前的元件執行此測試為紅，證明不是恆真。修法：按鈕帶 data-snackbar-id，onAction 比對 id 不一致即忽略，leave-active 另加 pointer-events: none；action 按鈕補 min-width 44px（初審殘留）。殘留：live region 隨 v-if 插入，iOS VoiceOver 朗讀建議實機驗證（同初審）。"
       }
     },
     {
@@ -985,7 +985,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/PullToRefresh.vue",
       "source_ref": "FE:src/parent/components/PullToRefresh.vue::props",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r3",
       "depends_on": [
         "PARENT-001",
@@ -1019,9 +1019,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r3",
-        "notes": "tdd.run 全綠；紅燈 commit（含規格修正）先於實作；web-lint 乾淨。稿 approved，decisions 逐條對照，happy-dom 驗得到的行為以突變驗證（元件副本改壞一處、以指向副本的 spec 副本執行，暫存檔皆已刪除），純樣式項逐一確認 CSS 有寫。vue-tsc 以只含本批 14 個檔案的暫時 tsconfig 執行。vue-tsc 對本元件無錯誤。decisions：三段文案、內容 translateY、阻尼 0.5、上限 threshold×2、≥ threshold 觸發、停 56px、reject 也收回、頁面頂端才啟動、touchmove 以 passive:false 註冊且往上滑不 preventDefault、重新整理中再拉不觸發、disabled 不攔截、role=status 與 aria-label、可見文字 aria-hidden——突變皆紅。規格修正合理：捲動容器改 window 與 ParentLayout 頁面捲動一致（讀 window.scrollY || scrollingElement.scrollTop，iOS 回彈負值也可啟動）；「指示器消失」改為 aria-label 移除、高度 0、內容無 transform，比原文更具體。打回原因（暫時測試可穩定重現）：(1) 重新整理中觸發 touchcancel 會把指示器收掉：pull(200) 後 touchstart + touchcancel，高度由 56px 變 0px、內容 transform 消失，但 aria-label 仍是「重新整理中」；reset() 不看 refreshing，違反「重新整理中停在 56px」，iOS 系統手勢中斷觸控時會發 touchcancel。(2) 頁面在頂端時幾乎水平的滑動也被 preventDefault：由 (200,100) 滑到 (80,104)，defaultPrevented 為 true；touchmove 只看 dy > 0、不比較 |dx| 與 |dy|，會擋掉 slot 內 chip 篩選列等水平捲動，不符「只在確定進入下拉時 preventDefault」。(3) 多指：單指拉過門檻後第二指按下再抬起，第一指仍按著時就觸發 onRefresh（onTouchEnd 不檢查剩餘 touches）。另有規格已寫但沒有 red_case 的項目（突變後仍綠）：下拉途中頁面被捲走就取消、恰好等於門檻時觸發（>=）、超過門檻時箭頭 is-armed 旋轉、touchcancel 處理、多指觸控。殘留：.ptr__content 常駐 will-change: transform（照稿），會讓 slot 內未 Teleport 的 position: fixed 元素改以內容區定位；狀態只靠切換 role=status 的 aria-label 傳達，部分螢幕閱讀器可能不朗讀。"
+        "notes": "複審（只核對打回項與新增 red_case）：tdd.run 全綠；web-lint 乾淨；vue-tsc 以只含本批 5 個元件與 spec 的暫時 tsconfig 執行 exit 0。新增的紅燈測試另以修正前版本的元件（git show <fix>^ 取出副本、spec 副本改指向副本）執行，確認會紅，非恆真；暫存檔已刪除。通過。818bca1 測試先於 64b4709 實作。修正前版本跑新測試：keeps indicator on touchcancel while refreshing、ignores near horizontal swipe、multi touch does not trigger early 三條皆紅；補的鎖定測試（頁面被捲走取消、恰等於門檻觸發、超過門檻 is-armed）也都在。修法逐條對照初審反例：(1) touchcancel 改由 cancelGesture 處理，refreshing 時不動 pullDistance，維持 56px 與 aria-label；(2) 位移超過 8px 才判定方向，|dx| ≥ |dy| 視為水平滑動、整個手勢放棄且不 preventDefault，判定距離內的移動也不攔截；(3) 第二指按下即取消這次下拉，touchend 時仍有手指按著不算放開。8px 門檻合理：與常見觸控 slop（Android 約 8dp、iOS 約 10pt）同一量級，足以分辨 (200,100)→(80,104) 這類近水平滑動，又不明顯延遲下拉。殘留：判定前 8px 內的 touchmove 不 preventDefault，在 Chrome 等瀏覽器原生下拉刷新 / iOS 回彈可能先一步開始，之後的 touchmove 可能變成不可取消；目前專案沒有任何 overscroll-behavior 設定，建議 PARENT-024 ParentLayout（或 base.css）加 overscroll-behavior-y: contain，並在 LINE 內建瀏覽器實機確認。"
       }
     },
     {
@@ -1031,7 +1031,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/SkeletonBlock.vue",
       "source_ref": "FE:src/parent/components/SkeletonBlock.vue::props",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r3",
       "depends_on": [
         "PARENT-001",
@@ -1058,9 +1058,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r3",
-        "notes": "tdd.run 全綠；紅燈 commit（含規格修正）先於實作；web-lint 乾淨。稿 approved，decisions 逐條對照，happy-dom 驗得到的行為以突變驗證（元件副本改壞一處、以指向副本的 spec 副本執行，暫存檔皆已刪除），純樣式項逐一確認 CSS 有寫。vue-tsc 以只含本批 14 個檔案的暫時 tsconfig 執行。vue-tsc 對本元件無錯誤。decisions：pulse（只有 opacity 1 → 0.5 → 1、1.2s，沒有漸層位移，使用者裁定已落實）、reduced-motion 停用、line / card / row 結構與尺寸、count 個區塊、count > 1 且沒給 width 時最後一行 60%、aria-busy + 視覺隱藏「載入中」、色塊 aria-hidden、不加 role=status——突變皆紅或 CSS 已寫。只給 height 時最後一行仍 60%：decision 原文與 description 都是「沒給 width 時」，實作正確，是稿 demo 的 lineStyle（width 或 height 任一有值就不縮）與 decision 文字矛盾。打回原因：description 寫「width / height 套在每個區塊的外框上」，但 variant='row' 搭配 height='56px' 時實際仍是 72px 高——.skeleton-row 的 min-height: 72px 壓過 inline height（稿也有同樣問題）。另外「只給 height 時最後一行 60%」偏離稿 demo，卻沒有測試鎖住（把實作改成稿的 !width && !height 寫法測試仍全綠）。"
+        "notes": "複審（只核對打回項與新增 red_case）：tdd.run 全綠；web-lint 乾淨；vue-tsc 以只含本批 5 個元件與 spec 的暫時 tsconfig 執行 exit 0。新增的紅燈測試另以修正前版本的元件（git show <fix>^ 取出副本、spec 副本改指向副本）執行，確認會紅，非恆真；暫存檔已刪除。通過。9f8c553 測試先於 7c5f571 實作。修正前版本跑 row height overrides default row height 為紅；修法為給 height 時同時寫入 inline min-height，蓋過 .skeleton-row 的 72px 下限。另補的 red_case（variant line、count 3、只給 height → 第三行 width 60%）鎖住符合 decision 原文的行為。"
       }
     },
     {
