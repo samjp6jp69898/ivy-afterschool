@@ -143,3 +143,19 @@ def test_attendance_xlsx_column_width_follows_content() -> None:
 
     assert wide.column_dimensions["B"].width > narrow.column_dimensions["B"].width
     assert narrow.column_dimensions["B"].width >= 4
+
+
+def test_attendance_xlsx_illegal_control_chars_removed() -> None:
+    ws = _sheet(_report(name="王\x0b小明", student_no="S\x0700"), title="低年級\x07A班")
+
+    assert ws["B3"].value == "王小明"
+    assert ws["A3"].value == "S00"
+    assert ws["A1"].value == "低年級A班 2026年9月出勤月報"
+
+
+def test_attendance_xlsx_strip_before_formula_check() -> None:
+    ws = _sheet(_report(name='\x07=HYPERLINK("x")', student_no="\x0b+1"))
+
+    # 先移除控制字元再判斷前綴，否則移除後會變成未防護的 '='
+    assert ws["B3"].value == "'=HYPERLINK(\"x\")"
+    assert ws["A3"].value == "'+1"
