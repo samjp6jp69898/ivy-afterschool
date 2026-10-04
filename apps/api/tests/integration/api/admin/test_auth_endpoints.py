@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -14,7 +15,16 @@ from tests.support.route_audit import admin_routes_without_permission
 
 _URL = "/api/admin/auth/login"
 _PASSWORD = "Passw0rd-Test1"  # noqa: S105  測試假值
+_WRONG = "Wrong-Passw0rd1"
 AssertError = Callable[..., None]
+
+
+@pytest.fixture(autouse=True)
+def throttles(app: FastAPI) -> AuthThrottles:
+    """每個測試一份新的節流狀態：module 單例會在測試間累計（fake clock 時間固定）。"""
+    instance = AuthThrottles()
+    app.dependency_overrides[get_auth_throttles] = lambda: instance
+    return instance
 
 
 def _body(username: str = "lin.teacher", password: str = _PASSWORD) -> dict[str, str]:
@@ -77,7 +87,7 @@ def test_admin_login_401(
     make_staff(db_session, username="left.teacher", is_active=False)
     db_session.commit()
 
-    wrong_password = api_client.post(_URL, json=_body(password="Wrong-Passw0rd1"))
+    wrong_password = api_client.post(_URL, json=_body(password=_WRONG))
     unknown_user = api_client.post(_URL, json=_body(username="nobody.here"))
     inactive = api_client.post(_URL, json=_body(username="left.teacher"))
 
@@ -104,19 +114,18 @@ def test_admin_login_403_foreign_origin(
 
 
 def test_admin_login_429(
-    app: FastAPI, api_client: TestClient, db_session: Session, assert_error: AssertError
+    api_client: TestClient, db_session: Session, assert_error: AssertError
 ) -> None:
-    app.dependency_overrides[get_auth_throttles] = lambda: AuthThrottles()
     make_staff(db_session, username="lin.teacher")
     db_session.commit()
 
     for _ in range(5):
         assert_error(
-            api_client.post(_URL, json=_body(password="Wrong-Passw0rd1")),
+            api_client.post(_URL, json=_body(password=_WRONG)),
             401,
             "invalid_credentials",
         )
-    locked = api_client.post(_URL, json=_body(password="Wrong-Passw0rd1"))
+    locked = api_client.post(_URL, json=_body(password=_WRONG))
     # 鎖定中連正確密碼也拒絕
     still_locked = api_client.post(_URL, json=_body())
 
