@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 51,
-  "last_updated": "2026-10-04T04:46:46Z",
+  "version": 52,
+  "last_updated": "2026-10-04T04:50:35Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -1400,7 +1400,7 @@
     {
       "id": "PARENT-051",
       "title": "移植 StatusPill 元件：狀態膠囊（依 FRONTEND-005 的顏色語意）",
-      "description": "建立 `apps/web/src/parent/components/StatusPill.vue`：\n```ts\nprops: { label: string; tone?: 'success' | 'warning' | 'danger' | 'info' | 'neutral' /* 預設 neutral */; icon?: string }\n```\n- tone 對應 `--m3-*` 容器色（success → primary-container、warning → tertiary-container、danger → error-container、info → secondary-container、neutral → surface-container-high），文字對比 ≥ 4.5:1。\n- success / warning / danger / info 與 FRONTEND-005 的 `Tone` 一一對應（呼叫端直接把 `statusMeta(...)` 回傳的 `tone` 傳入）；neutral 是家長端額外的中性樣式（例如「已排定」「無紀錄」）。不在本元件內寫狀態字串對應。\n\n移植 ivy `FE:src/parent/components/StatusPill.vue`（tone 名稱改為與 FRONTEND-005 一致）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-status-pill.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：五種 tone、含 / 不含 icon。可併入 m3-kit 稿。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/StatusPill.vue`：\n```ts\nprops: { label: string; tone?: 'success' | 'warning' | 'danger' | 'info' | 'neutral' /* 預設 neutral */; icon?: string }\n```\n- tone 對應 `--m3-*` 容器色（success → primary-container、warning → warning-container、danger → error-container、info → secondary-container、neutral → surface-container-high），文字對比 ≥ 4.5:1。\n- success / warning / danger / info 與 FRONTEND-005 的 `Tone` 一一對應（呼叫端直接把 `statusMeta(...)` 回傳的 `tone` 傳入）；neutral 是家長端額外的中性樣式（例如「已排定」「無紀錄」）。不在本元件內寫狀態字串對應。\n\n**新增色票 token**：本 task 負責在 `apps/web/src/parent/styles/m3-tokens.css` 新增 `--m3-warning-container` / `--m3-on-warning-container`（淺色 `#ffddb0` / `#2b1700`，深色 `#5b3a00` / `#ffddb0`），淺色寫在 `:root`、深色寫在 `:root[data-theme='dark']`，與既有 container 色放在一起。這是對 PARENT-001 產物的部分改寫，PARENT-001 的 description 不變。warning tone 的底 / 字色用這兩個 token。\n\n移植 ivy `FE:src/parent/components/StatusPill.vue`（tone 名稱改為與 FRONTEND-005 一致）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-status-pill.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：五種 tone、含 / 不含 icon（稿已核可）。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/StatusPill.vue",
       "source_ref": "FE:src/parent/components/StatusPill.vue::tone",
@@ -1422,7 +1422,8 @@
         ],
         "red_cases": [
           "StatusPill renders label and tone class：label='已到班'、tone='success' → 文字 '已到班'，classes() 含 'status-pill--success'",
-          "StatusPill defaults neutral and optional icon：只給 label='未開始' → classes() 含 'status-pill--neutral'、無 m3-icon；icon='schedule' → 含文字為 'schedule' 的 icon 元素"
+          "StatusPill defaults neutral and optional icon：只給 label='未開始' → classes() 含 'status-pill--neutral'、無 m3-icon；icon='schedule' → 含文字為 'schedule' 的 icon 元素",
+          "StatusPill warning uses warning tokens defined in both themes：tone='warning' → 元件原始碼（?raw）含 var(--m3-warning-container) 與 var(--m3-on-warning-container) 且不含 tertiary；m3-tokens.css（?raw）在 :root 與 :root[data-theme='dark'] 區塊都定義這兩個 token，值分別為 #ffddb0 / #2b1700 與 #5b3a00 / #ffddb0"
         ],
         "run": "just web-test src/parent/components/StatusPill.spec.ts -t \"StatusPill\"",
         "notes": ""
