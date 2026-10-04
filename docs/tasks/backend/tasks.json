@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 154,
-  "last_updated": "2026-10-04T15:01:12Z",
+  "version": 155,
+  "last_updated": "2026-10-04T15:01:27Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1364,7 +1364,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/staff_auth.py",
       "source_ref": "BE:api/auth.py::login",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6b",
       "depends_on": [
         "BACKEND-030",
@@ -1396,9 +1396,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r6-backend",
+        "notes": "pass。6 條 red_case 各有對應測試（含 dummy_verify 以 monkeypatch 計數 == 1、停用帳號不簽 refresh、(帳號, IP) 5 次後 429 與 15 分 + 1 秒解鎖、弱 hash 透明升級），另有鎖定以 (帳號, IP) 為單位、成功清除失敗計數、只 flush 不 commit 的補充測試；tdd.run 9 passed；commit 2193e2d（測試）先於 6a1e607（實作）。reviewer 另構造反例全部通過：帳號桶 20 次跨 IP 失敗後第 21 個 IP 正確密碼也 429、大小寫 / 空白變體命中同一鎖、鎖定期間的失敗不延長鎖定、同 IP 滑動視窗第 21 次（即使全成功）429 而換 IP 不受影響、ip=None 以 '-' 當 key；三種失敗路徑（不存在 / 密碼錯 / 停用）各跑恰一次 argon2，實測耗時 93 / 87 / 90 ms（比值 1.07），401 code 與訊息完全相同，不洩漏帳號是否存在。流程順序與 description 一致（IP 視窗 → 帳號 IP 鎖 → 帳號鎖 → 查帳號 → 驗密碼 → 清鎖 / rehash / last_login_at / issue / access token / 權限），lint / mypy 乾淨。"
       }
     },
     {
@@ -1593,7 +1593,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/api/deps.py",
       "source_ref": "BE:utils/auth.py::get_current_user",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r6b",
       "depends_on": [
         "BACKEND-033",
@@ -1605,7 +1605,7 @@
         "BACKEND-022"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "",
+      "risk_notes": "review-r6-backend 打回：tests/integration/api/test_deps_current_staff.py 的 mypy 錯誤（第 59、70 行 `-> dict` 缺型別參數；第 90 行 `-> httpx.Response` 與 TestClient 實際回傳的 httpx2.Response 不符），`just typecheck <該檔>` 必須 exit 0。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/test_deps_current_staff.py",
@@ -1623,9 +1623,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r6-backend",
+        "notes": "concern（只有 typecheck 一項）。功能面全部通過：5 條 red_case 各有對應測試，tdd.run 5 passed，commit 8f5d11a（測試）先於 928d3c3（實作）；reviewer 反例：竄改 payload（tv / sub）、alg=none、別的金鑰簽、tv 為字串 / bool、bind token 當 access、typ=parent 的 token 放 staff_access、staff_access 壞而 parent_access 放了有效員工 token 仍 401（只讀 staff_access）、path=None（WS）且須改密碼 403、allowlist 路徑帶 query string 200，全部符合。request.state.current_staff 為 description 所列。打回原因：README「執行方式」§3 要求動到的路徑 lint / typecheck 乾淨，`just typecheck apps/api/tests/integration/api/test_deps_current_staff.py` exit 1（3 個錯：第 59、70 行 `-> dict` 缺型別參數；第 90 行 `_get` 標 `-> httpx.Response` 但 starlette TestClient 實際回傳 httpx2.Response）。既有 TestClient 測試檔（test_errors、test_pagination、test_db_session 等）皆 mypy 乾淨，本檔是本輪唯一例外。修法：`dict[str, Any]`、`_get` 回傳型別改用 TestClient 的回應型別（例如 `from starlette.testclient import TestClient` 後以 `httpx2.Response` 或不標回傳型別交由推斷），修完重跑 typecheck 與 tdd.run 後改回 in_review。"
       }
     },
     {
@@ -2182,7 +2182,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/api/deps.py",
       "source_ref": "BE:api/parent_portal/_shared.py::_get_parent_user",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r6b",
       "depends_on": [
         "BACKEND-033",
@@ -2193,7 +2193,7 @@
         "BACKEND-022"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "",
+      "risk_notes": "review-r6-backend 打回：tests/integration/api/test_deps_current_parent.py 的 mypy 錯誤（第 65 行 `-> dict` 缺型別參數；第 97 行 `-> httpx.Response` 與 TestClient 實際回傳的 httpx2.Response 不符），`just typecheck <該檔>` 必須 exit 0。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/test_deps_current_parent.py",
@@ -2210,9 +2210,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r6-backend",
+        "notes": "concern（只有 typecheck 一項）。功能面全部通過：4 條 red_case 各有對應測試，另有 load_current_parent 直接呼叫的補充測試，tdd.run 5 passed，commit 507deac（測試）先於 f372071（實作）；reviewer 反例：bind token 放 parent_access → optional 回 None、exp == now 視為過期、get_optional_parent 只吞 UnauthenticatedError（monkeypatch load_current_parent 拋 RuntimeError 時照常往外拋）、員工 token / 家長 token 放錯 cookie 名皆 401，全部符合。實作者自述把結果存進 request.state.current_parent：description 未寫，但與 BACKEND-047 的 request.state.current_staff 對稱、只多一個屬性供 log / audit，不改變任何回應或授權行為，不視為範圍擴張。打回原因：README「執行方式」§3 要求動到的路徑 lint / typecheck 乾淨，`just typecheck apps/api/tests/integration/api/test_deps_current_parent.py` exit 1（2 個錯：第 65 行 `-> dict` 缺型別參數；第 97 行 `_get` 標 `-> httpx.Response` 但 TestClient 實際回傳 httpx2.Response）。修法同 BACKEND-047，修完重跑 typecheck 與 tdd.run 後改回 in_review。"
       }
     },
     {
@@ -6211,7 +6211,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_scope.py",
       "source_ref": "BE:api/parent_portal/_shared.py::_get_parent_student_ids",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6b",
       "depends_on": [
         "BACKEND-132",
@@ -6235,9 +6235,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r6-backend",
+        "notes": "pass。3 條 red_case 各有對應測試，另有排序 / 去重與解綁立即生效的補充測試；tdd.run 5 passed；commit 60968fc（測試）先於 30d18c4（實作）。reviewer 反例：suspended 學生可見（description 只排除封存，與 withdrawn 同樣可看歷史）、guardian 封存立即消失、學生封存後所有家長都看不到、parent_account_id 為 None 的監護人不算、同一學生 p 的綁定封存而 q 的綁定有效時 p 看不到 q 看得到、同名依 student_no 排序，全部通過。實作者自述偏離合理：uq_guardians_student_parent 是 (student_id, parent_account_id) where parent_account_id is not null and archived_at is null 的 partial unique index，同一家長對同一學生不可能有兩筆未封存綁定，「多位監護人去重」在 DB 層不可達；改以封存舊綁定 + 現行綁定驗證只回一次，守住「同一學生只出現一次」的原意，distinct 保留為縱深防禦。每次呼叫都查 DB、無快取。"
       }
     },
     {
