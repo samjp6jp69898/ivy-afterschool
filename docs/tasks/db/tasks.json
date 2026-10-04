@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 33,
-  "last_updated": "2026-10-04T04:44:03Z",
+  "version": 34,
+  "last_updated": "2026-10-04T04:53:24Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -139,7 +139,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db004_create_staff_users.py",
       "source_ref": "BE:models/auth.py::User",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r4",
       "depends_on": [
         "DB-003"
@@ -166,9 +166,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4",
+        "notes": "8 條 red_case 都有同名測試，-k staff_users 選到全檔 10 個且全綠（多出 display_name / email 格式與 token_version 非負的測試）；1516e62 → 9c9aaef。偏離 1 成立：starts_with(password_hash, '$argon2id$') 與 like 前綴語意相同，pg_get_constraintdef 確認落地為 starts_with(password_hash, '$argon2id$'::text)，測試另外驗了 $argon2i$ 與 bcrypt 也會被拒，並斷言約束名稱。ACL 實測 app_backend=arwd、未開 RLS。以 review-r4 開的臨時 database（review_r4_probe）從空套用全部 revision 成功（head = db037，驗完已 drop）；tdd.run 實跑全綠，lint / mypy 乾淨，測試 commit 是實作 commit 的祖先。"
       }
     },
     {
@@ -178,7 +178,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db005_create_refresh_tokens.py",
       "source_ref": "BE:models/staff_refresh_token.py::StaffRefreshToken",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r4",
       "depends_on": [
         "DB-041",
@@ -205,9 +205,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4",
+        "notes": "7 條 red_case 都有對應測試，-k refresh_tokens 選到 9 個且全綠；b3dba24 → 6bc7e16。偏離 2 成立（ck_refresh_tokens_token_hash_format 有名稱，測試斷言 constraint_name）。replaced_by 的 partial FK 索引（where replaced_by is not null）能服務 FK 反查（反查值必為非 null）。ACL 實測 app_backend=arwd。以 review-r4 開的臨時 database（review_r4_probe）從空套用全部 revision 成功（head = db037，驗完已 drop）；tdd.run 實跑全綠，lint / mypy 乾淨，測試 commit 是實作 commit 的祖先。"
       }
     },
     {
@@ -217,7 +217,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db006_create_audit_logs.py",
       "source_ref": "BE:models/audit.py::AuditLog",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r4",
       "depends_on": [
         "DB-041",
@@ -242,9 +242,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4",
+        "notes": "5 條 red_case 都有對應測試，-k audit_logs 選到 7 個且全綠；2fcbe49 → 0ddbb0c。偏離 3 成立：先 revoke all 再 grant_backend('select, insert')，結果與執行前的 ACL 無關。另外以 app_backend 實際登入臨時 database 實測：update / delete / truncate audit_logs、alter table ... disable trigger 都得到 42501，insert / select 成功；ACL 為 app_backend=ar。測試也涵蓋 truncate。以 review-r4 開的臨時 database（review_r4_probe）從空套用全部 revision 成功（head = db037，驗完已 drop）；tdd.run 實跑全綠，lint / mypy 乾淨，測試 commit 是實作 commit 的祖先。"
       }
     },
     {
@@ -517,7 +517,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db014_create_students.py",
       "source_ref": "BE:models/classroom.py::Student",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r4",
       "depends_on": [
         "DB-010",
@@ -548,9 +548,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4",
+        "notes": "11 條 red_case 都有對應測試，-k students 選到 14 個且全綠（另含 HMAC 唯一包含已封存學生、name / school_class 長度與預設值）；86cfad0 → 5798d57。偏離 2 成立（ck_students_id_number_hmac_format 有名稱並被斷言）。ix_students_class 照 description 建成 partial index（where archived_at is null）。殘留：刪除班級時 FK 的 on delete set null 反查是 class_id = $1，不符合 partial 條件，用不到這個索引（單一安親班的學生數下觀測不到效能差異）；DB-040 的 FK 索引慣例測試實作時要決定 partial index 算不算（若不算，需要新 revision 補一個非 partial 的 class_id 索引）。以 review-r4 開的臨時 database（review_r4_probe）從空套用全部 revision 成功（head = db037，驗完已 drop）；tdd.run 實跑全綠，lint / mypy 乾淨，測試 commit 是實作 commit 的祖先。"
       }
     },
     {
@@ -560,7 +560,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db015_create_parent_accounts.py",
       "source_ref": "BE:models/auth.py::User",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r4",
       "depends_on": [
         "DB-041",
@@ -586,9 +586,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4",
+        "notes": "6 條 red_case 都有對應測試，-k parent_accounts 選到 8 個且全綠；d7a35a8 → 1f8cd0a。LINE userId 大寫、長度不符與小寫 u 前綴都會被拒。ACL 實測 app_backend=arwd。以 review-r4 開的臨時 database（review_r4_probe）從空套用全部 revision 成功（head = db037，驗完已 drop）；tdd.run 實跑全綠，lint / mypy 乾淨，測試 commit 是實作 commit 的祖先。"
       }
     },
     {
@@ -1111,7 +1111,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db029_create_notifications.py",
       "source_ref": "BE:models/notification_log.py::NotificationLog",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r4",
       "depends_on": [
         "DB-041",
@@ -1138,9 +1138,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4",
+        "notes": "7 條 red_case 都有對應測試，-k notifications 選到 9 個且全綠；e5d9304 → 767bc3b。ck_notifications_event 的 13 個值與 app/notifications/events.py 的 Event enum 以集合比對完全相同，test_notifications_event_domain_matches_backend_events 逐一插入 Event 全部值。ACL 實測 app_backend=arwd。以 review-r4 開的臨時 database（review_r4_probe）從空套用全部 revision 成功（head = db037，驗完已 drop）；tdd.run 實跑全綠，lint / mypy 乾淨，測試 commit 是實作 commit 的祖先。"
       }
     },
     {
@@ -1340,7 +1340,7 @@
       "granularity_unit": "seed",
       "target_path": "apps/api/alembic/versions/db035_seed_system_roles.py",
       "source_ref": "BE:models/permission_models.py::SYSTEM_ROLE_CODES",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r4",
       "depends_on": [
         "DB-003"
@@ -1366,9 +1366,9 @@
         "notes": "SEED_SQL 以 importlib 依檔案路徑載入 revision 模組取得（revision 檔名以數字以外的字元開頭，不能直接 import）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4",
+        "notes": "7 條 red_case 都有對應測試，-k seed_system_roles 選到 9 個且全綠；d10aa36 → f737297。從 SEED_SQL 解析出的權限碼都屬於 Permission enum（28 碼），director = 全部扣除 staff:write / roles:write / students:purge，clerk 18 碼、tutor 12 碼與 domain_spec §3 的「預設授予」欄逐碼相同；臨時 database 套用後 roles 內容一致。偏離 4 成立：array['*'] 與 '{*}' 是同一個值，測試斷言 == ['*']。冪等測試以 owner 重跑 SEED_SQL 後tutor 被改過的權限不變、列數不變（拿掉 on conflict 會 23505、改成 do update 會被抓到）。以 review-r4 開的臨時 database（review_r4_probe）從空套用全部 revision 成功（head = db037，驗完已 drop）；tdd.run 實跑全綠，lint / mypy 乾淨，測試 commit 是實作 commit 的祖先。"
       }
     },
     {
@@ -1378,7 +1378,7 @@
       "granularity_unit": "seed",
       "target_path": "apps/api/alembic/versions/db036_seed_subjects.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r4",
       "depends_on": [
         "DB-008"
@@ -1399,9 +1399,9 @@
         "notes": "SEED_SQL 以 importlib 依檔案路徑載入 revision 模組取得（revision 檔名以數字以外的字元開頭，不能直接 import）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4",
+        "notes": "2 條 red_case 都有對應測試，-k seed_subjects 選到 2 個且全綠；ddb8c75 → d1201b0。present 測試以名稱過濾而不假設表內只有 seed 列，idempotent 以前後列數相等斷言，比 red_case 的「== 5」更不受其他測資影響；臨時 database 套用後依 sort_order 為 國語 → 數學 → 英語 → 自然 → 社會。偏離 5（conftest 的 load_seed_sql）是測試輔助，符合 tdd.notes 的 importlib 載入方式。以 review-r4 開的臨時 database（review_r4_probe）從空套用全部 revision 成功（head = db037，驗完已 drop）；tdd.run 實跑全綠，lint / mypy 乾淨，測試 commit 是實作 commit 的祖先。"
       }
     },
     {
@@ -1411,7 +1411,7 @@
       "granularity_unit": "seed",
       "target_path": "apps/api/alembic/versions/db037_seed_exam_types.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r4",
       "depends_on": [
         "DB-009"
@@ -1432,9 +1432,9 @@
         "notes": "SEED_SQL 以 importlib 依檔案路徑載入 revision 模組取得（revision 檔名以數字以外的字元開頭，不能直接 import）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4",
+        "notes": "2 條 red_case 都有對應測試，-k seed_exam_types 選到 2 個且全綠；24c4905 → 97176e2。臨時 database 套用後依 sort_order 為 段考 → 小考 → 複習考。以 review-r4 開的臨時 database（review_r4_probe）從空套用全部 revision 成功（head = db037，驗完已 drop）；tdd.run 實跑全綠，lint / mypy 乾淨，測試 commit 是實作 commit 的祖先。"
       }
     },
     {
