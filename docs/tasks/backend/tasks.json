@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 95,
-  "last_updated": "2026-10-04T04:40:47Z",
+  "version": 96,
+  "last_updated": "2026-10-04T04:45:07Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -621,7 +621,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/locks.py",
       "source_ref": "BE:utils/advisory_lock.py::try_scheduler_lock",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-005"
