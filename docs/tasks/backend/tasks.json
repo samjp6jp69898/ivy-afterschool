@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 98,
-  "last_updated": "2026-10-04T04:45:07Z",
+  "version": 99,
+  "last_updated": "2026-10-04T04:55:21Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -127,13 +127,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/logging.py",
       "source_ref": "BE:utils/request_logging.py::RequestLoggingMiddleware",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-001"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "【review-r4-be 打回，以下三項皆須修並各補測試】(1) 遮罩失敗時 fail-open：args 內含 namedtuple 等建構子不接受單一 iterable 的 tuple 子類時，redact_mapping 的 type(value)(generator) 拋 TypeError，filter 進 except 只遮 msg 樣板、保留原始 args，同一筆 log 的其他 dict 秘密全數外洩。反例：logger.info('%s %s', namedtuple('P','x y')(1, 2), {'password': 'PW4'}) → 輸出含 'PW4'。修正要求：tuple 子類不可讓遮罩中斷，且任何例外的退路必須 fail-closed（例如把 args 格式化成字串後再做字串遮罩，或整個 args 換成 '***'），不得保留未遮罩的原始 args。(2) authorization / cookie 值含空白時只遮第一段：'authorization=Bearer T5' → 'authorization=*** T5'，token 本體外洩；HTTP header 樣式 'Authorization: Bearer T6'（未加引號的 key: value）完全不遮。修正要求：這兩種樣式下敏感 key 的整個值（含 'Bearer <token>'，到行尾或分隔符）都遮成 ***。(3) header pair 序列不遮：logger.info('headers %s', [('authorization', 'Bearer T3')]) 與 ASGI scope['headers'] 形式 [(b'cookie', b'sid=T7')] 原樣輸出。修正要求：二元 tuple / list 的第一個元素是敏感 key（str 或 bytes，大小寫不敏感）時，第二個元素遮成 ***。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/core/test_logging.py",
@@ -152,9 +152,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r4-be",
+        "notes": "打回。tdd.run 9 passed（collect-only 帶 / 不帶 -k 皆 9 條，6 條 red_case 全選到），測試 commit bcd3ac6 先於實作 55b7d5e，lint / typecheck 乾淨；request id、access log 不含 query string、/api/health 不記、production JSON 皆正確。偏離判定：停用 uvicorn.access 成立（否則 production 會記含 query string 的完整 URL）；測試排除 httpx 測試客戶端自己的 URL log 成立（那是 client 端 logger，不是被測對象）；websocket 只設 request id 不記 access log 行為合理，但 description 寫法未明示，修正時順手把這句寫進 description。打回原因：RedactingFilter 對 description 列出的敏感 key 可構造出明文外洩的反例（見 risk_notes 新增項，探針實測）。殘留（不擋）：未處理例外的 500 回應由 Starlette ServerErrorMiddleware 產生、位於所有 user middleware 外層，不會帶 X-Request-ID（實測 BACKEND-003 的 500 回應無此 header），單靠本 middleware 無法修，建議 BACKEND-020 或 BACKEND-003 的 500 handler 從 request.state.request_id 補 header；exc_info 的 traceback 文字未遮罩；入站 X-Request-ID 用 re.match + '$'（尾端換行可過，但 HTTP 解析層不會送進來），可改 fullmatch。"
       }
     },
     {
@@ -211,7 +211,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/tx_hooks.py",
       "source_ref": "BE:services/notification/dispatch.py::install_session_hooks",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-005"
@@ -234,9 +234,9 @@
         "notes": "實測結論：INFRA-010 db_session（create_savepoint）下 session.commit() 會觸發 after_commit（test_tx_hooks_with_savepoint_session），營運模組的通知測試直接用 db_session 即可。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4-be",
+        "notes": "通過。tdd.run 6 passed（collect-only 帶 / 不帶 -k 皆 6 條，4 條 red_case 全選到），測試 commit f3d04ea 先於實作 82e45f7（測試 commit 時 tx_hooks.py 不存在），lint / typecheck 乾淨。偏離判定：begin_nested 的 savepoint 釋放也會發 after_commit，以 in_nested_transaction() 跳過成立（test_tx_hooks_nested_savepoint_does_not_fire；另以臨時探針確認 nested 未結束時直接 session.commit() callback 只跑一次）；未開交易先 begin() 讓 rollback 必觸發 after_soft_rollback 成立；savepoint 模式 db_session.commit() 會觸發 after_commit 已實測並寫入 docstring 與 tdd.notes，原 risk_notes 的待實測風險已消解，清空合理；override_get_db 請求結束 rollback 會清掉清單。殘留（不擋）：Session.close() 不發 after_soft_rollback，close 後若重用同一個 Session 物件再 commit 會補跑舊 callback（探針實測）；正式 get_db / session_scope 每次新建 Session 不會重用，觀測不到，日後若出現重用 Session 的寫法可改聽 after_transaction_end（root 交易）清單。"
       }
     },
     {
@@ -281,7 +281,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/pagination.py",
       "source_ref": "BE:utils/pagination.py::paginate",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-005",
@@ -305,9 +305,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4-be",
+        "notes": "通過。tdd.run 6 passed（collect-only 帶 / 不帶 -k 皆 6 條，4 條 red_case 全選到），測試 commit 8a7b105 先於實作 9ed8f34，lint / typecheck 乾淨；資料寫入與查詢經 app_backend 的 db_session，owner 只用於探針 schema DDL。偏離判定：SQLAlchemy 2.1 Select 為 variadic generic，簽名 Select[M] 成立（typecheck 通過，description 已同步）。殘留（不擋）：paginate 以 .scalars() 取 items，多欄位 select 只會拿到第一欄、對 collection 做 joinedload 需要 .unique()，日後呼叫端需要時再擴充；order_by 檢查用私有屬性 _order_by_clauses；模組層 T = TypeVar('T') 與 PEP 695 的 Page[T] 重複、未使用。"
       }
     },
     {
@@ -317,7 +317,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/crypto.py",
       "source_ref": "BE:utils/medical_encryption.py::encrypt_medical",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-001",
@@ -343,9 +343,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4-be",
+        "notes": "通過。tdd.run 10 passed（collect-only 帶 / 不帶 -k 皆 10 條，6 條 red_case 全選到），測試 commit e9889a8 先於實作 c80f8e2，lint / typecheck 乾淨。安全檢查：HKDF-SHA256（salt=None、info=label、32 bytes）與四個 label 常數符合規格；AES-256-GCM nonce 每次 os.urandom(12)、AAD=b'afterschool'、格式 0x01+nonce+ct||tag；版本 / 長度 / tag / base64 / 非 ASCII token 失敗一律 DecryptionError，訊息固定、from None 切斷 InvalidTag 鏈，不含金鑰或密文；金鑰只在 lru_cache 內，不經 repr / log。殘留（不擋）：urlsafe_b64decode 非 validate 模式會略過非字母表字元，但結果仍須通過 GCM tag 驗證，不影響安全；金鑰輪替無 re-encrypt 工具（既有 risk_notes）。"
       }
     },
     {
@@ -621,7 +621,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/locks.py",
       "source_ref": "BE:utils/advisory_lock.py::try_scheduler_lock",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-005"
@@ -643,9 +643,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4-be",
+        "notes": "通過。tdd.run 10 passed（collect-only 帶 / 不帶 -k 皆 10 條，3 條 red_case 全選到），測試 commit 9cfcefe 先於實作 e57fff3，lint / typecheck 乾淨，兩條 Session 皆以 app_backend（db_engine）連線。安全檢查：namespace 以 fullmatch 驗證 ^[a-z_:.]+$（含尾端換行被拒），namespace 不可能含 '|'，因此 (namespace, key) 與 md5 輸入一對一、不會因分隔符造成碰撞；SQL 以 bind 參數傳 key，無注入面；63-bit 隨機碰撞機率可忽略。殘留（不擋）：namespace 依規格不接受數字與連字號（'job:1' 被拒），BACKEND-018 / 158 命名 job id 時需遵守；test_locks_advisory_key_separator_distinct 的 docstring 寫 '|' 但實際用 ':' 測，名不符實。"
       }
     },
     {
@@ -694,7 +694,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security_middleware.py",
       "source_ref": "BE:middleware/csrf_origin.py::CSRFOriginCheckMiddleware",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-001",
@@ -720,9 +720,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4-be",
+        "notes": "通過。tdd.run 8 passed（collect-only 帶 / 不帶 -k 皆 8 條，6 條 red_case 全選到），測試 commit b488647 先於實作 58a2334，lint / typecheck 乾淨。實作 commit 內把 HEAD 期望由 200 改 405 成立（FastAPI 的 GET 路由不自動提供 HEAD，405 來自路由層，仍證明 middleware 未擋）。安全檢查（探針實測 normalize_origin）：Origin: null / 空字串 / file: / ws: → 拒絕；scheme / host 大小寫與預設 port 正規化；不同 port 拒絕；userinfo 混淆 http://allowed@evil.test、fragment / 反斜線混淆都解析成 evil.test 而拒絕；Origin 優先於 Referer，外站 Referer 與無法解析的 Referer 都 403；WS 先收 connect 再於 accept 前 close 4403。安全標頭齊全，/api/ 加 no-store。settings 以建構子顯式注入成立。殘留（不擋）：Cache-Control: no-store 套在所有 /api/ 回應（不只 JSON），比規格嚴格；normalize_origin 對 IPv6 會丟掉方括號，兩側一致比對，只有 cors_origins 含 IPv6 字面值時有理論歧義；Starlette 的 ServerErrorMiddleware 在所有 user middleware 外層，未處理例外的 500 回應不會帶本 middleware 的安全標頭（BACKEND-020 掛載時評估）。"
       }
     },
     {
