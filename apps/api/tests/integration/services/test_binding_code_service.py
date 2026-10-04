@@ -96,7 +96,7 @@ def test_generate_binding_code_format(
     r = _generate(db_session, g.id, actor, fake_clock)
 
     assert CODE_LENGTH == 8
-    assert CODE_TTL == timedelta(days=7)
+    assert timedelta(days=7) == CODE_TTL
     assert len(r.code) == 8
     assert set(r.code) <= set(CODE_ALPHABET)
     assert r.guardian_id == g.id
@@ -130,6 +130,7 @@ def test_generate_binding_code_invalidates_old(
     g = make_guardian(db_session, make_student(db_session))
     first = _generate(db_session, g.id, actor, fake_clock)
     used = ParentBindingCode(
+        created_at=fake_clock.now() - timedelta(days=2),
         guardian_id=g.id,
         code_hash=hash_code("USEDCODE"),
         expires_at=fake_clock.now() + timedelta(days=1),
