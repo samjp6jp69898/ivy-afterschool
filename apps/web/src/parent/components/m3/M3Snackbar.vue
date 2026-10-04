@@ -10,11 +10,16 @@ const props = defineProps<{ item: SnackbarItem | null }>()
 
 const emit = defineEmits<{ dismiss: [id: number] }>()
 
-function onAction(): void {
+// 按鈕帶所屬那一則的 id：出場中的舊按鈕被點到時，props.item 已是下一則，必須忽略
+function onAction(ownerId: number): void {
   const current = props.item
-  if (!current?.action) return
+  if (!current?.action || current.id !== ownerId) return
   current.action.onClick()
   emit('dismiss', current.id)
+}
+
+function onActionClick(event: MouseEvent): void {
+  onAction(Number((event.currentTarget as HTMLElement).dataset.snackbarId))
 }
 </script>
 
@@ -42,7 +47,8 @@ function onAction(): void {
         v-if="item.action"
         type="button"
         class="m3-snackbar__action m3-label-large"
-        @click="onAction"
+        :data-snackbar-id="item.id"
+        @click="onActionClick"
       >
         {{ item.action.label }}
       </button>
@@ -89,6 +95,7 @@ function onAction(): void {
 .m3-snackbar__action {
   position: relative;
   flex: none;
+  min-width: 44px;
   min-height: 44px;
   padding: 0 12px;
   border: none;
@@ -128,6 +135,7 @@ function onAction(): void {
 }
 
 .m3-snackbar-leave-active {
+  pointer-events: none;
   transition: opacity var(--m3-dur-short-3) var(--m3-easing-emphasized-accel);
 }
 
