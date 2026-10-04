@@ -1,13 +1,15 @@
-"""BACKEND-115：參考資料（科目 / 考試類型 / 學校 / 休息日）共用 service，依 ReferenceSpec 運作。"""
-
 from __future__ import annotations
+
+from collections.abc import Iterator
+from contextlib import contextmanager
+from uuid import UUID
 
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.errors import ConflictError
+from app.core.errors import ConflictError, NotFoundError
 from app.models.reference import ClosedDay
 from app.schemas.reference import ReferenceListQuery
 from app.services.reference_specs import ReferenceSpec
@@ -36,14 +38,33 @@ _UNIQUE_VIOLATION = "23505"
 def create_item(session: Session, spec: ReferenceSpec, data: BaseModel) -> BaseModel:
     """在 savepoint 內 insert；撞 unique（名稱不分大小寫去頭尾空白、休息日日期）→ 409。"""
     row = spec.model(**data.model_dump())
+    with _translate_unique_conflict(spec), session.begin_nested():
+        session.add(row)
+        session.flush()
+    return spec.out_schema.model_validate(row)
+
+
+@contextmanager
+def _translate_unique_conflict(spec: ReferenceSpec) -> Iterator[None]:
     try:
-        with session.begin_nested():
-            session.add(row)
-            session.flush()
+        yield
     except IntegrityError as exc:
         # 只轉譯 unique 衝突；其他約束違反維持原例外（全域 handler 轉 409 / 記 log）
         if getattr(exc.orig, "sqlstate", None) != _UNIQUE_VIOLATION:
             raise
         subject = "日期" if spec.resource == "closed-days" else "名稱"
         raise ConflictError(spec.conflict_code, f"{subject}已存在") from None
+
+
+def update_item(session: Session, spec: ReferenceSpec, item_id: UUID, data: BaseModel) -> BaseModel:
+    """只更新有給的欄位（exclude_unset，給 null 即清除可空欄位）；不存在 404、名稱衝突 409。"""
+    row = session.execute(
+        select(spec.model).where(spec.model.id == item_id)  # type: ignore[attr-defined]
+    ).scalar_one_or_none()
+    if row is None:
+        raise NotFoundError(spec.not_found_code, "找不到資料")
+    with _translate_unique_conflict(spec), session.begin_nested():
+        for field, value in data.model_dump(exclude_unset=True).items():
+            setattr(row, field, value)
+        session.flush()
     return spec.out_schema.model_validate(row)
