@@ -1,5 +1,6 @@
 """BACKEND-036：app/services/auth/refresh_tokens.py（issue、hash_refresh）。
 BACKEND-037：rotate（輪替、race window、重用偵測撤銷整個 family + token_version +1 並 commit）。
+BACKEND-038：revoke_family_by_raw（登出）、revoke_all_for_subject（改密碼 / 停用）。
 """
 
 import hashlib
@@ -16,7 +17,13 @@ from sqlalchemy.orm import Session
 from app.core.errors import AppError
 from app.models.account import RefreshToken, StaffUser
 from app.models.parents import ParentAccount
-from app.services.auth.refresh_tokens import hash_refresh, issue, rotate
+from app.services.auth.refresh_tokens import (
+    hash_refresh,
+    issue,
+    revoke_all_for_subject,
+    revoke_family_by_raw,
+    rotate,
+)
 from tests.integration.db.conftest import connect_owner
 from tests.support.factories import make_parent, make_staff
 from tests.support.fake_clock import FakeClock
@@ -329,4 +336,102 @@ def test_rotate_refresh_reuse_parent_bumps_parent_version(
             select(ParentAccount.token_version).where(ParentAccount.id == parent.id)
         ).scalar_one()
         == 1
+    )
+
+
+# --- BACKEND-038 revoke ------------------------------------------------------------------
+
+
+def test_revoke_family_by_raw(db_session: Session, fake_clock: FakeClock) -> None:
+    staff = make_staff(db_session)
+    f1 = issue(db_session, subject_type="staff", subject_id=staff.id, clock=fake_clock)
+    f1_latest = rotate(db_session, f1.raw, clock=fake_clock)
+    f2 = issue(db_session, subject_type="staff", subject_id=staff.id, clock=fake_clock)
+    fake_clock.advance(minutes=1)
+
+    assert revoke_family_by_raw(db_session, f1_latest.raw, clock=fake_clock) == 2
+
+    f1_rows = _family_rows(db_session, f1.family_id)
+    assert len(f1_rows) == 2
+    assert all(row.revoked_at == fake_clock.now() for row in f1_rows)
+    assert all(row.revoked_at is None for row in _family_rows(db_session, f2.family_id))
+    # 登出冪等：不存在的 raw 回 0，已撤銷的 family 再撤一次也回 0
+    assert revoke_family_by_raw(db_session, "nope", clock=fake_clock) == 0
+    assert revoke_family_by_raw(db_session, f1_latest.raw, clock=fake_clock) == 0
+    assert revoke_family_by_raw(db_session, f1.raw, clock=fake_clock) == 0
+    # 撤銷後整個 family 都不能再輪替
+    err = _raise_app_error(db_session, f1_latest.raw, fake_clock)
+    assert err.code == "refresh_revoked"
+    # 帳號 token_version 不變（登出單一裝置不踢其他裝置的 access token）
+    db_session.expire_all()
+    assert (
+        db_session.execute(
+            select(StaffUser.token_version).where(StaffUser.id == staff.id)
+        ).scalar_one()
+        == 0
+    )
+
+
+def test_revoke_all_for_subject(db_session: Session, fake_clock: FakeClock) -> None:
+    staff_a = make_staff(db_session)
+    staff_b = make_staff(db_session)
+    a1 = issue(db_session, subject_type="staff", subject_id=staff_a.id, clock=fake_clock)
+    rotate(db_session, a1.raw, clock=fake_clock)
+    a2 = issue(db_session, subject_type="staff", subject_id=staff_a.id, clock=fake_clock)
+    b1 = issue(db_session, subject_type="staff", subject_id=staff_b.id, clock=fake_clock)
+    # 同 uuid 但 subject_type 不同的列：不可被員工的撤銷波及
+    same_uuid_parent = issue(
+        db_session, subject_type="parent", subject_id=staff_a.id, clock=fake_clock
+    )
+    fake_clock.advance(minutes=1)
+
+    revoked = revoke_all_for_subject(
+        db_session, subject_type="staff", subject_id=staff_a.id, clock=fake_clock
+    )
+
+    assert revoked == 3
+    for family_id in (a1.family_id, a2.family_id):
+        assert all(
+            row.revoked_at == fake_clock.now() for row in _family_rows(db_session, family_id)
+        )
+    assert all(row.revoked_at is None for row in _family_rows(db_session, b1.family_id))
+    assert _token_row(db_session, same_uuid_parent.token_id).revoked_at is None
+    # 家長側以同 uuid 撤銷只影響家長列
+    assert (
+        revoke_all_for_subject(
+            db_session, subject_type="parent", subject_id=staff_a.id, clock=fake_clock
+        )
+        == 1
+    )
+    assert _token_row(db_session, same_uuid_parent.token_id).revoked_at == fake_clock.now()
+    assert all(row.revoked_at is None for row in _family_rows(db_session, b1.family_id))
+
+
+def test_revoke_all_idempotent_count(db_session: Session, fake_clock: FakeClock) -> None:
+    staff = make_staff(db_session)
+    issue(db_session, subject_type="staff", subject_id=staff.id, clock=fake_clock)
+    issue(db_session, subject_type="staff", subject_id=staff.id, clock=fake_clock)
+
+    first = revoke_all_for_subject(
+        db_session, subject_type="staff", subject_id=staff.id, clock=fake_clock
+    )
+    first_revoked_at = fake_clock.now()
+    fake_clock.advance(minutes=5)
+    second = revoke_all_for_subject(
+        db_session, subject_type="staff", subject_id=staff.id, clock=fake_clock
+    )
+
+    assert (first, second) == (2, 0)
+    # 第二次不得覆寫原本的 revoked_at
+    db_session.expire_all()
+    rows = db_session.execute(
+        select(RefreshToken.revoked_at).where(RefreshToken.subject_id == staff.id)
+    ).scalars()
+    assert set(rows) == {first_revoked_at}
+    # 沒有任何 token 的 subject 回 0
+    assert (
+        revoke_all_for_subject(
+            db_session, subject_type="staff", subject_id=uuid4(), clock=fake_clock
+        )
+        == 0
     )
