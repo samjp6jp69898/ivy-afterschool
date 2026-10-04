@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 136,
-  "last_updated": "2026-10-04T11:42:00Z",
+  "version": 138,
+  "last_updated": "2026-10-04T11:42:58Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3831,7 +3831,7 @@
         "BACKEND-006"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "committing 測試會真的改到 seed 表 system_settings，teardown 必須以 owner 連線還原；audit_logs 為 append-only，清理只能走 INFRA-010 的 owner truncate。",
+      "risk_notes": "committing 測試會真的改到 seed 表 system_settings，teardown 必須以 owner 連線還原；audit_logs 為 append-only，清理只能走 INFRA-010 的 owner truncate。\nBACKEND-108 的 TTL cache（review-r5-backend）：invalidate_setting 只能在 commit 之後呼叫（本 task 第 6 步的 run_after_commit），在 commit 前呼叫會讓其他執行緒讀到舊值並以新世代回寫快取 60 秒；put_setting 的寫入交易內不得以同一個 session 呼叫 get_setting（會把尚未 commit 的值寫進快取，交易回滾後快取仍保留該值直到 TTL），需要讀現值時直接查 system_settings 列。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_settings_service.py",
@@ -14787,6 +14787,39 @@
         "status": "pass",
         "reviewer": "review-r5-backend",
         "notes": "通過。b41cc42（紅）→ 0286e06（綠）。tdd.run 12 個 test_tokens_ 全綠，四條 red_case 皆選到，BACKEND-033 既有測試仍綠。typ / sub / jti 以 _require_str、tv / iat / exp 以 _as_int（排除 bool），timestamp 轉換只攔 OverflowError / OSError / ValueError，沒有 except Exception。typ 為陣列時 _decode_payload 以 != 比較，不會 TypeError。驗證放在 _decode_payload / 共用 helper，綁定 token 一併受益。"
+      }
+    },
+    {
+      "id": "BACKEND-541",
+      "title": "get_setting 回傳值與 registry 預設值不可被就地修改污染（NotificationToggles 等 RootModel）",
+      "description": "補強 BACKEND-108 `get_setting`（改寫該 task 產物，BACKEND-108 維持 done）。`NotificationToggles` 是 `RootModel[dict[str, bool]]`，`frozen=True` 擋不住 `get_setting(session, NOTIFICATION_TOGGLES).root['pickup.created'] = False` 這類就地修改；get_setting 回傳的是快取中的同一個物件（或 registry 的共用預設值物件），修改後會污染快取與 registry 預設，直到 TTL 或程序重啟。\n\n**要求**：get_setting 回傳給呼叫端的值與快取中保存的值、registry 的 `default` 互不共用可變狀態。做法二擇一並寫進本 description：(a) 回傳前 `model_copy(deep=True)`；(b) RootModel 內層改用不可變型別（例如 `Mapping` 以 `MappingProxyType` 包裝），就地修改直接拋 TypeError。無論哪種，DB 無列而以 registry default 回傳時也要遵守。\n\n**驗收標準**：每一條對應下列 red_case；BACKEND-108 既有測試仍全綠。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/services/settings_service.py",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5b",
+      "depends_on": [
+        "BACKEND-108"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/services/test_settings_service.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_get_setting_mutation_does_not_pollute_cache：DB 有 notification.toggles 列（全 True）→ v1 = get_setting(...)；嘗試把 v1 內層某事件改成 False（若採不可變方案則斷言拋 TypeError 並略過修改）→ v2 = get_setting(...)（命中快取）該事件仍為 True",
+          "test_get_setting_mutation_does_not_pollute_registry_default：DB 無 notification.toggles 列 → 回傳值就地修改（或斷言拋 TypeError）後，REGISTRY['notification.toggles'].default 內層值不變，再次 get_setting 仍為全 True"
+        ],
+        "run": "just test-int apps/api/tests/integration/services/test_settings_service.py -k \"test_get_setting_\"",
+        "notes": "tdd.run 沿用 BACKEND-108 的指令；測試名稱以 test_get_setting_ 開頭，確認 -k 選得到。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
       }
     }
   ]
