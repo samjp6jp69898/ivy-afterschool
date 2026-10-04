@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 218,
-  "last_updated": "2026-10-04T16:56:29Z",
+  "version": 219,
+  "last_updated": "2026-10-04T16:56:44Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1920,7 +1920,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/binding_code_service.py",
       "source_ref": "BE:api/parent_portal/auth.py::_claim_binding_code_atomic",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-054"
