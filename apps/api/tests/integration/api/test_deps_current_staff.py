@@ -83,6 +83,13 @@ def _token(staff: StaffUser, fake_clock: FakeClock, *, subject_type: SubjectType
     )
 
 
+def _get(
+    client: TestClient, path: str, token: str | None, *, name: str = STAFF_ACCESS.name
+) -> httpx.Response:
+    headers = {"Cookie": f"{name}={token}"} if token is not None else {}
+    return client.get(path, headers=headers)
+
+
 def _assert_401(response: httpx.Response) -> None:
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "unauthenticated"
@@ -92,9 +99,7 @@ def test_current_staff_ok(client: TestClient, db_session: Session, fake_clock: F
     staff = make_staff(db_session, permissions=["students:read", "pickup:read"])
     db_session.commit()
 
-    response = client.get(
-        "/api/admin/probe", cookies={STAFF_ACCESS.name: _token(staff, fake_clock)}
-    )
+    response = _get(client, "/api/admin/probe", _token(staff, fake_clock))
 
     assert response.status_code == 200
     body = response.json()
@@ -112,16 +117,16 @@ def test_current_staff_missing_or_bad_token(
     staff = make_staff(db_session, permissions=["students:read"])
     db_session.commit()
 
-    _assert_401(client.get("/api/admin/probe"))
-    _assert_401(client.get("/api/admin/probe", cookies={STAFF_ACCESS.name: "garbage"}))
+    _assert_401(_get(client, "/api/admin/probe", None))
+    _assert_401(_get(client, "/api/admin/probe", "garbage"))
     parent_token = _token(staff, fake_clock, subject_type="parent")
-    _assert_401(client.get("/api/admin/probe", cookies={STAFF_ACCESS.name: parent_token}))
+    _assert_401(_get(client, "/api/admin/probe", parent_token))
     # 正確 token 放錯 cookie 名稱（家長 cookie）也不算登入
     good = _token(staff, fake_clock)
-    _assert_401(client.get("/api/admin/probe", cookies={"parent_access": good}))
+    _assert_401(_get(client, "/api/admin/probe", good, name="parent_access"))
     # 過期 token
     fake_clock.advance(minutes=15, seconds=1)
-    _assert_401(client.get("/api/admin/probe", cookies={STAFF_ACCESS.name: good}))
+    _assert_401(_get(client, "/api/admin/probe", good))
 
 
 def test_current_staff_inactive_or_version_mismatch(
@@ -130,22 +135,22 @@ def test_current_staff_inactive_or_version_mismatch(
     staff = make_staff(db_session, permissions=["students:read"])
     db_session.commit()
     token = _token(staff, fake_clock)
-    assert client.get("/api/admin/probe", cookies={STAFF_ACCESS.name: token}).status_code == 200
+    assert _get(client, "/api/admin/probe", token).status_code == 200
 
     staff.is_active = False
     db_session.commit()
-    _assert_401(client.get("/api/admin/probe", cookies={STAFF_ACCESS.name: token}))
+    _assert_401(_get(client, "/api/admin/probe", token))
 
     staff.is_active = True
     staff.token_version = 1
     db_session.commit()
-    _assert_401(client.get("/api/admin/probe", cookies={STAFF_ACCESS.name: token}))
+    _assert_401(_get(client, "/api/admin/probe", token))
 
     # 不存在的帳號（簽章正確）
     ghost = create_access_token(
         subject_type="staff", subject_id=uuid4(), token_version=0, clock=fake_clock
     )
-    _assert_401(client.get("/api/admin/probe", cookies={STAFF_ACCESS.name: ghost}))
+    _assert_401(_get(client, "/api/admin/probe", ghost))
 
 
 def test_current_staff_must_change_password(
@@ -155,11 +160,11 @@ def test_current_staff_must_change_password(
     db_session.commit()
     token = _token(staff, fake_clock)
 
-    response = client.get("/api/admin/probe", cookies={STAFF_ACCESS.name: token})
+    response = _get(client, "/api/admin/probe", token)
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "password_change_required"
 
-    allowed = client.get("/api/admin/auth/me", cookies={STAFF_ACCESS.name: token})
+    allowed = _get(client, "/api/admin/auth/me", token)
     assert allowed.status_code == 200
     assert allowed.json() == {"id": str(staff.id)}
     expected_paths = {
@@ -182,11 +187,11 @@ def test_current_staff_permissions_live(
     db_session.commit()
     token = _token(staff, fake_clock)
 
-    first = client.get("/api/admin/probe", cookies={STAFF_ACCESS.name: token})
+    first = _get(client, "/api/admin/probe", token)
     assert first.json()["permissions"] == ["pickup:read", "students:read"]
 
     staff.role.permissions = ["exams:read", "exams:write"]
     db_session.commit()
 
-    second = client.get("/api/admin/probe", cookies={STAFF_ACCESS.name: token})
+    second = _get(client, "/api/admin/probe", token)
     assert second.json()["permissions"] == ["exams:read", "pickup:read"]
