@@ -54,5 +54,5 @@ USER app
 EXPOSE 8080
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-# --host :: 同時監聽 IPv4 / IPv6（Railway private network 走 IPv6）
+# --host :: 只監聽 IPv6（V6ONLY，不接受 IPv4 連線；Railway private network 走 IPv6）
 CMD ["sh", "-c", "exec uvicorn app.main:create_app --factory --host :: --port ${PORT} --workers 1 --proxy-headers --forwarded-allow-ips \"${FORWARDED_ALLOW_IPS}\" --no-access-log"]
