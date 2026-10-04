@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 86,
-  "last_updated": "2026-10-04T01:32:24Z",
+  "version": 87,
+  "last_updated": "2026-10-04T01:57:22Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -164,7 +164,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/db.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-001",
@@ -173,7 +173,7 @@
         "INFRA-046"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "【review-r3-fe 打回】description 規定的 override 寫法 `app.dependency_overrides[get_db] = lambda: db_session` 不會模擬 get_db 的「handler 例外時 rollback」：handler 遇到 DB 錯誤（例如 IntegrityError 被 service 轉成 409 的 HTTPException）時，真正的 get_db 會 rollback，override 的 lambda 不會，db_session（savepoint 模式）停在 aborted 狀態。已實測的反例（INFRA-010 的 db_session、temp table 帶 unique）：同一測試內第一次 POST 成功、第二次觸發 unique 違反回 409 → 之後 db_session.execute(select count) 拋 InFailedSqlTransaction，第三次 POST 同樣拋 InternalError。所有 endpoint 測試都照這個寫法（BACKEND-023 api_client 以此為準），凡是「409 / 業務錯誤之後再查資料或再打 API」的測試都會踩到；而且驗收沒有任何一條涵蓋 override 下的錯誤路徑。修正方向（已實測可行）：override 改為與 get_db 同語意的 generator：try: yield db_session / except Exception: db_session.rollback(); raise（create_savepoint 模式下 rollback 只回到 savepoint，先前 commit 釋放的資料與外層交易都保留；實測第二次 409 後 count 仍為前面成功的筆數、可再打第三次）。驗收清單：(1) description 的 override 段落改成上述 generator 寫法，並說明 BACKEND-023 的 api_client fixture 以此為準（同步檢查 BACKEND-023 的 description 與 red_case 沒有寫 lambda: db_session）；(2) 新增 red_case 與測試 test_db_get_db_override_rolls_back_on_handler_error：db_session 內先有一筆、override 下第一次 POST 成功、第二次因 unique 違反回 409 → db_session 仍可查詢且筆數為成功的那些、再 POST 一次仍回 409（不拋 InFailedSqlTransaction）；(3) 既有 test_db_get_db_override_with_db_session 改用新 override 寫法並仍通過；tdd.run 選得到新測試。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/core/test_db_session.py",
@@ -196,9 +196,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r3-fe",
+        "notes": "打回，只有一項（override 寫法的規格缺陷），db.py 實作本身通過。其餘均已驗證：tdd.run（just test-int test_db_session.py -k test_db_）11 項全綠，red_case 逐條有對應（timezone 與 pg_settings.source / current_user 合併在 test_db_timezone_utc）；紅燈 7aeaa46 先於實作 135fc6d；ruff、mypy 乾淨。engine 參數（pre_ping、pool 5 + overflow 5、recycle 1800、timezone=UTC 連線參數）與 description 一致，連線為 app_backend、程式中沒有 set role、沒有自行 log URL，repr(engine) 不含密碼；get_engine 為 lru_cache 延遲建立，import 時不讀 env。get_db：handler 例外 rollback、未 commit 丟棄、最後 close、pool.checkedout() 回 0；session_scope 成功 commit、例外 rollback 並重新拋出。timezone 測試改驗 pg_settings.source == client 合理：能區分「連線參數設定」與「伺服器預設剛好是 UTC」，且同時驗了 current_user。override 的正向行為已確認：handler 的 commit 只釋放 savepoint，測試中另一連線看不到資料、測試結束整筆 rollback。探針 schema db_probe_* 在正常執行後不殘留。突變驗證（暫時副本）：get_db 自動 commit、session_scope 不 commit、session_scope 吞例外、拿掉 timezone 連線參數、pool_size / pre_ping / recycle 改值、expire_on_commit 改 True、get_engine 不快取，皆被抓到；拿掉 get_db 的明確 rollback 測試仍綠（等價突變：session.close() 本來就會丟棄交易，無行為差異）；拿掉 session.close() 時測試在 module teardown 的 drop schema 卡住（連線仍持鎖）而非明確失敗，屬偵測得到但表現為逾時。複審時只需核對 risk_notes 追加的三項驗收清單。"
       }
     },
     {
