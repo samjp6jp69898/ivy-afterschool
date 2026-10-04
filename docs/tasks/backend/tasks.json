@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 161,
-  "last_updated": "2026-10-04T16:15:04Z",
+  "version": 162,
+  "last_updated": "2026-10-04T16:15:10Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -868,7 +868,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/api/conftest.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-020",
