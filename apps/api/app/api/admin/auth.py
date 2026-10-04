@@ -1,0 +1,70 @@
+"""BACKEND-042：後台認證 endpoint（``/api/admin/auth/*``，不掛權限守衛，見 route_audit 白名單）。
+
+- ``POST /login``：``StaffAuthService.login`` → commit → 設 httpOnly cookie → ``StaffAuthOut``。
+  失敗時 DB 無寫入（失敗計數在記憶體），不需 commit。回應 body 不含任何 token。
+- ``staff_auth_out``：login / refresh / change-password 共用的回應組裝（permissions 先排序，
+  ``StaffMeOut`` 不自行排序）。
+"""
+
+from __future__ import annotations
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Response
+from sqlalchemy.orm import Session
+
+from app.core.clock import Clock, get_clock
+from app.core.config import Settings, get_settings
+from app.core.db import get_db
+from app.core.request_meta import RequestMeta, get_request_meta
+from app.core.security.cookies import set_auth_cookies
+from app.schemas.auth import RoleBrief, StaffAuthOut, StaffLoginIn, StaffMeOut
+from app.services.auth import staff_auth
+from app.services.auth.staff_auth import StaffSession
+from app.services.auth.throttle import AuthThrottles, get_auth_throttles
+
+router = APIRouter(prefix="/auth", tags=["admin-auth"])
+
+
+def staff_auth_out(session: StaffSession) -> StaffAuthOut:
+    staff = session.staff
+    return StaffAuthOut(
+        user=StaffMeOut(
+            id=staff.id,
+            username=staff.username,
+            display_name=staff.display_name,
+            role=RoleBrief(id=staff.role.id, code=staff.role.code, name=staff.role.name),
+            permissions=sorted(session.permissions),
+            must_change_password=staff.must_change_password,
+        )
+    )
+
+
+@router.post("/login", response_model=StaffAuthOut)
+def login(
+    body: StaffLoginIn,
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+    meta: Annotated[RequestMeta, Depends(get_request_meta)],
+    throttles: Annotated[AuthThrottles, Depends(get_auth_throttles)],
+    clock: Annotated[Clock, Depends(get_clock)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> StaffAuthOut:
+    result = staff_auth.login(
+        db,
+        username=body.username,
+        password=body.password,
+        meta=meta,
+        throttles=throttles,
+        clock=clock,
+    )
+    out = staff_auth_out(result)
+    db.commit()
+    set_auth_cookies(
+        response,
+        subject_type="staff",
+        access_token=result.access_token,
+        refresh_token=result.refresh_token,
+        settings=settings,
+    )
+    return out
