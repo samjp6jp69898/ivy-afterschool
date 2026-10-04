@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 145,
-  "last_updated": "2026-10-04T14:00:52Z",
+  "version": 146,
+  "last_updated": "2026-10-04T14:01:50Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1364,8 +1364,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/staff_auth.py",
       "source_ref": "BE:api/auth.py::login",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6b",
       "depends_on": [
         "BACKEND-030",
         "BACKEND-031",
@@ -1593,8 +1593,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/api/deps.py",
       "source_ref": "BE:utils/auth.py::get_current_user",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6b",
       "depends_on": [
         "BACKEND-033",
         "BACKEND-035",
@@ -2182,8 +2182,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/api/deps.py",
       "source_ref": "BE:api/parent_portal/_shared.py::_get_parent_user",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6b",
       "depends_on": [
         "BACKEND-033",
         "BACKEND-035",
@@ -2590,8 +2590,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/roles.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
       ],
@@ -3597,8 +3597,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/audit.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
       ],
@@ -3862,8 +3862,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/settings.py",
       "source_ref": "BE:api/system_config.py::SystemConfigUpdate",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
       ],
@@ -3970,8 +3970,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/reference.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "BACKEND-100"
       ],
@@ -4554,8 +4554,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/classes.py",
       "source_ref": "BE:api/classrooms.py::ClassroomCreate",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
       ],
@@ -5772,8 +5772,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/guardians.py",
       "source_ref": "BE:api/students.py::GuardianCreate",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
       ],
@@ -6211,8 +6211,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_scope.py",
       "source_ref": "BE:api/parent_portal/_shared.py::_get_parent_student_ids",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6b",
       "depends_on": [
         "BACKEND-132",
         "BACKEND-131",
@@ -6285,8 +6285,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/parent_children.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
       ],
@@ -6812,7 +6812,7 @@
         "BACKEND-005"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "sweep_outbox 經 BACKEND-018 run_job_once 執行，advisory lock 為交易級：sweep 內的 dispatch_due 不可自行 commit（會提前釋放鎖），由 runner commit；kick_outbox 走自己的 session_scope，不經 runner，不受此限。",
+      "risk_notes": "sweep_outbox 經 BACKEND-018 run_job_once 執行，advisory lock 為交易級：sweep 內的 dispatch_due 不可自行 commit（會提前釋放鎖），由 runner commit；kick_outbox 走自己的 session_scope，不經 runner，不受此限。\nBACKEND-207 的 HttpLineMessagingClient 持有 httpx.Client 但沒有 close() / context manager：dispatch_due 不可每批重建 client 而不關閉（會累積連線），由呼叫端長期持有單一實例，或先為 client 補 close() 並在用完時呼叫。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/notifications/test_outbox_jobs.py",
@@ -6841,8 +6841,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/notifications.py",
       "source_ref": "BE:api/parent_portal/notifications.py::PreferenceUpdate",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "BACKEND-201"
       ],
@@ -7551,8 +7551,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/attendance.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
       ],
@@ -8470,8 +8470,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/leaves.py",
       "source_ref": "BE:api/parent_portal/leaves.py::CreateLeaveRequest",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
       ],
@@ -12003,8 +12003,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/exams.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
       ],
@@ -13114,8 +13114,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/dashboard.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
       ],
