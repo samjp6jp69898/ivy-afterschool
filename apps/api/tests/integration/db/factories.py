@@ -150,3 +150,13 @@ def make_class_staff(conn: psycopg.Connection[Any], **overrides: Any) -> dict[st
         "staff_user_id": overrides.get("staff_user_id") or make_staff_users(conn)["id"],
     }
     return insert_row(conn, "public.class_staff", **{**defaults, **overrides})
+
+
+def make_guardians(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    """未指定 student_id 時另建一位學生。"""
+    defaults = {
+        "student_id": overrides.get("student_id") or make_students(conn)["id"],
+        "name": "王大明",
+        "relation": "father",
+    }
+    return insert_row(conn, "public.guardians", **{**defaults, **overrides})
