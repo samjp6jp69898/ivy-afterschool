@@ -500,6 +500,37 @@ def test_put_setting_secret_keep_masked(db_session: Session, actor: CurrentStaff
     assert decrypt_token(stored["channel_secret"]) == "short1"
 
 
+def test_put_setting_secret_empty_string_clears(db_session: Session, actor: CurrentStaff) -> None:
+    """secret 欄位送空字串（或只有空白）視同 null：清除，不得存成 encrypt_token('')。"""
+    _put(
+        db_session,
+        actor,
+        "line.messaging",
+        {"channel_access_token": _NEW_TOKEN, "channel_secret": _NEW_SECRET},
+    )
+
+    out = _put(
+        db_session, actor, "line.messaging", {"channel_access_token": "", "channel_secret": "  "}
+    )
+
+    assert out.value == {"channel_access_token": None, "channel_secret": None}
+    stored = _raw_value(db_session, "line.messaging")
+    assert stored == {"channel_access_token": None, "channel_secret": None}
+    invalidate_setting("line.messaging")
+    messaging = get_setting(db_session, LINE_MESSAGING)
+    assert messaging.channel_access_token is None
+    assert messaging.channel_secret is None
+    # 首次設定就送空字串：同樣存 None
+    db_session.execute(
+        text("update public.system_settings set value = '{}'::jsonb where key = 'line.messaging'")
+    )
+    _put(db_session, actor, "line.messaging", {"channel_access_token": "", "channel_secret": ""})
+    assert _raw_value(db_session, "line.messaging") == {
+        "channel_access_token": None,
+        "channel_secret": None,
+    }
+
+
 def test_put_setting_unknown_key(db_session: Session, actor: CurrentStaff) -> None:
     with pytest.raises(AppError) as excinfo:
         _put(db_session, actor, "foo.bar", {})

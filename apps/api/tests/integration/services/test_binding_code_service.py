@@ -4,12 +4,13 @@
 """
 
 import json
+import threading
 from collections.abc import Iterator
 from datetime import timedelta
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentStaff
@@ -30,6 +31,7 @@ from app.services.binding_code_service import (
     hash_code,
     normalize_code,
 )
+from tests.integration.db.conftest import connect_owner
 from tests.support.factories import make_guardian, make_parent, make_staff, make_student
 from tests.support.fake_clock import FakeClock
 
@@ -252,3 +254,96 @@ def test_generate_binding_code_retries_on_hash_collision(
         _generate(db_session, g.id, actor, fake_clock)
     assert excinfo.value.status == 500
     assert excinfo.value.code == "binding_code_collision"
+
+
+@pytest.fixture
+def owner_cleanup_rows() -> Iterator[dict[str, list[UUID]]]:
+    """committing 測試建立的列以 owner 連線依 id 刪除；排在 committing_db_session 之前。"""
+    ids: dict[str, list[UUID]] = {"guardians": [], "students": [], "staff": [], "roles": []}
+    yield ids
+    with connect_owner() as conn:
+        conn.execute("set lock_timeout = '5s'")
+        for guardian_id in ids["guardians"]:
+            conn.execute(
+                "delete from public.parent_binding_codes where guardian_id = %s", (guardian_id,)
+            )
+            conn.execute("delete from public.guardians where id = %s", (guardian_id,))
+        for student_id in ids["students"]:
+            conn.execute("delete from public.students where id = %s", (student_id,))
+        for staff_id in ids["staff"]:
+            conn.execute("delete from public.staff_users where id = %s", (staff_id,))
+        for role_id in ids["roles"]:
+            conn.execute("delete from public.roles where id = %s", (role_id,))
+        conn.commit()
+
+
+@pytest.mark.cleanup_tables("audit_logs")
+def test_generate_binding_code_concurrent_same_guardian(
+    owner_cleanup_rows: dict[str, list[UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    fake_clock: FakeClock,
+) -> None:
+    """同一 guardian 併發 generate：後到者等前者 commit 後才執行，最後只剩一筆有效碼。"""
+    session = committing_db_session
+    staff = make_staff(session, permissions=["guardians:write"])
+    student = make_student(session)
+    g = make_guardian(session, student)
+    session.commit()
+    owner_cleanup_rows["guardians"].append(g.id)
+    owner_cleanup_rows["students"].append(student.id)
+    owner_cleanup_rows["staff"].append(staff.id)
+    owner_cleanup_rows["roles"].append(staff.role.id)
+    actor = current_staff_of(staff)
+
+    a_generated = threading.Event()
+    release_a = threading.Event()
+    b_done = threading.Event()
+    results: dict[str, IssuedBindingCode] = {}
+    errors: list[BaseException] = []
+
+    def worker_a() -> None:
+        sa = Session(bind=db_engine)
+        try:
+            results["a"] = _generate(sa, g.id, actor, fake_clock)
+            a_generated.set()
+            release_a.wait(timeout=10)
+            sa.commit()
+        except BaseException as exc:
+            errors.append(exc)
+            a_generated.set()
+        finally:
+            sa.close()
+
+    def worker_b() -> None:
+        sb = Session(bind=db_engine)
+        try:
+            a_generated.wait(timeout=10)
+            results["b"] = _generate(sb, g.id, actor, fake_clock)
+            sb.commit()
+        except BaseException as exc:
+            errors.append(exc)
+        finally:
+            sb.close()
+            b_done.set()
+
+    threads = [threading.Thread(target=worker_a), threading.Thread(target=worker_b)]
+    for t in threads:
+        t.start()
+    try:
+        assert a_generated.wait(timeout=10)
+        # A 尚未 commit：B 必須被 guardian 列鎖擋住
+        assert not b_done.wait(timeout=0.5)
+    finally:
+        release_a.set()
+        for t in threads:
+            t.join(timeout=10)
+    assert errors == []
+    assert b_done.is_set()
+    assert results["a"].code != results["b"].code
+
+    session.expire_all()
+    rows = _codes(session, g.id)
+    unused = [row for row in rows if row.used_at is None]
+    assert len(unused) == 1
+    assert unused[0].code_hash == hash_code(results["b"].code)
