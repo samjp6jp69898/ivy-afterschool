@@ -281,3 +281,14 @@ def make_notification_outbox(conn: psycopg.Connection[Any], **overrides: Any) ->
         "notification_id": overrides.get("notification_id") or make_notifications(conn)["id"]
     }
     return insert_row(conn, "public.notification_outbox", **{**defaults, **overrides})
+
+
+def make_notification_preferences(
+    conn: psycopg.Connection[Any], **overrides: Any
+) -> dict[str, Any]:
+    """未指定 parent_account_id 時另建一個家長帳號。"""
+    defaults = {
+        "parent_account_id": overrides.get("parent_account_id") or make_parent_accounts(conn)["id"],
+        "event": "homework.done",
+    }
+    return insert_row(conn, "public.notification_preferences", **{**defaults, **overrides})
