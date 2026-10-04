@@ -14,6 +14,7 @@ from starlette.datastructures import Headers, UploadFile
 from app.api.deps import CurrentParent
 from app.core.errors import AppError
 from app.core.storage import StorageError, build_object_path
+from app.core.uploads import PHOTO_MAX_BYTES
 from app.models.parents import ParentAccount
 from app.models.pickup import PickupPerson
 from app.schemas.pickup import PickupPersonCreateIn
@@ -231,6 +232,33 @@ def test_create_pickup_person_file_errors(db_session: Session) -> None:
     assert (unavailable.value.status, unavailable.value.code) == (502, "storage_unavailable")
     assert _person_count(db_session, student.id) == 0
     assert storage.objects == {}
+
+
+def test_create_pickup_person_photo_too_large(db_session: Session) -> None:
+    storage = FakeStorage()
+    parent = make_parent(db_session)
+    student = make_student(db_session)
+    exact = _JPEG + b"0" * (PHOTO_MAX_BYTES - len(_JPEG))
+    oversized = UploadFile(
+        file=io.BytesIO(exact + b"0"),
+        filename="a.jpg",
+        headers=Headers({"content-type": "image/jpeg"}),
+    )
+
+    with pytest.raises(AppError) as exc:
+        create_pickup_person(
+            db_session, student.id, _data(), oversized, parent=_current(parent), storage=storage
+        )
+
+    assert (exc.value.status, exc.value.code) == (413, "file_too_large")
+    assert _person_count(db_session, student.id) == 0
+    assert storage.objects == {}
+    # 剛好 PHOTO_MAX_BYTES（5 MiB）可建立
+    exact_upload = UploadFile(file=io.BytesIO(exact), filename="a.jpg")
+    out = create_pickup_person(
+        db_session, student.id, _data(), exact_upload, parent=_current(parent), storage=storage
+    )
+    assert out.photo_url is not None
 
 
 def test_create_pickup_person_insert_failure_removes_uploaded_photo(db_session: Session) -> None:
