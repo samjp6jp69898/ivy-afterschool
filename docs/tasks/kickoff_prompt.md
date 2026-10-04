@@ -14,29 +14,29 @@
 
 ## 目前狀態
 
-- 共 714 個 task（INFRA 49、DB 42、BACKEND 387、FRONTEND 152、PARENT 84），NFC 相關 27 個 `blocked`；superseded 7 個（INFRA-003、007、037、038，DB-001、034、039）。
+- 共 715 個 task（INFRA 49、DB 42、BACKEND 388、FRONTEND 152、PARENT 84），NFC 相關 27 個 `blocked`；superseded 7 個（INFRA-003、007、037、038，DB-001、034、039）。
 - 架構：DB 為 PostgreSQL（雲端 Railway Postgres、本機 `compose.yaml` 的 Postgres 17.11 + SeaweedFS 模擬 R2），migration 用 Alembic（forward-only、revision id = task id），檔案存 Cloudflare R2，後端以最小權限角色 `app_backend` 連線、不使用 RLS。細節見 `docs/architecture_decisions.md` §2~§5、§10、§11。
-- 已 done（104）：
-  - INFRA（30）：001、002、004~006、008~016、018~022、031、033、034、041~046、048、049。repo 骨架與 justfile、compose（db-start / db-stop）、Alembic 骨架（db-migrate / db-new-migration）、db-reset、doctor、bootstrap、up、pre-commit hook（`just install-hooks` 尚未在共用工作樹啟用）、CI 骨架、schema drift、nginx 範本、api / web Dockerfile、README、.env.example。
-  - DB（9）：002（psycopg 測試 fixture）、041（baseline db001：extensions、app_private、set_updated_at、app_backend、grant_backend）、042（fixture 改寫：as_role 只允許 app_backend、assert_backend_grants）、003 / 008~012（roles、subjects、exam_types、schools、closed_days、classes）。目前 head = db012。
-  - BACKEND（27）：001（Settings）、002（clock）、003、005（db session，endpoint 測試以 `tests/support/db_override.py::override_get_db` 覆寫 get_db）、007、012（rate limit / lockout）、013~016（R2Storage、uploads）、031、032、040（auth throttle）、051（LINE id_token）、070、072（有效權限，revoked 含 `*` fail-closed）、106（settings_registry）、201~203、223、372、403、535（`python -m app.cli migrate`）、536（SeaweedFS 整合測試）、537 / 538（secret 不經 repr / 例外外洩）。
-  - FRONTEND（27）：001~009、020、024、030、039~046、056、066、084、186、196、236、238。
-  - PARENT（11）：001~003、011、014、017、018、023、027、028、175。
-- 設計稿（`docs/mockups/`，全部 approved）：component-common、component-common-extra、component-settings、component-exams、component-pickup-countdown、page-admin-shell、page-students、page-attendance-today、page-homework-board、parent-component-m3-kit、parent-component-bottom-sheet、parent-component-pull-to-refresh、parent-component-skeleton。元件稿是元件外觀的權威，頁面稿只負責版面並引用元件稿。
+- 已 done（138）：
+  - INFRA（38）：001、002、004~006、008~028、031、033、034、041~049。repo 骨架與 justfile、compose、Alembic 骨架、db-reset、doctor、bootstrap、up / down（服務自成 process group，down 對整個 group 送訊號）、pre-commit hook（`just install-hooks` 尚未在共用工作樹啟用）、CI（lint、typecheck、unit、integration、db-checks、web-test）、schema drift、nginx 範本、api / web Dockerfile、README、.env.example；Supabase 產物已移除並以掃描測試鎖住。
+  - DB（18）：002、041、042、003、004~006、008~012、014、015、029、035~037。目前 head = db037（串接 db012 → db004 → db005 → db006 → db014 → db015 → db029 → db035 → db036 → db037）。
+  - BACKEND（33）：001（Settings）、002（clock）、003（errors）、004（logging / request id / 遮罩）、005（db session，endpoint 測試以 `tests/support/db_override.py::override_get_db` 覆寫 get_db）、006（tx_hooks）、007、008（pagination）、009（crypto）、012（rate limit / lockout）、013~016（R2Storage、uploads）、017（advisory lock）、019（security middleware）、031、032、040、051、070、072、106、201~203、223、372、403、535~538。
+  - FRONTEND（31）：001~009、020、024、030、036、039~046、056、066、084、093、123、157、186、196、236、238。
+  - PARENT（18）：001~003、011、014~020、022、023、027、028、051、098、175。
+- 設計稿（`docs/mockups/`，全部 approved）：component-common、component-common-extra、component-settings、component-exams、component-pickup-countdown、page-admin-shell、page-students、page-attendance-today、page-homework-board、parent-component-m3-kit、parent-component-bottom-sheet、parent-component-pull-to-refresh、parent-component-skeleton、parent-component-status-pill。元件稿是元件外觀的權威，頁面稿只負責版面並引用元件稿。家長端 warning 色使用 `m3-tokens.css` 的 `--m3-warning-container` / `--m3-on-warning-container`（琥珀色）。
 - 沒有 `in_progress` / `in_review` 殘留。本機 compose 服務已停止（`just db-start` 啟動）。
-- 工具版本基準：Python 3.13（uv）、TypeScript 鎖 `~6.0`、vite 8、vitest 5、pinia 4、vue-router 5、eslint 10、@playwright/test 1.63（本機已裝 chromium）；Postgres 映像 `postgres:17.11`、SeaweedFS `chrislusf/seaweedfs:4.48`；alembic 1.20、boto3 1.43；本機沒有 `psql`，DB 驗證用 `docker compose exec db psql -U postgres` 或 psycopg。
+- 工具版本基準：Python 3.13（uv）、TypeScript 鎖 `~6.0`、vite 8、vitest 5、pinia 4、vue-router 5、eslint 10、@playwright/test 1.63（本機已裝 chromium）；Postgres 映像 `postgres:17.11`、SeaweedFS `chrislusf/seaweedfs:4.48`；alembic 1.20、boto3 1.43、SQLAlchemy 2.1（`Select` 是 variadic generic，單一 entity 的 select 型別是 `Select[M]`）；本機沒有 `psql`，DB 驗證用 `docker compose exec db psql -U postgres` 或 psycopg。
 - async 測試用 anyio 內建 pytest plugin，`apps/api/tests/conftest.py` 已統一提供 session 級 `anyio_backend = "asyncio"`。
 - 專案 `.claude/settings.json`（權限 allowlist）由使用者要求建立，尚未 commit。
 
 ## 下一輪建議順序
 
-依賴都已寫進 `depends_on`，一律用 `python3 scripts/validate_tasks.py . --ready [AREA]` 查。下一輪（第 4 輪）可五區平行：
+依賴都已寫進 `depends_on`，一律用 `python3 scripts/validate_tasks.py . --ready [AREA]` 查。下一輪（第 5 輪）：
 
-1. **INFRA**：INFRA-047（移除 supabase/ 目錄、check_rls、justfile 與 pyproject 殘留的 Supabase 字樣，並以掃描測試鎖住；含 `apps/api/app/models/base.py` docstring 的跨區例外）最先做。之後 CI job（023~029、036）、INFRA-017（just down）。部署段（032、035、039 與 INFRA-040 deployment.md）排在後端可跑之後。
-2. **DB**：DB-004（staff_users）、005（refresh_tokens）、006（audit_logs，append-only；grant_backend 不會收回既有權限，縮權要在 revision 內自己 revoke）、014（students）、015（parent_accounts）、029（notifications），以及 seed data migration DB-035~037。
-3. **BACKEND**：基礎模組 004（logging）、006（tx_hooks）、008（pagination）、009（crypto）、017（advisory xact lock）、019（security middleware）。認證鏈 BACKEND-022（factories）→ 023（endpoint 測試 fixture，fixture 建帳號後必須 `db_session.commit()`）→ 047（員工守衛）等依 `--ready` 推進。Pydantic schemas（076、104、111、134、167、181、210、301、341、451、490）可在 model 規格穩定後成批做。
-4. **FRONTEND**：已核可頁面稿涵蓋的元件 task 可直接開工（036 NotificationPanel、093 BindingCodeDialog、123 AttendanceSummaryBar、157 ReadyEtaDialog），view task 等對應 BACKEND endpoint 與 api client 完成後再做。其餘頁面（設定、帳號、考試、接送 POS 等）要先出頁面稿。
-5. **PARENT**：M3 元件（015、016、019、020、022、098）與 PARENT-051 StatusPill 的稿已在 parent-component-m3-kit 核可，可直接開工；PARENT-025 BottomSheet 等 016 完成。
+1. **BACKEND**：SQLAlchemy model 優先（030 account、101 audit；100 reference 等 DB-007 完成），因為 `just schema-drift` 與 CI 的 db-checks job 在 model 補齊前會紅燈。接著 010（keyed_hash）、033（access token）、018（scheduler）、539（RedactingFilter 補遮罩），Pydantic schemas（076、104、111、134、167、181、210、301、341、451、490）成批做。BACKEND-020 實作時要處理 description 新增的「未處理例外的 500 回應帶 X-Request-ID 與安全標頭」。
+2. **DB**：007（system_settings）、013（class_staff）、016（guardians）、018（student_leaves，btree_gist exclusion constraint 要以 app_backend 實測寫入）、021、022、023、026、030、031。
+3. **INFRA**：029（bundle 檢查與 web-build job）、030（e2e workflow）、036（docker-build job）。部署段（032、035、039 與 INFRA-040 deployment.md）排在後端可跑之後。
+4. **PARENT**：021 M3TopAppBar（m3-kit 稿）、025 ParentBottomSheet（bottom-sheet 稿）可直接開工；026、029、032、035、096、099、101 要先派設計稿 agent 照各 task description 指定的檔名出稿。
+5. **FRONTEND**：目前沒有 `--ready` 的 task（view 等 BACKEND endpoint 與 api client）。可先派設計稿 agent 出尚未有稿的頁面（設定、帳號、考試、接送 POS 等）。
 6. 部署前要使用者決定：api 的 uvicorn `--host ::` 只監聽 IPv6（INFRA-031 open_design_questions），Railway healthcheck 或 web→api 若走 IPv4 需改 `0.0.0.0`；連同 architecture_decisions §11 的實測項目一起處理。
 
 ## 派工方式（每一輪都照做）
@@ -99,12 +99,12 @@ INFRA-047 收尾時會改 `apps/api/app/models/base.py` 的 docstring（跨區�
 
 ## 共用 working tree 的硬規則（全體 agent）
 
-1. `git add` / `git commit` 一律帶明確檔案 pathspec；**禁止 `git add -A`、`git add <目錄>`、`git commit -a`、`git stash`、`--amend`、`--no-verify`**。commit 前 `git diff --cached --stat` 確認只有自己的檔。
+1. `git add` / `git commit` 一律帶明確檔案 pathspec，commit 用 `git commit -m ... -- <路徑>`（只提交指定路徑，不會帶走別人已 staged 的檔案；`git rm` 之後同樣要帶路徑 commit）；**禁止 `git add -A`、`git add <目錄>`、`git commit -a`、`git stash`、`--amend`、`--no-verify`**。commit 前 `git diff --cached --stat` 確認只有自己的檔。
 2. 寫 tasks.json：寫入前 `git status --porcelain -- <檔>`，被別人改過而未提交就先停下重讀；用 Python `json.load` → 改 → `json.dump(ensure_ascii=False, indent=2)` + 結尾換行；頂層 `version` +1、`last_updated` 更新；跑 `python3 scripts/validate_tasks.py .` 零 ERROR。多個 agent 同時活動時，整段（load → dump → add → 自檢 → commit）包在 `flock /tmp/afterschool_git.lock` 內。
 3. 看到別人的可疑未提交改動：停手 → 回報協調者 → **什麼都不要還原**。reviewer 不代為 commit 實作者的檔案。
 4. 任何「已 commit / 工作區乾淨」的宣稱都附當下 `git log --oneline -1`。
 5. 每個 Bash 呼叫用絕對路徑或 `cd <絕對路徑> && ...`；scratchpad 檔名加自己的 agent 名前綴。
-6. 起 dev server / static server 用自己的 port，用完關掉；Playwright 產生的檔只刪自己的。
+6. 起 dev server / static server 用自己的 port，用完關掉；Playwright 產生的檔只刪自己的。清理行程只用自己記錄的 pid，禁止 `pkill -f` 這類可能命中別人行程的寬鬆 pattern。
 7. 含反引號的內容不要用 bash heredoc 包 Python 寫入（會被當成指令替換），改寫成獨立 `.py` 檔執行；commit message 含反引號時先寫檔再 `git commit -F <檔>`。
 8. commit message 用繁體中文、說明動了哪些 task id，結尾加 `Co-Authored-By` 行（與既有歷史一致）。
 9. 不要把真實個資（姓名、電話、身分證）寫進測試、fixture、commit 或回報；用擬真假資料（王小明、0912-000-123）。
@@ -125,6 +125,8 @@ INFRA-047 收尾時會改 `apps/api/app/models/base.py` 的 docstring（跨區�
 - **逐區域滾動審查**：不必等全部區域收工；某區域一批 commit 落地就可派 reviewer 審該區。關鍵路徑上的 task（例如 DB 鏈的前置 INFRA）可破例讓同區域實作 agent 繼續做「檔案完全不重疊」的下一件，派工時明列雙方不可碰的檔案。
 - **reviewer 可以多位**：一位忙或用量上限時，另派新的獨立 reviewer（`review-r<N>-<分工>`），分區負責、各寫各區的 tasks.json；Opus 用量吃緊時改用 sonnet。
 - **設計稿 agent**（`design-<area>-r<N>`）一律照 task description「設計稿關卡」指定的檔名出稿；要另訂分法先由協調者改 description。核可後由設計稿 agent 把裁定寫回 task（協調者明確授權範圍）。
+- **打回紀錄由 reviewer / 協調者改寫**：實作者修正打回項時不要自己刪改 risk_notes 裡的打回紀錄，複審通過後才改寫成目前仍成立的風險；轉交複審時把原打回清單附給 reviewer。
+- **kickoff 宣稱「稿已核可」前先查證**：`grep -l 'preview-tasks" content="[^"]*<task id>' docs/mockups/*.html` 確認稿的 preview-tasks 真的含該 task（只 grep task id 會命中 index.html 或順帶提及的稿）。
 - **使用者裁定的推薦選項**：AskUserQuestion 時稿通常已照推薦選項畫，問完要另外確認「整張稿是否核可」再改 approved。
 
 ## 已知待驗證 / 待決（不要當成新發現）
@@ -135,4 +137,6 @@ INFRA-047 收尾時會改 `apps/api/app/models/base.py` 的 docstring（跨區�
 - **測試基礎設施的已知殘留**（不擋實作，INFRA-021 或相關 task 時評估）：justfile 的全量執行防護可被刻意構造的路徑繞過（`apps/api/tests/unit/..`、`apps/api//tests`），`just web-test` 的位置參數是 vitest filter（多帶 `src` 會跑全部 spec）；unit 測試明示 `enable_socket` 仍可連本機 DB；loopback 守衛不檢查 port（127.0.0.1 上其他專案的 DB 仍可被指到）；只把 `local_db_url` 交給非 libpq 客戶端時沒有連線後複驗。
 - **DB function 的 EXECUTE 權限**：baseline revision（DB-041）以全域 default privileges 收回 postgres 新建 function 對 PUBLIC 的 EXECUTE。trigger function 不受影響；但若 function 被 CHECK 約束、DEFAULT 運算式或後端 SQL 直接呼叫，migration 必須明確 `grant execute on function ... to app_backend`，否則 app_backend 寫入 / 呼叫會 42501。`app_backend` 對 `extensions` schema 沒有 USAGE（目前沒有 task 從 SQL 呼叫 pgcrypto；DB-018 的 btree_gist exclusion constraint 實作時要實測 app_backend 寫入）。
 - **macOS bash 3.2**：`$var` 後緊接全形字元會被當成變數名的一部分（unbound variable），bash 腳本 / justfile 一律寫 `${var}`。
+- **schema drift 過渡紅燈**：已建立的業務表在 `app.models` 補齊前，`just schema-drift` 與 CI db-checks job 會報 table_missing_in_model，屬預期狀態，隨 BACKEND model task 消解。
+- **students.class_id 是 partial index**（`where archived_at is null`）：DB-040 的「FK 欄位都有索引」測試要決定 partial index 算不算；不算就以新 revision 補非 partial 索引。
 - **規劃 review 留下的 low 項目**（不擋實作，可在相關 task 實作時順手處理或之後開票）：沒有跨家長端與後台、走真實後端的接送核心流程 e2e（目前兩端各自 mock）；少數後端工具模組 task 一次包多個函式（BACKEND-223、224、013、038、404 等）。

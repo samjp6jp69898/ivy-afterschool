@@ -31,6 +31,8 @@
 - `ElMessageBox` 要等下一個 tick 才渲染，斷言前先等待；已關閉的 message box 仍可能留在 DOM，找按鈕時取最後一個符合的元素。
 - `useId()` 只在同一個 app 內唯一，比較兩個 id 要在同一次 mount 內放兩個元件，不能用兩次 mount 比對。
 - happy-dom 不計算版面：版面相關的 decision（固定 footer、只有 body 捲動等）用 class / 結構斷言加 `?raw` 讀原始碼斷言樣式規則，並在回報說明；必要時用 Playwright 在真實 Chromium 量測。
+- vitest 對 `*.css?raw` 回傳空字串（`.vue?raw` 正常），斷言 CSS 檔內容要用 `readFileSync` 搭配上面的 `resolve(dirname(fileURLToPath(import.meta.url)), ...)` 讀真實檔案。
+- happy-dom 不實作「在欄位按 Enter 隱式送出表單」，在測試裡按 Enter 驗不出任何東西。瀏覽器的隱式送出是對預設送出鈕派發 click，所以測試改用對送出鈕呼叫 `element.click()` 模擬這條路徑。
 
 ## 3. 測試分層
 
