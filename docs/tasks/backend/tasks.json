@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 158,
-  "last_updated": "2026-10-04T15:05:15Z",
+  "version": 159,
+  "last_updated": "2026-10-04T15:09:03Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14820,6 +14820,40 @@
         "status": "pass",
         "reviewer": "review-r5-backend",
         "notes": "通過。bd92bf4、1fe571d（紅）→ 2593288（綠）→ 58f7a6f（狀態）。tdd.run 8/8 綠（含 BACKEND-108 既有 6 條），兩條 red_case 皆選到。命中快取與查 DB（含無列回 registry default）兩條路徑都回傳 model_copy(deep=True)，快取保存原物件。突變自證（scratch 副本）：拿掉命中路徑的 copy → 1 紅；拿掉查詢路徑的 copy → 2 紅（含 registry default 被污染）；改成只把副本存進快取、查詢路徑回傳原物件 → 1 紅；deep=False 仍全綠，實作者已說明為等價突變（pydantic 淺複製會複製 RootModel 的 root dict，其餘巢狀 model 皆 frozen）。副作用：deep copy 後與原值 ==，巢狀 DayHours 仍 frozen（賦值拋 ValidationError），LineMessaging 的 secret 欄位原樣保留、不重跑驗證也不重新解密。效能殘留（不擋）：每次呼叫複製一次，實測 2.7~9.7 µs（service_hours 最大），相對一次 DB 查詢可忽略；若日後有熱迴圈大量呼叫，呼叫端應在迴圈外取一次。"
+      }
+    },
+    {
+      "id": "BACKEND-542",
+      "title": "errors.py 全域 handler：sqlalchemy DataError → 422 invalid_value（schema 漏擋時的第二道防線）",
+      "description": "補強 BACKEND-003 `apps/api/app/core/errors.py`（改寫該 task 產物，BACKEND-003 維持 done）。request schema 應在進 DB 前擋下 DB 不接受的值，但漏擋時（整數超出 integer 範圍、text / jsonb 含 NUL、jsonb 不接受的 NaN / Infinity / 孤立 surrogate、日期超出範圍等）psycopg 會拋 `sqlalchemy.exc.DataError`，目前落入未處理例外回 500。新增全域 handler 把它轉成使用者可修正的 422，作為第二道防線；各 schema 仍必須自行擋下（本 handler 不取代 schema 驗證）。\n\n**要求**\n- `register_exception_handlers` 註冊 `sqlalchemy.exc.DataError` → 422，body `{\"error\": {\"code\": \"invalid_value\", \"message\": \"輸入的資料超出允許範圍或含有不支援的字元\", \"details\": null}}`；不回傳 SQL、參數、DB 錯誤原文（與 IntegrityError → 409 同樣的不外洩原則）。\n- server 端以 `logger.warning` 記一筆，帶 request id 與例外類別名稱及 SQLSTATE（`exc.orig.sqlstate`，取不到時為 null），不記 SQL 參數（可能含個資）。\n- `IntegrityError` 仍回 409、其他未處理例外仍回 500，handler 的比對不得互相吞掉（DataError 與 IntegrityError 都是 DBAPIError 子類，要以具體類別註冊）。\n- 更新 errors.py 檔頭的對照表，加一列 `sqlalchemy DataError | 422 | invalid_value`。\n- 交易狀態：handler 只負責回應；session 的 rollback 由既有的 DB session dependency 處理，handler 內不碰 session。\n\n**驗收標準**：每一條對應下列 red_case；BACKEND-003 既有測試仍全綠。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/core/errors.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "BACKEND-003"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/unit/core/test_errors.py",
+        "markers": [
+          "unit"
+        ],
+        "red_cases": [
+          "test_errors_data_error_to_422：迷你 FastAPI app 路由拋 sqlalchemy.exc.DataError('INSERT INTO subjects ...', {'name': 'secret\\x00value'}, Exception('PostgreSQL text fields cannot contain NUL (0x00) bytes')) → 422，JSON == {'error': {'code': 'invalid_value', 'message': '輸入的資料超出允許範圍或含有不支援的字元', 'details': None}}，回應文字不含 'INSERT'、'secret'、'NUL'",
+          "test_errors_data_error_logged_without_params：同上路由，caplog 有一筆 WARNING，訊息含 'DataError'，所有 log record 的文字不含 'secret'",
+          "test_errors_data_error_does_not_shadow_others：路由拋 IntegrityError → 仍 409 conflict；路由拋 sqlalchemy.exc.OperationalError('SELECT 1', {}, Exception('connection lost')) → 仍 500 internal_error（DataError handler 不吞其他 DBAPIError）"
+        ],
+        "run": "just test apps/api/tests/unit/core/test_errors.py -k \"test_errors_\"",
+        "notes": "tdd.run 沿用 BACKEND-003 的指令；新測試名稱以 test_errors_ 開頭，確認 -k 選得到。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
       }
     }
   ]
