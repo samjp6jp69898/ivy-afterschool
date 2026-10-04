@@ -115,6 +115,15 @@ describe('PickupPersonForm', () => {
     expect(w.find('img').exists()).toBe(false)
   })
 
+  it('PickupPersonForm clears the file input so the same file can be chosen again', async () => {
+    const w = mountForm()
+    const input = w.get<HTMLInputElement>('input[type="file"]')
+    const written: string[] = []
+    Object.defineProperty(input.element, 'value', { get: () => '', set: (v: string) => written.push(v), configurable: true })
+    await pickPhoto(w, makeFile(1024))
+    expect(written).toEqual([''])
+  })
+
   it('PickupPersonForm revokes the old preview on replace and on unmount', async () => {
     const w = mountForm()
     await pickPhoto(w, makeFile(1024, 'a.jpg'))
@@ -175,7 +184,8 @@ describe('PickupPersonForm', () => {
     await radio(w, '保母').trigger('click')
     await radio(w, '外婆').trigger('click')
     const checked = group.findAll('[role="radio"]').filter((r) => r.attributes('aria-checked') === 'true')
-    expect(checked.map((r) => r.text())).toEqual(['外婆'])
+    // 已選 chip 的 leading 圖示 check 也是文字節點
+    expect(checked.map((r) => r.text().replace('check', ''))).toEqual(['外婆'])
     expect(group.findAll('[role="radio"]').filter((r) => r.attributes('aria-checked') === 'false')).toHaveLength(8)
     expect(button(w, '儲存').attributes('disabled')).toBeUndefined()
   })
