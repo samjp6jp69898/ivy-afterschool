@@ -16,10 +16,10 @@ from tests.integration.db.factories import make_staff_users, make_system_setting
 
 
 def test_system_settings_key_unique(backend_conn: Conn) -> None:
-    make_system_settings(backend_conn, key="org.profile")
+    make_system_settings(backend_conn, key="test.unique_key")
 
     with pg_error(backend_conn, UNIQUE_VIOLATION) as err:
-        make_system_settings(backend_conn, key="org.profile")
+        make_system_settings(backend_conn, key="test.unique_key")
     assert err.constraint_name == "uq_system_settings_key"
 
 
@@ -28,7 +28,7 @@ def test_system_settings_key_format(backend_conn: Conn) -> None:
         with pg_error(backend_conn, CHECK_VIOLATION):
             make_system_settings(backend_conn, key=bad_key)
 
-    assert make_system_settings(backend_conn, key="pickup.window")["key"] == "pickup.window"
+    assert make_system_settings(backend_conn, key="test.window_key")["key"] == "test.window_key"
 
 
 def test_system_settings_value_must_be_object(backend_conn: Conn) -> None:
