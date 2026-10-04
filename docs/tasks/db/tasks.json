@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 52,
-  "last_updated": "2026-10-04T12:48:28Z",
+  "version": 53,
+  "last_updated": "2026-10-04T12:52:23Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -1520,7 +1520,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db040_enforce_grants_baseline.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r6",
       "depends_on": [
         "DB-003",
@@ -1587,9 +1587,9 @@
         "notes": "schema 慣例測試放在 test_schema_conventions.py，函式名稱以 test_grants_baseline_ 開頭以便 -k 選取。VERIFY_SQL 以 conftest.load_revision_sql(revision_file, 'VERIFY_SQL') 依檔案路徑載入。目錄層級的正向斷言在第一道防線（grant_backend）已達標的 DB 上一開始就綠，每條都附臨時表反例證明檢查函式會回報違規；真正因 db040 轉綠的是 VERIFY_SQL 五條與 FK 索引一條。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r6-db",
+        "notes": "pass（review-r6-db，審 ce07984 測試 / 2675b34 revision / 77b6c5f tasks.json / ed4662b 補複合 predicate 反例）。tdd.run 19 passed；--collect-only 帶 / 不帶 -k grants_baseline 都是同一份 19 條，red_cases 逐條對應且斷言具體值。commit 歷史測試先於實作；revision 鏈單一線性，db028 原為 head，db040 為唯一 head，本機 alembic current = db040 (head)。reviewer 以 owner transaction 自證（結束 rollback）：upgrade 全部語句連跑三次不報錯（冪等）；VERIFY_SQL 四條規則各能被只違反該條的反例獨立觸發（force RLS、grant 給 PUBLIC、grant 給另一個 nologin 角色、relacl 為 null 的新表、grant insert on alembic_version），訊息只含該條；revoke 迴圈對臨時 sequence / function 的 PUBLIC 權限確實收回；has_table_privilege('public', …) 確實代表 PUBLIC。FK predicate 為 pg_get_expr 輸出完全相等：`(archived_at IS NOT NULL)`、`(student_id IS NULL)`、`(NOT (student_id IS NULL))`、`… OR …`、`… AND …` 都仍回報，只有 `(student_id IS NOT NULL)` 算數；unique constraint 算索引；多欄 FK 以集合比對（(b,a) 算、(a,x,b) 不算）。app_backend 實際登入：delete / truncate audit_logs、select / insert alembic_version 皆 42501；rolsuper / rolinherit / rolbypassrls 皆 false。roles red_case 改為斷言 is_system 的四個 code：仍證明 app_backend 讀得到 seed 資料且內容具體，守住原意。殘留（不打回）：(1) VERIFY_SQL rule 2 與 test_grants_baseline_acl_only_owner_and_backend 只看 relacl / 表層級權限，column-level ACL（例如 grant select (id) on students to public）不會被抓到；upgrade 內的 revoke 迴圈會把它清掉、目前 schema 的 pg_attribute.attacl 全為 null，但之後的 revision 若下 column-level grant，整合測試不會紅——要補時以 pg_attribute.attacl / has_any_column_privilege 擴充（需先改 description）。(2) 未檢查 app_backend 的 with grant option（目前沒有）。(3) public 目前沒有 sequence，驗收標準「PUBLIC 對 sequence 無權限」在測試裡是空集合，只有 reviewer 手動反例證明 revoke 迴圈有效。(4) FK 索引檢查不過濾 indisvalid = false（本專案不用 concurrently，暫無影響）。(5) 流程：ed4662b 在 reviewer 派出後才落地（純補反例測試與 red_case 描述，內容無問題）。"
       }
     },
     {
