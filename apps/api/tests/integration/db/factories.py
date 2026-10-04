@@ -292,3 +292,15 @@ def make_notification_preferences(
         "event": "homework.done",
     }
     return insert_row(conn, "public.notification_preferences", **{**defaults, **overrides})
+
+
+def make_pickup_requests(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    """未指定 student_id 時另建一位學生；預設為 2026-10-05 家長發起的 pending。"""
+    defaults = {
+        "student_id": overrides.get("student_id") or make_students(conn)["id"],
+        "service_date": date(2026, 10, 5),
+        "source": "parent",
+        "requested_by_type": "parent",
+        "requested_by_id": uuid4(),
+    }
+    return insert_row(conn, "public.pickup_requests", **{**defaults, **overrides})
