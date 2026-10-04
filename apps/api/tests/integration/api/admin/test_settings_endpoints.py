@@ -75,8 +75,8 @@ def test_admin_settings_list_masked(staff_client: StaffClientFactory, db_session
     assert "****9999" in resp.text
     messaging = next(i for i in resp.json()["items"] if i["key"] == "line.messaging")
     assert messaging["is_secret"] is True
-    assert messaging["value"]["channel_access_token"] == "****9999"
-    assert messaging["value"]["channel_secret"] == "****3456"
+    assert messaging["value"]["channel_access_token"] == "****9999"  # noqa: S105
+    assert messaging["value"]["channel_secret"] == "****3456"  # noqa: S105
 
 
 def test_admin_settings_list_401(api_client: TestClient, assert_error: AssertError) -> None:
