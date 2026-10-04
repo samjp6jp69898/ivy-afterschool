@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 195,
-  "last_updated": "2026-10-04T16:42:46Z",
+  "version": 197,
+  "last_updated": "2026-10-04T16:43:54Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1880,7 +1880,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/binding_code_service.py",
       "source_ref": "BE:api/guardians_admin.py::create_binding_code",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-132",
@@ -3819,11 +3819,11 @@
     {
       "id": "BACKEND-110",
       "title": "實作 SettingsService.put_setting：驗證、secret 加密與保留、稽核、commit 後失效 cache",
-      "description": "在 `apps/api/app/services/settings_service.py` 實作：\n```python\ndef put_setting(session: Session, key: str, value: dict[str, Any], *, actor: CurrentStaff, meta: RequestMeta) -> SettingOut: ...\n```\n1. key 未註冊 → 404 `setting_not_found`。\n2. secret 欄位處理：送來的值以 `****` 開頭或等於 `********`（前端回傳遮罩值，代表不修改）→ 沿用 DB 現有密文；`null` → 清除；其他字串 → 視為新明文。\n3. 以 schema 驗證（明文狀態）→ 失敗 422 `invalid_setting_value`，details 為 Pydantic 錯誤清單（不含 input）。\n4. secret 欄位新明文以 `encrypt_token` 加密後存入；upsert 列（is_secret 依 registry）、`updated_by = actor.id`。\n5. 稽核 `settings.update`（entity_type `system_setting`、entity_id key），before / after 為遮罩後的值。\n6. `run_after_commit(session, lambda: invalidate_setting(key))`（BACKEND-006）。\n- 移植 ivy `api/system_config.py::upsert_config` 的 upsert 流程；去掉 finance 權限分支。\n\n**驗收標準**\n- 一般 key 更新成功並寫 audit；commit 後 get_setting 立即反映。\n- secret：新值被加密存放（DB 不含明文）；送遮罩值保留原值；送 null 清除。\n- 未註冊 key 404；不合 schema 422。",
+      "description": "在 `apps/api/app/services/settings_service.py` 實作：\n```python\ndef put_setting(session: Session, key: str, value: dict[str, Any], *, actor: CurrentStaff, meta: RequestMeta) -> SettingOut: ...\n```\n1. key 未註冊 → 404 `setting_not_found`。\n2. secret 欄位處理：送來的值以 `****` 開頭或等於 `********`（前端回傳遮罩值，代表不修改）→ 沿用 DB 現有密文；`null`、空字串或只含空白 → 清除（存 null）；其他字串 → 視為新明文。\n3. 以 schema 驗證（明文狀態）→ 失敗 422 `invalid_setting_value`，details 為 Pydantic 錯誤清單（不含 input）。\n4. secret 欄位新明文以 `encrypt_token` 加密後存入；upsert 列（is_secret 依 registry）、`updated_by = actor.id`。\n5. 稽核 `settings.update`（entity_type `system_setting`、entity_id key），before / after 為遮罩後的值。\n6. `run_after_commit(session, lambda: invalidate_setting(key))`（BACKEND-006）。\n- 移植 ivy `api/system_config.py::upsert_config` 的 upsert 流程；去掉 finance 權限分支。\n\n**驗收標準**\n- 一般 key 更新成功並寫 audit；commit 後 get_setting 立即反映。\n- secret：新值被加密存放（DB 不含明文）；送遮罩值保留原值；送 null 清除。\n- 未註冊 key 404；不合 schema 422。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/settings_service.py",
       "source_ref": "BE:api/system_config.py::upsert_config",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-109",
