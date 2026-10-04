@@ -14,6 +14,14 @@
 - 沒有帳號、或帳號存在但沒有任何有效綁定（監護人 / 學生封存、被解除綁定）→ 發綁定臨時 token
   （BACKEND-034）→ ``NeedsBinding``。**不**建立 parent_accounts，首次綁定成功（BACKEND-055）才建立。
 - 只 flush 不 commit（endpoint commit）。
+
+BACKEND-058：``refresh``（與 BACKEND-043 對稱）。無 cookie → 401；``rotate`` 的錯誤原樣往外拋；
+輪替出的 token 不是 parent → 撤銷 family、401 ``refresh_invalid``；家長不存在或
+``status='disabled'`` → 撤銷 family、401 ``unauthenticated``。兩個 401 撤銷路徑都**在 raise 前
+commit**（endpoint 的 401 rollback 不會退回撤銷，service 不 commit 原則的例外見 BACKEND-037）。
+以目前 ``token_version`` 簽 access；沒有任何有效綁定的家長仍可 refresh（看到空清單後前往加綁頁）。
+
+BACKEND-060：``logout``（同 BACKEND-045）：無 cookie / 不存在 → 0，否則撤銷整個 family 回撤銷筆數。
 """
 
 from __future__ import annotations
@@ -25,7 +33,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.clock import Clock
-from app.core.errors import AppError, ForbiddenError
+from app.core.errors import AppError, ForbiddenError, UnauthenticatedError
 from app.core.request_meta import RequestMeta
 from app.core.security.tokens import BindClaims, create_access_token, create_bind_token
 from app.core.settings_registry import LINE_LIFF
@@ -90,6 +98,16 @@ def liff_login(
     return NeedsBinding(bind_token=bind_token, name_hint=profile.display_name)
 
 
+def _parent_session(parent: ParentAccount, *, refresh_token: str, clock: Clock) -> ParentSession:
+    access_token = create_access_token(
+        subject_type="parent",
+        subject_id=parent.id,
+        token_version=parent.token_version,
+        clock=clock,
+    )
+    return ParentSession(parent=parent, access_token=access_token, refresh_token=refresh_token)
+
+
 def _login_bound_parent(
     session: Session, parent: ParentAccount, *, profile: LineProfile, clock: Clock
 ) -> ParentSession:
@@ -99,11 +117,36 @@ def _login_bound_parent(
         parent.picture_url = profile.picture_url
     parent.last_login_at = clock.now()
     issued = refresh_tokens.issue(session, subject_type="parent", subject_id=parent.id, clock=clock)
-    access_token = create_access_token(
-        subject_type="parent",
-        subject_id=parent.id,
-        token_version=parent.token_version,
-        clock=clock,
-    )
+    result = _parent_session(parent, refresh_token=issued.raw, clock=clock)
     session.flush()
-    return ParentSession(parent=parent, access_token=access_token, refresh_token=issued.raw)
+    return result
+
+
+def _revoke_family_and_commit(session: Session, raw: str, clock: Clock) -> None:
+    """撤銷 raw 所屬 family 並 commit：呼叫端接著 raise，endpoint 的 rollback 不會退回撤銷。"""
+    refresh_tokens.revoke_family_by_raw(session, raw, clock=clock)
+    session.commit()
+
+
+def refresh(session: Session, *, raw_refresh: str | None, clock: Clock) -> ParentSession:
+    if not raw_refresh:
+        raise UnauthenticatedError
+    rotated = refresh_tokens.rotate(session, raw_refresh, clock=clock)
+    if rotated.subject_type != "parent":
+        _revoke_family_and_commit(session, rotated.raw, clock)
+        raise UnauthenticatedError(code="refresh_invalid")
+    parent = session.execute(
+        select(ParentAccount).where(ParentAccount.id == rotated.subject_id)
+    ).scalar_one_or_none()
+    if parent is None or parent.status == "disabled":
+        _revoke_family_and_commit(session, rotated.raw, clock)
+        raise UnauthenticatedError
+    result = _parent_session(parent, refresh_token=rotated.raw, clock=clock)
+    session.flush()
+    return result
+
+
+def logout(session: Session, *, raw_refresh: str | None, clock: Clock) -> int:
+    if not raw_refresh:
+        return 0
+    return refresh_tokens.revoke_family_by_raw(session, raw_refresh, clock=clock)
