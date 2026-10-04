@@ -238,7 +238,7 @@ def test_create_pickup_person_insert_failure_removes_uploaded_photo(db_session: 
     parent = make_parent(db_session)
 
     # 不存在的 student_id：flush 時違反 FK，剛上傳的照片要被刪除，例外原樣拋出
-    with pytest.raises(Exception, match="fk_pickup_persons_student_id"):
+    with pytest.raises(Exception, match="pickup_persons_student_id_fkey"):
         create_pickup_person(
             db_session, uuid4(), _data(), _jpeg(), parent=_current(parent), storage=storage
         )
