@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 228,
-  "last_updated": "2026-10-04T16:58:43Z",
+  "version": 229,
+  "last_updated": "2026-10-04T16:59:33Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1840,7 +1840,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/auth.py",
       "source_ref": "BE:api/parent_portal/auth.py::liff_login",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-052",
