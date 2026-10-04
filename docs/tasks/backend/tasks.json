@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 148,
-  "last_updated": "2026-10-04T14:10:04Z",
+  "version": 149,
+  "last_updated": "2026-10-04T14:12:20Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2590,13 +2590,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/roles.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "[review-r6-schemas 打回] app/schemas/common.py 的 RequestModel 接受含 NUL（\\x00）的字串：例如 RoleCreateIn(code='front_desk', name='櫃\\x00台', permissions=[]) 通過驗證，寫入 roles.name 時 psycopg 拋 DataError，errors.py 只轉譯 IntegrityError，結果是 500 而不是 422（本機以 app_backend 實測 subjects.name='a\\x00b' 得到 DataError）。要求：RequestModel 拒絕所有 str 輸入（含 list[str] 元素，例如 RoleCreateIn.permissions）中的 \\x00 → ValidationError；test_common_schemas.py 補對應測試（str 欄位與 list[str] 元素各一），並確認既有 schemas 測試仍全綠。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_role_schemas.py",
@@ -2612,9 +2612,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r6-schemas",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同（每條 red_case 均被選到）；test(schemas) commit 早於 feat(schemas) commit，綠燈 commit 對測試只有格式化或等價改寫；ruff / mypy 只對 27 個異動檔執行，乾淨。角色 code pattern / name / description / permissions 與 DB-003 一致，UpdateModel 行為（至少一欄、只有 nullable_fields 可給 null）符合補進 description 的規格。打回：共用基底 RequestModel 對 str 欄位接受 NUL（\\x00），寫入 text 欄位時 psycopg 拋 DataError（非 IntegrityError），app/core/errors.py 只把 IntegrityError 轉 409，其餘落到 500。已在本機 DB 以 app_backend 實測（rollback）：insert subjects name='a\\x00b' → sqlalchemy.exc.DataError「PostgreSQL text fields cannot contain NUL (0x00) bytes」。本批所有 request schema 都繼承 RequestModel，在這裡修一次即可。"
       }
     },
     {
@@ -3597,7 +3597,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/audit.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
@@ -3618,9 +3618,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r6-schemas",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同（每條 red_case 均被選到）；test(schemas) commit 早於 feat(schemas) commit，綠燈 commit 對測試只有格式化或等價改寫；ruff / mypy 只對 27 個異動檔執行，乾淨。actor_type 用 models.audit.ActorType（與 DB-006 CHECK 四值一致）、各字串 ≤100、date_from > date_to 拒絕且相等通過、extra 拒絕；AuditLogOut 欄位集合以測試固定。殘留（不擋）：str 欄位含 NUL（\\x00）會在 DB 層變成 DataError → 500，統一由 BACKEND-076 的 RequestModel 修正（已打回 076），本 task 不需自行改動。殘留：AuditLogOut.entity_type 宣告 str | None，DB 為 not null，輸出端較寬鬆無害。"
       }
     },
     {
@@ -3862,7 +3862,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/settings.py",
       "source_ref": "BE:api/system_config.py::SystemConfigUpdate",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
@@ -3883,9 +3883,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r6-schemas",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同（每條 red_case 均被選到）；test(schemas) commit 早於 feat(schemas) commit，綠燈 commit 對測試只有格式化或等價改寫；ruff / mypy 只對 27 個異動檔執行，乾淨。SettingPutIn 外層 extra 拒絕、value 非物件 / 缺漏拒絕；SettingGroup 取自 settings_registry。殘留（不擋）：str 欄位含 NUL（\\x00）會在 DB 層變成 DataError → 500，統一由 BACKEND-076 的 RequestModel 修正（已打回 076），本 task 不需自行改動。殘留：value 內層字串含 \\u0000 寫入 jsonb 會 DataError → 500，內層驗證屬 settings_registry / settings service；is_secret 設定的 value 遮罩屬 service 責任，schema 本身不遮罩。"
       }
     },
     {
@@ -3970,13 +3970,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/reference.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "BACKEND-100"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "[review-r6-schemas 打回] NamedItemCreateIn / NamedItemUpdateIn 的 sort_order 只有 ge=0：sort_order=2147483648 通過 schema，寫入 subjects / exam_types.sort_order（integer）時 psycopg 拋 NumericValueOutOfRange（sqlalchemy DataError，非 IntegrityError），errors.py 轉成 500。要求：sort_order 加上不超過 2147483647 的上限（可取更小的業務上限），create 與 update 都要；test_reference_schemas.py 補上限邊界測試（上限值通過、上限 +1 → ValidationError）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_reference_schemas.py",
@@ -3992,9 +3992,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r6-schemas",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同（每條 red_case 均被選到）；test(schemas) commit 早於 feat(schemas) commit，綠燈 commit 對測試只有格式化或等價改寫；ruff / mypy 只對 27 個異動檔執行，乾淨。name / short_name / reason 長度與 DB-008~011 CHECK 一致，ClosedDayUpdateIn 不接受 date，SPECS 四資源設定與 order_by 正確。打回：sort_order 只有 ge=0 沒有上限，2147483648 能通過 schema，寫入 integer 欄位得到 NumericValueOutOfRange（DataError）→ 500。已在本機 DB 以 app_backend 實測（rollback）。"
       }
     },
     {
@@ -4554,13 +4554,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/classes.py",
       "source_ref": "BE:api/classrooms.py::ClassroomCreate",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "[review-r6-schemas 打回] ClassCreateIn / ClassUpdateIn 的 sort_order 只有 ge=0：sort_order=2147483648 通過 schema，寫入 classes.sort_order（integer）時拋 NumericValueOutOfRange（sqlalchemy DataError）→ errors.py 轉成 500（同型反例已在本機 DB 實測）。要求：create 與 update 的 sort_order 加上不超過 2147483647 的上限；test_class_schemas.py 補上限邊界測試。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_class_schemas.py",
@@ -4576,9 +4576,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r6-schemas",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同（每條 red_case 均被選到）；test(schemas) commit 早於 feat(schemas) commit，綠燈 commit 對測試只有格式化或等價改寫；ruff / mypy 只對 27 個異動檔執行，乾淨。name btrim 1~30、grade_levels 1~6 至少一個不重複並排序、academic_year 100~200 與 DB-012 CHECK 一致；ClassStaffPutIn ≤20 且不重複，role 值域與 DB-013 一致。打回：sort_order 只有 ge=0 沒有上限，2147483648 寫入 classes.sort_order（integer）會 DataError → 500。"
       }
     },
     {
@@ -5772,7 +5772,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/guardians.py",
       "source_ref": "BE:api/students.py::GuardianCreate",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
@@ -5793,9 +5793,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r6-schemas",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同（每條 red_case 均被選到）；test(schemas) commit 早於 feat(schemas) commit，綠燈 commit 對測試只有格式化或等價改寫；ruff / mypy 只對 27 個異動檔執行，乾淨。relation 用 models.parents.GuardianRelation（與 DB-016 CHECK 一致）、name btrim 1~50 對齊、phone ≤20、預設值正確；Update 空 body 422、送 student_id extra_forbidden、只有 phone 可給 null。BindingCodeOut 的明碼為規格要求（只在產生當下回傳），GuardianOut 不含 code_hash。殘留（不擋）：str 欄位含 NUL（\\x00）會在 DB 層變成 DataError → 500，統一由 BACKEND-076 的 RequestModel 修正（已打回 076），本 task 不需自行改動。"
       }
     },
     {
@@ -6285,7 +6285,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/parent_children.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
@@ -6307,9 +6307,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r6-schemas",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同（每條 red_case 均被選到）；test(schemas) commit 早於 feat(schemas) commit，綠燈 commit 對測試只有格式化或等價改寫；ruff / mypy 只對 27 個異動檔執行，乾淨。ChildSummary / Detail / ParentMe / ChildGuardian / Today* 欄位集合以 model_fields 固定，不含 id_number / id_number_enc / id_number_hmac / health_note / note / student_no；TodayPickupRequestOut 不含 replied_by 等員工欄位，status / reply_source 值域與 DB-025 CHECK 一致；ready_eta / expected_arrival_at 用 settings_registry.TimeHM。TodayHomeworkOut.note 依 domain_spec 為「給家長看的說明」，可輸出。"
       }
     },
     {
@@ -6841,7 +6841,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/notifications.py",
       "source_ref": "BE:api/parent_portal/notifications.py::PreferenceUpdate",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "BACKEND-201"
@@ -6862,9 +6862,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r6-schemas",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同（每條 red_case 均被選到）；test(schemas) commit 早於 feat(schemas) commit，綠燈 commit 對測試只有格式化或等價改寫；ruff / mypy 只對 27 個異動檔執行，乾淨。PreferencesPutIn 1~7 項、event 重複 / 空清單 / 8 項 / 子項 extra 皆拒；NotificationListQuery extra 拒。event 合法性依規格留給 service（DB-031 CHECK 為最後防線，違反為 IntegrityError → 409，不是 500）。殘留（不擋）：str 欄位含 NUL（\\x00）會在 DB 層變成 DataError → 500，統一由 BACKEND-076 的 RequestModel 修正（已打回 076），本 task 不需自行改動。"
       }
     },
     {
@@ -7551,7 +7551,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/attendance.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
@@ -7575,9 +7575,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r6-schemas",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同（每條 red_case 均被選到）；test(schemas) commit 早於 feat(schemas) commit，綠燈 commit 對測試只有格式化或等價改寫；ruff / mypy 只對 27 個異動檔執行，乾淨。BatchCheckInIn 1~200 不重複；AttendanceAmendIn：只給 reason 拒、status='leave' 拒、naive datetime 拒（AwareDatetime）、能以 model_fields_set 區分未給與給 null；note ≤200 對齊 DB-020；month pattern 拒 13 / 00；CheckIn / CheckOut / MarkAbsent extra 拒且不接受時間；to_parent_attendance_event 只輸出五個欄位（不含 note、姓名）。殘留（不擋）：str 欄位含 NUL（\\x00）會在 DB 層變成 DataError → 500，統一由 BACKEND-076 的 RequestModel 修正（已打回 076），本 task 不需自行改動。殘留：(1) AttendanceAmendIn 明確給 status=null 不算修改，但與其他欄位併送時 status 仍在 model_fields_set 且值為 None，BACKEND-310 必須以「status is None 視同未給」計算新狀態，否則會寫 null 進 not null 欄位；建議 310 實作時補一條測試，或改為 schema 直接拒絕 status=null。(2) month pattern 的 \\d 接受全形 / 其他 Unicode 數字，且 '0000-01' 能通過；BACKEND-312 以 date(year, month, 1) 計算時 year=0 會 ValueError → 500，312 實作時需處理或把 pattern 改為 [0-9] 並限制年份。"
       }
     },
     {
@@ -8470,7 +8470,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/leaves.py",
       "source_ref": "BE:api/parent_portal/leaves.py::CreateLeaveRequest",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
@@ -8494,9 +8494,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r6-schemas",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同（每條 red_case 均被選到）；test(schemas) commit 早於 feat(schemas) commit，綠燈 commit 對測試只有格式化或等價改寫；ruff / mypy 只對 27 個異動檔執行，乾淨。日期順序、跨度（end - start ≤ 60，2026-09-01~10-31 通過、11-01 拒）與 DB-018 ck_student_leaves_range 一致；reason 空白轉 None、≤500；leave_type / status / created_by_type 值域與 DB CHECK 一致；ParentLeaveCreateIn 多帶欄位拒；ParentLeaveOut 不含 created_by_name / cancelled_by_*（員工姓名），ParentLeaveAttachmentOut 不含 storage_path。殘留（不擋）：str 欄位含 NUL（\\x00）會在 DB 層變成 DataError → 500，統一由 BACKEND-076 的 RequestModel 修正（已打回 076），本 task 不需自行改動。"
       }
     },
     {
@@ -12003,13 +12003,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/exams.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "[review-r6-schemas 打回] ExamSubjectIn.sort_order 只有 ge=0：sort_order=2147483648 通過 schema，寫入 exam_subjects.sort_order（integer）時拋 NumericValueOutOfRange（sqlalchemy DataError）→ errors.py 轉成 500（同型反例已在本機 DB 實測）。要求：sort_order 加上不超過 2147483647 的上限；test_exam_schemas.py 補上限邊界測試。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_exam_schemas.py",
@@ -12027,9 +12027,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r6-schemas",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同（每條 red_case 均被選到）；test(schemas) commit 早於 feat(schemas) commit，綠燈 commit 對測試只有格式化或等價改寫；ruff / mypy 只對 27 個異動檔執行，乾淨。ExamCreateIn 範圍必填對齊 ck_exams_scope、name btrim 1~50 / note ≤500 / grade_level 1~6 對齊 DB-026；Score / FullScore 範圍與 numeric(6,2) 一致（NaN / Infinity / 3 位小數拒絕）；Out 的 Decimal 序列化為 number；ExamOut.class_ 以 alias class 輸出，from_attributes 下讀 class_ 屬性亦可。score 與 is_absent 併存依規格由 BACKEND-460 回 absent_with_score，schema 不檢查可接受。打回：ExamSubjectIn.sort_order 只有 ge=0 沒有上限，2147483648 寫入 exam_subjects.sort_order（integer）會 DataError → 500。"
       }
     },
     {
@@ -13114,7 +13114,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/dashboard.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
@@ -13135,9 +13135,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r6-schemas",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同（每條 red_case 均被選到）；test(schemas) commit 早於 feat(schemas) commit，綠燈 commit 對測試只有格式化或等價改寫；ruff / mypy 只對 27 個異動檔執行，乾淨。DashboardTodayOut 與子 model 欄位集合固定；completion_rate 0~100、1 位小數；recent_leaves ≤10。殘留：Rate 的四捨五入只處理 int / float，傳 Decimal（例如 SQL numeric 聚合結果）或字串時不會四捨五入（Decimal('33.333') → 33.333），BACKEND-491 實作時需以 float 計算或在 schema 補 Decimal 分支；round() 為 banker's rounding 且受 float 表示誤差影響（66.65 不保證進位）；RecentLeaveOut.created_by_type 宣告為 str，可改用 Literal['parent','staff']。"
       }
     },
     {
