@@ -19,7 +19,9 @@ from sqlalchemy.orm import Session
 from app.core import db
 from app.core.config import get_settings
 from app.core.db import build_engine, get_db, session_scope
+from app.core.errors import register_exception_handlers
 from tests.support import db_urls
+from tests.support.db_override import override_get_db
 
 Conn = psycopg.Connection[tuple[Any, ...]]
 
@@ -48,7 +50,9 @@ def db_probe() -> Iterator[None]:
     with _owner_connect() as conn:
         conn.execute(sql.SQL("create schema {}").format(schema))
         conn.execute(
-            sql.SQL("create table {}.items (id serial primary key, name text)").format(schema)
+            sql.SQL("create table {}.items (id serial primary key, name text unique)").format(
+                schema
+            )
         )
         conn.execute(sql.SQL("grant usage on schema {} to app_backend").format(schema))
         conn.execute(sql.SQL("grant all on {}.items to app_backend").format(schema))
@@ -229,7 +233,7 @@ def test_db_get_engine_uses_settings_singleton(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_db_get_db_override_with_db_session(db_session: Session) -> None:
-    """之後所有 endpoint 整合測試照這個寫法：get_db 換成 INFRA-010 的 db_session。
+    """之後所有 endpoint 整合測試照這個寫法：get_db 換成 override_get_db(db_session)。
 
     handler 的 commit 只釋放 savepoint；測試結束 db_session 整筆 rollback，不留資料。
     """
@@ -241,7 +245,7 @@ def test_db_get_db_override_with_db_session(db_session: Session) -> None:
         session.commit()
         return {"count": int(session.execute(text(f"select count(*) from {TABLE}")).scalar_one())}  # noqa: S608
 
-    app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[get_db] = override_get_db(db_session)
     response = TestClient(app).post("/items")
 
     assert response.status_code == 200
@@ -249,3 +253,71 @@ def test_db_get_db_override_with_db_session(db_session: Session) -> None:
     assert db_session.execute(text(f"select count(*) from {TABLE}")).scalar_one() == 1  # noqa: S608
     # 外層交易尚未結束：其他連線看不到
     assert _count() == 0
+
+
+def _count_in(session: Session) -> int:
+    return int(session.execute(text(f"select count(*) from {TABLE}")).scalar_one())  # noqa: S608
+
+
+def _override_app(db_session: Session) -> TestClient:
+    """與正式 app 相同：IntegrityError 由 BACKEND-003 的 handler 轉成 409。"""
+    app = FastAPI()
+    register_exception_handlers(app)
+
+    @app.post("/items/{name}")
+    def create_item(name: str, session: Session = Depends(get_db)) -> dict[str, str]:  # noqa: B008
+        _insert(session, name)
+        session.commit()
+        return {"name": name}
+
+    @app.post("/draft/{name}")
+    def draft_item(name: str, session: Session = Depends(get_db)) -> dict[str, str]:  # noqa: B008
+        _insert(session, name)
+        session.flush()
+        return {"name": name}  # 刻意不 commit
+
+    app.dependency_overrides[get_db] = override_get_db(db_session)
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def test_db_get_db_override_rolls_back_on_handler_error(db_session: Session) -> None:
+    _insert(db_session, "王小明")
+    db_session.commit()  # 只釋放 savepoint：測試資料先 commit 再打 API
+    client = _override_app(db_session)
+
+    assert client.post("/items/林小華").status_code == 200
+    conflict = client.post("/items/王小明")
+    assert conflict.status_code == 409
+    assert conflict.json()["error"]["code"] == "conflict"
+
+    # db_session 沒有停在 aborted：仍可查詢，筆數是成功的那些
+    assert _count_in(db_session) == 2
+    assert client.post("/items/王小明").status_code == 409
+    assert client.post("/items/陳小美").status_code == 200
+    assert _count_in(db_session) == 3
+    # 外層交易尚未結束：其他連線看不到
+    assert _count() == 0
+
+
+def test_db_get_db_override_first_request_fails_keeps_committed_fixture(
+    db_session: Session,
+) -> None:
+    _insert(db_session, "王小明")
+    db_session.commit()
+    client = _override_app(db_session)
+
+    assert client.post("/items/王小明").status_code == 409
+
+    assert _count_in(db_session) == 1
+
+
+def test_db_get_db_override_discards_uncommitted(db_session: Session) -> None:
+    client = _override_app(db_session)
+
+    response = client.post("/draft/林小華")
+
+    assert response.status_code == 200
+    # 與 get_db 的 close 同語意：handler 沒 commit 的寫入在請求結束後不存在
+    assert _count_in(db_session) == 0
+    assert client.post("/items/林小華").status_code == 200
+    assert _count_in(db_session) == 1
