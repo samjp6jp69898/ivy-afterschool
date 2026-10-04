@@ -155,6 +155,7 @@ def test_staff_authorizations_list(db_session: Session) -> None:
     assert [r.id for r in rows] == [locked.id, with_photo.id, completed.id]
     by_id = {r.id: r for r in rows}
     assert by_id[locked.id].locked is True
+    assert by_id[locked.id].effective_status == "active"  # 今天的 active 還沒過期
     assert by_id[locked.id].code_attempts == 5
     assert by_id[with_photo.id].locked is False
     assert by_id[with_photo.id].photo_url == f"{_URL_PREFIX}{photo}?exp=300"
@@ -193,8 +194,8 @@ def test_staff_authorizations_list_date_filter_and_photo_sign_error(db_session: 
         {yesterday.id},
     )
 
-    assert [(r.id, r.service_date, r.photo_url) for r in rows] == [
-        (yesterday.id, _TODAY - timedelta(days=1), None)
+    assert [(r.id, r.service_date, r.photo_url, r.effective_status) for r in rows] == [
+        (yesterday.id, _TODAY - timedelta(days=1), None, "expired")
     ]
 
 
