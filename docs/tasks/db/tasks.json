@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 48,
-  "last_updated": "2026-10-04T11:42:57Z",
+  "version": 49,
+  "last_updated": "2026-10-04T11:43:45Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -952,7 +952,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db025_create_pickup_requests.py",
       "source_ref": "BE:models/dismissal.py::StudentDismissalCall",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-016",
@@ -960,7 +960,7 @@
         "DB-004"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "BACKEND 建立請求遇到 23505（uq_pickup_requests_one_open）要轉成業務錯誤 409，而不是 500；狀態轉換（pending→acknowledged→arrived→completed）的合法性由 BACKEND 守，DB 只保證欄位一致性。 replied_by 為 on delete restrict：回覆過請求的員工硬刪會得到 23503（員工只停用不硬刪）；completed_by 為 on delete set null。\n協調者裁定（review-r5-db 建議）：replied_by 由 on delete set null 改為 on delete restrict。原設計下硬刪回覆過的員工會因 ck_pickup_requests_reply 得到 23514，實質等同 restrict 但錯誤語意誤導；員工只停用不硬刪（domain_spec 帳號 API 只有 deactivate / activate），與 parent_binding_codes.created_by 一致。db025 尚未部署，直接修改本 revision。",
+      "risk_notes": "BACKEND 建立請求遇到 23505（uq_pickup_requests_one_open）要轉成業務錯誤 409，而不是 500；狀態轉換（pending→acknowledged→arrived→completed）的合法性由 BACKEND 守，DB 只保證欄位一致性。replied_by 為 on delete restrict：回覆過請求的員工硬刪會得到 23503（pickup_requests_replied_by_fkey），員工一律只停用不硬刪（domain_spec 帳號 API 只有 deactivate / activate）；completed_by 為 on delete set null。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/db/test_pickup_requests.py",
@@ -985,9 +985,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r5-db",
-        "notes": "通過。12 passed；每個 CHECK 反例以 constraint 名稱斷言。突變自證（逐一 drop 後 commit、跑測試、還原）：17 個 CHECK / FK、uq_pickup_requests_one_open、trg_pickup_requests_updated_at 共 20 個物件全部轉紅。db-reset 從空 DB 升到 head=db028（單一 head）；tdd.run 實跑全綠，--collect-only 帶/不帶 -k 相同；測試 commit（含補充反例的 commit）皆先於實作 commit；pg_catalog 核對欄位 / 約束 / 索引 / FK 行為 / trigger / ACL（postgres + app_backend=arwd）與 description 一致；測資一律經 app_backend 寫入；just lint 乾淨；tests/integration/db 全目錄 293 passed。 殘留：red_case test_pickup_requests_guardian_restrict 實際為 test_pickup_requests_fk_restrict（內容涵蓋並另測 authorization restrict）；replied_by 為 on delete set null 但 ck_pickup_requests_reply 要求 staff 回覆必有 replied_by，硬刪回覆過的員工會得到 23514 而非 23503（domain_spec 沒有刪除員工的 API，員工只停用，行為可接受；是否改為 on delete restrict 讓錯誤語意一致，待協調者裁定）。"
+        "notes": "通過。db-reset 從空 DB 升到 head=db028（單一 head）；tdd.run 13 passed，--collect-only 帶/不帶 -k 相同，13 條 red_case 與測試名稱一一對應；測試 commit 先於實作 commit；pg_catalog 核對欄位 / 約束 / 索引 / FK 行為 / trigger / ACL（postgres + app_backend=arwd）與 description 一致，replied_by confdeltype=r、completed_by 為 set null；每個 CHECK 反例以 constraint 名稱斷言；突變自證：17 個 CHECK / FK、uq_pickup_requests_one_open、trg_pickup_requests_updated_at 逐一 drop 皆轉紅；replied_by 改回 on delete set null 時 test_pickup_requests_replied_by_restrict 轉紅（實際 23514 ck_pickup_requests_reply）；測資一律經 app_backend 寫入；just lint 乾淨；tests/integration/db 全目錄 294 passed。"
       }
     },
     {
