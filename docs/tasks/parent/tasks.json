@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 50,
-  "last_updated": "2026-10-04T04:38:52Z",
+  "version": 51,
+  "last_updated": "2026-10-04T04:46:46Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -527,7 +527,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3Button.vue",
       "source_ref": "FE:src/parent/components/m3/M3Button.vue::props",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-parent-r4",
       "depends_on": [
         "PARENT-001",
@@ -535,7 +535,7 @@
         "INFRA-012"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "【review-r4-ui 打回】loading 時 type=\"submit\" 的按鈕仍會送出表單：onClick 在 loading 時只 return，沒有 event.preventDefault()，按鈕也不是原生 disabled，因此 <form @submit.prevent=\"save\"> 內的 <M3Button type=\"submit\" :loading=\"saving\"> 在 loading 中被點擊或在欄位按 Enter（隱式送出會對預設按鈕派發 click）時 save 會再被呼叫，與 description「loading 視同 disabled，防止連點重複送出」不符（PARENT-134 請假表單等會用 type=submit）。驗收：補一條 red_case / 測試「form 內 type=submit + loading 點擊 → form submit 0 次；loading=false 對照 → 1 次」，並維持 loading 時保留焦點（不改原生 disabled）與既有 aria-disabled / aria-busy 行為。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/components/m3/M3Button.spec.ts",
@@ -551,9 +551,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r4-ui",
+        "notes": "concern。3 條 red_case 有對應測試且 tdd.run 實跑 6/6 綠、測試 a981ea0 先於實作 1d9d82f、web-lint 乾淨，版面與稿一致；但 loading 未達成 description「視同 disabled，防止連點重複送出」：type=\"submit\" + loading 時 onClick 只是不 emit，沒有 preventDefault，按鈕又不是原生 disabled，所以在 <form> 內點擊（或在欄位按 Enter 觸發隱式送出）仍會送出表單。reviewer 以暫時探針實測：<form @submit.prevent> 內放 <M3Button type=\"submit\" loading> 點一下，form submit 觸發 1 次（對照組 loading=false 也是 1 次），應為 0。其餘偏離不擋：拿掉 disabled guard 不影響（原生 disabled 已擋）。"
       }
     },
     {
@@ -563,7 +563,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3IconButton.vue",
       "source_ref": "FE:src/parent/components/m3/M3IconButton.vue::props",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r4",
       "depends_on": [
         "PARENT-001",
@@ -586,9 +586,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4-ui",
+        "notes": "pass。2 條 red_case 有對應測試：label 寫入 aria-label、點擊 emit 1 次（payload 為 MouseEvent）；disabled 時無 emit 且有原生 disabled。另補 variant class 與預設 standard、圖示 aria-hidden（無障礙名稱只來自 label）。tdd.run 實跑 4/4 綠；測試 636eab6 先於實作 1492d11，spec 之後未再改動；web-lint 乾淨。與 parent-component-m3-kit 稿一致（48 點擊區 / 40 圓形視覺、state layer 只蓋視覺圓、focus 外框內縮 -2px、三種 variant 色、停用 0.38）。偏離 4（拿掉 if (props.disabled) return 測試仍綠）不構成未驗收：驗收的是「disabled 時不 emit」這個可觀測行為，原生 disabled 在瀏覽器與 test-utils 都不派發 click，該 guard 是多餘的防禦，行為已被斷言。"
       }
     },
     {
@@ -683,7 +683,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3Chip.vue",
       "source_ref": "FE:src/parent/components/m3/M3Chip.vue::props",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r4",
       "depends_on": [
         "PARENT-001",
@@ -706,9 +706,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4-ui",
+        "notes": "pass。2 條 red_case 有對應測試：filter + selected → aria-pressed true、leading 圖示 check、文字「約 10 分鐘」；點擊 1 次 emit、disabled 0 次且有原生 disabled。另補 filter 未選 aria-pressed false、assist 無 aria-pressed、selected 只對 filter 生效、已選時 check 取代自身圖示。tdd.run 實跑 5/5 綠；測試 ee1eaf7 先於實作 838377b；web-lint 乾淨。與稿一致（32px 高、圓角 small、::after 透明延伸到 48px、assist 圖示 primary、filter 已選 secondary-container 無邊）。偏離 4 同 PARENT-016：guard 多餘，disabled 不 emit 的行為已由原生 disabled 保證並被斷言，不構成未驗收。"
       }
     },
     {
@@ -718,7 +718,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3ListItem.vue",
       "source_ref": "FE:src/parent/components/m3/M3ListItem.vue::props",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r4",
       "depends_on": [
         "PARENT-001",
@@ -742,9 +742,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4-ui",
+        "notes": "pass。3 條 red_case 有對應測試：根元素 li、headline / supporting 文字；to=/attendance 渲染 a[href=/attendance] 且點擊後 currentRoute 為 /attendance；clickable + disabled 點擊與 Enter / Space 都不 emit、aria-disabled true、tabindex -1。另補一行版面、停用的 to 列不導頁、clickable 列鍵盤操作與 preventDefault、非互動列無 role、leading / trailing 圖示與 slot。tdd.run 實跑 8/8 綠；測試 fdb5d98 先於實作 cce7c7a；web-lint 乾淨。偏離 1（停用的 to 列改渲染 div[role=link] + aria-disabled + tabindex -1，不導頁不 emit）成立：稿 decisions 明定「disabled：不 emit、不導頁、tabindex -1」，稿內 a + preventDefault 的寫法反而讓停用連結仍在 Tab 順序內；RouterLink 沒有停用態，退成不可導頁的 div 更符合 decisions，description「to 有值時渲染 RouterLink」未規範停用情境，無衝突。"
       }
     },
     {
@@ -789,7 +789,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3NavigationBar.vue",
       "source_ref": "FE:src/parent/components/m3/M3NavigationBar.vue::badgeLabel",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r4",
       "depends_on": [
         "PARENT-001",
@@ -813,9 +813,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4-ui",
+        "notes": "pass。3 條 red_case 有對應測試：5 筆中只有「接送」aria-current=page 且有 is-active；點「成績」emit [exams, item]；徽章 120 → 99+、0 不渲染、3 → 3（另補 99 與 undefined 邊界）。另補 active 才用 filled 圖示、點目前分頁照樣 emit、徽章 aria-hidden 與視覺隱藏文字「，3 則未讀」、nav landmark 與 80px + safe-area。tdd.run 實跑 7/7 綠；測試 93f31b0 先於實作 05cd14f；web-lint 乾淨。偏離 2 成立：匯出 NavItem 與 description 介面一致；徽章 aria-hidden + 視覺隱藏文字是稿 decisions 原文；隱藏文字讀完整數字（不封頂 99）只影響報讀，視覺徽章仍 99+，資訊更完整。偏離 3 成立：happy-dom 不算版面，testing_conventions 明定版面類 decision 用 ?raw 原始碼斷言並回報；斷言 env(safe-area-inset-bottom、height 80px、:focus-visible 皆存在。殘留：?raw 斷言只證明規則字串存在，不證明套用在哪個選擇器，PARENT-024 整合時可用 Playwright 量測。"
       }
     },
     {
@@ -2071,7 +2071,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3SegmentedButton.vue",
       "source_ref": "FE:src/parent/components/m3/M3SegmentedButton.vue::isSelected",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r4",
       "depends_on": [
         "PARENT-001",
@@ -2095,9 +2095,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4-ui",
+        "notes": "pass。3 條 red_case 有對應測試：sick 選中 aria-checked true、其餘 false，點「事假」emit [personal]；personal disabled 時在病假上 ArrowRight emit [other] 且 preventDefault；點 disabled 段無 emit。另補 radiogroup + aria-label、roving tabindex 與值不在清單時退到第一個可用段、兩端循環並移動焦點、只剩自己可用時方向鍵不動、選中段 check 取代圖示、等寬欄。tdd.run 實跑 9/9 綠；測試 b5b7e08 先於實作 aa61ac4；web-lint 乾淨。與稿 decisions 一致（48px、外框圓角 full、選中 secondary-container、焦點內縮 -4px、← → 選取並循環）。殘留：方向鍵先移焦點、選取值由父層回寫；父層若拒絕更新 modelValue，焦點會停在未選中的段上（屬呼叫端行為，觀測不到錯誤資料）。"
       }
     },
     {
