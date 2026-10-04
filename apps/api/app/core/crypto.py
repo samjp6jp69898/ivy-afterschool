@@ -1,4 +1,6 @@
 """BACKEND-009：APP_SECRET_KEY 金鑰衍生（HKDF-SHA256）與 AES-256-GCM 應用層加解密。
+BACKEND-010：``keyed_hash`` / ``constant_time_equals``（身分證查重 DB-014 ``id_number_hmac``、
+綁定碼 DB-017 ``code_hash`` 的 HMAC-SHA256）。
 
 學生身分證字號 / 健康備註（bytea，DB-014）與 system_settings 的 secret 欄位（JSON 字串，DB-007）
 共用此模組；DB 不持金鑰，只有應用層能解密。
@@ -10,6 +12,9 @@
 - ``encrypt_token`` / ``decrypt_token``：``'v1:' + base64url(encrypt_bytes(...))``（無 padding）。
 - 任何解密失敗（版本、長度、tag、base64）一律 ``DecryptionError``，訊息固定、不含金鑰與密文。
 - 函式不接受 ``None``：欄位為空時由呼叫端自行判斷不加密。
+- ``keyed_hash(label, value)``：``hmac(derive_key(label), value)`` 的 64 碼小寫 hex；label 只接受
+  ``LABEL_HMAC_*``（防止誤用加密 / JWT 金鑰做 HMAC）。正規化不在此做，由呼叫端負責
+  （身分證：去空白轉大寫；綁定碼：去空白、去連字號、轉大寫），確保同一值永遠用同一正規化。
 
 金鑰輪替（APP_SECRET_KEY 變更）會使所有加密欄位與 settings secret 無法解密，目前不提供 re-encrypt。
 """
@@ -18,6 +23,8 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
+import hmac
 import os
 from functools import lru_cache
 from typing import Final
@@ -33,6 +40,7 @@ LABEL_FIELD_ENC: Final = b"afterschool/field-encryption/v1"
 LABEL_HMAC_ID_NUMBER: Final = b"afterschool/hmac/id-number/v1"
 LABEL_HMAC_BINDING_CODE: Final = b"afterschool/hmac/binding-code/v1"
 LABEL_JWT: Final = b"afterschool/jwt/v1"
+_HMAC_LABELS: Final = frozenset({LABEL_HMAC_ID_NUMBER, LABEL_HMAC_BINDING_CODE})
 
 _KEY_LEN: Final = 32
 _VERSION: Final = b"\x01"
@@ -89,3 +97,14 @@ def decrypt_token(token: str) -> str:
     except (binascii.Error, ValueError):
         raise DecryptionError from None
     return decrypt_bytes(blob)
+
+
+def keyed_hash(label: bytes, value: str) -> str:
+    """HMAC-SHA256 的 64 碼小寫 hex（符合 DB CHECK ``^[0-9a-f]{64}$``）。"""
+    if label not in _HMAC_LABELS:
+        raise ValueError("keyed_hash 只接受 LABEL_HMAC_* 標籤")
+    return hmac.new(derive_key(label), value.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def constant_time_equals(a: str, b: str) -> bool:
+    return hmac.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
