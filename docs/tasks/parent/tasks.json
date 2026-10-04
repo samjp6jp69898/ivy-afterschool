@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 66,
-  "last_updated": "2026-10-04T11:29:19Z",
+  "version": 67,
+  "last_updated": "2026-10-04T11:40:03Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -951,7 +951,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/ConfirmDialog.vue",
       "source_ref": "FE:src/parent/components/ConfirmDialog.vue::defineEmits",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-001",
@@ -959,7 +959,7 @@
         "INFRA-012"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "[review-r5-parent 打回] (1) 對話框疊在 sheet 上、同一 tick 一起關閉時焦點遺失：頁面按鈕開 sheet → sheet 內開 ConfirmDialog → 呼叫端同一 tick 設 sheet=false、dialog=false。ConfirmDialog 宣告在 sheet 之後（或放在 sheet 的 slot 內，兩者都是常見寫法）時，sheet 的 watcher 先跑：sheet 移出堆疊並把焦點還原到頁面按鈕 → 仍在堆疊頂端的 dialog 以 focusin 把焦點拉回自己的取消鈕 → dialog 再把焦點還原到 sheet 內的按鈕 → 兩者移除後焦點落到 body（vitest 實測；ConfirmDialog 宣告在 sheet 之前時正確回到頁面按鈕）。違反「關閉後焦點回到開啟前的元素」，而稿中正是以「接送碼 sheet 上的確認對話框」為疊加情境。要求：修正後兩種宣告順序都回到頁面按鈕，並補「sheet + dialog 同 tick 關閉、dialog 宣告在後」的測試；修正若動到 ParentBottomSheet / overlayStack，PARENT-025 與 overlayStack 的 spec 須維持全綠。 (2) ConfirmDialog 自身的 isTopOverlay 檢查沒有測試守住（拿掉不會紅）。sheet + dialog 的實際情境中 dialog 永遠在頂端，構造不出錯誤行為，但兩個 ConfirmDialog 疊開（或 sheet 開在 dialog 之上）時拿掉檢查會讓 Esc 一次取消兩層；請補「兩個 ConfirmDialog 疊開，Esc 只對上層 emit cancel」的測試。",
+      "risk_notes": "開啟前的元素在關閉時已不在 DOM（例如確認刪除後清單項目被移除）時不還原焦點，焦點落到 body。open 當下 loading 已為 true 時取消鈕為原生 disabled、無法聚焦，初始焦點留在背景元素，之後由 Tab / focusin 拉回對話框。疊層焦點還原只在 happy-dom 驗證（測試中 Transition 被 stub、元素立即移除）；真實瀏覽器 leave 動畫期間 DOM 仍在，行為推論相同但未以 Playwright 量測。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/components/ConfirmDialog.spec.ts",
@@ -978,9 +978,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r5-parent",
-        "notes": "tdd.run 15/15 綠，六條 red_case 皆選到。web-lint 對元件、spec 與 overlayStack 皆 exit 0；測試 commit 先於實作 commit。稿 decisions 其餘各條一致（surface-container-high、28px、寬 −48 / 280–400、headline-small 不截斷、pre-line、text / filled 按鈕、destructive error 底、wrap-reverse 堆疊、loading 鎖取消 / Esc / scrim、z-index 15、200 / 150ms 動畫、不自行關閉）。overlayStack 重構（274aa24）未造成 PARENT-025 回歸：sheet spec 24/24 綠，交錯開關 overflow 還原、焦點鎖、多層 Esc 皆仍成立；sheet + dialog 疊加時 Esc 只取消 dialog、dialog 關閉後 body 仍鎖、焦點回 sheet。打回兩項見 risk_notes。殘留（不擋）：open 當下若 loading 已為 true，取消鈕原生 disabled 無法聚焦，初始焦點留在背景元素（之後 Tab / focusin 會拉回）。"
+        "notes": "複審通過。tdd.run 19/19 綠（exit 0），六條 red_case 皆選到；紅燈測試 206a6a6 先於實作 9c04044；web-lint 對 ConfirmDialog、ParentBottomSheet、overlayStack 及其 spec 皆 exit 0。突變驗證：拿掉 overlayStack 的還原目標轉移 →「returns focus to the page button」兩條轉紅；拿掉 ConfirmDialog keydown 的 isTopOverlay →「Escape only cancels the topmost of two stacked dialogs」轉紅。原反例重驗：sheet + dialog 同 tick 關閉，dialog 宣告在後 / 放在 sheet slot 內 / 宣告在前三種寫法焦點都回到頁面按鈕、overflow 還原。另驗疊層情境皆正確：sheet → dialog 只關 dialog 焦點回 sheet 內按鈕且 body 仍鎖；sheet A → B 同 tick 交換（兩種宣告順序）焦點進 B、關 B 後回頁面按鈕；dialog 開啟時下層 sheet 先關，焦點留在 dialog、關 dialog 後回頁面按鈕；A → B → dialog（dialog 在 B 的 slot）三層同 tick 全關回頁面按鈕；整頁卸載時回頁面按鈕。PARENT-025 無回歸：sheet spec 24/24、overlayStack spec 3/3 綠。殘留見 risk_notes。"
       }
     },
     {
@@ -2015,7 +2015,7 @@
       "review": {
         "status": "pass",
         "reviewer": "review-r5-parent",
-        "notes": "tdd.run 13/13 綠，八條 red_case 皆選到。web-lint 對元件、spec 與 overlayStack 皆 exit 0；測試 commit 先於實作 commit。換算（秒數進位）、跨午夜停用與回到不指定、自選預填 / 早於現在錯誤 / 清空 emit null、注入 now 不計時、未注入每 60 秒重算且 unmount 清除（getTimerCount 0）皆有測試。初值非 null 時初始化為「自選時間」合理（PARENT-097 重開表單帶回值時需要），但屬可觀測行為，建議寫回 description。殘留：計時器從 mount 起每 60 秒觸發、未對齊整分，換算時刻最多落後約 1 分鐘；進位只看秒數不看毫秒；初值為已過去的時間時畫面顯示錯誤但不會主動 emit null（父層仍持舊值，送出後由後端判斷）。"
+        "notes": "tdd.run 13/13 綠，八條 red_case 皆選到。web-lint 對元件、spec 與 overlayStack 皆 exit 0；測試 commit 先於實作 commit。換算（秒數進位）、跨午夜停用與回到不指定、自選預填 / 早於現在錯誤 / 清空 emit null、注入 now 不計時、未注入每 60 秒重算且 unmount 清除（getTimerCount 0）皆有測試。初值非 null 時初始化為「自選時間」合理（PARENT-097 重開表單帶回值時需要），但屬可觀測行為，建議寫回 description。殘留：計時器從 mount 起每 60 秒觸發、未對齊整分，換算時刻最多落後約 1 分鐘；進位只看秒數不看毫秒；初值為已過去的時間時畫面顯示錯誤但不會主動 emit null（父層仍持舊值，送出後由後端判斷）。 補充：ca86480 寫回的「受控值同步」與實作一致（初值非 null → 自選時間並帶入值；父層清成 null 且上次 emit 非 null → 回到不指定）；「父層清成 null」有測試，「初值非 null 初始化為自選時間」目前沒有測試，建議補一條。"
       }
     },
     {
