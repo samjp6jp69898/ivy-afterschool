@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 211,
-  "last_updated": "2026-10-04T16:52:23Z",
+  "version": 212,
+  "last_updated": "2026-10-04T16:52:56Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10675,7 +10675,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/persons.py",
       "source_ref": "BE:api/parent_portal/pickup.py::list_pickup_persons",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7c",
       "depends_on": [
         "BACKEND-401",
@@ -10710,7 +10710,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/persons.py",
       "source_ref": "BE:api/parent_portal/pickup.py::create_pickup_person",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7c",
       "depends_on": [
         "BACKEND-401",
@@ -10721,7 +10721,7 @@
         "BACKEND-108"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "未封存人數上限檢查沒有鎖學生列：同一學生兩個並發請求可能同時通過而略超過上限（軟限制，家長端操作頻率極低，接受）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/pickup/test_pickup_persons.py",
@@ -10750,7 +10750,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/persons.py",
       "source_ref": "BE:api/parent_portal/pickup.py::delete_pickup_person",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7c",
       "depends_on": [
         "BACKEND-401",
@@ -10824,7 +10824,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:api/parent_portal/pickup.py::list_authorizations",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7c",
       "depends_on": [
         "BACKEND-401",
@@ -10897,7 +10897,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:api/pickup_authorizations.py::list_authorizations",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7c",
       "depends_on": [
         "BACKEND-401",
@@ -10906,7 +10906,7 @@
         "BACKEND-133"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "排序在 Python 端（active 在前、學生姓名以 Unicode 碼位比較、created_at、id），清單以單日為範圍、量小。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/pickup/test_pickup_authorizations.py",
@@ -12039,7 +12039,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7c",
       "depends_on": [
         "BACKEND-450",
@@ -12464,7 +12464,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7c",
       "depends_on": [
         "BACKEND-450",
@@ -12499,7 +12499,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7c",
       "depends_on": [
         "BACKEND-450",
@@ -12507,7 +12507,7 @@
         "BACKEND-008"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "家長端 IDOR 由 endpoint 層（BACKEND-479 get_owned_student）負責，本 service 不收 parent；測試以「他人小孩的成績不洩漏、只有別人成績列的考試不出現」覆蓋。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_exam_service.py",
@@ -12534,14 +12534,14 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7c",
       "depends_on": [
         "BACKEND-450",
         "BACKEND-451"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "家長端 IDOR 由 endpoint 層（BACKEND-479）負責，本 service 不收 parent；draft / 該生無成績列 / 不存在三者同一個 404（含相同 message）已測。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_exam_service.py",
