@@ -82,7 +82,7 @@ def test_staff_user_schemas_create_fields() -> None:
     with pytest.raises(ValidationError):
         _create(role_id="not-a-uuid")
     with pytest.raises(ValidationError):
-        _create(password="Passw0rd-Test1")  # 密碼由系統產生臨時密碼，不接受 client 指定
+        _create(password="Passw0rd-Test1")  # noqa: S106  密碼由系統產生，不接受 client 指定
     with pytest.raises(ValidationError):
         StaffUserCreateIn.model_validate({"username": "lin.teacher", "display_name": "林老師"})
     ok = _create()
@@ -156,6 +156,6 @@ def test_staff_user_schemas_outputs() -> None:
 
     created = StaffUserCreatedOut(user=user, temp_password="Tmp-Passw0rd9")  # noqa: S106
     assert created.temp_password == "Tmp-Passw0rd9"  # noqa: S105
-    assert TempPasswordOut(temp_password="x").temp_password == "x"  # noqa: S106
+    assert TempPasswordOut(temp_password="x").temp_password == "x"  # noqa: S105, S106
     option = StaffOptionOut(id=uuid4(), display_name="林老師")
     assert set(option.model_dump()) == {"id", "display_name"}
