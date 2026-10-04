@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 124,
-  "last_updated": "2026-10-04T11:20:48Z",
+  "version": 125,
+  "last_updated": "2026-10-04T11:26:03Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -736,7 +736,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/main.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-001",
@@ -749,7 +749,7 @@
         "BACKEND-223"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "Sentry 預設 LoggingIntegration 會在 RedactingFilter 之前讀 record，未掛 before_send / before_breadcrumb 時 breadcrumb 與 event 會帶未遮罩的 msg / args / 例外訊息（review-r5-backend 指出）；本 task 以 scrub_sentry_event / scrub_sentry_breadcrumb 處理。\n【review-r5-backend 打回】(1) & 終止符讓含 & 的敏感值只遮前段：redact_text('login password=Abc&123') → 'login password=***&123'、'secret=a&b&c' → 'secret=***&b&c'、'Authorization: Bearer abc&def' → 'Authorization=***&def'、'cookie: sid=X&Y; path=/' → 'cookie=***&Y; path=/'，Sentry exception value 'password=Pw&rd!' → 'password=***&rd!'；改動前整段遮掉。修正方向：& 只在後面緊接 '識別字=' 時才終止（例如 (?!&[A-Za-z_][A-Za-z0-9_.-]*=) 的反向條件），或移除 & 終止符並放寬測試的 'page=2' 斷言（過度遮罩是 fail-safe）；上列四個字串都要有「後段不外漏」的測試，'code=Q5&page=2' 的期望依所選方向寫明。(2) 補測試：settings.sentry_dsn 有值時 lifespan 以 before_send=scrub_sentry_event、before_breadcrumb=scrub_sentry_breadcrumb、send_default_pii=False 呼叫 sentry_sdk.init（monkeypatch 記錄參數），sentry_dsn 為 None 時不呼叫。(3) 補測試：lifespan 進入時 broadcaster.start、離開時 broadcaster.stop 各呼叫一次（以 spy broadcaster 斷言），並建議同測試涵蓋 set_main_loop 啟動時設定 / 關閉時清為 None、install_tx_hooks 被呼叫、engine 曾建立時 dispose。",
+      "risk_notes": "Sentry 的 LoggingIntegration 在 handler 級 RedactingFilter 之前讀 record，送往 Sentry 的內容完全依賴 before_send / before_breadcrumb（scrub_sentry_event / scrub_sentry_breadcrumb）遮罩；日後調整 sentry_sdk.init 或加新整合時必須保留這兩個 hook（test_main_sentry_init_with_scrubbers 把關）。redact_text 只認 key=value、key: value、'key': 'value' 樣式，非此樣式的秘密（例如 URL 內嵌帳密）不會被遮；& 不是終止符，query string 中敏感 key 之後的參數會一併遮掉（fail-safe 的過度遮罩）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/test_main.py",
@@ -774,9 +774,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r5-backend",
-        "notes": "打回。300ef95（紅）→ 407bfc3（綠），tdd.run 8/8 綠、八條 red_case 皆選到，lint / typecheck 乾淨。已確認正確的部分：middleware 外到內 RequestContext → Security → CORS；未處理例外的 500 回應帶入站 X-Request-ID 與 security_headers_for(path) 的四個標頭（含 /api/ 的 no-store），回應不含例外訊息；production 關 docs / openapi；CORS 只對允許 origin 回 allow-credentials；session_factory 綁 get_engine()、engine 曾建立才 dispose 合理；routers_mounted 改以 openapi paths + 實際請求驗證合理；Sentry scrub 深度走訪、不就地修改原 event、遮罩拋例外回 None（fail-closed），比 description 寬但方向正確。打回原因三項：(1) redact_text 的 & 終止符造成遮罩漏洞（BACKEND-004 產物回歸）；(2) Sentry init 掛 before_send / before_breadcrumb 沒有測試；(3) 驗收標準「broadcaster 正確啟動 / 停止」沒有測試。突變驗證（在 scratch 副本）：拿掉 before_send / before_breadcrumb、整個不呼叫 _init_sentry、拿掉 broadcaster.start() / stop()、install_tx_hooks()、engine.dispose()，test_main 8 個測試全部仍綠。"
+        "notes": "複審通過。三項打回皆已修：6b7d741（測試）→ e715cb7（實作），tasks.json 更新落在 abd2e36。(1) & 終止符已移除，test_main_redact_ampersand_values 涵蓋 'password=Abc&123'、'secret=a&b&c'、'Authorization: Bearer abc&def'、'cookie: sid=X&Y; path=/' 與 Sentry exception value 'password=Pw&rd!'；query_string 只要求 code 被遮。(2) test_main_sentry_init_with_scrubbers / _not_initialized_without_dsn 斷言 init 參數（before_send / before_breadcrumb 為同一函式物件、send_default_pii False、traces_sample_rate 0.0）與無 dsn 不呼叫。(3) test_main_lifespan_starts_and_stops_broadcaster（engine 建立與否兩組參數）斷言 broadcaster start / stop、set_main_loop 設定後清為 None、install_tx_hooks 一次、engine 曾建立才 dispose。以 HEAD 的 scratch 副本重跑突變 11 種（拿掉 broadcaster.start / stop、before_send + before_breadcrumb、只拿掉 before_breadcrumb、不呼叫 _init_sentry、install_tx_hooks、dispose、set_main_loop(None)、無條件 dispose、send_default_pii=True、加回 & 終止符）全部轉紅。tdd.run 13/13 綠，BACKEND-004 / 539 的 test_logging 20/20 綠；lint / typecheck 乾淨。前一輪已確認的 500 回應 X-Request-ID 與安全標頭、middleware 順序、docs 開關、CORS、Sentry scrub fail-closed 不變。"
       }
     },
     {
@@ -5022,14 +5022,14 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/students/id_number.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-010",
         "BACKEND-003"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "外籍學生若只有護照號碼會被格式檢查擋下；目前不支援護照號碼。\n【review-r5-backend 打回】validate_id_number 的 \\d 接受 Unicode 數字（全形 '９'、阿拉伯-印度 '٧'），使 'A12345678９' 通過驗證但 HMAC 與 'A123456789' 不同，身分證查重可被繞過。修正方向（二擇一，description 一併寫明）：(a) 三條 regex 改用 [0-9]（或 re.ASCII），非 ASCII 數字一律 422；(b) normalize 先做 NFKC 轉半形再驗證。驗收反例：'A12345678９'、'A123456٧89'、'A１23456789' 依所選方向分別 422 或正規化成 'A123456789'（HMAC 相同），需有對應測試。",
+      "risk_notes": "外籍學生若只有護照號碼會被格式檢查擋下；目前不支援護照號碼。呼叫端（學生 service）寫入、查重與加密都必須使用 normalize_id_number 後的值，否則同一號碼會產生不同 HMAC；NFKC 會把全形、上標等相容字元映射成 ASCII 後視為同一號碼，屬預期行為。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/services/students/test_id_number.py",
@@ -5049,9 +5049,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r5-backend",
-        "notes": "打回。50f6607（紅）→ 7754bf7（綠），tdd.run 13/13 綠、red_case 皆選到，國民身分證 / 新舊式居留證檢查碼實作正確，但有可構造的查重繞過：_CITIZEN_RE / _NEW_RESIDENT_RE / _OLD_RESIDENT_RE 的 \\d 在 Python 會比對 Unicode 數字，int() 也接受，normalize_id_number 只去空白轉大寫不轉半形。實測 validate_id_number(normalize_id_number('A12345678９'))（末碼全形）與 'A123456٧89'（阿拉伯-印度數字）都通過，id_number_hmac 與 'A123456789' 不同，同一人可重複建檔；mask 也輸出全形字元。中文輸入法打出全形數字是常見情境。"
+        "notes": "複審通過。打回項（\\d 接受 Unicode 數字造成 HMAC 查重繞過）已修：7eab8f2（紅）→ abd2e36（綠），依協調者裁定 normalize 先 NFKC、驗證 regex 改 [0-9] 並要求 isascii。tdd.run 15/15 綠，新增 test_id_number_normalize_nfkc_fullwidth / test_id_number_rejects_non_ascii_digits 皆選到。實測：'A12345678９'、'A１23456789'、'Ａ123456789'、'ａ123456789'、上標 'A12345678⁹'、尾端 NBSP / U+2028 皆正規化成 'A123456789' 且 HMAC 相同；'A123456٧89'、'A1234567①9'（NFKC 成 '1' 後檢查碼錯）、含零寬空白、'ı123456789'（upper 成 'I' 但檢查碼錯）皆 422。NFKC 不會引入新的繞過：被接受的值必為 ASCII 且 normalize 冪等，所以同一號碼不會有兩種 HMAC；相容字元映射成 ASCII 後代表的就是使用者宣稱的那個號碼，不會讓兩個不同的真實號碼相撞。lint / typecheck 乾淨。殘留：description 介面註解與 module docstring 的格式仍寫 \\d{8}（下方條列與程式已是 [0-9]），屬文件用詞。"
       }
     },
     {
