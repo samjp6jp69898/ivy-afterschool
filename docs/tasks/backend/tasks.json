@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 131,
-  "last_updated": "2026-10-04T11:33:16Z",
+  "version": 132,
+  "last_updated": "2026-10-04T11:34:52Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2405,7 +2405,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/test_permission_seed_consistency.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-070",
@@ -3707,11 +3707,11 @@
     {
       "id": "BACKEND-107",
       "title": "建立 settings registry 預設值與 DB seed 的一致性整合測試",
-      "description": "建立 `apps/api/tests/integration/test_settings_seed_consistency.py`（DB-038：「BACKEND 另有測試比對 registry 預設值與 DB seed」）。\n\n- 對 REGISTRY 每個 key：DB `system_settings` 必須存在該列；`is_secret` 與 registry 一致；DB value 通過 registry schema 驗證；DB value == `default.model_dump(mode='json', by_alias=True)`（只在乾淨 `just db-reset` 後比對；以 owner 連線讀取，不依賴 cache）。\n- DB 中不得有 registry 未註冊的 key。\n- 營業與接送時段的預設值（DB-038）：`org.service_hours` 週一~五 open 12:00–19:00、週六 open=false（08:00–12:00）、週日不列；`pickup.window` request_start 12:00、request_end 19:00、latest_expected_arrival 19:00、auto_expire_minutes 120（接送時段同營業時段）。\n\n**驗收標準**\n- 全部通過；故意改測試中的預設值時失敗並列出差異的 key。",
+      "description": "建立 `apps/api/tests/integration/test_settings_seed_consistency.py`（DB-038：「BACKEND 另有測試比對 registry 預設值與 DB seed」）。\n\n- 對 REGISTRY 每個 key：DB `system_settings` 必須存在該列；`is_secret` 與 registry 一致；DB value 通過 registry schema 驗證；DB value == `default.model_dump(mode='json', by_alias=True)`（只在乾淨 `just db-reset` 後比對；以 app_backend 的 db_session 直接查表，不經 SettingsService 的 cache；testing_conventions §3 不允許以 owner 連線做一般讀取）。\n- DB 中不得有 registry 未註冊的 key。\n- 營業與接送時段的預設值（DB-038）：`org.service_hours` 週一~五 open 12:00–19:00、週六 open=false（08:00–12:00）、週日不列；`pickup.window` request_start 12:00、request_end 19:00、latest_expected_arrival 19:00、auto_expire_minutes 120（接送時段同營業時段）。\n\n**驗收標準**\n- 全部通過；故意改測試中的預設值時失敗並列出差異的 key。",
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/test_settings_seed_consistency.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-106",
