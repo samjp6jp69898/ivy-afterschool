@@ -1,6 +1,6 @@
 {
   "area": "frontend",
-  "version": 81,
+  "version": 82,
   "last_updated": "2026-10-05",
   "tasks": [
     {
@@ -2363,7 +2363,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/AuditDiffDrawer.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r7",
       "depends_on": [
         "FRONTEND-054",
@@ -2387,9 +2387,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-fe",
+        "notes": "4 條 red_case 皆有對應測試且斷言具體（列內容、is-added/is-removed class、score.math 展開、空資料文案），另加 8 條補充測試（深層 JSON、全未變更引導、遮罩值與（空）、資訊區、缺值占位、複製 ID、切換 log 重設開關、關閉 emit）；實跑 12/12 綠、lint 無問題；49c7fb0(test) 先於 260eac8(impl)。對照 page-settings-audit.html（approved）decisions：抽屜寬 600、資訊表欄位、摘要與開關（無未變更時 disabled）、三欄表、新增/刪除 tag 與底色、null 斜體（空）與「—」區分、巢狀第二層、兩種空文案皆一致。偏離判斷：(2) :before-close 直接 emit false，Esc/遮罩/關閉鈕都走 before-close，父層 v-model 同步即關閉，可接受；(3) 遮罩值原樣顯示，*** 與 **** 皆涵蓋。殘留：ENTITY_LABELS 與 ACTOR_TAGS 寫在元件內，FRONTEND-072 需共用，待抽出；巢狀空物件 {} 展開後不產生任何列（兩側皆 {} 時該欄位不顯示）；父層若在關閉動畫期間把 log 設 null，內容會提前消失（父層注意）。"
       }
     },
     {
