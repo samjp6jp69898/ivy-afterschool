@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 185,
-  "last_updated": "2026-10-04T16:34:51Z",
+  "version": 186,
+  "last_updated": "2026-10-04T16:35:56Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -8007,13 +8007,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_export.py",
       "source_ref": "BE:api/student_attendance.py::_write_class_sheet",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-301"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：公式注入前綴採 description 列的 = + - @ Tab CR（ivy SafeWorksheet 另含 | 與 %，且會先 lstrip Tab / CR / LF；本實作不 lstrip，而是對以 Tab / CR 開頭者同樣補 '）。是否要比照 ivy 加上 | 與 % 待確認。非營業日的「-」與簡碼、表頭為程式常數，不經防護。xlsx 的 XML 會把 CR 正規化為 LF，回讀時為 LF，前綴仍在。\nreview-r7-b2 打回：使用者輸入字串（姓名、學號、班名）含 openpyxl 不接受的控制字元（openpyxl.cell.cell.ILLEGAL_CHARACTERS_RE，例如 \\x07、\\x0b）時，build_monthly_attendance_xlsx 拋 IllegalCharacterError，整份月報匯出失敗。StudentCreateIn.name 只擋 NUL，此資料可經 API 正常存入。要求：寫入前移除這些控制字元，且「先移除再判斷公式前綴」（否則 '\\x07=cmd' 移除後變成 '=cmd' 會被 openpyxl 當公式寫入）。補測試：姓名 '王\\x0b小明' → B3 == '王小明' 且不拋例外；姓名 '\\x07=HYPERLINK(\"x\")' → B3 == '\\'=HYPERLINK(\"x\")'；班名含 \\x07 時 A1 不含該字元。",
+      "risk_notes": "公式注入前綴採 description 列的 = + - @ Tab CR（ivy SafeWorksheet 另含 | 與 %，屬 CSV / DDE 情境；xlsx 以字串型別寫入，Excel 不會執行）；不 lstrip，Tab / CR 開頭同樣補 '。使用者字串中 openpyxl 不接受的控制字元（ILLEGAL_CHARACTERS_RE，例如 0x07、0x0B）在寫入前移除，Excel 內不保留，且移除在前綴判斷之前。非營業日的「-」與簡碼、表頭為程式常數，不經防護。xlsx 的 XML 會把 CR 正規化為 LF，回讀時為 LF，前綴仍在。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/services/test_attendance_export.py",
@@ -8029,9 +8029,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r7-b2",
-        "notes": "打回。red_case 3 條對應 test_attendance_xlsx_layout / _non_service_day / _formula_injection（另有 status_codes、column_width），tdd.run 5 passed，-k 與不帶 -k 收集相同；測試 35f2710 先於實作 fee9a66。3bc0dc2 確認為修測試資料錯誤而非放寬斷言迎合實作：合併範圍 2+30+4=36 欄本就是 AJ（原寫 AF 為算錯）；expected 原放 9/5 週六，依 description 非營業日必須是「-」，原期望 None 與規格矛盾；CR 經 XML 正規化為 LF 是 openpyxl 回讀行為，斷言仍要求「'」前綴。版面、簡碼、灰底、stats、欄寬、公式注入（=、+、-、@、Tab、CR，含標題班名）以突變驗證皆有測試轉紅。打回原因（可構造反例）：使用者輸入字串含 openpyxl 不接受的控制字元時整份匯出拋 IllegalCharacterError（端點會 500）。StudentCreateIn.name 只擋 NUL，name='王\\x0b小明'（Word 複製貼上的手動換行即為 \\x0b）或 '王小明\\x07' 皆可存入，之後 build_monthly_attendance_xlsx 對該班整份月報失敗，實測已重現。班名（title_class_name）同理。對 risk_notes「協調者待使用者確認」的建議：xlsx 內容以字串型別寫入，Excel 不會把字串儲存格當公式或 DDE 執行，實際風險只有 openpyxl 把以 = 開頭的字串存成公式（已擋）；| 與 % 主要是 CSV / DDE 情境，description 未列，不加不違規；要與 ivy 一致可順手加入，非必要。不 lstrip 而對 Tab / CR 開頭補 ' 同樣安全（RequestModel 也會 strip 前後空白）。此點不構成打回理由。"
+        "notes": "複審通過（只核對打回項）。新增 test_attendance_xlsx_illegal_control_chars_removed / _strip_before_formula_check（紅燈 commit e25bcd1 先於修正 1ff04b2），以原實作 fee9a66 的模組替換執行時兩條皆轉紅（IllegalCharacterError）；把清理順序對調成「先補前綴再移除」的突變會讓 strip_before_formula_check 轉紅，證明實作確實先以 ILLEGAL_CHARACTERS_RE 移除控制字元再判斷公式前綴。ILLEGAL_CHARACTERS_RE 不含 Tab / LF / CR，Tab / CR 開頭的前綴防護不受影響。tdd.run 7 passed，lint / typecheck 乾淨。初審結論保留：red_case 3 條皆有對應測試，3bc0dc2 為修測試資料錯誤；公式注入前綴（description 列的 = + - @ Tab CR）在 xlsx 已足夠，| 與 % 屬 CSV / DDE 情境，不加不違規。"
       }
     },
     {
