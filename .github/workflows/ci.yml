@@ -29,3 +29,21 @@ jobs:
 
       - name: 驗證 tasks.json
         run: python3 scripts/validate_tasks.py .
+
+  lint:
+    name: Lint（ruff / eslint）
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+
+      - name: ruff
+        run: |
+          uv run --frozen --project apps/api ruff check apps/api scripts --config apps/api/pyproject.toml
+          uv run --frozen --project apps/api ruff format --check apps/api scripts --config apps/api/pyproject.toml
+
+      - name: eslint
+        working-directory: apps/web
+        run: pnpm exec eslint .
