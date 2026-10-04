@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 238,
-  "last_updated": "2026-10-04T17:07:15Z",
+  "version": 239,
+  "last_updated": "2026-10-04T17:08:02Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -6813,7 +6813,7 @@
         "BACKEND-005"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "sweep_outbox 經 BACKEND-018 run_job_once 執行，advisory lock 為交易級：sweep 內的 dispatch_due 不可自行 commit（會提前釋放鎖），由 runner commit；kick_outbox 走自己的 session_scope，不經 runner，不受此限。\nBACKEND-207 的 HttpLineMessagingClient 持有 httpx.Client 但沒有 close() / context manager：dispatch_due 不可每批重建 client 而不關閉（會累積連線），由呼叫端長期持有單一實例，或先為 client 補 close() 並在用完時呼叫。\n協調者待使用者確認：LINE client 以 channel access token 為 key 在 outbox_jobs 快取單一實例（每次 kick / sweep 仍呼叫 build_line_client，但只在 token 變更時重建；舊實例若有 close() 則關閉）。HttpLineMessagingClient（BACKEND-207）目前沒有 close()，token 變更時舊實例交給 GC；若要完全避免，請為 HttpLineMessagingClient 補 close()（本 task 不改 channels/line.py）。測試用 reset_line_client_cache() 清快取。另依 description 在 app/jobs/__init__.py 加一行 import 註冊 job。",
+      "risk_notes": "sweep_outbox 經 BACKEND-018 run_job_once 執行，advisory lock 為交易級：sweep 內的 dispatch_due 不可自行 commit（會提前釋放鎖），由 runner commit；kick_outbox 走自己的 session_scope，不經 runner，不受此限。\nBACKEND-207 的 HttpLineMessagingClient 持有 httpx.Client 但沒有 close() / context manager：dispatch_due 不可每批重建 client 而不關閉（會累積連線），由呼叫端長期持有單一實例，或先為 client 補 close() 並在用完時呼叫。\nLINE client 以 channel access token 為 key 在 outbox_jobs 快取單一實例（每次 kick / sweep 仍呼叫 build_line_client，但只在 token 變更時重建；舊實例若有 close() 則關閉）。HttpLineMessagingClient（BACKEND-207）目前沒有 close()，token 變更時舊實例交給 GC；BACKEND-543 為 HttpLineMessagingClient 補 close() 後即自動生效（本 task 不需再改）。測試用 reset_line_client_cache() 清快取。另依 description 在 app/jobs/__init__.py 加一行 import 註冊 job。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/notifications/test_outbox_jobs.py",
@@ -14855,6 +14855,41 @@
         "status": "pass",
         "reviewer": "review-r7-b",
         "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試先於實作；動到的檔案 just lint / just typecheck 乾淨。突變驗證：handler 加 exc_info → test_errors_data_error_logged_without_params 轉紅。回應不含 SQL / 參數 / 原文，log 只帶 method、path、request id、類別名、SQLSTATE，不帶 exc_info。殘留（不打回）：測試未斷言 log 含 request id 與 SQLSTATE（實作有帶）；把 handler 改掛 DBAPIError 時因 handler 內 assert isinstance(DataError) 讓 OperationalError 仍落 500，觀測行為等價，故 shadow 測試無法區分此突變。"
+      }
+    },
+    {
+      "id": "BACKEND-543",
+      "title": "HttpLineMessagingClient 補 close() 與 context manager（token 變更時釋放舊連線池）",
+      "description": "補強 BACKEND-207 `apps/api/app/notifications/channels/line.py`（改寫該 task 產物，BACKEND-207 維持 done）。`HttpLineMessagingClient` 持有 `httpx.Client` 卻沒有關閉方法；BACKEND-209 的 outbox_jobs 以 channel access token 為 key 快取單一實例，token 變更時會對舊實例呼叫 `close()`（若存在），目前只能交給 GC 釋放連線池。\n\n**要求**\n- 新增 `close() -> None`：關閉內部 `httpx.Client`；重複呼叫不拋例外（冪等）。\n- 支援 context manager：`__enter__` 回傳 self、`__exit__` 呼叫 `close()`。\n- `close()` 之後再呼叫 push 類方法 → 拋 `RuntimeError`（訊息不含 token）。\n- 若 client 是由外部注入的 `httpx.Client`（測試用 transport），`close()` 一樣關閉它；不改既有建構子簽章與 push 行為，BACKEND-207 既有測試仍全綠。\n- BACKEND-209 的 outbox_jobs 不需修改（已實作「舊實例若有 close 則關閉」）。\n\n**驗收標準**：每一條對應下列 red_case；BACKEND-207 既有測試仍全綠。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/notifications/channels/line.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "BACKEND-207",
+        "BACKEND-209"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/unit/notifications/test_line_client.py",
+        "markers": [
+          "unit"
+        ],
+        "red_cases": [
+          "test_line_client_close_closes_http_client：以 httpx.MockTransport 建 httpx.Client 注入 HttpLineMessagingClient → close() 後該 httpx.Client.is_closed is True；再呼叫一次 close() 不拋例外",
+          "test_line_client_context_manager：with HttpLineMessagingClient(...) as c: 斷言 c 是同一實例；離開 with 後內部 httpx.Client.is_closed is True",
+          "test_line_client_push_after_close_raises：close() 後呼叫 push → RuntimeError，str(exc) 不含 channel access token"
+        ],
+        "run": "just test apps/api/tests/unit/notifications/test_line_client.py -k \"test_line_client_\"",
+        "notes": "tdd.run 沿用 BACKEND-207 的指令；新測試名稱以 test_line_client_ 開頭。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
       }
     }
   ]
