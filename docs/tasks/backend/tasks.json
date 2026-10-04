@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 119,
-  "last_updated": "2026-10-04T07:54:01Z",
+  "version": 120,
+  "last_updated": "2026-10-04T07:55:52Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3441,7 +3441,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/reference.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-007",
