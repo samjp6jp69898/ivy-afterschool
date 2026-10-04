@@ -593,7 +593,8 @@ API_DIR = REPO_ROOT / "apps" / "api"
 
 
 def _railway(service_dir: Path) -> dict[str, Any]:
-    return json.loads((service_dir / "railway.json").read_text(encoding="utf-8"))
+    config: dict[str, Any] = json.loads((service_dir / "railway.json").read_text(encoding="utf-8"))
+    return config
 
 
 def test_api_railway_builder() -> None:

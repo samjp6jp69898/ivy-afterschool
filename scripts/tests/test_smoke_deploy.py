@@ -25,7 +25,7 @@ SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
 }
-SPA = (200, {}, '<html><div id="app"></div></html>')
+SPA: tuple[int, dict[str, str], str] = (200, {}, '<html><div id="app"></div></html>')
 
 
 def _all_pass_routes() -> dict[str, tuple[int, dict[str, str], str]]:
