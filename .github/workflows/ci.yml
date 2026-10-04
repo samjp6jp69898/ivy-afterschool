@@ -140,3 +140,18 @@ jobs:
       - name: 關閉服務並清除 volume
         if: always()
         run: docker compose -f compose.yaml down -v
+
+  web-test:
+    name: 前端單元測試（vitest）
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+        with:
+          python: false
+
+      - name: vitest
+        working-directory: apps/web
+        run: pnpm exec vitest run
