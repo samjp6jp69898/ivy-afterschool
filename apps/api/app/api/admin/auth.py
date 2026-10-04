@@ -10,15 +10,20 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
 from app.core.clock import Clock, get_clock
 from app.core.config import Settings, get_settings
 from app.core.db import get_db
 from app.core.request_meta import RequestMeta, get_request_meta
-from app.core.security.cookies import set_auth_cookies
-from app.schemas.auth import RoleBrief, StaffAuthOut, StaffLoginIn, StaffMeOut
+from app.core.security.cookies import (
+    STAFF_REFRESH,
+    clear_auth_cookies,
+    read_cookie,
+    set_auth_cookies,
+)
+from app.schemas.auth import MessageOut, RoleBrief, StaffAuthOut, StaffLoginIn, StaffMeOut
 from app.services.auth import staff_auth
 from app.services.auth.staff_auth import StaffSession
 from app.services.auth.throttle import AuthThrottles, get_auth_throttles
@@ -68,3 +73,18 @@ def login(
         settings=settings,
     )
     return out
+
+
+@router.post("/logout", response_model=MessageOut)
+def logout(
+    request: Request,
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+    clock: Annotated[Clock, Depends(get_clock)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> MessageOut:
+    """登出永遠成功：不需有效 access token，無 cookie 或 refresh 不存在也回 200 並清 cookie。"""
+    staff_auth.logout(db, raw_refresh=read_cookie(request, STAFF_REFRESH.name), clock=clock)
+    db.commit()
+    clear_auth_cookies(response, subject_type="staff", settings=settings)
+    return MessageOut(message="已登出")
