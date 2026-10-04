@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 53,
-  "last_updated": "2026-10-04T04:51:16Z",
+  "version": 54,
+  "last_updated": "2026-10-04T04:52:22Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -1404,7 +1404,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/StatusPill.vue",
       "source_ref": "FE:src/parent/components/StatusPill.vue::tone",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r4",
       "depends_on": [
         "PARENT-001",
