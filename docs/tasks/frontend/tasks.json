@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 72,
-  "last_updated": "2026-10-04T04:33:59Z",
+  "version": 73,
+  "last_updated": "2026-10-04T04:40:17Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -936,11 +936,11 @@
     {
       "id": "FRONTEND-036",
       "title": "實作 components/layout/NotificationPanel.vue：通知清單、全部 / 未讀切換、全部已讀",
-      "description": "建立 `apps/web/src/components/layout/NotificationPanel.vue`（純展示 + emit，不直接呼叫 API）。移植 ivy `FE:src/components/layout/NotificationPanel.vue` 的清單樣式；**去掉** reminder groups / action items。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-admin-shell.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。\n\n**props / emits**：`items: Notification[]`、`unreadCount: number`、`loading: boolean`；emits `open(n: Notification)`、`read-all()`、`filter(unreadOnly: boolean)`。\n**內容**\n- 頂部：「通知」+ segmented「全部 / 未讀」（切換 emit `filter`）+「全部標為已讀」（`unreadCount === 0` 時 disabled）。\n- 每列：未讀圓點、`title`（粗體）、`body`（最多 2 行）、`formatDateTime(created_at)`（FRONTEND-003）、事件標籤（FRONTEND-005 `NOTIFICATION_EVENT_LABELS`）；點整列 emit `open`。\n- loading 顯示 skeleton；空清單顯示「目前沒有通知」（未讀模式：「沒有未讀通知」）。\n\n**驗收標準**\n- 列內容、空狀態、loading、emit 皆正確。",
+      "description": "建立 `apps/web/src/components/layout/NotificationPanel.vue`（純展示 + emit，不直接呼叫 API）。移植 ivy `FE:src/components/layout/NotificationPanel.vue` 的清單樣式；**去掉** reminder groups / action items。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-admin-shell.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。\n\n**props / emits**：`items: Notification[]`、`unreadCount: number`、`loading: boolean`；emits `open(n: Notification)`、`read-all()`、`filter(unreadOnly: boolean)`。「全部 / 未讀」狀態由面板內部持有（不是 prop），切換時 emit `filter` 讓父層重新載入。\n**內容**\n- 頂部：「通知」+ segmented「全部 / 未讀」（切換 emit `filter`）+「全部標為已讀」（`unreadCount === 0` 時 disabled）。\n- 每列：未讀圓點、`title`（粗體）、`body`（最多 2 行）、`formatDateTime(created_at)`（FRONTEND-003）、事件標籤（FRONTEND-005 `NOTIFICATION_EVENT_LABELS`）；點整列 emit `open`。\n- loading 顯示 skeleton；空清單顯示「目前沒有通知」（未讀模式：「沒有未讀通知」）。\n\n**驗收標準**\n- 列內容、空狀態、loading、emit 皆正確。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/layout/NotificationPanel.vue",
       "source_ref": "FE:src/components/layout/NotificationPanel.vue::default",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r4",
       "depends_on": [
         "FRONTEND-003",
@@ -2905,7 +2905,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/student/BindingCodeDialog.vue",
       "source_ref": "FE:src/components/student/GuardianManager.vue::default",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r4",
       "depends_on": [
         "FRONTEND-003",
@@ -3331,11 +3331,11 @@
     {
       "id": "FRONTEND-123",
       "title": "實作 components/attendance/AttendanceSummaryBar.vue：出勤狀態摘要 chip",
-      "description": "建立 `apps/web/src/components/attendance/AttendanceSummaryBar.vue`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-attendance-today.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸、觸控目標 ≥ 44px。稿需呈現：班級篩選與狀態摘要 chip、逐生卡片的五種狀態（預計到班 / 已到班 / 已離班 / 缺席 / 請假）與各狀態可按的按鈕、批次到班選取模式與結果（部分略過）、改判 dialog（需 attendance:amend）、非今天日期的唯讀檢視、非營業日、即時連線中斷提示、只有 attendance:read 時的唯讀樣式、空清單、載入中。\n\n**props / emits**：`summary: {total, expected, present, left, absent, leave}`、`active: AttendanceStatus | null`；emits `update:active`。\n- chip 依序：全部 {total}、預計到班 {expected}、已到班 {present}、已離班 {left}、缺席 {absent}、請假 {leave}；顏色依 ATTENDANCE_STATUS_META（FRONTEND-005）；使用 `StatCard`（FRONTEND-043）的 active 樣式或同等 chip。\n- 點已選中的 chip → emit `null`；點「全部」→ emit `null`。\n- 額外顯示「出席率」= (present + left) / (total − leave)，分母 0 顯示「—」，取整數百分比。\n\n**驗收標準**\n- chip 文字與數字；點選 emit；出席率計算與分母 0。",
+      "description": "建立 `apps/web/src/components/attendance/AttendanceSummaryBar.vue`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-attendance-today.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸、觸控目標 ≥ 44px。稿需呈現：班級篩選與狀態摘要 chip、逐生卡片的五種狀態（預計到班 / 已到班 / 已離班 / 缺席 / 請假）與各狀態可按的按鈕、批次到班選取模式與結果（部分略過）、改判 dialog（需 attendance:amend）、非今天日期的唯讀檢視、非營業日、即時連線中斷提示、只有 attendance:read 時的唯讀樣式、空清單、載入中。\n\n**props / emits**：`summary: {total, expected, present, left, absent, leave}`、`active: AttendanceStatus | null`；選用 prop `loading?: boolean`（預設 false，載入中時 7 張 StatCard 顯示 skeleton）；emits `update:active`。\n- chip 依序：全部 {total}、預計到班 {expected}、已到班 {present}、已離班 {left}、缺席 {absent}、請假 {leave}；顏色依 ATTENDANCE_STATUS_META（FRONTEND-005）；使用 `StatCard`（FRONTEND-043）的 active 樣式或同等 chip。\n- 點已選中的 chip → emit `null`；點「全部」→ emit `null`。\n- 額外顯示「出席率」= (present + left) / (total − leave)，分母 0 顯示「—」，取整數百分比。\n\n**驗收標準**\n- chip 文字與數字；點選 emit；出席率計算與分母 0。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/attendance/AttendanceSummaryBar.vue",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r4",
       "depends_on": [
         "FRONTEND-005",
@@ -3993,11 +3993,11 @@
     {
       "id": "FRONTEND-157",
       "title": "實作 components/homework/ReadyEtaDialog.vue：設定預計可接送時間與給家長的說明",
-      "description": "建立 `apps/web/src/components/homework/ReadyEtaDialog.vue`（domain_spec M6：`ready_eta` 被設定或變更時通知家長 `homework.eta_updated`；家長按「我要來接」時以此自動回覆，M7）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-homework-board.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸、觸控目標 ≥ 44px。稿需呈現：班級 / 日期篩選與整體狀態摘要、逐生卡片（無作業 / 進行中 / 全部完成 / 手動標記完成 / 請假或缺席淡化）、作業項目四種狀態切換、新增單項與整班批次新增 dialog、預計可接送時間與家長說明 dialog（含上次設定者）、非今天日期的限制、即時連線中斷提示、只有 homework:read 時的唯讀樣式、空清單、載入中。\n\n**props / emits**：`modelValue`、`studentName: string`、`progress: Progress`、`loading: boolean`、`error: string | null`；emits `update:modelValue`、`submit(body: {ready_eta: string | null; note: string | null})`。\n- 預計可接送時間：el-time-select（步進 5 分；起始為現在時間無條件進位到 5 分，結束 21:00；`nowHHMM` FRONTEND-003）；快捷按鈕「+15 分」「+30 分」「+60 分」（以現在時間為基準）。\n- 給家長的說明（≤100，placeholder「例如：數學訂正中，預計 17:30 完成」）。\n- 「清除預計時間」：ready_eta 送 null（note 保留）。\n- 顯示「上次由 {eta_updated_by_name} 於 {formatTime(eta_updated_at)} 設定」（無則不顯示）。\n- 底部提示「儲存後會通知家長」。未變更時「儲存」disabled。\n\n**驗收標準**\n- 快捷時間計算；清除送 null；提示與上次設定者；未變更 disabled。",
+      "description": "建立 `apps/web/src/components/homework/ReadyEtaDialog.vue`（domain_spec M6：`ready_eta` 被設定或變更時通知家長 `homework.eta_updated`；家長按「我要來接」時以此自動回覆，M7）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-homework-board.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸、觸控目標 ≥ 44px。稿需呈現：班級 / 日期篩選與整體狀態摘要、逐生卡片（無作業 / 進行中 / 全部完成 / 手動標記完成 / 請假或缺席淡化）、作業項目四種狀態切換、新增單項與整班批次新增 dialog、預計可接送時間與家長說明 dialog（含上次設定者）、非今天日期的限制、即時連線中斷提示、只有 homework:read 時的唯讀樣式、空清單、載入中。\n\n**props / emits**：`modelValue`、`studentName: string`、`progress: Progress`、`loading: boolean`、`error: string | null`；emits `update:modelValue`、`submit(body: {ready_eta: string | null; note: string | null})`。\n- 預計可接送時間：el-time-select（步進 5 分；起始為現在時間無條件進位到 5 分，結束 21:00；`nowHHMM` FRONTEND-003）；快捷按鈕「+15 分」「+30 分」「+60 分」（以現在時間為基準）。\n- 給家長的說明（≤100，placeholder「例如：數學訂正中，預計 17:30 完成」）。\n- 「清除預計時間」：ready_eta 送 null（note 保留）。\n- 顯示「上次由 {eta_updated_by_name} 於 {formatTime(eta_updated_at)} 設定」（無則不顯示）。\n- 快捷鈕的結果（進位後）超過 21:00 時該鈕 disabled。\n- `submit` 的 `note` 為 trim 後內容，空白送 null。`progress` 型別為 Progress 的子集 `{ready_eta, note, eta_updated_at, eta_updated_by_name}`（元件匯出 `ReadyEtaProgress`）。\n- 底部提示「儲存後會通知家長」。未變更時「儲存」disabled。\n\n**驗收標準**\n- 快捷時間計算；清除送 null；提示與上次設定者；未變更 disabled。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/homework/ReadyEtaDialog.vue",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r4",
       "depends_on": [
         "FRONTEND-003",
