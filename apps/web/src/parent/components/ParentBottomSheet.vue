@@ -1,3 +1,11 @@
+<script lang="ts">
+// 跨實例共享：多個 sheet 同時存在時，只有第一個記錄 body 原值、最後一個還原；
+// 堆疊順序決定誰處理 Esc 與焦點鎖（只有最上層）
+let scrollLockCount = 0
+let scrollLockPrev = ''
+const sheetStack: symbol[] = []
+</script>
+
 <script setup lang="ts">
 /**
  * 家長端 bottom sheet：Teleport 到 body，v-model 開關。
@@ -25,12 +33,9 @@ const FOCUSABLE =
 const DISMISS_DISTANCE = 80
 const LOCKED_MAX_OFFSET = 24
 
-// 多個 sheet 同時存在時，只有第一個記錄原值、最後一個還原
-let scrollLockCount = 0
-let scrollLockPrev = ''
-
 const slots = useSlots()
 const titleId = useId()
+const self = Symbol('parent-bottom-sheet')
 const dialogRef = ref<HTMLElement | null>(null)
 const offset = ref(0)
 const dragging = ref(false)
@@ -42,30 +47,49 @@ function requestClose(): void {
   if (props.dismissible) emit('update:modelValue', false)
 }
 
-function onDocKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape') return
-  event.stopPropagation()
-  requestClose()
+function isTop(): boolean {
+  return sheetStack[sheetStack.length - 1] === self
 }
 
-function onKeydown(event: KeyboardEvent): void {
+function focusables(dialog: HTMLElement): HTMLElement[] {
+  return Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE))
+}
+
+function onDocKeydown(event: KeyboardEvent): void {
+  if (!isTop()) return
+  if (event.key === 'Escape') {
+    requestClose()
+    return
+  }
   if (event.key !== 'Tab') return
   const dialog = dialogRef.value
   if (!dialog) return
-  const list = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE))
+  const list = focusables(dialog)
   const first = list[0]
   const last = list[list.length - 1]
   if (!first || !last) {
     event.preventDefault()
+    dialog.focus({ preventScroll: true })
     return
   }
-  if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+  const current = document.activeElement
+  if (!(current instanceof Node) || !dialog.contains(current)) {
+    event.preventDefault()
+    ;(event.shiftKey ? last : first).focus()
+  } else if (event.shiftKey && (current === first || current === dialog)) {
     event.preventDefault()
     last.focus()
-  } else if (!event.shiftKey && document.activeElement === last) {
+  } else if (!event.shiftKey && current === last) {
     event.preventDefault()
     first.focus()
   }
+}
+
+// 焦點因點擊 scrim 或其他方式落到 sheet 外時拉回
+function onDocFocusin(event: FocusEvent): void {
+  const dialog = dialogRef.value
+  if (!isTop() || !dialog || !(event.target instanceof Node) || dialog.contains(event.target)) return
+  ;(focusables(dialog)[0] ?? dialog).focus({ preventScroll: true })
 }
 
 function startDrag(event: PointerEvent): void {
@@ -107,7 +131,9 @@ function activate(): void {
   if (active) return
   active = true
   prevFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  sheetStack.push(self)
   document.addEventListener('keydown', onDocKeydown)
+  document.addEventListener('focusin', onDocFocusin)
   if (scrollLockCount++ === 0) {
     scrollLockPrev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -122,12 +148,14 @@ function activate(): void {
 function deactivate(): void {
   if (!active) return
   active = false
+  sheetStack.splice(sheetStack.indexOf(self), 1)
   document.removeEventListener('keydown', onDocKeydown)
+  document.removeEventListener('focusin', onDocFocusin)
   stopDragListeners()
   offset.value = 0
   dragging.value = false
   if (--scrollLockCount === 0) document.body.style.overflow = scrollLockPrev
-  prevFocus?.focus({ preventScroll: true })
+  if (prevFocus?.isConnected) prevFocus.focus({ preventScroll: true })
   prevFocus = null
 }
 
@@ -164,7 +192,6 @@ onBeforeUnmount(deactivate)
           aria-modal="true"
           :aria-labelledby="titleId"
           tabindex="-1"
-          @keydown="onKeydown"
         >
           <div
             class="sheet__drag"
