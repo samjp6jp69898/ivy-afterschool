@@ -240,6 +240,9 @@ def test_pickup_requests_fk_restrict(backend_conn: Conn) -> None:
     with pg_error(backend_conn, FK_VIOLATION):
         make_pickup_requests(backend_conn, student_id=uuid4())
 
+    with pg_error(backend_conn, FK_VIOLATION):
+        make_pickup_requests(backend_conn, reply_source="staff", replied_at=NOW, replied_by=uuid4())
+
 
 def test_pickup_requests_staff_set_null(backend_conn: Conn) -> None:
     staff = make_staff_users(backend_conn)
