@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 37,
-  "last_updated": "2026-10-04T06:43:43Z",
+  "version": 38,
+  "last_updated": "2026-10-04T06:44:25Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -638,8 +638,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db017_create_parent_binding_codes.py",
       "source_ref": "BE:models/parent_binding.py::GuardianBindingCode",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-016",
         "DB-004"
@@ -715,8 +715,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db019_create_student_leave_attachments.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-018"
       ],
@@ -753,8 +753,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db020_create_student_attendances.py",
       "source_ref": "BE:models/classroom.py::StudentAttendance",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-018",
         "DB-004"
@@ -910,8 +910,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db024_create_pickup_authorizations.py",
       "source_ref": "BE:models/pickup.py::PickupAuthorization",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-023",
         "DB-004"
@@ -1032,8 +1032,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db027_create_exam_subjects.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-026",
         "DB-008"
@@ -1150,8 +1150,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db030_create_notification_outbox.py",
       "source_ref": "BE:models/notification_outbox.py::NotificationOutbox",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-029"
       ],
@@ -1189,8 +1189,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db031_create_notification_preferences.py",
       "source_ref": "BE:models/parent_notification.py::ParentNotificationPreference",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-015"
       ],
@@ -1444,8 +1444,8 @@
       "granularity_unit": "seed",
       "target_path": "apps/api/alembic/versions/db038_seed_system_settings.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-007"
       ],
