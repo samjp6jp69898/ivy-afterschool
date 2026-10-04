@@ -121,3 +121,14 @@ def make_parent_accounts(conn: psycopg.Connection[Any], **overrides: Any) -> dic
     """line_user_id 預設為亂數的合法 LINE userId，同一測試可多次呼叫。"""
     defaults = {"line_user_id": f"U{uuid4().hex}", "display_name": "王媽媽"}
     return insert_row(conn, "public.parent_accounts", **{**defaults, **overrides})
+
+
+def make_notifications(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    defaults = {
+        "recipient_type": "parent",
+        "recipient_id": uuid4(),
+        "event": "homework.done",
+        "title": "作業已完成",
+        "body": "王小明的作業已完成，可以來接送了",
+    }
+    return insert_row(conn, "public.notifications", **{**defaults, **overrides})
