@@ -18,6 +18,7 @@ from app.schemas.reference import (
     NamedItemUpdateIn,
     ReferenceListQuery,
     SchoolCreateIn,
+    SchoolOut,
     SchoolUpdateIn,
 )
 from app.services.reference_data_service import create_item, list_items, update_item
@@ -166,6 +167,7 @@ def test_reference_update_clear_nullable_field(db_session: Session) -> None:
     created = create_item(
         db_session, SPECS["schools"], SchoolCreateIn(name="仁愛國小", short_name="仁愛")
     )
+    assert isinstance(created, SchoolOut)
 
     kept = update_item(db_session, SPECS["schools"], created.id, SchoolUpdateIn(is_active=False))
     cleared = update_item(
@@ -184,6 +186,7 @@ def test_reference_update_closed_day_reason(db_session: Session) -> None:
     created = create_item(
         db_session, SPECS["closed-days"], ClosedDayCreateIn(date=date(2026, 10, 10), reason="國慶")
     )
+    assert isinstance(created, ClosedDayOut)
 
     out = update_item(
         db_session, SPECS["closed-days"], created.id, ClosedDayUpdateIn(reason="國慶日")
