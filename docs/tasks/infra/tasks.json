@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 101,
-  "last_updated": "2026-10-04T06:38:42Z",
+  "version": 102,
+  "last_updated": "2026-10-04T06:42:25Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1041,7 +1041,7 @@
       "granularity_unit": "script",
       "target_path": "apps/web/scripts/check_parent_bundle.mjs",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r5",
       "depends_on": [
         "INFRA-022",
@@ -1066,9 +1066,9 @@
         "notes": "CI 結構測試另加 test_ci_web_build_job_checks_after_build（run_lines('web-build') 中 'vite build' 索引 < 'check_parent_bundle.mjs' 索引），以 `just test scripts/tests/test_ci_workflow.py -k web_build_job` 執行。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-infra",
+        "notes": "通過（對照 description 與 red_cases）。5 條 red_case 都有對應的 vitest（另補 @element-plus、src/components|layouts|stores、src/parent 不誤判、經由循環才到的違規只報一次、manifest 缺 parent entry 時丟錯），`just web-test scripts/check_parent_bundle.spec.ts -t \"parent bundle check\"` 12 passed；`-k web_build_job` 2 passed；test commit 6b25b12 早於 df8439a。eslint、ruff、`vue-tsc -p tsconfig.node.json`、actionlint 都乾淨；實際 vite build 後跑腳本 exit 0。殘留（description 本身不足，不是實作違反規格）：description 規定只比對 manifest chunk 的 src / name，但 Vite 8（rolldown）的 manifest 只有 entry 與 dynamic entry 帶 src，靜態共用 chunk 的 key 是 `_<名稱>-<hash>.js`，name 取自第一個模組的檔名；只被 parent 用到的模組會直接併進 parent entry chunk，而腳本不檢查 entry 自己。已用探針專案實際 build 出反例，腳本都回 exit 0：(1) parent 靜態引入 element-plus 與 src/stores/auth → Element Plus 51KB 被併進名為 `auth` 的共用 chunk；(2) parent 靜態引入後台 lazy 載入的 src/views/LoginView → 變成沒有 src 的 `_LoginView-<hash>.js`；(3) 只有 parent 引入的模組會併進 entry chunk。red_cases 假設的 manifest 形狀（靜態引入的 chunk key 等於 src 路徑）在真實 build 不會出現。建議另開 task，改用模組層級的資料（例如 vite plugin 在 generateBundle 輸出每個 chunk 的 moduleIds，並把 entry chunk 也納入檢查），並用真實 vite build 的 fixture 寫測試。"
       }
     },
     {
@@ -1078,7 +1078,7 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/e2e.yml",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r5",
       "depends_on": [
         "INFRA-022",
@@ -1107,9 +1107,9 @@
         "notes": "另跑：uvx --from actionlint-py actionlint .github/workflows/e2e.yml"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-infra",
+        "notes": "通過。5 條 red_case 都有對應測試（另補 permissions、timeout、test-results 路徑、retention 7 天、最後一步 always() 執行 dev_down.sh --all），`-k e2e_workflow` 6 passed；test commit 71e24ca 早於 2695cde。actionlint 乾淨。已確認 db-reset 不讀 apps/api/.env（先 reset 後產生 .env 不會出錯）、.env.example 有 `APP_SECRET_KEY=` 行讓 sed 能替換、openssl rand -base64 48 輸出單行且不含 `|` 或 `&`、playwright.config 沒有設 webServer（由 dev_up.sh 啟動服務）。沒有用到 secrets、沒有 pull_request_target、權限只有 contents: read。殘留：失敗時只上傳 playwright-report / test-results，沒有上傳 dev_up.sh 的 var/log/*.log，服務啟動失敗時不易除錯，可補進 artifact path。"
       }
     },
     {
@@ -1310,7 +1310,7 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r5",
       "depends_on": [
         "INFRA-022",
@@ -1334,9 +1334,9 @@
         "notes": "另跑：uvx --from actionlint-py actionlint .github/workflows/ci.yml"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-infra",
+        "notes": "通過。3 條 red_case 都有對應測試（另補 buildx + gha cache、load: true、always() 移除容器），`-k docker_build_job` 5 passed；test commit 0d1c6f8 早於 906c3be，實作 commit 把 cache-from 斷言改成前綴比對 type=gha（仍斷言 gha cache，沒有變成恆真）。actionlint 乾淨。本機實測：兩個映像都能建置，`python -c \"import app\"` 成功；web 容器 healthz 2 秒內就緒、`/` 與 `/parent/` 回 200、`/` 有 CSP 標頭。不推送映像（push: false，也沒有 docker push），workflow 權限維持 read-only。偏離 description（用 docker/build-push-action@v6，設 load: true、push: false，每個映像各自的 cache scope，取代 `docker build -t`）是正確做法：要用 type=gha cache 就必須透過 buildx，red_case 也允許 build-push-action，建議把這個做法寫回 description。殘留：映像建置失敗、容器從沒建立時，always() 的 `docker rm -f` 也會失敗，多一個紅色 step（job 本來就已失敗，不影響判定），可加 `|| true`。"
       }
     },
     {
