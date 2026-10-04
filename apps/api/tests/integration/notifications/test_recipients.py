@@ -7,8 +7,21 @@ from sqlalchemy import event
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
-from app.notifications.recipients import Recipient, parent_recipients, parent_recipients_bulk
-from tests.support.factories import make_guardian, make_parent, make_student
+from app.core.permissions import Permission
+from app.notifications.recipients import (
+    Recipient,
+    parent_recipients,
+    parent_recipients_bulk,
+    staff_recipients,
+)
+from tests.support.factories import (
+    make_class,
+    make_class_staff,
+    make_guardian,
+    make_parent,
+    make_staff,
+    make_student,
+)
 
 
 @contextmanager
@@ -88,3 +101,70 @@ def test_parent_recipients_archived_student(db_session: Session) -> None:
 
     assert parent_recipients(db_session, s.id) == []
     assert parent_recipients_bulk(db_session, [s.id, live.id]) == {s.id: [], live.id: []}
+
+
+def _ids(recipients: list[Recipient]) -> set[object]:
+    assert all(r.type == "staff" for r in recipients)
+    return {r.id for r in recipients}
+
+
+def test_staff_recipients_permission(db_session: Session) -> None:
+    pickup = ["pickup:operate"]
+    a = make_staff(db_session, permissions=pickup)
+    b = make_staff(db_session, permissions=[], extra_permissions=pickup)
+    c = make_staff(db_session, permissions=pickup, revoked_permissions=pickup)
+    d = make_staff(db_session, role_code="admin")
+    e = make_staff(db_session, permissions=pickup, is_active=False)
+    no_perm = make_staff(db_session, permissions=["students:read"])
+
+    ids = _ids(staff_recipients(db_session, permission=Permission.PICKUP_OPERATE))
+
+    assert {a.id, b.id, d.id} <= ids
+    assert not {c.id, e.id, no_perm.id} & ids
+
+
+def test_staff_recipients_admin_wildcard_and_revoked_admin(db_session: Session) -> None:
+    admin = make_staff(db_session, role_code="admin")
+    revoked_admin = make_staff(db_session, role_code="admin", revoked_permissions=["leaves:read"])
+
+    ids = _ids(staff_recipients(db_session, permission=Permission.LEAVES_READ))
+
+    assert admin.id in ids
+    assert revoked_admin.id not in ids
+
+
+def test_staff_recipients_class_staff(db_session: Session) -> None:
+    class_a = make_class(db_session)
+    class_b = make_class(db_session)
+    f = make_staff(db_session, permissions=[])
+    other_class = make_staff(db_session, permissions=[])
+    inactive = make_staff(db_session, permissions=[], is_active=False)
+    make_class_staff(db_session, class_a, f, role="assistant")
+    make_class_staff(db_session, class_b, other_class, role="lead")
+    make_class_staff(db_session, class_a, inactive, role="lead")
+
+    ids = _ids(
+        staff_recipients(db_session, permission=Permission.LEAVES_READ, class_ids=[class_a.id])
+    )
+
+    assert f.id in ids
+    assert other_class.id not in ids
+    assert inactive.id not in ids
+    # 沒給 permission 時只看班級
+    only_class = _ids(staff_recipients(db_session, class_ids=[class_a.id]))
+    assert only_class == {f.id}
+
+
+def test_staff_recipients_dedupe_and_empty(db_session: Session) -> None:
+    klass = make_class(db_session)
+    a = make_staff(db_session, permissions=["leaves:read"])
+    make_class_staff(db_session, klass, a, role="lead")
+
+    result = staff_recipients(
+        db_session, permission=Permission.LEAVES_READ, class_ids=[klass.id, klass.id]
+    )
+
+    assert [r.id for r in result].count(a.id) == 1
+    assert [r.id for r in result] == sorted(r.id for r in result)
+    assert staff_recipients(db_session) == []
+    assert staff_recipients(db_session, class_ids=[]) == []
