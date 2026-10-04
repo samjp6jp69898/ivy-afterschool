@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 175,
-  "last_updated": "2026-10-04T16:24:14Z",
+  "version": 176,
+  "last_updated": "2026-10-04T16:24:28Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1673,7 +1673,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/staff_auth.py",
       "source_ref": "BE:api/auth.py::change_password",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-041",
