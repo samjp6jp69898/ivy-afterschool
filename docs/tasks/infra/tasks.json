@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 102,
-  "last_updated": "2026-10-04T06:42:25Z",
+  "version": 103,
+  "last_updated": "2026-10-04T06:43:46Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1037,7 +1037,7 @@
     {
       "id": "INFRA-029",
       "title": "實作家長端 bundle 檢查腳本並新增 CI job web-build",
-      "description": "新增 `apps/web/scripts/check_parent_bundle.mjs`，並在 `.github/workflows/ci.yml` 加入 job `web-build`。\n\n**check_parent_bundle.mjs**：讀 `dist/.vite/manifest.json`（INFRA-005 已開 `build.manifest`），從 `parent/index.html` 這個 entry 出發，沿 `imports`（靜態 import，不含 `dynamicImports`）遞迴收集 chunk。任一 chunk 的 `src` 或 `name` 符合下列任一條件即違規：\n- 來自 `node_modules/element-plus/` 或 `node_modules/@element-plus/`（家長端用自製 M3 元件，不得載入 Element Plus）。\n- 來自 `src/views/`、`src/components/`、`src/layouts/`、`src/stores/`（後台程式碼）。\n違規時印出「家長端 entry 靜態引入了 <chunk>（經由 <路徑鏈>）」並 exit 1；無違規印收集到的 chunk 數並 exit 0。腳本以 `--manifest <path>` 參數覆寫 manifest 位置（測試用）。測試 `apps/web/scripts/check_parent_bundle.spec.ts` 用 vitest 呼叫匯出的 `findViolations(manifest)` 函式；`vitest.config.ts` 的 include 加入 `scripts/**/*.spec.ts`。\n\n**web-build job**：checkout → setup（node，python: false）→ `pnpm exec vite build` → `node scripts/check_parent_bundle.mjs`（working-directory 皆為 `apps/web`）。`timeout-minutes: 10`。\n\n**驗收標準**：每一條對應下列 red_case，且 CI 結構測試確認 web-build job 在 build 之後執行檢查。",
+      "description": "新增 `apps/web/scripts/check_parent_bundle.mjs`，並在 `.github/workflows/ci.yml` 加入 job `web-build`。\n\n**check_parent_bundle.mjs**：讀 `dist/.vite/manifest.json`（INFRA-005 已開 `build.manifest`），從 `parent/index.html` 這個 entry 出發，沿 `imports`（靜態 import，不含 `dynamicImports`）遞迴收集 chunk。任一 chunk 的 `src` 或 `name` 符合下列任一條件即違規：\n- 來自 `node_modules/element-plus/` 或 `node_modules/@element-plus/`（家長端用自製 M3 元件，不得載入 Element Plus）。\n- 來自 `src/views/`、`src/components/`、`src/layouts/`、`src/stores/`（後台程式碼）。\n違規時印出「家長端 entry 靜態引入了 <chunk>（經由 <路徑鏈>）」並 exit 1；無違規印收集到的 chunk 數並 exit 0。manifest 沒有 `parent/index.html` entry 時丟錯並 exit 1（fail-fast，避免 entry 改名後檢查靜默通過）。腳本以 `--manifest <path>` 參數覆寫 manifest 位置（測試用）。`apps/web/tsconfig.node.json` 的 include 納入 `scripts/`，並以 `check_parent_bundle.d.mts` 提供型別，讓 spec 能 import `.mjs` 並進 web-typecheck。測試 `apps/web/scripts/check_parent_bundle.spec.ts` 用 vitest 呼叫匯出的 `findViolations(manifest)` 函式；`vitest.config.ts` 的 include 加入 `scripts/**/*.spec.ts`。\n\n**web-build job**：checkout → setup（node，python: false）→ `pnpm exec vite build` → `node scripts/check_parent_bundle.mjs`（working-directory 皆為 `apps/web`）。`timeout-minutes: 10`。\n\n**驗收標準**：每一條對應下列 red_case，且 CI 結構測試確認 web-build job 在 build 之後執行檢查。",
       "granularity_unit": "script",
       "target_path": "apps/web/scripts/check_parent_bundle.mjs",
       "source_ref": null,
@@ -1048,7 +1048,7 @@
         "INFRA-005"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "只比對 manifest chunk 的 src / name，在 Vite 8（rolldown）的真實 build 上抓不到靜態共用 chunk 與併進 parent entry chunk 的模組；改為模組層級檢查由 INFRA-050 接手。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/scripts/check_parent_bundle.spec.ts",
@@ -1306,7 +1306,7 @@
     {
       "id": "INFRA-036",
       "title": "新增 CI job docker-build：建置兩個映像並做容器煙霧測試",
-      "description": "在 `.github/workflows/ci.yml` 加入 job `docker-build`（`timeout-minutes: 20`），在 PR 階段抓出 Dockerfile 損壞。\n\n步驟：checkout →\n1. `docker build -t afterschool-api apps/api`\n2. `docker run --rm afterschool-api python -c \"import app\"`（確認套件可匯入；不啟動 uvicorn，因為需要 DATABASE_URL）\n3. `docker build -t afterschool-web apps/web`\n4. 以 `-e BACKEND_URL=http://127.0.0.1:9 -p 18080:8080` 背景啟動 web 容器，輪詢 `http://127.0.0.1:18080/healthz` 最多 15 次，再以 curl 確認 `/` 與 `/parent/` 回 200、`/` 回應標頭含 `Content-Security-Policy`。\n5. `if: always()` 移除容器。\n不推送映像（Railway 自己建置）。使用 `docker/setup-buildx-action` 與 GitHub Actions cache（`cache-from: type=gha`）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "在 `.github/workflows/ci.yml` 加入 job `docker-build`（`timeout-minutes: 20`），在 PR 階段抓出 Dockerfile 損壞。\n\n步驟：checkout → `docker/setup-buildx-action` →\n1. 以 `docker/build-push-action@v6` 建置 `apps/api`（tag `afterschool-api`，`load: true`、`push: false`，`cache-from` / `cache-to` 為 `type=gha` 且 scope 為 `api`）\n2. `docker run --rm afterschool-api python -c \"import app\"`（確認套件可匯入；不啟動 uvicorn，因為需要 DATABASE_URL）\n3. 同樣方式建置 `apps/web`（tag `afterschool-web`，cache scope 為 `web`，兩個映像的 cache 不互蓋）\n4. 以 `-e BACKEND_URL=http://127.0.0.1:9 -p 18080:8080` 背景啟動 web 容器，輪詢 `http://127.0.0.1:18080/healthz` 最多 15 次，再以 curl 確認 `/` 與 `/parent/` 回 200、`/` 回應標頭含 `Content-Security-Policy`。\n5. `if: always()` 移除容器。\n不推送映像（Railway 自己建置）。GitHub Actions cache（`type=gha`）只能經由 buildx 使用，所以建置一律走 build-push-action，不用裸 `docker build`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": null,
@@ -1849,6 +1849,77 @@
         "status": "pass",
         "reviewer": "review-r3-infra",
         "notes": "通過。初審已確認：紅燈 92c2d77 先於實作 f52a444；key 恰為 architecture_decisions §4 的 11 項且順序一致、每個 key 上一行為註解、APP_SECRET_KEY=change-me、範本只有本機固定開發值，無真實 secret。打回項（bucket 以子字串比對）於 c8e12bf 修正（純測試修正，.env.example 與 compose.yaml 未動）並複核：改為 local_value_mismatches 逐項完整相等比較，bucket 取 storage.command token 中所有 `-bucket=` 的值並要求 == [R2_BUCKET]，red_case 同步更新。scratchpad 副本突變全部轉紅：R2_BUCKET=afterschool、R2_BUCKET=afterschool-local-x、compose 重複 -bucket=（相同值與不同值）、compose 移除 -bucket=、compose bucket 改為前綴、R2 port、secret 延伸、access key 前綴、MIGRATION port；基準 6 passed，--collect-only 全選到；lint / typecheck 乾淨。殘留（不擋）：apps/api/app/core/config.py、tests/unit/core/test_config.py、scripts/doctor.sh 與 test_doctor.py 仍使用 SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY，分屬 BACKEND-001 與 INFRA-018（皆 in_progress）的改寫範圍；在它們完成之前，從新範本複製出的 apps/api/.env 會缺 Settings 目前要求的 SUPABASE_* key。"
+      }
+    },
+    {
+      "id": "INFRA-050",
+      "title": "家長端 bundle 檢查改為模組層級：vite plugin 輸出 chunk 模組圖，涵蓋 entry chunk 與共用 chunk",
+      "description": "取代 INFRA-029 以 manifest chunk `src` / `name` 判斷的作法。Vite 8（rolldown）的 manifest 只有 entry 與 dynamic entry 帶 `src`，靜態共用 chunk 的 key 是 `_<名稱>-<hash>.js`、`name` 取自第一個模組檔名，只被 parent 用到的模組會直接併進 parent entry chunk；因此必須看每個 chunk 實際包含的模組。\n\n**vite plugin**：新增 `apps/web/build/parentModuleGraph.ts`，匯出 `parentModuleGraph()` plugin，在 `vite.config.ts` 掛上。於 `generateBundle` 對每個 chunk 收集 `{ fileName, isEntry, facadeModuleId, moduleIds, imports, dynamicImports }`，`facadeModuleId` 與 `moduleIds` 轉成相對於 Vite `root` 的 POSIX 路徑（`\\0` 開頭的虛擬模組略過），以 `emitFile` 輸出 `.vite/parent-module-graph.json`（與 manifest 同層）。\n\n**check_parent_bundle.mjs 改寫**：預設讀 `dist/.vite/parent-module-graph.json`（`--graph <path>` 覆寫）。從 `facadeModuleId === 'parent/index.html'` 的 entry chunk 出發（**entry chunk 本身也要檢查**），沿 `imports`（不含 `dynamicImports`）遞迴收集 chunk，逐一檢查其 `moduleIds`。任一模組路徑符合下列條件即違規：\n- 路徑含 `/node_modules/element-plus/` 或 `/node_modules/@element-plus/`（含 pnpm 的 `node_modules/.pnpm/<pkg>@<ver>/node_modules/element-plus/` 形狀），或以 `node_modules/element-plus/`、`node_modules/@element-plus/` 開頭。\n- 以 `src/views/`、`src/components/`、`src/layouts/`、`src/stores/` 開頭（後台程式碼；`src/parent/` 不算）。\n違規時印「家長端 entry 靜態引入了 <模組路徑>（位於 chunk <fileName>，經由 <chunk 鏈>）」並 exit 1；同一模組只報一次。graph 檔不存在或找不到 parent entry chunk 時丟錯並 exit 1。無違規印收集到的 chunk 數與模組數並 exit 0。匯出 `findViolations(graph)` 供測試使用。INFRA-029 的 manifest 版邏輯與其手寫 manifest 測試一併移除，`check_parent_bundle.d.mts` 同步更新型別。\n\n**測試用真實 build**：`apps/web/scripts/fixtures/parent-bundle/<case>/` 放最小 fixture 專案（`index.html` 後台 entry、`parent/index.html` 家長 entry、`src/...`），spec 以 Vite JS API `build()`（`root` 指向 fixture、掛 `parentModuleGraph()`、`build.outDir` 指向暫存目錄、`logLevel: 'silent'`）實際建置後讀 graph 呼叫 `findViolations`。不得再以手寫 graph / manifest 作為違規案例的唯一證據。\n\n**web-build job**：維持 INFRA-029 的步驟順序（`vite build` → `node scripts/check_parent_bundle.mjs`），不需改 ci.yml 結構；CI 結構測試照舊。\n\n**驗收標準**：每一條對應下列 red_case；另在本機對 `apps/web` 實際 `vite build` 後跑腳本 exit 0，回報收集到的 chunk / 模組數。",
+      "granularity_unit": "script",
+      "target_path": "apps/web/scripts/check_parent_bundle.mjs",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "INFRA-029"
+      ],
+      "suggested_model": "opus-5",
+      "risk_notes": "fixture build 會實際打包 element-plus，注意測試時間（每個 case 數秒）；必要時 fixture 共用一次 build 的多個 entry。Vite 升版時 generateBundle 的 chunk 欄位（moduleIds、imports）若改名，plugin 要同步，測試會轉紅。",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/web/scripts/check_parent_bundle.spec.ts",
+        "markers": [
+          "vitest"
+        ],
+        "red_cases": [
+          "parent module graph clean build passes：fixture 中 parent 只靜態引入 src/parent/ 與 vue → findViolations 回 []",
+          "parent module graph flags element-plus in shared chunk：parent 與後台都靜態引入 src/stores/auth.ts，parent 另靜態引入 element-plus → 實際 build 後回至少一筆，模組路徑含 node_modules/element-plus/，不論共用 chunk 叫什麼名字",
+          "parent module graph flags admin view as shared chunk：parent 靜態引入後台以 lazy route 載入的 src/views/LoginView.vue → 回一筆，模組路徑為 src/views/LoginView.vue",
+          "parent module graph flags module inlined into entry chunk：只有 parent 靜態引入 src/stores/only.ts → 該模組併進 parent entry chunk，仍回一筆",
+          "parent module graph ignores dynamic imports：parent 只以 import() 動態引入 element-plus → 回 []",
+          "parent module graph missing parent entry fails：graph 沒有 facadeModuleId 為 parent/index.html 的 chunk → findViolations 丟錯"
+        ],
+        "run": "just web-test scripts/check_parent_bundle.spec.ts -t \"parent module graph\"",
+        "notes": "lint / typecheck 只跑動到的檔：just web-lint 指定 build/parentModuleGraph.ts、scripts/check_parent_bundle.mjs、spec 與 vite.config.ts。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "INFRA-051",
+      "title": "CI 收尾小修：e2e 失敗上傳服務日誌、docker-build 移除容器容錯",
+      "description": "兩項 review-r5-infra 留下的除錯性改善：\n1. `.github/workflows/e2e.yml`：失敗時上傳的 artifact path 加入 `scripts/dev_up.sh` 寫出的服務日誌（`var/log/*.log`），讓服務啟動失敗時可以除錯。\n2. `.github/workflows/ci.yml` 的 `docker-build` job：`if: always()` 的移除容器 step 改為 `docker rm -f <name> || true`，映像建置失敗、容器從未建立時不多出一個紅色 step。\n\n**驗收標準**：每一條對應下列 red_case；actionlint 乾淨。",
+      "granularity_unit": "config",
+      "target_path": ".github/workflows/e2e.yml",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "INFRA-030",
+        "INFRA-036"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "scripts/tests/test_ci_workflow.py",
+        "markers": [
+          "unit"
+        ],
+        "red_cases": [
+          "test_e2e_workflow_uploads_service_logs_on_failure：e2e.yml 中 if 含 failure() 的 upload-artifact step，with.path 含 'var/log/'",
+          "test_ci_docker_build_job_cleanup_tolerates_missing_container：docker-build job 中 if 含 always() 的 step，run 含 'docker rm -f' 且含 '|| true'"
+        ],
+        "run": "just test scripts/tests/test_ci_workflow.py -k \"service_logs or cleanup_tolerates\"",
+        "notes": "另跑：uvx --from actionlint-py actionlint .github/workflows/ci.yml .github/workflows/e2e.yml"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
       }
     }
   ]
