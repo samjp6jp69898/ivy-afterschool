@@ -5,7 +5,7 @@
 """
 
 import secrets
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -216,3 +216,14 @@ def make_exams(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any
     if "class_id" not in overrides:
         defaults["grade_level"] = 3
     return insert_row(conn, "public.exams", **{**defaults, **overrides})
+
+
+def make_parent_binding_codes(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    """未指定 guardian_id / created_by 時各另建一筆；code_hash 預設為亂數 64 碼 hex。"""
+    defaults = {
+        "guardian_id": overrides.get("guardian_id") or make_guardians(conn)["id"],
+        "code_hash": secrets.token_hex(32),
+        "expires_at": datetime.now(UTC) + timedelta(days=7),
+        "created_by": overrides.get("created_by") or make_staff_users(conn)["id"],
+    }
+    return insert_row(conn, "public.parent_binding_codes", **{**defaults, **overrides})
