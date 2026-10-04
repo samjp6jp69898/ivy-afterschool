@@ -6,6 +6,7 @@
 
 from datetime import date
 from typing import Any
+from uuid import uuid4
 
 import psycopg
 from psycopg import sql
@@ -68,3 +69,19 @@ def make_closed_days(conn: psycopg.Connection[Any], **overrides: Any) -> dict[st
 def make_classes(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
     defaults = {"name": "低年級 A 班", "grade_levels": [1, 2], "academic_year": 115}
     return insert_row(conn, "public.classes", **{**defaults, **overrides})
+
+
+# 合法格式的 argon2id 編碼字串（假值，不對應任何密碼）
+ARGON2ID_HASH = "$argon2id$v=19$m=65536,t=3,p=4$c2FsdHNhbHQxMjM0$aGFzaGhhc2hoYXNoaGFzaGhhc2g"
+
+
+def make_staff_users(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    """未指定 role_id 時另建一個專用角色；username 預設帶亂數，同一測試可多次呼叫。"""
+    if "role_id" not in overrides:
+        overrides["role_id"] = make_roles(conn, code=f"role_{uuid4().hex[:12]}")["id"]
+    defaults = {
+        "username": f"teacher.{uuid4().hex[:8]}",
+        "password_hash": ARGON2ID_HASH,
+        "display_name": "林老師",
+    }
+    return insert_row(conn, "public.staff_users", **{**defaults, **overrides})
