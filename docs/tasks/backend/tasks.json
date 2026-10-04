@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 138,
-  "last_updated": "2026-10-04T11:42:58Z",
+  "version": 139,
+  "last_updated": "2026-10-04T11:44:06Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14792,11 +14792,11 @@
     {
       "id": "BACKEND-541",
       "title": "get_setting 回傳值與 registry 預設值不可被就地修改污染（NotificationToggles 等 RootModel）",
-      "description": "補強 BACKEND-108 `get_setting`（改寫該 task 產物，BACKEND-108 維持 done）。`NotificationToggles` 是 `RootModel[dict[str, bool]]`，`frozen=True` 擋不住 `get_setting(session, NOTIFICATION_TOGGLES).root['pickup.created'] = False` 這類就地修改；get_setting 回傳的是快取中的同一個物件（或 registry 的共用預設值物件），修改後會污染快取與 registry 預設，直到 TTL 或程序重啟。\n\n**要求**：get_setting 回傳給呼叫端的值與快取中保存的值、registry 的 `default` 互不共用可變狀態。做法二擇一並寫進本 description：(a) 回傳前 `model_copy(deep=True)`；(b) RootModel 內層改用不可變型別（例如 `Mapping` 以 `MappingProxyType` 包裝），就地修改直接拋 TypeError。無論哪種，DB 無列而以 registry default 回傳時也要遵守。\n\n**驗收標準**：每一條對應下列 red_case；BACKEND-108 既有測試仍全綠。",
+      "description": "補強 BACKEND-108 `get_setting`（改寫該 task 產物，BACKEND-108 維持 done）。`NotificationToggles` 是 `RootModel[dict[str, bool]]`，`frozen=True` 擋不住 `get_setting(session, NOTIFICATION_TOGGLES).root['pickup.created'] = False` 這類就地修改；get_setting 回傳的是快取中的同一個物件（或 registry 的共用預設值物件），修改後會污染快取與 registry 預設，直到 TTL 或程序重啟。\n\n**要求**：get_setting 回傳給呼叫端的值與快取中保存的值、registry 的 `default` 互不共用可變狀態。做法：get_setting 一律回傳 `model_copy(deep=True)`——命中快取與查詢 DB（含 DB 無列 / 壞資料而回 registry default）兩條路徑都是；快取保存原物件，呼叫端拿到的是自己的副本，就地修改只影響副本。不改 registry 的 schema（內層型別維持 dict，序列化與 json_schema 不受影響）。\n\n**驗收標準**：每一條對應下列 red_case；BACKEND-108 既有測試仍全綠。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/settings_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-108"
@@ -14810,8 +14810,8 @@
           "integration"
         ],
         "red_cases": [
-          "test_get_setting_mutation_does_not_pollute_cache：DB 有 notification.toggles 列（全 True）→ v1 = get_setting(...)；嘗試把 v1 內層某事件改成 False（若採不可變方案則斷言拋 TypeError 並略過修改）→ v2 = get_setting(...)（命中快取）該事件仍為 True",
-          "test_get_setting_mutation_does_not_pollute_registry_default：DB 無 notification.toggles 列 → 回傳值就地修改（或斷言拋 TypeError）後，REGISTRY['notification.toggles'].default 內層值不變，再次 get_setting 仍為全 True"
+          "test_get_setting_mutation_does_not_pollute_cache：DB 有 notification.toggles 列（全 True）→ v1 = get_setting(...)（查詢路徑）把 v1.root['pickup.requested'] 改 False → v2 = get_setting(...)（命中快取）該事件仍為 True；再把 v2.root['exam.published'] 改 False → v3 = get_setting(...) 全部仍為 True",
+          "test_get_setting_mutation_does_not_pollute_registry_default：DB 無 notification.toggles 列 → 回傳值 == registry default，就地把 root['homework.done'] 改 False 後，REGISTRY['notification.toggles'].default.root['homework.done'] 仍為 True；invalidate 後再次 get_setting 仍為全 True"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_settings_service.py -k \"test_get_setting_\"",
         "notes": "tdd.run 沿用 BACKEND-108 的指令；測試名稱以 test_get_setting_ 開頭，確認 -k 選得到。"
