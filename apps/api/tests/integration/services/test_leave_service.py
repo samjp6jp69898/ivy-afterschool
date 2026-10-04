@@ -31,7 +31,7 @@ def _mine(rows: list[LeaveOut], ids: set[UUID]) -> list[LeaveOut]:
 
 
 def _list(db: Session, ids: set[UUID], **filters: object) -> list[LeaveOut]:
-    page = list_leaves(db, LeaveListQuery(**filters), _PAGE)  # type: ignore[arg-type]
+    page = list_leaves(db, LeaveListQuery(**filters), _PAGE)
     return _mine(page.items, ids)
 
 
