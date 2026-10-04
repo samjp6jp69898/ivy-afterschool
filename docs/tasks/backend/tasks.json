@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 152,
-  "last_updated": "2026-10-04T14:56:16Z",
+  "version": 153,
+  "last_updated": "2026-10-04T14:59:34Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2590,7 +2590,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/roles.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
