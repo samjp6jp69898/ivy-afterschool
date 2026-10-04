@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 126,
-  "last_updated": "2026-10-04T14:59:23Z",
+  "version": 127,
+  "last_updated": "2026-10-04T14:59:52Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1455,7 +1455,7 @@
       "granularity_unit": "doc",
       "target_path": "docs/deployment.md",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r6b",
       "depends_on": [
         "INFRA-049",
@@ -1465,7 +1465,7 @@
         "BACKEND-535"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "打回（description 仍有被 shell 吞掉的內容）：§2 api 一項寫成「web 的  reference 讀不到」，缺少 `${{api.PORT}}`；§6 寫成「api 第一次部署完成後以  進入執行中的 api 容器（ 是本機 subshell…」，缺少 `railway ssh --service api` 與 `railway shell`。description 是唯一權威，§6 正是打回項「create-admin 改用 railway ssh」要同步的位置，目前讀不出該用哪個指令。修正：以 Python json.load → 改 → json.dump 寫回這三處（不要經過 shell 字串），寫入後以 `'railway ssh --service api' in description`、`'railway shell' in description`、`description.count('${{api.PORT}}') >= 2` 自檢。\n目前仍成立的風險（docs/deployment.md §11 已列為待驗證）：BACKEND-021 / 048 / 065 尚未實作，完成前 api healthcheck、smoke 與建立初始管理員都會失敗；api 只監聽 IPv6，與 Railway private DNS 雙棧解析的處理方式屬 INFRA-031 open_design_questions (3)。",
+      "risk_notes": "BACKEND-021 / 048 / 065 尚未實作，完成前 api healthcheck、smoke 與建立初始管理員都會失敗；api 只監聽 IPv6，與 Railway private DNS 雙棧解析的處理方式屬 INFRA-031 open_design_questions (3)（docs/deployment.md §11 已列為待驗證）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "scripts/tests/test_deployment_doc.py",
@@ -1492,9 +1492,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r6-infra",
-        "notes": "打回 1 項：description §2 與 §6 仍有被吞掉的反引號內容（見 risk_notes）。docs/deployment.md 本身已修正前次 3 項：§2 api 的 PORT 改為必填 `PORT=8080`，並說明 `${{api.PORT}}` 的限制；§6 改用 `railway ssh --service api`，並註明不要用 `railway shell`；§11 btree_gist 改查 extnamespace，並寫明 DB-018 寫死 extensions.gist_uuid_ops；§3 編號已修正，§11 補上 BACKEND-021 / 048 / 065 與 IPv6 雙棧待決。新增 red_case 兩條（api_port_matches_dockerfile、btree_gist_check），references_commands 加 'railway ssh'；dockerfile_port 解析 apps/api/Dockerfile 的 `PORT=8080`（ENV 續行），doc_api_port 只取環境變數章節，兩者都有合成輸入自檢。測試 commit 7a5c0d7、2aae197 早於文件 70594bf；取 2aae197 的樹實跑，新增 / 修改的 3 條 failed、其餘 11 條 passed，確認紅燈；tdd.run 實跑 14 passed，--collect-only 帶 / 不帶 -k deployment_doc 同為 14 條；just typecheck、just lint 測試檔皆 exit 0。"
+        "notes": "通過。12 + 2 條 red_case 逐條有對應測試；tdd.run 實跑 14 passed，--collect-only 帶 / 不帶 -k deployment_doc 同為 14 條；測試 commit（1c462f0；7a5c0d7、2aae197）分別早於文件 commit（51eee82；70594bf），兩次都取測試 commit 的樹實跑，確認紅燈；just typecheck、just lint 測試檔皆 exit 0；文件無歷史敘述。內容對照實際檔案：api 環境變數表與 apps/api/.env.example 的 11 個 key 一致，PORT 必填 `PORT=8080`，與 apps/api/Dockerfile 的 ENV PORT 相同，讓 web 的 `${{api.PORT}}` 能解析（Railway 注入的 PORT 只在執行期存在）；DATABASE_URL 用 postgresql://，config.py、migrate.py、alembic env.py 三處都接受，且 `${{Postgres.PGHOST/PGPORT/PGDATABASE}}` 與 `${{Postgres.DATABASE_URL}}` 同目標，通過 migrate 的檢查；兩份 railway.json 的 preDeployCommand、healthcheckPath、numReplicas 與文件一致；Config File 絕對路徑依 Railway monorepo 文件；create-admin 以 `railway ssh --service api` 進入容器執行（`railway shell` 是本機 subshell）；btree_gist 驗證項查 extnamespace，與 db018 寫死 extensions.gist_uuid_ops 一致；settings_registry 的 line.liff / line.messaging 欄位與 §5 一致；architecture_decisions §11 的四項、Railway 雙棧 DNS 與 BACKEND-021 / 048 / 065 未實作都列在 §11 待驗證；description §2、§6 與文件一致，沒有缺漏的內容。殘留：BACKEND-021 / 048 / 065 未實作、IPv6 雙棧待 INFRA-031 決定（見 risk_notes）。"
       }
     },
     {
