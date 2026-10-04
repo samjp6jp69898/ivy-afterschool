@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+
+<meta name="preview-status" content="draft">
+<meta name="preview-tasks" content="FRONTEND-067,FRONTEND-068,FRONTEND-069,FRONTEND-070,FRONTEND-071">
+<meta name="preview-route" content="/settings/roles">
+<meta name="preview-updated" content="2026-10-04">
+
+<title>設計稿：角色權限</title>
+
+<!-- 版號對齊 apps/web/pnpm-lock.yaml 的實際安裝版本 -->
+<link rel="stylesheet" href="https://unpkg.com/element-plus@2.14.7/dist/index.css">
+<script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/locale/zh-tw.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue@2.3.2/dist/index.iife.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+#app { display: flex; flex-direction: column; height: 100%; }
+body { font-family: var(--el-font-family); background: var(--el-fill-color); color: var(--el-text-color-primary); }
+
+.preview-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 6px 16px; font-size: 12px;
+  color: var(--el-color-info-dark-2);
+  background: var(--el-color-info-light-9);
+  border-bottom: 1px dashed var(--el-border-color);
+}
+.preview-bar__spacer { flex: 1; }
+.preview-bar code { font-size: 12px; }
+.text-secondary { color: var(--el-text-color-secondary); font-size: 13px; }
+.el-button > span > .el-icon { margin-right: 4px; }
+.stage { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+.control-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; font-size: 12px; color: var(--el-text-color-secondary); background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-lighter); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* ==================== ADMIN SHELL CSS START（各頁稿逐字複製這一段） ==================== */
+/* 裝置框：只存在於設計稿，模擬桌機 / 平板 1024×768 / 手機 390×844 */
+.device-frame { position: relative; margin: 0 auto; overflow: hidden; background: var(--el-bg-color-page); border: 1px solid var(--el-border-color); border-radius: 10px; box-shadow: var(--el-box-shadow-light); }
+.device-frame.is-desktop { width: 1200px; height: 760px; }
+.device-frame.is-tablet { width: 1024px; height: 768px; }
+.device-frame.is-mobile { width: 390px; height: 844px; border-radius: 24px; }
+
+.shell { display: flex; height: 100%; }
+.shell__aside { display: flex; flex-direction: column; flex-shrink: 0; width: 220px; background: var(--el-bg-color); border-right: 1px solid var(--el-border-color-light); transition: width 0.2s ease; }
+.shell__aside.is-collapsed { width: 64px; }
+.shell__brand { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 22px; flex-shrink: 0; white-space: nowrap; overflow: hidden; font-weight: 600; color: var(--el-text-color-primary); border-bottom: 1px solid var(--el-border-color-lighter); }
+.shell__brand .el-icon { font-size: 20px; color: var(--el-color-primary); flex-shrink: 0; }
+.shell__menu { flex: 1; min-height: 0; overflow: hidden auto; }
+.shell__menu .el-menu { border-right: none; }
+.shell__menu .el-menu-item-group__title { padding-top: 14px; font-size: 12px; }
+.shell__menu .el-menu--collapse .el-menu-item-group__title { height: 1px; padding: 0; margin: 8px 12px; background: var(--el-border-color-lighter); overflow: hidden; }
+.shell__menu .el-menu-item { height: 44px; line-height: 44px; }
+.shell__empty { padding: 24px 16px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.shell__collapse { flex-shrink: 0; height: 44px; border-top: 1px solid var(--el-border-color-lighter); display: flex; align-items: center; justify-content: center; }
+.shell__body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.shell__header { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 12px 0 8px; flex-shrink: 0; background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-light); }
+.shell__toggle { width: 44px; height: 44px; }
+.shell__title { margin: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shell__spacer { flex: 1; }
+.ws-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-info-light-3); margin: 0 6px; }
+.ws-dot.is-open { background: var(--el-color-success); }
+.ws-dot.is-reconnecting { background: var(--el-color-warning); }
+.shell__bell { width: 44px; height: 44px; font-size: 18px; }
+.shell__bell .el-badge__content { top: 10px; right: 12px; }
+.shell__user { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 8px; cursor: pointer; border-radius: 6px; color: var(--el-text-color-regular); font-size: 14px; }
+.shell__user:hover { background: var(--el-fill-color-light); }
+.shell__banner { flex-shrink: 0; border-radius: 0; }
+.shell__main { flex: 1; min-height: 0; overflow: auto; padding: 20px; }
+.device-frame.is-tablet .shell__main { padding: 16px; }
+.device-frame.is-mobile .shell__main { padding: 12px; }
+/* 手機：側欄改抽屜（實作用 el-drawer，稿裡在裝置框內模擬） */
+.shell__scrim { position: absolute; inset: 0; z-index: 20; background: var(--el-overlay-color-lighter); }
+.shell__drawer { position: absolute; top: 0; bottom: 0; left: 0; z-index: 21; width: 240px; display: flex; flex-direction: column; background: var(--el-bg-color); box-shadow: var(--el-box-shadow-dark); }
+
+/* 通知面板（FRONTEND-036） */
+.notif { width: 360px; margin: -12px; }
+.notif__head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 10px 16px; border-bottom: 1px solid var(--el-border-color-lighter); }
+.notif__title { font-size: 15px; font-weight: 600; }
+.notif__list { max-height: 420px; overflow: auto; }
+.notif__row { position: relative; display: block; width: 100%; padding: 12px 16px 12px 28px; text-align: left; cursor: pointer; border: none; border-bottom: 1px solid var(--el-border-color-extra-light); background: var(--el-bg-color); font-family: inherit; color: inherit; }
+.notif__row:hover, .notif__row:focus-visible { background: var(--el-fill-color-light); outline: none; }
+.notif__row.is-unread { background: var(--el-color-primary-light-9); }
+.notif__row.is-unread:hover { background: var(--el-color-primary-light-8); }
+.notif__dot { position: absolute; left: 12px; top: 18px; width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-primary); }
+.notif__row-title { font-size: 14px; font-weight: 600; color: var(--el-text-color-primary); }
+.notif__row-body { margin-top: 2px; font-size: 13px; line-height: 1.5; color: var(--el-text-color-regular); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+.notif__row-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--el-text-color-secondary); }
+.notif__empty { padding: 40px 16px; text-align: center; font-size: 13px; color: var(--el-text-color-secondary); }
+.notif__skeleton { padding: 12px 16px; }
+/* ==================== ADMIN SHELL CSS END ==================== */
+
+/* ==== 以下逐字複製自 component-common.html（已核可） ==== */
+/* ---------- PageHeader（FRONTEND-039） ---------- */
+.page-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+.page-header__body { flex: 1; min-width: 0; }
+.page-header__title { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; color: var(--el-text-color-primary); }
+.page-header__subtitle { margin: 4px 0 0; font-size: 13px; color: var(--el-text-color-secondary); }
+.page-header__extra { margin-top: 8px; }
+.page-header__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+.page-header__actions .el-button + .el-button { margin-left: 0; }
+/* 實作用 @media (max-width: 767.98px)；稿裡用 .is-narrow 在 375px 框內示意 */
+.is-narrow .page-header { flex-wrap: wrap; }
+.is-narrow .page-header__body { flex-basis: 100%; }
+.is-narrow .page-header__actions { width: 100%; }
+
+/* ---------- AdminListToolbar（FRONTEND-041） ---------- */
+.list-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.list-toolbar__search { width: 240px; }
+.list-toolbar__filter { display: flex; align-items: center; gap: 6px; }
+.list-toolbar__filter-label { font-size: 13px; color: var(--el-text-color-secondary); white-space: nowrap; }
+.list-toolbar__spacer { flex: 1 1 auto; }
+.list-toolbar__count { font-size: 13px; color: var(--el-text-color-secondary); white-space: nowrap; }
+.list-toolbar__actions { display: flex; gap: 8px; }
+.list-toolbar__actions .el-button + .el-button { margin-left: 0; }
+.is-narrow .list-toolbar__search { width: 100%; }
+.is-narrow .list-toolbar__filter { flex: 1 1 calc(50% - 6px); }
+.is-narrow .list-toolbar__filter .el-select { flex: 1; }
+
+/* ---------- EmptyState（FRONTEND-042） ---------- */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 16px; }
+.empty-state__icon { font-size: 48px; color: var(--el-text-color-placeholder); margin-bottom: 16px; }
+.empty-state__title { margin: 0 0 6px; font-size: 16px; font-weight: 500; color: var(--el-text-color-regular); }
+.empty-state__desc { margin: 0; max-width: 360px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.empty-state__action { margin-top: 16px; display: flex; gap: 8px; }
+.empty-state.is-error .empty-state__icon { color: var(--el-color-danger); }
+.empty-state.is-inline { padding: 16px 8px; }
+.empty-state.is-inline .empty-state__title { font-size: 14px; margin-bottom: 2px; }
+.empty-state.is-inline .empty-state__action { margin-top: 8px; }
+
+/* ==== 以下逐字複製自 component-common-extra.html（已核可） ==== */
+/* ---------- FormDialog（FRONTEND-040） ---------- */
+.form-dialog__footer { display: flex; justify-content: flex-end; gap: 8px; }
+.form-dialog__footer .el-button + .el-button { margin-left: 0; }
+
+/* ==================== 角色權限（FRONTEND-067~071） ==================== */
+.roles-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; align-items: start; }
+.panel { background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter); border-radius: 8px; }
+.roles-layout__list { padding: 12px; position: sticky; top: 0; }
+.roles-layout__list-title { margin: 0 0 10px 2px; font-size: 13px; color: var(--el-text-color-secondary); }
+.last-request { font-size: 12px; color: var(--el-text-color-secondary); }
+
+/* RoleCardsGrid（FRONTEND-067）：自動欄數，左欄 280px 時一欄、員工表單裡多欄 */
+.role-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.role-card {
+  display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; min-height: 76px; text-align: left; cursor: pointer;
+  border: 1px solid var(--el-border-color-light); border-radius: 8px; background: var(--el-bg-color);
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.role-card:hover { border-color: var(--el-color-primary-light-5); }
+.role-card:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+.role-card.is-selected { border-color: var(--el-color-primary); background: var(--el-color-primary-light-9); box-shadow: inset 0 0 0 1px var(--el-color-primary); }
+.role-card.is-disabled { cursor: not-allowed; opacity: 0.6; }
+.role-card.is-disabled:hover { border-color: var(--el-border-color-light); }
+.role-card__top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.role-card__name { font-size: 14px; font-weight: 600; color: var(--el-text-color-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.role-card__code { font-size: 12px; color: var(--el-text-color-secondary); }
+.role-card__meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--el-text-color-regular); }
+.role-card__dot { color: var(--el-text-color-placeholder); }
+@media (prefers-reduced-motion: reduce) { .role-card { transition: none; } }
+
+/* RoleDetailPanel（FRONTEND-069） */
+.role-detail__head { display: flex; align-items: flex-start; gap: 12px; padding: 16px 20px 12px; border-bottom: 1px solid var(--el-border-color-extra-light); }
+.role-detail__titles { flex: 1; min-width: 0; }
+.role-detail__name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; font-size: 18px; line-height: 26px; font-weight: 600; }
+.role-detail__sub { margin-top: 2px; font-size: 12px; color: var(--el-text-color-secondary); }
+.role-detail__readonly { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; line-height: 26px; color: var(--el-text-color-secondary); }
+.role-detail__body { padding: 16px 20px 4px; }
+.role-detail__body .el-form-item { margin-bottom: 18px; }
+.role-detail__code { font-size: 14px; color: var(--el-text-color-regular); }
+.role-detail__foot { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--el-border-color-extra-light); }
+.role-detail__hint { flex: 1; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--el-text-color-secondary); }
+.role-detail__foot .el-button + .el-button { margin-left: 0; }
+.form-hint { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); }
+
+/* PermissionPicker（FRONTEND-068） */
+.perm-picker { width: 100%; }
+.perm-picker__toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.perm-picker__search { width: 240px; }
+.perm-picker__count { font-size: 13px; color: var(--el-text-color-secondary); }
+.perm-group { border: 1px solid var(--el-border-color-lighter); border-radius: 6px; }
+.perm-group + .perm-group { margin-top: 8px; }
+.perm-group__head { display: flex; align-items: center; gap: 4px; padding: 4px 12px 4px 4px; background: var(--el-fill-color-lighter); border-radius: 6px; }
+.perm-group.is-open .perm-group__head { border-bottom: 1px solid var(--el-border-color-lighter); border-radius: 6px 6px 0 0; }
+.perm-group__toggle { width: 32px; height: 32px; padding: 0; }
+.perm-group__head .el-checkbox { font-weight: 600; }
+.perm-group__count { margin-left: auto; font-size: 12px; color: var(--el-text-color-secondary); font-variant-numeric: tabular-nums; }
+.perm-group__body { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 2px 16px; padding: 8px 12px 8px 40px; }
+.perm-item { display: flex; align-items: flex-start; min-height: 40px; }
+.perm-item .el-checkbox { height: auto; align-items: flex-start; white-space: normal; }
+.perm-item .el-checkbox__input { margin-top: 3px; }
+.perm-item__text { display: flex; flex-direction: column; line-height: 1.4; }
+.perm-item__label { font-size: 14px; color: var(--el-text-color-regular); }
+.perm-item__code { font-size: 12px; color: var(--el-text-color-secondary); }
+.perm-item__base { margin-left: 4px; }
+.el-checkbox.is-disabled .perm-item__label { color: var(--el-text-color-placeholder); }
+</style>
+</head>
+
+<body>
+<div id="app">
+  <div class="preview-bar">
+    <el-tag :type="meta.status === 'approved' ? 'success' : 'warning'" size="small" effect="dark" disable-transitions>
+      {{ meta.status === 'approved' ? '已核可' : '待核可' }}
+    </el-tag>
+    <span>{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span>以身分檢視</span>
+    <el-select v-model="viewAs" size="small" style="width: 230px">
+      <el-option v-for="(r, key) in roles" :key="key" :label="r.label" :value="key"></el-option>
+    </el-select>
+    <span>裝置</span>
+    <el-radio-group v-model="device" size="small">
+      <el-radio-button value="desktop">桌機 1200</el-radio-button>
+      <el-radio-button value="tablet">平板 1024</el-radio-button>
+    </el-radio-group>
+    <span class="preview-bar__spacer"></span>
+    <span>更新 {{ meta.updated }}</span>
+    <el-button size="small" text type="primary" @click="notesOpen = true">
+      設計說明 / 待裁定（{{ openQuestions.length }}）
+    </el-button>
+  </div>
+  <div class="control-bar">
+    <span>稿件控制：</span>
+    <span>頁面</span>
+    <el-radio-group v-model="pageState" size="small">
+      <el-radio-button value="data">有資料</el-radio-button>
+      <el-radio-button value="loading">載入中</el-radio-button>
+      <el-radio-button value="error">載入失敗</el-radio-button>
+    </el-radio-group>
+    <span>送出時</span>
+    <el-select v-model="simError" size="small" style="width: 260px">
+      <el-option label="成功" value="none"></el-option>
+      <el-option label="儲存：403 cannot_grant_permissions" value="cannot_grant_permissions"></el-option>
+      <el-option label="儲存：409 last_role_manager" value="last_role_manager"></el-option>
+      <el-option label="刪除：409 role_in_use（清單過期）" value="role_in_use"></el-option>
+    </el-select>
+    <el-button size="small" @click="gridDemoOpen = true">RoleCardsGrid / PermissionPicker 在員工表單裡的樣子</el-button>
+    <span class="last-request">網址：<span class="mono">/settings/roles?role={{ selectedCode }}</span></span>
+    <span v-if="lastRequest" class="last-request">最後送出：<span class="mono">{{ lastRequest }}</span></span>
+  </div>
+
+  <div class="stage">
+    <admin-shell :key="device" :device="device" :perms="perms" :user="user" active-path="/settings/roles" @navigate="onNavigate">
+      <el-alert v-if="!can('roles:read')" type="info" :closable="false" show-icon style="margin-bottom: 16px"
+                title="此身分沒有 roles:read：側欄沒有「角色權限」，直接輸入網址會被導向 /forbidden（見 page-error.html）。以下內容僅供對照。"></el-alert>
+      <page-header title="角色權限" subtitle="設定每個角色可以使用的功能；員工的個別調整在「員工帳號」頁">
+        <template #actions v-if="can('roles:write')">
+          <el-button type="primary" :disabled="pageState !== 'data'" @click="openCreate"><el-icon><icon-plus></icon-plus></el-icon>新增角色</el-button>
+        </template>
+      </page-header>
+
+      <div v-if="pageState === 'error'" class="panel">
+        <empty-state variant="error" title="無法載入角色" description="網路連線中斷，請確認網路後再試一次">
+          <template #action><el-button @click="retry">重試</el-button></template>
+        </empty-state>
+      </div>
+
+      <div v-else class="roles-layout">
+        <aside class="panel roles-layout__list">
+          <p class="roles-layout__list-title">角色（{{ pageState === 'data' ? sortedRoles.length : '—' }}）</p>
+          <el-skeleton v-if="pageState === 'loading'" animated>
+            <template #template>
+              <el-skeleton-item v-for="i in 5" :key="i" variant="rect" style="height: 76px; margin-bottom: 8px; border-radius: 8px"></el-skeleton-item>
+            </template>
+          </el-skeleton>
+          <role-cards-grid v-else :roles="roleList" :model-value="selectedId" show-staff-count
+                           @update:model-value="selectRole"></role-cards-grid>
+        </aside>
+
+        <section class="panel">
+          <div v-if="pageState === 'loading'" style="padding: 20px"><el-skeleton :rows="8" animated></el-skeleton></div>
+          <role-detail-panel v-else-if="selectedRole" :key="selectedRole.id + '-' + selectedRole.updated_at" ref="detailRef"
+                             :role="selectedRole" :catalog="CATALOG" :perms="perms" :sim-error="simError"
+                             @saved="onSaved" @deleted="onDeleted" @request="(r) => lastRequest = r"></role-detail-panel>
+        </section>
+      </div>
+
+      <role-create-dialog v-model="createOpen" :roles="roleList" :catalog="CATALOG" :perms="perms" :sim-error="simError"
+                          @created="onCreated" @request="(r) => lastRequest = r"></role-create-dialog>
+    </admin-shell>
+  </div>
+
+  <!-- 元件展示：員工表單（FRONTEND-064/065 另出稿）裡共用的兩個元件長相 -->
+  <el-dialog v-model="gridDemoOpen" title="元件展示：員工表單裡的 RoleCardsGrid 與 PermissionPicker" width="820px" append-to-body>
+    <p class="text-secondary" style="margin-top: 0">員工表單的實際版面在 page-settings-accounts.html 另出稿；這裡只確認共用元件在寬容器裡的樣子：RoleCardsGrid 不顯示員工數（showStaffCount=false）、自動多欄；PermissionPicker 以 highlight 標出「角色預設」。</p>
+    <div style="font-size: 13px; font-weight: 600; margin: 12px 0 8px">角色</div>
+    <role-cards-grid :roles="roleList" v-model="gridDemoRole"></role-cards-grid>
+    <div style="font-size: 13px; font-weight: 600; margin: 16px 0 8px">個別權限（highlight = 所選角色的權限）</div>
+    <permission-picker :catalog="CATALOG" v-model="gridDemoPerms" :highlight="gridDemoHighlight" :grantable="grantableSet"></permission-picker>
+  </el-dialog>
+
+  <el-drawer v-model="notesOpen" title="設計說明 / 待裁定" size="500px">
+    <el-alert v-if="openQuestions.length" title="以下項目需要你裁定，未回覆前這張稿不會進入實作"
+              type="warning" :closable="false" show-icon style="margin-bottom: 16px"></el-alert>
+    <h4>設計決策</h4>
+    <ol>
+      <li v-for="(d, i) in decisions" :key="i" style="margin-bottom: 6px">{{ d }}</li>
+    </ol>
+    <h4 v-if="openQuestions.length">待裁定</h4>
+    <ol>
+      <li v-for="(q, i) in openQuestions" :key="i" style="margin-bottom: 8px">
+        <div>{{ q.question }}</div>
+        <div style="color: var(--el-text-color-secondary); font-size: 13px">
+          A. {{ q.optionA }}<br>B. {{ q.optionB }}
+        </div>
+      </li>
+    </ol>
+  </el-drawer>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch, onBeforeUnmount, nextTick } = Vue
+const { ElMessage, ElMessageBox } = ElementPlus
+
+/* ==================== ADMIN SHELL JS START（各頁稿逐字複製這一段） ==================== */
+/** 各角色預設權限碼，與 docs/domain_spec.md §3「預設授予」一致；admin 擁有全部。 */
+const ALL_STAFF = [
+  'dashboard:read', 'classes:read', 'students:read',
+  'attendance:read', 'attendance:operate', 'leaves:read',
+  'homework:read', 'homework:write', 'pickup:read', 'pickup:operate', 'exams:read',
+]
+const DIRECTOR = [...ALL_STAFF,
+  'staff:read', 'roles:read', 'settings:read', 'settings:write', 'audit:read',
+  'classes:write', 'students:write', 'students:sensitive', 'guardians:write',
+  'attendance:amend', 'leaves:write', 'pickup:override', 'exams:write', 'exams:publish']
+const CLERK = [...ALL_STAFF, 'settings:read', 'classes:write', 'students:write', 'guardians:write',
+  'leaves:write', 'exams:write', 'exams:publish']
+const TUTOR = [...ALL_STAFF, 'exams:write']
+const ADMIN = [...DIRECTOR, 'staff:write', 'roles:write', 'students:purge']
+const SHELL_USERS = {
+  admin: { display_name: '系統管理員', role: '系統管理員' },
+  director: { display_name: '張主任', role: '主任' },
+  clerk: { display_name: '林行政', role: '行政' },
+  tutor: { display_name: '陳老師', role: '課輔老師' },
+}
+
+/** 與 apps/web/src/constants/navigation.ts 的 NAVIGATION 逐項一致（原檔是權威） */
+const NAVIGATION = [
+  { key: 'home', label: '首頁', items: [{ label: '今日儀表板', path: '/', icon: 'icon-odometer', permission: 'dashboard:read' }] },
+  { key: 'daily', label: '日常營運', items: [
+    { label: '今日出勤', path: '/attendance', icon: 'icon-calendar', permission: 'attendance:read' },
+    { label: '作業進度', path: '/homework', icon: 'icon-edit-pen', permission: 'homework:read' },
+    { label: '接送', path: '/pickup', icon: 'icon-van', permission: 'pickup:read' },
+    { label: '代理接送核驗', path: '/pickup/authorizations', icon: 'icon-stamp', permission: 'pickup:read' },
+    { label: '請假', path: '/leaves', icon: 'icon-tickets', permission: 'leaves:read' },
+  ] },
+  { key: 'students', label: '學生與班級', items: [
+    { label: '學生工作台', path: '/students', icon: 'icon-user', permission: 'students:read' },
+    { label: '班級管理', path: '/classes', icon: 'icon-school', permission: 'classes:read' },
+    { label: '月出勤報表', path: '/attendance/monthly', icon: 'icon-data-line', permission: 'attendance:read' },
+  ] },
+  { key: 'exams', label: '成績', items: [{ label: '考試', path: '/exams', icon: 'icon-trophy', permission: 'exams:read' }] },
+  { key: 'settings', label: '設定', items: [
+    { label: '系統設定', path: '/settings/system', icon: 'icon-setting', permission: 'settings:read' },
+    { label: '參考資料', path: '/settings/reference', icon: 'icon-collection', permission: 'settings:read' },
+    { label: '員工帳號', path: '/settings/accounts', icon: 'icon-user-filled', permission: 'staff:read' },
+    { label: '角色權限', path: '/settings/roles', icon: 'icon-lock', permission: 'roles:read' },
+    { label: '稽核紀錄', path: '/settings/audit', icon: 'icon-list', permission: 'audit:read' },
+  ] },
+]
+/** 與 apps/web/src/router/routes.ts 的 meta.title / meta.tablet 一致 */
+const ROUTE_META = {
+  '/': { title: '今日儀表板' }, '/students': { title: '學生工作台' }, '/classes': { title: '班級管理' },
+  '/attendance': { title: '今日出勤', tablet: true }, '/attendance/monthly': { title: '月出勤報表' }, '/leaves': { title: '請假' },
+  '/homework': { title: '作業進度', tablet: true }, '/pickup': { title: '接送', tablet: true },
+  '/pickup/authorizations': { title: '代理接送核驗', tablet: true }, '/exams': { title: '考試' }, '/exams/e1': { title: '考試成績' },
+  '/settings/system': { title: '系統設定' }, '/settings/reference': { title: '參考資料' }, '/settings/accounts': { title: '員工帳號' },
+  '/settings/roles': { title: '角色權限' }, '/settings/audit': { title: '稽核紀錄' },
+}
+/** 與 apps/web/src/shared/constants/statusLabels.ts 的 NOTIFICATION_EVENT_LABELS 一致 */
+const NOTIFICATION_EVENT_LABELS = {
+  'attendance.checked_in': '到班通知', 'attendance.checked_out': '離班通知', 'leave.created': '學生請假',
+  'leave.cancelled': '學生取消請假', 'homework.eta_updated': '預計可接送時間', 'homework.done': '作業完成',
+  'pickup.requested': '家長發起接送', 'pickup.replied': '老師回覆接送', 'pickup.arrived': '家長已抵達',
+  'pickup.completed': '接送完成', 'pickup.cancelled': '接送取消', 'exam.published': '成績公布', 'binding.completed': '綁定完成',
+}
+/** 員工收得到的站內通知（domain_spec M9）；文案依 BACKEND-203 templates */
+const SAMPLE_NOTIFICATIONS = () => [
+  { id: 'n1', event: 'pickup.requested', title: '王小明 家長要來接', body: '家長預計 17:30 抵達。', deep_link: '/pickup', created_at: '2026/10/02 17:05', read_at: null },
+  { id: 'n2', event: 'leave.created', title: '陳小美 請假', body: '陳小美 2026-10-05～2026-10-06 病假。', deep_link: '/leaves', created_at: '2026/10/02 16:40', read_at: null },
+  { id: 'n3', event: 'pickup.cancelled', title: '李承恩 接送已取消', body: '家長已取消今天的接送請求。\n原因：改由爺爺來接', deep_link: '/pickup', created_at: '2026/10/02 16:12', read_at: null },
+  { id: 'n4', event: 'leave.cancelled', title: '林小華 取消請假', body: '林小華 2026-10-02～2026-10-02 的請假已取消。', deep_link: '/leaves', created_at: '2026/10/01 20:31', read_at: '2026/10/01 21:00' },
+  { id: 'n5', event: 'pickup.requested', title: '張語晴 家長要來接', body: '家長已發起接送。', deep_link: '/pickup', created_at: '2026/10/01 17:48', read_at: '2026/10/01 17:50' },
+]
+
+const NotificationPanel = {
+  props: { items: Array, unreadCount: Number, loading: Boolean, unreadOnly: Boolean },
+  emits: ['open', 'read-all', 'filter'],
+  setup() { return { LABELS: NOTIFICATION_EVENT_LABELS } },
+  template: `
+    <div class="notif">
+      <div class="notif__head">
+        <span class="notif__title">通知</span>
+        <el-segmented :model-value="unreadOnly ? 'unread' : 'all'" size="small"
+                      :options="[{ label: '全部', value: 'all' }, { label: '未讀', value: 'unread' }]"
+                      @change="(v) => $emit('filter', v === 'unread')"></el-segmented>
+        <span style="flex: 1"></span>
+        <el-button link type="primary" :disabled="unreadCount === 0" @click="$emit('read-all')">全部標為已讀</el-button>
+      </div>
+      <div class="notif__list">
+        <template v-if="loading">
+          <div v-for="i in 3" :key="i" class="notif__skeleton"><el-skeleton :rows="1" animated></el-skeleton></div>
+        </template>
+        <div v-else-if="!items.length" class="notif__empty">{{ unreadOnly ? '沒有未讀通知' : '目前沒有通知' }}</div>
+        <template v-else>
+          <button v-for="n in items" :key="n.id" type="button" class="notif__row" :class="{ 'is-unread': !n.read_at }" @click="$emit('open', n)">
+            <span v-if="!n.read_at" class="notif__dot" data-test="unread-dot" aria-label="未讀"></span>
+            <div class="notif__row-title">{{ n.title }}</div>
+            <div class="notif__row-body">{{ n.body }}</div>
+            <div class="notif__row-meta">
+              <el-tag size="small" type="info" disable-transitions>{{ LABELS[n.event] || n.event }}</el-tag>
+              <span>{{ n.created_at }}</span>
+            </div>
+          </button>
+        </template>
+      </div>
+    </div>`,
+}
+
+/**
+ * AdminShell：AdminLayout + AdminSidebar + AdminHeader + NotificationBell 的稿內合體。
+ * props 只有 device / perms / user / activePath 是各頁需要傳的；wsStatus / notifState 只有外框稿用來切狀態。
+ * emits navigate(path)：點側欄項目或通知 deep_link 時發出，各頁稿可以忽略或顯示提示。
+ */
+const AdminShell = {
+  components: { NotificationPanel },
+  props: {
+    device: { type: String, default: 'desktop' },
+    perms: { type: Array, required: true },
+    user: { type: Object, required: true },
+    activePath: { type: String, required: true },
+    wsStatus: { type: String, default: 'open' },
+    notifState: { type: String, default: 'data' },
+  },
+  emits: ['navigate'],
+  setup(props, { emit }) {
+    const isMobile = computed(() => props.device === 'mobile')
+    // 模擬 localStorage['admin.sidebarCollapsed']：使用者沒切過（remembered = null）時，依路由 meta.tablet 決定預設
+    const remembered = ref(null)
+    const collapsed = computed({
+      get: () => remembered.value ?? !!ROUTE_META[props.activePath]?.tablet,
+      set: (v) => { remembered.value = v },
+    })
+    const drawerOpen = ref(false)
+    const groups = computed(() => NAVIGATION
+      .map((g) => ({ ...g, items: g.items.filter((i) => props.perms.includes(i.permission)) }))
+      .filter((g) => g.items.length))
+    const activeItem = computed(() => {
+      const segs = (p) => p.split('/').filter(Boolean)
+      const route = segs(props.activePath)
+      let best = null
+      for (const g of groups.value) for (const it of g.items) {
+        const s = segs(it.path)
+        const match = it.path === '/' ? props.activePath === '/' : s.every((x, i) => route[i] === x)
+        if (match && (!best || s.length > segs(best).length)) best = it.path
+      }
+      return best ?? ''
+    })
+    const title = computed(() => ROUTE_META[props.activePath]?.title ?? '')
+    const go = (path) => { drawerOpen.value = false; emit('navigate', path) }
+    const toggle = () => { if (isMobile.value) drawerOpen.value = !drawerOpen.value; else collapsed.value = !collapsed.value }
+
+    // 通知（NotificationBell + store 的稿內模擬）
+    const items = ref(SAMPLE_NOTIFICATIONS())
+    const unreadOnly = ref(false)
+    const popoverOpen = ref(false)
+    const unreadCount = computed(() => {
+      if (props.notifState === 'many') return 120
+      if (props.notifState === 'empty') return 0
+      return items.value.filter((n) => !n.read_at).length
+    })
+    const shownItems = computed(() => {
+      if (props.notifState === 'empty' || props.notifState === 'loading') return []
+      return unreadOnly.value ? items.value.filter((n) => !n.read_at) : items.value
+    })
+    const openNotif = (n) => {
+      if (!n.read_at) n.read_at = '剛剛'
+      popoverOpen.value = false
+      if (n.deep_link) go(n.deep_link)
+    }
+    const readAll = () => { items.value.forEach((n) => { if (!n.read_at) n.read_at = '剛剛' }) }
+    const loggingOut = ref(false)
+    const onUserCommand = (cmd) => {
+      if (cmd === 'password') { ElMessage.info('（稿）導頁至 /change-password'); return }
+      loggingOut.value = true
+      setTimeout(() => { loggingOut.value = false; ElMessage.success('（稿）已登出，導回 /login') }, 800)
+    }
+    const wsTip = computed(() => ({ open: '即時連線正常', reconnecting: '即時連線重試中' }[props.wsStatus] ?? '即時連線未建立'))
+    return {
+      isMobile, collapsed, drawerOpen, groups, activeItem, title, go, toggle,
+      shownItems, unreadCount, unreadOnly, popoverOpen, openNotif, readAll, loggingOut, onUserCommand, wsTip,
+    }
+  },
+  template: `
+    <div class="device-frame" :class="'is-' + device">
+      <div class="shell">
+        <aside v-if="!isMobile" class="shell__aside" :class="{ 'is-collapsed': collapsed }" data-test="admin-sidebar">
+          <div class="shell__brand"><el-icon><icon-school></icon-school></el-icon><span v-show="!collapsed">安親班管理系統</span></div>
+          <div class="shell__menu">
+            <div v-if="!groups.length" class="shell__empty" v-show="!collapsed">沒有可使用的功能，請聯絡管理員</div>
+            <el-menu v-else :default-active="activeItem" :collapse="collapsed" :collapse-transition="false" @select="go">
+              <el-menu-item-group v-for="g in groups" :key="g.key" :title="g.label">
+                <el-menu-item v-for="it in g.items" :key="it.path" :index="it.path">
+                  <el-icon><component :is="it.icon"></component></el-icon>
+                  <template #title>{{ it.label }}</template>
+                </el-menu-item>
+              </el-menu-item-group>
+            </el-menu>
+          </div>
+          <div class="shell__collapse">
+            <el-button text :aria-label="collapsed ? '展開側欄' : '收合側欄'" @click="collapsed = !collapsed">
+              <el-icon><icon-arrow-right v-if="collapsed"></icon-arrow-right><icon-arrow-left v-else></icon-arrow-left></el-icon>
+              <span v-if="!collapsed">收合</span>
+            </el-button>
+          </div>
+        </aside>
+
+        <div class="shell__body">
+          <header class="shell__header">
+            <el-button class="shell__toggle" text aria-label="切換側欄" @click="toggle">
+              <el-icon :size="18"><icon-expand v-if="isMobile || collapsed"></icon-expand><icon-fold v-else></icon-fold></el-icon>
+            </el-button>
+            <h1 class="shell__title">{{ title }}</h1>
+            <span class="shell__spacer"></span>
+            <el-tooltip :content="wsTip" placement="bottom">
+              <span class="ws-dot" :class="'is-' + wsStatus" data-test="ws-dot" :aria-label="wsTip" role="img"></span>
+            </el-tooltip>
+            <el-popover v-model:visible="popoverOpen" trigger="click" placement="bottom-end" :width="360" :show-arrow="false">
+              <template #reference>
+                <el-button class="shell__bell" text aria-label="通知">
+                  <el-badge :value="unreadCount" :max="99" :hidden="unreadCount === 0">
+                    <el-icon :size="18"><icon-bell></icon-bell></el-icon>
+                  </el-badge>
+                </el-button>
+              </template>
+              <notification-panel :items="shownItems" :unread-count="unreadCount" :loading="notifState === 'loading'"
+                                  :unread-only="unreadOnly" @open="openNotif" @read-all="readAll"
+                                  @filter="(v) => unreadOnly = v"></notification-panel>
+            </el-popover>
+            <el-dropdown trigger="click" @command="onUserCommand">
+              <span class="shell__user">
+                <el-icon><icon-avatar></icon-avatar></el-icon>
+                <span v-if="!isMobile">{{ user.display_name }}</span>
+                <el-tag v-if="!isMobile" size="small" type="info" disable-transitions>{{ user.role }}</el-tag>
+                <el-icon><icon-arrow-down></icon-arrow-down></el-icon>
+              </span>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-if="isMobile" disabled>{{ user.display_name }}（{{ user.role }}）</el-dropdown-item>
+                  <el-dropdown-item command="password"><el-icon><icon-key></icon-key></el-icon>修改密碼</el-dropdown-item>
+                  <el-dropdown-item command="logout" divided :disabled="loggingOut">
+                    <el-icon><icon-loading v-if="loggingOut" class="is-loading"></icon-loading><icon-switch-button v-else></icon-switch-button></el-icon>
+                    {{ loggingOut ? '登出中…' : '登出' }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </header>
+          <el-alert v-if="wsStatus === 'reconnecting'" class="shell__banner" type="warning" :closable="false" show-icon
+                    title="即時連線中斷，畫面每 15 秒自動更新"></el-alert>
+          <main class="shell__main"><slot></slot></main>
+        </div>
+
+        <template v-if="isMobile && drawerOpen">
+          <div class="shell__scrim" @click="drawerOpen = false"></div>
+          <aside class="shell__drawer" data-test="admin-sidebar">
+            <div class="shell__brand"><el-icon><icon-school></icon-school></el-icon><span>安親班管理系統</span></div>
+            <div class="shell__menu">
+              <div v-if="!groups.length" class="shell__empty">沒有可使用的功能，請聯絡管理員</div>
+              <el-menu v-else :default-active="activeItem" @select="go">
+                <el-menu-item-group v-for="g in groups" :key="g.key" :title="g.label">
+                  <el-menu-item v-for="it in g.items" :key="it.path" :index="it.path">
+                    <el-icon><component :is="it.icon"></component></el-icon><span>{{ it.label }}</span>
+                  </el-menu-item>
+                </el-menu-item-group>
+              </el-menu>
+            </div>
+          </aside>
+        </template>
+      </div>
+    </div>`,
+}
+/* ==================== ADMIN SHELL JS END ==================== */
+
+/* ==== 以下逐字複製自 component-common.html（已核可） ==== */
+/* ---------- PageHeader ---------- */
+const PageHeader = {
+  props: { title: { type: String, required: true }, subtitle: { type: String, default: '' } },
+  template: `
+    <div class="page-header">
+      <div class="page-header__body">
+        <h1 class="page-header__title">{{ title }}</h1>
+        <p v-if="subtitle" class="page-header__subtitle" data-test="page-subtitle">{{ subtitle }}</p>
+        <div v-if="$slots.default" class="page-header__extra"><slot></slot></div>
+      </div>
+      <div v-if="$slots.actions" class="page-header__actions"><slot name="actions"></slot></div>
+    </div>`,
+}
+
+/* ---------- AdminListToolbar ---------- */
+const ALL = '__all__'
+const AdminListToolbar = {
+  props: {
+    search: { type: String, default: '' },
+    searchPlaceholder: { type: String, default: '搜尋' },
+    filters: { type: Array, default: () => [] },
+    filterValues: { type: Object, default: () => ({}) },
+    total: { type: Number, default: undefined },
+  },
+  emits: ['update:search', 'update:filterValues'],
+  setup(props, { emit }) {
+    const text = ref(props.search)
+    watch(() => props.search, (v) => { if (v !== text.value.trim()) text.value = v })
+    let timer = null
+    const flush = () => { clearTimeout(timer); timer = null; emit('update:search', text.value.trim()) }
+    const onInput = (v) => { text.value = v; clearTimeout(timer); timer = setTimeout(flush, 300) }
+    onBeforeUnmount(() => clearTimeout(timer))
+    const clearable = (g) => g.clearable !== false
+    const current = (g) => {
+      const v = props.filterValues[g.key]
+      return v === undefined && clearable(g) ? ALL : v
+    }
+    const onSelect = (g, v) => {
+      emit('update:filterValues', { ...props.filterValues, [g.key]: v === ALL || v === '' ? undefined : v })
+    }
+    return { text, onInput, flush, clearable, current, onSelect, ALL }
+  },
+  template: `
+    <div class="list-toolbar">
+      <el-input class="list-toolbar__search" :model-value="text" :placeholder="searchPlaceholder"
+                :aria-label="searchPlaceholder" clearable
+                @update:model-value="onInput" @keyup.enter="flush" @clear="flush">
+        <template #prefix><el-icon><icon-search></icon-search></el-icon></template>
+      </el-input>
+      <div v-for="g in filters" :key="g.key" class="list-toolbar__filter">
+        <span class="list-toolbar__filter-label">{{ g.label }}</span>
+        <el-select :model-value="current(g)" :clearable="clearable(g) && current(g) !== ALL"
+                   style="width: 130px" @update:model-value="(v) => onSelect(g, v)">
+          <el-option v-if="clearable(g)" label="全部" :value="ALL"></el-option>
+          <el-option v-for="o in g.options" :key="String(o.value)" :label="o.label" :value="o.value"></el-option>
+        </el-select>
+      </div>
+      <slot name="extra-filters"></slot>
+      <span class="list-toolbar__spacer"></span>
+      <span v-if="total !== undefined" class="list-toolbar__count">共 {{ total }} 筆</span>
+      <div v-if="$slots.actions" class="list-toolbar__actions"><slot name="actions"></slot></div>
+    </div>`,
+}
+
+/* ---------- EmptyState ---------- */
+const EmptyState = {
+  props: {
+    title: { type: String, required: true },
+    description: { type: String, default: '' },
+    variant: { type: String, default: 'default' },
+    icon: { type: String, default: '' },
+  },
+  computed: {
+    iconName() { return this.icon || (this.variant === 'error' ? 'icon-warning-filled' : 'icon-folder-opened') },
+  },
+  template: `
+    <div class="empty-state" :class="{ 'is-error': variant === 'error', 'is-inline': variant === 'inline' }" role="status">
+      <el-icon v-if="variant !== 'inline'" class="empty-state__icon" data-test="empty-icon">
+        <component :is="iconName"></component>
+      </el-icon>
+      <p class="empty-state__title">{{ title }}</p>
+      <p v-if="description" class="empty-state__desc">{{ description }}</p>
+      <div v-if="$slots.action" class="empty-state__action"><slot name="action"></slot></div>
+    </div>`,
+}
+
+/* ==== 以下逐字複製自 component-common-extra.html（已核可） ==== */
+/** 與 apps/web/src/composables/useFormDirty.ts 的 confirmDiscardChanges 一致 */
+const confirmDiscardChanges = () => ElMessageBox.confirm('尚未儲存的變更將會遺失，確定要關閉嗎？', '未儲存的變更', {
+  confirmButtonText: '放棄變更', cancelButtonText: '繼續編輯',
+}).then(() => true).catch(() => false)
+
+/* ---------- FormDialog ----------
+   fullscreen prop 只用於稿裡模擬視窗寬 < 768；實作依視窗寬自動判斷。 */
+const WIDTH = { sm: '420px', md: '560px', lg: '800px' }
+const FormDialog = {
+  props: {
+    modelValue: Boolean, title: { type: String, required: true }, size: { type: String, default: 'md' },
+    loading: Boolean, submitText: { type: String, default: '儲存' }, cancelText: { type: String, default: '取消' },
+    submitDisabled: Boolean, dirty: Boolean, hideFooter: Boolean, autofocus: { type: Boolean, default: true },
+    fullscreen: Boolean,
+  },
+  emits: ['update:modelValue', 'submit', 'closed'],
+  setup(props, { emit }) {
+    const body = ref(null)
+    const canClose = async () => !props.loading && (!props.dirty || await confirmDiscardChanges())
+    const beforeClose = async (done) => { if (await canClose()) done() }
+    const cancel = async () => { if (await canClose()) emit('update:modelValue', false) }
+    const onOpened = () => {
+      if (!props.autofocus) return
+      const PICKERS = '.el-select, .el-date-editor, .el-time-picker, .el-cascader, .el-autocomplete'
+      const el = [...(body.value?.querySelectorAll('input:not([disabled]):not([readonly]):not([type=checkbox]):not([type=radio]), textarea:not([disabled]):not([readonly])') ?? [])]
+        .find((x) => !x.closest(PICKERS))
+      el?.focus()
+    }
+    return { body, width: computed(() => WIDTH[props.size]), beforeClose, cancel, onOpened }
+  },
+  template: `
+    <el-dialog :model-value="modelValue" :title="title" :width="width" :fullscreen="fullscreen"
+               :show-close="!loading" :before-close="beforeClose" append-to-body
+               @update:model-value="(v) => $emit('update:modelValue', v)" @opened="onOpened" @closed="$emit('closed')">
+      <div ref="body"><slot></slot></div>
+      <template v-if="!hideFooter" #footer>
+        <div class="form-dialog__footer">
+          <el-button :disabled="loading" @click="cancel">{{ cancelText }}</el-button>
+          <el-button type="primary" :loading="loading" :disabled="loading || submitDisabled" @click="$emit('submit')">{{ submitText }}</el-button>
+        </div>
+      </template>
+    </el-dialog>`,
+}
+
+/* ==================== 資料 ==================== */
+/** GET /admin/permissions（BACKEND-085）：順序與 label 同 apps/api/app/core/permissions.py */
+const CATALOG = { groups: [
+  { key: 'dashboard', label: '儀表板', permissions: [{ code: 'dashboard:read', label: '首頁儀表板' }] },
+  { key: 'accounts', label: '帳號與權限', permissions: [
+    { code: 'staff:read', label: '查看員工帳號' }, { code: 'staff:write', label: '管理員工帳號' },
+    { code: 'roles:read', label: '查看角色與權限' }, { code: 'roles:write', label: '管理角色與權限' }, { code: 'audit:read', label: '稽核紀錄' }] },
+  { key: 'settings', label: '系統設定', permissions: [
+    { code: 'settings:read', label: '查看系統設定與參考資料' }, { code: 'settings:write', label: '修改系統設定與參考資料' }] },
+  { key: 'students', label: '班級與學生', permissions: [
+    { code: 'classes:read', label: '查看班級' }, { code: 'classes:write', label: '管理班級' },
+    { code: 'students:read', label: '查看學生' }, { code: 'students:write', label: '管理學生' },
+    { code: 'students:sensitive', label: '查看與寫入身分證、健康備註' }, { code: 'students:purge', label: '永久刪除（匿名化）退班學生' },
+    { code: 'guardians:write', label: '管理監護人與綁定碼' }] },
+  { key: 'attendance', label: '出勤', permissions: [
+    { code: 'attendance:read', label: '查出勤' }, { code: 'attendance:operate', label: '到班離班登記' }, { code: 'attendance:amend', label: '改判已登記的出勤（寫 audit）' }] },
+  { key: 'leaves', label: '請假', permissions: [{ code: 'leaves:read', label: '查請假' }, { code: 'leaves:write', label: '代登記與取消請假' }] },
+  { key: 'homework', label: '作業進度', permissions: [{ code: 'homework:read', label: '查看作業進度' }, { code: 'homework:write', label: '更新作業進度' }] },
+  { key: 'pickup', label: '接送', permissions: [
+    { code: 'pickup:read', label: '查看接送佇列' }, { code: 'pickup:operate', label: '接送回覆、確認、完成' }, { code: 'pickup:override', label: '代理接送強制完成' }] },
+  { key: 'exams', label: '考試成績', permissions: [
+    { code: 'exams:read', label: '查看成績' }, { code: 'exams:write', label: '登錄成績' }, { code: 'exams:publish', label: '發布成績' }] },
+] }
+const ALL_CODES = CATALOG.groups.flatMap((g) => g.permissions.map((p) => p.code))
+const LABEL_OF = Object.fromEntries(CATALOG.groups.flatMap((g) => g.permissions.map((p) => [p.code, p.label])))
+
+const HR = [...ALL_STAFF, 'staff:read', 'staff:write', 'roles:read', 'roles:write', 'audit:read']
+const WEEKEND = ['dashboard:read', 'attendance:read', 'attendance:operate', 'homework:read', 'pickup:read', 'pickup:operate']
+const sorted = (a) => [...a].sort()
+/** GET /admin/roles（BACKEND-081 / RoleOut） */
+const ROLE_FIXTURE = () => [
+  { id: 'r-tutor', code: 'tutor', name: '課輔老師', description: '日常點名、作業進度與接送', is_system: true, permissions: sorted(TUTOR), effective_permissions: sorted(TUTOR), staff_count: 5, updated_at: '2026-08-01' },
+  { id: 'r-hr', code: 'hr_manager', name: '人事主管', description: '管理員工帳號與自訂角色', is_system: false, permissions: sorted(HR), effective_permissions: sorted(HR), staff_count: 1, updated_at: '2026-09-10' },
+  { id: 'r-admin', code: 'admin', name: '系統管理員', description: '擁有全部權限', is_system: true, permissions: ['*'], effective_permissions: sorted(ALL_CODES), staff_count: 1, updated_at: '2026-08-01' },
+  { id: 'r-clerk', code: 'clerk', name: '行政', description: '學生資料、請假與成績發布', is_system: true, permissions: sorted(CLERK), effective_permissions: sorted(CLERK), staff_count: 2, updated_at: '2026-08-01' },
+  { id: 'r-weekend', code: 'weekend_helper', name: '週六支援老師', description: '', is_system: false, permissions: sorted(WEEKEND), effective_permissions: sorted(WEEKEND), staff_count: 0, updated_at: '2026-09-22' },
+  { id: 'r-director', code: 'director', name: '主任', description: '班務管理與稽核', is_system: true, permissions: sorted(DIRECTOR), effective_permissions: sorted(DIRECTOR), staff_count: 1, updated_at: '2026-08-01' },
+]
+const SYSTEM_ORDER = ['admin', 'director', 'clerk', 'tutor']
+const sortRoles = (roles) => [...roles].sort((a, b) => {
+  const ia = SYSTEM_ORDER.indexOf(a.code); const ib = SYSTEM_ORDER.indexOf(b.code)
+  if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
+  return a.name.localeCompare(b.name, 'zh-Hant')
+})
+
+/* ==================== RoleCardsGrid（FRONTEND-067） ==================== */
+const RoleCardsGrid = {
+  props: { roles: Array, modelValue: { type: String, default: null }, disabled: Boolean, showStaffCount: Boolean },
+  emits: ['update:modelValue'],
+  setup(props, { emit }) {
+    const list = computed(() => sortRoles(props.roles))
+    const root = ref(null)
+    const pick = (r) => { if (!props.disabled && r.id !== props.modelValue) emit('update:modelValue', r.id) }
+    const onKey = (e, idx) => {
+      if (props.disabled) return
+      const delta = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key]
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(list.value[idx]); return }
+      if (!delta) return
+      e.preventDefault()
+      const next = (idx + delta + list.value.length) % list.value.length
+      pick(list.value[next])
+      nextTick(() => root.value?.querySelectorAll('.role-card')[next]?.focus())
+    }
+    const tabIndex = (r, i) => (r.id === props.modelValue || (!props.modelValue && i === 0) ? 0 : -1)
+    return { list, root, pick, onKey, tabIndex }
+  },
+  template: `
+    <div ref="root" class="role-grid" role="radiogroup" aria-label="角色">
+      <div v-for="(r, i) in list" :key="r.id" class="role-card" role="radio" :aria-checked="r.id === modelValue ? 'true' : 'false'"
+           :aria-disabled="disabled ? 'true' : undefined" :tabindex="disabled ? -1 : tabIndex(r, i)"
+           :class="{ 'is-selected': r.id === modelValue, 'is-disabled': disabled }" @click="pick(r)" @keydown="onKey($event, i)">
+        <div class="role-card__top">
+          <span class="role-card__name">{{ r.name }}</span>
+          <el-tag v-if="r.is_system" size="small" type="info" disable-transitions>系統</el-tag>
+        </div>
+        <span class="role-card__code mono">{{ r.code }}</span>
+        <div class="role-card__meta">
+          <span>{{ r.effective_permissions.length }} 項權限</span>
+          <template v-if="showStaffCount"><span class="role-card__dot">・</span><span>{{ r.staff_count }} 位員工</span></template>
+        </div>
+      </div>
+    </div>`,
+}
+
+/* ==================== PermissionPicker（FRONTEND-068） ==================== */
+const PermissionPicker = {
+  props: {
+    catalog: Object, modelValue: { type: Array, default: () => [] },
+    grantable: { type: Object, default: null }, highlight: { type: Object, default: null }, disabled: Boolean,
+  },
+  emits: ['update:modelValue'],
+  setup(props, { emit }) {
+    const keyword = ref('')
+    const collapsed = reactive({})
+    const selected = computed(() => new Set(props.modelValue))
+    const canGrant = (code) => !props.grantable || props.grantable.has(code)
+    /** 新增受 grantable 限制；已勾選但不可授出的碼仍可取消 */
+    const itemDisabled = (code) => props.disabled || (!selected.value.has(code) && !canGrant(code))
+    const q = computed(() => keyword.value.trim().toLowerCase())
+    const visibleGroups = computed(() => props.catalog.groups
+      .map((g) => ({ ...g, items: g.permissions.filter((p) => !q.value || p.label.toLowerCase().includes(q.value) || p.code.toLowerCase().includes(q.value)) }))
+      .filter((g) => g.items.length))
+    const isOpen = (g) => !!q.value || !collapsed[g.key]
+    const groupCount = (g) => g.permissions.filter((p) => selected.value.has(p.code)).length
+    const groupState = (g) => {
+      const n = groupCount(g)
+      return { checked: n === g.permissions.length, indeterminate: n > 0 && n < g.permissions.length }
+    }
+    const groupDisabled = (g) => props.disabled || g.permissions.every((p) => itemDisabled(p.code))
+    const emitSet = (set) => emit('update:modelValue', [...set].sort())
+    const toggle = (code, on) => { const s = new Set(selected.value); if (on) s.add(code); else s.delete(code); emitSet(s) }
+    /** 整組全選只勾 grantable 的碼；取消整組則全部取消 */
+    const toggleGroup = (g, on) => {
+      const s = new Set(selected.value)
+      for (const p of g.permissions) { if (on) { if (canGrant(p.code)) s.add(p.code) } else s.delete(p.code) }
+      emitSet(s)
+    }
+    return { keyword, collapsed, selected, canGrant, itemDisabled, visibleGroups, isOpen, groupCount, groupState, groupDisabled, toggle, toggleGroup, total: ALL_CODES.length }
+  },
+  template: `
+    <div class="perm-picker">
+      <div class="perm-picker__toolbar">
+        <el-input v-model="keyword" class="perm-picker__search" placeholder="搜尋權限名稱或代碼" clearable aria-label="搜尋權限名稱或代碼">
+          <template #prefix><el-icon><icon-search></icon-search></el-icon></template>
+        </el-input>
+        <span class="perm-picker__count">已選 {{ modelValue.length }} / {{ total }}</span>
+      </div>
+      <empty-state v-if="!visibleGroups.length" variant="inline" title="找不到符合的權限"></empty-state>
+      <div v-for="g in visibleGroups" :key="g.key" class="perm-group" :class="{ 'is-open': isOpen(g) }">
+        <div class="perm-group__head">
+          <el-button class="perm-group__toggle" text :aria-expanded="String(isOpen(g))" :aria-label="'展開或收合 ' + g.label"
+                     :disabled="!!keyword.trim()" @click="collapsed[g.key] = !collapsed[g.key]">
+            <el-icon><icon-arrow-down v-if="isOpen(g)"></icon-arrow-down><icon-arrow-right v-else></icon-arrow-right></el-icon>
+          </el-button>
+          <el-checkbox :model-value="groupState(g).checked" :indeterminate="groupState(g).indeterminate" :disabled="groupDisabled(g)"
+                       @change="(v) => toggleGroup(g, v)">{{ g.label }}</el-checkbox>
+          <span class="perm-group__count">已選 {{ groupCount(g) }} / {{ g.permissions.length }}</span>
+        </div>
+        <div v-if="isOpen(g)" class="perm-group__body">
+          <div v-for="p in g.items" :key="p.code" class="perm-item">
+            <el-tooltip :disabled="disabled || canGrant(p.code)" content="你沒有此權限，無法授出" placement="top">
+              <el-checkbox :model-value="selected.has(p.code)" :disabled="itemDisabled(p.code)" @change="(v) => toggle(p.code, v)">
+                <span class="perm-item__text">
+                  <span class="perm-item__label">{{ p.label }}<el-tag v-if="highlight && highlight.has(p.code)" class="perm-item__base" size="small" type="info" effect="plain" disable-transitions>角色預設</el-tag></span>
+                  <span class="perm-item__code mono">{{ p.code }}</span>
+                </span>
+              </el-checkbox>
+            </el-tooltip>
+          </div>
+        </div>
+      </div>
+    </div>`,
+}
+
+/* ==================== RoleDetailPanel（FRONTEND-069） ==================== */
+const errorAlert = (code, codes) => {
+  if (code === 'cannot_grant_permissions') return `你沒有以下權限，無法授出：${codes.map((c) => LABEL_OF[c] ?? c).join('、')}`
+  if (code === 'last_role_manager') return '此變更會讓系統沒有任何可管理角色權限的啟用帳號'
+  return ''
+}
+const RoleDetailPanel = {
+  props: { role: Object, catalog: Object, perms: Array, simError: String },
+  emits: ['saved', 'deleted', 'request'],
+  setup(props, { emit, expose }) {
+    const isAdmin = computed(() => props.role.code === 'admin')
+    const canWrite = computed(() => props.perms.includes('roles:write'))
+    const editable = computed(() => canWrite.value && !isAdmin.value)
+    const grantable = computed(() => new Set(props.perms))
+    const base = () => ({ name: props.role.name, description: props.role.description, permissions: [...(isAdmin.value ? props.role.effective_permissions : props.role.permissions)] })
+    const baseline = ref(base())
+    const form = reactive(base())
+    const isDirty = computed(() => JSON.stringify(form) !== JSON.stringify(baseline.value))
+    const saving = ref(false)
+    const alertMsg = ref('')
+    const nameError = ref('')
+    const save = () => {
+      nameError.value = form.name.trim() ? '' : '請輸入角色名稱'
+      if (nameError.value) return
+      const body = {}
+      for (const k of ['name', 'description']) if (form[k] !== baseline.value[k]) body[k] = form[k]
+      if (JSON.stringify(form.permissions) !== JSON.stringify(baseline.value.permissions)) body.permissions = form.permissions
+      emit('request', `PATCH /admin/roles/${props.role.id} ${JSON.stringify(body)}`)
+      saving.value = true; alertMsg.value = ''
+      setTimeout(() => {
+        saving.value = false
+        if (props.simError === 'cannot_grant_permissions') { alertMsg.value = errorAlert('cannot_grant_permissions', ['students:purge', 'pickup:override']); return }
+        if (props.simError === 'last_role_manager') { alertMsg.value = errorAlert('last_role_manager'); return }
+        ElMessage.success('角色已更新')
+        emit('saved', { ...props.role, ...body, permissions: body.permissions ?? props.role.permissions, effective_permissions: body.permissions ?? props.role.effective_permissions, updated_at: String(Date.now()) })
+      }, 800)
+    }
+    const deleting = ref(false)
+    const remove = () => {
+      ElMessageBox.confirm(`確定要刪除角色「${props.role.name}」嗎？`, '確認刪除', { type: 'warning', confirmButtonText: '刪除', cancelButtonText: '取消' })
+        .then(() => {
+          emit('request', `DELETE /admin/roles/${props.role.id}`)
+          deleting.value = true
+          setTimeout(() => {
+            deleting.value = false
+            if (props.simError === 'role_in_use') { ElMessage.error('仍有 2 位員工使用此角色，請先調整他們的角色'); return }
+            ElMessage.success('已刪除')
+            emit('deleted', props.role.id)
+          }, 700)
+        }).catch(() => {})
+    }
+    expose({ isDirty })
+    return { isAdmin, canWrite, editable, grantable, form, isDirty, saving, alertMsg, nameError, save, deleting, remove }
+  },
+  template: `
+    <div class="role-detail">
+      <header class="role-detail__head">
+        <div class="role-detail__titles">
+          <h2 class="role-detail__name">{{ role.name }}
+            <el-tag v-if="role.is_system" size="small" type="info" disable-transitions>系統角色</el-tag>
+            <el-tag v-if="isDirty" size="small" type="warning" disable-transitions>未儲存</el-tag>
+          </h2>
+          <div class="role-detail__sub">{{ role.staff_count }} 位員工使用・{{ role.effective_permissions.length }} 項權限</div>
+        </div>
+        <span v-if="!canWrite" class="role-detail__readonly"><el-icon><icon-lock></icon-lock></el-icon>你只有檢視權限</span>
+        <template v-else-if="!role.is_system">
+          <el-tooltip :disabled="role.staff_count === 0" :content="'仍有 ' + role.staff_count + ' 位員工使用此角色，請先調整他們的角色'" placement="bottom-end">
+            <span><el-button type="danger" plain :disabled="role.staff_count > 0" :loading="deleting" @click="remove">
+              <el-icon><icon-delete></icon-delete></el-icon>刪除角色</el-button></span>
+          </el-tooltip>
+        </template>
+      </header>
+
+      <div class="role-detail__body">
+        <el-alert v-if="isAdmin" type="info" :closable="false" show-icon style="margin-bottom: 16px"
+                  title="管理員角色擁有全部權限（含未來新增），不可修改"></el-alert>
+        <el-alert v-if="alertMsg" type="error" show-icon style="margin-bottom: 16px" :title="alertMsg" @close="alertMsg = ''"></el-alert>
+        <el-form label-position="top" @submit.prevent>
+          <el-form-item label="代碼">
+            <span class="role-detail__code mono">{{ role.code }}</span>
+          </el-form-item>
+          <el-form-item label="名稱" :required="editable" :error="nameError">
+            <el-input v-model="form.name" :disabled="!editable || saving" maxlength="30" show-word-limit style="max-width: 360px"></el-input>
+          </el-form-item>
+          <el-form-item label="說明">
+            <el-input v-model="form.description" :disabled="!editable || saving" type="textarea" :rows="2" maxlength="200" show-word-limit
+                      :placeholder="editable ? '這個角色負責的工作，方便日後指派' : ''"></el-input>
+          </el-form-item>
+          <el-form-item label="權限">
+            <permission-picker :catalog="catalog" v-model="form.permissions" :grantable="grantable" :disabled="!editable || saving"></permission-picker>
+          </el-form-item>
+        </el-form>
+      </div>
+
+      <footer v-if="editable" class="role-detail__foot">
+        <span class="role-detail__hint"><el-icon><icon-info-filled></icon-info-filled></el-icon>權限變更會在員工下一次操作時立即生效</span>
+        <el-button type="primary" :disabled="!isDirty" :loading="saving" @click="save">儲存</el-button>
+      </footer>
+    </div>`,
+}
+
+/* ==================== RoleCreateDialog（FRONTEND-070） ==================== */
+const CODE_RE = /^[a-z][a-z0-9_]{1,29}$/
+const RoleCreateDialog = {
+  props: { modelValue: Boolean, roles: Array, catalog: Object, perms: Array, simError: String },
+  emits: ['update:modelValue', 'created', 'request'],
+  setup(props, { emit }) {
+    const empty = () => ({ code: '', name: '', description: '', copyFrom: null, permissions: [] })
+    const form = reactive(empty())
+    const errors = reactive({ code: '', name: '' })
+    const skipped = ref(0)
+    const loading = ref(false)
+    const grantable = computed(() => new Set(props.perms))
+    const dirty = computed(() => JSON.stringify(form) !== JSON.stringify(empty()))
+    watch(() => props.modelValue, (open) => { if (open) { Object.assign(form, empty()); errors.code = ''; errors.name = ''; skipped.value = 0 } })
+    const options = computed(() => sortRoles(props.roles))
+    const onCopy = (id) => {
+      const r = props.roles.find((x) => x.id === id)
+      if (!r) { skipped.value = 0; return }
+      const ok = r.effective_permissions.filter((c) => grantable.value.has(c))
+      skipped.value = r.effective_permissions.length - ok.length
+      form.permissions = [...ok].sort()
+    }
+    const submit = () => {
+      errors.code = !form.code ? '請輸入代碼' : CODE_RE.test(form.code) ? '' : '只能用小寫英文、數字與底線，並以英文字母開頭（2~30 字）'
+      errors.name = form.name.trim() ? '' : '請輸入角色名稱'
+      if (errors.code || errors.name) return
+      const body = { code: form.code, name: form.name.trim(), description: form.description, permissions: form.permissions }
+      emit('request', `POST /admin/roles ${JSON.stringify(body)}`)
+      loading.value = true
+      setTimeout(() => {
+        loading.value = false
+        if (props.roles.some((r) => r.code === form.code)) { errors.code = '代碼已被使用'; return }
+        if (props.simError === 'cannot_grant_permissions') { ElMessage.error(errorAlert('cannot_grant_permissions', ['students:purge'])); return }
+        ElMessage.success('角色已建立')
+        emit('created', { id: 'r-' + form.code, ...body, is_system: false, effective_permissions: body.permissions, staff_count: 0, updated_at: String(Date.now()) })
+        emit('update:modelValue', false)
+      }, 800)
+    }
+    return { form, errors, skipped, loading, grantable, dirty, options, onCopy, submit }
+  },
+  template: `
+    <form-dialog :model-value="modelValue" title="新增角色" size="lg" submit-text="建立" :loading="loading" :dirty="dirty"
+                 @update:model-value="(v) => $emit('update:modelValue', v)" @submit="submit">
+      <el-form label-position="top" @submit.prevent>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px">
+          <el-form-item label="代碼" required :error="errors.code">
+            <el-input v-model="form.code" maxlength="30" placeholder="例如 weekend_helper" class="mono" @input="errors.code = ''"></el-input>
+            <div class="form-hint">建立後不可修改</div>
+          </el-form-item>
+          <el-form-item label="名稱" required :error="errors.name">
+            <el-input v-model="form.name" maxlength="30" show-word-limit placeholder="例如 週六支援老師" @input="errors.name = ''"></el-input>
+          </el-form-item>
+        </div>
+        <el-form-item label="說明">
+          <el-input v-model="form.description" type="textarea" :rows="2" maxlength="200" show-word-limit></el-input>
+        </el-form-item>
+        <el-form-item label="從既有角色複製權限">
+          <el-select v-model="form.copyFrom" clearable placeholder="不複製，從空白開始" style="width: 280px" @change="onCopy">
+            <el-option v-for="r in options" :key="r.id" :label="r.name + '（' + r.effective_permissions.length + ' 項）'" :value="r.id"></el-option>
+          </el-select>
+          <div v-if="skipped" class="form-hint" style="color: var(--el-color-warning-dark-2); width: 100%">
+            已略過 {{ skipped }} 項你沒有的權限
+          </div>
+        </el-form-item>
+        <el-form-item label="權限">
+          <permission-picker :catalog="catalog" v-model="form.permissions" :grantable="grantable" :disabled="loading"></permission-picker>
+        </el-form-item>
+      </el-form>
+    </form-dialog>`,
+}
+
+const ROLES = {
+  admin: { label: '系統管理員（全部可授出）', permissions: ADMIN },
+  hr: { label: '人事主管（roles:write，缺權限）', permissions: HR },
+  director: { label: '主任（只有 roles:read）', permissions: DIRECTOR },
+  clerk: { label: '行政（沒有 roles:read）', permissions: CLERK },
+}
+
+const app = createApp({
+  components: { AdminShell, PageHeader, EmptyState, RoleCardsGrid, RoleDetailPanel, RoleCreateDialog, PermissionPicker },
+  setup() {
+    const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
+    const meta = {
+      status: readMeta('preview-status'), tasks: readMeta('preview-tasks'),
+      route: readMeta('preview-route'), updated: readMeta('preview-updated'),
+    }
+    const viewAs = ref('hr')
+    const perms = computed(() => ROLES[viewAs.value].permissions)
+    const can = (code) => perms.value.includes(code)
+    const user = computed(() => SHELL_USERS[viewAs.value] ?? { display_name: '周人事', role: '人事主管' })
+    const device = ref('desktop')
+    const onNavigate = (p) => { if (p !== '/settings/roles') ElMessage.info(`（稿）導頁至 ${p}（有未儲存變更時先跳「未儲存的變更」確認）`) }
+
+    const pageState = ref('data')
+    const simError = ref('none')
+    const lastRequest = ref('')
+    const roleList = ref(ROLE_FIXTURE())
+    const sortedRoles = computed(() => sortRoles(roleList.value))
+    const selectedId = ref('r-weekend')
+    const selectedRole = computed(() => roleList.value.find((r) => r.id === selectedId.value) ?? null)
+    const selectedCode = computed(() => selectedRole.value?.code ?? '')
+    const detailRef = ref(null)
+    const selectRole = async (id) => {
+      if (detailRef.value?.isDirty && !(await confirmDiscardChanges())) return
+      selectedId.value = id
+    }
+    const onSaved = (role) => { roleList.value = roleList.value.map((r) => (r.id === role.id ? role : r)) }
+    const onDeleted = (id) => { roleList.value = roleList.value.filter((r) => r.id !== id); selectedId.value = sortRoles(roleList.value)[0].id }
+    const onCreated = (role) => { roleList.value = [...roleList.value, role]; selectedId.value = role.id }
+    const createOpen = ref(false)
+    const openCreate = () => { createOpen.value = true }
+    const retry = () => { pageState.value = 'loading'; setTimeout(() => { pageState.value = 'data' }, 900) }
+
+    const gridDemoRole = ref('r-tutor')
+    const gridDemoHighlight = computed(() => new Set(roleList.value.find((r) => r.id === gridDemoRole.value)?.effective_permissions ?? []))
+    const gridDemoPerms = ref([...TUTOR, 'leaves:write'].sort())
+    const grantableSet = computed(() => new Set(perms.value))
+
+    const decisions = [
+      '版面：PageHeader「角色權限」+ 副標「設定每個角色可以使用的功能；員工的個別調整在「員工帳號」頁」，右側「新增角色」（只有 roles:write 才出現）。下方左右兩欄：左 280px 角色卡清單（捲動時固定在上方），右邊角色詳情。',
+      'RoleCardsGrid 卡片：名稱（14px / 600，過長省略）+ 系統角色灰色「系統」tag；下一行等寬小字 code；最後一行「28 項權限・1 位員工」（員工數只在 showStaffCount 時顯示）。選中：primary 框線 + 淺底；排序 admin → director → clerk → tutor，自訂角色依名稱。',
+      'RoleCardsGrid 是 radiogroup：每張卡 role=radio，只有選中那張可 Tab 進入，方向鍵移到上一張 / 下一張並直接選取（頭尾循環），Enter / 空白鍵選取；disabled 時整組變淡、不可點、不 emit。欄數自動（每欄最小 200px）：在左欄是一欄，在員工表單（控制列按鈕看）是多欄。',
+      'RoleDetailPanel 標題列：名稱 18px + 「系統角色」tag + 有變更時「未儲存」tag，下面灰字「N 位員工使用・N 項權限」；右側是「刪除角色」（只有非系統角色且有 roles:write）或沒有 roles:write 時的灰字「你只有檢視權限」。',
+      '表單：代碼唯讀（等寬字純文字）、名稱（必填、字數計數）、說明（textarea 兩行、200 字）、權限 PermissionPicker。footer 左邊 info icon 灰字「權限變更會在員工下一次操作時立即生效」，右邊「儲存」（沒變更時 disabled）。只送有變更的欄位（控制列「最後送出」可看 body）。',
+      'admin 角色：頂端 info alert「管理員角色擁有全部權限（含未來新增），不可修改」，所有欄位 disabled、權限全勾、沒有任何按鈕。沒有 roles:write（主任）：全部 disabled、沒有按鈕。',
+      '儲存失敗：cannot_grant_permissions 與 last_role_manager / last_staff_manager 顯示在表單頂端的紅色 alert（可關閉，列出權限中文名稱或後端訊息），因為使用者要對照勾選清單修改；其他錯誤 ElMessage.error。',
+      '刪除：確認框「確定要刪除角色「{name}」嗎？」（useConfirmDelete，按鈕「刪除」/「取消」）。仍有員工使用時按鈕先 disabled，hover tooltip「仍有 N 位員工使用此角色，請先調整他們的角色」（待裁定 2）；清單過期而後端回 409 role_in_use 時 ElMessage.error 同一句。刪除成功選第一個角色。',
+      'PermissionPicker：上方搜尋框（240px，比對中文名稱與代碼、不分大小寫）+「已選 N / 28」；每組一個框：組標頭（淺灰底）有收合鈕、整組勾選（部分勾選時 indeterminate）、右側「已選 x / y」；組內每項是 checkbox：中文名稱 + 下一行等寬小字代碼，自動多欄（每欄 ≥ 240px）。搜尋時只列出命中的組與項目並強制展開；沒有命中顯示「找不到符合的權限」。',
+      'PermissionPicker 不可授出：沒勾的碼若不在自己的權限內 → disabled（文字變淡）+ hover tooltip「你沒有此權限，無法授出」；已勾選的照樣可以取消。整組勾選只勾可授出的碼；組內全部不可操作時整組勾選也 disabled。highlight 的碼在名稱後加灰色線框「角色預設」小 tag（員工表單用）。',
+      '新增角色 dialog（FormDialog lg 800px，送出鈕「建立」）：代碼與名稱並排，代碼下方灰字「建立後不可修改」；「從既有角色複製權限」下拉列出角色名稱與權限數，選了就把可授出的碼帶入權限勾選器，有略過時橘字「已略過 N 項你沒有的權限」。代碼格式錯誤與「代碼已被使用」（409 role_code_taken）顯示在代碼欄位下方。建立後選中新角色。',
+      '切換角色時詳情有未儲存變更 → confirmDiscardChanges；選中的角色存在 ?role={code}。載入中：左欄 5 張卡骨架 + 右側段落骨架；載入失敗：EmptyState error「無法載入角色」+「重試」。角色清單不會是空的（4 個系統角色恆在），沒有空狀態。',
+    ]
+    const openQuestions = [
+      { question: '1. 名稱與代碼長度前後端規格不一致：FRONTEND-069/070 寫名稱 ≤30、代碼 ^[a-z][a-z0-9_]{1,29}$；BACKEND-076 與已完成的 DB-003 CHECK 是名稱 1~50、代碼 {1,31}（最長 32 字）。', optionA: '（推薦）前端改成對齊後端：名稱 ≤50、代碼 2~32 字（不用動 DB）', optionB: '後端 schema 收緊成名稱 ≤30、代碼 ≤30（DB CHECK 維持較寬，靠 API 擋）' },
+      { question: '2. 有員工使用中的自訂角色，「刪除角色」按鈕怎麼呈現？', optionA: '（推薦，稿已照畫）先 disabled + tooltip「仍有 N 位員工使用此角色，請先調整他們的角色」，後端 409 只當清單過期時的保險', optionB: '按鈕一律可按，按下確認後才由後端 409 回錯誤訊息（照規格字面）' },
+    ]
+
+    return {
+      meta, decisions, openQuestions, roles: ROLES, viewAs, perms, can, user, device, onNavigate, notesOpen: ref(false),
+      pageState, simError, lastRequest, roleList, sortedRoles, selectedId, selectedRole, selectedCode, detailRef, selectRole,
+      onSaved, onDeleted, onCreated, createOpen, openCreate, retry, CATALOG,
+      gridDemoOpen: ref(false), gridDemoRole, gridDemoHighlight, gridDemoPerms, grantableSet,
+    }
+  },
+})
+
+app.use(ElementPlus, { locale: ElementPlusLocaleZhTw })
+app.component('PermissionPicker', PermissionPicker)
+app.component('EmptyState', EmptyState)
+app.component('FormDialog', FormDialog)
+const toKebab = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+for (const [name, component] of Object.entries(ElementPlusIconsVue)) {
+  app.component(`icon-${toKebab(name)}`, component)
+}
+app.mount('#app')
+</script>
+</body>
+</html>

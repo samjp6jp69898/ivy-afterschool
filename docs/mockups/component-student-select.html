@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+
+<meta name="preview-status" content="draft">
+<meta name="preview-tasks" content="FRONTEND-096">
+<meta name="preview-route" content="component:components/student/StudentSelect.vue">
+<meta name="preview-updated" content="2026-10-04">
+
+<title>設計稿：StudentSelect（遠端搜尋學生下拉）</title>
+
+<!-- 版號對齊 apps/web/pnpm-lock.yaml 的實際安裝版本 -->
+<link rel="stylesheet" href="https://unpkg.com/element-plus@2.14.7/dist/index.css">
+<script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/locale/zh-tw.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue@2.3.2/dist/index.iife.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+#app { display: flex; flex-direction: column; height: 100%; }
+body { font-family: var(--el-font-family); background: var(--el-bg-color-page); color: var(--el-text-color-primary); }
+
+.preview-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 6px 16px; font-size: 12px;
+  color: var(--el-color-info-dark-2);
+  background: var(--el-color-info-light-9);
+  border-bottom: 1px dashed var(--el-border-color);
+}
+.preview-bar__spacer { flex: 1; }
+.preview-bar code { font-size: 12px; }
+
+.sheet { flex: 1; min-height: 0; overflow: auto; padding: 24px; }
+.sheet__inner { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+.section-title { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+.section-desc { margin: 0 0 16px; font-size: 13px; color: var(--el-text-color-secondary); line-height: 1.6; }
+.demo-label { margin: 20px 0 8px; font-size: 12px; font-weight: 600; color: var(--el-text-color-secondary); }
+.demo-box { padding: 16px; border: 1px dashed var(--el-border-color); border-radius: 6px; background: var(--el-bg-color); }
+.demo-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.text-secondary { color: var(--el-text-color-secondary); font-size: 13px; }
+.el-button > span > .el-icon { margin-right: 4px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.emit-log {
+  margin-top: 12px; padding: 8px 12px; min-height: 64px; max-height: 160px; overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.7;
+  color: var(--el-text-color-regular); background: var(--el-fill-color-light); border-radius: 4px;
+}
+.emit-log__empty { color: var(--el-text-color-placeholder); }
+
+/* ---------- StudentSelect（FRONTEND-096） ---------- */
+.student-option { display: flex; align-items: baseline; gap: 2px; min-width: 0; }
+.student-option__name { color: var(--el-text-color-primary); }
+.student-option__meta { color: var(--el-text-color-secondary); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.el-select-dropdown__item.is-selected .student-option__name { color: var(--el-color-primary); font-weight: 600; }
+.student-select__status { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; font-size: 14px; color: var(--el-text-color-secondary); }
+.student-select__status.is-error { color: var(--el-color-danger); }
+
+/* 狀態一覽：把下拉面板攤平畫出來（實作時是 el-select 的 popper，不是常駐區塊） */
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.gallery__cell { display: flex; flex-direction: column; gap: 6px; }
+.gallery__caption { font-size: 12px; font-weight: 600; color: var(--el-text-color-secondary); }
+.fake-popper { border: 1px solid var(--el-border-color-light); border-radius: var(--el-border-radius-base); background: var(--el-bg-color-overlay); box-shadow: var(--el-box-shadow-light); padding: 6px 0; }
+.fake-popper .el-select-dropdown__item { cursor: default; }
+.fake-popper .el-select-dropdown__loading { display: flex; align-items: center; justify-content: center; gap: 6px; }
+
+/* 使用情境 */
+.context-form { max-width: 560px; }
+.form-hint { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); }
+</style>
+</head>
+
+<body>
+<div id="app">
+  <div class="preview-bar">
+    <el-tag :type="meta.status === 'approved' ? 'success' : 'warning'" size="small" effect="dark" disable-transitions>
+      {{ meta.status === 'approved' ? '已核可' : '待核可' }}
+    </el-tag>
+    <span>{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span class="preview-bar__spacer"></span>
+    <span>更新 {{ meta.updated }}</span>
+    <el-button size="small" text type="primary" @click="notesOpen = true">
+      設計說明 / 待裁定（{{ openQuestions.length }}）
+    </el-button>
+  </div>
+
+  <div class="sheet">
+    <div class="sheet__inner">
+
+      <!-- ============ 互動示範 ============ -->
+      <el-card shadow="never">
+        <h2 class="section-title">StudentSelect<el-tag size="small" disable-transitions>FRONTEND-096</el-tag></h2>
+        <p class="section-desc">el-select <code>filterable remote clearable</code>。輸入停 300ms 後呼叫 <code>listStudents({ q, class_id, status: 'active', page_size: 20 })</code>；空輸入不查詢；舊請求晚到時丟棄。<br>
+          本元件沒有自己的權限判斷：使用它的表單（代登記請假需 <code>leaves:write</code>、員工代建接送需 <code>pickup:operate</code>）缺權限時整個入口不出現。<code>GET /admin/students</code> 需要 <code>students:read</code>（全部員工預設都有）。</p>
+
+        <div class="demo-row">
+          <span class="text-secondary">模擬後端</span>
+          <el-radio-group v-model="sim" size="small">
+            <el-radio-button value="normal">正常（約 0.5 秒）</el-radio-button>
+            <el-radio-button value="slow">很慢（約 2.5 秒，看搜尋中）</el-radio-button>
+            <el-radio-button value="race">先送的請求晚到</el-radio-button>
+            <el-radio-button value="error">請求失敗</el-radio-button>
+          </el-radio-group>
+          <span class="text-secondary">限定班級</span>
+          <el-select v-model="demoClassId" size="small" clearable placeholder="不限" style="width: 140px">
+            <el-option v-for="c in classes" :key="c.id" :label="c.name" :value="c.id"></el-option>
+          </el-select>
+        </div>
+        <div class="demo-box" style="margin-top: 12px">
+          <el-form label-position="top" style="max-width: 360px">
+            <el-form-item label="學生">
+              <student-select v-model="demoValue" :class-id="demoClassId" :sim="sim" @change="onChange" @request="onRequest"></student-select>
+            </el-form-item>
+          </el-form>
+          <div class="text-secondary">試試：輸入「王」「S113」「小」；輸入「李」在「先送的請求晚到」模式下看舊結果被丟棄；輸入「張三」看查無結果。</div>
+          <div class="emit-log">
+            <div v-if="!log.length" class="emit-log__empty">（請求與 emit 紀錄）</div>
+            <div v-for="(l, i) in log" :key="i">{{ l }}</div>
+          </div>
+        </div>
+      </el-card>
+
+      <!-- ============ 狀態一覽 ============ -->
+      <el-card shadow="never">
+        <h2 class="section-title">狀態一覽</h2>
+        <p class="section-desc">下拉面板攤平畫出（實作時是 el-select 的彈出層）。上排是輸入框本身，下排是同時看到的下拉內容。</p>
+        <div class="gallery">
+          <div class="gallery__cell">
+            <span class="gallery__caption">1. 未輸入（不查詢、不展開）</span>
+            <el-input model-value="" placeholder="輸入學號或姓名搜尋" readonly>
+              <template #suffix><el-icon><icon-arrow-down></icon-arrow-down></el-icon></template>
+            </el-input>
+            <span class="text-secondary">點開時沒有下拉面板；placeholder 就是提示。</span>
+          </div>
+          <div class="gallery__cell">
+            <span class="gallery__caption">2. 搜尋中</span>
+            <el-input model-value="王" readonly></el-input>
+            <div class="fake-popper">
+              <div class="student-select__status" role="status"><el-icon class="is-loading"><icon-loading></icon-loading></el-icon>搜尋中…</div>
+            </div>
+          </div>
+          <div class="gallery__cell">
+            <span class="gallery__caption">3. 結果清單</span>
+            <el-input model-value="王" readonly></el-input>
+            <div class="fake-popper">
+              <ul class="el-select-dropdown__list" style="margin: 0; padding: 0">
+                <li v-for="(s, i) in sampleResults" :key="s.id" class="el-select-dropdown__item" :class="{ 'is-hovering': i === 0 }">
+                  <span class="student-option"><span class="student-option__name">{{ s.name }}</span><span class="student-option__meta">（{{ s.student_no }}・{{ s.class ? s.class.name : '未分班' }}）</span></span>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div class="gallery__cell">
+            <span class="gallery__caption">4. 查無結果</span>
+            <el-input model-value="張三" readonly></el-input>
+            <div class="fake-popper"><div class="student-select__status">找不到符合的學生</div></div>
+          </div>
+          <div class="gallery__cell">
+            <span class="gallery__caption">5. 載入失敗</span>
+            <el-input model-value="王" readonly></el-input>
+            <div class="fake-popper">
+              <div class="student-select__status is-error" role="alert"><el-icon><icon-warning-filled></icon-warning-filled></el-icon>無法載入學生</div>
+            </div>
+            <span class="text-secondary">再輸入或修改文字即重新查詢，不另放重試按鈕。</span>
+          </div>
+          <div class="gallery__cell">
+            <span class="gallery__caption">6. 已選取（hover 出現清除 x）</span>
+            <student-select v-model="picked" :initial-option="pickedInitial" sim="normal"></student-select>
+          </div>
+          <div class="gallery__cell">
+            <span class="gallery__caption">7. 編輯時預先顯示（initialOption，未分班）</span>
+            <student-select v-model="pickedNoClass" :initial-option="noClassInitial" sim="normal"></student-select>
+          </div>
+          <div class="gallery__cell">
+            <span class="gallery__caption">8. disabled（已選取）</span>
+            <student-select v-model="pickedDisabled" :initial-option="pickedInitial" sim="normal" disabled></student-select>
+          </div>
+        </div>
+      </el-card>
+
+      <!-- ============ 使用情境 ============ -->
+      <el-card shadow="never">
+        <h2 class="section-title">使用情境<el-tag size="small" type="info" disable-transitions>情境</el-tag></h2>
+        <p class="section-desc">兩個使用端都把它當成一般表單欄位（寬度 100%）。表單驗證錯誤（必填）顯示在 el-form-item 下方，由使用端負責。實際 dialog 的完整版面在各自頁面稿畫。</p>
+        <div class="demo-row" style="align-items: flex-start">
+          <div class="demo-box context-form" style="flex: 1; min-width: 300px">
+            <div class="demo-label" style="margin-top: 0">代登記請假（請假列表頁，leaves:write）</div>
+            <el-form label-position="top" :model="leaveForm">
+              <el-form-item label="學生" required :error="leaveError">
+                <student-select v-model="leaveForm.student_id" sim="normal" @change="leaveError = ''"></student-select>
+              </el-form-item>
+              <el-form-item label="請假日期" required>
+                <el-date-picker type="daterange" model-value="" start-placeholder="開始日" end-placeholder="結束日" style="width: 100%"></el-date-picker>
+              </el-form-item>
+              <el-button type="primary" @click="leaveError = leaveForm.student_id ? '' : '請選擇學生'">送出（看必填錯誤）</el-button>
+            </el-form>
+          </div>
+          <div class="demo-box context-form" style="flex: 1; min-width: 300px">
+            <div class="demo-label" style="margin-top: 0">員工代建接送（接送 POS，pickup:operate；限定目前班級）</div>
+            <el-form label-position="top">
+              <el-form-item label="學生" required>
+                <student-select v-model="pickupStudent" class-id="c3" placeholder="輸入學號或姓名（中年級班）" sim="normal"></student-select>
+                <div class="form-hint">只列出「中年級班」在學學生（classId 由 POS 目前選的班級帶入）。</div>
+              </el-form-item>
+            </el-form>
+          </div>
+        </div>
+      </el-card>
+    </div>
+  </div>
+
+  <el-drawer v-model="notesOpen" title="設計說明 / 待裁定" size="460px">
+    <el-alert v-if="openQuestions.length" title="以下項目需要你裁定，未回覆前這張稿不會進入實作"
+              type="warning" :closable="false" show-icon style="margin-bottom: 16px"></el-alert>
+    <h4>設計決策</h4>
+    <ol>
+      <li v-for="(d, i) in decisions" :key="i" style="margin-bottom: 6px">{{ d }}</li>
+    </ol>
+    <h4 v-if="openQuestions.length">待裁定</h4>
+    <ol>
+      <li v-for="(q, i) in openQuestions" :key="i" style="margin-bottom: 8px">
+        <div>{{ q.question }}</div>
+        <div style="color: var(--el-text-color-secondary); font-size: 13px">
+          A. {{ q.optionA }}<br>B. {{ q.optionB }}
+        </div>
+      </li>
+    </ol>
+  </el-drawer>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch, onBeforeUnmount } = Vue
+
+/** 安親班內部班級 */
+const CLASSES = [
+  { id: 'c1', name: '低年級 A 班' }, { id: 'c2', name: '低年級 B 班' },
+  { id: 'c3', name: '中年級班' }, { id: 'c4', name: '高年級班' },
+]
+const cls = (id) => CLASSES.find((c) => c.id === id) ?? null
+/** StudentListItem（FRONTEND-081）形狀：class 為 {id, name} | null；只列 active（StudentSelect 預設 statuses） */
+const STUDENTS = [
+  { id: 's1', student_no: 'S11301', name: '王小明', grade_level: 3, class: cls('c3'), status: 'active' },
+  { id: 's2', student_no: 'S11302', name: '陳小美', grade_level: 1, class: cls('c1'), status: 'active' },
+  { id: 's3', student_no: 'S11305', name: '李承恩', grade_level: 5, class: cls('c4'), status: 'active' },
+  { id: 's4', student_no: 'S11308', name: '王小華', grade_level: 2, class: cls('c2'), status: 'active' },
+  { id: 's5', student_no: 'S11311', name: '林小安', grade_level: 4, class: cls('c3'), status: 'active' },
+  { id: 's6', student_no: 'S11312', name: '王語晴', grade_level: 4, class: null, status: 'active' },
+  { id: 's7', student_no: 'S11320', name: '李小宇', grade_level: 3, class: cls('c3'), status: 'active' },
+]
+/** 模擬 GET /admin/students?q=：學號前綴（不分大小寫）或姓名包含 */
+const searchStudents = (q, classId) => STUDENTS
+  .filter((s) => s.student_no.toLowerCase().startsWith(q.toLowerCase()) || s.name.includes(q))
+  .filter((s) => !classId || s.class?.id === classId)
+  .slice(0, 20)
+
+const optionLabel = (s) => `${s.name}（${s.student_no}・${s.class ? s.class.name : '未分班'}）`
+
+/* ---------- StudentSelect ----------
+   sim prop 與 request emit 只用於稿裡模擬後端與記錄請求；實作沒有。 */
+const StudentSelect = {
+  props: {
+    modelValue: { type: String, default: null },
+    classId: { type: String, default: undefined },
+    placeholder: { type: String, default: '輸入學號或姓名搜尋' },
+    disabled: { type: Boolean, default: false },
+    initialOption: { type: Object, default: null },
+    sim: { type: String, default: 'normal' },
+  },
+  emits: ['update:modelValue', 'change', 'request'],
+  setup(props, { emit }) {
+    const toItem = (o) => (o ? { id: o.id, name: o.name, student_no: o.student_no, class: o.class_name ? { name: o.class_name } : null } : null)
+    const options = ref(props.initialOption ? [toItem(props.initialOption)] : [])
+    const loading = ref(false)
+    const failed = ref(false)
+    const query = ref('')
+    let timer = null
+    let seq = 0
+    const run = (q) => {
+      const mySeq = ++seq
+      loading.value = true; failed.value = false
+      const params = { q, class_id: props.classId, status: 'active', page_size: 20 }
+      emit('request', `#${mySeq} GET /admin/students ${JSON.stringify(params)}`)
+      let delay = props.sim === 'slow' ? 2500 : 500
+      if (props.sim === 'race' && mySeq % 2 === 1) delay = 1800
+      setTimeout(() => {
+        if (mySeq !== seq) { emit('request', `#${mySeq} 回應晚到（目前最新 #${seq}）→ 丟棄`); return }
+        loading.value = false
+        if (props.sim === 'error') { failed.value = true; options.value = []; return }
+        options.value = searchStudents(q, props.classId)
+        emit('request', `#${mySeq} 回應 ${options.value.length} 筆 → 採用`)
+      }, delay)
+    }
+    const remoteMethod = (raw) => {
+      const q = raw.trim()
+      query.value = q
+      clearTimeout(timer)
+      if (!q) { seq++; loading.value = false; failed.value = false; return }
+      loading.value = true; failed.value = false
+      timer = setTimeout(() => run(q), 300)
+    }
+    onBeforeUnmount(() => clearTimeout(timer))
+    const onUpdate = (id) => {
+      emit('update:modelValue', id ?? null)
+      emit('change', options.value.find((o) => o.id === id) ?? null)
+    }
+    return { options, loading, failed, query, remoteMethod, onUpdate, optionLabel }
+  },
+  template: `
+    <el-select :model-value="modelValue" filterable remote clearable :remote-method="remoteMethod"
+               :loading="loading" :placeholder="placeholder" :disabled="disabled" style="width: 100%"
+               loading-text="搜尋中…" @update:model-value="onUpdate">
+      <el-option v-for="s in options" :key="s.id" :value="s.id" :label="optionLabel(s)">
+        <span class="student-option"><span class="student-option__name">{{ s.name }}</span><span class="student-option__meta">（{{ s.student_no }}・{{ s.class ? s.class.name : '未分班' }}）</span></span>
+      </el-option>
+      <!-- 提供 #empty slot 時 EP 不再顯示 loading-text，搜尋中要自己畫 -->
+      <template #empty>
+        <div v-if="loading" class="student-select__status" role="status"><el-icon class="is-loading"><icon-loading></icon-loading></el-icon>搜尋中…</div>
+        <div v-else-if="failed" class="student-select__status is-error" role="alert"><el-icon><icon-warning-filled></icon-warning-filled></el-icon>無法載入學生</div>
+        <div v-else-if="query" class="student-select__status">找不到符合的學生</div>
+      </template>
+    </el-select>`,
+}
+
+const app = createApp({
+  components: { StudentSelect },
+  setup() {
+    const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
+    const meta = {
+      status: readMeta('preview-status'), tasks: readMeta('preview-tasks'),
+      route: readMeta('preview-route'), updated: readMeta('preview-updated'),
+    }
+
+    const decisions = [
+      '外觀就是 Element Plus 的 el-select（filterable remote clearable），寬度 100%，跟著所在表單欄位伸縮；預設 placeholder「輸入學號或姓名搜尋」，使用端可覆寫（例如接送 POS 加上班級名稱）。',
+      '選項文字照規格「王小明（S11301・中年級班）」；下拉裡姓名用主要文字色、括號內學號與班級用 13px 次要色並在過長時省略，選中後輸入框顯示完整同一串字。沒有班級顯示「未分班」。',
+      '未輸入（或只輸入空白）不查詢，也不展開下拉；清掉文字會作廢進行中的請求。',
+      '輸入停 300ms 才查；等待 debounce 與請求期間下拉顯示 EP 的 loading 列，文字「搜尋中…」。',
+      '查無結果顯示「找不到符合的學生」；請求失敗顯示紅字警告 icon「無法載入學生」（role=alert），不另放重試按鈕，再輸入或修改文字即重查。失敗時清空選項，不保留上一次結果，避免選到過期清單。',
+      '舊請求晚到時直接丟棄（遞增序號），畫面只反映最後一次輸入的結果。',
+      '可清除（hover 出現 x）：清除時 emit update:modelValue(null) 與 change(null)。選取時 change 帶完整 StudentListItem。',
+      'initialOption（編輯既有資料時）放進選項清單作為唯一初始選項，讓輸入框直接顯示「姓名（學號・班級）」，不需先查一次。',
+      '查詢參數固定 status=active、page_size=20（最多顯示 20 筆，不做「載入更多」：學號或姓名再多打一個字就能縮小範圍）；classId 有值時帶 class_id 只查該班。',
+      '本元件沒有權限差異：使用端的入口（代登記請假 leaves:write、員工代建接送 pickup:operate）缺權限時整個 dialog 不出現；disabled 由使用端決定（例如送出中）。',
+    ]
+    const openQuestions = []
+
+    const log = ref([])
+    const t0 = Date.now()
+    const push = (line) => {
+      const ms = String(Date.now() - t0).padStart(6, ' ')
+      log.value.unshift(`+${ms}ms  ${line}`)
+      log.value.length = Math.min(log.value.length, 40)
+    }
+    const onRequest = (line) => push(line)
+    const onChange = (s) => push(`emit change ${s ? JSON.stringify({ id: s.id, name: s.name, student_no: s.student_no, class: s.class }) : 'null'}`)
+
+    const pickedInitial = { id: 's1', name: '王小明', student_no: 'S11301', class_name: '中年級班' }
+    const noClassInitial = { id: 's6', name: '王語晴', student_no: 'S11312', class_name: null }
+
+    return {
+      meta, decisions, openQuestions, notesOpen: ref(false), classes: CLASSES,
+      sim: ref('normal'), demoValue: ref(null), demoClassId: ref(null), log, onRequest, onChange,
+      sampleResults: searchStudents('王'),
+      picked: ref('s1'), pickedNoClass: ref('s6'), pickedDisabled: ref('s1'), pickedInitial, noClassInitial,
+      leaveForm: reactive({ student_id: null }), leaveError: ref(''), pickupStudent: ref(null),
+    }
+  },
+})
+
+app.use(ElementPlus, { locale: ElementPlusLocaleZhTw })
+const toKebab = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+for (const [name, component] of Object.entries(ElementPlusIconsVue)) {
+  app.component(`icon-${toKebab(name)}`, component)
+}
+app.mount('#app')
+</script>
+</body>
+</html>

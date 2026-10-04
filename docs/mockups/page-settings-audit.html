@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+
+<meta name="preview-status" content="draft">
+<meta name="preview-tasks" content="FRONTEND-072,FRONTEND-073">
+<meta name="preview-route" content="/settings/audit">
+<meta name="preview-updated" content="2026-10-04">
+
+<title>設計稿：稽核紀錄</title>
+
+<!-- 版號對齊 apps/web/pnpm-lock.yaml 的實際安裝版本 -->
+<link rel="stylesheet" href="https://unpkg.com/element-plus@2.14.7/dist/index.css">
+<script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/locale/zh-tw.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue@2.3.2/dist/index.iife.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+#app { display: flex; flex-direction: column; height: 100%; }
+body { font-family: var(--el-font-family); background: var(--el-fill-color); color: var(--el-text-color-primary); }
+
+.preview-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 6px 16px; font-size: 12px;
+  color: var(--el-color-info-dark-2);
+  background: var(--el-color-info-light-9);
+  border-bottom: 1px dashed var(--el-border-color);
+}
+.preview-bar__spacer { flex: 1; }
+.preview-bar code { font-size: 12px; }
+.text-secondary { color: var(--el-text-color-secondary); font-size: 13px; }
+.el-button > span > .el-icon { margin-right: 4px; }
+.stage { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+.control-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; font-size: 12px; color: var(--el-text-color-secondary); background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-lighter); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* ==================== ADMIN SHELL CSS START（各頁稿逐字複製這一段） ==================== */
+/* 裝置框：只存在於設計稿，模擬桌機 / 平板 1024×768 / 手機 390×844 */
+.device-frame { position: relative; margin: 0 auto; overflow: hidden; background: var(--el-bg-color-page); border: 1px solid var(--el-border-color); border-radius: 10px; box-shadow: var(--el-box-shadow-light); }
+.device-frame.is-desktop { width: 1200px; height: 760px; }
+.device-frame.is-tablet { width: 1024px; height: 768px; }
+.device-frame.is-mobile { width: 390px; height: 844px; border-radius: 24px; }
+
+.shell { display: flex; height: 100%; }
+.shell__aside { display: flex; flex-direction: column; flex-shrink: 0; width: 220px; background: var(--el-bg-color); border-right: 1px solid var(--el-border-color-light); transition: width 0.2s ease; }
+.shell__aside.is-collapsed { width: 64px; }
+.shell__brand { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 22px; flex-shrink: 0; white-space: nowrap; overflow: hidden; font-weight: 600; color: var(--el-text-color-primary); border-bottom: 1px solid var(--el-border-color-lighter); }
+.shell__brand .el-icon { font-size: 20px; color: var(--el-color-primary); flex-shrink: 0; }
+.shell__menu { flex: 1; min-height: 0; overflow: hidden auto; }
+.shell__menu .el-menu { border-right: none; }
+.shell__menu .el-menu-item-group__title { padding-top: 14px; font-size: 12px; }
+.shell__menu .el-menu--collapse .el-menu-item-group__title { height: 1px; padding: 0; margin: 8px 12px; background: var(--el-border-color-lighter); overflow: hidden; }
+.shell__menu .el-menu-item { height: 44px; line-height: 44px; }
+.shell__empty { padding: 24px 16px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.shell__collapse { flex-shrink: 0; height: 44px; border-top: 1px solid var(--el-border-color-lighter); display: flex; align-items: center; justify-content: center; }
+.shell__body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.shell__header { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 12px 0 8px; flex-shrink: 0; background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-light); }
+.shell__toggle { width: 44px; height: 44px; }
+.shell__title { margin: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shell__spacer { flex: 1; }
+.ws-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-info-light-3); margin: 0 6px; }
+.ws-dot.is-open { background: var(--el-color-success); }
+.ws-dot.is-reconnecting { background: var(--el-color-warning); }
+.shell__bell { width: 44px; height: 44px; font-size: 18px; }
+.shell__bell .el-badge__content { top: 10px; right: 12px; }
+.shell__user { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 8px; cursor: pointer; border-radius: 6px; color: var(--el-text-color-regular); font-size: 14px; }
+.shell__user:hover { background: var(--el-fill-color-light); }
+.shell__banner { flex-shrink: 0; border-radius: 0; }
+.shell__main { flex: 1; min-height: 0; overflow: auto; padding: 20px; }
+.device-frame.is-tablet .shell__main { padding: 16px; }
+.device-frame.is-mobile .shell__main { padding: 12px; }
+/* 手機：側欄改抽屜（實作用 el-drawer，稿裡在裝置框內模擬） */
+.shell__scrim { position: absolute; inset: 0; z-index: 20; background: var(--el-overlay-color-lighter); }
+.shell__drawer { position: absolute; top: 0; bottom: 0; left: 0; z-index: 21; width: 240px; display: flex; flex-direction: column; background: var(--el-bg-color); box-shadow: var(--el-box-shadow-dark); }
+
+/* 通知面板（FRONTEND-036） */
+.notif { width: 360px; margin: -12px; }
+.notif__head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 10px 16px; border-bottom: 1px solid var(--el-border-color-lighter); }
+.notif__title { font-size: 15px; font-weight: 600; }
+.notif__list { max-height: 420px; overflow: auto; }
+.notif__row { position: relative; display: block; width: 100%; padding: 12px 16px 12px 28px; text-align: left; cursor: pointer; border: none; border-bottom: 1px solid var(--el-border-color-extra-light); background: var(--el-bg-color); font-family: inherit; color: inherit; }
+.notif__row:hover, .notif__row:focus-visible { background: var(--el-fill-color-light); outline: none; }
+.notif__row.is-unread { background: var(--el-color-primary-light-9); }
+.notif__row.is-unread:hover { background: var(--el-color-primary-light-8); }
+.notif__dot { position: absolute; left: 12px; top: 18px; width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-primary); }
+.notif__row-title { font-size: 14px; font-weight: 600; color: var(--el-text-color-primary); }
+.notif__row-body { margin-top: 2px; font-size: 13px; line-height: 1.5; color: var(--el-text-color-regular); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+.notif__row-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--el-text-color-secondary); }
+.notif__empty { padding: 40px 16px; text-align: center; font-size: 13px; color: var(--el-text-color-secondary); }
+.notif__skeleton { padding: 12px 16px; }
+/* ==================== ADMIN SHELL CSS END ==================== */
+
+/* ==== 以下逐字複製自 component-common.html（已核可） ==== */
+/* ---------- PageHeader（FRONTEND-039） ---------- */
+.page-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+.page-header__body { flex: 1; min-width: 0; }
+.page-header__title { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; color: var(--el-text-color-primary); }
+.page-header__subtitle { margin: 4px 0 0; font-size: 13px; color: var(--el-text-color-secondary); }
+.page-header__extra { margin-top: 8px; }
+.page-header__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+.page-header__actions .el-button + .el-button { margin-left: 0; }
+/* 實作用 @media (max-width: 767.98px)；稿裡用 .is-narrow 在 375px 框內示意 */
+.is-narrow .page-header { flex-wrap: wrap; }
+.is-narrow .page-header__body { flex-basis: 100%; }
+.is-narrow .page-header__actions { width: 100%; }
+
+/* ---------- AdminListToolbar（FRONTEND-041） ---------- */
+.list-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.list-toolbar__search { width: 240px; }
+.list-toolbar__filter { display: flex; align-items: center; gap: 6px; }
+.list-toolbar__filter-label { font-size: 13px; color: var(--el-text-color-secondary); white-space: nowrap; }
+.list-toolbar__spacer { flex: 1 1 auto; }
+.list-toolbar__count { font-size: 13px; color: var(--el-text-color-secondary); white-space: nowrap; }
+.list-toolbar__actions { display: flex; gap: 8px; }
+.list-toolbar__actions .el-button + .el-button { margin-left: 0; }
+.is-narrow .list-toolbar__search { width: 100%; }
+.is-narrow .list-toolbar__filter { flex: 1 1 calc(50% - 6px); }
+.is-narrow .list-toolbar__filter .el-select { flex: 1; }
+
+/* ---------- EmptyState（FRONTEND-042） ---------- */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 16px; }
+.empty-state__icon { font-size: 48px; color: var(--el-text-color-placeholder); margin-bottom: 16px; }
+.empty-state__title { margin: 0 0 6px; font-size: 16px; font-weight: 500; color: var(--el-text-color-regular); }
+.empty-state__desc { margin: 0; max-width: 360px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.empty-state__action { margin-top: 16px; display: flex; gap: 8px; }
+.empty-state.is-error .empty-state__icon { color: var(--el-color-danger); }
+.empty-state.is-inline { padding: 16px 8px; }
+.empty-state.is-inline .empty-state__title { font-size: 14px; margin-bottom: 2px; }
+.empty-state.is-inline .empty-state__action { margin-top: 8px; }
+
+/* ==================== 稽核紀錄（FRONTEND-072、073） ==================== */
+.panel { background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter); border-radius: 8px; padding: 16px; }
+.list-pager { display: flex; justify-content: flex-end; margin-top: 12px; }
+.audit-table .el-table__row { cursor: pointer; }
+.audit-time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.audit-actor { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.audit-actor__name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.audit-action__label { color: var(--el-text-color-primary); }
+.audit-action__code, .audit-entity__id { font-size: 12px; color: var(--el-text-color-secondary); }
+.audit-ip { font-size: 13px; color: var(--el-text-color-regular); }
+.query-preview { font-size: 12px; color: var(--el-text-color-secondary); word-break: break-all; }
+
+/* AuditDiffDrawer（FRONTEND-073） */
+.diff-info { margin-bottom: 20px; }
+.diff-info .el-descriptions__label { width: 96px; }
+.diff-ua { display: block; max-width: 340px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.diff-entity { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.diff-head { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; }
+.diff-head__title { margin: 0; font-size: 15px; font-weight: 600; }
+.diff-head__summary { flex: 1; font-size: 12px; color: var(--el-text-color-secondary); }
+.diff-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+.diff-table th { padding: 8px 10px; text-align: left; font-weight: 600; color: var(--el-text-color-secondary); background: var(--el-fill-color-light); border-bottom: 1px solid var(--el-border-color-lighter); }
+.diff-table td { padding: 8px 10px; vertical-align: top; border-bottom: 1px solid var(--el-border-color-extra-light); word-break: break-all; white-space: pre-wrap; }
+.diff-table col.c-field { width: 30%; }
+.diff-field { color: var(--el-text-color-regular); }
+.diff-cell.is-added { background: var(--el-color-success-light-9); color: var(--el-color-success-dark-2); }
+.diff-cell.is-removed { background: var(--el-color-danger-light-9); color: var(--el-color-danger); text-decoration: line-through; }
+.diff-cell.is-old { color: var(--el-text-color-secondary); }
+.diff-row.is-same td { color: var(--el-text-color-placeholder); }
+.diff-absent { color: var(--el-text-color-placeholder); text-decoration: none; display: inline-block; }
+.diff-null { color: var(--el-text-color-placeholder); font-style: italic; }
+.diff-badge { margin-right: 6px; text-decoration: none; display: inline-block; }
+</style>
+</head>
+
+<body>
+<div id="app">
+  <div class="preview-bar">
+    <el-tag :type="meta.status === 'approved' ? 'success' : 'warning'" size="small" effect="dark" disable-transitions>
+      {{ meta.status === 'approved' ? '已核可' : '待核可' }}
+    </el-tag>
+    <span>{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span>以身分檢視</span>
+    <el-select v-model="viewAs" size="small" style="width: 220px">
+      <el-option v-for="(r, key) in roles" :key="key" :label="r.label" :value="key"></el-option>
+    </el-select>
+    <span>裝置</span>
+    <el-radio-group v-model="device" size="small">
+      <el-radio-button value="desktop">桌機 1200</el-radio-button>
+      <el-radio-button value="tablet">平板 1024</el-radio-button>
+    </el-radio-group>
+    <span class="preview-bar__spacer"></span>
+    <span>更新 {{ meta.updated }}</span>
+    <el-button size="small" text type="primary" @click="notesOpen = true">
+      設計說明 / 待裁定（{{ openQuestions.length }}）
+    </el-button>
+  </div>
+  <div class="control-bar">
+    <span>稿件控制：</span>
+    <span>列表</span>
+    <el-radio-group v-model="listState" size="small">
+      <el-radio-button value="data">有資料</el-radio-button>
+      <el-radio-button value="empty">空清單</el-radio-button>
+      <el-radio-button value="loading">載入中</el-radio-button>
+      <el-radio-button value="error">載入失敗</el-radio-button>
+    </el-radio-group>
+    <span class="query-preview">GET <span class="mono">/admin/audit-logs?{{ queryString }}</span></span>
+  </div>
+
+  <div class="stage">
+    <admin-shell :key="device" :device="device" :perms="perms" :user="user" active-path="/settings/audit" @navigate="onNavigate">
+      <el-alert v-if="!can('audit:read')" type="info" :closable="false" show-icon style="margin-bottom: 16px"
+                title="此身分沒有 audit:read：側欄沒有「稽核紀錄」，直接輸入網址會被導向 /forbidden（見 page-error.html）。以下內容僅供對照。"></el-alert>
+      <page-header title="稽核紀錄" subtitle="帳號、角色、系統設定與重要營運異動的紀錄；紀錄只能查詢，無法修改或刪除"></page-header>
+
+      <section class="panel">
+        <!-- 篩選列：沿用 AdminListToolbar 的版面樣式（本頁沒有關鍵字搜尋，所以不用該元件） -->
+        <div class="list-toolbar">
+          <div class="list-toolbar__filter">
+            <span class="list-toolbar__filter-label">動作類別</span>
+            <el-select v-model="filters.action_prefix" style="width: 170px" @change="onFilter">
+              <el-option label="全部" :value="ALL"></el-option>
+              <el-option v-for="o in ACTION_CATEGORIES" :key="o.value" :label="o.label" :value="o.value"></el-option>
+            </el-select>
+          </div>
+          <div class="list-toolbar__filter">
+            <span class="list-toolbar__filter-label">對象類型</span>
+            <el-select v-model="filters.entity_type" filterable allow-create default-first-option style="width: 150px" @change="onFilter">
+              <el-option label="全部" :value="ALL"></el-option>
+              <el-option v-for="(label, code) in ENTITY_LABELS" :key="code" :label="label" :value="code"></el-option>
+            </el-select>
+          </div>
+          <div class="list-toolbar__filter">
+            <span class="list-toolbar__filter-label">操作者</span>
+            <el-select v-model="filters.actor_type" style="width: 110px" @change="onFilter">
+              <el-option label="全部" :value="ALL"></el-option>
+              <el-option v-for="(v, k) in ACTOR_TYPES" :key="k" :label="v.label" :value="k"></el-option>
+            </el-select>
+          </div>
+          <div class="list-toolbar__filter">
+            <span class="list-toolbar__filter-label">日期</span>
+            <el-date-picker v-model="filters.range" type="daterange" value-format="YYYY-MM-DD" :clearable="false" unlink-panels
+                            range-separator="～" start-placeholder="開始日" end-placeholder="結束日" :shortcuts="shortcuts"
+                            :disabled-date="(d) => d > TODAY_DATE" style="width: 250px" @change="onFilter"></el-date-picker>
+          </div>
+          <el-button text type="primary" :disabled="!isFiltered" @click="resetFilters">重設</el-button>
+          <span class="list-toolbar__spacer"></span>
+          <span v-if="listState === 'data' || listState === 'empty'" class="list-toolbar__count">共 {{ total }} 筆</span>
+        </div>
+
+        <empty-state v-if="listState === 'error'" variant="error" title="無法載入稽核紀錄" description="網路連線中斷，請確認網路後再試一次">
+          <template #action><el-button @click="retry">重試</el-button></template>
+        </empty-state>
+
+        <template v-else>
+          <el-table class="audit-table" v-loading="listState === 'loading'" :data="rows" border row-key="id" @row-click="openDiff">
+            <el-table-column label="時間" width="150">
+              <template #default="{ row }"><span class="audit-time">{{ row.created_at }}</span></template>
+            </el-table-column>
+            <el-table-column label="操作者" min-width="150">
+              <template #default="{ row }">
+                <div class="audit-actor">
+                  <span class="audit-actor__name">{{ row.actor_name || '—' }}</span>
+                  <actor-tag :type="row.actor_type"></actor-tag>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="動作" min-width="190">
+              <template #default="{ row }">
+                <div v-if="ACTION_LABELS[row.action]" class="audit-action__label">{{ ACTION_LABELS[row.action] }}</div>
+                <div class="audit-action__code mono">{{ row.action }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column label="對象" min-width="170">
+              <template #default="{ row }">
+                <div>{{ ENTITY_LABELS[row.entity_type] || row.entity_type }}</div>
+                <div class="audit-entity__id mono">{{ shortId(row.entity_id) }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column label="IP" width="130">
+              <template #default="{ row }"><span class="audit-ip mono">{{ row.ip || '—' }}</span></template>
+            </el-table-column>
+            <el-table-column label="" width="72" align="center">
+              <template #default="{ row }"><el-button link type="primary" @click.stop="openDiff(row)">詳情</el-button></template>
+            </el-table-column>
+            <template #empty>
+              <empty-state v-if="listState !== 'loading'" variant="inline" title="這段期間沒有稽核紀錄"
+                           description="試著放寬日期區間或調整篩選條件"></empty-state>
+            </template>
+          </el-table>
+          <div v-if="listState === 'data'" class="list-pager">
+            <el-pagination v-model:current-page="page" :page-size="50" :total="total" layout="total, prev, pager, next" background></el-pagination>
+          </div>
+        </template>
+      </section>
+    </admin-shell>
+  </div>
+
+  <audit-diff-drawer v-model="diffOpen" :log="diffLog" :action-label="diffLog ? (ACTION_LABELS[diffLog.action] || diffLog.action) : ''"></audit-diff-drawer>
+
+  <el-drawer v-model="notesOpen" title="設計說明 / 待裁定" size="500px">
+    <el-alert v-if="openQuestions.length" title="以下項目需要你裁定，未回覆前這張稿不會進入實作"
+              type="warning" :closable="false" show-icon style="margin-bottom: 16px"></el-alert>
+    <h4>設計決策</h4>
+    <ol>
+      <li v-for="(d, i) in decisions" :key="i" style="margin-bottom: 6px">{{ d }}</li>
+    </ol>
+    <h4 v-if="openQuestions.length">待裁定</h4>
+    <ol>
+      <li v-for="(q, i) in openQuestions" :key="i" style="margin-bottom: 8px">
+        <div>{{ q.question }}</div>
+        <div style="color: var(--el-text-color-secondary); font-size: 13px">
+          A. {{ q.optionA }}<br>B. {{ q.optionB }}
+        </div>
+      </li>
+    </ol>
+  </el-drawer>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch, onBeforeUnmount, nextTick } = Vue
+const { ElMessage, ElMessageBox } = ElementPlus
+
+/* ==================== ADMIN SHELL JS START（各頁稿逐字複製這一段） ==================== */
+/** 各角色預設權限碼，與 docs/domain_spec.md §3「預設授予」一致；admin 擁有全部。 */
+const ALL_STAFF = [
+  'dashboard:read', 'classes:read', 'students:read',
+  'attendance:read', 'attendance:operate', 'leaves:read',
+  'homework:read', 'homework:write', 'pickup:read', 'pickup:operate', 'exams:read',
+]
+const DIRECTOR = [...ALL_STAFF,
+  'staff:read', 'roles:read', 'settings:read', 'settings:write', 'audit:read',
+  'classes:write', 'students:write', 'students:sensitive', 'guardians:write',
+  'attendance:amend', 'leaves:write', 'pickup:override', 'exams:write', 'exams:publish']
+const CLERK = [...ALL_STAFF, 'settings:read', 'classes:write', 'students:write', 'guardians:write',
+  'leaves:write', 'exams:write', 'exams:publish']
+const TUTOR = [...ALL_STAFF, 'exams:write']
+const ADMIN = [...DIRECTOR, 'staff:write', 'roles:write', 'students:purge']
+const SHELL_USERS = {
+  admin: { display_name: '系統管理員', role: '系統管理員' },
+  director: { display_name: '張主任', role: '主任' },
+  clerk: { display_name: '林行政', role: '行政' },
+  tutor: { display_name: '陳老師', role: '課輔老師' },
+}
+
+/** 與 apps/web/src/constants/navigation.ts 的 NAVIGATION 逐項一致（原檔是權威） */
+const NAVIGATION = [
+  { key: 'home', label: '首頁', items: [{ label: '今日儀表板', path: '/', icon: 'icon-odometer', permission: 'dashboard:read' }] },
+  { key: 'daily', label: '日常營運', items: [
+    { label: '今日出勤', path: '/attendance', icon: 'icon-calendar', permission: 'attendance:read' },
+    { label: '作業進度', path: '/homework', icon: 'icon-edit-pen', permission: 'homework:read' },
+    { label: '接送', path: '/pickup', icon: 'icon-van', permission: 'pickup:read' },
+    { label: '代理接送核驗', path: '/pickup/authorizations', icon: 'icon-stamp', permission: 'pickup:read' },
+    { label: '請假', path: '/leaves', icon: 'icon-tickets', permission: 'leaves:read' },
+  ] },
+  { key: 'students', label: '學生與班級', items: [
+    { label: '學生工作台', path: '/students', icon: 'icon-user', permission: 'students:read' },
+    { label: '班級管理', path: '/classes', icon: 'icon-school', permission: 'classes:read' },
+    { label: '月出勤報表', path: '/attendance/monthly', icon: 'icon-data-line', permission: 'attendance:read' },
+  ] },
+  { key: 'exams', label: '成績', items: [{ label: '考試', path: '/exams', icon: 'icon-trophy', permission: 'exams:read' }] },
+  { key: 'settings', label: '設定', items: [
+    { label: '系統設定', path: '/settings/system', icon: 'icon-setting', permission: 'settings:read' },
+    { label: '參考資料', path: '/settings/reference', icon: 'icon-collection', permission: 'settings:read' },
+    { label: '員工帳號', path: '/settings/accounts', icon: 'icon-user-filled', permission: 'staff:read' },
+    { label: '角色權限', path: '/settings/roles', icon: 'icon-lock', permission: 'roles:read' },
+    { label: '稽核紀錄', path: '/settings/audit', icon: 'icon-list', permission: 'audit:read' },
+  ] },
+]
+/** 與 apps/web/src/router/routes.ts 的 meta.title / meta.tablet 一致 */
+const ROUTE_META = {
+  '/': { title: '今日儀表板' }, '/students': { title: '學生工作台' }, '/classes': { title: '班級管理' },
+  '/attendance': { title: '今日出勤', tablet: true }, '/attendance/monthly': { title: '月出勤報表' }, '/leaves': { title: '請假' },
+  '/homework': { title: '作業進度', tablet: true }, '/pickup': { title: '接送', tablet: true },
+  '/pickup/authorizations': { title: '代理接送核驗', tablet: true }, '/exams': { title: '考試' }, '/exams/e1': { title: '考試成績' },
+  '/settings/system': { title: '系統設定' }, '/settings/reference': { title: '參考資料' }, '/settings/accounts': { title: '員工帳號' },
+  '/settings/roles': { title: '角色權限' }, '/settings/audit': { title: '稽核紀錄' },
+}
+/** 與 apps/web/src/shared/constants/statusLabels.ts 的 NOTIFICATION_EVENT_LABELS 一致 */
+const NOTIFICATION_EVENT_LABELS = {
+  'attendance.checked_in': '到班通知', 'attendance.checked_out': '離班通知', 'leave.created': '學生請假',
+  'leave.cancelled': '學生取消請假', 'homework.eta_updated': '預計可接送時間', 'homework.done': '作業完成',
+  'pickup.requested': '家長發起接送', 'pickup.replied': '老師回覆接送', 'pickup.arrived': '家長已抵達',
+  'pickup.completed': '接送完成', 'pickup.cancelled': '接送取消', 'exam.published': '成績公布', 'binding.completed': '綁定完成',
+}
+/** 員工收得到的站內通知（domain_spec M9）；文案依 BACKEND-203 templates */
+const SAMPLE_NOTIFICATIONS = () => [
+  { id: 'n1', event: 'pickup.requested', title: '王小明 家長要來接', body: '家長預計 17:30 抵達。', deep_link: '/pickup', created_at: '2026/10/02 17:05', read_at: null },
+  { id: 'n2', event: 'leave.created', title: '陳小美 請假', body: '陳小美 2026-10-05～2026-10-06 病假。', deep_link: '/leaves', created_at: '2026/10/02 16:40', read_at: null },
+  { id: 'n3', event: 'pickup.cancelled', title: '李承恩 接送已取消', body: '家長已取消今天的接送請求。\n原因：改由爺爺來接', deep_link: '/pickup', created_at: '2026/10/02 16:12', read_at: null },
+  { id: 'n4', event: 'leave.cancelled', title: '林小華 取消請假', body: '林小華 2026-10-02～2026-10-02 的請假已取消。', deep_link: '/leaves', created_at: '2026/10/01 20:31', read_at: '2026/10/01 21:00' },
+  { id: 'n5', event: 'pickup.requested', title: '張語晴 家長要來接', body: '家長已發起接送。', deep_link: '/pickup', created_at: '2026/10/01 17:48', read_at: '2026/10/01 17:50' },
+]
+
+const NotificationPanel = {
+  props: { items: Array, unreadCount: Number, loading: Boolean, unreadOnly: Boolean },
+  emits: ['open', 'read-all', 'filter'],
+  setup() { return { LABELS: NOTIFICATION_EVENT_LABELS } },
+  template: `
+    <div class="notif">
+      <div class="notif__head">
+        <span class="notif__title">通知</span>
+        <el-segmented :model-value="unreadOnly ? 'unread' : 'all'" size="small"
+                      :options="[{ label: '全部', value: 'all' }, { label: '未讀', value: 'unread' }]"
+                      @change="(v) => $emit('filter', v === 'unread')"></el-segmented>
+        <span style="flex: 1"></span>
+        <el-button link type="primary" :disabled="unreadCount === 0" @click="$emit('read-all')">全部標為已讀</el-button>
+      </div>
+      <div class="notif__list">
+        <template v-if="loading">
+          <div v-for="i in 3" :key="i" class="notif__skeleton"><el-skeleton :rows="1" animated></el-skeleton></div>
+        </template>
+        <div v-else-if="!items.length" class="notif__empty">{{ unreadOnly ? '沒有未讀通知' : '目前沒有通知' }}</div>
+        <template v-else>
+          <button v-for="n in items" :key="n.id" type="button" class="notif__row" :class="{ 'is-unread': !n.read_at }" @click="$emit('open', n)">
+            <span v-if="!n.read_at" class="notif__dot" data-test="unread-dot" aria-label="未讀"></span>
+            <div class="notif__row-title">{{ n.title }}</div>
+            <div class="notif__row-body">{{ n.body }}</div>
+            <div class="notif__row-meta">
+              <el-tag size="small" type="info" disable-transitions>{{ LABELS[n.event] || n.event }}</el-tag>
+              <span>{{ n.created_at }}</span>
+            </div>
+          </button>
+        </template>
+      </div>
+    </div>`,
+}
+
+/**
+ * AdminShell：AdminLayout + AdminSidebar + AdminHeader + NotificationBell 的稿內合體。
+ * props 只有 device / perms / user / activePath 是各頁需要傳的；wsStatus / notifState 只有外框稿用來切狀態。
+ * emits navigate(path)：點側欄項目或通知 deep_link 時發出，各頁稿可以忽略或顯示提示。
+ */
+const AdminShell = {
+  components: { NotificationPanel },
+  props: {
+    device: { type: String, default: 'desktop' },
+    perms: { type: Array, required: true },
+    user: { type: Object, required: true },
+    activePath: { type: String, required: true },
+    wsStatus: { type: String, default: 'open' },
+    notifState: { type: String, default: 'data' },
+  },
+  emits: ['navigate'],
+  setup(props, { emit }) {
+    const isMobile = computed(() => props.device === 'mobile')
+    // 模擬 localStorage['admin.sidebarCollapsed']：使用者沒切過（remembered = null）時，依路由 meta.tablet 決定預設
+    const remembered = ref(null)
+    const collapsed = computed({
+      get: () => remembered.value ?? !!ROUTE_META[props.activePath]?.tablet,
+      set: (v) => { remembered.value = v },
+    })
+    const drawerOpen = ref(false)
+    const groups = computed(() => NAVIGATION
+      .map((g) => ({ ...g, items: g.items.filter((i) => props.perms.includes(i.permission)) }))
+      .filter((g) => g.items.length))
+    const activeItem = computed(() => {
+      const segs = (p) => p.split('/').filter(Boolean)
+      const route = segs(props.activePath)
+      let best = null
+      for (const g of groups.value) for (const it of g.items) {
+        const s = segs(it.path)
+        const match = it.path === '/' ? props.activePath === '/' : s.every((x, i) => route[i] === x)
+        if (match && (!best || s.length > segs(best).length)) best = it.path
+      }
+      return best ?? ''
+    })
+    const title = computed(() => ROUTE_META[props.activePath]?.title ?? '')
+    const go = (path) => { drawerOpen.value = false; emit('navigate', path) }
+    const toggle = () => { if (isMobile.value) drawerOpen.value = !drawerOpen.value; else collapsed.value = !collapsed.value }
+
+    // 通知（NotificationBell + store 的稿內模擬）
+    const items = ref(SAMPLE_NOTIFICATIONS())
+    const unreadOnly = ref(false)
+    const popoverOpen = ref(false)
+    const unreadCount = computed(() => {
+      if (props.notifState === 'many') return 120
+      if (props.notifState === 'empty') return 0
+      return items.value.filter((n) => !n.read_at).length
+    })
+    const shownItems = computed(() => {
+      if (props.notifState === 'empty' || props.notifState === 'loading') return []
+      return unreadOnly.value ? items.value.filter((n) => !n.read_at) : items.value
+    })
+    const openNotif = (n) => {
+      if (!n.read_at) n.read_at = '剛剛'
+      popoverOpen.value = false
+      if (n.deep_link) go(n.deep_link)
+    }
+    const readAll = () => { items.value.forEach((n) => { if (!n.read_at) n.read_at = '剛剛' }) }
+    const loggingOut = ref(false)
+    const onUserCommand = (cmd) => {
+      if (cmd === 'password') { ElMessage.info('（稿）導頁至 /change-password'); return }
+      loggingOut.value = true
+      setTimeout(() => { loggingOut.value = false; ElMessage.success('（稿）已登出，導回 /login') }, 800)
+    }
+    const wsTip = computed(() => ({ open: '即時連線正常', reconnecting: '即時連線重試中' }[props.wsStatus] ?? '即時連線未建立'))
+    return {
+      isMobile, collapsed, drawerOpen, groups, activeItem, title, go, toggle,
+      shownItems, unreadCount, unreadOnly, popoverOpen, openNotif, readAll, loggingOut, onUserCommand, wsTip,
+    }
+  },
+  template: `
+    <div class="device-frame" :class="'is-' + device">
+      <div class="shell">
+        <aside v-if="!isMobile" class="shell__aside" :class="{ 'is-collapsed': collapsed }" data-test="admin-sidebar">
+          <div class="shell__brand"><el-icon><icon-school></icon-school></el-icon><span v-show="!collapsed">安親班管理系統</span></div>
+          <div class="shell__menu">
+            <div v-if="!groups.length" class="shell__empty" v-show="!collapsed">沒有可使用的功能，請聯絡管理員</div>
+            <el-menu v-else :default-active="activeItem" :collapse="collapsed" :collapse-transition="false" @select="go">
+              <el-menu-item-group v-for="g in groups" :key="g.key" :title="g.label">
+                <el-menu-item v-for="it in g.items" :key="it.path" :index="it.path">
+                  <el-icon><component :is="it.icon"></component></el-icon>
+                  <template #title>{{ it.label }}</template>
+                </el-menu-item>
+              </el-menu-item-group>
+            </el-menu>
+          </div>
+          <div class="shell__collapse">
+            <el-button text :aria-label="collapsed ? '展開側欄' : '收合側欄'" @click="collapsed = !collapsed">
+              <el-icon><icon-arrow-right v-if="collapsed"></icon-arrow-right><icon-arrow-left v-else></icon-arrow-left></el-icon>
+              <span v-if="!collapsed">收合</span>
+            </el-button>
+          </div>
+        </aside>
+
+        <div class="shell__body">
+          <header class="shell__header">
+            <el-button class="shell__toggle" text aria-label="切換側欄" @click="toggle">
+              <el-icon :size="18"><icon-expand v-if="isMobile || collapsed"></icon-expand><icon-fold v-else></icon-fold></el-icon>
+            </el-button>
+            <h1 class="shell__title">{{ title }}</h1>
+            <span class="shell__spacer"></span>
+            <el-tooltip :content="wsTip" placement="bottom">
+              <span class="ws-dot" :class="'is-' + wsStatus" data-test="ws-dot" :aria-label="wsTip" role="img"></span>
+            </el-tooltip>
+            <el-popover v-model:visible="popoverOpen" trigger="click" placement="bottom-end" :width="360" :show-arrow="false">
+              <template #reference>
+                <el-button class="shell__bell" text aria-label="通知">
+                  <el-badge :value="unreadCount" :max="99" :hidden="unreadCount === 0">
+                    <el-icon :size="18"><icon-bell></icon-bell></el-icon>
+                  </el-badge>
+                </el-button>
+              </template>
+              <notification-panel :items="shownItems" :unread-count="unreadCount" :loading="notifState === 'loading'"
+                                  :unread-only="unreadOnly" @open="openNotif" @read-all="readAll"
+                                  @filter="(v) => unreadOnly = v"></notification-panel>
+            </el-popover>
+            <el-dropdown trigger="click" @command="onUserCommand">
+              <span class="shell__user">
+                <el-icon><icon-avatar></icon-avatar></el-icon>
+                <span v-if="!isMobile">{{ user.display_name }}</span>
+                <el-tag v-if="!isMobile" size="small" type="info" disable-transitions>{{ user.role }}</el-tag>
+                <el-icon><icon-arrow-down></icon-arrow-down></el-icon>
+              </span>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-if="isMobile" disabled>{{ user.display_name }}（{{ user.role }}）</el-dropdown-item>
+                  <el-dropdown-item command="password"><el-icon><icon-key></icon-key></el-icon>修改密碼</el-dropdown-item>
+                  <el-dropdown-item command="logout" divided :disabled="loggingOut">
+                    <el-icon><icon-loading v-if="loggingOut" class="is-loading"></icon-loading><icon-switch-button v-else></icon-switch-button></el-icon>
+                    {{ loggingOut ? '登出中…' : '登出' }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </header>
+          <el-alert v-if="wsStatus === 'reconnecting'" class="shell__banner" type="warning" :closable="false" show-icon
+                    title="即時連線中斷，畫面每 15 秒自動更新"></el-alert>
+          <main class="shell__main"><slot></slot></main>
+        </div>
+
+        <template v-if="isMobile && drawerOpen">
+          <div class="shell__scrim" @click="drawerOpen = false"></div>
+          <aside class="shell__drawer" data-test="admin-sidebar">
+            <div class="shell__brand"><el-icon><icon-school></icon-school></el-icon><span>安親班管理系統</span></div>
+            <div class="shell__menu">
+              <div v-if="!groups.length" class="shell__empty">沒有可使用的功能，請聯絡管理員</div>
+              <el-menu v-else :default-active="activeItem" @select="go">
+                <el-menu-item-group v-for="g in groups" :key="g.key" :title="g.label">
+                  <el-menu-item v-for="it in g.items" :key="it.path" :index="it.path">
+                    <el-icon><component :is="it.icon"></component></el-icon><span>{{ it.label }}</span>
+                  </el-menu-item>
+                </el-menu-item-group>
+              </el-menu>
+            </div>
+          </aside>
+        </template>
+      </div>
+    </div>`,
+}
+/* ==================== ADMIN SHELL JS END ==================== */
+
+/* ==== 以下逐字複製自 component-common.html（已核可） ==== */
+/* ---------- PageHeader ---------- */
+const PageHeader = {
+  props: { title: { type: String, required: true }, subtitle: { type: String, default: '' } },
+  template: `
+    <div class="page-header">
+      <div class="page-header__body">
+        <h1 class="page-header__title">{{ title }}</h1>
+        <p v-if="subtitle" class="page-header__subtitle" data-test="page-subtitle">{{ subtitle }}</p>
+        <div v-if="$slots.default" class="page-header__extra"><slot></slot></div>
+      </div>
+      <div v-if="$slots.actions" class="page-header__actions"><slot name="actions"></slot></div>
+    </div>`,
+}
+
+/* ---------- AdminListToolbar ---------- */
+const ALL = '__all__'
+const AdminListToolbar = {
+  props: {
+    search: { type: String, default: '' },
+    searchPlaceholder: { type: String, default: '搜尋' },
+    filters: { type: Array, default: () => [] },
+    filterValues: { type: Object, default: () => ({}) },
+    total: { type: Number, default: undefined },
+  },
+  emits: ['update:search', 'update:filterValues'],
+  setup(props, { emit }) {
+    const text = ref(props.search)
+    watch(() => props.search, (v) => { if (v !== text.value.trim()) text.value = v })
+    let timer = null
+    const flush = () => { clearTimeout(timer); timer = null; emit('update:search', text.value.trim()) }
+    const onInput = (v) => { text.value = v; clearTimeout(timer); timer = setTimeout(flush, 300) }
+    onBeforeUnmount(() => clearTimeout(timer))
+    const clearable = (g) => g.clearable !== false
+    const current = (g) => {
+      const v = props.filterValues[g.key]
+      return v === undefined && clearable(g) ? ALL : v
+    }
+    const onSelect = (g, v) => {
+      emit('update:filterValues', { ...props.filterValues, [g.key]: v === ALL || v === '' ? undefined : v })
+    }
+    return { text, onInput, flush, clearable, current, onSelect, ALL }
+  },
+  template: `
+    <div class="list-toolbar">
+      <el-input class="list-toolbar__search" :model-value="text" :placeholder="searchPlaceholder"
+                :aria-label="searchPlaceholder" clearable
+                @update:model-value="onInput" @keyup.enter="flush" @clear="flush">
+        <template #prefix><el-icon><icon-search></icon-search></el-icon></template>
+      </el-input>
+      <div v-for="g in filters" :key="g.key" class="list-toolbar__filter">
+        <span class="list-toolbar__filter-label">{{ g.label }}</span>
+        <el-select :model-value="current(g)" :clearable="clearable(g) && current(g) !== ALL"
+                   style="width: 130px" @update:model-value="(v) => onSelect(g, v)">
+          <el-option v-if="clearable(g)" label="全部" :value="ALL"></el-option>
+          <el-option v-for="o in g.options" :key="String(o.value)" :label="o.label" :value="o.value"></el-option>
+        </el-select>
+      </div>
+      <slot name="extra-filters"></slot>
+      <span class="list-toolbar__spacer"></span>
+      <span v-if="total !== undefined" class="list-toolbar__count">共 {{ total }} 筆</span>
+      <div v-if="$slots.actions" class="list-toolbar__actions"><slot name="actions"></slot></div>
+    </div>`,
+}
+
+/* ---------- EmptyState ---------- */
+const EmptyState = {
+  props: {
+    title: { type: String, required: true },
+    description: { type: String, default: '' },
+    variant: { type: String, default: 'default' },
+    icon: { type: String, default: '' },
+  },
+  computed: {
+    iconName() { return this.icon || (this.variant === 'error' ? 'icon-warning-filled' : 'icon-folder-opened') },
+  },
+  template: `
+    <div class="empty-state" :class="{ 'is-error': variant === 'error', 'is-inline': variant === 'inline' }" role="status">
+      <el-icon v-if="variant !== 'inline'" class="empty-state__icon" data-test="empty-icon">
+        <component :is="iconName"></component>
+      </el-icon>
+      <p class="empty-state__title">{{ title }}</p>
+      <p v-if="description" class="empty-state__desc">{{ description }}</p>
+      <div v-if="$slots.action" class="empty-state__action"><slot name="action"></slot></div>
+    </div>`,
+}
+
+/* ==================== 對照表（AUDIT_ACTION_LABELS 放 AuditLogView.vue） ==================== */
+/** domain_spec M1 與各 BACKEND task 定義的稽核 action */
+const ACTION_LABELS = {
+  'role.create': '新增角色', 'role.update': '修改角色', 'role.delete': '刪除角色',
+  'staff_user.create': '新增員工帳號', 'staff_user.update': '修改員工帳號', 'staff_user.reset_password': '重設員工密碼',
+  'staff_user.deactivate': '停用員工帳號', 'staff_user.activate': '重新啟用員工帳號',
+  'settings.update': '修改系統設定',
+  'student.import': '匯入學生', 'student.promote_grade': '學年升級', 'student.sensitive_update': '修改學生敏感資料',
+  'student.purge': '永久刪除學生', 'student.close_out': '學生退班 / 暫停收尾',
+  'guardian.binding_code_issue': '產生家長綁定碼', 'guardian.unbind': '解除家長綁定',
+  'attendance.amend': '出勤改判',
+  'exam_score.update': '修改已發布成績', 'exam.unpublish': '取消發布成績',
+  'pickup.override_complete': '代理接送強制完成', 'pickup.visual_match': '代理接送目視核對',
+}
+/** 動作類別 → action_prefix（FRONTEND-072）；exam. 為待裁定 1 的推薦選項 */
+const ACTION_CATEGORIES = [
+  { value: 'staff_user.', label: '帳號' }, { value: 'role.', label: '角色' }, { value: 'settings.', label: '系統設定' },
+  { value: 'student.', label: '學生' }, { value: 'guardian.', label: '監護人' }, { value: 'attendance.', label: '出勤改判' },
+  { value: 'exam_score.', label: '成績修改' }, { value: 'exam.', label: '考試發布' },
+  { value: 'pickup.', label: '接送強制完成 / 目視核對' },
+]
+/** 已知 entity_type（待裁定 2 推薦 A：下拉 + 可輸入其他值） */
+const ENTITY_LABELS = {
+  staff_user: '員工帳號', role: '角色', system_setting: '系統設定', student: '學生', student_import: '學生匯入',
+  academic_year: '學年度', guardian: '監護人', student_attendance: '出勤', exam: '考試', exam_score: '成績',
+  pickup_request: '接送請求', pickup_authorization: '代理接送授權',
+}
+const ACTOR_TYPES = {
+  staff: { label: '員工', type: 'info' }, parent: { label: '家長', type: 'success' },
+  system: { label: '系統', type: 'warning' }, device: { label: '裝置', type: 'primary' },
+}
+const ActorTag = {
+  props: { type: String },
+  setup(props) { return { meta: computed(() => ACTOR_TYPES[props.type] ?? { label: props.type, type: 'info' }) } },
+  template: `<el-tag size="small" :type="meta.type" effect="plain" disable-transitions>{{ meta.label }}</el-tag>`,
+}
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const shortId = (id) => (!id ? '—' : UUID_RE.test(id) ? id.slice(0, 8) : id)
+
+/* ==================== 假資料：AuditLogOut（BACKEND-104），時間已以 formatDateTime 顯示 ==================== */
+const UA_CHROME = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'
+const UA_IPAD = 'Mozilla/5.0 (iPad; CPU OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'
+const LOGS = [
+  { id: 'a01', created_at: '2026/10/04 09:42', actor_type: 'staff', actor_name: '張主任', action: 'settings.update', entity_type: 'system_setting', entity_id: 'pickup.window',
+    before: { request_start: '12:00', request_end: '19:00', latest_expected_arrival: '19:00', auto_expire_minutes: 120 },
+    after: { request_start: '12:00', request_end: '18:30', latest_expected_arrival: '19:00', auto_expire_minutes: 90 }, ip: '203.0.113.24', user_agent: UA_CHROME },
+  { id: 'a02', created_at: '2026/10/03 17:55', actor_type: 'staff', actor_name: '陳老師', action: 'pickup.override_complete', entity_type: 'pickup_authorization', entity_id: '7f3a9c12-55b0-4e8e-9a41-0d2c6b1e8f90',
+    before: { status: 'active', verified_at: null }, after: { status: 'completed', override_reason: '代理人忘記帶接送碼，已電話與家長確認', completed_by: '陳老師' }, ip: '203.0.113.31', user_agent: UA_IPAD },
+  { id: 'a03', created_at: '2026/10/03 16:10', actor_type: 'staff', actor_name: '系統管理員', action: 'role.update', entity_type: 'role', entity_id: '0b6e2d44-1c9f-4a7a-8e55-3f1d2c9b7a10',
+    before: { name: '週末支援老師', permissions: ['attendance:operate', 'attendance:read', 'dashboard:read', 'pickup:read'] },
+    after: { name: '週六支援老師', permissions: ['attendance:operate', 'attendance:read', 'dashboard:read', 'homework:read', 'pickup:operate', 'pickup:read'] }, ip: '203.0.113.24', user_agent: UA_CHROME },
+  { id: 'a04', created_at: '2026/10/03 14:02', actor_type: 'staff', actor_name: '張主任', action: 'attendance.amend', entity_type: 'student_attendance', entity_id: 'c41d8e77-2b3a-4f61-9d0e-8a7b6c5d4e3f',
+    before: { student_name: '王小明', date: '2026-10-02', status: 'absent', check_in_at: null }, after: { student_name: '王小明', date: '2026-10-02', status: 'present', check_in_at: '2026-10-02T08:05:00Z', amend_reason: '家長補登，當天有到班' }, ip: '203.0.113.24', user_agent: UA_CHROME },
+  { id: 'a05', created_at: '2026/10/02 20:31', actor_type: 'staff', actor_name: '系統管理員', action: 'settings.update', entity_type: 'system_setting', entity_id: 'line.messaging',
+    before: { channel_access_token: '****a91f', channel_secret: null }, after: { channel_access_token: '****77e1', channel_secret: '********' }, ip: '203.0.113.24', user_agent: UA_CHROME },
+  { id: 'a06', created_at: '2026/10/02 11:20', actor_type: 'staff', actor_name: '林行政', action: 'exam_score.update', entity_type: 'exam_score', entity_id: '5e9a1b2c-3d4e-4f50-8a6b-7c8d9e0f1a2b',
+    before: { exam: '第一次段考', student_name: '陳小美', scores: { math: 78, chinese: 92 } }, after: { exam: '第一次段考', student_name: '陳小美', scores: { math: 87, chinese: 92 } }, ip: '203.0.113.40', user_agent: UA_CHROME },
+  { id: 'a07', created_at: '2026/10/02 10:05', actor_type: 'staff', actor_name: '張主任', action: 'student.sensitive_update', entity_type: 'student', entity_id: '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d',
+    before: { id_number: '***', health_note: '***' }, after: { id_number: '***', health_note: '***' }, ip: '203.0.113.24', user_agent: UA_CHROME },
+  { id: 'a08', created_at: '2026/10/01 18:00', actor_type: 'staff', actor_name: '系統管理員', action: 'role.create', entity_type: 'role', entity_id: '0b6e2d44-1c9f-4a7a-8e55-3f1d2c9b7a10',
+    before: null, after: { code: 'weekend_helper', name: '週末支援老師', description: '', permissions: ['attendance:operate', 'attendance:read', 'dashboard:read', 'pickup:read'] }, ip: '203.0.113.24', user_agent: UA_CHROME },
+  { id: 'a09', created_at: '2026/10/01 00:05', actor_type: 'system', actor_name: '系統', action: 'leave.truncate', entity_type: 'student_leave', entity_id: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
+    before: { end_date: '2026-10-10' }, after: { end_date: '2026-09-30' }, ip: null, user_agent: null },
+  { id: 'a10', created_at: '2026/09/30 15:12', actor_type: 'staff', actor_name: '系統管理員', action: 'staff_user.deactivate', entity_type: 'staff_user', entity_id: '3c2b1a09-8f7e-4d6c-9b5a-4e3d2c1b0a9f',
+    before: null, after: null, ip: '203.0.113.24', user_agent: UA_CHROME },
+  { id: 'a11', created_at: '2026/09/29 09:30', actor_type: 'staff', actor_name: '系統管理員', action: 'role.delete', entity_type: 'role', entity_id: '6d5c4b3a-2f1e-4d0c-8b9a-7f6e5d4c3b2a',
+    before: { code: 'summer_temp', name: '暑期臨時人員', permissions: ['attendance:read', 'dashboard:read'] }, after: null, ip: '203.0.113.24', user_agent: UA_CHROME },
+]
+
+/* ==================== AuditDiffDrawer（FRONTEND-073） ==================== */
+/** 巢狀物件以「.」展開到第二層，更深的以 JSON 字串顯示 */
+const flatten = (obj) => {
+  const out = {}
+  if (!obj) return out
+  for (const [k, v] of Object.entries(obj)) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      for (const [k2, v2] of Object.entries(v)) out[`${k}.${k2}`] = v2 && typeof v2 === 'object' ? JSON.stringify(v2) : v2
+    } else out[k] = v
+  }
+  return out
+}
+const show = (v) => (typeof v === 'string' ? v : JSON.stringify(v))
+const AuditDiffDrawer = {
+  components: { ActorTag },
+  props: { modelValue: Boolean, log: { type: Object, default: null }, actionLabel: String },
+  emits: ['update:modelValue'],
+  setup(props) {
+    const showSame = ref(false)
+    const rows = computed(() => {
+      if (!props.log) return []
+      const b = flatten(props.log.before); const a = flatten(props.log.after)
+      const keys = [...new Set([...Object.keys(b), ...Object.keys(a)])]
+      return keys.map((k) => {
+        const inB = k in b; const inA = k in a
+        const kind = !inB ? 'added' : !inA ? 'removed' : JSON.stringify(b[k]) === JSON.stringify(a[k]) ? 'same' : 'changed'
+        return { key: k, kind, before: b[k], after: a[k], inB, inA }
+      })
+    })
+    const visible = computed(() => (showSame.value ? rows.value : rows.value.filter((r) => r.kind !== 'same')))
+    const noData = computed(() => props.log && props.log.before == null && props.log.after == null)
+    const counts = computed(() => ({
+      changed: rows.value.filter((r) => r.kind === 'changed').length, added: rows.value.filter((r) => r.kind === 'added').length,
+      removed: rows.value.filter((r) => r.kind === 'removed').length, same: rows.value.filter((r) => r.kind === 'same').length,
+    }))
+    const copy = async (text) => {
+      try { await navigator.clipboard.writeText(text); ElMessage.success('已複製') } catch (e) { ElMessage.error('無法複製，請手動選取') }
+    }
+    watch(() => props.log, () => { showSame.value = false })
+    return { showSame, rows, visible, noData, counts, copy, show, ENTITY_LABELS }
+  },
+  template: `
+    <el-drawer :model-value="modelValue" :title="actionLabel" size="600px" append-to-body
+               @update:model-value="(v) => $emit('update:modelValue', v)">
+      <template v-if="log">
+        <el-descriptions class="diff-info" :column="1" border size="small">
+          <el-descriptions-item label="時間"><span class="audit-time">{{ log.created_at }}</span></el-descriptions-item>
+          <el-descriptions-item label="操作者">{{ log.actor_name || '—' }} <actor-tag :type="log.actor_type"></actor-tag></el-descriptions-item>
+          <el-descriptions-item label="動作"><span class="mono">{{ log.action }}</span></el-descriptions-item>
+          <el-descriptions-item label="對象">
+            <span class="diff-entity">{{ ENTITY_LABELS[log.entity_type] || log.entity_type }}
+              <span class="mono text-secondary">{{ log.entity_id }}</span>
+              <el-button v-if="log.entity_id" link type="primary" size="small" aria-label="複製對象 ID" @click="copy(log.entity_id)">
+                <el-icon><icon-document-copy></icon-document-copy></el-icon>複製</el-button>
+            </span>
+          </el-descriptions-item>
+          <el-descriptions-item label="IP"><span class="mono">{{ log.ip || '—' }}</span></el-descriptions-item>
+          <el-descriptions-item label="User-Agent">
+            <el-tooltip v-if="log.user_agent" :content="log.user_agent" placement="top" :show-after="300">
+              <span class="diff-ua text-secondary">{{ log.user_agent }}</span>
+            </el-tooltip>
+            <span v-else>—</span>
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <div class="diff-head">
+          <h3 class="diff-head__title">欄位變更</h3>
+          <span v-if="!noData" class="diff-head__summary">變更 {{ counts.changed }}・新增 {{ counts.added }}・刪除 {{ counts.removed }}・未變更 {{ counts.same }}</span>
+          <el-switch v-if="!noData" v-model="showSame" :disabled="!counts.same" active-text="顯示未變更欄位"></el-switch>
+        </div>
+        <empty-state v-if="noData" variant="inline" title="此紀錄沒有欄位變更資料"></empty-state>
+        <empty-state v-else-if="!visible.length" variant="inline" title="沒有欄位內容變更" description="遮罩後的值相同或欄位皆未變更；打開「顯示未變更欄位」可查看全部"></empty-state>
+        <table v-else class="diff-table">
+          <colgroup><col class="c-field"><col><col></colgroup>
+          <thead><tr><th>欄位</th><th>變更前</th><th>變更後</th></tr></thead>
+          <tbody>
+            <tr v-for="r in visible" :key="r.key" class="diff-row" :class="'is-' + r.kind">
+              <td class="diff-field mono">{{ r.key }}</td>
+              <td class="diff-cell" :class="{ 'is-removed': r.kind === 'removed', 'is-old': r.kind === 'changed' }">
+                <template v-if="!r.inB"><span class="diff-absent">—</span></template>
+                <template v-else>
+                  <el-tag v-if="r.kind === 'removed'" class="diff-badge" size="small" type="danger" disable-transitions>刪除</el-tag><span v-if="r.before === null" class="diff-null">（空）</span><span v-else>{{ show(r.before) }}</span>
+                </template>
+              </td>
+              <td class="diff-cell" :class="{ 'is-added': r.kind === 'added' }">
+                <template v-if="!r.inA"><span class="diff-absent">—</span></template>
+                <template v-else>
+                  <el-tag v-if="r.kind === 'added'" class="diff-badge" size="small" type="success" disable-transitions>新增</el-tag><span v-if="r.after === null" class="diff-null">（空）</span><span v-else>{{ show(r.after) }}</span>
+                </template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </template>
+    </el-drawer>`,
+}
+
+const ROLES = {
+  director: { label: '主任（audit:read）', permissions: DIRECTOR },
+  admin: { label: '系統管理員', permissions: ADMIN },
+  clerk: { label: '行政（沒有 audit:read）', permissions: CLERK },
+}
+
+// ALL（'__all__'）沿用上方 AdminListToolbar 的「全部」哨兵值
+const TODAY = '2026-10-04'
+const TODAY_DATE = new Date('2026-10-04T23:59:59+08:00')
+const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00+08:00'); d.setUTCDate(d.getUTCDate() + n); return new Date(d.getTime() + 8 * 3600e3).toISOString().slice(0, 10) }
+
+const app = createApp({
+  components: { AdminShell, PageHeader, EmptyState, ActorTag, AuditDiffDrawer },
+  setup() {
+    const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
+    const meta = {
+      status: readMeta('preview-status'), tasks: readMeta('preview-tasks'),
+      route: readMeta('preview-route'), updated: readMeta('preview-updated'),
+    }
+    const viewAs = ref('director')
+    const perms = computed(() => ROLES[viewAs.value].permissions)
+    const can = (code) => perms.value.includes(code)
+    const user = computed(() => SHELL_USERS[viewAs.value])
+    const device = ref('desktop')
+    const onNavigate = (p) => { if (p !== '/settings/audit') ElMessage.info(`（稿）導頁至 ${p}`) }
+
+    const listState = ref('data')
+    const defaultRange = () => [addDays(TODAY, -6), TODAY]
+    // 「全部」用哨兵值：EP 的 el-select 把 '' 當成未選而顯示 placeholder；送出前轉成不帶參數
+    const filters = reactive({ action_prefix: ALL, entity_type: ALL, actor_type: ALL, range: defaultRange() })
+    const val = (v) => (v === ALL ? '' : v)
+    const page = ref(1)
+    const isFiltered = computed(() => val(filters.action_prefix) || val(filters.entity_type) || val(filters.actor_type) || JSON.stringify(filters.range) !== JSON.stringify(defaultRange()))
+    const resetFilters = () => { Object.assign(filters, { action_prefix: ALL, entity_type: ALL, actor_type: ALL, range: defaultRange() }); page.value = 1 }
+    const onFilter = () => { page.value = 1 }
+    const rows = computed(() => (listState.value !== 'data' ? [] : LOGS
+      .filter((l) => !val(filters.action_prefix) || l.action.startsWith(filters.action_prefix))
+      .filter((l) => !val(filters.entity_type) || l.entity_type === filters.entity_type)
+      .filter((l) => !val(filters.actor_type) || l.actor_type === filters.actor_type)))
+    const total = computed(() => (listState.value === 'data' ? (isFiltered.value ? rows.value.length : 137) : 0))
+    const queryString = computed(() => {
+      const q = { action_prefix: val(filters.action_prefix), entity_type: val(filters.entity_type), actor_type: val(filters.actor_type),
+        date_from: filters.range?.[0], date_to: filters.range?.[1], page: page.value, page_size: 50 }
+      return Object.entries(q).filter(([, v]) => v !== '' && v != null).map(([k, v]) => `${k}=${v}`).join('&')
+    })
+    const shortcuts = [
+      { text: '今天', value: () => [new Date(TODAY + 'T00:00:00+08:00'), new Date(TODAY + 'T00:00:00+08:00')] },
+      { text: '近 7 天', value: () => [new Date(addDays(TODAY, -6) + 'T00:00:00+08:00'), new Date(TODAY + 'T00:00:00+08:00')] },
+      { text: '近 30 天', value: () => [new Date(addDays(TODAY, -29) + 'T00:00:00+08:00'), new Date(TODAY + 'T00:00:00+08:00')] },
+    ]
+    const diffOpen = ref(false)
+    const diffLog = ref(null)
+    const openDiff = (row) => { diffLog.value = row; diffOpen.value = true }
+    const retry = () => { listState.value = 'loading'; setTimeout(() => { listState.value = 'data' }, 900) }
+
+    const decisions = [
+      '版面：PageHeader「稽核紀錄」+ 副標「帳號、角色、系統設定與重要營運異動的紀錄；紀錄只能查詢，無法修改或刪除」；下方一個白底面板：篩選列 → 表格 → 分頁。本頁沒有任何寫入操作，audit:read 以外沒有權限差異。',
+      '篩選列沿用 AdminListToolbar 的版面樣式（灰字標籤 + 下拉、右側「共 N 筆」），但不使用該元件，因為本頁沒有關鍵字搜尋。順序：動作類別（170px）→ 對象類型（150px）→ 操作者（員工 / 家長 / 系統 / 裝置）→ 日期區間 → 「重設」文字按鈕（篩選與預設相同時 disabled）。每個下拉第一項是「全部」。',
+      '日期區間預設近 7 天（迄日 = todayTaipei，起日 = 迄日 − 6），不可清空（一定有區間，避免一次撈全部）；快捷選項「今天」「近 7 天」「近 30 天」；今天以後的日期不可選。改任何篩選回到第 1 頁；篩選條件與頁碼同步到網址（usePagedList syncQuery）。',
+      '表格欄位：時間（150，2026/10/04 09:42）、操作者（姓名 + 類型線框 tag：員工灰、家長綠、系統橘、裝置藍）、動作（中文對照為主、下一行 12px 等寬灰字 action 原文；未知 action 只顯示原文）、對象（類型中文 + 下一行等寬灰字 ID）、IP（等寬）、「詳情」連結。整列可點開抽屜，「詳情」給鍵盤與不知道列可點的人。依時間新到舊（後端排序），不提供欄位排序。',
+      '對象 ID：UUID 只顯示前 8 碼；非 UUID 的 entity_id（系統設定的 key「pickup.window」、學年度「114」）完整顯示，避免截成「line.mes」看不懂。完整 ID 在抽屜裡可複製。',
+      '每頁 50 筆，分頁器「共 N 筆、上一頁、頁碼、下一頁」。空清單：表格內 inline「這段期間沒有稽核紀錄」+「試著放寬日期區間或調整篩選條件」；載入中：表格 v-loading；載入失敗：EmptyState error「無法載入稽核紀錄」+「重試」取代表格。',
+      'AuditDiffDrawer（寬 600）：標題 = 動作中文；上方資訊表（時間、操作者 + 類型 tag、動作原文、對象類型 + 完整 ID + 「複製」、IP、User-Agent 單行截斷 + hover 看全文）。',
+      '差異表：「欄位變更」標題右側摘要「變更 x・新增 x・刪除 x・未變更 x」與「顯示未變更欄位」開關（預設關，沒有未變更欄位時 disabled）。三欄「欄位 / 變更前 / 變更後」：變更的列舊值灰字、新值正常；新增列（before 沒有）變更後格綠底 +「新增」tag、變更前顯示「—」；刪除列（after 沒有）變更前格紅底刪除線 +「刪除」tag；未變更列整列淡灰。null 顯示斜體「（空）」以區分「沒有這個欄位」的「—」。',
+      '巢狀物件展開到第二層（scores.math），更深的與陣列以 JSON 字串顯示並自動換行。遮罩值（***、****a91f）原樣顯示。before / after 皆為 null：「此紀錄沒有欄位變更資料」；全部欄位都相同（例如敏感欄位遮罩後一樣）：「沒有欄位內容變更」+ 引導打開開關。',
+    ]
+    const openQuestions = [
+      { question: '1. 「取消發布成績」（exam.unpublish）不在規格的 8 個動作類別內（成績修改的前綴是 exam_score.），選任何類別都篩不到它。', optionA: '（推薦，稿已照畫）多一個類別「考試發布」= exam.', optionB: '維持 8 類，exam.unpublish 只在「全部」裡看得到' },
+      { question: '2. 對象類型篩選要用什麼輸入？規格寫「文字」，但員工不會知道 student_attendance 這類代碼。', optionA: '（推薦，稿已照畫）下拉列出已知類型的中文名稱（員工帳號、角色、系統設定、學生、出勤…），仍可輸入其他代碼', optionB: '照規格用文字輸入框，輸入 entity_type 原文' },
+    ]
+
+    return {
+      meta, decisions, openQuestions, roles: ROLES, viewAs, perms, can, user, device, onNavigate, notesOpen: ref(false),
+      listState, filters, page, isFiltered, resetFilters, onFilter, rows, total, queryString, shortcuts, TODAY_DATE,
+      ACTION_LABELS, ACTION_CATEGORIES, ENTITY_LABELS, ACTOR_TYPES, ALL, shortId, diffOpen, diffLog, openDiff, retry,
+    }
+  },
+})
+
+app.use(ElementPlus, { locale: ElementPlusLocaleZhTw })
+app.component('EmptyState', EmptyState)
+const toKebab = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+for (const [name, component] of Object.entries(ElementPlusIconsVue)) {
+  app.component(`icon-${toKebab(name)}`, component)
+}
+app.mount('#app')
+</script>
+</body>
+</html>
