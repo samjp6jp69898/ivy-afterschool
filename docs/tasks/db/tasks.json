@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 40,
-  "last_updated": "2026-10-04T06:50:40Z",
+  "version": 41,
+  "last_updated": "2026-10-04T11:02:11Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -640,7 +640,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db017_create_parent_binding_codes.py",
       "source_ref": "BE:models/parent_binding.py::GuardianBindingCode",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-016",
@@ -666,9 +666,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-db",
+        "notes": "通過。code_hash 唯一（斷言 constraint 名稱）與格式（大寫、63 碼、非 hex）、expires_at 早於或等於 created_at、guardian cascade、staff restrict 皆測；測試改用固定時間符合 TID251。tdd.run 實跑全綠，--collect-only 帶/不帶 -k 選到的測試相同且涵蓋每條 red_case；測試 commit 先於實作 commit；db-reset 從空 DB 升到 head=db038（單一 head），pg_catalog 核對欄位 / 約束 / 索引 / FK 行為 / trigger / ACL（postgres + app_backend=arwd）與 description 一致；測資一律經 app_backend 寫入；改動路徑 just lint / just typecheck 乾淨；tests/integration/db 全目錄 265 passed。"
       }
     },
     {
@@ -717,7 +717,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db019_create_student_leave_attachments.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-018"
@@ -743,9 +743,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-db",
+        "notes": "通過。storage_path 的六種反例（路徑穿越、帶前綴、36 碼 uuid、大寫 hex、副檔名不在白名單、尾端多段）與合法路徑、mime 白名單、size 0 / 上限 +1 / 上限、cascade 皆測。tdd.run 實跑全綠，--collect-only 帶/不帶 -k 選到的測試相同且涵蓋每條 red_case；測試 commit 先於實作 commit；db-reset 從空 DB 升到 head=db038（單一 head），pg_catalog 核對欄位 / 約束 / 索引 / FK 行為 / trigger / ACL（postgres + app_backend=arwd）與 description 一致；測資一律經 app_backend 寫入；改動路徑 just lint / just typecheck 乾淨；tests/integration/db 全目錄 265 passed。 殘留：test_student_leave_attachments_mime_whitelist 的合法值迴圈只做 truthy 斷言（insert 失敗仍會拋錯，不構成恆真）。"
       }
     },
     {
@@ -755,7 +755,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db020_create_student_attendances.py",
       "source_ref": "BE:models/classroom.py::StudentAttendance",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-018",
@@ -784,9 +784,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-db",
+        "notes": "通過。逐一推演每個 CHECK 反例只違反單一約束；status_times / leave_link / check_out_after_in 斷言 constraint 名稱；leave restrict、student restrict、FK 不存在皆測。tdd.run 實跑全綠，--collect-only 帶/不帶 -k 選到的測試相同且涵蓋每條 red_case；測試 commit 先於實作 commit；db-reset 從空 DB 升到 head=db038（單一 head），pg_catalog 核對欄位 / 約束 / 索引 / FK 行為 / trigger / ACL（postgres + app_backend=arwd）與 description 一致；測資一律經 app_backend 寫入；改動路徑 just lint / just typecheck 乾淨；tests/integration/db 全目錄 265 passed。 殘留：DB 不保證 leave_id 所屬學生與出勤學生相同（description 未要求，由 BACKEND 保證）。"
       }
     },
     {
@@ -912,14 +912,14 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db024_create_pickup_authorizations.py",
       "source_ref": "BE:models/pickup.py::PickupAuthorization",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-023",
         "DB-004"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "BACKEND 驗碼失敗時要以單一語句原子累計：`update pickup_authorizations set code_attempts = code_attempts + 1, code_locked_at = case when code_attempts + 1 = 5 then now() end where id = ? and code_locked_at is null and status = 'active' returning code_attempts`，避免併發驗碼繞過上限；已鎖定時 verify 一律拒絕（即使碼正確）。",
+      "risk_notes": "BACKEND 驗碼失敗時要以單一語句原子累計：`update pickup_authorizations set code_attempts = code_attempts + 1, code_locked_at = case when code_attempts + 1 = 5 then now() end where id = ? and code_locked_at is null and status = 'active' returning code_attempts`，避免併發驗碼繞過上限；已鎖定時 verify 一律拒絕（即使碼正確）。\n打回（review-r5-db）：test_pickup_authorizations_status_domain 的 verification_method='face' 反例同時違反 ck_pickup_authorizations_verified（status 預設 active、verified_at 為 null 但 verification_method 非 null），拿掉 pickup_authorizations_verification_method_check 後該測試仍綠，驗收標準「verification_method 值域受限」實際上沒有測試把關。已在 owner transaction 內 drop 該 CHECK 實測：測試寫法的 insert 改由 ck_pickup_authorizations_verified 拋 23514；status='completed'、verified_at 有值、verification_method='face' 則可寫入。要修：'face' 反例改成 status='completed'、verified_at 有值、verification_method='face'（只違反值域 CHECK），並同步把 red_case 寫清楚這三個欄位；其餘 red_case 與 migration 本身無問題。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/db/test_pickup_authorizations.py",
@@ -940,9 +940,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r5-db",
+        "notes": "打回：verification_method 值域反例被 ck_pickup_authorizations_verified 遮蔽，驗收標準未被測試把關（詳見 risk_notes）。其餘已確認：migration 與 description 逐欄一致（catalog 核對）、tdd.run 9 passed、red_case 全選中、測試先於實作、lint / typecheck 乾淨。"
       }
     },
     {
@@ -1034,7 +1034,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db027_create_exam_subjects.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-026",
@@ -1059,9 +1059,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-db",
+        "notes": "通過。unique 斷言名稱、full_score 0 / -5 / 1000.01 拒絕與 1000、預設 100.00、exam cascade、subject restrict 皆測；full_score 下修 trigger 依 description 留給 DB-028。tdd.run 實跑全綠，--collect-only 帶/不帶 -k 選到的測試相同且涵蓋每條 red_case；測試 commit 先於實作 commit；db-reset 從空 DB 升到 head=db038（單一 head），pg_catalog 核對欄位 / 約束 / 索引 / FK 行為 / trigger / ACL（postgres + app_backend=arwd）與 description 一致；測資一律經 app_backend 寫入；改動路徑 just lint / just typecheck 乾淨；tests/integration/db 全目錄 265 passed。"
       }
     },
     {
@@ -1152,7 +1152,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db030_create_notification_outbox.py",
       "source_ref": "BE:models/notification_outbox.py::NotificationOutbox",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-029"
@@ -1179,9 +1179,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-db",
+        "notes": "通過。unique(notification_id, channel) 去重斷言名稱、channel 只收 line、status / attempts 值域、failed 與 dead 皆需 last_error（斷言名稱）、cascade、partial index 謂詞皆測；skip locked 以三條 app_backend 連線、commit 後兩條連線各取到 2 / 1 列且不重疊，結束只刪自己建的 notifications（cascade outbox），不 truncate 共用表。tdd.run 實跑全綠，--collect-only 帶/不帶 -k 選到的測試相同且涵蓋每條 red_case；測試 commit 先於實作 commit；db-reset 從空 DB 升到 head=db038（單一 head），pg_catalog 核對欄位 / 約束 / 索引 / FK 行為 / trigger / ACL（postgres + app_backend=arwd）與 description 一致；測資一律經 app_backend 寫入；改動路徑 just lint / just typecheck 乾淨；tests/integration/db 全目錄 265 passed。 殘留：red_case 與 risk_notes 仍寫「truncate 清表」，實作改為只刪自建列（較安全），文字可改成與實作一致。"
       }
     },
     {
@@ -1191,7 +1191,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db031_create_notification_preferences.py",
       "source_ref": "BE:models/parent_notification.py::ParentNotificationPreference",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-015"
@@ -1215,9 +1215,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-db",
+        "notes": "通過。unique 斷言名稱、7 個事件全數可寫入、pickup.requested / binding.completed / leave.created 拒絕並斷言 ck_notification_preferences_event、cascade、預設 line_enabled=true 皆測。tdd.run 實跑全綠，--collect-only 帶/不帶 -k 選到的測試相同且涵蓋每條 red_case；測試 commit 先於實作 commit；db-reset 從空 DB 升到 head=db038（單一 head），pg_catalog 核對欄位 / 約束 / 索引 / FK 行為 / trigger / ACL（postgres + app_backend=arwd）與 description 一致；測資一律經 app_backend 寫入；改動路徑 just lint / just typecheck 乾淨；tests/integration/db 全目錄 265 passed。"
       }
     },
     {
@@ -1446,7 +1446,7 @@
       "granularity_unit": "seed",
       "target_path": "apps/api/alembic/versions/db038_seed_system_settings.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-007"
@@ -1471,9 +1471,9 @@
         "notes": "SEED_SQL 以 importlib 依檔案路徑載入 revision 模組取得（revision 檔名以數字以外的字元開頭，不能直接 import）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-db",
+        "notes": "通過。11 個 key 與 value 逐欄斷言；另以 BACKEND-106 REGISTRY 的 default.model_dump(mode='json') 與 is_secret 對 DB seed 逐 key 比對，11 個 key 零差異；notification.toggles 13 個事件與 app/notifications/events.py 一致；全部 key 符合 DB-007 格式 CHECK；app_backend 讀取；冪等測試先改 line.liff 再以 owner 重跑 SEED_SQL，值不被覆寫且筆數仍 11。tdd.run 實跑全綠，--collect-only 帶/不帶 -k 選到的測試相同且涵蓋每條 red_case；測試 commit 先於實作 commit；db-reset 從空 DB 升到 head=db038（單一 head），pg_catalog 核對欄位 / 約束 / 索引 / FK 行為 / trigger / ACL（postgres + app_backend=arwd）與 description 一致；測資一律經 app_backend 寫入；改動路徑 just lint / just typecheck 乾淨；tests/integration/db 全目錄 265 passed。 殘留：keys 測試與冪等測試的筆數斷言假設表內只有 seed 列（integration conftest 已禁止 truncate seed 表，但 committing 測試若遺留自建 key 會讓它們失敗）；冪等測試的前置 update 以 owner 寫入（同一 transaction 重跑 SEED_SQL 所需）。"
       }
     },
     {
