@@ -19,7 +19,9 @@ COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY nginx/security-headers.conf /etc/nginx/security-headers.conf
 COPY --chmod=755 nginx/40-real-ip.sh /docker-entrypoint.d/40-real-ip.sh
 COPY --from=build /app/dist /usr/share/nginx/html
-RUN find /usr/share/nginx/html -name '*.map' -delete
+# .vite/ 內的 manifest 與模組圖列出所有原始碼與依賴路徑，不對外提供
+RUN find /usr/share/nginx/html -name '*.map' -delete \
+    && rm -rf /usr/share/nginx/html/.vite
 
 # TRUSTED_EDGE_CIDRS：Railway edge 的來源範圍，上線實測前的保守預設（INFRA-033 open_design_questions）。
 # 100.64.0.0/10 為 CGNAT 保留位址，網際網路上的用戶端無法以此為來源，設錯只會讓 audit 記到 edge IP，
