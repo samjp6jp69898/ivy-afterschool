@@ -161,6 +161,9 @@ describe('ParentBottomSheet', () => {
     const wrapper = mountSheet({ dismissible: false })
     const sheet = q('.sheet').element as HTMLElement
     pointer(q('.sheet__header').element, 'pointerdown', 300)
+    pointer(window, 'pointermove', 340)
+    await nextTick()
+    expect(sheet.style.transform).toBe('translateY(10px)')
     pointer(window, 'pointermove', 700)
     await nextTick()
     expect(sheet.style.transform).toBe('translateY(24px)')
@@ -228,8 +231,8 @@ describe('ParentBottomSheet', () => {
 
   it('ParentBottomSheet teleports to body and removes document listeners on unmount', async () => {
     const wrapper = mountSheet()
-    expect(dialog()?.closest('.sheet-layer')?.parentElement).toBe(document.body)
-    expect(wrapper.element.querySelector('[role="dialog"]')).toBeNull()
+    expect(document.body.contains(dialog())).toBe(true)
+    expect(wrapper.element.contains(dialog())).toBe(false)
     wrapper.unmount()
     mounted = mounted.filter((w) => w !== wrapper)
     expect(dialog()).toBeNull()
