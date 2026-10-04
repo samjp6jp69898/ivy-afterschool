@@ -49,7 +49,7 @@ LINE 的 ID 與 secret **不是 env**，一律填入後台「系統設定」頁�
 | `R2_SECRET_ACCESS_KEY` | 是 | R2 API token 的 Secret Access Key | Cloudflare（§4） |
 | `R2_BUCKET` | 是 | bucket 名稱 | Cloudflare（§4） |
 | `SENTRY_DSN` | 否 | 錯誤回報，留空即停用 | Sentry 專案設定 |
-| `PORT` | 自動 | 由 Railway 注入 | — |
+| `PORT` | 是 | 必須明確設為 `PORT=8080`（與 `apps/api/Dockerfile` 的 `ENV PORT=8080` 一致）。Railway 自動注入的 PORT 只在執行期存在，web 的 `${{api.PORT}}` 讀不到，不設會讓 `BACKEND_URL` 缺 port、`/api` 全部失敗 | `8080` |
 
 api 映像內建 `FORWARDED_ALLOW_IPS`（預設 `fd12::/16`，Railway private network 範圍），一般不需在 Railway 覆寫。
 
@@ -69,10 +69,9 @@ api 映像內建 `FORWARDED_ALLOW_IPS`（預設 `fd12::/16`，Railway private ne
    - `select rolsuper from pg_roles where rolname = current_user`：須為 true（baseline revision 需要建立角色）。
 3. 產生 `app_backend` 密碼：`python3 -c "import secrets; print(secrets.token_urlsafe(32))"`（URL-safe，放進 URL 不需編碼）。
 4. 在 api 服務設定 `DATABASE_URL` 與 `MIGRATION_DATABASE_URL`（值見 §2，後者為 `${{Postgres.DATABASE_URL}}`）。
+5. 開啟 Railway Postgres 的備份排程。
 
 **不需要手動執行任何 SQL**：第一次部署的 pre-deploy（`python -m app.cli migrate`）會套用全部 revision、建立 `app_backend` 角色，並把 `DATABASE_URL` 中的密碼同步到 DB。
-
-5. 開啟 Railway Postgres 的備份排程。
 
 ## 4. 首次建置 Cloudflare R2
 
@@ -100,7 +99,7 @@ api 映像內建 `FORWARDED_ALLOW_IPS`（預設 `fd12::/16`，Railway private ne
 2. **Config File 路徑必須在服務設定填絕對路徑**：api 填 `/apps/api/railway.json`、web 填 `/apps/web/railway.json`。Railway 的 config file 不會跟著 Root Directory 解析，沒填時兩份 railway.json 會被靜默忽略，pre-deploy migration 與 healthcheck 都不會生效。
 3. `apps/api/railway.json` 的 `preDeployCommand`（`python -m app.cli migrate`）會在每次部署前執行 migration；healthcheck 路徑：api `/api/health`、web `/healthz`。
 4. GitHub 連動 `main` 分支自動部署，並開啟「Wait for CI」（同一個 commit 的 CI 全綠才部署）。
-5. api 第一次部署完成後，在 Railway shell 執行一次 `python -m app.cli create-admin --username <name> --display-name <name>` 建立初始管理員。
+5. api 第一次部署完成後，以 `railway ssh --service api` 進入 api 服務執行中的容器（不要用 `railway shell`，它是本機 subshell，解析不到 private network 的 DB），執行一次 `python -m app.cli create-admin --username <name> --display-name <name>` 建立初始管理員。
 
 ## 7. 例行部署順序
 
@@ -133,10 +132,10 @@ api 的 `numReplicas` 必須為 1（`apps/api/railway.json`）。要擴充需先
 以下項目需在實際部署時實測，結果確認前不視為已確認：
 
 - [ ] Railway Postgres 主版本為 17、owner 角色為 superuser（§3 的兩個查詢）。
-- [ ] `btree_gist` extension 所在的 schema 與 `app_backend` 的 search_path 相容（baseline revision 於 Railway Postgres 實際執行結果）。
+- [ ] Railway Postgres 可安裝 `btree_gist`，且位於 `extensions` schema：`select extnamespace::regnamespace from pg_extension where extname = 'btree_gist'` 應為 `extensions`。DB-018 的 exclusion constraint 寫死 `extensions.gist_uuid_ops`；若已裝在其他 schema，`create extension if not exists` 會跳過，pre-deploy migration 會失敗。
 - [ ] pre-deploy command 能經 private network 連到 Postgres，且失敗時確實中止部署、保留舊版本。
 - [ ] Railway edge 轉送到 web 時的來源 IP 範圍（決定 `TRUSTED_EDGE_CIDRS`），以及真實 client IP 放在 `X-Forwarded-For` 還是其他標頭。
 - [ ] web 經 private network 連 api 的來源位址範圍（決定 `FORWARDED_ALLOW_IPS`，目前預設 `fd12::/16`，雙棧環境需加上 IPv4 範圍）。
-- [ ] api 以 `--host ::` 只監聽 IPv6：確認 web → api 與 Railway healthcheck（`/api/health`）都經 IPv6 連入；若任一走 IPv4，需改為雙棧監聽。
-- [ ] `/api/health` 端點已由 BACKEND-021 實作；未完成前 api 的 healthcheck 會失敗。
+- [ ] api 以 `--host ::` 只監聽 IPv6（待決）：Railway 2025-10-16 之後建立的環境，private DNS 同時解析 IPv4 與 IPv6，nginx 解析 `api.railway.internal` 可能先拿到 IPv4 而連線失敗。需確認 web → api 與 Railway healthcheck（`/api/health`）都能連入，雙棧處理方式部署前決定（INFRA-031 open_design_questions）。
+- [ ] `/api/health` 由 BACKEND-021 實作，`/api/admin/auth/me` 由 BACKEND-048 實作，`create-admin` 由 BACKEND-065 實作；未完成前 api 的 healthcheck 與 smoke 會失敗、無法建立初始管理員。
 - [ ] R2 presigned URL 在 LINE in-app browser 內能正常載入圖片與開啟 PDF。
