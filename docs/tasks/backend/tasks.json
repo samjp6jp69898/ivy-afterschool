@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 212,
-  "last_updated": "2026-10-04T16:52:56Z",
+  "version": 213,
+  "last_updated": "2026-10-04T16:53:06Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1556,8 +1556,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/auth.py",
       "source_ref": "BE:api/auth.py::logout",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-045",
         "BACKEND-042"
@@ -1635,8 +1635,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/auth.py",
       "source_ref": "BE:api/auth.py::get_me",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-047",
         "BACKEND-042",
@@ -2884,8 +2884,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/roles.py",
       "source_ref": "BE:api/permissions_admin.py::delete_role",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-080",
         "BACKEND-081"
@@ -2921,8 +2921,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/roles.py",
       "source_ref": "BE:api/auth.py::get_permissions",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-070",
         "BACKEND-073",
@@ -4180,8 +4180,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/reference.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-116",
         "BACKEND-119"
@@ -5841,8 +5841,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/guardian_service.py",
       "source_ref": "BE:api/students.py::create_guardian",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-168"
       ],
@@ -5981,8 +5981,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::list_guardians",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-168",
         "BACKEND-159",
@@ -6354,8 +6354,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_children_service.py",
       "source_ref": "BE:api/parent_portal/profile.py::get_child_profile",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-182",
         "BACKEND-180"
