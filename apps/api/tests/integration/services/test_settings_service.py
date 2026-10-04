@@ -33,7 +33,10 @@ from app.services.settings_service import (
     clear_settings_cache,
     get_setting,
     invalidate_setting,
+    list_settings_for_admin,
+    mask_secret,
 )
+from tests.support.factories import make_staff
 
 _LOGGER = "app.services.settings_service"
 _TOKEN = "tok-123"  # noqa: S105  測試假值
@@ -249,3 +252,81 @@ def test_get_setting_mutation_does_not_pollute_registry_default(db_session: Sess
     again = get_setting(db_session, NOTIFICATION_TOGGLES)
     assert set(again.root.values()) == {True}
     assert again.root["homework.done"] is True
+
+
+def test_list_settings_masked(db_session: Session) -> None:
+    token = encrypt_token("abcdefghijkl1234")
+    _set_value(
+        db_session,
+        "line.messaging",
+        {"channel_access_token": token, "channel_secret": encrypt_token("short")},
+    )
+
+    items = {s.key: s for s in list_settings_for_admin(db_session)}
+
+    messaging = items["line.messaging"]
+    assert messaging.is_secret is True
+    assert messaging.value == {"channel_access_token": "****1234", "channel_secret": "********"}
+    dumped = json.dumps([s.model_dump(mode="json") for s in items.values()], ensure_ascii=False)
+    assert "abcdefghijkl1234" not in dumped
+    assert token not in dumped
+
+
+def test_list_settings_unset_secret_stays_none(db_session: Session) -> None:
+    _set_value(db_session, "line.messaging", {"channel_access_token": None, "channel_secret": None})
+
+    items = {s.key: s for s in list_settings_for_admin(db_session)}
+
+    assert items["line.messaging"].value == {"channel_access_token": None, "channel_secret": None}
+
+
+def test_list_settings_order_and_schema(db_session: Session) -> None:
+    items = list_settings_for_admin(db_session)
+
+    assert [s.key for s in items] == list(REGISTRY)
+    org = next(s for s in items if s.key == "org.profile")
+    assert org.group == "org"
+    assert org.label == "安親班資料"
+    assert org.is_secret is False
+    assert {"name", "logo_url"} <= set(org.json_schema["properties"])
+
+
+def test_list_settings_reads_latest_without_cache(db_session: Session) -> None:
+    before = next(s for s in list_settings_for_admin(db_session) if s.key == "pickup.window").value
+    _set_auto_expire(db_session, 77)
+
+    after = next(s for s in list_settings_for_admin(db_session) if s.key == "pickup.window").value
+
+    assert after["auto_expire_minutes"] == 77
+    assert before["auto_expire_minutes"] != 77
+
+
+def test_list_settings_missing_row_uses_default(db_session: Session) -> None:
+    db_session.execute(text("delete from public.system_settings where key = 'pickup.window'"))
+
+    item = next(s for s in list_settings_for_admin(db_session) if s.key == "pickup.window")
+
+    assert item.value == PICKUP_WINDOW.definition().default.model_dump(mode="json")
+    assert item.updated_at is None
+    assert item.updated_by_name is None
+
+
+def test_list_settings_updated_by_name(db_session: Session) -> None:
+    staff = make_staff(db_session, display_name="陳主任")
+    db_session.execute(
+        text("update public.system_settings set updated_by = :u where key = 'pickup.window'"),
+        {"u": staff.id},
+    )
+
+    item = next(s for s in list_settings_for_admin(db_session) if s.key == "pickup.window")
+
+    assert item.updated_by_name == "陳主任"
+    assert item.updated_at is not None
+
+
+def test_mask_secret() -> None:
+    assert mask_secret(None) is None
+    assert mask_secret("short") == "********"
+    assert mask_secret("12345678") == "********"
+    assert mask_secret("123456789") == "****6789"
+    assert mask_secret("abcdefghijkl1234") == "****1234"
