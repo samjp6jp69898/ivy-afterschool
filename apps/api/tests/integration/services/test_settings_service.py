@@ -19,8 +19,10 @@ from app.core.crypto import derive_key, encrypt_token
 from app.core.settings_registry import (
     HOMEWORK_DEFAULTS,
     LINE_MESSAGING,
+    NOTIFICATION_TOGGLES,
     ORG_SERVICE_HOURS,
     PICKUP_WINDOW,
+    REGISTRY,
     HomeworkDefaults,
     PickupWindow,
     ServiceHours,
@@ -212,3 +214,32 @@ def test_get_setting_invalidate_during_load_not_cached(
 
     _set_auto_expire(db_session, 90)
     assert get_setting(db_session, PICKUP_WINDOW).auto_expire_minutes == 90
+
+
+def test_get_setting_mutation_does_not_pollute_cache(db_session: Session) -> None:
+    first = get_setting(db_session, NOTIFICATION_TOGGLES)
+    assert first.root["pickup.requested"] is True
+
+    # RootModel 的 frozen 擋不住內層 dict 的就地修改；回傳值必須是呼叫端自己的副本
+    first.root["pickup.requested"] = False
+
+    second = get_setting(db_session, NOTIFICATION_TOGGLES)
+    assert second.root["pickup.requested"] is True
+    assert set(second.root.values()) == {True}
+
+
+def test_get_setting_mutation_does_not_pollute_registry_default(db_session: Session) -> None:
+    db_session.execute(
+        text("delete from public.system_settings where key = 'notification.toggles'")
+    )
+    default = REGISTRY["notification.toggles"].default
+
+    toggles = get_setting(db_session, NOTIFICATION_TOGGLES)
+    assert toggles == default
+    toggles.root["homework.done"] = False
+
+    assert default.root["homework.done"] is True
+    invalidate_setting("notification.toggles")
+    again = get_setting(db_session, NOTIFICATION_TOGGLES)
+    assert set(again.root.values()) == {True}
+    assert again.root["homework.done"] is True
