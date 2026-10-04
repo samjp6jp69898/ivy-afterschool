@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 181,
-  "last_updated": "2026-10-04T16:30:41Z",
+  "version": 182,
+  "last_updated": "2026-10-04T16:33:18Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -868,7 +868,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/api/conftest.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-020",
@@ -900,9 +900,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。5 條 red_case 對應 test_api_fixtures_*（--collect-only 核對），tdd.run 5 passed；tests/integration/api/ 全目錄 20 passed；commit 4d91a02（測試）先於 0a91baa（實作）。staff_client / parent_client 每次呼叫建獨立 TestClient（共用 api_client 已啟動 lifespan 的 app）是必要的偏離：同一測試常需要兩個不同權限的 staff（073 的測試即如此），cookie jar 必須分開，與 description「需要兩個家長時各自建立獨立 TestClient」同一精神；接受。測資在 login 後 commit 釋放 savepoint，連續請求驗證通過。殘留（不擋）：test_api_fixtures_clock_and_storage_overrides 只斷言 dependency_overrides 映射，未在 endpoint 內取 clock / storage 驗證（與 red_case 字面一致，但比驗收標準「endpoint 內取得」弱一層）。"
       }
     },
     {
@@ -1288,7 +1288,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/auth.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "INFRA-004",
@@ -1312,9 +1312,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。4 條 red_case 對應 test_auth_schemas_*，tdd.run 6 passed；commit 91f7396 先於 ca05a0d。繼承 RequestModel（extra='forbid' + str_strip_whitespace + 拒 NUL）符合 kickoff 實作慣例，密碼欄位以 Annotated StringConstraints(strip_whitespace=False) 覆寫，測試證實 ' p ' 原樣保留；接受此偏離。長度邊界（32/33、128/129、4096/4097、4/20/21）皆有測。殘留（不擋）：StaffMeOut.permissions 不自行排序，只靠呼叫端傳入 sorted list；/me、login、refresh、change-password endpoint 須傳 sorted(permissions)，或日後加 field_validator 排序。"
       }
     },
     {
@@ -1447,7 +1447,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/staff_auth.py",
       "source_ref": "BE:api/auth.py::refresh_token",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-041",
@@ -1473,9 +1473,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。5 條 red_case 對應（另加測 tv 取 DB 現值、revoked / invalid 傳遞），tdd.run 7 passed；commit 5881e03 先於 b839960。reviewer 另驗：家長 token 路徑的撤銷在 rollback 後仍存在（commit 確實發生，rotate 產生的後繼列一併撤銷）、過期 token 原樣拋 refresh_expired。對「協調者待使用者確認」的判斷：兩個 401 路徑撤銷後 session.commit() 合理且必要——BACKEND-044 description 明定只在成功時 commit、401 路徑清 cookie 後回錯誤 envelope，不先 commit 則驗收標準「停用帳號 401 且該 family 被撤銷」在正式環境不成立；作法與 BACKEND-037 重用分支（已核可的例外）同一模式，未與 architecture_decisions 衝突（該文件沒有 service 不 commit 的條文，此原則只在 037 的 description / docstring）。建議使用者核可後：037 description 與 refresh_tokens.py docstring 的「唯一例外」改寫為例外清單（rotate 重用分支、staff / parent refresh 的 401 撤銷路徑），BACKEND-058 description 比照加註「撤銷後在 raise 前 commit」，044 加註「401 路徑不需再 commit」。若不接受，替代方案為 044 在 401 路徑自行 commit，但會把交易控制散到 endpoint 錯誤路徑。"
       }
     },
     {
@@ -1522,7 +1522,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/staff_auth.py",
       "source_ref": "BE:api/auth.py::logout",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-038",
@@ -1544,9 +1544,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。2 條 red_case 對應（另加測輪替後以任一代 raw 登出撤銷整族），tdd.run 3 passed；commit fe48907 先於 ede27ff。不檢查 subject_type：以家長 raw 呼叫員工 logout 會撤銷該家長 family，等同持有 raw 者自行登出，無提權面。無殘留。"
       }
     },
     {
@@ -1673,7 +1673,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/staff_auth.py",
       "source_ref": "BE:api/auth.py::change_password",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-041",
@@ -1700,9 +1700,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。5 條 red_case 對應（另加測成功清除失敗計數），tdd.run 6 passed；commit 2516e34 先於 d2a9755。with_for_update(of=StaffUser) 是必要的偏離：StaffUser.role 為 lazy='joined'（LEFT OUTER JOIN），Postgres 不允許對 outer join 的 nullable 側 FOR UPDATE，of= 只鎖 staff_users 列；接受。reviewer 以兩條 app_backend 連線 + thread 構造競態：(1) A 持鎖未 commit 時 B 的 change_password 阻塞，A commit 後 B 以舊密碼驗證失敗 → 400，token_version 恰為 1、只有 A 的新 family 存活；(2) A 正在 rotate（舊列上鎖、後繼已 insert 未 commit）時 B change_password 阻塞於 revoke_all_for_subject 的 FOR UPDATE，A commit 後 B 連後繼 token 一併撤銷（ivy F14 兩段式生效），B 的新 family 存活，舊後繼再 refresh → refresh_revoked。帳號在守衛通過後被刪除 / 停用 → 401 是 description 之外的小幅防禦性擴張，接受。回應與 log 不含密碼或 raw token。無殘留。"
       }
     },
     {
@@ -2482,7 +2482,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/api/deps.py",
       "source_ref": "BE:utils/auth.py::require_permission",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-047",
@@ -2507,9 +2507,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。5 條 red_case 對應，tdd.run 5 passed；commit 55ec5a6 先於 2438671。reviewer 另在 scratchpad 構造反例全部符合預期：include_router(dependencies=[...]) 在 include 時掛的守衛被辨識；守衛包在二層以上的巢狀 dependency 也被辨識；只掛 get_current_staff 的路由被列為未掛守衛；/api/admin/authx、/api/admin/notificationsx 不落入白名單；重複傳同一 Permission 正常；傳 None / list → TypeError。提醒：測試檔若用 from __future__ import annotations 且 Depends 指向函式內的區域變數，FastAPI 無法解析字串註解會把該依賴整個丟掉（路由真的沒守衛），route audit 會如實列出——這是 FastAPI 行為不是 helper 誤判，現有測試檔沒有 future import。殘留（不擋）：route audit 只掃 APIRoute，/api/admin 下的 WebSocket 路由與 app.mount 的子 app 不在掃描範圍（目前沒有這類 admin 路由；BACKEND-225 的 ws 另由 load_current_staff 驗證）。"
       }
     },
     {
@@ -2519,7 +2519,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/rbac_guards.py",
       "source_ref": "BE:api/permissions_admin.py::_assert_can_grant",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-072",
@@ -2542,9 +2542,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。3 條 red_case 對應（另加測 admin 全權限），tdd.run 4 passed；commit 01930e5 先於 9b0932e。反例：admin（ALL_PERMISSIONS）授出 '*'、'Students:Read'、' students:read'、含 NUL 的碼 → assert_can_grant 403、assert_valid_permission_codes 422；'*' 永遠不會出現在 CurrentStaff.permissions（resolve_effective_permissions 只留合法碼），無法藉 * 提權；空權限 actor 授出任何碼 403。殘留（不擋）：assert_can_grant 單獨呼叫時對未知碼回 403 而非 422，角色 / 員工帳號 endpoint 須先呼叫 assert_valid_permission_codes 才有 422 契約。"
       }
     },
     {
@@ -6247,7 +6247,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_scope.py",
       "source_ref": "BE:api/parent_portal/_shared.py::_assert_student_owned",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-179",
@@ -6273,9 +6273,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。5 條 red_case 對應，tdd.run 5 passed（整檔 10 passed）；commit 058a876 先於 5cafc30。他人小孩 / 不存在 uuid / 封存 guardian / 封存學生 / 他人的退班學生皆為同一個 404 body（status、code、message、details=None），for_write 只在確定是自己小孩後才檢查 withdrawn → 409，不洩漏存在性；dependency 層測試含未登入 401、自己退班學生讀 200 寫 409。無殘留。"
       }
     },
     {
