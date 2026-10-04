@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 219,
-  "last_updated": "2026-10-04T16:56:44Z",
+  "version": 220,
+  "last_updated": "2026-10-04T16:57:05Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2554,7 +2554,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/rbac_guards.py",
       "source_ref": "BE:api/permissions_admin.py::_assert_roles_manage_retained",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-074",
@@ -2562,7 +2562,7 @@
         "BACKEND-022"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "",
+      "risk_notes": "assert_admin_capabilities_retained 本身不加鎖：兩筆併發異動（例如各自停用一位 admin）在 READ COMMITTED 下各自看到對方仍啟用而都通過（review-r7-a 兩連線實跑確認），系統可能一度沒有啟用 admin。呼叫端（BACKEND-079 / 080 / 090 / 092 / 521）若要杜絕，須在呼叫前對相關 staff_users / roles 列 FOR UPDATE 或以 advisory lock 序列化帳號 / 角色異動。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_rbac_retained.py",
@@ -2578,9 +2578,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。3 條 red_case 對應（另加測兩者皆缺先報 last_role_manager、extra 補上的算 / revoked 拿掉的不算 / 分散兩帳號、autoflush 讀到未 flush 的變更），tdd.run 5 passed；lint / typecheck 乾淨；commit 7422e9a 先於 d5196e4。單一查詢（role 為 lazy='joined'）不 N+1，兩者齊備即提前返回。reviewer 反例：admin 角色但 revoked ['*'] → 有效權限空 → 409；extra ['*'] 連 DB 都進不去（ck_staff_users_no_wildcard），無法藉此繞過。併發（reviewer 兩條 app_backend 連線 + Barrier 實跑）：兩筆交易各停用一位 admin，各自在 READ COMMITTED 下看到對方仍啟用而通過，兩筆都 commit 後系統沒有任何啟用 admin——description 未要求鎖，列為殘留並寫進 risk_notes，由 090 / 092 / 079 / 080 等呼叫端決定是否加鎖（例如對 staff_users 持有 roles:write / staff:write 的列 FOR UPDATE，或以 advisory lock 序列化帳號 / 角色異動）。"
       }
     },
     {
@@ -2660,7 +2660,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/role_service.py",
       "source_ref": "BE:api/permissions_admin.py::create_role",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-077",
@@ -2685,9 +2685,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。4 條 red_case 對應（另加測競態：先查沒查到 → insert 撞 unique → savepoint 回滾後仍 409、session 可續用；空權限角色可建；重複碼去重排序），tdd.run 5 passed（整檔 11 passed）；lint / typecheck 乾淨；commit 5c99620 先於 45d984d。順序 assert_valid_permission_codes（422）→ assert_can_grant（403）→ 先查 code → savepoint 內 insert 攔 uq_roles_code 的 UniqueViolation（以 diag.constraint_name 判斷）→ is_system=False → audit role.create after={code,name,permissions}。reviewer 以兩條 app_backend 連線 + Barrier 同 code 併發 create_role：一個 created、一個 role_code_taken，無 500。無殘留。"
       }
     },
     {
@@ -5135,7 +5135,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": "BE:api/students.py::get_student_medical",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-149",
@@ -5162,9 +5162,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。5 條 red_case 對應（另加測解密失敗只記學生 id 與欄位名、不記密文），tdd.run 6 passed（整檔 11 passed）；lint / typecheck 乾淨；commit bcb22fd 先於 f87885c（實作 commit 只把測試的 photo_path 改成符合 storage 路徑格式的 32 hex）。敏感欄位：只有 students:sensitive 才解密，否則 sensitive None 而 has_* 正確；無權限時 JSON 不含明文、也不含 *_enc 密文（StudentListItemOut 沒有 enc 欄位）；解密失敗該欄位 None 並 logger.error（只記 id 與欄位名）。照片：FakeStorage 簽名格式 exp=300、StorageError → None。封存學生可查、guardians 只含未封存且含綁定狀態。對「協調者待使用者確認」的判斷：簽章多收 clock 合理且必要——BACKEND-168 list_for_student 需要 now 判斷綁定碼是否過期，service 內自建 SystemClock 會違反「時間一律注入」慣例；description 已同步改，建議使用者核可，BACKEND-161 以 Depends(get_clock) 傳入。殘留（不擋）：photo_path 不符 storage 路徑格式時 object_key 拋 ValueError（非 StorageError）會讓詳情頁 500；photo_path 只由上傳 service 以合法格式寫入，實務到不了。"
       }
     },
     {
@@ -5401,7 +5401,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/grade_promotion_service.py",
       "source_ref": "BE:api/students.py::bulk_graduate_students",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-133",
@@ -5423,9 +5423,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。2 條 red_case 對應（另加測 grade、student_no 排序），tdd.run 3 passed；lint / typecheck 乾淨；commit fe9c206 先於 9262265（實作 commit 只把測試的 withdrawn 學生改成先建 active 再轉，因 DB CHECK 要求 withdrawn_on，不是弱化）。對象 archived_at is null 且 status ∈ {active, suspended}；grade >= 6 → graduate（grade_to None），DB CHECK grade_level 1~6 保證無越界；class_id 不動、class_name 顯示原班；already_promoted 以 audit student.promote_grade / academic_year / entity_id=學年度判斷，仍回結果。無殘留。"
       }
     },
     {
@@ -7344,7 +7344,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/realtime/publish.py",
       "source_ref": "BE:services/ws/dismissal.py::schedule_broadcast_threadsafe",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-223",
@@ -7373,9 +7373,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。7 條 red_case 對應，tdd.run 7 passed；lint / typecheck 乾淨；commit fcd02ba 先於 b9dd36a。實作 commit b9dd36a 對測試檔的 15 行改動逐行核對：fixture 由 yield 改 return 並移除 Iterator import（lint）、PARENT_VISIBLE_TOPICS 斷言左右互換（語意相同）、envelope 內 datetime 的預期由 '…00Z' 改為 '…00+00:00'（jsonable_encoder 的實際輸出，原預期寫錯）、三處 pytest.raises 補 match=（斷言更強）。沒有弱化、沒有夾帶他人改動。commit 後才送 / rollback 不送以 db_session 的 savepoint commit + install_tx_hooks 驗證；家長裁切只送 student channel、admin channel 收完整 data；type 前綴與 PARENT_VISIBLE_TOPICS 檢查在註冊前就 raise；頻道名由 Literal topic 與 UUID 組成，無使用者輸入進入頻道名。sent_at 以 clock.now()（契約為 UTC aware）格式化加 Z，與 FakeClock 一致。殘留（不擋）：topic 只靠型別標註限制，執行期傳入非 Literal 字串仍會組出 admin:<任意> 頻道（只有後端程式呼叫，不接使用者輸入）。"
       }
     },
     {
@@ -14525,7 +14525,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/rbac_guards.py",
       "source_ref": "BE:api/auth.py::_assert_can_manage_user",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-074",
@@ -14549,9 +14549,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。3 條 red_case 對應（director 25 碼對 ALL 403、只多一碼也 403、對 tutor 12 碼 / 空集合 / 自己同集合通過、admin 對全部通過），tdd.run 3 passed（整檔 7 passed）；lint / typecheck 乾淨；commit 69197b7 先於 814f9e5。實作是純集合比較 target_effective <= actor.permissions，無法用停用 / 角色 / extra / revoked 繞過——target_effective 由呼叫端（090 / 091 / 092 / 521）以 resolve_effective_permissions 計算，'*' 不會出現在任一側。無殘留。"
       }
     },
     {
