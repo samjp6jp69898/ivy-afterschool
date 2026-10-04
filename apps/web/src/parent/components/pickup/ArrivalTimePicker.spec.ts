@@ -149,6 +149,32 @@ describe('ArrivalTimePicker', () => {
     expect(wrapper.findAll('button.m3-chip')).toHaveLength(5)
   })
 
+  it('ArrivalTimePicker initializes custom time from a non-null modelValue', () => {
+    const wrapper = mountPicker(taipei('17:31:20'), '18:15')
+    expect(chip(wrapper, '自選時間').attributes('aria-pressed')).toBe('true')
+    expect(chip(wrapper, '不指定').attributes('aria-pressed')).toBe('false')
+    expect((wrapper.get('input[type="time"]').element as HTMLInputElement).value).toBe('18:15')
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  it('ArrivalTimePicker returns to unspecified when parent clears a non-null modelValue', async () => {
+    const wrapper = mountPicker(taipei('17:31:20'), '18:15')
+    await wrapper.setProps({ modelValue: null })
+    expect(chip(wrapper, '不指定').attributes('aria-pressed')).toBe('true')
+    expect(chip(wrapper, '自選時間').attributes('aria-pressed')).toBe('false')
+    expect(wrapper.find('input[type="time"]').exists()).toBe(false)
+  })
+
+  it('ArrivalTimePicker keeps custom time when parent mirrors its own null emit', async () => {
+    const wrapper = mountPicker(taipei('17:31:20'), '18:15')
+    await wrapper.get('input[type="time"]').setValue('17:00')
+    expect(lastEmit(wrapper)).toEqual([null])
+    await wrapper.setProps({ modelValue: null })
+    expect(chip(wrapper, '自選時間').attributes('aria-pressed')).toBe('true')
+    expect((wrapper.get('input[type="time"]').element as HTMLInputElement).value).toBe('17:00')
+    expect(wrapper.text()).toContain(ERROR_TEXT)
+  })
+
   it('ArrivalTimePicker resets to unspecified when parent clears modelValue', async () => {
     const wrapper = mountPicker(taipei('17:31:20'))
     await chip(wrapper, '約 10 分鐘後').trigger('click')
