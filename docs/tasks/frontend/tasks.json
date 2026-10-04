@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 77,
-  "last_updated": "2026-10-04T16:55:44Z",
+  "version": 78,
+  "last_updated": "2026-10-05",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1611,11 +1611,11 @@
     {
       "id": "FRONTEND-054",
       "title": "實作 api/auditLogs.ts：稽核紀錄查詢 api client",
-      "description": "建立 `apps/web/src/api/auditLogs.ts`（`docs/tasks/api_index.md` §4）。走 `adminHttp`。\n\n**型別**：`AuditLog = {id, created_at, actor_type: 'staff' | 'parent' | 'system' | 'device', actor_id, actor_name, action, entity_type, entity_id, before: Record<string, unknown> | null, after: Record<string, unknown> | null, ip, user_agent}`；`AuditLogQuery = {action?, action_prefix?, entity_type?, entity_id?, actor_type?, actor_id?, date_from?, date_to?, page?, page_size?}`。\n- `listAuditLogs(q: AuditLogQuery): Promise<Page<AuditLog>>` → `GET /admin/audit-logs`\n\n**驗收標準**\n- query 參數原樣傳遞；回傳 Page。",
+      "description": "建立 `apps/web/src/api/auditLogs.ts`（`docs/tasks/api_index.md` §4）。走 `adminHttp`。\n\n**型別**：`AuditLog = {id, created_at, actor_type: 'staff' | 'parent' | 'system' | 'device', actor_id（nullable）, actor_name（nullable）, action, entity_type（nullable）, entity_id（nullable）, before: Record<string, unknown> | null, after: Record<string, unknown> | null, ip, user_agent}`；`AuditLogQuery = {action?, action_prefix?, entity_type?, entity_id?, actor_type?, actor_id?, date_from?, date_to?, page?, page_size?}`。\n- `listAuditLogs(q: AuditLogQuery): Promise<Page<AuditLog>>` → `GET /admin/audit-logs`\n\n**驗收標準**\n- query 參數原樣傳遞；回傳 Page。",
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/auditLogs.ts",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r7",
       "depends_on": [
         "FRONTEND-020",
