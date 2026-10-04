@@ -587,7 +587,7 @@ def test_web_dockerfile_removes_build_metadata_from_runtime_image() -> None:
     assert "rm -rf /usr/share/nginx/html/.vite" in text
 
 
-# --- INFRA-032 / INFRA-035：Railway config-as-code ---------------------------------------------------
+# --- INFRA-032 / INFRA-035：Railway config-as-code ---
 
 API_DIR = REPO_ROOT / "apps" / "api"
 
