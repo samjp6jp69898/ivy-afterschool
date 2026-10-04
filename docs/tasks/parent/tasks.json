@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 59,
-  "last_updated": "2026-10-04T06:43:15Z",
+  "version": 60,
+  "last_updated": "2026-10-04T06:45:24Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -912,7 +912,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/ParentBottomSheet.vue",
       "source_ref": "FE:src/parent/components/ParentBottomSheet.vue::props",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-001",
@@ -920,7 +920,7 @@
         "PARENT-016"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "[review-r5-parent 打回] (1) 捲動鎖計數不是共用狀態：scrollLockCount / scrollLockPrev 宣告在 <script setup> 內，每個實例各一份，註解宣稱的多 sheet 共用不成立。反例：同一頁兩個 sheet，template 中接送碼 sheet 在前、建立授權 sheet 在後，同一 tick 設 auth=false、code=true → 接送碼 sheet 開著時 body.style.overflow 已被還原為 ''（背景可捲）；再關閉接送碼 sheet → overflow 永久停在 'hidden'，整頁無法捲動（vitest 實測重現）。要求：計數與原值移到模組層級（獨立 <script> 區塊），並補一條「兩個實例交錯開關後 overflow 正確還原」的測試。 (2) 焦點鎖只靠 dialog 自身的 keydown：dismissible=false 時點擊 scrim，焦點落到 body，之後 Shift+Tab 由瀏覽器從 scrim 往前找，焦點進入背景頁按鈕（Chromium 實測：activeElement 由 sheet 內按鈕 → BODY → 背景最後一個按鈕），違反「焦點鎖在其中」。要求：Tab 攔截改掛在 document（或以 document focusin 把焦點拉回 sheet），並補「焦點在 sheet 外時按 Tab / Shift+Tab 會回到 sheet 內」的測試。",
+      "risk_notes": "拖曳超過 80px 後若父層不接受關閉（不改 modelValue），sheet 停在位移後的位置不回彈。title 為空時 aria-labelledby 指向空的 h2。同一 tick 由 A sheet 換成 B sheet 時，B 記住的開啟前元素在 A 內，B 關閉時該元素已移除而不還原焦點（焦點落到 body）。sheet 開啟期間 focusin 會把焦點拉回 sheet，sheet 外的互動元素（例如 M3Snackbar 的 action）只能點擊、無法用鍵盤到達。焦點鎖的可聚焦清單不含 contenteditable / summary 等元素，內容放這類元素時 Tab 循環會漏算。捲動鎖只設 body overflow:hidden，舊版 iOS / LINE WebView 是否擋得住觸控捲動需實機確認。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/components/ParentBottomSheet.spec.ts",
@@ -939,9 +939,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r5-parent",
-        "notes": "tdd.run 18/18 綠，六條 red_case 皆選到；ec6e5ed / acf7ca4（測試）先於 2c98034（實作）；web-lint 乾淨。稿 decisions 其餘各條（高度 100dvh−56px、只有 body 捲動、把手 32×4、footer safe-area、400/200ms 動畫、拖曳 1:1 / 80px / 阻尼 24px、關閉鈕 pointerdown 不拖曳、Esc 在 document、z-index 10 < snackbar 20）一致。打回兩項見 risk_notes。殘留（不擋）：多個 sheet 疊開時 Esc 用 stopPropagation 擋不住同在 document 上的另一個 listener（需 stopImmediatePropagation），會一次關掉兩層；拖曳超過 80px 後若父層不接受關閉，sheet 停在位移後的位置不回彈；title 為空時 aria-labelledby 指向空 h2；同 tick 交換 sheet 時新 sheet 記住的 prevFocus 是舊 sheet 內即將移除的元素，關閉後焦點落到 body。"
+        "notes": "複審通過。tdd.run 24/24 綠（exit 0），六條 red_case 皆選到；修正的紅燈測試 7127048 先於實作 a49c525；web-lint 乾淨。以舊實作（2c98034）跑新 spec：「overlapping sheets close in any order」「pulls focus back」「Tab from outside enters」「Escape closes only the topmost」4 條轉紅，兩個打回項都有測試守住（「same tick swap」一條在舊實作下也綠，非守門測試）。原反例重驗：接送碼 sheet 宣告在前、同 tick 交換後 overflow 維持 hidden、全關後還原、焦點在接送碼 sheet 內；scrim 點擊後焦點在 body 時 Shift+Tab 由 document keydown 攔下並移到 sheet 內最後一個元素。description 新增的多層 sheet 規格（模組層級捲動鎖與堆疊、只有最上層處理 Esc / Tab、focusin 拉回、開啟前元素已移除不還原）與實作一致。殘留見 risk_notes；另「does not restore focus to an element that was removed」只斷言 activeElement 不是已移除元素，鑑別力弱。"
       }
     },
     {
