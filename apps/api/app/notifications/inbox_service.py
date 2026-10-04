@@ -2,15 +2,24 @@
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from uuid import UUID
+
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
+from app.core.clock import Clock
+from app.core.errors import NotFoundError
 from app.core.pagination import PageParams, paginate
 from app.models.notifications import Notification
 from app.notifications.events import Event
 from app.notifications.recipients import Recipient
 from app.notifications.templates import DEEP_LINKS
-from app.schemas.notifications import NotificationListQuery, NotificationOut, NotificationPageOut
+from app.schemas.notifications import (
+    MarkAllReadOut,
+    NotificationListQuery,
+    NotificationOut,
+    NotificationPageOut,
+)
 
 _DEFAULT_DEEP_LINK = "/"
 
@@ -21,6 +30,19 @@ def _deep_link(event: str) -> str:
         return DEEP_LINKS[Event(event)]
     except ValueError:
         return _DEFAULT_DEEP_LINK
+
+
+def _to_out(row: Notification) -> NotificationOut:
+    return NotificationOut(
+        id=row.id,
+        event=row.event,
+        title=row.title,
+        body=row.body,
+        payload=row.payload,
+        read_at=row.read_at,
+        created_at=row.created_at,
+        deep_link=_deep_link(row.event),
+    )
 
 
 def list_notifications(
@@ -47,19 +69,47 @@ def list_notifications(
         select(func.count()).select_from(Notification).where(*own, Notification.read_at.is_(None))
     ).scalar_one()
     return NotificationPageOut(
-        items=[
-            NotificationOut(
-                id=row.id,
-                event=row.event,
-                title=row.title,
-                body=row.body,
-                payload=row.payload,
-                read_at=row.read_at,
-                created_at=row.created_at,
-                deep_link=_deep_link(row.event),
-            )
-            for row in rows
-        ],
+        items=[_to_out(row) for row in rows],
         total=total,
         unread_count=unread_count,
     )
+
+
+def mark_read(
+    session: Session, recipient: Recipient, notification_id: UUID, *, clock: Clock
+) -> NotificationOut:
+    """標記單則已讀；以 id + 收件人查詢，別人的通知與不存在回相同 404（IDOR，不洩漏存在與否）。
+
+    已讀的列保留原 read_at（冪等）。
+    """
+    row = session.execute(
+        select(Notification)
+        .where(
+            Notification.id == notification_id,
+            Notification.recipient_type == recipient.type,
+            Notification.recipient_id == recipient.id,
+        )
+        .with_for_update()
+    ).scalar_one_or_none()
+    if row is None:
+        raise NotFoundError("notification_not_found", "找不到通知")
+    if row.read_at is None:
+        row.read_at = clock.now()
+        session.flush()
+    return _to_out(row)
+
+
+def mark_all_read(session: Session, recipient: Recipient, *, clock: Clock) -> MarkAllReadOut:
+    """bulk update 自己所有未讀為 now；已讀列的 read_at 不變，不影響他人。"""
+    result = session.execute(
+        update(Notification)
+        .where(
+            Notification.recipient_type == recipient.type,
+            Notification.recipient_id == recipient.id,
+            Notification.read_at.is_(None),
+        )
+        .values(read_at=clock.now())
+        .returning(Notification.id),
+        execution_options={"synchronize_session": "fetch"},
+    )
+    return MarkAllReadOut(updated=len(result.all()))
