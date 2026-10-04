@@ -263,3 +263,13 @@ def make_pickup_authorizations(conn: psycopg.Connection[Any], **overrides: Any) 
         "code_last4": "1234",
     }
     return insert_row(conn, "public.pickup_authorizations", **{**defaults, **overrides})
+
+
+def make_exam_subjects(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    """未指定 exam_id / subject_id 時各另建一筆（科目名帶亂數，同一測試可多次呼叫）。"""
+    defaults = {
+        "exam_id": overrides.get("exam_id") or make_exams(conn)["id"],
+        "subject_id": overrides.get("subject_id")
+        or make_subjects(conn, name=f"科目{uuid4().hex[:8]}")["id"],
+    }
+    return insert_row(conn, "public.exam_subjects", **{**defaults, **overrides})
