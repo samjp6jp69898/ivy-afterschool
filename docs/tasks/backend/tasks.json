@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 94,
-  "last_updated": "2026-10-04T04:39:12Z",
+  "version": 95,
+  "last_updated": "2026-10-04T04:40:47Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -694,7 +694,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security_middleware.py",
       "source_ref": "BE:middleware/csrf_origin.py::CSRFOriginCheckMiddleware",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-001",

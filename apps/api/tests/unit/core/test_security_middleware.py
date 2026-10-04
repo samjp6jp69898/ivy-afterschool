@@ -20,7 +20,7 @@ def _settings(cors_origins: str = _ALLOWED, public_base_url: str = _PUBLIC) -> S
         app_env="test",
         database_url="postgresql+psycopg://u:p@127.0.0.1:54342/postgres",
         app_secret_key="s" * 48,
-        cors_origins=cors_origins,  # type: ignore[arg-type]  validator 會切逗號字串
+        cors_origins=cors_origins,  # validator 會把逗號字串切成 list
         public_base_url=public_base_url,
         r2_endpoint_url="http://127.0.0.1:54344",
         r2_access_key_id="afterschool",
@@ -113,7 +113,8 @@ def test_security_mw_get_unaffected(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json() == {"ok": "get"}
-    assert client.head("/api/x", headers={"Origin": _EVIL}).status_code == 200
+    # 沒有 HEAD 路由 → 405（由路由層回應，不是本 middleware 的 403）
+    assert client.head("/api/x", headers={"Origin": _EVIL}).status_code == 405
 
 
 def test_security_mw_allowed_origins_from_settings() -> None:
