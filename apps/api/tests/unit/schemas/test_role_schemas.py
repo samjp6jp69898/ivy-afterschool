@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -73,23 +74,19 @@ def test_role_schemas_create_rejects_extra() -> None:
 
 
 def test_role_schemas_out_from_orm_with_computed_values() -> None:
-    class _Orm:
-        id = uuid4()
-        code = "admin"
-        name = "管理員"
-        description = None
-        is_system = True
-        permissions = ["*"]
-        created_at = datetime(2026, 9, 1, tzinfo=UTC)
-        updated_at = datetime(2026, 9, 2, tzinfo=UTC)
-
-    out = RoleOut.model_validate(
-        {
-            **{k: getattr(_Orm, k) for k in vars(_Orm) if not k.startswith("_")},
-            "effective_permissions": ["attendance.read"],
-            "staff_count": 2,
-        }
+    orm_like = SimpleNamespace(
+        id=uuid4(),
+        code="admin",
+        name="管理員",
+        description=None,
+        is_system=True,
+        permissions=["*"],
+        effective_permissions=["attendance.read"],
+        staff_count=2,
+        created_at=datetime(2026, 9, 1, tzinfo=UTC),
+        updated_at=datetime(2026, 9, 2, tzinfo=UTC),
     )
+    out = RoleOut.model_validate(orm_like)
     assert out.permissions == ["*"]
     assert out.effective_permissions == ["attendance.read"]
     assert out.staff_count == 2
