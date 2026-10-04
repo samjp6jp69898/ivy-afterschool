@@ -12,6 +12,7 @@ from uuid import uuid4
 import psycopg
 from psycopg import sql
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 
 
 def split_table(table: str) -> tuple[str, str]:
@@ -132,3 +133,10 @@ def make_notifications(conn: psycopg.Connection[Any], **overrides: Any) -> dict[
         "body": "王小明的作業已完成，可以來接送了",
     }
     return insert_row(conn, "public.notifications", **{**defaults, **overrides})
+
+
+def make_system_settings(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    """key 預設帶亂數後綴字母（key 格式為 `<段>.<段>`），同一測試可多次呼叫。"""
+    suffix = "".join(secrets.choice("abcdefghijklmnopqrstuvwxyz") for _ in range(10))
+    defaults = {"key": f"test.setting_{suffix}", "value": Jsonb({"enabled": True})}
+    return insert_row(conn, "public.system_settings", **{**defaults, **overrides})
