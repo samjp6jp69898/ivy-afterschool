@@ -2,6 +2,7 @@
 
 import pytest
 from fastapi import FastAPI, WebSocket
+from fastapi.responses import Response
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
@@ -169,3 +170,28 @@ def test_security_mw_headers(client: TestClient) -> None:
     assert non_api.headers["x-content-type-options"] == "nosniff"
     assert non_api.headers["x-frame-options"] == "DENY"
     assert "cache-control" not in non_api.headers
+
+
+def test_security_mw_public_cacheable_path_keeps_handler_cache_control() -> None:
+    app = FastAPI()
+    app.add_middleware(SecurityMiddleware, settings=_settings())
+
+    @app.get("/api/parent/config")
+    def _public(response: Response) -> dict[str, str]:
+        response.headers["Cache-Control"] = "public, max-age=60"
+        return {"ok": "public"}
+
+    @app.get("/api/private")
+    def _private(response: Response) -> dict[str, str]:
+        # 非公開路徑：即使 handler 想快取也一律 no-store
+        response.headers["Cache-Control"] = "public, max-age=60"
+        return {"ok": "private"}
+
+    client = TestClient(app)
+
+    public = client.get("/api/parent/config")
+    private = client.get("/api/private")
+
+    assert public.headers["cache-control"] == "public, max-age=60"
+    assert public.headers["x-content-type-options"] == "nosniff"
+    assert private.headers["cache-control"] == "no-store"
