@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 50,
-  "last_updated": "2026-10-04T12:36:26Z",
+  "version": 51,
+  "last_updated": "2026-10-04T12:47:10Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -1516,11 +1516,11 @@
     {
       "id": "DB-040",
       "title": "建立 grant 收尾 revision（fail-closed 自我驗證）與 schema 慣例整合測試",
-      "description": "建立 Alembic revision `apps/api/alembic/versions/db040_enforce_grants_baseline.py`（revision id `db040`，`down_revision` 指向實作當下的 head）：全部 public 物件的權限收尾與 fail-closed 自我驗證，加上 grant 與 schema 慣例的整合測試（architecture_decisions §5）。這是第二道防線：各表 revision 已各自呼叫 `app_private.grant_backend`，本 revision 從 `pg_catalog` 取當下實際物件補漏，不寫死清單（寫死的清單會和漏掉的表一起漏掉）。\n\n**revision 內容（全部冪等）**\n1. 迴圈 `pg_class`（`relnamespace = 'public'::regnamespace and relkind in ('r','p')`）：`revoke all on table ... from public`。**不**在迴圈內 grant app_backend（授權邊界由各表 revision 明確決定，例如 audit_logs 只有 select / insert）。\n2. 迴圈 sequence（`relkind = 'S'`）：`revoke all on sequence ... from public`。\n3. 迴圈 function / procedure（`pg_proc` in public 與 app_private）：`revoke all on function ... from public`（已明確 grant 給 app_backend 的 execute 不受影響）。\n4. fail-closed 自我驗證：驗證 SQL 定義為模組常數 `VERIFY_SQL`（`do $$ ... raise exception ... $$`），`upgrade()` 在步驟 1~3 之後執行；任一條成立就讓 migration 失敗，訊息列出違規的表名：\n   - public 有任何表開啟 RLS（本專案不使用 RLS；開啟而沒有 policy 會讓 app_backend 讀不到資料）；\n   - 任何 public 表的 ACL 出現 owner 與 app_backend 以外的 grantee（含 PUBLIC）；\n   - 除 `alembic_version` 外，任何 public 表 app_backend 沒有任何權限（每張業務表都應由後端存取）；\n   - app_backend 對 `alembic_version` 有任何權限。\n5. 檔頭註解寫明：之後新增的表若 revision 在本檔之後，本檔不會重跑，第一道防線（`grant_backend`）與下列整合測試（integration CI job 每次都跑）才是持續把關者。\n\n**schema 慣例整合測試**（`apps/api/tests/integration/db/test_schema_conventions.py`，不寫死表名，從 information_schema 動態取全部 public base table，排除 `alembic_version`）：\n- 每張表有 `id uuid` 主鍵且 default 為 `gen_random_uuid()`；\n- 每張表有 `created_at timestamptz not null default now()` 與 `updated_at timestamptz not null default now()`；\n- 每張表有 `before update` 的 trigger 執行 `public.set_updated_at()`；\n- 所有 `timestamp` 欄位都是 `timestamptz`；\n- 所有 FK 欄位都有索引（以該欄位為前導欄位的 index 或 unique；partial index 不算，因為它不涵蓋被排除的列，父表刪除 / 更新時的 FK 檢查仍會全表掃描）。students.class_id、guardians.student_id、pickup_persons.student_id 目前只有 `where archived_at is null` 的 partial 前導索引，由本 revision 補建非 partial 索引。\n\n**驗收標準**\n- 套用全部 revision 後，public 每張表都沒有 RLS，ACL 只有 owner 與 app_backend；PUBLIC 對任何表、sequence、function 都沒有權限。\n- app_backend 實際登入後可讀每張業務表，audit_logs 仍只能 select / insert，讀 alembic_version 得到 42501。\n- fail-closed：transaction 內新增一張授權給 PUBLIC、或沒有授權給 app_backend 的表後執行 VERIFY_SQL → raise。\n- schema 慣例測試對全部表通過。",
+      "description": "建立 Alembic revision `apps/api/alembic/versions/db040_enforce_grants_baseline.py`（revision id `db040`，`down_revision` 指向實作當下的 head）：全部 public 物件的權限收尾與 fail-closed 自我驗證，加上 grant 與 schema 慣例的整合測試（architecture_decisions §5）。這是第二道防線：各表 revision 已各自呼叫 `app_private.grant_backend`，本 revision 從 `pg_catalog` 取當下實際物件補漏，不寫死清單（寫死的清單會和漏掉的表一起漏掉）。\n\n**revision 內容（全部冪等）**\n1. 迴圈 `pg_class`（`relnamespace = 'public'::regnamespace and relkind in ('r','p')`）：`revoke all on table ... from public`。**不**在迴圈內 grant app_backend（授權邊界由各表 revision 明確決定，例如 audit_logs 只有 select / insert）。\n2. 迴圈 sequence（`relkind = 'S'`）：`revoke all on sequence ... from public`。\n3. 迴圈 function / procedure（`pg_proc` in public 與 app_private）：`revoke all on function ... from public`（已明確 grant 給 app_backend 的 execute 不受影響）。\n4. fail-closed 自我驗證：驗證 SQL 定義為模組常數 `VERIFY_SQL`（`do $$ ... raise exception ... $$`），`upgrade()` 在步驟 1~3 與步驟 5 之後執行；任一條成立就讓 migration 失敗，訊息列出違規的表名：\n   - public 有任何表開啟 RLS（本專案不使用 RLS；開啟而沒有 policy 會讓 app_backend 讀不到資料）；\n   - 任何 public 表的 ACL 出現 owner 與 app_backend 以外的 grantee（含 PUBLIC）；\n   - 除 `alembic_version` 外，任何 public 表 app_backend 沒有任何權限（每張業務表都應由後端存取）；\n   - app_backend 對 `alembic_version` 有任何權限。\n5. 補建 FK 欄位的非 partial 索引（`create index if not exists`）：ix_students_class_id、ix_guardians_student_id、ix_pickup_persons_student_id、ix_parent_binding_codes_guardian_id（規則見下方 schema 慣例）。\n6. 檔頭註解寫明：之後新增的表若 revision 在本檔之後，本檔不會重跑，第一道防線（`grant_backend`）與下列整合測試（integration CI job 每次都跑）才是持續把關者。\n\n**schema 慣例整合測試**（`apps/api/tests/integration/db/test_schema_conventions.py`，不寫死表名，從 information_schema 動態取全部 public base table，排除 `alembic_version`）：\n- 每張表有 `id uuid` 主鍵且 default 為 `gen_random_uuid()`；\n- 每張表有 `created_at timestamptz not null default now()` 與 `updated_at timestamptz not null default now()`；\n- 每張表有 `before update` 的 trigger 執行 `public.set_updated_at()`；\n- 所有 `timestamp` 欄位都是 `timestamptz`；\n- 所有 FK 欄位都有索引（以該欄位為前導欄位的 index 或 unique；多欄 FK 則前導 n 欄恰為 FK 欄位集合）。partial index 只在 predicate 恰為 `<fk 欄位> is not null` 時算數：父表刪除 / 更新時的 FK 檢查是 `fk = $1`，null 列本來就不可能命中，planner 會用它（各表審計 FK 的 `where updated_by is not null` 索引即屬此類）；其他 predicate（`archived_at is null`、`used_at is null`）排除掉的列仍可能命中，FK 檢查會退回全表掃描，不算。students.class_id、guardians.student_id、pickup_persons.student_id、parent_binding_codes.guardian_id 原本只有後者，由本 revision 補建非 partial 索引（`ix_<table>_<column>`）。\n\n**驗收標準**\n- 套用全部 revision 後，public 每張表都沒有 RLS，ACL 只有 owner 與 app_backend；PUBLIC 對任何表、sequence、function 都沒有權限。\n- app_backend 實際登入後可讀每張業務表，audit_logs 仍只能 select / insert，讀 alembic_version 得到 42501。\n- fail-closed：transaction 內新增一張授權給 PUBLIC、或沒有授權給 app_backend 的表後執行 VERIFY_SQL → raise。\n- schema 慣例測試對全部表通過。",
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db040_enforce_grants_baseline.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-db-r6",
       "depends_on": [
         "DB-003",
@@ -1560,7 +1560,7 @@
         "DB-042"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "FK 索引檢查會要求各表 revision 為每個 FK 建索引：updated_by / published_by / created_by 等審計 FK 也要建（可用 partial index where 欄位 is not null 降低成本）；實作本 task 時若發現既有表漏建，在尚未部署前回頭改該表的 revision 並在對應 task description 補上，已部署的則以新 revision 補建。NFC 表（DB-032/033）blocked 中，日後補上時本檔不會重跑，由整合測試把關。",
+      "risk_notes": "FK 索引檢查會要求各表 revision 為每個 FK 建索引：updated_by / published_by / created_by 等審計 FK 也要建（可用 partial index `where <欄位> is not null` 降低成本，這種 predicate 算數）；日後新表漏建時，尚未部署可回頭改該表的 revision 並在對應 task description 補上，已部署的以新 revision 補建。db040 補建的四個全表索引與原本的 partial 索引（ix_students_class、ix_guardians_student、ix_pickup_persons_student、ix_parent_binding_codes_guardian_unused）功能重疊，各表 task 的測試仍斷言原索引存在，故本 revision 不刪；要精簡時由新 revision 連同該表測試一起調整。NFC 表（DB-032/033）blocked 中，日後補上時本檔不會重跑，由整合測試把關。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/db/test_grants_baseline.py",
@@ -1568,18 +1568,23 @@
           "integration"
         ],
         "red_cases": [
-          "test_grants_baseline_no_rls：select relname from pg_class where relnamespace='public'::regnamespace and relkind in ('r','p') and relrowsecurity → 0 列；select count(*) from pg_policies where schemaname='public' → 0",
-          "test_grants_baseline_acl_only_owner_and_backend：對每張 public 表的 aclexplode(relacl)，grantee 都屬於 {表 owner, app_backend}；has_table_privilege('public', tbl, 'select,insert,update,delete') 全部 false",
-          "test_grants_baseline_public_has_no_function_execute：public 與 app_private 的每個 function / procedure，has_function_privilege('public', oid, 'execute') 全部 false",
-          "test_grants_baseline_real_login_backend_access：backend_conn（app_backend 實際登入）對每張業務表 select 1 limit 1 → 全部成功；select count(*) from roles → 4；update audit_logs set action='x.y' → 42501；select * from alembic_version → 42501",
-          "test_grants_baseline_fail_closed_on_public_grant：owner_conn 在 transaction 內 create table public._leak(id int)、grant all on public._leak to app_backend、grant select on public._leak to public，再執行 revision 模組的 VERIFY_SQL → SQLSTATE P0001，訊息含 '_leak'",
+          "test_grants_baseline_no_rls：pg_class where public and relkind in ('r','p') and (relrowsecurity or relforcerowsecurity) → 0 列；select count(*) from pg_policies where schemaname='public' → 0",
+          "test_grants_baseline_acl_only_owner_and_backend：對每張 public 表的 aclexplode(relacl)，grantee 都屬於 {表 owner, app_backend}；has_table_privilege('public', tbl, 全部七種表權限) 全部 false",
+          "test_grants_baseline_public_has_no_function_execute：public 與 app_private 的每個 function / procedure（至少含 set_updated_at 與 grant_backend），has_function_privilege('public', oid, 'execute') 全部 false",
+          "test_grants_baseline_real_login_backend_access：backend_conn（app_backend 實際登入）對 pg_class 列出的每張業務表 select 1 limit 1 → 全部成功；select code from roles where is_system → admin / clerk / director / tutor（本機 DB 多 agent 共用，不斷言總數）；update audit_logs set action='x.y' → 42501；select * from alembic_version → 42501",
+          "test_grants_baseline_verify_sql_passes_on_current_schema：owner_conn 執行 revision 模組的 VERIFY_SQL（以 load_revision_sql 依檔案路徑載入）→ 不拋錯",
+          "test_grants_baseline_fail_closed_on_public_grant：owner_conn 在 transaction 內 create table public._leak(id int)、grant all on public._leak to app_backend、grant select on public._leak to public，再執行 VERIFY_SQL → SQLSTATE P0001，訊息含 '_leak'",
           "test_grants_baseline_fail_closed_on_ungranted_table：transaction 內 create table public._orphan(id int)（未授權給 app_backend）後執行 VERIFY_SQL → SQLSTATE P0001，訊息含 '_orphan'",
-          "test_grants_baseline_schema_conventions：test_schema_conventions.py 對所有 public 表斷言 id uuid default gen_random_uuid()、created_at / updated_at timestamptz not null default now()、掛 set_updated_at trigger；任一張不符則列出表名失敗（以刻意建立一張缺 updated_at 的臨時表餵給同一檢查函式，驗證它會回報該表）",
-          "test_grants_baseline_no_naive_timestamps：information_schema.columns where table_schema='public' and data_type='timestamp without time zone' → 0 列",
-          "test_grants_baseline_fk_columns_indexed：對 pg_constraint contype='f' 的每個 FK，檢查存在以其欄位為前導的 index → 缺索引清單為空"
+          "test_grants_baseline_fail_closed_on_rls：transaction 內 create table public._rls、call grant_backend、alter table enable row level security 後執行 VERIFY_SQL → P0001，訊息含 '_rls'",
+          "test_grants_baseline_fail_closed_on_alembic_version_grant：transaction 內 grant select on alembic_version to app_backend 後執行 VERIFY_SQL → P0001，訊息含 'alembic_version'",
+          "test_grants_baseline_schema_conventions：test_schema_conventions.py 對 information_schema 列出的所有 public base table（排除 alembic_version）斷言 id uuid default gen_random_uuid() 且為唯一主鍵欄、created_at / updated_at timestamptz not null default now()、恰一個 before update row trigger 執行 public.set_updated_at()；再刻意建一張缺 updated_at 的臨時表餵給同一檢查函式，驗證只回報該表且列出 updated_at 欄位與 trigger 兩項",
+          "test_grants_baseline_schema_conventions_reports_each_rule：parametrize 六種各違反一條的臨時表（id 非 uuid、id 無 default、created_at nullable、updated_at 無 default、沒有 trigger、after update trigger）→ 檢查函式只回報該表且含對應描述",
+          "test_grants_baseline_schema_conventions_accepts_compliant_table：符合全部慣例的臨時表 → 檢查函式回傳空 dict",
+          "test_grants_baseline_no_naive_timestamps：information_schema.columns where table_schema='public' and data_type='timestamp without time zone' → 0 列；建 _naive(at timestamp) 後 → [('_naive','at')]",
+          "test_grants_baseline_fk_columns_indexed：對 pg_constraint contype='f' 的每個 FK，存在前導欄位恰為 FK 欄位的 index（partial 只在 predicate 恰為 `<fk 欄位> is not null` 時算）→ 缺索引清單為空；再建 _child(student_id references students) 依序驗證：無索引 → 回報；`where archived_at is null` partial → 仍回報；後導欄位索引 → 仍回報；`where student_id is not null` partial → 不回報；drop 後 → 回報；(student_id, archived_at) 全表索引 → 不回報"
         ],
         "run": "just test-int apps/api/tests/integration/db/test_grants_baseline.py apps/api/tests/integration/db/test_schema_conventions.py -k grants_baseline",
-        "notes": "test_grants_baseline_schema_conventions 的實作放在 test_schema_conventions.py，函式名稱以 test_grants_baseline_ 開頭以便 -k 選取。VERIFY_SQL 以 importlib 依檔案路徑載入 revision 模組取得。"
+        "notes": "schema 慣例測試放在 test_schema_conventions.py，函式名稱以 test_grants_baseline_ 開頭以便 -k 選取。VERIFY_SQL 以 conftest.load_revision_sql(revision_file, 'VERIFY_SQL') 依檔案路徑載入。目錄層級的正向斷言在第一道防線（grant_backend）已達標的 DB 上一開始就綠，每條都附臨時表反例證明檢查函式會回報違規；真正因 db040 轉綠的是 VERIFY_SQL 五條與 FK 索引一條。"
       },
       "review": {
         "status": "pending",
