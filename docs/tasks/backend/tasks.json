@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 113,
-  "last_updated": "2026-10-04T07:47:07Z",
+  "version": 114,
+  "last_updated": "2026-10-04T07:47:32Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -736,8 +736,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/main.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-001",
         "BACKEND-003",
@@ -1104,8 +1104,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security/tokens.py",
       "source_ref": "BE:api/parent_portal/auth.py::_issue_bind_temp_token",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-033"
       ],
@@ -1139,8 +1139,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security/cookies.py",
       "source_ref": "BE:utils/cookie.py::set_staff_refresh_cookie",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-001",
         "BACKEND-033"
@@ -3441,8 +3441,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/reference.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-007",
         "DB-007",
@@ -4394,8 +4394,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/classes.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-007",
         "BACKEND-030",
@@ -5018,8 +5018,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/students/id_number.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-010",
         "BACKEND-003"
@@ -9996,8 +9996,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/codes.py",
       "source_ref": "BE:services/pickup_code.py::generate_pickup_code",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-009",
         "BACKEND-010"
@@ -14752,8 +14752,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security/tokens.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-033"
       ],
