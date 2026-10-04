@@ -178,11 +178,12 @@ def test_parent_liff_login_ok(api_client: TestClient, db_session: Session) -> No
     assert body["parent"]["id"] == str(parent.id)
     assert body["parent"]["display_name"] == "王媽媽"
     assert [c["name"] for c in body["parent"]["children"]] == ["王小明"]
-    assert resp.cookies.get("parent_access")
+    access = resp.cookies.get("parent_access")
+    assert access
     assert resp.cookies.get("parent_refresh")
     assert not resp.cookies.get("parent_bind")
     assert "token" not in body
-    assert resp.cookies.get("parent_access") not in resp.text
+    assert access not in resp.text
     # 已 commit：之後用 cookie 打 /me 成功；DB 的 last_login_at 已更新
     assert api_client.get("/api/parent/me").status_code == 200
     db_session.expire_all()

@@ -2,10 +2,11 @@
 
 from fastapi import APIRouter
 
-from app.api.parent import children, config, me, notifications
+from app.api.parent import auth, children, config, me, notifications
 
 parent_router = APIRouter(prefix="/api/parent")
 parent_router.include_router(config.router)
+parent_router.include_router(auth.router)
 parent_router.include_router(me.router)
 parent_router.include_router(children.router)
 parent_router.include_router(notifications.router)
