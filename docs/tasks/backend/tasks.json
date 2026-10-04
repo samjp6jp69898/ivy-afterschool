@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 188,
-  "last_updated": "2026-10-04T16:37:19Z",
+  "version": 189,
+  "last_updated": "2026-10-04T16:37:58Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -4588,7 +4588,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": "BE:api/classrooms.py::get_classrooms",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-134",
