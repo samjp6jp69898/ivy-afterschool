@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+
+<!-- ============================================================
+     設計稿中繼資料（gate 用，四個都必填，值不可猜）
+     preview-status : draft | approved | superseded
+     preview-tasks  : 這張稿涵蓋的 PARENT task id，逗號分隔
+     preview-route  : 對應的家長端路由 path；元件稿寫 component:<相對路徑>
+     preview-updated: 最後更新日期 YYYY-MM-DD
+     ============================================================ -->
+<meta name="preview-status" content="draft">
+<meta name="preview-tasks" content="PARENT-051">
+<meta name="preview-route" content="component:parent/components/StatusPill.vue">
+<meta name="preview-updated" content="2026-10-04">
+
+<title>設計稿：家長端 StatusPill 狀態膠囊</title>
+
+<!-- 家長端不用 Element Plus。Vue 版號鎖定 apps/web/package.json 的實際版本，不要用 @latest。
+     圖示用 Material Symbols Rounded（ligature 字型），與家長端 M3Icon 一致。 -->
+<script src="https://unpkg.com/vue@3.5.42/dist/vue.global.prod.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&display=block">
+
+<style>
+/* ============================================================
+   色票：家長端唯一允許落地 hex 的地方。
+   --m3-*      Material 3 色票（source color #0d9053，light 值），apps/web 建立後
+               與 src/parent/styles/m3-tokens.css 一致——原檔是權威，這是複本。
+   --preview-* 只給稿件框架（狀態列、設計說明面板）用，對齊後台模板 Element Plus
+               的 info / warning / success 色，讓兩種稿的框架看起來一樣。
+   手機框內的畫面一律用 --m3-*，不要寫死 hex——
+   設計稿寫死的 hex 會被當成「設計指定色」複製進 src/，那是錯的。
+   ============================================================ */
+:root {
+  --m3-primary: #006d3d;
+  --m3-on-primary: #ffffff;
+  --m3-primary-container: #89f9b1;
+  --m3-on-primary-container: #00210f;
+  --m3-secondary: #4f6353;
+  --m3-on-secondary: #ffffff;
+  --m3-secondary-container: #d2e8d4;
+  --m3-on-secondary-container: #0d1f13;
+  --m3-tertiary: #3a646f;
+  --m3-on-tertiary: #ffffff;
+  --m3-tertiary-container: #beeaf7;
+  --m3-on-tertiary-container: #001f26;
+  --m3-error: #ba1a1a;
+  --m3-on-error: #ffffff;
+  --m3-error-container: #ffdad6;
+  --m3-on-error-container: #410002;
+  --m3-background: #fbfdf8;
+  --m3-on-background: #191c19;
+  --m3-surface: #fbfdf8;
+  --m3-on-surface: #191c19;
+  --m3-surface-variant: #dce5db;
+  --m3-on-surface-variant: #414942;
+  --m3-outline: #717971;
+  --m3-outline-variant: #c0c9bf;
+  --m3-shadow: #000000;
+  --m3-scrim: #000000;
+  --m3-inverse-surface: #2e312e;
+  --m3-inverse-on-surface: #f0f1ec;
+  --m3-inverse-primary: #6ddc97;
+  --m3-surface-container-lowest: #ffffff;
+  --m3-surface-container-low: #f3f4ef;
+  --m3-surface-container: #edeee9;
+  --m3-surface-container-high: #e7e9e4;
+  --m3-surface-container-highest: #e1e3de;
+
+  /* State layer 透明度 */
+  --m3-state-hover: 0.08;
+  --m3-state-focus: 0.12;
+  --m3-state-pressed: 0.12;
+
+  /* Elevation */
+  --m3-elev-1: 0px 1px 2px 0px rgba(0, 0, 0, 0.30), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --m3-elev-3: 0px 1px 3px 0px rgba(0, 0, 0, 0.30), 0px 4px 8px 3px rgba(0, 0, 0, 0.15);
+
+  /* Shape */
+  --m3-shape-small: 8px;
+  --m3-shape-medium: 12px;
+  --m3-shape-large: 16px;
+  --m3-shape-extra-large: 28px;
+  --m3-shape-full: 9999px;
+
+  /* Motion */
+  --m3-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --m3-dur-short-2: 100ms;
+  --m3-dur-medium-2: 300ms;
+
+  /* Typography */
+  --m3-font: 'Roboto', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Helvetica Neue', sans-serif;
+
+  /* 稿件框架專用 */
+  --preview-page-bg: #f2f3f5;
+  --preview-panel-bg: #ffffff;
+  --preview-bar-bg: #f4f4f5;
+  --preview-bar-text: #73767a;
+  --preview-border: #dcdfe6;
+  --preview-text: #303133;
+  --preview-text-secondary: #909399;
+  --preview-primary: #409eff;
+  --preview-warning: #e6a23c;
+  --preview-warning-bg: #fdf6ec;
+  --preview-warning-border: #f3d19e;
+  --preview-success: #67c23a;
+  --preview-device: #1f1f1f;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { font-family: var(--m3-font); background: var(--preview-page-bg); color: var(--preview-text); }
+#app { display: flex; flex-direction: column; min-height: 100%; }
+button { font: inherit; }
+
+/* ---- 稿件狀態列：只存在於設計稿，實作時不會有（樣式對齊後台模板） ---- */
+.preview-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 6px 16px; font-size: 12px;
+  color: var(--preview-bar-text);
+  background: var(--preview-bar-bg);
+  border-bottom: 1px dashed var(--preview-border);
+}
+.preview-bar__spacer { flex: 1; }
+.preview-bar code { font-size: 12px; }
+.preview-tag {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 7px;
+  border-radius: 4px; font-size: 12px; color: var(--m3-on-primary);
+  background: var(--preview-warning);
+}
+.preview-tag.is-approved { background: var(--preview-success); }
+
+/* ---- 舞台：手機框 + 旁邊的設計說明面板 ---- */
+.stage {
+  flex: 1; display: flex; align-items: flex-start; justify-content: center;
+  gap: 32px; flex-wrap: wrap; padding: 32px 16px;
+}
+
+/* ---- 手機框：390×844，內部 app bar / 捲動內容 / 底部導覽 ---- */
+.device {
+  flex: none; width: 390px; height: 844px; padding: 0;
+  border-radius: 44px; overflow: hidden;
+  outline: 10px solid var(--preview-device);
+  box-shadow: var(--m3-elev-3);
+  margin: 10px;
+}
+.screen {
+  position: relative; display: flex; flex-direction: column; height: 100%;
+  background: var(--m3-surface); color: var(--m3-on-surface);
+}
+.screen__content { flex: 1; overflow-y: auto; padding: 8px 16px 24px; }
+
+/* ---- 設計說明面板（放在手機框旁邊；樣式對齊後台模板的設計說明抽屜） ---- */
+.notes {
+  flex: 0 1 380px; min-width: 300px; max-width: 100%;
+  padding: 20px; border-radius: 8px;
+  background: var(--preview-panel-bg); border: 1px solid var(--preview-border);
+  font-size: 14px; line-height: 1.6;
+}
+.notes h3 { margin: 0 0 12px; font-size: 16px; }
+.notes h4 { margin: 20px 0 8px; font-size: 14px; }
+.notes ol { margin: 0; padding-left: 20px; }
+.notes__alert {
+  display: flex; gap: 8px; align-items: flex-start;
+  padding: 8px 12px; margin-bottom: 16px; border-radius: 4px; font-size: 13px;
+  color: var(--preview-warning); background: var(--preview-warning-bg);
+  border: 1px solid var(--preview-warning-border);
+}
+.notes__option { color: var(--preview-text-secondary); font-size: 13px; }
+/* 預覽狀態切換：只存在於設計稿，所以放在手機框外面 */
+.state-switch { display: inline-flex; border: 1px solid var(--preview-border); border-radius: 4px; overflow: hidden; }
+.state-switch button {
+  padding: 4px 12px; font-size: 12px; border: none; cursor: pointer;
+  background: var(--preview-panel-bg); color: var(--preview-text);
+}
+.state-switch button + button { border-left: 1px solid var(--preview-border); }
+.state-switch button.is-active { background: var(--preview-primary); color: var(--m3-on-primary); }
+
+/* ============================================================
+   M3 元件樣式——對照 ivy 家長端 src/parent/components/m3/*。
+   只寫這張稿用得到的；新稿需要別的元件時照 M3 規格補在這裡。
+   ============================================================ */
+.material-symbols-rounded {
+  font-family: 'Material Symbols Rounded'; font-weight: normal; font-style: normal;
+  line-height: 1; letter-spacing: normal; text-transform: none; white-space: nowrap;
+  direction: ltr; font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased;
+  /* 防跑版夾盒：字型未就緒時 ligature 原文裁在 1em 內 */
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1em; height: 1em; overflow: hidden; flex-shrink: 0; vertical-align: middle;
+  user-select: none;
+}
+
+.m3-title-large { font-size: 22px; line-height: 28px; font-weight: 500; }
+.m3-title-medium { font-size: 16px; line-height: 24px; font-weight: 500; letter-spacing: 0.15px; }
+.m3-body-medium { font-size: 14px; line-height: 20px; letter-spacing: 0.25px; }
+.m3-label-large { font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: 0.1px; }
+.m3-label-medium { font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: 0.5px; }
+
+/* Top app bar（center-aligned） */
+.m3-top-app-bar {
+  display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; align-items: center;
+  min-height: 64px; padding: 0 4px; flex: none;
+  background: var(--m3-surface); color: var(--m3-on-surface);
+}
+.m3-top-app-bar__title { margin: 0; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Icon button：48×48 觸控區、40×40 state layer */
+.m3-icon-button {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px; border: none; border-radius: var(--m3-shape-full);
+  background: transparent; color: var(--m3-on-surface-variant); cursor: pointer;
+}
+.m3-icon-button::after {
+  content: ''; position: absolute; inset: 4px; border-radius: var(--m3-shape-full);
+  background: currentColor; opacity: 0; transition: opacity var(--m3-dur-short-2) var(--m3-easing-standard);
+}
+.m3-icon-button:hover::after { opacity: var(--m3-state-hover); }
+.m3-icon-button:active::after { opacity: var(--m3-state-pressed); }
+
+/* Card（filled / elevated）：底色照 M3Card（parent-component-m3-kit.html） */
+.m3-card {
+  padding: 16px; border-radius: var(--m3-shape-medium);
+  background: var(--m3-surface-container-highest); color: var(--m3-on-surface);
+}
+.m3-card--elevated { background: var(--m3-surface-container-low); box-shadow: var(--m3-elev-1); }
+
+/* Button（filled，44px 以上觸控高度） */
+.m3-button {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 48px; padding: 0 24px; border: none; border-radius: var(--m3-shape-full);
+  background: var(--m3-primary); color: var(--m3-on-primary); cursor: pointer; overflow: hidden;
+}
+.m3-button::after {
+  content: ''; position: absolute; inset: 0; background: currentColor; opacity: 0;
+  transition: opacity var(--m3-dur-short-2) var(--m3-easing-standard);
+}
+.m3-button:hover::after { opacity: var(--m3-state-hover); }
+.m3-button:active::after { opacity: var(--m3-state-pressed); }
+.m3-button--block { width: 100%; }
+
+/* Assist chip */
+.m3-chip {
+  display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px;
+  border-radius: var(--m3-shape-small);
+  background: var(--m3-primary-container); color: var(--m3-on-primary-container);
+}
+
+/* Linear progress */
+.m3-progress { height: 4px; border-radius: var(--m3-shape-full); background: var(--m3-surface-container-highest); overflow: hidden; }
+.m3-progress__bar { height: 100%; border-radius: inherit; background: var(--m3-primary); transition: width var(--m3-dur-medium-2) var(--m3-easing-standard); }
+
+/* Navigation bar（底部導覽，active indicator pill） */
+.m3-navigation-bar { display: flex; flex: none; height: 80px; background: var(--m3-surface-container); color: var(--m3-on-surface-variant); }
+.m3-nav-tab {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  padding: 12px 0 16px; border: none; background: transparent; color: inherit; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.m3-nav-tab__icon {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 64px; height: 32px; border-radius: var(--m3-shape-full);
+  transition: background-color var(--m3-dur-short-2) var(--m3-easing-standard);
+}
+.m3-nav-tab.is-active .m3-nav-tab__icon { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.m3-nav-tab.is-active .m3-nav-tab__label { color: var(--m3-on-surface); }
+.m3-nav-tab__badge {
+  position: absolute; top: -2px; right: 10px; min-width: 16px; height: 16px; padding: 0 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--m3-shape-full); font-size: 11px; font-weight: 600;
+  background: var(--m3-error); color: var(--m3-on-error);
+}
+
+/* Snackbar */
+.m3-snackbar {
+  position: absolute; left: 16px; right: 16px; bottom: 92px;
+  padding: 14px 16px; border-radius: var(--m3-shape-small);
+  background: var(--m3-inverse-surface); color: var(--m3-inverse-on-surface); box-shadow: var(--m3-elev-3);
+}
+
+/* Skeleton（載入中） */
+.skeleton { border-radius: var(--m3-shape-small); background: var(--m3-surface-container-high); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.5; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+
+/* ---- 頁面內容常用排版 ---- */
+.section-title { margin: 16px 4px 8px; color: var(--m3-on-surface-variant); }
+.status-card__head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.status-card__avatar {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 44px; height: 44px; border-radius: var(--m3-shape-full);
+  background: var(--m3-tertiary-container); color: var(--m3-on-tertiary-container); font-weight: 700;
+}
+.status-card__sub { color: var(--m3-on-surface-variant); }
+.status-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--m3-outline-variant); }
+.status-row__icon { color: var(--m3-on-surface-variant); font-size: 24px; }
+.status-row__label { flex: 1; color: var(--m3-on-surface-variant); }
+.status-row__value { color: var(--m3-on-surface); }
+.status-card__action { margin-top: 16px; }
+.empty-state { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px 8px; text-align: center; color: var(--m3-on-surface-variant); }
+.empty-state .material-symbols-rounded { font-size: 48px; color: var(--m3-outline); }
+
+/* StatusPill（PARENT-051）：28px 高資訊膠囊，不可互動、不拿焦點 */
+.status-pill {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 100%; height: 28px; padding: 0 12px;
+  border-radius: var(--m3-shape-full); white-space: nowrap; vertical-align: middle;
+}
+.status-pill.has-icon { padding-left: 8px; }
+.status-pill__label { overflow: hidden; text-overflow: ellipsis; }
+.status-pill--success { background: var(--m3-primary-container); color: var(--m3-on-primary-container); }
+.status-pill--warning { background: var(--m3-tertiary-container); color: var(--m3-on-tertiary-container); }
+.status-pill--danger { background: var(--m3-error-container); color: var(--m3-on-error-container); }
+.status-pill--info { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.status-pill--neutral { background: var(--m3-surface-container-high); color: var(--m3-on-surface); }
+/* 選項 B 預覽專用：目前沒有這組 token，只存在於稿 */
+.status-pill--warning-alt { background: var(--preview-alt-warning-bg); color: var(--preview-alt-warning-fg); }
+:root { --preview-alt-warning-bg: #ffddb0; --preview-alt-warning-fg: #2b1700; }
+:root[data-theme='dark'] { --preview-alt-warning-bg: #5b3a00; --preview-alt-warning-fg: #ffddb0; }
+
+.demo__caption { margin: 20px 0 8px; color: var(--m3-on-surface-variant); }
+.demo__caption:first-child { margin-top: 4px; }
+.demo-grid { display: grid; grid-template-columns: 72px 1fr 1fr; align-items: center; gap: 10px 8px; }
+.demo-grid__head { color: var(--m3-on-surface-variant); }
+.demo-grid__tone { color: var(--m3-on-surface-variant); }
+.demo-code { margin-top: 6px; padding: 6px 8px; border-radius: var(--m3-shape-extra-small); background: var(--m3-surface-container); color: var(--m3-on-surface-variant); font: 11px/16px ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+.demo-list { margin: 0; padding: 0; list-style: none; }
+.demo-list li { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px 0; border-top: 1px solid var(--m3-outline-variant); }
+.demo-list li:first-child { border-top: none; }
+.demo-list__main { flex: 1; min-width: 0; }
+.demo-list__sub { color: var(--m3-on-surface-variant); }
+.demo-narrow { max-width: 120px; }
+.theme-switch { display: inline-flex; border: 1px solid var(--preview-border); border-radius: 4px; overflow: hidden; }
+.notes table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
+.notes th, .notes td { padding: 3px 6px; border: 1px solid var(--preview-border); text-align: left; }
+</style>
+</head>
+
+<body>
+<div id="app">
+
+  <!-- 稿件狀態列 -->
+  <div class="preview-bar">
+    <span class="preview-tag" :class="{ 'is-approved': meta.status === 'approved' }">
+      {{ meta.status === 'approved' ? '已核可' : '待核可' }}
+    </span>
+    <span>{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span class="preview-bar__spacer"></span>
+    <span>更新 {{ meta.updated }}</span>
+    <span>設計說明 / 待裁定（{{ openQuestions.length }}）在手機框右側</span>
+  </div>
+
+  <div class="stage">
+    <!-- ============================================================
+         手機框 390×844。純元件稿可以把元件放進多張 m3-card 逐一展示各種狀態，
+         但仍放在手機框裡，寬度才對得上真機。
+         ============================================================ -->
+    <div class="device">
+      <div class="screen">
+
+        <!-- Top app bar：對照 components/m3/M3TopAppBar.vue（首頁用 center-aligned） -->
+        <header class="m3-top-app-bar">
+          <span></span>
+          <h1 class="m3-top-app-bar__title m3-title-large">StatusPill</h1>
+          <button class="m3-icon-button" type="button" aria-label="通知">
+            <m3-icon name="notifications"></m3-icon>
+          </button>
+        </header>
+
+        <main class="screen__content">
+          <!-- ============================================================
+               PAGE CONTENT —— 從這裡開始換成本頁的實際內容。
+               下面以首頁「今日狀態卡」示範；三態（有資料 / 空 / 載入中）一定要都畫到，
+               用手機框右側的「預覽狀態」切換。
+               ============================================================ -->
+          <div class="section-title m3-label-large">五種 tone × 不含 / 含 icon</div>
+          <section class="m3-card" aria-label="tone 一覽">
+            <div class="demo-grid">
+              <span></span><span class="demo-grid__head m3-label-medium">不含 icon</span><span class="demo-grid__head m3-label-medium">含 icon</span>
+              <template v-for="r in toneRows" :key="r.tone">
+                <span class="demo-grid__tone m3-label-medium">{{ r.tone }}</span>
+                <span><status-pill :label="r.label" :tone="r.tone"></status-pill></span>
+                <span><status-pill :label="r.label" :tone="r.tone" :icon="r.icon"></status-pill></span>
+              </template>
+            </div>
+            <div class="demo-code">未傳 tone → neutral；icon 為 M3Icon 名稱，18px 裝飾用（aria-hidden）。</div>
+          </section>
+
+          <div class="section-title m3-label-large">實際用法：出勤 / 接送 / 作業</div>
+          <section class="m3-card" aria-label="使用情境">
+            <ul class="demo-list">
+              <li>
+                <div class="demo-list__main"><div class="m3-title-medium">今日出勤</div><div class="demo-list__sub m3-body-medium">15:42 到班</div></div>
+                <status-pill label="已到班" tone="success" icon="check_circle"></status-pill>
+              </li>
+              <li>
+                <div class="demo-list__main"><div class="m3-title-medium">接送</div><div class="demo-list__sub m3-body-medium">17:20 家長發起</div></div>
+                <status-pill label="待回覆" tone="warning" icon="schedule"></status-pill>
+              </li>
+              <li>
+                <div class="demo-list__main"><div class="m3-title-medium">10/02 接送</div><div class="demo-list__sub m3-body-medium">家長已在門口</div></div>
+                <status-pill label="家長已到" tone="danger" icon="error"></status-pill>
+              </li>
+              <li>
+                <div class="demo-list__main"><div class="m3-title-medium">10/03 請假</div><div class="demo-list__sub m3-body-medium">病假</div></div>
+                <status-pill label="已取消" tone="info"></status-pill>
+              </li>
+              <li>
+                <div class="demo-list__main"><div class="m3-title-medium">數學習作</div><div class="demo-list__sub m3-body-medium">第 3 單元</div></div>
+                <status-pill label="未開始" tone="neutral"></status-pill>
+              </li>
+            </ul>
+          </section>
+
+          <div class="section-title m3-label-large">長文字：單行省略，不換行</div>
+          <section class="m3-card" aria-label="長文字">
+            <div class="demo-narrow"><status-pill label="待家長回覆確認" tone="warning" icon="schedule"></status-pill></div>
+            <div class="demo-code">外層寬度不足時，膠囊縮窄並在文字尾端以 … 省略（max-width: 100%）。</div>
+          </section>
+
+          <div class="section-title m3-label-large">待裁定：warning 色（選項 B 預覽）</div>
+          <section class="m3-card" aria-label="warning 比較">
+            <div class="demo-grid" style="grid-template-columns: 112px 1fr">
+              <span class="demo-grid__tone m3-label-medium">A tertiary-container（藍青）</span>
+              <span><status-pill label="待回覆" tone="warning" icon="schedule"></status-pill> <status-pill label="已到班" tone="success" icon="check_circle"></status-pill> <status-pill label="已確認" tone="info"></status-pill></span>
+              <span class="demo-grid__tone m3-label-medium">B 新增琥珀 token</span>
+              <span><status-pill label="待回覆" tone="warning-alt" icon="schedule"></status-pill> <status-pill label="已到班" tone="success" icon="check_circle"></status-pill> <status-pill label="已確認" tone="info"></status-pill></span>
+            </div>
+          </section>
+          <!-- ============ PAGE CONTENT 結束 ============ -->
+        </main>
+
+        <!-- Snackbar：操作回饋，示範互動 -->
+        <div v-if="snackbar" class="m3-snackbar m3-body-medium" role="status">{{ snackbar }}</div>
+
+        <!-- Navigation bar：對照 components/m3/M3NavigationBar.vue -->
+        <nav class="m3-navigation-bar" aria-label="主要功能">
+          <button v-for="item in navItems" :key="item.key" type="button"
+                  class="m3-nav-tab" :class="{ 'is-active': item.key === currentTab }"
+                  :aria-current="item.key === currentTab ? 'page' : null"
+                  @click="currentTab = item.key">
+            <span class="m3-nav-tab__icon">
+              <m3-icon :name="item.icon" :filled="item.key === currentTab"></m3-icon>
+              <span v-if="item.badge" class="m3-nav-tab__badge">{{ item.badge }}</span>
+            </span>
+            <span class="m3-nav-tab__label m3-label-medium">{{ item.label }}</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+
+    <!-- 設計說明面板：這張稿做了哪些決定、還有什麼要使用者裁定 -->
+    <aside class="notes">
+      <h3>設計說明 / 待裁定</h3>
+      <div class="notes__alert" v-if="openQuestions.length">
+        以下項目需要你裁定，未回覆前這張稿不會進入實作
+      </div>
+
+      <h4>預覽選項</h4>
+      <div class="state-switch" role="group" aria-label="主題">
+        <button v-for="o in themes" :key="o.value" type="button" :class="{ 'is-active': theme === o.value }" @click="theme = o.value">{{ o.label }}</button>
+      </div>
+      <p class="notes__option">元件無資料 / 空 / 載入中三態：呼叫端沒有狀態時不渲染元件（空狀態文案由頁面負責），載入中由 SkeletonBlock 負責。</p>
+
+      <h4>文字對比（WCAG，容器色 vs 對應 on- 色）</h4>
+      <table>
+        <tr><th>tone</th><th>底 / 字 token</th><th>淺色</th><th>深色</th></tr>
+        <tr v-for="c in contrast" :key="c.tone"><td>{{ c.tone }}</td><td>{{ c.tokens }}</td><td>{{ c.light }}:1</td><td>{{ c.dark }}:1</td></tr>
+      </table>
+
+      <h4>設計決策</h4>
+      <ol>
+        <li v-for="(d, i) in decisions" :key="i">{{ d }}</li>
+      </ol>
+      <h4 v-if="openQuestions.length">待裁定</h4>
+      <ol>
+        <li v-for="(q, i) in openQuestions" :key="i" style="margin-bottom: 8px">
+          <div>{{ q.question }}</div>
+          <div class="notes__option">A. {{ q.optionA }}<br>B. {{ q.optionB }}</div>
+        </li>
+      </ol>
+    </aside>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, watch } = Vue
+
+/** Material Symbols Rounded icon，對照 components/m3/M3Icon.vue。
+    用法：<m3-icon name="home" :filled="true"></m3-icon>（不可自閉合）。
+    icon 名稱：https://fonts.google.com/icons?icon.set=Material+Symbols&icon.style=Rounded */
+const M3Icon = {
+  props: {
+    name: { type: String, required: true },
+    size: { type: Number, default: 24 },
+    filled: { type: Boolean, default: false },
+  },
+  computed: {
+    iconStyle() {
+      return {
+        fontSize: `${this.size}px`,
+        fontVariationSettings: `"FILL" ${this.filled ? 1 : 0}, "wght" 400, "GRAD" 0, "opsz" 24`,
+      }
+    },
+  },
+  template: `<span class="material-symbols-rounded" :style="iconStyle" aria-hidden="true">{{ name }}</span>`,
+}
+
+
+/** PARENT-051 StatusPill：純展示，不可互動、不拿焦點；tone 預設 neutral */
+const StatusPill = {
+  props: {
+    label: { type: String, required: true },
+    tone: { type: String, default: 'neutral' },
+    icon: { type: String, default: '' },
+  },
+  template: `<span class="status-pill m3-label-large" :class="['status-pill--' + tone, { 'has-icon': !!icon }]">
+    <m3-icon v-if="icon" :name="icon" :size="18"></m3-icon><span class="status-pill__label">{{ label }}</span>
+  </span>`,
+}
+
+/** 底部導覽五項，對照 docs/domain_spec.md §4 家長端路由（更多 = 出勤 / 請假 / 通知 / 代理接送）。 */
+const NAV_ITEMS = [
+  { key: 'home', label: '首頁', icon: 'home' },
+  { key: 'homework', label: '作業', icon: 'menu_book' },
+  { key: 'pickup', label: '接送', icon: 'directions_car' },
+  { key: 'exams', label: '成績', icon: 'grade', badge: 1 },
+  { key: 'more', label: '更多', icon: 'more_horiz' },
+]
+
+const app = createApp({
+  setup() {
+    /** 讀 <head> 的中繼資料，狀態列與稿件內容永遠一致，不用手動同步兩份。 */
+    const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
+    const meta = {
+      status: readMeta('preview-status'),
+      tasks: readMeta('preview-tasks'),
+      route: readMeta('preview-route'),
+      updated: readMeta('preview-updated'),
+    }
+
+    // 這張稿已經定下來的設計決定，逐條寫，實作時照這個做。
+    const decisions = [
+      'tone 與 FRONTEND-005 的 Tone 一一對應（success / warning / danger / info），neutral 是家長端額外的中性樣式；呼叫端直接把 statusMeta(...) 的 tone 傳入，元件內不寫任何狀態字串對應。',
+      '底 / 字色全部取 --m3-* token：success = primary-container / on-primary-container、warning = tertiary-container / on-tertiary-container、danger = error-container / on-error-container、info = secondary-container / on-secondary-container、neutral = surface-container-high / on-surface；淺 / 深色文字對比皆 ≥ 4.5:1（見右側表）。',
+      '視覺：高 28px、圓角 full、左右 padding 12px（含 icon 時左 8px）、label-large（14px / 500）；不可互動，不拿焦點、不放 state layer，因此不受 44px 觸控目標規則約束。',
+      'icon 選填，18px，M3Icon 無 label（aria-hidden）；狀態意義由文字承擔。顏色不是唯一的資訊來源，因為每個 pill 都有文字。',
+      '長文字單行省略（max-width: 100%），不換行、不撐破父層。',
+      '無障礙：渲染為 span，無 role；文字就是無障礙名稱。需要在清單列被朗讀成「狀態：已到班」時由呼叫端的列文字負責。',
+    ]
+    // 需要使用者選的項目；每題兩個具體選項，不要寫成開放式問題。空陣列代表沒有待裁定。
+    const openQuestions = [
+      { question: 'warning 照 task 對應 tertiary-container，在目前色票是淡藍青色（不是黃 / 橘），家長容易把「待回覆」看成中性資訊色；且 success（薄荷綠）與 info（灰綠）底色相近。warning 要不要換成琥珀色？（見手機框最下方 A / B 預覽）', optionA: '維持 tertiary-container（不動 PARENT-001 色票；靠 icon 與文字區分）', optionB: '在 m3-tokens.css 新增 warning-container / on-warning-container（淺色 #ffddb0 / #2b1700，深色 #5b3a00 / #ffddb0），warning tone 改用它（需改 PARENT-001 與 PARENT-051 的 description）' },
+    ]
+    const themes = [{ value: 'light', label: '淺色' }, { value: 'dark', label: '深色' }]
+    const theme = ref('light')
+    watch(theme, (v) => {
+      if (v === 'dark') document.documentElement.setAttribute('data-theme', 'dark')
+      else document.documentElement.removeAttribute('data-theme')
+    })
+    const toneRows = [
+      { tone: 'success', label: '已到班', icon: 'check_circle' },
+      { tone: 'warning', label: '待回覆', icon: 'schedule' },
+      { tone: 'danger', label: '家長已到', icon: 'error' },
+      { tone: 'info', label: '已離班', icon: 'logout' },
+      { tone: 'neutral', label: '未開始', icon: 'schedule' },
+    ]
+    const contrast = [
+      { tone: 'success', tokens: 'primary-container / on-primary-container', light: '13.3', dark: '7.2' },
+      { tone: 'warning', tokens: 'tertiary-container / on-tertiary-container', light: '13.3', dark: '7.3' },
+      { tone: 'danger', tokens: 'error-container / on-error-container', light: '13.3', dark: '5.5' },
+      { tone: 'info', tokens: 'secondary-container / on-secondary-container', light: '13.3', dark: '7.2' },
+      { tone: 'neutral', tokens: 'surface-container-high / on-surface', light: '14.1', dark: '11.1' },
+    ]
+
+    // 擬真但非真實個資的假資料。
+    const child = { name: '王小明', school: '某某國小', schoolClass: '三年二班', className: '中年級班' }
+    const today = { arrivedAt: '15:42', homeworkDone: 2, homeworkTotal: 3, readyAt: '17:30' }
+
+    const snackbar = ref('')
+    let snackbarTimer = null
+    const notifyPickup = () => {
+      snackbar.value = '已通知安親班，抵達時請按「我到了」'
+      clearTimeout(snackbarTimer)
+      snackbarTimer = setTimeout(() => { snackbar.value = '' }, 3000)
+    }
+
+    return {
+      meta, decisions, openQuestions, themes, theme, toneRows, contrast,
+      navItems: NAV_ITEMS,
+      currentTab: ref('home'),
+      child, today,
+      snackbar, notifyPickup,
+    }
+  },
+})
+
+app.component('M3Icon', M3Icon)
+app.component('StatusPill', StatusPill)
+app.mount('#app')
+</script>
+</body>
+</html>
