@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 179,
-  "last_updated": "2026-10-04T16:30:00Z",
+  "version": 180,
+  "last_updated": "2026-10-04T16:30:08Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -8007,7 +8007,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_export.py",
       "source_ref": "BE:api/student_attendance.py::_write_class_sheet",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-301"
