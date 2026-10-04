@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 31,
-  "last_updated": "2026-10-04T01:31:04Z",
+  "version": 32,
+  "last_updated": "2026-10-04T04:33:59Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -139,8 +139,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db004_create_staff_users.py",
       "source_ref": "BE:models/auth.py::User",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r4",
       "depends_on": [
         "DB-003"
       ],
@@ -178,8 +178,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db005_create_refresh_tokens.py",
       "source_ref": "BE:models/staff_refresh_token.py::StaffRefreshToken",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r4",
       "depends_on": [
         "DB-041",
         "DB-042"
@@ -217,8 +217,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db006_create_audit_logs.py",
       "source_ref": "BE:models/audit.py::AuditLog",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r4",
       "depends_on": [
         "DB-041",
         "DB-042"
@@ -517,8 +517,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db014_create_students.py",
       "source_ref": "BE:models/classroom.py::Student",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r4",
       "depends_on": [
         "DB-010",
         "DB-012"
@@ -560,8 +560,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db015_create_parent_accounts.py",
       "source_ref": "BE:models/auth.py::User",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r4",
       "depends_on": [
         "DB-041",
         "DB-042"
@@ -1111,8 +1111,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db029_create_notifications.py",
       "source_ref": "BE:models/notification_log.py::NotificationLog",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r4",
       "depends_on": [
         "DB-041",
         "DB-042"
@@ -1340,8 +1340,8 @@
       "granularity_unit": "seed",
       "target_path": "apps/api/alembic/versions/db035_seed_system_roles.py",
       "source_ref": "BE:models/permission_models.py::SYSTEM_ROLE_CODES",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r4",
       "depends_on": [
         "DB-003"
       ],
@@ -1378,8 +1378,8 @@
       "granularity_unit": "seed",
       "target_path": "apps/api/alembic/versions/db036_seed_subjects.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r4",
       "depends_on": [
         "DB-008"
       ],
@@ -1411,8 +1411,8 @@
       "granularity_unit": "seed",
       "target_path": "apps/api/alembic/versions/db037_seed_exam_types.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r4",
       "depends_on": [
         "DB-009"
       ],

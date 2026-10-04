@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 71,
-  "last_updated": "2026-10-04T01:31:17Z",
+  "version": 72,
+  "last_updated": "2026-10-04T04:33:59Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -940,8 +940,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/layout/NotificationPanel.vue",
       "source_ref": "FE:src/components/layout/NotificationPanel.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r4",
       "depends_on": [
         "FRONTEND-003",
         "FRONTEND-005"
@@ -2905,8 +2905,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/student/BindingCodeDialog.vue",
       "source_ref": "FE:src/components/student/GuardianManager.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r4",
       "depends_on": [
         "FRONTEND-003",
         "INFRA-013"
@@ -3335,8 +3335,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/attendance/AttendanceSummaryBar.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r4",
       "depends_on": [
         "FRONTEND-005",
         "FRONTEND-043"
@@ -3997,8 +3997,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/homework/ReadyEtaDialog.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r4",
       "depends_on": [
         "FRONTEND-003",
         "FRONTEND-040"

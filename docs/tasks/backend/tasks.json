@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 91,
-  "last_updated": "2026-10-04T04:21:56Z",
+  "version": 92,
+  "last_updated": "2026-10-04T04:33:59Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -127,8 +127,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/logging.py",
       "source_ref": "BE:utils/request_logging.py::RequestLoggingMiddleware",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-001"
       ],
@@ -211,8 +211,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/tx_hooks.py",
       "source_ref": "BE:services/notification/dispatch.py::install_session_hooks",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-005"
       ],
@@ -281,8 +281,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/pagination.py",
       "source_ref": "BE:utils/pagination.py::paginate",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-005",
         "BACKEND-003"
@@ -317,8 +317,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/crypto.py",
       "source_ref": "BE:utils/medical_encryption.py::encrypt_medical",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-001",
         "INFRA-004"
@@ -621,8 +621,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/locks.py",
       "source_ref": "BE:utils/advisory_lock.py::try_scheduler_lock",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-005"
       ],
@@ -694,8 +694,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security_middleware.py",
       "source_ref": "BE:middleware/csrf_origin.py::CSRFOriginCheckMiddleware",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-001",
         "BACKEND-003"

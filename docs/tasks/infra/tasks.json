@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 94,
-  "last_updated": "2026-10-03T15:30:49Z",
+  "version": 95,
+  "last_updated": "2026-10-04T04:33:59Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -581,8 +581,8 @@
       "granularity_unit": "script",
       "target_path": "scripts/dev_down.sh",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r4",
       "depends_on": [
         "INFRA-016",
         "INFRA-044"
@@ -829,8 +829,8 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r4",
       "depends_on": [
         "INFRA-022"
       ],
@@ -863,8 +863,8 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r4",
       "depends_on": [
         "INFRA-022"
       ],
@@ -896,8 +896,8 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r4",
       "depends_on": [
         "INFRA-022",
         "INFRA-009"
@@ -930,8 +930,8 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r4",
       "depends_on": [
         "INFRA-022",
         "INFRA-010",
@@ -968,8 +968,8 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r4",
       "depends_on": [
         "INFRA-022",
         "INFRA-020",
@@ -1005,8 +1005,8 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r4",
       "depends_on": [
         "INFRA-022",
         "INFRA-012"
@@ -1732,8 +1732,8 @@
       "granularity_unit": "test",
       "target_path": "scripts/tests/test_no_supabase_artifacts.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r4",
       "depends_on": [
         "INFRA-046",
         "INFRA-048",
