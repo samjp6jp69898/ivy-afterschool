@@ -2,6 +2,7 @@
 
 ``Student`` 的 ``school`` / ``class_`` 為 ``lazy="joined"``（outer join），``for_update`` 時
 只鎖 students（``FOR UPDATE OF students``）：Postgres 不允許鎖 outer join 的可空側。
+``for_update`` 另帶 ``populate_existing``，已載入的物件會被刷新成上鎖後的 DB 值。
 """
 
 from __future__ import annotations
@@ -29,7 +30,8 @@ def get_student_or_404(
     if not include_archived:
         stmt = stmt.where(Student.archived_at.is_(None))
     if for_update:
-        stmt = stmt.with_for_update(of=Student)
+        # populate_existing：同 session 已載入過該學生時，以上鎖後的 DB 現值覆蓋舊屬性
+        stmt = stmt.with_for_update(of=Student).execution_options(populate_existing=True)
     student = session.execute(stmt).unique().scalar_one_or_none()
     if student is None:
         raise NotFoundError("student_not_found", "找不到學生")
