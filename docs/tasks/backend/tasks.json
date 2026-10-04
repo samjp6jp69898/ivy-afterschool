@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 220,
-  "last_updated": "2026-10-04T16:57:05Z",
+  "version": 221,
+  "last_updated": "2026-10-04T16:57:47Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -8706,7 +8706,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_service.py",
       "source_ref": "BE:api/student_leaves.py::list_leaves",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7c",
       "depends_on": [
         "BACKEND-340",
@@ -8731,9 +8731,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試（99f6b5c、8185e79 只移除多餘 type: ignore）先於實作 602af80；動到的檔案 just lint / just typecheck 乾淨。突變驗證：日期交集改不含頭、拿掉 class_id 篩選、拿掉 created_by_type 篩選、名稱查找不分 staff / parent、同日 created_at 改升冪，皆有測試轉紅。class_id 以學生目前班級 join students 篩選，與 description「class_id（學生目前班級）」一致。SQL 次數：count、列表、附件 selectin、student_brief_map、建立 / 取消者名稱（員工與家長以 UNION ALL 合併成一次）共 5 次，20 筆請假時 ≤ 5 有測試，符合「以一次批次查詢解析、查詢次數固定」。附件只回 metadata 不簽 URL；分頁與 start_date desc、created_at desc 排序正確。"
       }
     },
     {
@@ -8818,7 +8818,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7c",
       "depends_on": [
         "BACKEND-340",
@@ -8841,9 +8841,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試（99f6b5c、8185e79 只移除多餘 type: ignore）先於實作 602af80；動到的檔案 just lint / just typecheck 乾淨。突變驗證：拿掉 attachment.leave_id == leave_id 條件 → test_attachment_url_mismatch 轉紅；附件屬於另一筆請假與不存在同一個 404（code 與 message 相同），不可跨請假取用。StorageError → 502 storage_unavailable 與 description 一致，log 只帶 attachment_id 不帶路徑。權限守衛屬 endpoint BACKEND-354（description 為 require_permission(LEAVES_READ)，red_cases 含 401 / 403 / 跨請假 404），service 不檢查權限符合規格。"
       }
     },
     {
