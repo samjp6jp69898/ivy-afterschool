@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 95,
-  "last_updated": "2026-10-04T04:33:59Z",
+  "version": 96,
+  "last_updated": "2026-10-04T04:38:36Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -581,7 +581,7 @@
       "granularity_unit": "script",
       "target_path": "scripts/dev_down.sh",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r4",
       "depends_on": [
         "INFRA-016",
@@ -829,7 +829,7 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r4",
       "depends_on": [
         "INFRA-022"
@@ -863,7 +863,7 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r4",
       "depends_on": [
         "INFRA-022"
@@ -896,7 +896,7 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r4",
       "depends_on": [
         "INFRA-022",
@@ -930,7 +930,7 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r4",
       "depends_on": [
         "INFRA-022",
@@ -968,7 +968,7 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r4",
       "depends_on": [
         "INFRA-022",
@@ -989,7 +989,7 @@
           "test_ci_db_checks_single_head：含 'alembic heads' 的那一行同時含 'wc -l' 與 '-eq 1'",
           "test_ci_db_checks_job_tears_down_always：最後一個 step 的 if == 'always()' 且 run 含 'docker compose' 與 'down'"
         ],
-        "run": "just test scripts/tests/test_ci_workflow.py -k db_checks_job",
+        "run": "just test scripts/tests/test_ci_workflow.py -k db_checks",
         "notes": "另跑：uvx --from actionlint-py actionlint .github/workflows/ci.yml"
       },
       "review": {
@@ -1005,7 +1005,7 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r4",
       "depends_on": [
         "INFRA-022",
@@ -1728,11 +1728,11 @@
     {
       "id": "INFRA-047",
       "title": "移除 Supabase 產物：supabase/ 目錄、check_rls、check-rls recipe 與殘留設定，並以掃描測試鎖住",
-      "description": "DB 改為 Railway Postgres + Alembic、檔案改為 R2 之後（architecture_decisions §2、§5、§10），清除 Supabase 時期留下的產物：\n- 刪除 `supabase/` 整個目錄（`config.toml`、`.gitignore`、`.branches/`、`.temp/` 與 `migrations/` 殘留；各表 SQL 由 DB-041 / DB-003 / DB-008~012 改寫成 revision 時刪除，本 task 確認已無殘留）。\n- 刪除 `scripts/check_rls.py`、`scripts/tests/test_check_rls.py` 與 justfile 的 `check-rls` recipe；grant 的持續把關由 DB-040 的整合測試負責。\n- root `.gitignore` 移除 `supabase/.temp/`、`supabase/.branches/` 條目。\n- `apps/api/pyproject.toml` 的 pytest marker 說明改為 `integration: 整合測試，只連本機 Postgres 127.0.0.1:54342 與 SeaweedFS S3 127.0.0.1:54344`；`scripts/tests/pytest.ini` 同步。\n- justfile 檔頭註解改為「pnpm / uv / docker 一律從 PATH 找執行檔」，`test-int` 的錯誤訊息改為「本機 DB 未啟動（127.0.0.1:<port> 連不上），先跑 just db-start」。\n- `scripts/tests/conftest.py` 的 docstring / 錯誤訊息改為「本機 DB」；`scripts/tests/test_scripts_conftest.py` 以 `supabase` 當假指令名稱的案例改用 `probe-tool`（行為不變，純改名）。\n- `apps/api/app/models/base.py` 模組 docstring 的「與 supabase/migrations 的約束命名一致」改為「與 Alembic revision 的約束命名一致」（純註解，不改程式行為）。\n\n**掃描測試** `scripts/tests/test_no_supabase_artifacts.py`：以 `git ls-files` 列出受版控檔案，排除 `docs/tasks/`（task 的判決紀錄）與 `docs/mockups/`，其餘檔案內容（不分大小寫）不得含 `supabase`、`check_rls`、`check-rls`、`service_role`。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "DB 改為 Railway Postgres + Alembic、檔案改為 R2 之後（architecture_decisions §2、§5、§10），清除 Supabase 時期留下的產物：\n- 刪除 `supabase/` 整個目錄（`config.toml`、`.gitignore`、`.branches/`、`.temp/` 與 `migrations/` 殘留；各表 SQL 由 DB-041 / DB-003 / DB-008~012 改寫成 revision 時刪除，本 task 確認已無殘留）。\n- 刪除 `scripts/check_rls.py`、`scripts/tests/test_check_rls.py` 與 justfile 的 `check-rls` recipe；grant 的持續把關由 DB-040 的整合測試負責。\n- root `.gitignore` 移除 `supabase/.temp/`、`supabase/.branches/` 條目。\n- `apps/api/pyproject.toml` 的 pytest marker 說明改為 `integration: 整合測試，只連本機 Postgres 127.0.0.1:54342 與 SeaweedFS S3 127.0.0.1:54344`；`scripts/tests/pytest.ini` 同步。\n- justfile 檔頭註解改為「pnpm / uv / docker 一律從 PATH 找執行檔」，`test-int` 的錯誤訊息改為「本機 DB 未啟動（127.0.0.1:<port> 連不上），先跑 just db-start」。\n- `scripts/tests/conftest.py` 的 docstring / 錯誤訊息改為「本機 DB」；`scripts/tests/test_scripts_conftest.py` 與 `scripts/tests/test_compose.py` 以 `supabase` 當假指令名稱的案例改用 `probe-tool`（行為不變，純改名）。\n- `apps/api/app/models/base.py` 模組 docstring 的「與 supabase/migrations 的約束命名一致」改為「與 Alembic revision 的約束命名一致」（純註解，不改程式行為）。\n\n**掃描測試** `scripts/tests/test_no_supabase_artifacts.py`：以 `git ls-files` 列出受版控檔案，排除 `docs/tasks/`（task 的判決紀錄）與 `docs/mockups/`，其餘檔案內容（不分大小寫）不得含 `supabase`、`check_rls`、`check-rls`、`service_role`。例外：本測試檔自己，以及明確斷言「輸出 / 設定不含舊名稱」或拒絕舊 DB 角色名的回歸測試（`NEGATIVE_ASSERTION_FILES`：scripts/tests 的 test_bootstrap、test_ci_workflow、test_deploy_configs、test_doctor、test_env_examples、test_readme，與 apps/api/tests 的 integration/db/test_base、integration/db/test_fixtures、integration/infra/test_db_fixtures）必須寫出被禁字串，不受掃描；新增檔案一律受掃描。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "test",
       "target_path": "scripts/tests/test_no_supabase_artifacts.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r4",
       "depends_on": [
         "INFRA-046",
