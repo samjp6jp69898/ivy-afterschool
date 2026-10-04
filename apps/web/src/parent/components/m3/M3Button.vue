@@ -20,7 +20,11 @@ const props = withDefaults(
 const emit = defineEmits<{ click: [MouseEvent] }>()
 
 function onClick(event: MouseEvent): void {
-  if (props.disabled || props.loading) return
+  if (props.disabled || props.loading) {
+    // loading 不設原生 disabled（保留焦點），所以要自己擋下 submit / reset 的預設行為
+    event.preventDefault()
+    return
+  }
   emit('click', event)
 }
 </script>
