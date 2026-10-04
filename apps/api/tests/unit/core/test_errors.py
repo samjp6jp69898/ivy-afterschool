@@ -6,7 +6,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DataError, IntegrityError, OperationalError
 
 from app.core.errors import (
     AppError,
@@ -41,6 +41,18 @@ def client() -> TestClient:
     @app.get("/integrity")
     def _integrity() -> None:
         raise IntegrityError("INSERT INTO probe ...", {}, Exception("duplicate key"))
+
+    @app.get("/data-error")
+    def _data_error() -> None:
+        raise DataError(
+            "INSERT INTO subjects ...",
+            {"name": "secret\x00value"},
+            Exception("PostgreSQL text fields cannot contain NUL (0x00) bytes"),
+        )
+
+    @app.get("/operational")
+    def _operational() -> None:
+        raise OperationalError("SELECT 1", {}, Exception("connection lost"))
 
     @app.get("/boom")
     def _boom() -> None:
@@ -151,3 +163,43 @@ def test_errors_subclass_defaults() -> None:
     assert (forbidden.status, forbidden.code) == (403, "permission_denied")
     unauth = UnauthenticatedError()
     assert (unauth.status, unauth.code, unauth.message) == (401, "unauthenticated", "請重新登入")
+
+
+def test_errors_data_error_to_422(client: TestClient) -> None:
+    resp = client.get("/data-error")
+
+    assert resp.status_code == 422
+    assert resp.json() == {
+        "error": {
+            "code": "invalid_value",
+            "message": "輸入的資料超出允許範圍或含有不支援的字元",
+            "details": None,
+        }
+    }
+    for leaked in ("INSERT", "secret", "NUL"):
+        assert leaked not in resp.text
+
+
+def test_errors_data_error_logged_without_params(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.WARNING, logger="app.core.errors"):
+        client.get("/data-error")
+
+    warnings = [rec for rec in caplog.records if rec.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "DataError" in warnings[0].getMessage()
+    for rec in caplog.records:
+        assert "secret" not in rec.getMessage()
+        assert rec.exc_info is None
+        assert "secret" not in (rec.exc_text or "")
+
+
+def test_errors_data_error_does_not_shadow_others(client: TestClient) -> None:
+    integrity = client.get("/integrity")
+    operational = client.get("/operational")
+
+    assert integrity.status_code == 409
+    assert integrity.json()["error"]["code"] == "conflict"
+    assert operational.status_code == 500
+    assert operational.json()["error"]["code"] == "internal_error"
