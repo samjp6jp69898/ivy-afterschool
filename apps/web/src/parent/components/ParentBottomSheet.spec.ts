@@ -210,6 +210,73 @@ describe('ParentBottomSheet', () => {
     expect(document.body.style.overflow).toBe('auto')
   })
 
+  it('ParentBottomSheet keeps body locked when two sheets swap in the same tick', async () => {
+    document.body.style.overflow = 'auto'
+    const a = mountSheet({ title: 'A' })
+    const b = mountSheet({ title: 'B', modelValue: false })
+    expect(document.body.style.overflow).toBe('hidden')
+    await Promise.all([a.setProps({ modelValue: false }), b.setProps({ modelValue: true })])
+    await nextTick()
+    expect(document.body.style.overflow).toBe('hidden')
+    await b.setProps({ modelValue: false })
+    expect(document.body.style.overflow).toBe('auto')
+  })
+
+  it('ParentBottomSheet restores body scroll after overlapping sheets close in any order', async () => {
+    document.body.style.overflow = 'auto'
+    const a = mountSheet({ title: 'A' })
+    const b = mountSheet({ title: 'B' })
+    await a.setProps({ modelValue: false })
+    expect(document.body.style.overflow).toBe('hidden')
+    await b.setProps({ modelValue: false })
+    expect(document.body.style.overflow).toBe('auto')
+  })
+
+  it('ParentBottomSheet pulls focus back into the sheet when it lands outside', async () => {
+    const outside = document.createElement('button')
+    outside.textContent = '背景'
+    document.body.appendChild(outside)
+    mountSheet({ dismissible: false })
+    await nextTick()
+    outside.focus()
+    await nextTick()
+    expect(dialog()?.contains(document.activeElement)).toBe(true)
+  })
+
+  it('ParentBottomSheet Tab from outside the sheet enters the sheet', async () => {
+    mountSheet({ dismissible: false })
+    await nextTick()
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    expect(document.activeElement).toBe(document.body)
+    const event = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })
+    document.body.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
+    expect(dialog()?.contains(document.activeElement)).toBe(true)
+  })
+
+  it('ParentBottomSheet Escape closes only the topmost of stacked sheets', async () => {
+    const a = mountSheet({ title: 'A' })
+    const b = mountSheet({ title: 'B' })
+    escape()
+    expect(b.emitted('update:modelValue')?.[0]).toEqual([false])
+    expect(a.emitted('update:modelValue')).toBeUndefined()
+    await b.setProps({ modelValue: false })
+    escape()
+    expect(a.emitted('update:modelValue')?.[0]).toEqual([false])
+  })
+
+  it('ParentBottomSheet does not restore focus to an element that was removed', async () => {
+    const trigger = document.createElement('button')
+    document.body.appendChild(trigger)
+    trigger.focus()
+    const wrapper = mountSheet({ modelValue: false })
+    await wrapper.setProps({ modelValue: true })
+    await nextTick()
+    trigger.remove()
+    await wrapper.setProps({ modelValue: false })
+    expect(document.activeElement).not.toBe(trigger)
+  })
+
   it('ParentBottomSheet renders footer slot below the body only when provided', () => {
     mountSheet({}, { default: '<p>內容</p>', footer: '<button type="button">儲存</button>' })
     const footer = document.body.querySelector('.sheet__footer')
