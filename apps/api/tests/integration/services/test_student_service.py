@@ -1,7 +1,10 @@
-"""BACKEND-149：app/services/student_service.py（list_students）。"""
+"""BACKEND-149：app/services/student_service.py（list_students）。
+BACKEND-150：get_student（敏感欄位依權限解密、照片短效 URL、監護人清單、封存可查）。"""
 
 from __future__ import annotations
 
+import json
+import logging
 from collections.abc import Iterator
 from datetime import date
 from uuid import UUID, uuid4
@@ -11,13 +14,23 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentStaff
 from app.core.config import get_settings
-from app.core.crypto import derive_key
+from app.core.crypto import derive_key, encrypt_bytes
+from app.core.errors import AppError
 from app.core.pagination import PageParams
+from app.core.storage import StorageError
 from app.models.students import Student
-from app.schemas.students import StudentListQuery
-from app.services.student_service import list_students
+from app.schemas.students import StudentDetailOut, StudentListQuery
+from app.services.student_service import get_student, list_students
 from app.services.students.id_number import id_number_hmac, normalize_id_number
-from tests.support.factories import make_class, make_school, make_student
+from tests.support.factories import (
+    make_class,
+    make_guardian,
+    make_parent,
+    make_school,
+    make_student,
+)
+from tests.support.fake_clock import FakeClock
+from tests.support.fake_storage import FakeStorage
 
 _PAGE = PageParams(page=1, page_size=50)
 
@@ -157,3 +170,135 @@ def test_list_students_order(db_session: Session) -> None:
 
     mine = [i.name for i in page.items if i.id in ids]
     assert mine == ["s3a1", "s3a2", "s3b", "s3none", "s4"]
+
+
+# --- BACKEND-150：get_student --------------------------------------------------------------------
+
+
+def _get(
+    db: Session, student_id: UUID, actor: CurrentStaff, clock: FakeClock, storage: FakeStorage
+) -> StudentDetailOut:
+    return get_student(db, student_id, actor=actor, storage=storage, clock=clock)
+
+
+def _with_sensitive(db: Session) -> Student:
+    student = make_student(db, name="王小明")
+    student.id_number_enc = encrypt_bytes("A123456789")
+    student.id_number_hmac = id_number_hmac("A123456789")
+    student.health_note_enc = encrypt_bytes("對花生過敏")
+    db.flush()
+    return student
+
+
+def test_get_student_sensitive_visible(db_session: Session, fake_clock: FakeClock) -> None:
+    student = _with_sensitive(db_session)
+
+    out = _get(
+        db_session,
+        student.id,
+        _actor("students:read", "students:sensitive"),
+        fake_clock,
+        FakeStorage(),
+    )
+
+    assert isinstance(out, StudentDetailOut)
+    assert out.id == student.id
+    assert out.name == "王小明"
+    assert out.has_id_number is True
+    assert out.has_health_note is True
+    assert out.sensitive is not None
+    assert out.sensitive.model_dump() == {"id_number": "A123456789", "health_note": "對花生過敏"}
+    assert out.photo_url is None
+    assert out.guardians == []
+
+
+def test_get_student_sensitive_hidden(db_session: Session, fake_clock: FakeClock) -> None:
+    student = _with_sensitive(db_session)
+
+    out = _get(db_session, student.id, _actor("students:read"), fake_clock, FakeStorage())
+
+    assert out.sensitive is None
+    assert out.has_id_number is True
+    assert out.has_health_note is True
+    dumped = json.dumps(out.model_dump(mode="json"), ensure_ascii=False)
+    assert "A123456789" not in dumped
+    assert "對花生過敏" not in dumped
+    assert "id_number_enc" not in dumped
+    # 沒有敏感資料的學生：has_* 皆 False
+    plain = make_student(db_session, name="陳小華")
+    out_plain = _get(
+        db_session,
+        plain.id,
+        _actor("students:read", "students:sensitive"),
+        fake_clock,
+        FakeStorage(),
+    )
+    assert out_plain.has_id_number is False
+    assert out_plain.has_health_note is False
+    assert out_plain.sensitive is not None
+    assert out_plain.sensitive.model_dump() == {"id_number": None, "health_note": None}
+
+
+def test_get_student_decrypt_failure_logged(
+    db_session: Session, fake_clock: FakeClock, caplog: pytest.LogCaptureFixture
+) -> None:
+    student = _with_sensitive(db_session)
+    student.id_number_enc = b"\x01garbage"
+    db_session.flush()
+
+    with caplog.at_level(logging.ERROR, logger="app.services.student_service"):
+        out = _get(db_session, student.id, _actor("students:sensitive"), fake_clock, FakeStorage())
+
+    assert out.sensitive is not None
+    assert out.sensitive.id_number is None
+    assert out.sensitive.health_note == "對花生過敏"
+    assert out.has_id_number is True
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert any(str(student.id) in r.getMessage() for r in errors)
+    assert all("garbage" not in r.getMessage() for r in caplog.records)
+
+
+def test_get_student_photo_url(db_session: Session, fake_clock: FakeClock) -> None:
+    student = make_student(db_session)
+    student.photo_path = f"{student.id}/abcdef0123456789.jpg"
+    db_session.flush()
+    storage = FakeStorage()
+
+    out = _get(db_session, student.id, _actor("students:read"), fake_clock, storage)
+    assert out.photo_url == (
+        f"https://storage.test/student-photos/{student.id}/abcdef0123456789.jpg?exp=300"
+    )
+
+    storage.sign_error = StorageError("簽名失敗")
+    out = _get(db_session, student.id, _actor("students:read"), fake_clock, storage)
+    assert out.photo_url is None
+    assert out.id == student.id
+
+
+def test_get_student_guardians_and_archived(db_session: Session, fake_clock: FakeClock) -> None:
+    klass = make_class(db_session, name="彩虹班")
+    school = make_school(db_session)
+    student = make_student(db_session, class_=klass, school=school, archived=True)
+    parent = make_parent(db_session, display_name="王媽媽")
+    bound = make_guardian(db_session, student, parent=parent, name="王媽媽", is_primary=True)
+    unbound = make_guardian(db_session, student, name="王爸爸", relation="father")
+    make_guardian(db_session, student, name="王阿嬤", relation="grandparent", archived=True)
+
+    out = _get(db_session, student.id, _actor("students:read"), fake_clock, FakeStorage())
+
+    assert out.archived_at is not None
+    assert out.class_ is not None
+    assert out.class_.name == "彩虹班"
+    assert out.school is not None
+    assert out.school.id == school.id
+    assert [g.id for g in out.guardians] == [bound.id, unbound.id]
+    assert out.guardians[0].binding.status == "bound"
+    assert out.guardians[0].binding.parent_display_name == "王媽媽"
+    assert out.guardians[1].binding.status == "unbound"
+
+
+def test_get_student_not_found(db_session: Session, fake_clock: FakeClock) -> None:
+    with pytest.raises(AppError) as exc:
+        _get(db_session, uuid4(), _actor("students:read"), fake_clock, FakeStorage())
+
+    assert (exc.value.status, exc.value.code) == (404, "student_not_found")
