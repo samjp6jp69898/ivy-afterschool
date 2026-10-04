@@ -21,6 +21,7 @@ from tests.support.factories import (
 )
 
 _DAY = date(2026, 9, 1)
+# lock_timeout 一律 SET LOCAL：連線會回到 pool，session 級 SET 會污染之後借到該連線的測試
 
 
 def _progress_count(session: Session, student_id: UUID) -> int:
@@ -95,22 +96,22 @@ def test_lock_progress_row_blocks(
     s1 = Session(bind=db_engine)
     s2 = Session(bind=db_engine)
     try:
-        created = lock_progress_row(s1, student.id, _DAY)
-        s2.execute(text("set lock_timeout = '200ms'"))
+        created_id = lock_progress_row(s1, student.id, _DAY).id
+        s2.execute(text("set local lock_timeout = '200ms'"))
         with pytest.raises(OperationalError) as blocked:
             lock_progress_row(s2, student.id, _DAY)
         assert getattr(blocked.value.orig, "sqlstate", None) == "55P03"  # lock_not_available
         s2.rollback()
 
         s1.commit()
-        s2.execute(text("set lock_timeout = '200ms'"))
-        retried = lock_progress_row(s2, student.id, _DAY)
+        s2.execute(text("set local lock_timeout = '200ms'"))
+        retried_id = lock_progress_row(s2, student.id, _DAY).id
         s2.commit()
     finally:
         s1.close()
         s2.close()
 
-    assert retried.id == created.id
+    assert retried_id == created_id
 
 
 @pytest.mark.cleanup_tables("homework_daily_progress")
@@ -122,25 +123,26 @@ def test_lock_progress_row_blocks_existing_row(
     existing = make_homework_progress(committing_db_session, student, service_date=_DAY)
     committing_db_session.commit()
     owner_cleanup_students.append(student.id)
+    existing_id = existing.id
 
     s1 = Session(bind=db_engine)
     s2 = Session(bind=db_engine)
     try:
-        assert lock_progress_row(s1, student.id, _DAY).id == existing.id
-        s2.execute(text("set lock_timeout = '200ms'"))
+        assert lock_progress_row(s1, student.id, _DAY).id == existing_id
+        s2.execute(text("set local lock_timeout = '200ms'"))
         with pytest.raises(OperationalError) as blocked:
             lock_progress_row(s2, student.id, _DAY)
         assert getattr(blocked.value.orig, "sqlstate", None) == "55P03"
         s2.rollback()
 
         s1.commit()
-        retried = lock_progress_row(s2, student.id, _DAY)
+        retried_id = lock_progress_row(s2, student.id, _DAY).id
         s2.commit()
     finally:
         s1.close()
         s2.close()
 
-    assert retried.id == existing.id
+    assert retried_id == existing_id
 
 
 @pytest.mark.cleanup_tables("homework_daily_progress")
@@ -188,7 +190,7 @@ def test_lock_progress_row_concurrent_create_yields_one_row(
         t.start()
     try:
         assert a_locked.wait(timeout=10)
-        assert not b_done.wait(timeout=0.5)  # A 尚未 commit：B 被擋住
+        assert not b_done.wait(timeout=0.5), errors  # A 尚未 commit：B 被擋住
     finally:
         release_a.set()
         for t in threads:
