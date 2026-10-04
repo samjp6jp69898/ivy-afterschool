@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 191,
-  "last_updated": "2026-10-04T16:40:23Z",
+  "version": 192,
+  "last_updated": "2026-10-04T16:41:34Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -7385,7 +7385,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/api/ws/common.py",
       "source_ref": "BE:utils/ws_hub.py::run_ws_connection",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-047",
@@ -7394,7 +7394,7 @@
         "BACKEND-002"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：描述的「DB 存取在 anyio.to_thread.run_sync 執行」以 common.run_in_thread(fn, ...) 提供（ws_load_staff / ws_load_parent 本身維持描述的同步簽章），endpoint task（BACKEND-226 / 227）要用 `await run_in_thread(ws_load_staff, ws, clock=clock)` 呼叫；另提供 close_code_for(AppError) 把 401 / 403 / 其他轉成 4401 / 4403 / 4400。短 session 經 common.open_session() 開啟（測試以 monkeypatch 綁到測試連線）。\n已知限制：starlette TestClient 在 client 離開 websocket context 時會直接取消 app task，無法觀察「client 斷線 → run_ws_loop 正常結束」，該路徑改以替身 WebSocket 驅動 run_ws_loop 驗證。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/ws/test_ws_common.py",
