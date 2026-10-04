@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 210,
-  "last_updated": "2026-10-04T16:51:43Z",
+  "version": 211,
+  "last_updated": "2026-10-04T16:52:23Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5131,11 +5131,11 @@
     {
       "id": "BACKEND-150",
       "title": "實作 StudentService.get_student：學生詳情（敏感欄位依權限解密、照片短效 URL）",
-      "description": "在 `apps/api/app/services/student_service.py` 實作：\n```python\ndef get_student(session: Session, student_id: UUID, *, actor: CurrentStaff, storage: Storage) -> StudentDetailOut: ...\n```\n- 封存學生也可查看（include_archived）；不存在 404。\n- `has_id_number` / `has_health_note` 一律回傳；`sensitive` 只在 `actor.has(STUDENTS_SENSITIVE)` 時以 BACKEND-009 解密填入，否則 None；解密失敗 → 該欄位 None 並 logger.error。\n- photo_url：photo_path 有值時 `storage.create_signed_url('student-photos', path, 300)`；StorageError → None 並記 log（不讓詳情頁失敗）。\n- guardians：未封存監護人（BACKEND-168 的組裝函式，含綁定狀態）。\n- 移植 ivy `api/students.py::get_student` 與 `get_student_medical` 的「敏感欄位另行授權」；去掉醫療欄位多欄位、lifecycle。\n\n**驗收標準**\n- 有 sensitive 權限回明文；沒有則 sensitive 為 None 但 has_* 正確，回應不含密文或明文。\n- 照片 URL 為 FakeStorage 簽名格式；Storage 失敗時 photo_url None。\n- 包含監護人清單。",
+      "description": "在 `apps/api/app/services/student_service.py` 實作：\n```python\ndef get_student(session: Session, student_id: UUID, *, actor: CurrentStaff, storage: Storage, clock: Clock) -> StudentDetailOut: ...\n```\n- 封存學生也可查看（include_archived）；不存在 404。\n- `has_id_number` / `has_health_note` 一律回傳；`sensitive` 只在 `actor.has(STUDENTS_SENSITIVE)` 時以 BACKEND-009 解密填入，否則 None；解密失敗 → 該欄位 None 並 logger.error。\n- photo_url：photo_path 有值時 `storage.create_signed_url('student-photos', path, 300)`；StorageError → None 並記 log（不讓詳情頁失敗）。\n- guardians：未封存監護人（BACKEND-168 `list_for_student(session, student_id, clock=clock)`，含綁定狀態；綁定碼是否過期需要 clock，故簽章多收 `clock`，BACKEND-161 以 `Depends(get_clock)` 傳入）。\n- 移植 ivy `api/students.py::get_student` 與 `get_student_medical` 的「敏感欄位另行授權」；去掉醫療欄位多欄位、lifecycle。\n\n**驗收標準**\n- 有 sensitive 權限回明文；沒有則 sensitive 為 None 但 has_* 正確，回應不含密文或明文。\n- 照片 URL 為 FakeStorage 簽名格式；Storage 失敗時 photo_url None。\n- 包含監護人清單。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": "BE:api/students.py::get_student_medical",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-149",
@@ -5144,7 +5144,7 @@
         "BACKEND-168"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：get_student 簽章比 description 原版多收 `clock: Clock`（BACKEND-168 的 list_for_student 需要 now 判斷綁定碼是否過期；不在 service 內自建 SystemClock）。description 已同步改；BACKEND-161 endpoint 要以 Depends(get_clock) 傳入。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_student_service.py",
