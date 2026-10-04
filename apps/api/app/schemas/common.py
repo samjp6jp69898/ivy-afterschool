@@ -19,13 +19,29 @@ SortOrder = Annotated[int, Field(ge=0, le=2147483647)]
 
 
 def _contains_nul(value: Any) -> bool:
-    """PostgreSQL text / jsonb 不接受 NUL；遞迴檢查 str、list、dict（含 key）。"""
-    if isinstance(value, str):
-        return "\x00" in value
-    if isinstance(value, dict):
-        return any(_contains_nul(k) or _contains_nul(v) for k, v in value.items())
-    if isinstance(value, list | tuple):
-        return any(_contains_nul(v) for v in value)
+    """PostgreSQL text / jsonb 不接受 NUL；以明確 stack 走訪 str、bytes、list、dict（含 key）。
+
+    不用 Python 遞迴（深層巢狀會 RecursionError）；以 id 去重，循環參照與共用子結構都只走一次。
+    """
+    stack = [value]
+    seen: set[int] = set()
+    while stack:
+        item = stack.pop()
+        if isinstance(item, str):
+            if "\x00" in item:
+                return True
+        elif isinstance(item, bytes | bytearray):
+            if b"\x00" in item:
+                return True
+        elif isinstance(item, dict | list | tuple):
+            if id(item) in seen:
+                continue
+            seen.add(id(item))
+            if isinstance(item, dict):
+                stack.extend(item.keys())
+                stack.extend(item.values())
+            else:
+                stack.extend(item)
     return False
 
 
