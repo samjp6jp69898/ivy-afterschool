@@ -11,10 +11,11 @@
   URL 含密碼：只交給 SQLAlchemy（Engine 的 repr 會遮罩密碼），不得自行 log。
 
 **測試**
-- endpoint 整合測試把 ``get_db`` 換成 INFRA-010 的 ``db_session``（savepoint 模式：handler 的
-  commit 只釋放 savepoint，測試結束整筆 rollback）::
+- endpoint 整合測試以 ``tests/support/db_override.py`` 的 ``override_get_db`` 換掉 ``get_db``
+  （與本模組 get_db 同語意：請求結束 rollback 到 savepoint；不可用 ``lambda: db_session``，
+  DB 錯誤後 session 會停在 aborted）::
 
-      app.dependency_overrides[get_db] = lambda: db_session
+      app.dependency_overrides[get_db] = override_get_db(db_session)
 
 - 要驗證 ``get_db`` / ``session_scope`` 本身時，以 ``monkeypatch.setattr(db, "get_engine", ...)``
   換成 ``build_engine(backend_url())``。
