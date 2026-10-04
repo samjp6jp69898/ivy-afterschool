@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 223,
-  "last_updated": "2026-10-04T16:58:00Z",
+  "version": 224,
+  "last_updated": "2026-10-04T16:58:01Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1556,14 +1556,14 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/auth.py",
       "source_ref": "BE:api/auth.py::logout",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-045",
         "BACKEND-042"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：BACKEND-044（refresh endpoint）尚未存在，「logout 後舊 refresh 打 refresh → 401 refresh_revoked」與「其他裝置 refresh 仍成功」改在 service 層驗證（直接呼叫 refresh_tokens.rotate）。044 完成後，請在 test_auth_endpoints.py 補一條經 endpoint 的 logout → refresh 401 案例。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_auth_endpoints.py",
@@ -1635,7 +1635,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/auth.py",
       "source_ref": "BE:api/auth.py::get_me",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-047",
@@ -2884,7 +2884,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/roles.py",
       "source_ref": "BE:api/permissions_admin.py::delete_role",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-080",
@@ -2921,7 +2921,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/roles.py",
       "source_ref": "BE:api/auth.py::get_permissions",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-070",
@@ -2929,7 +2929,7 @@
         "BACKEND-081"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：red_case 預期 students:sensitive 的 label 為「查看身分證、健康備註」，但 PERMISSION_LABELS（BACKEND-070）實際為「查看與寫入身分證、健康備註」，測試與 red_case 以實際值為準（目錄 label 取自 PERMISSION_LABELS，不另寫一份）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_roles_endpoints.py",
@@ -2938,7 +2938,7 @@
         ],
         "red_cases": [
           "test_admin_permissions_catalog：staff_client(permissions=['roles:read']) → GET /api/admin/permissions 200，[g['key'] for g in groups] == ['dashboard','accounts','settings','students','attendance','leaves','homework','pickup','exams']，總 code 數 == 28",
-          "test_admin_permissions_label：students 組含 {'code':'students:sensitive','label':'查看身分證、健康備註'}",
+          "test_admin_permissions_label：students 組含 {'code':'students:sensitive','label':'查看與寫入身分證、健康備註'}",
           "test_admin_permissions_401：無 cookie → 401",
           "test_admin_permissions_403：staff_client(permissions=['students:read']) → 403",
           "test_admin_permissions_staff_read_allowed：staff_client(permissions=['staff:read']) → 200"
@@ -4180,14 +4180,14 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/reference.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-116",
         "BACKEND-119"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "寫入 handler 加在 BACKEND-119 的 build_reference_router(spec) 內時，必須掛本 task 指定的寫入權限，不可沿用 119 的 READ_PERMISSIONS（任一讀取權限）；測試要含「只有讀取權限 → 403」與 route audit == []。",
+      "risk_notes": "寫入 handler 加在 BACKEND-119 的 build_reference_router(spec) 內時，必須掛本 task 指定的寫入權限，不可沿用 119 的 READ_PERMISSIONS（任一讀取權限）；測試要含「只有讀取權限 → 403」與 route audit == []。\n協調者待使用者確認：POST handler 的 body 型別依資源在執行期決定，以 handler.__annotations__[\"body\"] = Annotated[spec.create_schema, Body()] 設定後經 add_api_route 註冊（reference.py 有 from __future__ import annotations，無法在簽名直接引用閉包變數）。寫入只認 SETTINGS_WRITE，測試含只有 settings:read / students:read / exams:read 皆 403。BACKEND-121、122 的 PATCH / DELETE 日後比照在同一 builder 加。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_reference_endpoints.py",
@@ -5841,13 +5841,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/guardian_service.py",
       "source_ref": "BE:api/students.py::create_guardian",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-168"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：signature 的 clock 參數依 description 保留，目前未使用。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_guardian_service.py",
@@ -5981,7 +5981,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::list_guardians",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-168",
@@ -6354,14 +6354,14 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_children_service.py",
       "source_ref": "BE:api/parent_portal/profile.py::get_child_profile",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-182",
         "BACKEND-180"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：get_child 重用 list_children 取得摘要欄位再補詳情欄位（多查一次其他小孩的摘要，家長小孩數少，不另寫單筆查詢）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_parent_children_service.py",
