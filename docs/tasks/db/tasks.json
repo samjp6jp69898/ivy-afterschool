@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 44,
-  "last_updated": "2026-10-04T11:26:25Z",
+  "version": 45,
+  "last_updated": "2026-10-04T11:31:37Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -952,7 +952,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db025_create_pickup_requests.py",
       "source_ref": "BE:models/dismissal.py::StudentDismissalCall",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-016",
@@ -960,7 +960,7 @@
         "DB-004"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "BACKEND 建立請求遇到 23505（uq_pickup_requests_one_open）要轉成業務錯誤 409，而不是 500；狀態轉換（pending→acknowledged→arrived→completed）的合法性由 BACKEND 守，DB 只保證欄位一致性。",
+      "risk_notes": "BACKEND 建立請求遇到 23505（uq_pickup_requests_one_open）要轉成業務錯誤 409，而不是 500；狀態轉換（pending→acknowledged→arrived→completed）的合法性由 BACKEND 守，DB 只保證欄位一致性。 replied_by 為 on delete set null，但 ck_pickup_requests_reply 要求 reply_source='staff' 時 replied_by 不可為 null：硬刪已回覆過請求的員工會被該 CHECK 擋下（23514），員工一律以停用處理、不硬刪。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/db/test_pickup_requests.py",
@@ -1067,11 +1067,11 @@
     {
       "id": "DB-028",
       "title": "建立 exam_scores 表 migration（含分數上限 trigger）",
-      "description": "建立 Alembic revision `apps/api/alembic/versions/db028_create_exam_scores.py`（revision id `db028`，`down_revision` 指向實作當下的 head；`upgrade()` 以 `op.execute` 寫原生 SQL）：考試成績（domain_spec M8）。後台以「學生 × 科目」格狀表格逐格自動儲存，BACKEND 以 `insert ... on conflict (exam_id, student_id, subject_id) do update` 批次 upsert。\n\n**欄位**\n共用欄位：`id uuid primary key default gen_random_uuid()`、`created_at timestamptz not null default now()`、`updated_at timestamptz not null default now()`。\n- `exam_id uuid not null references public.exams(id) on delete cascade`\n- `student_id uuid not null references public.students(id) on delete restrict`\n- `subject_id uuid not null`\n- 複合 FK `fk_exam_scores_exam_subject (exam_id, subject_id) references public.exam_subjects(exam_id, subject_id) on delete cascade`（只能為該考試有設定的科目登分；從考試移除科目時連帶刪除該科成績）\n- `score numeric(6,2) null`，CHECK `score is null or score >= 0`\n- `is_absent boolean not null default false`\n- CHECK `ck_exam_scores_absent_no_score`：`not (is_absent and score is not null)`（缺考不可同時有分數）\n- `note text null`，CHECK `note is null or length(note) <= 200`\n- `updated_by uuid null references public.staff_users(id) on delete set null`\n\n**約束 / 索引**\n- unique `uq_exam_scores_exam_student_subject (exam_id, student_id, subject_id)`（domain_spec 指定）\n- `ix_exam_scores_student (student_id, exam_id)`（個人歷次成績、家長端）\n- `ix_exam_scores_exam_subject (exam_id, subject_id)`（各科平均）\n\n**分數上限 trigger**（`score <= full_score` 跨表，CHECK 做不到）：\n- function `public.enforce_exam_score_within_full_score()`，trigger `trg_exam_scores_full_score`（`before insert or update of score, subject_id, exam_id on public.exam_scores for each row`）：查 `exam_subjects.full_score`，若 `new.score > full_score` → `raise exception using errcode = 'check_violation', message = format('score %s exceeds full_score %s', new.score, v_full)`。\n- 同時建立 DB-027 說明的 `public.guard_exam_subject_full_score()` 與 `trg_exam_subjects_full_score_guard`（`before update of full_score on public.exam_subjects`），下修滿分低於既有成績時 raise check_violation。\n- 兩支 function 建立後 `revoke all on function ... from public`。trigger function 以 security invoker 執行（app_backend 對 exam_subjects / exam_scores 皆有 select）。\n\n**FK 索引**（DB-040 的慣例測試要求每個 FK 欄位都有以它為前導的索引）：`ix_exam_scores_updated_by (updated_by) where updated_by is not null`。\n\n收尾：`create trigger trg_exam_scores_updated_at before update on public.exam_scores for each row execute function public.set_updated_at();`，最後 `call app_private.grant_backend('public.exam_scores');`（DB-041 提供：收回 PUBLIC 的全部權限，只授權 app_backend select / insert / update / delete）。\n\n**驗收標準**\n- 同一考試、學生、科目只能一筆；upsert 不產生重複列。\n- 分數 ≥ 0 且 ≤ 該科 full_score（以 Postgres check_violation 23514 回報）。\n- 缺考與分數互斥。\n- 只能為考試已設定的科目登分；移除科目時成績連帶刪除。\n- 下修 full_score 低於既有分數被拒。\n- 表的 ACL 只有 owner 與 app_backend：app_backend 恰有 select / insert / update / delete，PUBLIC 沒有任何權限；app_backend（backend_conn）可正常讀寫。\n- `updated_at` 由 trigger 維護。",
+      "description": "建立 Alembic revision `apps/api/alembic/versions/db028_create_exam_scores.py`（revision id `db028`，`down_revision` 指向實作當下的 head；`upgrade()` 以 `op.execute` 寫原生 SQL）：考試成績（domain_spec M8）。後台以「學生 × 科目」格狀表格逐格自動儲存，BACKEND 以 `insert ... on conflict (exam_id, student_id, subject_id) do update` 批次 upsert。\n\n**欄位**\n共用欄位：`id uuid primary key default gen_random_uuid()`、`created_at timestamptz not null default now()`、`updated_at timestamptz not null default now()`。\n- `exam_id uuid not null references public.exams(id) on delete cascade`\n- `student_id uuid not null references public.students(id) on delete restrict`\n- `subject_id uuid not null`\n- 複合 FK `fk_exam_scores_exam_subject (exam_id, subject_id) references public.exam_subjects(exam_id, subject_id) on delete cascade`（只能為該考試有設定的科目登分；從考試移除科目時連帶刪除該科成績）\n- `score numeric(6,2) null`，CHECK `score is null or score >= 0`\n- `is_absent boolean not null default false`\n- CHECK `ck_exam_scores_absent_no_score`：`not (is_absent and score is not null)`（缺考不可同時有分數）\n- `note text null`，CHECK `note is null or length(note) <= 200`\n- `updated_by uuid null references public.staff_users(id) on delete set null`\n\n**約束 / 索引**\n- unique `uq_exam_scores_exam_student_subject (exam_id, student_id, subject_id)`（domain_spec 指定）\n- `ix_exam_scores_student (student_id, exam_id)`（個人歷次成績、家長端）\n- `ix_exam_scores_exam_subject (exam_id, subject_id)`（各科平均）\n\n**分數上限 trigger**（`score <= full_score` 跨表，CHECK 做不到）：\n- function `public.enforce_exam_score_within_full_score()`，trigger `trg_exam_scores_full_score`（`before insert or update of score, subject_id, exam_id on public.exam_scores for each row`）：查 `exam_subjects.full_score`，若 `new.score > full_score` → `raise exception using errcode = 'check_violation', message = format('score %s exceeds full_score %s', new.score, v_full)`。\n- 同時建立 DB-027 說明的 `public.guard_exam_subject_full_score()` 與 `trg_exam_subjects_full_score_guard`（`before update of full_score on public.exam_subjects`），下修滿分低於既有成績時 raise check_violation。\n- 兩支 trigger 都以 check_violation 回報並帶 constraint 名稱：分數上限為 `ck_exam_scores_within_full_score`、下修保護為 `ck_exam_subjects_full_score_floor`。分數 trigger 讀 exam_subjects 時 `for share`，與下修 trigger 取得的列鎖互斥，登分與下修滿分併發時不會同時成立「分數 > 滿分」。兩支 function 建立後 `revoke all on function ... from public`。trigger function 以 security invoker 執行（app_backend 對 exam_subjects / exam_scores 皆有 select）。\n\n**FK 索引**（DB-040 的慣例測試要求每個 FK 欄位都有以它為前導的索引）：`ix_exam_scores_updated_by (updated_by) where updated_by is not null`。\n\n收尾：`create trigger trg_exam_scores_updated_at before update on public.exam_scores for each row execute function public.set_updated_at();`，最後 `call app_private.grant_backend('public.exam_scores');`（DB-041 提供：收回 PUBLIC 的全部權限，只授權 app_backend select / insert / update / delete）。\n\n**驗收標準**\n- 同一考試、學生、科目只能一筆；upsert 不產生重複列。\n- 分數 ≥ 0 且 ≤ 該科 full_score（以 Postgres check_violation 23514 回報）。\n- 缺考與分數互斥。\n- 只能為考試已設定的科目登分；移除科目時成績連帶刪除。\n- 下修 full_score 低於既有分數被拒。\n- 表的 ACL 只有 owner 與 app_backend：app_backend 恰有 select / insert / update / delete，PUBLIC 沒有任何權限；app_backend（backend_conn）可正常讀寫。\n- `updated_at` 由 trigger 維護。",
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db028_create_exam_scores.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-027",
@@ -1094,6 +1094,9 @@
           "test_exam_scores_subject_must_belong_to_exam：subject_id 為未加入此考試的科目 → 23503（fk_exam_scores_exam_subject）",
           "test_exam_scores_cascade_on_subject_removal：刪除該考試的 exam_subjects 列 → 該科成績列消失",
           "test_exam_scores_block_full_score_lowering：已有 score=90，update exam_subjects set full_score=80 → 23514；update 為 95 → 成功",
+          "test_exam_scores_full_score_lowering_waits_for_concurrent_score：兩條 app_backend 連線、資料需 commit；連線 A 登分 80（未 commit）時，連線 B（lock_timeout 300ms）下修該科 full_score → 55P03；A commit 後 B 下修為 70 → 23514（ck_exam_subjects_full_score_floor）；測試結束以 owner 連線刪除自己建的 exams / students / subjects / exam_types",
+          "test_exam_scores_score_range_on_update：score=90 的列 update score=100.01 → 23514（ck_exam_scores_within_full_score）；把列改掛到 full_score=50 的科目 → 23514",
+          "test_exam_scores_updated_by_set_null：updated_by 指向某員工後刪除該員工 → updated_by 為 NULL",
           "test_exam_scores_grants：assert_backend_grants(owner_conn, 'public.exam_scores')（ACL 只有 owner 與 app_backend、app_backend 權限恰為 SELECT / INSERT / UPDATE / DELETE、PUBLIC 無任何權限、未開 RLS）；backend_conn（app_backend 實際登入）以 make_exam_scores 插入一列後 assert_backend_read_write(backend_conn, 'public.exam_scores', row, <任一可更新的業務欄位>=<新值>) → 依 id select 回同一列、update 成功、delete 後查無此列（不假設表為空）",
           "test_exam_scores_updated_at_trigger：插入時指定 updated_at = '2026-01-01T00:00:00+08:00'，update 任一業務欄位 → updated_at 等於該 transaction 的 now()，不再是 2026-01-01"
         ],
