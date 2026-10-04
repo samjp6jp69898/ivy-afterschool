@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-029">
 <meta name="preview-route" content="component:parent/components/ParentEmptyState.vue">
 <meta name="preview-updated" content="2026-10-04">
@@ -505,8 +505,6 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
 .empty-state { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px 16px; text-align: center; }
 .empty-state__icon { display: inline-flex; align-items: center; justify-content: center; color: var(--m3-outline); }
 .empty-state--error .empty-state__icon { color: var(--m3-error); }
-.empty-state.is-badge .empty-state__icon { width: 88px; height: 88px; margin-bottom: 4px; border-radius: var(--m3-shape-full); background: var(--m3-surface-container-high); color: var(--m3-on-surface-variant); }
-.empty-state.is-badge.empty-state--error .empty-state__icon { background: var(--m3-error-container); color: var(--m3-on-error-container); }
 .empty-state__title { margin: 0; max-width: 320px; color: var(--m3-on-surface); overflow-wrap: anywhere; }
 .empty-state__desc { margin: 0; max-width: 280px; color: var(--m3-on-surface-variant); overflow-wrap: anywhere; }
 .empty-state__action { margin-top: 8px; }
@@ -543,18 +541,18 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
         <main class="screen__content">
           <div class="demo__caption m3-label-medium">1. empty 無按鈕（預設圖示 inbox）· 通知收件匣</div>
           <div class="demo-frame">
-            <parent-empty-state title="目前沒有通知" description="安親班發送的到班、作業與接送通知會出現在這裡" :badge="iconStyle === 'badge'"></parent-empty-state>
+            <parent-empty-state title="目前沒有通知" description="安親班發送的到班、作業與接送通知會出現在這裡"></parent-empty-state>
           </div>
 
           <div class="demo__caption m3-label-medium">1b. empty 無按鈕（自訂圖示）· 接送頁無接送權限</div>
           <div class="demo-frame">
-            <parent-empty-state icon="block" title="您沒有這位小孩的接送權限" description="如需接送請聯絡安親班" :badge="iconStyle === 'badge'"></parent-empty-state>
+            <parent-empty-state icon="block" title="您沒有這位小孩的接送權限" description="如需接送請聯絡安親班"></parent-empty-state>
           </div>
 
           <div class="demo__caption m3-label-medium">2. empty 有按鈕 · 代理接送頁「常用接送人」區</div>
           <m3-card variant="outlined">
             <div class="section-head"><span class="m3-title-medium">常用接送人 0/10</span></div>
-            <parent-empty-state icon="group" title="尚未新增常用接送人" description="新增後可快速建立代理接送" action-label="新增接送人" :badge="iconStyle === 'badge'" @action="snack.show('action 事件 → 開啟新增接送人 sheet')"></parent-empty-state>
+            <parent-empty-state icon="group" title="尚未新增常用接送人" description="新增後可快速建立代理接送" action-label="新增接送人" @action="snack.show('action 事件 → 開啟新增接送人 sheet')"></parent-empty-state>
           </m3-card>
 
           <div class="demo__caption m3-label-medium">3. error 重試（點「重試」看重新載入流程）· 作業頁</div>
@@ -564,7 +562,7 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
               <div class="sk" style="height: 56px; margin-bottom: 8px"></div>
               <div class="sk" style="height: 56px"></div>
             </div>
-            <parent-empty-state v-else-if="retryState === 'error'" variant="error" title="載入失敗" description="請檢查網路連線後再試一次" :badge="iconStyle === 'badge'" @action="retry"></parent-empty-state>
+            <parent-empty-state v-else-if="retryState === 'error'" variant="error" title="載入失敗" description="請檢查網路連線後再試一次" @action="retry"></parent-empty-state>
             <div v-else style="padding: 8px 16px">
               <div class="loaded-row"><m3-icon name="check_circle" :filled="true" style="color: var(--m3-primary)"></m3-icon><span class="m3-body-large" style="flex: 1">數學習作 第 3 單元</span><span class="m3-body-medium muted">已完成</span></div>
               <div class="loaded-row"><m3-icon name="pending" style="color: var(--m3-on-surface-variant)"></m3-icon><span class="m3-body-large" style="flex: 1">國語圈詞</span><span class="m3-body-medium muted">進行中</span></div>
@@ -574,12 +572,12 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
 
           <div class="demo__caption m3-label-medium">3b. error 自訂按鈕文字 · 頁面整頁載入失敗</div>
           <div class="demo-frame">
-            <parent-empty-state variant="error" icon="cloud_off" title="無法連線到安親班系統" description="可能是網路不穩，稍後再試；若持續發生請聯絡安親班" action-label="重新整理" :badge="iconStyle === 'badge'" @action="snack.show('action 事件')"></parent-empty-state>
+            <parent-empty-state variant="error" icon="cloud_off" title="無法連線到安親班系統" description="可能是網路不穩，稍後再試；若持續發生請聯絡安親班" action-label="重新整理" @action="snack.show('action 事件')"></parent-empty-state>
           </div>
 
           <div class="demo__caption m3-label-medium">4. 極端長度：標題與說明都換行，不截斷</div>
           <div class="demo-frame">
-            <parent-empty-state icon="event_busy" title="這個月王小明還沒有任何出勤紀錄，開始到班後會每天自動記錄" description="出勤紀錄由老師在安親班打卡後產生；如果小孩已經到班但這裡沒有紀錄，可能是老師還沒完成登記，請稍候再下拉重新整理，或直接聯絡安親班確認。" action-label="查看請假紀錄" :badge="iconStyle === 'badge'" @action="snack.show('action 事件')"></parent-empty-state>
+            <parent-empty-state icon="event_busy" title="這個月王小明還沒有任何出勤紀錄，開始到班後會每天自動記錄" description="出勤紀錄由老師在安親班打卡後產生；如果小孩已經到班但這裡沒有紀錄，可能是老師還沒完成登記，請稍候再下拉重新整理，或直接聯絡安親班確認。" action-label="查看請假紀錄" @action="snack.show('action 事件')"></parent-empty-state>
           </div>
           <div style="height: 24px"></div>
         </main>
@@ -592,10 +590,6 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
     <aside class="notes">
       <h3>設計說明 / 待裁定</h3>
       <div class="notes__alert" v-if="openQuestions.length">以下項目需要你裁定，未回覆前這張稿不會進入實作（稿已照推薦選項畫）</div>
-      <h4>預覽：圖示樣式（待裁定 1）</h4>
-      <div class="notes__row">
-        <span class="state-switch"><button type="button" :class="{ 'is-active': iconStyle === 'plain' }" @click="iconStyle = 'plain'">A 純圖示 48px</button><button type="button" :class="{ 'is-active': iconStyle === 'badge' }" @click="iconStyle = 'badge'">B 88px 圓底</button></span>
-      </div>
       <div class="notes__row">重試結果
         <span class="state-switch"><button type="button" :class="{ 'is-active': !retryOk }" @click="retryOk = false">仍失敗</button><button type="button" :class="{ 'is-active': retryOk }" @click="retryOk = true">成功</button></span>
       </div>
@@ -1080,7 +1074,7 @@ const NAV_ITEMS = [
 /* ============================================================
    本稿元件與稿件資料
    ============================================================ */
-/** PARENT-029 ParentEmptyState（badge 只為稿件比較待裁定 1 的樣式，實作沒有這個 prop） */
+/** PARENT-029 ParentEmptyState */
 const ParentEmptyState = {
   props: {
     variant: { type: String, default: 'empty' },
@@ -1088,7 +1082,6 @@ const ParentEmptyState = {
     title: { type: String, required: true },
     description: { type: String, default: '' },
     actionLabel: { type: String, default: '' },
-    badge: { type: Boolean, default: false },
   },
   emits: ['action'],
   computed: {
@@ -1096,8 +1089,8 @@ const ParentEmptyState = {
     resolvedIcon() { return this.icon || (this.isError ? 'error' : 'inbox') },
     label() { return this.actionLabel || (this.isError ? '重試' : '') },
   },
-  template: `<div class="empty-state" :class="['empty-state--' + variant, { 'is-badge': badge }]" :role="isError ? 'alert' : null">
-    <span class="empty-state__icon"><m3-icon :name="resolvedIcon" :size="badge ? 40 : 48"></m3-icon></span>
+  template: `<div class="empty-state" :class="'empty-state--' + variant" :role="isError ? 'alert' : null">
+    <span class="empty-state__icon"><m3-icon :name="resolvedIcon" :size="48"></m3-icon></span>
     <p class="empty-state__title m3-title-medium">{{ title }}</p>
     <p v-if="description" class="empty-state__desc m3-body-medium">{{ description }}</p>
     <div v-if="label" class="empty-state__action">
@@ -1108,7 +1101,6 @@ const ParentEmptyState = {
 const PAGE_COMPONENTS = { ParentEmptyState }
 
 function pageSetup({ snack }) {
-  const iconStyle = ref('plain')
   const retryState = ref('error')
   const retryOk = ref(false)
   const retry = () => {
@@ -1121,6 +1113,7 @@ function pageSetup({ snack }) {
 
   const decisions = [
     '版面：直向置中，padding 32px 16px；圖示 48px → 標題 title-medium（on-surface）→ 說明 body-medium（on-surface-variant，最寬 280px）→ 按鈕（上方多 8px）。元件不設最小高度，頁面決定放在整頁中央或區塊內。',
+    '圖示為純 48px M3Icon、無底色圓框（與 m3-kit「48 用於空狀態」一致，視覺輕、不搶內容）。',
     'empty：圖示 --m3-outline 色（預設 inbox）；有 actionLabel 時顯示 tonal 按鈕、無圖示。',
     'error：圖示 --m3-error 色（預設 error），標題與說明維持一般文字色（紅色只用在圖示，避免整塊刺眼且維持對比）；actionLabel 預設「重試」，按鈕為 tonal + 前置 refresh 圖示。',
     '標題與說明都可換行、不截斷（overflow-wrap: anywhere 處理長英數字串）。',
@@ -1129,17 +1122,9 @@ function pageSetup({ snack }) {
     '文案由各 view task 指定；稿中範例文案取自 PARENT-097（無接送權限）、PARENT-104（常用接送人）等 task。',
     '取代 ivy 家長端借用的後台 EmptyState（folder 線稿 SVG、四種 variant）與 MobileErrorRetry（紅字訊息 + 自刻按鈕）：改為 M3Icon + M3Button，只保留 empty / error 兩種 variant。',
   ]
-  const openQuestions = [
-    {
-      question: '1. 空狀態圖示樣式（右側可切換比較）',
-      options: [
-        { text: '純圖示 48px、無底色（與 m3-kit「48 用於空狀態」的尺寸規則一致，視覺輕、不搶內容）', recommended: true },
-        { text: '40px 圖示放在 88px 圓形底（surface-container-high；error 用 error-container），較有份量、像插圖' },
-      ],
-    },
-  ]
+  const openQuestions = []
 
-  return { iconStyle, retryState, retryOk, retry, decisions, openQuestions }
+  return { retryState, retryOk, retry, decisions, openQuestions }
 }
 
 const app = createApp({

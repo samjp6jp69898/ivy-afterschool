@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-032">
 <meta name="preview-route" content="component:parent/components/bind/BindCodeErrorNotice.vue">
 <meta name="preview-updated" content="2026-10-04">
@@ -1084,7 +1084,7 @@ const BIND_ERRORS = {
 }
 const TONE_ICON = { error: 'error', warning: 'hourglass_top', info: 'info' }
 
-/** href 只保留數字與開頭的 +；分機（#、轉、分機、ext、x）之後的部分不撥（待裁定 1 推薦 B） */
+/** 撥號只取分機符號（#、轉、分機、ext、x）之前的主號，href 只保留數字與開頭的 + */
 function toTelHref(phone) {
   const main = String(phone).split(/#|轉|分機|ext|x/i)[0].trim()
   return 'tel:' + (main.startsWith('+') ? '+' : '') + main.replace(/\D/g, '')
@@ -1163,29 +1163,14 @@ function pageSetup({ snack }) {
   const decisions = [
     '結構：上方提示框（role="alert"，含圖示、訊息、「下一步」小標與下一步說明），下方按鈕列；按鈕不放在 alert 內，避免朗讀時把按鈕文字一起念。',
     '提示框：圓角 12px、padding 16px；訊息 title-medium、「下一步」label-medium、說明 body-medium，全部用該色調的 on-*-container 色；24px filled 圖示。長文字換行不截斷。',
-    '色調（待裁定 2 推薦 B）：一般錯誤 error-container + error 圖示；「嘗試次數過多」warning-container + hourglass_top；「您已經綁定過這位小孩」secondary-container + info（不是錯誤，不用紅色）。對照表見右側。',
+    '色調：一般錯誤 error-container + error 圖示；「嘗試次數過多」warning-container + hourglass_top；「您已經綁定過這位小孩」secondary-container + info（不是錯誤，不用紅色）。對照表見右側。',
     '其他 / null：只顯示 fallbackMessage 或「綁定失敗，請稍後再試」，不渲染「下一步」小標與說明；error 色調。',
     '按鈕：一律有「重新輸入」（outlined、block、edit 圖示）emit retry；符合條件時在它上方加「聯絡安親班 {orgPhone}」（tonal、block、call 圖示），是 <a href="tel:…">。兩顆都滿版直排，因為電話號碼放進文字後並排放不下。',
-    '「聯絡安親班」條件：code 為 binding_code_expired / binding_code_used / guardian_already_bound / parent_disabled 且 orgPhone 非 null / 空字串。按鈕文字顯示 orgPhone 原字串；href 只保留數字與開頭的 +（02-2345-6789 → tel:0223456789）。',
+    '「聯絡安親班」條件：code 為 binding_code_expired / binding_code_used / guardian_already_bound / parent_disabled 且 orgPhone 非 null / 空字串。按鈕文字顯示 orgPhone 原字串（含分機）；撥號只取分機符號（#、轉、分機、ext、x，不分大小寫）之前的主號，href 只保留數字與開頭的 +（02-2345-6789 → tel:0223456789；02-2345-6789 #12 → tel:0223456789；+886 912-000-123 → tel:+886912000123）。',
     '頁面位置（示意）：放在綁定碼欄位與「綁定」按鈕下方；實際版面以 PARENT-031 的 parent-page-bind.html 為準。「重新輸入」由頁面清空欄位與錯誤（本稿示範）。',
     '移植 ivy BindView 的 needsNewCode 分流（過期 / 已用 → 索取新碼 + 聯絡），改為完整錯誤碼對照表；ivy 錯誤碼為大寫常數，本專案用後端 snake_case code。',
   ]
-  const openQuestions = [
-    {
-      question: '1. 安親班電話含分機（例如「02-2345-6789 #12」）時，撥號連結怎麼處理？（照目前規格「只保留數字」會變成 tel:022345678912，撥錯號碼）',
-      options: [
-        { text: '照規格只保留數字，由後台設定說明要求「只填主號，不含分機」' },
-        { text: '撥號只取分機符號（#、轉、分機、ext、x）之前的主號；按鈕文字仍顯示完整電話', recommended: true },
-      ],
-    },
-    {
-      question: '2. 提示框是否依錯誤碼分色調？',
-      options: [
-        { text: '全部用 error-container 紅色系' },
-        { text: '「已經綁定過這位小孩」用 secondary-container（資訊）、「嘗試次數過多」用 warning-container，其餘 error-container', recommended: true },
-      ],
-    },
-  ]
+  const openQuestions = []
 
   return { cases, caseKey, currentCase, phoneOptions, phoneKey, orgPhoneValue, telPreview, mode, bindCode, shown, submitting, pickCase, onRetry, submit, mapRows, decisions, openQuestions }
 }

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-026">
 <meta name="preview-route" content="component:parent/components/ConfirmDialog.vue">
 <meta name="preview-updated" content="2026-10-04">
@@ -1202,31 +1202,16 @@ function pageSetup({ snack }) {
     '按鈕：取消側為 text 按鈕、確認側為 filled 按鈕，靠右排列（取消在左、確認在右），沿用 ivy；destructive 時確認鈕改 --m3-error 底 / --m3-on-error 字，取消鈕不變。按鈕為 M3Button，高 48px。',
     '按鈕文字過長放不下一列時換行堆疊（確認在上、取消在下，仍靠右）；單一按鈕寬度不超過對話框，文字以 … 省略。',
     'default slot 放在說明與按鈕之間（例如「下次不再提醒」勾選）；slot 內容由呼叫端提供，稿中勾選列的建議樣式：原生 checkbox、accent-color primary、整列 48px 高可點。',
-    'loading：確認鈕走 M3Button loading（轉圈、文字不變、aria-disabled + aria-busy，點擊不 emit）；同時取消鈕原生 disabled、Esc 與 scrim 都不 emit cancel（待裁定 1 推薦 A）。red case「確認按鈕 disabled」以 aria-disabled="true" 斷言。',
+    'loading：確認鈕走 M3Button loading（轉圈、文字不變、aria-disabled + aria-busy，點擊不 emit）；同時取消鈕原生 disabled、Esc 與 scrim 都不 emit cancel（送出中不能取消，避免使用者以為已取消、請求其實成功）。red case「確認按鈕 disabled」以 aria-disabled="true" 斷言。',
     '元件不自行關閉：只 emit confirm / cancel，由呼叫端把 open 設回 false（因此 loading 流程可以「送出 → 等待 → 成功才關」，失敗時呼叫端保持開啟並以 snackbar 告知，使用者可重試或取消）。',
     '無障礙：Teleport 到 body；role="alertdialog"、aria-modal="true"、aria-labelledby 指向標題、aria-describedby 指向說明。開啟時焦點落在取消鈕；Tab / Shift+Tab 在對話框內循環；關閉後焦點回到開啟前的元素；開啟期間鎖背景捲動。鍵盤焦點只在 :focus-visible 顯示 2px primary 外框（見「鍵盤焦點」情境）。',
     'Esc（監聽在 document）與點 scrim 皆 emit cancel；open=false 時完全不渲染（不保留隱藏 DOM）。',
     '動畫：開啟 200ms 淡入 + 由 0.92 放大（emphasized-decel），關閉 150ms 淡出；reduced-motion 無動畫。',
+    '標題本身含「取消」的對話框（取消接送、取消代理接送）由呼叫端傳 cancelLabel「先不要」，避免同時出現「取消」與「確定取消」；元件預設仍是「取消」。',
     '層級：對話框在 BottomSheet 之上（例如接送碼 sheet 開啟中離開頁面時的「確定已記下接送碼？」），Snackbar 又在對話框之上。',
     '移植 ivy ConfirmDialog 的 title / message / confirmLabel / cancelLabel / destructive；去掉 v-model:open 與 update:open 事件（ivy 曾因事件順序造成確認流程 no-op），新增 loading 與 default slot。',
   ]
-  const openQuestions = [
-    {
-      question: '1. loading（確認送出中）期間，使用者能不能取消？',
-      options: [
-        { text: '不能：取消鈕停用、Esc 與 scrim 不作用，等請求結束（避免使用者以為已取消，但請求其實成功了）', recommended: true },
-        { text: '可以：照樣 emit cancel 關閉對話框，請求在背景繼續，結果以 snackbar 告知' },
-      ],
-    },
-    {
-      question: '2. 「取消接送 / 取消代理接送」這類標題本身含「取消」的對話框，關閉鈕文字怎麼寫？（元件預設仍是「取消」，這題決定呼叫端 PARENT-097 / PARENT-104 傳什麼 cancelLabel）',
-      options: [
-        { text: '維持預設「取消」：畫面會同時出現「取消」與「確定取消」兩顆按鈕' },
-        { text: '呼叫端傳「先不要」：與「確定取消」語意清楚分開', recommended: true },
-        { text: '呼叫端傳「返回」' },
-      ],
-    },
-  ]
+  const openQuestions = []
 
   return { active, current, loading, failLogout, skipChecked, arriveSkip, scenarioList, openScenario, onCancel, onConfirm, decisions, openQuestions }
 }

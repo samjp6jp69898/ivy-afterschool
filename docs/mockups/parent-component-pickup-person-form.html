@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-099">
 <meta name="preview-route" content="component:parent/components/pickup/PickupPersonForm.vue">
 <meta name="preview-updated" content="2026-10-04">
@@ -508,9 +508,6 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
 .field-error { display: flex; align-items: center; gap: 4px; margin: 4px 0 0; color: var(--m3-error); }
 .relation-chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0 0; }
 
-/* 關係：原生 select，外觀對齊 M3TextField outlined（待裁定 1 的 A） */
-.m3-select { padding-right: 48px !important; cursor: pointer; }
-.m3-select__arrow { position: absolute; z-index: 1; right: 12px; top: 16px; color: var(--m3-on-surface-variant); pointer-events: none; }
 
 /* 照片 */
 .photo { display: flex; gap: 16px; align-items: center; margin-top: 8px; }
@@ -571,7 +568,7 @@ label.m3-button input { position: absolute; width: 1px; height: 1px; opacity: 0;
         <m3-navigation-bar :items="navItems" current-key="pickup"></m3-navigation-bar>
 
         <parent-bottom-sheet v-model="sheetOpen" title="新增接送人">
-          <pickup-person-form ref="formRef" :key="formKey" :submitting="submitting" :relation-mode="relationMode" @submit="onSubmit" @cancel="sheetOpen = false"></pickup-person-form>
+          <pickup-person-form ref="formRef" :key="formKey" :submitting="submitting" @submit="onSubmit" @cancel="sheetOpen = false"></pickup-person-form>
         </parent-bottom-sheet>
       </div>
     </div>
@@ -582,10 +579,6 @@ label.m3-button input { position: absolute; width: 1px; height: 1px; opacity: 0;
       <h4>預覽狀態（會開啟 sheet 並填入示範資料）</h4>
       <div class="state-switch state-switch--wrap" role="group" aria-label="狀態">
         <button v-for="s in presetList" :key="s.key" type="button" :class="{ 'is-active': presetKey === s.key }" @click="applyPreset(s.key)">{{ s.label }}</button>
-      </div>
-      <h4>預覽：關係欄位（待裁定 1）</h4>
-      <div class="notes__row">
-        <span class="state-switch"><button type="button" :class="{ 'is-active': relationMode === 'chips' }" @click="relationMode = 'chips'">A 單選 chip</button><button type="button" :class="{ 'is-active': relationMode === 'select' }" @click="relationMode = 'select'">B 原生下拉</button></span>
       </div>
       <div class="notes__row">送出結果
         <span class="state-switch"><button type="button" :class="{ 'is-active': !failSubmit }" @click="failSubmit = false">成功</button><button type="button" :class="{ 'is-active': failSubmit }" @click="failSubmit = true">照片過大 413（頁面處理）</button></span>
@@ -1076,16 +1069,15 @@ const PHOTO_MAX_BYTES = 5 * 1024 * 1024
 const PHONE_RE = /^0\d{8,9}$/
 const formatBytes = (n) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`)
 
-/** PARENT-099 PickupPersonForm（relationMode 只為稿件比較待裁定 1，實作只會有其中一種） */
+/** PARENT-099 PickupPersonForm */
 let formUid = 0
 const PickupPersonForm = {
   props: {
     submitting: { type: Boolean, default: false },
-    relationMode: { type: String, default: 'chips' },
   },
   emits: ['submit', 'cancel'],
   data() {
-    return { uid: ++formUid, name: '', relation: '', phone: '', phoneError: '', photo: null, previewUrl: '', previewFailed: false, photoError: '', selectFocused: false }
+    return { uid: ++formUid, name: '', relation: '', phone: '', phoneError: '', photo: null, previewUrl: '', previewFailed: false, photoError: '' }
   },
   computed: {
     canSubmit() { return !!this.name.trim() && !!this.relation && !!this.phone.trim() && !this.submitting },
@@ -1135,24 +1127,13 @@ const PickupPersonForm = {
     <div :class="{ 'form-disabled': submitting }" style="display: flex; flex-direction: column; gap: 16px">
       <m3-text-field v-model="name" label="姓名" :maxlength="50" autocomplete="off"></m3-text-field>
 
-      <div v-if="relationMode === 'chips'" role="radiogroup" :aria-labelledby="relationId">
+      <div role="radiogroup" :aria-labelledby="relationId">
         <p :id="relationId" class="field-label m3-title-small">關係</p>
         <div class="relation-chips">
           <button v-for="r in RELATION_OPTIONS" :key="r" type="button" role="radio" class="m3-chip m3-chip--filter m3-state"
             :class="{ 'is-selected': relation === r, 'has-icon': relation === r }" :aria-checked="String(relation === r)" @click="relation = r">
             <m3-icon v-if="relation === r" class="m3-chip__icon" name="check" :size="18"></m3-icon><span class="m3-label-large">{{ r }}</span>
           </button>
-        </div>
-      </div>
-      <div v-else class="m3-tf" :class="{ 'is-focused': selectFocused, 'is-floating': selectFocused || !!relation }">
-        <div class="m3-tf__control">
-          <select :id="relationId" v-model="relation" class="m3-tf__input m3-select" @focus="selectFocused = true" @blur="selectFocused = false">
-            <option value="" disabled hidden></option>
-            <option v-for="r in RELATION_OPTIONS" :key="r" :value="r">{{ r }}</option>
-          </select>
-          <label class="m3-tf__label" :for="relationId">關係</label>
-          <fieldset class="m3-tf__outline" aria-hidden="true"><legend><span>關係</span></legend></fieldset>
-          <m3-icon class="m3-select__arrow" name="arrow_drop_down"></m3-icon>
         </div>
       </div>
 
@@ -1214,7 +1195,6 @@ function pageSetup({ snack }) {
   const sheetOpen = ref(false)
   const submitting = ref(false)
   const failSubmit = ref(false)
-  const relationMode = ref('chips')
   const formRef = ref(null)
   const formKey = ref(0)
   const presetKey = ref('')
@@ -1268,7 +1248,7 @@ function pageSetup({ snack }) {
     '放在 ParentBottomSheet「新增接送人」內（PARENT-104）；按鈕列「取消」（outlined）/「儲存」（filled）屬於本元件、平分寬度、在表單最下方，sheet 不另用 footer slot。',
     '欄位順序：姓名 → 關係 → 電話 → 照片（選填）。必填欄位不加星號，只在選填欄位標「（選填）」。',
     '姓名：M3TextField、maxlength 50（右下顯示 n/50）、autocomplete="off"（填的是別人的姓名）；送出時去頭尾空白，只有空白視同未填。',
-    '關係（待裁定 1 推薦 A）：9 個選項（父親、母親、祖父、祖母、外公、外婆、親戚、保母、其他）用 M3Chip filter 單選，role="radiogroup" + 每顆 role="radio" aria-checked；一次看到全部選項，點一下就完成。選 B 時改為原生 select，外觀對齊 M3TextField outlined（浮動 label、右側 arrow_drop_down）。',
+    '關係：9 個選項（父親、母親、祖父、祖母、外公、外婆、親戚、保母、其他）用 M3Chip filter 單選，role="radiogroup" + 每顆 role="radio" aria-checked；一次看到全部選項、點一下就完成，不開系統選單。',
     '電話：M3TextField type="tel"、inputmode="tel"、autocomplete="off"，支援文字「手機或市話，例如 0912-000-123」；按「儲存」時去掉空白與 - 後檢查 /^0\\d{8,9}$/，不符 → errorText「請輸入正確的電話號碼」並不 emit；修改電話欄位時清掉錯誤。送出值為正規化後的純數字。',
     '「儲存」：必填（姓名、關係、電話）未齊時原生 disabled；submitting 時走 M3Button loading（轉圈、aria-disabled + aria-busy）——red case「儲存按鈕 disabled」以 disabled 或 aria-disabled="true" 斷言。submitting 期間所有欄位、照片操作與「取消」都停用（opacity 0.38），避免送出途中內容被改。',
     '照片未選：96×96 虛線框（圓角 12px、add_a_photo 圖示 +「新增照片」），整塊是 label，內含視覺隱藏的 file input（accept="image/jpeg,image/png,image/webp,image/heic"、不設 capture，手機會讓使用者選相簿或拍照）；鍵盤焦點時外框 2px primary。',
@@ -1277,17 +1257,9 @@ function pageSetup({ snack }) {
     '照片 > 5 MB：不接受，照片區下方顯示 error 色「照片不可超過 5 MB」（role="alert"）；原本已選的照片保留不被取代。照片格式 / 上傳失敗（413 / 415 / storage_unavailable）由 PARENT-104 以 snackbar 顯示，表單保持開啟並保留輸入（右側「送出結果」可切換示意）。',
     '移植 ivy PickupPersonForm 的欄位、關係選項（加「親戚」）與 file input 清空技巧；改為元件內部狀態 + submit payload；去掉備註欄位、hideFooter 與 v-model 物件。',
   ]
-  const openQuestions = [
-    {
-      question: '1. 「關係」欄位的選擇方式（規格寫「下拉」；右側可切換比較）',
-      options: [
-        { text: '單選 chip：9 個選項兩列排開，一次看完、點一下完成，不用開系統選單（需把 PARENT-099 描述的「下拉」改為「單選 chip」）', recommended: true },
-        { text: '原生下拉 select（照目前規格），外觀對齊 M3TextField；iOS 會跳出滾輪、需再按「完成」' },
-      ],
-    },
-  ]
+  const openQuestions = []
 
-  return { sheetOpen, submitting, failSubmit, relationMode, formRef, formKey, presetKey, persons, openSheet, onSubmit, presetList, applyPreset, decisions, openQuestions }
+  return { sheetOpen, submitting, failSubmit, formRef, formKey, presetKey, persons, openSheet, onSubmit, presetList, applyPreset, decisions, openQuestions }
 }
 
 const app = createApp({

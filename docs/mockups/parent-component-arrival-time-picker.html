@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-096">
 <meta name="preview-route" content="component:parent/components/pickup/ArrivalTimePicker.vue">
 <meta name="preview-updated" content="2026-10-04">
@@ -571,7 +571,7 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
         <button type="button" @click="tick(60)">＋1 分鐘</button>
         <button type="button" @click="tick(600)">＋10 分鐘</button>
       </div>
-      <p class="notes__hint">按「＋1 / ＋10 分鐘」可看到換算時刻隨時間更新、已選的相對選項同步 emit 新值，自選時間被時間追過時改顯示錯誤（待裁定 2 推薦 B）。</p>
+      <p class="notes__hint">按「＋1 / ＋10 分鐘」可看到換算時刻隨時間更新、已選的相對選項同步 emit 新值，自選時間被時間追過時改顯示錯誤。</p>
       <div class="notes__row" style="margin-top: 8px">頁面表單錯誤（PARENT-097 顯示 expected_arrival_too_late）
         <span class="state-switch"><button type="button" :class="{ 'is-active': !formError }" @click="formError = false">無</button><button type="button" :class="{ 'is-active': formError }" @click="formError = true">有</button></span>
       </div>
@@ -1170,28 +1170,13 @@ function pageSetup({ snack }) {
     '版面：上方小標「預計抵達時間」（title-small）＋ 一排 M3Chip filter（單選，自動換行，間距 8px）；選「自選時間」時下方展開 M3TextField type="time"（label「抵達時間」）。整組 role="group" + aria-labelledby 指向小標。',
     '選項順序：不指定（預設）/ 約 10 分鐘後 / 約 20 分鐘後 / 約 30 分鐘後 / 自選時間。相對選項 chip 文字為「約 10 分鐘後 · 17:42」，時刻用 tabular-nums；已選 chip 為 secondary-container 底 + check 圖示（M3Chip filter 規則），aria-pressed 表達選取。',
     '換算：now（台北時間）+ n 分鐘，秒數無條件進位到分鐘（17:31:20 + 10 → 17:42），輸出 HH:MM；超過 23:59 的相對選項停用（chip 只顯示「約 n 分鐘後」、不顯示時刻，opacity 0.38）；若目前選中的選項因時間經過而停用，自動回到「不指定」並 emit null。',
-    '自選時間：展開時預填「約 10 分鐘後」的時刻並立即 emit（待裁定 1 推薦 B；跨午夜時預填空白）；以分鐘比較，早於現在（HH:MM < 現在的時:分）→ 欄位錯誤「預計抵達時間不能早於現在」並 emit null；與現在同一分鐘可以。清空欄位 → emit null（支援文字說明「清空時視同不指定」）。',
-    '時間持續更新（待裁定 2 推薦 B）：元件每分鐘重算 now（測試注入 now 時不計時），chip 上的換算時刻跟著更新，已選的相對選項同步 emit 新值；自選時間被時間追過時改顯示錯誤並 emit null。',
+    '自選時間：展開時預填「約 10 分鐘後」的時刻並立即 emit，使用者只需微調（跨午夜時預填空白）；以分鐘比較，早於現在（HH:MM < 現在的時:分）→ 欄位錯誤「預計抵達時間不能早於現在」並 emit null；與現在同一分鐘可以。清空欄位 → emit null（支援文字說明「清空時視同不指定」）。',
+    '時間持續更新：元件每分鐘重算 now（測試注入 now 時不計時），chip 上的換算時刻跟著更新，已選的相對選項同步 emit 新值；自選時間被時間追過時改顯示錯誤並 emit null。',
     '最晚時間不在前端判斷：送出後由後端 pickup.window 回 expected_arrival_too_late，PARENT-097 在表單卡內以 error 樣式顯示（右側可切換示意）。後端允許比現在早 5 分鐘內的時間，前端以「不早於現在」為準，避免時鐘誤差造成來回。',
     'chip 為 48px 點擊高（M3Chip 透明延伸）；停用 chip 用原生 disabled。',
     '移植 ivy PickupNoticeView 的快捷分鐘 chip；本專案後端收絕對時間 HH:MM，改為前端換算；去掉滾輪選擇器與「n 分鐘後抵達」的相對送出。',
   ]
-  const openQuestions = [
-    {
-      question: '1. 點「自選時間」展開時，時間欄位的預設值？',
-      options: [
-        { text: '空白：emit null，使用者沒填就送出時等同「不指定」' },
-        { text: '預填「約 10 分鐘後」的時刻並立即 emit，使用者只需微調（避免選了自選卻送出不指定）', recommended: true },
-      ],
-    },
-    {
-      question: '2. 停留在頁面一段時間後，相對選項的換算時刻要不要跟著更新？',
-      options: [
-        { text: '不更新：換算一次後固定（照目前規格；停留過久時「約 10 分鐘後 · 17:42」可能已經過了）' },
-        { text: '每分鐘更新：chip 時刻與已選相對選項的值隨時間重算，自選時間被追過時顯示錯誤（需擴充 PARENT-096 規格與 red case）', recommended: true },
-      ],
-    },
-  ]
+  const openQuestions = []
 
   return { now, clockText, setClock, tick, clockPresets, arrival, formError, submitting, submit, pickerKey, scenarioList, applyScenario, decisions, openQuestions }
 }
