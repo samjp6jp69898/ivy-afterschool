@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 47,
-  "last_updated": "2026-10-04T04:22:10Z",
+  "version": 48,
+  "last_updated": "2026-10-04T04:22:55Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -859,7 +859,7 @@
     {
       "id": "PARENT-024",
       "title": "移植 ParentLayout：頂部列、底部導覽（首頁 / 作業 / 接送 / 成績 / 更多）、連線橫幅與 Snackbar",
-      "description": "建立 `apps/web/src/parent/layouts/ParentLayout.vue`，作為家長端根元件（PARENT-013 以它建立 app），內含 `<RouterView>`。\n\n- 依 route meta：`public` 或 `hideTabBar` 時隱藏頂部列與底部導覽；`title` 顯示在 M3TopAppBar（PARENT-021）；`showBack` 顯示返回鍵，返回行為：`window.history.length > 1` 用 `router.back()`，否則 `router.replace('/')`（移植 ivy `onBack`）；無返回鍵時 leading 顯示 PARENT-005 `getPublicConfig()` 的 logo（無 logo 顯示安親班名稱首字圓形）。\n- 底部導覽（PARENT-022）固定五項：首頁 `/`（home）、作業 `/homework`（assignment）、接送 `/pickup`（directions_walk）、成績 `/exams`（grading）、更多 `/more`（menu），`currentKey` 取 `route.meta.tab`。**更多**的徽章 = PARENT-172 notifications store 的 `unreadCount`。再次點擊目前分頁且路徑相同 → 捲回頂端（ivy `onTabSelect`）。\n- 非公開頁顯示 PARENT-174 `ConnectionBanner`；登入後（parentAuth.isAuthed 由 false 變 true，或掛載時已登入）呼叫 PARENT-173 `parentWs.connect()` 與 notifications store `refreshUnread()`；登出（變 false）呼叫 `parentWs.disconnect()`。\n- 底部掛 PARENT-023 M3Snackbar，item 為 PARENT-011 store 的第一則。\n- 版面：最大寬 560px 置中、`min-height: 100dvh`、main 區預留底部導覽與 safe-area 高度。\n\n移植 ivy `FE:src/parent/layouts/ParentLayout.vue` 的 meta 驅動顯示與返回邏輯；**去掉** BrandMark、home summary 徽章、聯絡簿 / 事務 / 我的分頁、ParentOfflineIndicator、LINE in-app 隱藏標題判斷。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-layout.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：五個分頁各自 active、深層頁（有返回鍵）、公開頁（無頂部列與導覽）、更多分頁有未讀徽章、ws 斷線橫幅、snackbar 顯示中。\n\n**驗收標準**：每一條對應 red_case（mountWithApp，routes 以 stub 元件帶 meta）。",
+      "description": "建立 `apps/web/src/parent/layouts/ParentLayout.vue`，作為家長端根元件（PARENT-013 以它建立 app），內含 `<RouterView>`。\n\n- 依 route meta：`public` 或 `hideTabBar` 時隱藏頂部列與底部導覽；`title` 顯示在 M3TopAppBar（PARENT-021）；`showBack` 顯示返回鍵，返回行為：`window.history.length > 1` 用 `router.back()`，否則 `router.replace('/')`（移植 ivy `onBack`）；無返回鍵時 leading 顯示 PARENT-005 `getPublicConfig()` 的 logo（無 logo 顯示安親班名稱首字圓形）。\n- 底部導覽（PARENT-022）固定五項：首頁 `/`（home）、作業 `/homework`（assignment）、接送 `/pickup`（directions_walk）、成績 `/exams`（grading）、更多 `/more`（menu），`currentKey` 取 `route.meta.tab`。**更多**的徽章 = PARENT-172 notifications store 的 `unreadCount`。再次點擊目前分頁且路徑相同 → 捲回頂端（ivy `onTabSelect`）。\n- 非公開頁顯示 PARENT-174 `ConnectionBanner`；登入後（parentAuth.isAuthed 由 false 變 true，或掛載時已登入）呼叫 PARENT-173 `parentWs.connect()` 與 notifications store `refreshUnread()`；登出（變 false）呼叫 `parentWs.disconnect()`。\n- 底部掛 PARENT-023 M3Snackbar，item 為 PARENT-011 store 的第一則。\n- 版面：最大寬 560px 置中、`min-height: 100dvh`、main 區預留底部導覽與 safe-area 高度。\n\n移植 ivy `FE:src/parent/layouts/ParentLayout.vue` 的 meta 驅動顯示與返回邏輯；**去掉** BrandMark、home summary 徽章、聯絡簿 / 事務 / 我的分頁、ParentOfflineIndicator、LINE in-app 隱藏標題判斷。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-layout.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：五個分頁各自 active、深層頁（有返回鍵）、公開頁（無頂部列與導覽）、更多分頁有未讀徽章、ws 斷線橫幅、snackbar 顯示中。\n- 根元素（或家長端 base.css 的 html / body）設 `overscroll-behavior-y: contain`：PullToRefresh（PARENT-027）前 8px 的 touchmove 不 preventDefault，沒有這個設定時瀏覽器原生下拉刷新或 iOS 回彈可能先啟動，之後的 touchmove 變成不可取消。部署後在 LINE in-app browser 實機確認。\n- `hideTabBar` 時 M3Snackbar（PARENT-023，預設固定在底部導覽上方 96px + safe-area）改貼底部（16px + safe-area），不可懸空。\n\n**驗收標準**：每一條對應 red_case（mountWithApp，routes 以 stub 元件帶 meta）。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/layouts/ParentLayout.vue",
       "source_ref": "FE:src/parent/layouts/ParentLayout.vue::onTabSelect",
@@ -891,7 +891,9 @@
           "ParentLayout back falls back to home：initialRoute='/leaves'（showBack）、history.length 為 1 → 點擊返回 → currentRoute.path === '/'",
           "ParentLayout more badge from unread count：piniaInitialState notifications.unreadCount = 4 → '更多' 項目徽章文字 '4'",
           "ParentLayout connects ws when authed：vi.stubGlobal 假 WebSocket 類別、piniaInitialState parentAuth.parent 已設定 → 掛載後 parentWs.enabled === true 且假 WebSocket 建構 URL 結尾為 '/api/ws/parent'；將 parentAuth.parent 設為 null → parentWs.enabled === false",
-          "ParentLayout renders first snackbar：snackbar store items=[{id:1,message:'已取消接送'}] → 畫面含 '已取消接送'"
+          "ParentLayout renders first snackbar：snackbar store items=[{id:1,message:'已取消接送'}] → 畫面含 '已取消接送'",
+          "ParentLayout prevents native overscroll：以 ?raw 讀 ParentLayout.vue（或 base.css）原始碼 → 含 overscroll-behavior-y: contain",
+          "ParentLayout snackbar offset follows tab bar：route meta hideTabBar true → 根元素帶 class 'is-tabbar-hidden'（snackbar 位置規則以此切換）；false → 不帶"
         ],
         "run": "just web-test src/parent/layouts/ParentLayout.spec.ts -t \"ParentLayout\"",
         "notes": ""
