@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 171,
-  "last_updated": "2026-10-04T16:21:51Z",
+  "version": 172,
+  "last_updated": "2026-10-04T16:22:26Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1522,7 +1522,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/staff_auth.py",
       "source_ref": "BE:api/auth.py::logout",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-038",
