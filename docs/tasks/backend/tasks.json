@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 143,
-  "last_updated": "2026-10-04T13:00:43Z",
+  "version": 144,
+  "last_updated": "2026-10-04T13:51:35Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3784,7 +3784,7 @@
     {
       "id": "BACKEND-109",
       "title": "實作 SettingsService.list_settings_for_admin：依分組列出設定（secret 遮罩、附 JSON schema）",
-      "description": "在 `apps/api/app/services/settings_service.py` 實作：\n```python\ndef mask_secret(value: str | None) -> str | None: ...       # None → None；長度 ≤ 8 → '********'；否則 '****' + 末 4 碼\ndef list_settings_for_admin(session: Session) -> list[SettingOut]: ...\n```\n- 依 registry 順序回傳每個 key：key、group、label、is_secret、value（secret_fields 以 mask_secret 遮罩，其餘照實）、json_schema（`schema.model_json_schema()`，給前端依 registry 渲染表單，domain_spec §4 /settings/system）、updated_at、updated_by_name。\n- 直接查 DB（不走 cache），確保後台看到最新值；無列時以 default 呈現且 updated_at = null。\n\n**驗收標準**\n- 7 個 key 依 registry 順序；secret 欄位被遮罩，明文不出現在結果中。\n- json_schema 含欄位定義。",
+      "description": "在 `apps/api/app/services/settings_service.py` 實作：\n```python\ndef mask_secret(value: str | None) -> str | None: ...       # None → None；長度 ≤ 8 → '********'；否則 '****' + 末 4 碼\ndef list_settings_for_admin(session: Session) -> list[SettingOut]: ...\n```\n- 依 registry 順序回傳每個 key：key、group、label、is_secret、value（secret_fields 以 mask_secret 遮罩，其餘照實）、json_schema（`schema.model_json_schema()`，給前端依 registry 渲染表單，domain_spec §4 /settings/system）、updated_at、updated_by_name。\n- 直接查 DB（不走 cache），確保後台看到最新值；無列時以 default 呈現且 updated_at = null。\n\n**驗收標準**\n- REGISTRY 全部 key（目前 11 個）依 registry 順序；secret 欄位被遮罩，明文不出現在結果中。\n- json_schema 含欄位定義。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/settings_service.py",
       "source_ref": "BE:api/system_config.py::list_configs",
