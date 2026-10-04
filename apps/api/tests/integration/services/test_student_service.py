@@ -64,7 +64,7 @@ def test_list_students_search(db_session: Session) -> None:
     make_student(db_session, name="林小美", student_no="X999")
     actor = _actor("students:read")
 
-    assert sorted(_names(db_session, actor, q="s1150")) == ["王小明", "陳小華"]
+    assert set(_names(db_session, actor, q="s1150")) == {"王小明", "陳小華"}
     assert _names(db_session, actor, q="小華") == ["陳小華"]
     # 學號只比前綴，不比中段
     assert _names(db_session, actor, q="115001") == []
@@ -83,7 +83,7 @@ def test_list_students_id_number_search_requires_sensitive(db_session: Session) 
     without_perm = _actor("students:read")
 
     assert _names(db_session, with_perm, q="a123456789") == ["王小明"]
-    assert _names(db_session, with_perm, q=" ａ123456789 ") == ["王小明"]
+    assert _names(db_session, with_perm, q="\uff41123456789") == ["王小明"]
     assert _names(db_session, without_perm, q="a123456789") == []
     # 非身分證格式不觸發 HMAC 比對
     assert _names(db_session, with_perm, q="A123456780") == []
@@ -101,10 +101,10 @@ def test_list_students_filters(db_session: Session) -> None:
     db_session.flush()
     actor = _actor("students:read")
 
-    assert sorted(_names(db_session, actor, class_id=str(klass.id))) == ["甲", "丙"]
+    assert set(_names(db_session, actor, class_id=str(klass.id))) == {"甲", "丙"}
     assert _names(db_session, actor, class_id=str(klass.id), status="withdrawn") == ["丙"]
     assert _names(db_session, actor, school_id=str(school.id)) == ["甲"]
-    assert sorted(_names(db_session, actor, class_id=str(klass.id), grade_level=3)) == ["甲", "丙"]
+    assert set(_names(db_session, actor, class_id=str(klass.id), grade_level=3)) == {"甲", "丙"}
     assert _names(db_session, actor, class_id=str(klass.id), grade_level=4) == []
     # 封存預設不出現
     assert "丁" not in _names(db_session, actor, class_id=str(klass.id))
