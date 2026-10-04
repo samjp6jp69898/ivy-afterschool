@@ -3,11 +3,15 @@
 from datetime import date
 from uuid import UUID, uuid4
 
+import pytest
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentStaff
-from app.schemas.classes import ClassListQuery, ClassOut
-from app.services.class_service import list_classes
+from app.core.errors import AppError
+from app.models.classes import SchoolClass
+from app.schemas.classes import ClassCreateIn, ClassListQuery, ClassOut
+from app.services.class_service import create_class, get_class, list_classes
 from tests.support.factories import make_class, make_class_staff, make_staff, make_student
 
 
@@ -125,3 +129,84 @@ def test_list_classes_order_sort_order_within_year(db_session: Session) -> None:
 
     # 同學年先看 sort_order（B班 sort_order=0 在 A班 sort_order=1 前），學年仍優先於 sort_order
     assert [r.id for r in rows] == [first_by_sort.id, second_by_sort.id, other_year_low_sort.id]
+
+
+def test_get_class_success(db_session: Session) -> None:
+    klass = make_class(db_session, name="A班", grade_levels=(1, 2), academic_year=115)
+    teacher = make_staff(db_session, display_name="林老師")
+    inactive = make_staff(db_session, display_name="陳老師", is_active=False)
+    make_class_staff(db_session, klass, teacher, role="lead")
+    make_class_staff(db_session, klass, inactive, role="assistant")
+    make_student(db_session, class_=klass)
+    make_student(db_session, class_=klass, archived=True)
+    db_session.flush()
+
+    out = get_class(db_session, klass.id)
+
+    assert isinstance(out, ClassOut)
+    assert (out.id, out.name, out.grade_levels, out.academic_year) == (klass.id, "A班", [1, 2], 115)
+    assert out.staff[0].display_name == "林老師"
+    assert [s.display_name for s in out.staff] == ["林老師"]
+    assert out.student_count == 1
+    assert out.archived_at is None
+
+
+def test_get_class_archived_and_missing(db_session: Session) -> None:
+    archived = make_class(db_session, archived=True)
+
+    out = get_class(db_session, archived.id)
+    assert out.archived_at is not None
+
+    with pytest.raises(AppError) as exc:
+        get_class(db_session, uuid4())
+    assert (exc.value.status, exc.value.code) == (404, "class_not_found")
+
+
+def _count_classes(db: Session, year: int) -> int:
+    return db.execute(
+        select(func.count()).select_from(SchoolClass).where(SchoolClass.academic_year == year)
+    ).scalar_one()
+
+
+def test_create_class_success(db_session: Session) -> None:
+    out = create_class(
+        db_session, ClassCreateIn(name="低年級 A 班", grade_levels=[2, 1], academic_year=115)
+    )
+
+    assert out.name == "低年級 A 班"
+    assert out.grade_levels == [1, 2]
+    assert out.academic_year == 115
+    assert out.student_count == 0
+    assert out.staff == []
+    assert out.sort_order == 0
+    assert out.archived_at is None
+    stored = db_session.execute(select(SchoolClass).where(SchoolClass.id == out.id)).scalar_one()
+    assert stored.name == "低年級 A 班"
+
+
+def test_create_class_conflict(db_session: Session) -> None:
+    create_class(db_session, ClassCreateIn(name="低年級 A 班", grade_levels=[1], academic_year=115))
+    before = _count_classes(db_session, 115)
+
+    with pytest.raises(AppError) as exc:
+        create_class(
+            db_session, ClassCreateIn(name="低年級 a 班 ", grade_levels=[1], academic_year=115)
+        )
+
+    assert (exc.value.status, exc.value.code) == (409, "class_name_taken")
+    assert _count_classes(db_session, 115) == before
+    other_year = create_class(
+        db_session, ClassCreateIn(name="低年級 a 班", grade_levels=[1], academic_year=116)
+    )
+    assert other_year.academic_year == 116
+
+
+def test_create_class_archived_name_reusable(db_session: Session) -> None:
+    make_class(db_session, name="高年級班", academic_year=115, archived=True)
+
+    out = create_class(
+        db_session, ClassCreateIn(name="高年級班", grade_levels=[5, 6], academic_year=115)
+    )
+
+    assert out.name == "高年級班"
+    assert out.archived_at is None
