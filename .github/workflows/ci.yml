@@ -155,3 +155,22 @@ jobs:
       - name: vitest
         working-directory: apps/web
         run: pnpm exec vitest run
+
+  web-build:
+    name: 前端建置與家長端 bundle 檢查
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+        with:
+          python: false
+
+      - name: vite build
+        working-directory: apps/web
+        run: pnpm exec vite build
+
+      - name: 家長端 bundle 不得含 Element Plus 與後台程式碼
+        working-directory: apps/web
+        run: node scripts/check_parent_bundle.mjs
