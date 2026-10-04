@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 97,
-  "last_updated": "2026-10-04T04:43:30Z",
+  "version": 98,
+  "last_updated": "2026-10-04T04:51:47Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -536,7 +536,7 @@
     {
       "id": "INFRA-016",
       "title": "實作 scripts/dev_up.sh 與 just up：一鍵啟動本機 DB / SeaweedFS + API + Web",
-      "description": "新增 `scripts/dev_up.sh` 與 justfile recipe `up`。參考 `/Users/user/land/land_house_scraper/scripts/dev_up.sh`（簡化為三個服務）。\n\n**流程**（依序，任一步逾時就中止並以非 0 退出）：\n1. 本機 DB / SeaweedFS：執行 `just db-start`（INFRA-044，`docker compose up -d --wait` 本身冪等，已在執行時立即返回）；`DEV_UP_SKIP_DB=1` 時整步略過。\n2. API：pid 檔 `var/run/api.pid` 指向的行程仍存活、命令列與 `var/run/api.cmd` 相同，**且 port 可連線** → 印「api 已在執行（pid N）」略過；行程存活、命令列相符但 port 未開（例如上次逾時後留下的行程）→ 不重新啟動，進入第 4 步同一套輪詢，逾時印 log 並 exit 1；否則以 `nohup` 背景執行 API 指令（預設 `just api`），stdout/stderr 寫 `var/log/api.log`，寫入 pid 與 cmd 檔。\n3. Web：同上，pid/cmd/log 為 `var/run/web.*`、`var/log/web.log`，預設指令 `just web`。\n（啟動前若該 port 已可連線、而且不是 pid 檔記錄的行程 → 印「port 已被其他程式占用」exit 1，避免新行程 bind 失敗卻被輪詢誤判為就緒。「命令列相同」的判定：ps 的命令列與記錄指令完全相同；或 ps 去掉第一個字後整串等於記錄指令（shebang 腳本前面多一個直譯器）；或記錄指令的第一個字是直譯器（python* / node），且雙方去掉第一個字後整串相等（直譯器被換成實際執行檔，例如 venv 的 python 顯示為框架內的 Python.app）。一律整串相等，不用結尾比對。）\n4. 每個背景服務啟動後輪詢對應 port（API 8341、Web 5341）直到可連線，最多 `DEV_UP_WAIT_SECONDS`（預設 30）秒；逾時則印該服務 log 最後 20 行到 stderr 並 exit 1。port 探測用 `python3 -c` 的 `socket.create_connection(timeout=1)`。\n5. 全部就緒後印網址：後台 `http://127.0.0.1:5341/`、家長端 `http://127.0.0.1:5341/parent/`、API `http://127.0.0.1:8341/docs`。\n\n**測試用覆寫**（環境變數）：`DEV_UP_ROOT`（repo root）、`DEV_UP_API_CMD`、`DEV_UP_WEB_CMD`、`DEV_UP_API_PORT`、`DEV_UP_WEB_PORT`、`DEV_UP_SKIP_DB`、`DEV_UP_WAIT_SECONDS`。`var/run`、`var/log` 不存在時自動建立。\n\n**驗收標準**：每一條對應下列 red_case。測試用 `python3 -m http.server <臨時 port> --bind 127.0.0.1` 當假 API / Web，teardown 依 pid 檔 kill 所有啟動的行程。",
+      "description": "新增 `scripts/dev_up.sh` 與 justfile recipe `up`。參考 `/Users/user/land/land_house_scraper/scripts/dev_up.sh`（簡化為三個服務）。\n\n**流程**（依序，任一步逾時就中止並以非 0 退出）：\n1. 本機 DB / SeaweedFS：執行 `just db-start`（INFRA-044，`docker compose up -d --wait` 本身冪等，已在執行時立即返回）；`DEV_UP_SKIP_DB=1` 時整步略過。\n2. API：pid 檔 `var/run/api.pid` 指向的行程仍存活、命令列與 `var/run/api.cmd` 相同，**且 port 可連線** → 印「api 已在執行（pid N）」略過；行程存活、命令列相符但 port 未開（例如上次逾時後留下的行程）→ 不重新啟動，進入第 4 步同一套輪詢，逾時印 log 並 exit 1；否則以 `nohup` 背景執行 API 指令（預設 `just api`；先 `os.setsid()` 讓服務自成 session / process group，pgid == 記錄的 pid，再 exec 指令，讓 INFRA-017 能對整個行程樹送訊號），stdout/stderr 寫 `var/log/api.log`，寫入 pid 與 cmd 檔。\n3. Web：同上，pid/cmd/log 為 `var/run/web.*`、`var/log/web.log`，預設指令 `just web`。\n（啟動前若該 port 已可連線、而且不是 pid 檔記錄的行程 → 印「port 已被其他程式占用」exit 1，避免新行程 bind 失敗卻被輪詢誤判為就緒。「命令列相同」的判定：ps 的命令列與記錄指令完全相同；或 ps 去掉第一個字後整串等於記錄指令（shebang 腳本前面多一個直譯器）；或記錄指令的第一個字是直譯器（python* / node），且雙方去掉第一個字後整串相等（直譯器被換成實際執行檔，例如 venv 的 python 顯示為框架內的 Python.app）。一律整串相等，不用結尾比對。）\n4. 每個背景服務啟動後輪詢對應 port（API 8341、Web 5341）直到可連線，最多 `DEV_UP_WAIT_SECONDS`（預設 30）秒；逾時則印該服務 log 最後 20 行到 stderr 並 exit 1。port 探測用 `python3 -c` 的 `socket.create_connection(timeout=1)`。\n5. 全部就緒後印網址：後台 `http://127.0.0.1:5341/`、家長端 `http://127.0.0.1:5341/parent/`、API `http://127.0.0.1:8341/docs`。\n\n**測試用覆寫**（環境變數）：`DEV_UP_ROOT`（repo root）、`DEV_UP_API_CMD`、`DEV_UP_WEB_CMD`、`DEV_UP_API_PORT`、`DEV_UP_WEB_PORT`、`DEV_UP_SKIP_DB`、`DEV_UP_WAIT_SECONDS`。`var/run`、`var/log` 不存在時自動建立。\n\n**驗收標準**：每一條對應下列 red_case。測試用 `python3 -m http.server <臨時 port> --bind 127.0.0.1` 當假 API / Web，teardown 依 pid 檔 kill 所有啟動的行程。",
       "granularity_unit": "script",
       "target_path": "scripts/dev_up.sh",
       "source_ref": null,
@@ -577,11 +577,11 @@
     {
       "id": "INFRA-017",
       "title": "實作 scripts/dev_down.sh 與 just down：安全停止 dev_up 啟動的服務",
-      "description": "新增 `scripts/dev_down.sh` 與 justfile recipe `down *ARGS`。\n\n**行為**：\n1. 對 `var/run/api.pid`、`var/run/web.pid`：pid 存活且 `ps -o command= -p <pid>` 與對應 `.cmd` 檔內容相符 → 送 SIGTERM，最多等 10 秒，仍存活則 SIGKILL；之後刪除 pid 與 cmd 檔。\n2. pid 存活但命令列不符（pid 已被系統重用）→ **不送訊號**，印警告「pid N 已不是 api，略過」，刪除 pid 與 cmd 檔。\n3. pid 檔不存在或行程已結束 → 刪除殘留檔案，印「api 未在執行」。\n4. 只有帶 `--all` 時才額外執行 `just db-stop`（INFRA-044，compose stop，保留 volume）；其他參數印用法並 exit 1。\n5. 支援 `DEV_UP_ROOT` 覆寫（與 INFRA-016 共用）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "新增 `scripts/dev_down.sh` 與 justfile recipe `down *ARGS`。\n\n**行為**：\n1. 對 `var/run/api.pid`、`var/run/web.pid`：pid 存活且 `ps -o command= -p <pid>` 與對應 `.cmd` 檔內容相符 → 若該 pid 的 pgid == pid（dev_up 建立的 process group），SIGTERM 送給整個 process group（涵蓋 just → uv → uvicorn / pnpm → vite 等包裝下真正監聽 port 的子行程），否則只送該 pid；最多等 10 秒（group 模式等整個 group 結束），仍存活則同範圍 SIGKILL；之後刪除 pid 與 cmd 檔。\n2. pid 存活但命令列不符（pid 已被系統重用）→ **不對該 pid 與其 process group 送任何訊號**，印警告「pid N 已不是 api，略過」，刪除 pid 與 cmd 檔。\n3. pid 檔不存在或行程已結束 → 刪除殘留檔案，印「api 未在執行」。\n4. 只有帶 `--all` 時才額外執行 `just db-stop`（INFRA-044，compose stop，保留 volume）；其他參數印用法並 exit 1。\n5. 支援 `DEV_UP_ROOT` 覆寫（與 INFRA-016 共用）。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "script",
       "target_path": "scripts/dev_down.sh",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r4",
       "depends_on": [
         "INFRA-016",
@@ -600,15 +600,17 @@
           "test_dev_down_skips_reused_pid：啟動一個無關的 sleep 60 行程，把它的 pid 寫入 api.pid、api.cmd 寫 'just api' → 執行後 sleep 行程仍存活，stdout 或 stderr 含 '已不是 api'，api.pid 被刪除",
           "test_dev_down_without_all_keeps_db：fake_bin 替換 just，執行 dev_down.sh → fake_bin.calls('just') 中沒有任何 argv 含 'db-stop'",
           "test_dev_down_all_stops_db：執行 dev_down.sh --all → fake_bin.calls('just') 恰有一筆 argv == ['db-stop']",
-          "test_dev_down_rejects_unknown_flag：dev_down.sh --force → exit 1，stderr 含 '用法'"
+          "test_dev_down_rejects_unknown_flag：dev_down.sh --force → exit 1，stderr 含 '用法'",
+          "test_dev_down_stops_child_behind_non_exec_wrapper：DEV_UP_API_CMD 為 'sh <wrapper.sh> <port> <child_pid_file>'（wrapper 以背景方式啟動 http.server 並 wait，不 exec；由子行程監聽 port）→ dev_up 就緒後執行 dev_down → exit 0；子行程 pid 已結束（os.kill(child_pid, 0) 拋 ProcessLookupError）且 port 連不上",
+          "test_dev_down_reused_pid_leaves_process_group_alone：無關的 sleep 60 行程自成 process group 並有一個同 group 成員；其 pid 寫入 api.pid、api.cmd 寫 'just api' → 執行後 group leader 與成員都仍存活"
         ],
         "run": "just test scripts/tests/test_dev_down.py -k dev_down",
         "notes": ""
       },
       "review": {
-        "status": "concern",
-        "reviewer": "review-r4",
-        "notes": "打回。5 條 red_case 都有對應測試、-k dev_down 選到 5 個且全綠，f7652db 早於 07e5c1c，參數處理與 pid 重用保護符合 description。但預設的服務指令（just api / just web）實際停不掉：dev_up 記錄的 pid 是 just 行程，just 把 SIGTERM 轉給 shebang recipe 的 bash 後 bash 結束，真正監聽 port 的子行程（uv → uvicorn、pnpm → vite）沒收到訊號而被 init 收養，port 仍被占用，下一次 just up 會因「port 已被其他程式占用」失敗。測試的假服務是 exec 起來的 python -m http.server（pid 就是服務本身），所以測不到這個情境。問題已追加進 risk_notes。"
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
       }
     },
     {
