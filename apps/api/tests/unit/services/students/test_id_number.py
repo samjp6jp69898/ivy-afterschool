@@ -47,6 +47,38 @@ def test_id_number_normalize() -> None:
     assert normalize_id_number("") == ""
 
 
+def test_id_number_normalize_nfkc_fullwidth() -> None:
+    """全形英數（中文輸入法常見）先 NFKC 轉半形，HMAC 才會與半形輸入一致。"""
+    fullwidth_tail = "A12345678\uff19"  # 末碼為全形數字 9（U+FF19）
+    fullwidth_second = "A\uff11" + "23456789"  # 第二碼為全形數字 1（U+FF11）
+    fullwidth_letter = "\uff21123456789"  # 首碼為全形字母 A（U+FF21）
+
+    for raw in (
+        fullwidth_tail,
+        fullwidth_second,
+        fullwidth_letter,
+        " \uff41\uff11\uff12\uff13 456 789 ",
+    ):
+        normalized = normalize_id_number(raw)
+        assert normalized == "A123456789", raw
+        assert normalized.isascii()
+        validate_id_number(normalized)
+        assert id_number_hmac(normalized) == id_number_hmac("A123456789")
+
+
+def test_id_number_rejects_non_ascii_digits() -> None:
+    """NFKC 後仍非 ASCII 的數字（阿拉伯-印度數字等）一律 422，不得通過 \\d / int() 的寬鬆比對。"""
+    arabic_indic = "A123456\u0667" + "89"  # 阿拉伯-印度數字 7（U+0667）
+
+    assert normalize_id_number(arabic_indic) == arabic_indic
+    _assert_invalid(arabic_indic)
+    _assert_invalid(normalize_id_number(arabic_indic))
+    # 未經 normalize 的全形輸入直接驗證也要 422（驗證只收 ASCII）
+    _assert_invalid("A12345678\uff19")
+    _assert_invalid("\uff21123456789")
+    _assert_invalid("A1234567\u0668\u0669")  # ٨٩
+
+
 def test_id_number_valid_citizen() -> None:
     # 檢查碼正確的公開範例
     validate_id_number("A123456789")
