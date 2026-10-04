@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 61,
-  "last_updated": "2026-10-04T07:49:20Z",
+  "version": 62,
+  "last_updated": "2026-10-04T11:01:36Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -951,8 +951,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/ConfirmDialog.vue",
       "source_ref": "FE:src/parent/components/ConfirmDialog.vue::defineEmits",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-001",
         "PARENT-015",
@@ -1075,8 +1075,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/ParentEmptyState.vue",
       "source_ref": "FE:src/components/common/EmptyState.vue::props",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-001",
         "PARENT-014",
@@ -1207,8 +1207,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/bind/BindCodeErrorNotice.vue",
       "source_ref": "FE:src/parent/views/BindView.vue::needsNewCode",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-001",
         "PARENT-014",
@@ -1335,8 +1335,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/AddFriendCard.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-001",
         "PARENT-014",
@@ -1983,8 +1983,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/ArrivalTimePicker.vue",
       "source_ref": "FE:src/parent/views/PickupNoticeView.vue::selectPreset",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r5",
       "depends_on": [
         "FRONTEND-003",
         "PARENT-018",
@@ -2117,8 +2117,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/PickupPersonForm.vue",
       "source_ref": "FE:src/parent/components/pickup/PickupPersonForm.vue::onFileChange",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-015",
         "PARENT-018",
@@ -2191,8 +2191,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/PickupCodeCard.vue",
       "source_ref": "FE:src/parent/components/pickup/PickupCodeCard.vue::copyCode",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r5",
       "depends_on": [
         "FRONTEND-003",
         "PARENT-011",
