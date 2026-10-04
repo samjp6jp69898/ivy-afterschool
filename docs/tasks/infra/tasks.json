@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 125,
-  "last_updated": "2026-10-04T14:59:18Z",
+  "version": 126,
+  "last_updated": "2026-10-04T14:59:23Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1455,7 +1455,7 @@
       "granularity_unit": "doc",
       "target_path": "docs/deployment.md",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r6b",
       "depends_on": [
         "INFRA-049",
