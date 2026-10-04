@@ -115,3 +115,12 @@ def test_reference_specs_order_by() -> None:
 def test_reference_specs_are_immutable() -> None:
     with pytest.raises(AttributeError):
         SPECS["subjects"].resource = "schools"  # type: ignore[misc]
+
+
+def test_reference_schemas_sort_order_upper_bound() -> None:
+    assert NamedItemCreateIn(name="數學", sort_order=2147483647).sort_order == 2147483647
+    with pytest.raises(ValidationError):
+        NamedItemCreateIn(name="數學", sort_order=2147483648)
+    assert NamedItemUpdateIn.model_validate({"sort_order": 2147483647}).sort_order == 2147483647
+    with pytest.raises(ValidationError):
+        NamedItemUpdateIn.model_validate({"sort_order": 2147483648})

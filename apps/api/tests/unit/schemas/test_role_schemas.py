@@ -111,3 +111,10 @@ def test_role_schemas_catalog_shape() -> None:
             }
         ]
     }
+
+
+def test_role_schemas_rejects_nul_in_permissions_and_name() -> None:
+    with pytest.raises(ValidationError, match="NUL"):
+        RoleCreateIn(code="front_desk", name="櫃台", permissions=["a.read\x00"])
+    with pytest.raises(ValidationError, match="NUL"):
+        RoleUpdateIn.model_validate({"name": "櫃\x00台"})

@@ -94,3 +94,13 @@ def test_class_schemas_out() -> None:
     )
     assert out.staff[0].role == "lead"
     assert out.student_count == 12
+
+
+def test_class_schemas_sort_order_upper_bound() -> None:
+    ok = ClassCreateIn(name="A", grade_levels=[1], academic_year=115, sort_order=2147483647)
+    assert ok.sort_order == 2147483647
+    with pytest.raises(ValidationError):
+        ClassCreateIn(name="A", grade_levels=[1], academic_year=115, sort_order=2147483648)
+    assert ClassUpdateIn.model_validate({"sort_order": 2147483647}).sort_order == 2147483647
+    with pytest.raises(ValidationError):
+        ClassUpdateIn.model_validate({"sort_order": 2147483648})

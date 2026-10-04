@@ -163,3 +163,9 @@ def test_exam_schemas_class_alias() -> None:
     assert dumped["class"]["name"] == "A 班"
     assert "class_" not in dumped
     assert '"class":{' in exam.model_dump_json(by_alias=True)
+
+
+def test_exam_schemas_subject_sort_order_upper_bound() -> None:
+    assert ExamSubjectIn(subject_id=U, sort_order=2147483647).sort_order == 2147483647
+    with pytest.raises(ValidationError):
+        ExamSubjectIn(subject_id=U, sort_order=2147483648)
