@@ -1,4 +1,5 @@
-import { mount } from '@vue/test-utils'
+import { DOMWrapper, mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import type { SnackbarItem } from '../../stores/snackbar'
 import M3Snackbar from './M3Snackbar.vue'
@@ -52,10 +53,36 @@ describe('M3Snackbar', () => {
 
   it('M3Snackbar swaps to next item', async () => {
     const wrapper = mount(M3Snackbar, { props: { item: item() } })
+    const first = wrapper.get('.m3-snackbar').element
     await wrapper.setProps({ item: item({ id: 2, message: '已取消接送' }) })
     expect(wrapper.findAll('.m3-snackbar')).toHaveLength(1)
+    // 以 item.id 為 key：換則是新元素（走出場 / 進場），不是原地改字
+    expect(wrapper.get('.m3-snackbar').element).not.toBe(first)
     expect(wrapper.get('.m3-snackbar').text()).toBe('已取消接送')
     await wrapper.setProps({ item: null })
     expect(wrapper.find('.m3-snackbar').exists()).toBe(false)
+  })
+
+  it('M3Snackbar leaving item action does not run next item', async () => {
+    const retryA = vi.fn()
+    const undoB = vi.fn()
+    // 用真的 Transition：舊的一則在 leave 期間仍留在畫面上
+    const wrapper = mount(M3Snackbar, {
+      props: { item: item({ id: 1, message: '資料更新失敗', action: { label: '重試A', onClick: retryA } }) },
+      global: { stubs: { transition: false } },
+      attachTo: document.body,
+    })
+    await wrapper.setProps({ item: item({ id: 2, message: '已刪除', action: { label: '復原B', onClick: undoB } }) })
+    await nextTick()
+    // out-in：B 要等 A 出場完才進場，此時元件根節點是佔位 comment，A 仍掛在 DOM 上
+    const bars = document.body.querySelectorAll('.m3-snackbar')
+    expect(bars).toHaveLength(1)
+    const leaving = new DOMWrapper(bars[0] as HTMLElement)
+    expect(leaving.text()).toContain('重試A')
+    expect(leaving.classes()).toContain('m3-snackbar-leave-active')
+    await leaving.get('button').trigger('click')
+    expect(retryA).not.toHaveBeenCalled()
+    expect(undoB).not.toHaveBeenCalled()
+    expect(wrapper.emitted('dismiss')).toBeUndefined()
   })
 })
