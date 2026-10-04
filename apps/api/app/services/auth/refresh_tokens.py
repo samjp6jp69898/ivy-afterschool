@@ -1,5 +1,7 @@
 """BACKEND-036：refresh token 發行（員工與家長共用，DB-005 refresh_tokens）。
 BACKEND-037：輪替 ``rotate``（重用偵測即撤銷整個 family + token_version +1、5 秒內併發容忍）。
+BACKEND-038：``revoke_family_by_raw``（登出，冪等）、``revoke_all_for_subject``（改密碼 / 重設密碼 /
+停用帳號）；兩者只 flush 不 commit，token_version 由呼叫端依情境處理。
 
 移植 ivy ``services/staff_refresh.py``（issue / rotate / ``_revoke_locked``）；去掉 tenant、
 absolute lifetime、user_agent / ip 欄位。
@@ -160,4 +162,26 @@ def rotate(session: Session, raw: str, *, clock: Clock) -> RotatedRefresh:
         subject_type=token.subject_type,
         subject_id=token.subject_id,
         family_id=token.family_id,
+    )
+
+
+def revoke_family_by_raw(session: Session, raw: str, *, clock: Clock) -> int:
+    """登出用：以 raw 找到 family 後撤銷整個 family，回撤銷筆數；raw 不存在回 0（登出冪等）。"""
+    family_id = session.execute(
+        select(RefreshToken.family_id).where(RefreshToken.token_hash == hash_refresh(raw))
+    ).scalar_one_or_none()
+    if family_id is None:
+        return 0
+    return _revoke_locked(session, RefreshToken.family_id == family_id, now=clock.now())
+
+
+def revoke_all_for_subject(
+    session: Session, *, subject_type: SubjectType, subject_id: UUID, clock: Clock
+) -> int:
+    """撤銷該 subject 全部 family（只比對同 subject_type，uuid 相同的另一型不受影響）。"""
+    return _revoke_locked(
+        session,
+        RefreshToken.subject_type == subject_type,
+        RefreshToken.subject_id == subject_id,
+        now=clock.now(),
     )
