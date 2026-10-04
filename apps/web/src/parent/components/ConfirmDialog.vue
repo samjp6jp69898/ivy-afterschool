@@ -33,7 +33,6 @@ const titleId = useId()
 const messageId = useId()
 const dialogRef = ref<HTMLElement | null>(null)
 const cancelWrapper = ref<HTMLElement | null>(null)
-let prevFocus: HTMLElement | null = null
 let active = false
 
 function requestCancel(): void {
@@ -87,8 +86,7 @@ function onDocFocusin(event: FocusEvent): void {
 function activate(): void {
   if (active) return
   active = true
-  prevFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
-  pushOverlay(self)
+  pushOverlay(self, () => dialogRef.value)
   document.addEventListener('keydown', onDocKeydown)
   document.addEventListener('focusin', onDocFocusin)
   void nextTick(() => {
@@ -103,8 +101,6 @@ function deactivate(): void {
   removeOverlay(self)
   document.removeEventListener('keydown', onDocKeydown)
   document.removeEventListener('focusin', onDocFocusin)
-  if (prevFocus?.isConnected) prevFocus.focus({ preventScroll: true })
-  prevFocus = null
 }
 
 watch(

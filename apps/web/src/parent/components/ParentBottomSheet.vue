@@ -33,7 +33,6 @@ const dialogRef = ref<HTMLElement | null>(null)
 const offset = ref(0)
 const dragging = ref(false)
 let startY = 0
-let prevFocus: HTMLElement | null = null
 let active = false
 
 function requestClose(): void {
@@ -123,8 +122,7 @@ function endDrag(): void {
 function activate(): void {
   if (active) return
   active = true
-  prevFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
-  pushOverlay(self)
+  pushOverlay(self, () => dialogRef.value)
   document.addEventListener('keydown', onDocKeydown)
   document.addEventListener('focusin', onDocFocusin)
   void nextTick(() => {
@@ -143,8 +141,6 @@ function deactivate(): void {
   stopDragListeners()
   offset.value = 0
   dragging.value = false
-  if (prevFocus?.isConnected) prevFocus.focus({ preventScroll: true })
-  prevFocus = null
 }
 
 watch(
