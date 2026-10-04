@@ -7,6 +7,8 @@
 - guardian 不存在或已封存 → 404 ``guardian_not_found``；學生已封存 → 409 ``student_archived``；
   已綁定家長（``parent_account_id`` 非 null）→ 409 ``guardian_already_bound``（先解除綁定
   BACKEND-172）。
+- 先以 ``for update`` 鎖住 guardian 列再作廢 / 新增：同一 guardian 的併發 generate 序列化，不會留下
+  兩筆有效碼。
 - ``code_hash`` unique 衝突以 savepoint 重試最多 3 次，仍衝突 → 500 ``binding_code_collision``
   （32^8 的空間下實務上不會發生）。
 - 稽核 ``guardian.binding_code_issue``：after 只有 ``expires_at``，不含明碼與 hash。
@@ -66,8 +68,12 @@ def _random_code() -> str:
 
 
 def _load_guardian_for_issue(session: Session, guardian_id: UUID) -> Guardian:
+    # 鎖住 guardian 列：同一 guardian 的併發 generate 序列化，後到者等前者 commit 後才 delete 舊碼，
+    # 才刪得掉前者剛寫入的碼（student / parent_account 是 lazy='joined'，of= 避開 outer join）
     guardian = session.execute(
-        select(Guardian).where(Guardian.id == guardian_id, Guardian.archived_at.is_(None))
+        select(Guardian)
+        .where(Guardian.id == guardian_id, Guardian.archived_at.is_(None))
+        .with_for_update(of=Guardian)
     ).scalar_one_or_none()
     if guardian is None:
         raise NotFoundError("guardian_not_found", "找不到監護人")

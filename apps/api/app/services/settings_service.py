@@ -15,7 +15,7 @@ finance 權限分支）。
 
 - key 未註冊 → 404 ``setting_not_found``。
 - secret 欄位：送來的值以 ``****`` 開頭或等於 ``********``（前端回傳的遮罩值）→ 沿用 DB 現有密文
-  （以明文狀態參與驗證）；``null`` → 清除；其他字串 → 新明文。
+  （以明文狀態參與驗證）；``null``、空字串或只有空白 → 清除（存 None）；其他字串 → 新明文。
 - 以 registry schema 驗證（明文狀態）→ 422 ``invalid_setting_value``，details 為 Pydantic 錯誤清單
   （只留 loc / msg / type，不回顯輸入）。寫入的是驗證後 ``model_dump(mode="json")``（不寫原始
   value，NaN / 孤立 surrogate 等壞值不會進 jsonb），secret 欄位再以 ``encrypt_token`` 加密。
@@ -200,9 +200,13 @@ def _merge_secret_fields(
     merged = dict(value)
     kept: set[str] = set()
     for field in definition.secret_fields:
-        if _is_masked_value(merged.get(field)):
+        raw = merged.get(field)
+        if _is_masked_value(raw):
             merged[field] = getattr(current, field, None)
             kept.add(field)
+        elif isinstance(raw, str) and not raw.strip():
+            # 空字串 / 只有空白視同 null：清除，不可存成 encrypt_token('')（讀回 '' 卻顯示已設定）
+            merged[field] = None
     return merged, frozenset(kept)
 
 
