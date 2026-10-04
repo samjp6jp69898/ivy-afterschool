@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 38,
-  "last_updated": "2026-10-03T15:25:37Z",
+  "version": 39,
+  "last_updated": "2026-10-04T01:29:47Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -636,7 +636,7 @@
     {
       "id": "PARENT-018",
       "title": "移植 M3TextField 元件（outlined、錯誤訊息、textarea）",
-      "description": "建立 `apps/web/src/parent/components/m3/M3TextField.vue`（移植 ivy `FE:src/parent/components/m3/M3TextField.vue`）。\n\n**介面**：\n```ts\nprops: { modelValue?: string; label: string; type?: 'text' | 'tel' | 'date' | 'time' | 'textarea' /* 預設 text */; placeholder?: string; supportingText?: string; errorText?: string; disabled?: boolean; maxlength?: number; inputmode?: string; autocomplete?: string; id?: string }\nemits: { 'update:modelValue': [string]; enter: [] }\n```\n保留：浮動 label、supporting text、錯誤態配色。\n去掉：filled variant 與 `error` 布林 prop（改由 errorText 非空判斷錯誤態）。**新增** `textarea` 型態（固定 4 行高、框內捲動、不可拖曳縮放）、maxlength 字數計數（`12/200`，有 maxlength 就顯示，不限 textarea）、`aria-invalid`（隨 errorText 為 true / false）與 `aria-describedby` 指向 supporting / error 文字（兩者皆無時不帶）、Enter 鍵 emit `enter`（textarea 除外；IME 組字中 `isComposing` 或 `keyCode === 229` 不觸發）。\n- 外觀：outlined、高 56px、圓角 `--m3-shape-extra-small`，浮動 label 以 fieldset / legend 在邊框挖缺口；錯誤時 error 邊框 + error label + 右側 filled `error` 圖示（`.m3-tf__trailing`），errorText 取代 supportingText；disabled opacity 0.38。\n- label 在聚焦、有值或 type 為 date / time 時浮起（根元素 `is-floating`）；placeholder 只在聚焦時帶到 input 上（未聚焦時 label 佔位）。\n- `id` 未傳時以 Vue `useId()` 產生，label 的 `for` 指向它。\n樣式只用 PARENT-001 的 `--m3-*` 變數；觸控目標 ≥ 44×44px；有 `:focus-visible` 外框。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-m3-kit.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：空值 / 有值 / focus / 錯誤 / disabled / textarea 含字數。可與其他 M3 元件 task 共用同一張稿 `docs/mockups/parent-component-m3-kit.html`（`preview-tasks` 列出 PARENT-014~PARENT-023、PARENT-098、PARENT-175）。\n\n**驗收標準**：每一條對應 red_case（vitest + @vue/test-utils 真實 DOM）。",
+      "description": "建立 `apps/web/src/parent/components/m3/M3TextField.vue`（移植 ivy `FE:src/parent/components/m3/M3TextField.vue`）。\n\n**介面**：\n```ts\nprops: { modelValue?: string; label: string; type?: 'text' | 'tel' | 'date' | 'time' | 'textarea' /* 預設 text */; placeholder?: string; supportingText?: string; errorText?: string; disabled?: boolean; maxlength?: number; inputmode?: 'none' | 'text' | 'tel' | 'url' | 'email' | 'numeric' | 'decimal' | 'search' /* 同 HTMLAttributes['inputmode'] */; autocomplete?: string; id?: string }\nemits: { 'update:modelValue': [string]; enter: [] }\n```\n保留：浮動 label、supporting text、錯誤態配色。\n去掉：filled variant 與 `error` 布林 prop（改由 errorText 非空判斷錯誤態）。**新增** `textarea` 型態（固定 4 行高、框內捲動、不可拖曳縮放）、maxlength 字數計數（`12/200`，有 maxlength 就顯示，不限 textarea）、`aria-invalid`（隨 errorText 為 true / false）與 `aria-describedby` 指向 supporting / error 文字（兩者皆無時不帶）、Enter 鍵 emit `enter`（textarea 除外；IME 組字中 `isComposing` 或 `keyCode === 229` 不觸發）。\n- 外觀：outlined、高 56px、圓角 `--m3-shape-extra-small`，浮動 label 以 fieldset / legend 在邊框挖缺口；錯誤時 error 邊框 + error label + 右側 filled `error` 圖示（`.m3-tf__trailing`），errorText 取代 supportingText；disabled opacity 0.38。\n- label 在聚焦、有值或 type 為 date / time 時浮起（根元素 `is-floating`）；placeholder 只在聚焦時帶到 input 上（未聚焦時 label 佔位）。\n- `id` 未傳時以 Vue `useId()` 產生，label 的 `for` 指向它。\n樣式只用 PARENT-001 的 `--m3-*` 變數；觸控目標 ≥ 44×44px；焦點指示為聚焦時 2px `--m3-primary` 邊框（不另加 outline）；input 同時寫 `appearance: none` 與 `-webkit-appearance: none`（舊版 iOS WKWebView 的 date / time 欄位）。\n- 型別：綁到原生 input / textarea 的屬性必須通過 vue-tsc（`aria-invalid` 為 `\"true\" | \"false\"` 字面型別、`inputmode` 為上列字面型別）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-m3-kit.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：空值 / 有值 / focus / 錯誤 / disabled / textarea 含字數。可與其他 M3 元件 task 共用同一張稿 `docs/mockups/parent-component-m3-kit.html`（`preview-tasks` 列出 PARENT-014~PARENT-023、PARENT-098、PARENT-175）。\n\n**驗收標準**：每一條對應 red_case（vitest + @vue/test-utils 真實 DOM）。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3TextField.vue",
       "source_ref": "FE:src/parent/components/m3/M3TextField.vue::props",
@@ -668,7 +668,7 @@
           "M3TextField passes input attributes and disabled：type='tel'、inputmode='tel'、autocomplete='tel'、disabled → input 屬性對應、有 disabled、根元素含 'is-disabled'"
         ],
         "run": "just web-test src/parent/components/m3/M3TextField.spec.ts -t \"M3TextField\"",
-        "notes": ""
+        "notes": "型別驗收（vue-tsc 只能整專案跑，改以只含本元件與其 spec 的暫時 tsconfig 執行）：在 apps/web 建立暫時 tsconfig，extends ./tsconfig.app.json、include 為 src/parent/components/m3/M3TextField.vue、src/parent/components/m3/M3TextField.spec.ts、src/*.d.ts，執行 pnpm exec vue-tsc --noEmit -p <暫時 tsconfig> 必須 exit 0，跑完刪除暫時檔。"
       },
       "review": {
         "status": "concern",
