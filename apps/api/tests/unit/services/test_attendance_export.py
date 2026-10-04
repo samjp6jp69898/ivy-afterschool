@@ -71,7 +71,7 @@ def test_attendance_xlsx_layout() -> None:
     ws = _sheet(_report())
 
     assert ws["A1"].value == "低年級A班 2026年9月出勤月報"
-    assert "A1:AF1" in {str(r) for r in ws.merged_cells.ranges}  # 2 + 30 天 + 4 統計 = 36 欄
+    assert "A1:AJ1" in {str(r) for r in ws.merged_cells.ranges}  # 2 + 30 天 + 4 統計 = 36 欄（AJ）
     assert [ws.cell(2, c).value for c in (1, 2, 3, 4, 5)] == [
         "學號",
         "姓名",
@@ -100,13 +100,13 @@ def test_attendance_xlsx_layout() -> None:
 
 
 def test_attendance_xlsx_status_codes() -> None:
-    ws = _sheet(_report(statuses={0: "present", 1: "left", 2: "absent", 3: "leave", 4: "expected"}))
+    ws = _sheet(_report(statuses={0: "present", 1: "left", 2: "absent", 3: "leave", 6: "expected"}))
 
     assert ws["C3"].value == "到"
     assert ws["D3"].value == "離"
     assert ws["E3"].value == "缺"
     assert ws["F3"].value == "假"
-    assert ws["G3"].value is None  # expected 空白（9/5 週六為非營業日，見下一個測試）
+    assert ws["I3"].value is None  # 9/7 週一 expected → 空白
 
 
 def test_attendance_xlsx_non_service_day() -> None:
@@ -125,8 +125,13 @@ def test_attendance_xlsx_formula_injection() -> None:
     assert ws["B3"].value == '\'=HYPERLINK("x")'
     assert ws["A3"].value == "'+1"
     assert ws["A1"].value == "'@班 2026年9月出勤月報"
-    for lead in ("-1", "@a", "\tx", "\rx"):
+    for lead in ("-1", "@a", "\tx"):
         assert _sheet(_report(name=lead)).cell(3, 2).value == "'" + lead
+    # xlsx 的 XML 會把 CR 正規化成 LF，只驗證有補前綴
+    cr_value = _sheet(_report(name="\rx")).cell(3, 2).value
+    assert isinstance(cr_value, str)
+    assert cr_value.startswith("'")
+    assert cr_value.endswith("x")
     assert _sheet(_report(name="王=小明")).cell(3, 2).value == "王=小明"
     # 非使用者輸入的「-」不可被加前綴
     assert _sheet(_report()).cell(3, _FIRST_DAY_COLUMN + 5).value == "-"
