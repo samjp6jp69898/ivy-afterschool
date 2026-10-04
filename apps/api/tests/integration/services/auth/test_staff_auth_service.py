@@ -1,4 +1,5 @@
 """BACKEND-041：app/services/auth/staff_auth.py（StaffAuthService.login）。
+BACKEND-043：refresh（輪替 refresh 並以目前 token_version 重簽 access；停用帳號 / 家長 token 撤銷 family）。
 
 帳密驗證、(帳號, IP) 鎖定、不存在帳號仍跑一次 argon2（防帳號列舉）、停用帳號同一個 401、
 成功後更新 last_login_at / 簽發 access + refresh token / needs_rehash 透明升級。
@@ -19,9 +20,10 @@ from app.core.security.passwords import needs_rehash
 from app.core.security.tokens import decode_access_token
 from app.models.account import RefreshToken, StaffUser
 from app.services.auth import staff_auth
-from app.services.auth.staff_auth import StaffSession, login
+from app.services.auth.refresh_tokens import hash_refresh, issue, revoke_family_by_raw
+from app.services.auth.staff_auth import StaffSession, login, refresh
 from app.services.auth.throttle import AuthThrottles
-from tests.support.factories import make_staff
+from tests.support.factories import make_parent, make_staff
 from tests.support.fake_clock import FakeClock
 
 _PASSWORD = "Passw0rd-Test1"  # noqa: S105  測試固定密碼
@@ -255,3 +257,145 @@ def test_login_does_not_commit(
         ).scalar_one()
         is None
     )
+
+
+# --- BACKEND-043：refresh ----------------------------------------------------------------------
+
+
+def _family_rows(db_session: Session, raw: str) -> list[RefreshToken]:
+    family_id = db_session.execute(
+        select(RefreshToken.family_id).where(RefreshToken.token_hash == hash_refresh(raw))
+    ).scalar_one()
+    return list(
+        db_session.execute(
+            select(RefreshToken).where(RefreshToken.family_id == family_id)
+        ).scalars()
+    )
+
+
+def _assert_family_revoked(db_session: Session, raw: str, *, revoked: bool) -> None:
+    rows = _family_rows(db_session, raw)
+    assert rows
+    assert all((row.revoked_at is not None) is revoked for row in rows)
+
+
+def test_refresh_success(
+    db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock
+) -> None:
+    staff = make_staff(db_session, permissions=["students:read"])
+    s1 = _login(db_session, throttles, fake_clock, username=staff.username, password=_PASSWORD)
+    fake_clock.advance(minutes=10)
+
+    s2 = refresh(db_session, raw_refresh=s1.refresh_token, clock=fake_clock)
+
+    assert s2.refresh_token != s1.refresh_token
+    assert s2.access_token != s1.access_token
+    assert s2.staff.id == staff.id
+    assert s2.permissions == frozenset({"students:read"})
+    claims = decode_access_token(s2.access_token, expected_type="staff", clock=fake_clock)
+    assert claims.subject_id == staff.id
+    assert claims.token_version == staff.token_version
+    assert claims.issued_at == fake_clock.now()
+    # 同一 family 輪替：舊列 replaced_by 指向新列，兩列都未撤銷
+    rows = {row.token_hash: row for row in _family_rows(db_session, s1.refresh_token)}
+    assert set(rows) == {hash_refresh(s1.refresh_token), hash_refresh(s2.refresh_token)}
+    assert rows[hash_refresh(s1.refresh_token)].replaced_by == (
+        rows[hash_refresh(s2.refresh_token)].id
+    )
+    assert all(row.revoked_at is None for row in rows.values())
+
+
+def test_refresh_uses_current_token_version(
+    db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock
+) -> None:
+    """新 access 的 tv 取 DB 目前值（例如管理員重設密碼後 token_version 已 +1）。"""
+    staff = make_staff(db_session)
+    s1 = _login(db_session, throttles, fake_clock, username=staff.username, password=_PASSWORD)
+    staff.token_version = 3
+    db_session.flush()
+
+    s2 = refresh(db_session, raw_refresh=s1.refresh_token, clock=fake_clock)
+
+    assert decode_access_token(s2.access_token, expected_type="staff", clock=fake_clock).token_version == 3
+
+
+def test_refresh_missing_cookie(db_session: Session, fake_clock: FakeClock) -> None:
+    with pytest.raises(AppError) as excinfo:
+        refresh(db_session, raw_refresh=None, clock=fake_clock)
+    assert excinfo.value.status == 401
+    assert excinfo.value.code == "unauthenticated"
+
+    with pytest.raises(AppError) as empty:
+        refresh(db_session, raw_refresh="", clock=fake_clock)
+    assert empty.value.code == "unauthenticated"
+
+
+def test_refresh_inactive_staff(
+    db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock
+) -> None:
+    staff = make_staff(db_session)
+    s1 = _login(db_session, throttles, fake_clock, username=staff.username, password=_PASSWORD)
+    staff.is_active = False
+    db_session.flush()
+
+    with pytest.raises(AppError) as excinfo:
+        refresh(db_session, raw_refresh=s1.refresh_token, clock=fake_clock)
+
+    assert excinfo.value.status == 401
+    assert excinfo.value.code == "unauthenticated"
+    _assert_family_revoked(db_session, s1.refresh_token, revoked=True)
+    # 撤銷在 raise 前已 commit（釋放 savepoint）：endpoint 的 rollback 不會把撤銷退回
+    db_session.rollback()
+    _assert_family_revoked(db_session, s1.refresh_token, revoked=True)
+
+
+def test_refresh_parent_token_rejected(db_session: Session, fake_clock: FakeClock) -> None:
+    parent = make_parent(db_session)
+    issued = issue(db_session, subject_type="parent", subject_id=parent.id, clock=fake_clock)
+
+    with pytest.raises(AppError) as excinfo:
+        refresh(db_session, raw_refresh=issued.raw, clock=fake_clock)
+
+    assert excinfo.value.status == 401
+    assert excinfo.value.code == "refresh_invalid"
+    _assert_family_revoked(db_session, issued.raw, revoked=True)
+
+
+def test_refresh_propagates_in_progress(
+    db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock
+) -> None:
+    staff = make_staff(db_session)
+    s1 = _login(db_session, throttles, fake_clock, username=staff.username, password=_PASSWORD)
+    refresh(db_session, raw_refresh=s1.refresh_token, clock=fake_clock)
+    fake_clock.advance(seconds=2)
+
+    with pytest.raises(AppError) as excinfo:
+        refresh(db_session, raw_refresh=s1.refresh_token, clock=fake_clock)
+    assert excinfo.value.status == 409
+    assert excinfo.value.code == "refresh_in_progress"
+    _assert_family_revoked(db_session, s1.refresh_token, revoked=False)
+
+    # 超過容忍時間再用舊 token：重用 → 401 refresh_reused，整個 family 撤銷
+    fake_clock.advance(seconds=10)
+    with pytest.raises(AppError) as reused:
+        refresh(db_session, raw_refresh=s1.refresh_token, clock=fake_clock)
+    assert reused.value.status == 401
+    assert reused.value.code == "refresh_reused"
+    _assert_family_revoked(db_session, s1.refresh_token, revoked=True)
+
+
+def test_refresh_propagates_revoked_and_invalid(
+    db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock
+) -> None:
+    staff = make_staff(db_session)
+    s1 = _login(db_session, throttles, fake_clock, username=staff.username, password=_PASSWORD)
+    revoke_family_by_raw(db_session, s1.refresh_token, clock=fake_clock)
+
+    with pytest.raises(AppError) as revoked:
+        refresh(db_session, raw_refresh=s1.refresh_token, clock=fake_clock)
+    assert revoked.value.code == "refresh_revoked"
+
+    with pytest.raises(AppError) as invalid:
+        refresh(db_session, raw_refresh="no-such-token", clock=fake_clock)
+    assert invalid.value.status == 401
+    assert invalid.value.code == "refresh_invalid"
