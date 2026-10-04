@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 169,
-  "last_updated": "2026-10-04T16:20:54Z",
+  "version": 170,
+  "last_updated": "2026-10-04T16:21:50Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1447,7 +1447,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/staff_auth.py",
       "source_ref": "BE:api/auth.py::refresh_token",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-041",
@@ -1455,7 +1455,7 @@
         "BACKEND-038"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：refresh 在「家長 token」與「帳號不存在 / 停用」兩個 401 路徑撤銷 family 後**在 raise 前 session.commit()**（與 BACKEND-037 rotate 重用偵測相同的例外做法）。理由：BACKEND-044 endpoint 只在成功時 commit、401 路徑 rollback，不先 commit 撤銷就會隨 rollback 退回、形同沒撤銷。若使用者不接受 service commit，改法是 BACKEND-044 在 401 路徑自行 commit 再回應。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/auth/test_staff_auth_service.py",
