@@ -3,7 +3,7 @@
 #
 # 依序：(1) 本機 DB / SeaweedFS（just db-start，docker compose up --wait 本身冪等）
 #       (2) API（預設 just api，port 8341）(3) Web（預設 just web，port 5341）
-# 背景服務以 nohup 啟動，pid / 指令 / log 寫在 var/run/<name>.pid、var/run/<name>.cmd、var/log/<name>.log。
+# 背景服務以 nohup 啟動且自成 process group（pgid == pid），pid / 指令 / log 寫在 var/run/<name>.pid、var/run/<name>.cmd、var/log/<name>.log。
 # pid 存活、命令列與 .cmd 相同且 port 可連線時視為已在執行、略過；port 未開則照常輪詢；
 # pid 已死或被其他程式重用時重新啟動。
 # 啟動後輪詢 port 最多 DEV_UP_WAIT_SECONDS 秒；服務提早結束或逾時 → 印 log 最後 20 行到 stderr 並 exit 1。
@@ -108,10 +108,13 @@ start_service() {
         exit 1
     fi
 
-    # exec 讓記錄的 pid 就是服務本身（不是包一層的 sh），之後才能以 ps 比對命令列
+    # 先 setsid 讓服務自成 session / process group（pgid == 記錄的 pid），dev_down 才能對整個
+    # 行程樹送訊號（just → uv → uvicorn 這類包裝會讓真正監聽 port 的是孫行程）；
+    # 再 exec 讓記錄的 pid 就是服務本身（不是包一層的 sh），之後才能以 ps 比對命令列
     (
         cd "$ROOT"
-        nohup sh -c "exec ${cmd}" > "$log" 2>&1 < /dev/null &
+        nohup python3 -c 'import os, sys; os.setsid(); os.execvp("sh", ["sh", "-c", "exec " + sys.argv[1]])' \
+            "$cmd" > "$log" 2>&1 < /dev/null &
         echo $! > "$pid_file"
     )
     printf '%s' "$cmd" > "$cmd_file"
