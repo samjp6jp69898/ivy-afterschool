@@ -47,3 +47,22 @@ jobs:
       - name: eslint
         working-directory: apps/web
         run: pnpm exec eslint .
+
+  typecheck:
+    name: Typecheck（mypy / vue-tsc）
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+
+      - name: mypy app
+        working-directory: apps/api
+        run: uv run --frozen --project apps/api mypy app
+
+      - name: mypy scripts
+        run: uv run --frozen --project apps/api mypy scripts --config-file apps/api/pyproject.toml
+
+      - name: vue-tsc
+        run: just web-typecheck
