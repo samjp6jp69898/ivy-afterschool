@@ -24,7 +24,9 @@ def test_promotion_preview_classify(db_session: Session) -> None:
     first = make_student(db_session, name="王小明", grade_level=1, class_=klass)
     fifth = make_student(db_session, name="陳小華", grade_level=5, status="suspended")
     sixth = make_student(db_session, name="林小安", grade_level=6)
-    withdrawn = make_student(db_session, name="張小芳", grade_level=3, status="withdrawn")
+    # DB CHECK：withdrawn 必須有 withdrawn_on，先建 active 再轉
+    withdrawn = make_student(db_session, name="張小芳", grade_level=3)
+    withdrawn.status = "withdrawn"
     withdrawn.withdrawn_on = date(2026, 7, 31)
     make_student(db_session, name="李小兵", grade_level=2, archived=True)
     db_session.flush()
