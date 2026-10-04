@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 144,
-  "last_updated": "2026-10-04T13:51:35Z",
+  "version": 145,
+  "last_updated": "2026-10-04T14:00:52Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -824,7 +824,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/support/factories.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6",
       "depends_on": [
         "BACKEND-030",
@@ -856,9 +856,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r6-backend",
+        "notes": "pass。4 條 red_case 各有對應測試且斷言具體值（有效權限集合、verify_password、system role is_system、student_no / username 唯一、guardian 綁定與 line_user_id 格式）；tdd.run 5 passed，collect-only 比對無遺漏；commit 79035d8（測試）先於 20920ca（實作）。介面與 description 一致；唯一值帶本行程隨機前綴（2029603）是合理的健壯化，不影響驗收。全程經 app_backend db_session 寫入，無 owner fallback。lint / mypy 乾淨。"
       }
     },
     {
@@ -1216,7 +1216,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/refresh_tokens.py",
       "source_ref": "BE:services/staff_refresh.py::rotate_refresh_token",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6",
       "depends_on": [
         "BACKEND-036",
@@ -1242,9 +1242,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r6-backend",
+        "notes": "pass。6 條 red_case 各有對應測試（含 committing_db_session 另開 app_backend 連線驗證撤銷已 commit、staff / parent token_version 由 0 → 1、其他 family 不受影響、warning 不含 raw）；tdd.run 7 passed；commit 0fc8984（測試）先於 2df9d32（實作）。reviewer 另以兩條 app_backend 連線 + threads 構造反例全部通過：同一 raw 併發 rotate 恰一個成功、另一個 409 且 family 不撤銷；超過 5 秒後兩執行緒併發重放 → 一個 refresh_reused、一個 refresh_revoked，token_version 恰 +1 （不是 +2）；剛好 5 秒仍算 race window、剛好 expires_at == now 視為過期。實作者自述偏離：後繼列不存在視為重用（fail-closed）合理，但實務上到不了——refresh_tokens.replaced_by 為 on delete set null，後繼列被清理時前任列的 replaced_by 一併變 null；而後繼列可被清理代表已過期 / 撤銷 逾 7 天，前任列必然更早過期或同時被撤銷，重放會走 refresh_expired / refresh_revoked，無可利用路徑。殘留（不擋）：(1) 重用分支 session.commit() 之後才取 token 屬性寫 warning，正式環境 expire_on_commit=True 會多發一次 SELECT 刷新，可改為 commit 前先取值；(2) 重用分支先鎖舊列再鎖整個 family，與同時進行的 revoke_all_for_subject 理論上可能 deadlock（PG 會中止其一回 500），機率極低且與 ivy 相同；(3) 已過期的 token 即使 replaced_by 非 null 也只回 refresh_expired、不撤銷 family，符合 description 的檢查順序。"
       }
     },
     {
@@ -1254,7 +1254,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/refresh_tokens.py",
       "source_ref": "BE:services/staff_refresh.py::revoke_family",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6",
       "depends_on": [
         "BACKEND-036"
@@ -1276,9 +1276,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r6-backend",
+        "notes": "pass。3 條 red_case 各有對應測試（f1 兩列 == 2、f2 不受影響、'nope' 回 0；同 uuid 不同 subject_type 不波及；第二次回 0 且不覆寫原 revoked_at）；tdd.run 3 passed；commit a943c72（測試）先於 9bec25f（實作）。reviewer 以真併發驗證 ivy F14：rotate 持有舊列鎖、後繼列尚未 commit 時呼叫 revoke_all_for_subject，等鎖後回 2 且輪替出的新 raw 立即 refresh_revoked，證明「先 select for update 再 update」確實撤到後繼列。兩方法皆不 commit、不動 token_version。lint / mypy 乾淨。"
       }
     },
     {
@@ -2336,7 +2336,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/jobs/auth_cleanup.py",
       "source_ref": "BE:api/parent_portal/auth.py::gc_expired_refresh_tokens",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6",
       "depends_on": [
         "BACKEND-018",
@@ -2358,9 +2358,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r6-backend",
+        "notes": "pass。2 條 red_case 各有對應測試（過期 8 天 / 撤銷 8 天刪、過期 6 天 / 未過期留；JOB_REGISTRY 有 auth.refresh_token_cleanup、CronTrigger hour=3 minute=30 Asia/Taipei、run_key 為 daily_run_key）；另有邊界（剛好 7 天保留、7 天 + 1 秒刪）、replaced_by 自參照 set null、批次上限等補充測試；tdd.run 5 passed；commit 3f93982（測試）先於 8db305a（實作）。偏離合理：cleanup_refresh_tokens 回 int 給測試，另以 run_refresh_token_cleanup 包一層掛 @scheduled_job （JobFunc 型別要求回 None），只 flush 不 commit，符合 risk_notes 對 advisory xact lock 的要求；app/jobs/__init__.py 已 import，lifespan 以 import app.jobs 觸發註冊。"
       }
     },
     {
@@ -4291,7 +4291,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/service_calendar.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6",
       "depends_on": [
         "BACKEND-108",
@@ -4316,9 +4316,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r6-backend",
+        "notes": "pass。5 條 red_case 各有對應測試；tdd.run 5 passed；commit ba0a812（測試）先於 d9e029d（實作）。實作者修正 red_case test_service_calendar_list 的預期值為 [9/1, 9/2, 9/4, 9/7] 正確（2026-09-07 為週一、seed 預設週一營業），tasks.json 已同步。list_service_days 以 before_cursor_execute 計數驗證 closed_days 只查一次；區間 end < start、367 天 ValueError、剛好 366 天可用。週六依設定（jsonb_set 改 sat.open 後反映）。"
       }
     },
     {
@@ -4328,7 +4328,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/public_config_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6",
       "depends_on": [
         "BACKEND-108"
@@ -4350,9 +4350,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r6-backend",
+        "notes": "pass。3 條 red_case 各有對應測試；tdd.run 4 passed；commit 6041611（測試）先於 ab0a15d（實作）。輸出 model 欄位固定（PublicConfigOut.model_fields 恰為 6 個），PUBLIC_SOURCES 逐欄對應 registry 並有測試斷言每一欄都在 public_fields、不在 secret_fields、來源 key 皆非 is_secret；line.messaging 密文、channel_secret、line.liff.channel_id 寫入後 model_dump 不含 'tok-123' / 'v1:' / 'channel' / channel_id 值；put 後 invalidate_setting 立即反映。add_friend_url 空字串轉 None、logo_url HttpUrl 轉 str。"
       }
     },
     {
@@ -6730,7 +6730,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/channels/line.py",
       "source_ref": "BE:services/notification/_channels/line.py::LineAdapter",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6",
       "depends_on": [
         "BACKEND-108"
@@ -6753,9 +6753,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r6-backend",
+        "notes": "pass。4 條 red_case 各有對應測試（MockTransport 擷取 POST URL、Authorization、X-Line-Retry-Key、JSON body；200 / 409 ok；429 / 503 / 500 / ReadTimeout / ConnectError retryable；400 / 401 / 403 / 404 不可重試且 error 含 status、不含 token）；另有 error 截 2000 字與回應 / 例外訊息夾帶 token 時遮罩、build_line_client 未設定回 None 的補充測試；tdd.run 6 passed（unit，disable_socket 下 MockTransport 不開 socket）；commit 989438c（測試）先於 7c9056e（實作）。token 外洩檢查：logger.warning 只記例外型別 / status / retryable / retry_key；回傳的 error 一律經 _sanitize（token 換 ***）；例外被捕捉不送 Sentry，且 app 的 before_send scrubber 另有一層。殘留（不擋）：HttpLineMessagingClient 持有 httpx.Client 但沒有 close() / context manager，呼叫端（BACKEND-209 outbox 投遞）若每批重建 client 會累積連線，建議提供 close 或在呼叫端長期持有單一實例。"
       }
     },
     {
