@@ -16,6 +16,7 @@ from tests.integration.db.conftest import (
 from tests.integration.db.factories import make_parent_binding_codes
 
 CODE_HASH = "a" * 64
+USED_AT = datetime(2026, 10, 5, 10, 0, tzinfo=UTC)
 
 
 def test_parent_binding_codes_code_hash_unique(backend_conn: Conn) -> None:
@@ -63,14 +64,12 @@ def test_parent_binding_codes_grants(owner_conn: Conn, backend_conn: Conn) -> No
     assert_backend_grants(owner_conn, "public.parent_binding_codes")
 
     row = make_parent_binding_codes(backend_conn)
-    assert_backend_read_write(
-        backend_conn, "public.parent_binding_codes", row, used_at=datetime.now(UTC)
-    )
+    assert_backend_read_write(backend_conn, "public.parent_binding_codes", row, used_at=USED_AT)
 
 
 def test_parent_binding_codes_updated_at_trigger(backend_conn: Conn) -> None:
     row = make_parent_binding_codes(backend_conn, updated_at=SEEDED_UPDATED_AT)
 
     assert_updated_at_trigger(
-        backend_conn, "public.parent_binding_codes", row["id"], used_at=datetime.now(UTC)
+        backend_conn, "public.parent_binding_codes", row["id"], used_at=USED_AT
     )

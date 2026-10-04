@@ -5,7 +5,7 @@
 """
 
 import secrets
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -223,7 +223,7 @@ def make_parent_binding_codes(conn: psycopg.Connection[Any], **overrides: Any) -
     defaults = {
         "guardian_id": overrides.get("guardian_id") or make_guardians(conn)["id"],
         "code_hash": secrets.token_hex(32),
-        "expires_at": datetime.now(UTC) + timedelta(days=7),
+        "expires_at": datetime(2099, 1, 1, tzinfo=UTC),
         "created_by": overrides.get("created_by") or make_staff_users(conn)["id"],
     }
     return insert_row(conn, "public.parent_binding_codes", **{**defaults, **overrides})
