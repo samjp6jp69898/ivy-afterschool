@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, UTC
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 import pytest
@@ -38,7 +38,14 @@ def test_parent_children_schemas_fields() -> None:
 
 
 def test_parent_children_schemas_no_sensitive() -> None:
-    forbidden = {"id_number", "health_note", "note", "id_number_enc", "id_number_hmac", "student_no"}
+    forbidden = {
+        "id_number",
+        "health_note",
+        "note",
+        "id_number_enc",
+        "id_number_hmac",
+        "student_no",
+    }
     for model in (ChildDetailOut, ChildSummaryOut, ParentMeOut, ChildGuardianOut):
         assert forbidden.isdisjoint(model.model_fields), model.__name__
 
@@ -63,7 +70,9 @@ def test_parent_children_schemas_today_fields() -> None:
 
 def test_parent_children_schemas_today_value_domains() -> None:
     for status in ("expected", "present", "left", "absent", "leave", None):
-        assert TodayAttendanceOut(status=status, check_in_at=None, check_out_at=None).status == status
+        assert (
+            TodayAttendanceOut(status=status, check_in_at=None, check_out_at=None).status == status
+        )
     with pytest.raises(ValidationError):
         TodayAttendanceOut(status="late", check_in_at=None, check_out_at=None)
     with pytest.raises(ValidationError):
@@ -72,9 +81,12 @@ def test_parent_children_schemas_today_value_domains() -> None:
         TodayHomeworkOut(
             item_count=1, done_count=0, overall_status="done", ready_eta="25:00", note=None
         )
-    assert TodayHomeworkOut(
-        item_count=2, done_count=1, overall_status="in_progress", ready_eta="17:30", note=None
-    ).ready_eta == "17:30"
+    assert (
+        TodayHomeworkOut(
+            item_count=2, done_count=1, overall_status="in_progress", ready_eta="17:30", note=None
+        ).ready_eta
+        == "17:30"
+    )
     with pytest.raises(ValidationError):
         TodayPickupRequestOut(
             id=uuid4(), status="requested", expected_arrival_at="1730", reply_ready_eta=None,
