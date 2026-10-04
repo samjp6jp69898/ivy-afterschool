@@ -6,7 +6,8 @@ cancelled 擴充為六態（加 arrived、expired），新增自動回覆欄位�
 classroom_id、bus 來源、client_request_id（同學生同日非終態唯一已防重複送出）。
 
 BACKEND 建立請求遇到 23505（uq_pickup_requests_one_open）要轉成 409 業務錯誤；狀態轉換的合法性由
-BACKEND 守，DB 只保證欄位一致性。
+BACKEND 守，DB 只保證欄位一致性。replied_by 為 restrict（員工只停用不硬刪，且
+ck_pickup_requests_reply 要求 staff 回覆必有 replied_by）；completed_by 為 set null。
 
 Revision ID: db025
 Revises: db038
@@ -40,7 +41,7 @@ STATEMENTS = (
         reply_message text null,
         reply_source text null,
         replied_at timestamptz null,
-        replied_by uuid null references public.staff_users (id) on delete set null,
+        replied_by uuid null references public.staff_users (id) on delete restrict,
         arrived_at timestamptz null,
         completed_at timestamptz null,
         completed_by uuid null references public.staff_users (id) on delete set null,
