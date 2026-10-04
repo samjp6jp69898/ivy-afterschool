@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 232,
-  "last_updated": "2026-10-04T17:00:48Z",
+  "version": 233,
+  "last_updated": "2026-10-04T17:01:13Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1556,7 +1556,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/auth.py",
       "source_ref": "BE:api/auth.py::logout",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-045",
@@ -1581,9 +1581,9 @@
         "notes": "本 endpoint 無 body、不需登入，422 與 401 不適用；以多裝置隔離作為業務案例。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（另有 unknown_refresh_cookie_200），tdd.run 6 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作。endpoint 讀 staff_refresh cookie（path /api/admin/auth，logout 路徑收得到）→ revoke_family_by_raw → commit → 清兩個 cookie；無 cookie、垃圾 cookie 皆 200；外站 Origin 403。對「協調者待使用者確認」的建議：在 service 層驗「logout 後舊 refresh rotate → 401 refresh_revoked」「另一裝置仍可 rotate」足以驗收 046——本 task 的責任是 endpoint 確實讀到 cookie、撤銷正確的 family 並 commit，測試在 endpoint 呼叫後以 DB 狀態證明了這三件事；refresh endpoint 的 401 映射屬 BACKEND-044，協調者已在 044 risk_notes 要求補 endpoint 層案例，同意。"
       }
     },
     {
@@ -1635,7 +1635,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/auth.py",
       "source_ref": "BE:api/auth.py::get_me",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-047",
@@ -1661,9 +1661,9 @@
         "notes": "me 只需登入、無輸入：403 以「家長 token 打後台」驗證在 401 案例；422 不適用。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（另有 permissions_sorted_with_extra_and_revoked），tdd.run 6 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作。permissions 取自 CurrentStaff 的有效權限並排序；extra / revoked、admin * 展開為 Permission 全部值、強制改密碼帳號仍 200、停用帳號 401、家長 cookie 401 皆有測。"
       }
     },
     {
@@ -2884,7 +2884,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/roles.py",
       "source_ref": "BE:api/permissions_admin.py::delete_role",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-080",
@@ -2909,9 +2909,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（另有 404、guard_registered），tdd.run 7 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作。require_permission(roles:write)，204 後 GET /roles 不含該角色；系統角色 / 使用中 409、非 uuid 422、roles:read 只讀 403；admin_routes_without_permission == []。"
       }
     },
     {
@@ -2921,7 +2921,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/roles.py",
       "source_ref": "BE:api/auth.py::get_permissions",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-070",
@@ -2947,9 +2947,9 @@
         "notes": "GET 無輸入，422 與業務錯誤不適用。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（另有 guard_registered），tdd.run 6 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作。目錄依 PERMISSION_GROUPS 順序、label 直接取 PERMISSION_LABELS。red_case label 改為「查看與寫入身分證、健康備註」正確：BACKEND-070 的 PERMISSION_LABELS[STUDENTS_SENSITIVE] 與 domain_spec 權限碼表（students:sensitive 列）都是這個字串，原 red_case 是筆誤。不需問使用者。"
       }
     },
     {
@@ -4181,7 +4181,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/reference.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-116",
@@ -4206,9 +4206,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（四資源 parametrize；403 對 settings:read / students:read / exams:read 各跑一次，另有 409、guard_registered），tdd.run 26 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作。以 __annotations__ 指定 body 型別經實測生效：app.openapi() 中四個 POST 的 requestBody 分別為 NamedItemCreateIn（subjects / exam-types，name maxLength 20）、SchoolCreateIn（name 50、short_name 20）、ClosedDayCreateIn（reason 100），additionalProperties 皆為 false；422 測試含空名與多餘欄位。寫入只認 settings:write（WRITE_PERMISSION，require_permission），讀取仍為 119 的任一讀取權限，route audit == []。對「協調者待使用者確認」的建議：執行期設 __annotations__ 的做法可接受（OpenAPI 與驗證都正確）；121 / 122 比照時記得各自指定 body 型別與寫入權限。不需問使用者。"
       }
     },
     {
@@ -5842,7 +5842,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/guardian_service.py",
       "source_ref": "BE:api/students.py::create_guardian",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-168"
@@ -5864,9 +5864,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。3 條 red_case 對應同名測試（另有 non_primary_keeps_existing_primary、student_not_found），tdd.run 5 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作。互斥靠 get_student_or_404(for_update=True) 鎖學生列序列化同一學生的監護人異動，再「先 update 其他 primary 為 false、後 insert」；兩個併發的 is_primary=True 新增會被學生列鎖排隊，後者把前者改為非 primary，不會撞 uq_guardians_one_primary。突變（拿掉取消舊 primary → 23505、封存學生不擋）皆轉紅。partial unique 只是最後防線：只有在其他路徑不取同一把鎖時才會冒出 23505（目前會以全域 handler 的通用 409 conflict 回應），建議協調者在 BACKEND-170 / 171（update / archive guardian）的 risk_notes 註明比照本 task 先鎖學生列、primary 切換先 update 再寫入。對「協調者待使用者確認」的建議：clock 依簽名保留未用可接受。不需問使用者。殘留：取消舊 primary 的 update 已限定未封存列；把條件改成連封存列一起取消的突變觀測不到（封存列的 is_primary 無業務意義）。"
       }
     },
     {
@@ -5982,7 +5982,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::list_guardians",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-168",
@@ -6009,9 +6009,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（另有 archived_student、guard_registered），tdd.run 7 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作。require_permission(students:read)；path 非 uuid 422、不存在 404、封存學生可查；守衛 dependency 先於 path 驗證，未登入先得 401。"
       }
     },
     {
@@ -6355,7 +6355,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_children_service.py",
       "source_ref": "BE:api/parent_portal/profile.py::get_child_profile",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-182",
@@ -6377,9 +6377,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。2 條 red_case 對應同名測試（另有 withdrawn_still_readable），tdd.run 3 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作。IDOR 由 assert_parent_owns_student（BACKEND-180）負責，description 明文要求，實作第一行即呼叫；他人小孩 404 student_not_found 有測，拿掉該呼叫的突變轉紅。my_guardian 以 student_id + parent_account_id + 未封存查詢；測試同學生另有他人家長的 guardian（relation father、can_pickup False），把查詢改成不限家長的突變轉紅，不會回傳別人的 guardian 設定。輸出不含 id_number / health_note / note 有斷言。對「協調者待使用者確認」的建議：重用 list_children 取摘要欄位可接受（家長小孩數少，且與列表輸出一致）。不需問使用者。殘留：assert_parent_owns_student 與 list_children 是兩次查詢，若兩者之間剛好有人解除綁定並 commit，next() 會拋 StopIteration 變成 500（機率極低）。"
       }
     },
     {
