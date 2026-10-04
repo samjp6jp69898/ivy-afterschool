@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 151,
-  "last_updated": "2026-10-04T14:54:13Z",
+  "version": 152,
+  "last_updated": "2026-10-04T14:56:16Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2590,13 +2590,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/roles.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "[review-r6-schemas 打回] app/schemas/common.py 的 RequestModel 接受含 NUL（\\x00）的字串：例如 RoleCreateIn(code='front_desk', name='櫃\\x00台', permissions=[]) 通過驗證，寫入 roles.name 時 psycopg 拋 DataError，errors.py 只轉譯 IntegrityError，結果是 500 而不是 422（本機以 app_backend 實測 subjects.name='a\\x00b' 得到 DataError）。要求：RequestModel 拒絕所有 str 輸入（含 list[str] 元素，例如 RoleCreateIn.permissions）中的 \\x00 → ValidationError；test_common_schemas.py 補對應測試（str 欄位與 list[str] 元素各一），並確認既有 schemas 測試仍全綠。",
+      "risk_notes": "[review-r6-schemas 打回] app/schemas/common.py 的 RequestModel 接受含 NUL（\\x00）的字串：例如 RoleCreateIn(code='front_desk', name='櫃\\x00台', permissions=[]) 通過驗證，寫入 roles.name 時 psycopg 拋 DataError，errors.py 只轉譯 IntegrityError，結果是 500 而不是 422（本機以 app_backend 實測 subjects.name='a\\x00b' 得到 DataError）。要求：RequestModel 拒絕所有 str 輸入（含 list[str] 元素，例如 RoleCreateIn.permissions）中的 \\x00 → ValidationError；test_common_schemas.py 補對應測試（str 欄位與 list[str] 元素各一），並確認既有 schemas 測試仍全綠。\n[review-r6-schemas 複審打回] common.py 的 _contains_nul 以遞迴走訪 list / dict，使用者送出巢狀約 500 層以上的 JSON（例如在任一 body 多帶一個深層巢狀的欄位，或 SettingPutIn.value 深層巢狀）時拋 RecursionError，全域 handler 轉成 500（實測 600 層 → 500，修正前同輸入為 422）。要求：改成不依賴 Python 遞迴的走訪（例如明確的 stack），任何深度都不得拋 RecursionError；test_common_schemas.py 補測試：(1) 巢狀 1000 層的合法輸入不拋 RecursionError（多帶欄位時仍是 extra_forbidden 的 ValidationError）；(2) 巢狀 1000 層最底端含 \\x00 → ValidationError；(3) 巢狀 dict 的值與 key 含 \\x00 → ValidationError（目前只實測過、沒有測試保護，BACKEND-110 的 risk_notes 依賴這個行為）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_role_schemas.py",
@@ -2614,7 +2614,7 @@
       "review": {
         "status": "concern",
         "reviewer": "review-r6-schemas",
-        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同（每條 red_case 均被選到）；test(schemas) commit 早於 feat(schemas) commit，綠燈 commit 對測試只有格式化或等價改寫；ruff / mypy 只對 27 個異動檔執行，乾淨。角色 code pattern / name / description / permissions 與 DB-003 一致，UpdateModel 行為（至少一欄、只有 nullable_fields 可給 null）符合補進 description 的規格。打回：共用基底 RequestModel 對 str 欄位接受 NUL（\\x00），寫入 text 欄位時 psycopg 拋 DataError（非 IntegrityError），app/core/errors.py 只把 IntegrityError 轉 409，其餘落到 500。已在本機 DB 以 app_backend 實測（rollback）：insert subjects name='a\\x00b' → sqlalchemy.exc.DataError「PostgreSQL text fields cannot contain NUL (0x00) bytes」。本批所有 request schema 都繼承 RequestModel，在這裡修一次即可。"
+        "notes": "複審（accad06 紅燈 → be7983a 實作，測試先於實作）：tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同；ruff / mypy 只對 9 個異動檔執行，乾淨；其餘 8 個 schemas 測試檔與 test_common_schemas 一併重跑全綠。原打回項（NUL）已修：str 欄位、list[str] 元素、巢狀 dict 的值與 key 都會拒絕，回 ValidationError；UpdateModel 規則與 Out schema（from_attributes）不受影響。再次打回：修正引入新的 500 路徑。_contains_nul 以遞迴實作，每層約用兩個 Python frame，輸入巢狀約 500 層以上就拋 RecursionError（不是 ValidationError），errors.py 會轉成 500。修正前 pydantic-core 對同樣輸入回 422。實測：以 register_exception_handlers 掛上的 FastAPI app，POST NamedItemCreateIn body {'name':'數學','junk':[[[…600 層…]]]} → 500 internal_error（修正前為 422 extra_forbidden；450 層仍為 422）。所有繼承 RequestModel 的 endpoint 都受影響，含家長端。"
       }
     },
     {
@@ -3970,13 +3970,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/reference.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "BACKEND-100"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "[review-r6-schemas 打回] NamedItemCreateIn / NamedItemUpdateIn 的 sort_order 只有 ge=0：sort_order=2147483648 通過 schema，寫入 subjects / exam_types.sort_order（integer）時 psycopg 拋 NumericValueOutOfRange（sqlalchemy DataError，非 IntegrityError），errors.py 轉成 500。要求：sort_order 加上不超過 2147483647 的上限（可取更小的業務上限），create 與 update 都要；test_reference_schemas.py 補上限邊界測試（上限值通過、上限 +1 → ValidationError）。",
+      "risk_notes": "RequestModel 的 NUL 檢查（BACKEND-076）目前以遞迴實作，深層巢狀輸入會 RecursionError → 500，修正追蹤於 BACKEND-076；本 task 不需改動。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_reference_schemas.py",
@@ -3992,9 +3992,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r6-schemas",
-        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同（每條 red_case 均被選到）；test(schemas) commit 早於 feat(schemas) commit，綠燈 commit 對測試只有格式化或等價改寫；ruff / mypy 只對 27 個異動檔執行，乾淨。name / short_name / reason 長度與 DB-008~011 CHECK 一致，ClosedDayUpdateIn 不接受 date，SPECS 四資源設定與 order_by 正確。打回：sort_order 只有 ge=0 沒有上限，2147483648 能通過 schema，寫入 integer 欄位得到 NumericValueOutOfRange（DataError）→ 500。已在本機 DB 以 app_backend 實測（rollback）。"
+        "notes": "複審（accad06 紅燈 → be7983a 實作，測試先於實作）：tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同；ruff / mypy 只對 9 個異動檔執行，乾淨；其餘 8 個 schemas 測試檔與 test_common_schemas 一併重跑全綠。打回項已修：NamedItemCreateIn / NamedItemUpdateIn 的 sort_order 改用 common.SortOrder（0~2147483647），上限通過、上限 +1 拒絕，create / update 都有測試；UpdateModel 的「至少一欄」與 sort_order 不可給 null 仍成立。"
       }
     },
     {
@@ -4554,13 +4554,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/classes.py",
       "source_ref": "BE:api/classrooms.py::ClassroomCreate",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "[review-r6-schemas 打回] ClassCreateIn / ClassUpdateIn 的 sort_order 只有 ge=0：sort_order=2147483648 通過 schema，寫入 classes.sort_order（integer）時拋 NumericValueOutOfRange（sqlalchemy DataError）→ errors.py 轉成 500（同型反例已在本機 DB 實測）。要求：create 與 update 的 sort_order 加上不超過 2147483647 的上限；test_class_schemas.py 補上限邊界測試。",
+      "risk_notes": "RequestModel 的 NUL 檢查（BACKEND-076）目前以遞迴實作，深層巢狀輸入會 RecursionError → 500，修正追蹤於 BACKEND-076；本 task 不需改動。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_class_schemas.py",
@@ -4576,9 +4576,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r6-schemas",
-        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同（每條 red_case 均被選到）；test(schemas) commit 早於 feat(schemas) commit，綠燈 commit 對測試只有格式化或等價改寫；ruff / mypy 只對 27 個異動檔執行，乾淨。name btrim 1~30、grade_levels 1~6 至少一個不重複並排序、academic_year 100~200 與 DB-012 CHECK 一致；ClassStaffPutIn ≤20 且不重複，role 值域與 DB-013 一致。打回：sort_order 只有 ge=0 沒有上限，2147483648 寫入 classes.sort_order（integer）會 DataError → 500。"
+        "notes": "複審（accad06 紅燈 → be7983a 實作，測試先於實作）：tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同；ruff / mypy 只對 9 個異動檔執行，乾淨；其餘 8 個 schemas 測試檔與 test_common_schemas 一併重跑全綠。打回項已修：ClassCreateIn / ClassUpdateIn 的 sort_order 改用 SortOrder，上限邊界 create / update 都有測試。"
       }
     },
     {
@@ -12003,13 +12003,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/exams.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "[review-r6-schemas 打回] ExamSubjectIn.sort_order 只有 ge=0：sort_order=2147483648 通過 schema，寫入 exam_subjects.sort_order（integer）時拋 NumericValueOutOfRange（sqlalchemy DataError）→ errors.py 轉成 500（同型反例已在本機 DB 實測）。要求：sort_order 加上不超過 2147483647 的上限；test_exam_schemas.py 補上限邊界測試。",
+      "risk_notes": "RequestModel 的 NUL 檢查（BACKEND-076）目前以遞迴實作，深層巢狀輸入會 RecursionError → 500，修正追蹤於 BACKEND-076；本 task 不需改動。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_exam_schemas.py",
@@ -12027,9 +12027,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r6-schemas",
-        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同（每條 red_case 均被選到）；test(schemas) commit 早於 feat(schemas) commit，綠燈 commit 對測試只有格式化或等價改寫；ruff / mypy 只對 27 個異動檔執行，乾淨。ExamCreateIn 範圍必填對齊 ck_exams_scope、name btrim 1~50 / note ≤500 / grade_level 1~6 對齊 DB-026；Score / FullScore 範圍與 numeric(6,2) 一致（NaN / Infinity / 3 位小數拒絕）；Out 的 Decimal 序列化為 number；ExamOut.class_ 以 alias class 輸出，from_attributes 下讀 class_ 屬性亦可。score 與 is_absent 併存依規格由 BACKEND-460 回 absent_with_score，schema 不檢查可接受。打回：ExamSubjectIn.sort_order 只有 ge=0 沒有上限，2147483648 寫入 exam_subjects.sort_order（integer）會 DataError → 500。"
+        "notes": "複審（accad06 紅燈 → be7983a 實作，測試先於實作）：tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同；ruff / mypy 只對 9 個異動檔執行，乾淨；其餘 8 個 schemas 測試檔與 test_common_schemas 一併重跑全綠。打回項已修：ExamSubjectIn.sort_order 改用 SortOrder，上限邊界有測試。"
       }
     },
     {
