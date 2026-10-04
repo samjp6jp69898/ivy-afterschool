@@ -1,4 +1,5 @@
 """BACKEND-033：app/core/security/tokens.py（access token 簽發與驗證）。
+BACKEND-540：簽章合法但 claim 型別異常一律 UnauthenticatedError。
 
 HS256、typ 區分員工 / 家長、token_version、以注入的 clock 判斷過期。
 """
@@ -183,3 +184,58 @@ def test_tokens_claims_are_aware_datetimes(fake_clock: FakeClock) -> None:
     assert isinstance(claims.subject_id, UUID)
     assert claims.issued_at.tzinfo is UTC
     assert claims.expires_at == datetime(2026, 9, 1, 1, 15, tzinfo=UTC)
+
+
+# --- BACKEND-540：claim 型別異常 -----------------------------------------------------------
+
+
+def _signed(fake_clock: FakeClock, **overrides: object) -> str:
+    return jwt.encode(_claims(fake_clock, **overrides), derive_key(LABEL_JWT), algorithm="HS256")
+
+
+def test_tokens_claim_types_typ_not_str(fake_clock: FakeClock) -> None:
+    for typ in (["staff"], {"a": "staff"}, 1, True):
+        with pytest.raises(UnauthenticatedError):
+            decode_access_token(
+                _signed(fake_clock, typ=typ), expected_type="staff", clock=fake_clock
+            )
+    null_typ = jwt.encode(
+        {**_claims(fake_clock), "typ": None}, derive_key(LABEL_JWT), algorithm="HS256"
+    )
+    with pytest.raises(UnauthenticatedError):
+        decode_access_token(null_typ, expected_type="staff", clock=fake_clock)
+
+
+def test_tokens_claim_types_exp_overflow(fake_clock: FakeClock) -> None:
+    for exp, iat in ((10**20, 10**20), (10**20, 1), (1, 10**20), (-(10**20), 1)):
+        token = _signed(fake_clock, exp=exp, iat=iat)
+        with pytest.raises(UnauthenticatedError):
+            decode_access_token(token, expected_type="staff", clock=fake_clock)
+    # 非整數時間
+    for exp in ("later", 1.5, [1]):
+        with pytest.raises(UnauthenticatedError):
+            decode_access_token(
+                _signed(fake_clock, exp=exp), expected_type="staff", clock=fake_clock
+            )
+
+
+def test_tokens_claim_types_tv_bool(fake_clock: FakeClock) -> None:
+    for tv in (True, False, 1.0, "1", [1]):
+        with pytest.raises(UnauthenticatedError):
+            decode_access_token(_signed(fake_clock, tv=tv), expected_type="staff", clock=fake_clock)
+
+
+def test_tokens_claim_types_jti_missing_or_empty(fake_clock: FakeClock) -> None:
+    claims = _claims(fake_clock)
+    del claims["jti"]
+    missing = jwt.encode(claims, derive_key(LABEL_JWT), algorithm="HS256")
+    with pytest.raises(UnauthenticatedError):
+        decode_access_token(missing, expected_type="staff", clock=fake_clock)
+    for jti in ("", 123, ["x"]):
+        with pytest.raises(UnauthenticatedError):
+            decode_access_token(
+                _signed(fake_clock, jti=jti), expected_type="staff", clock=fake_clock
+            )
+    # sub 不是字串
+    with pytest.raises(UnauthenticatedError):
+        decode_access_token(_signed(fake_clock, sub=123), expected_type="staff", clock=fake_clock)
