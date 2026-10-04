@@ -12,7 +12,7 @@
      preview-route  : 對應的家長端路由 path；元件稿寫 component:<相對路徑>
      preview-updated: 最後更新日期 YYYY-MM-DD
      ============================================================ -->
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-051">
 <meta name="preview-route" content="component:parent/components/StatusPill.vue">
 <meta name="preview-updated" content="2026-10-04">
@@ -50,6 +50,8 @@
   --m3-on-tertiary: #ffffff;
   --m3-tertiary-container: #beeaf7;
   --m3-on-tertiary-container: #001f26;
+  --m3-warning-container: #ffddb0;
+  --m3-on-warning-container: #2b1700;
   --m3-error: #ba1a1a;
   --m3-on-error: #ffffff;
   --m3-error-container: #ffdad6;
@@ -111,6 +113,44 @@
   --preview-warning-border: #f3d19e;
   --preview-success: #67c23a;
   --preview-device: #1f1f1f;
+}
+:root[data-theme='dark'] {
+  --m3-primary: #6ddc97;
+  --m3-on-primary: #00391d;
+  --m3-primary-container: #00522c;
+  --m3-on-primary-container: #89f9b1;
+  --m3-secondary: #b6ccb9;
+  --m3-on-secondary: #223527;
+  --m3-secondary-container: #384b3d;
+  --m3-on-secondary-container: #d2e8d4;
+  --m3-tertiary: #a2cdda;
+  --m3-on-tertiary: #023640;
+  --m3-tertiary-container: #214c57;
+  --m3-on-tertiary-container: #beeaf7;
+  --m3-error: #ffb4ab;
+  --m3-on-error: #690005;
+  --m3-error-container: #93000a;
+  --m3-on-error-container: #ffb4ab;
+  --m3-background: #191c19;
+  --m3-on-background: #e1e3de;
+  --m3-surface: #191c19;
+  --m3-on-surface: #e1e3de;
+  --m3-surface-variant: #414942;
+  --m3-on-surface-variant: #c0c9bf;
+  --m3-outline: #8b938a;
+  --m3-outline-variant: #414942;
+  --m3-warning-container: #5b3a00;
+  --m3-on-warning-container: #ffddb0;
+  --m3-shadow: #000000;
+  --m3-scrim: #000000;
+  --m3-inverse-surface: #e1e3de;
+  --m3-inverse-on-surface: #2e312e;
+  --m3-inverse-primary: #006d3d;
+  --m3-surface-container-lowest: #0c0f0c;
+  --m3-surface-container-low: #191c19;
+  --m3-surface-container: #1d201d;
+  --m3-surface-container-high: #282b28;
+  --m3-surface-container-highest: #333532;
 }
 
 * { box-sizing: border-box; }
@@ -313,14 +353,10 @@ button { font: inherit; }
 .status-pill.has-icon { padding-left: 8px; }
 .status-pill__label { overflow: hidden; text-overflow: ellipsis; }
 .status-pill--success { background: var(--m3-primary-container); color: var(--m3-on-primary-container); }
-.status-pill--warning { background: var(--m3-tertiary-container); color: var(--m3-on-tertiary-container); }
+.status-pill--warning { background: var(--m3-warning-container); color: var(--m3-on-warning-container); }
 .status-pill--danger { background: var(--m3-error-container); color: var(--m3-on-error-container); }
 .status-pill--info { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
 .status-pill--neutral { background: var(--m3-surface-container-high); color: var(--m3-on-surface); }
-/* 選項 B 預覽專用：目前沒有這組 token，只存在於稿 */
-.status-pill--warning-alt { background: var(--preview-alt-warning-bg); color: var(--preview-alt-warning-fg); }
-:root { --preview-alt-warning-bg: #ffddb0; --preview-alt-warning-fg: #2b1700; }
-:root[data-theme='dark'] { --preview-alt-warning-bg: #5b3a00; --preview-alt-warning-fg: #ffddb0; }
 
 .demo__caption { margin: 20px 0 8px; color: var(--m3-on-surface-variant); }
 .demo__caption:first-child { margin-top: 4px; }
@@ -423,15 +459,6 @@ button { font: inherit; }
             <div class="demo-code">外層寬度不足時，膠囊縮窄並在文字尾端以 … 省略（max-width: 100%）。</div>
           </section>
 
-          <div class="section-title m3-label-large">待裁定：warning 色（選項 B 預覽）</div>
-          <section class="m3-card" aria-label="warning 比較">
-            <div class="demo-grid" style="grid-template-columns: 112px 1fr">
-              <span class="demo-grid__tone m3-label-medium">A tertiary-container（藍青）</span>
-              <span><status-pill label="待回覆" tone="warning" icon="schedule"></status-pill> <status-pill label="已到班" tone="success" icon="check_circle"></status-pill> <status-pill label="已確認" tone="info"></status-pill></span>
-              <span class="demo-grid__tone m3-label-medium">B 新增琥珀 token</span>
-              <span><status-pill label="待回覆" tone="warning-alt" icon="schedule"></status-pill> <status-pill label="已到班" tone="success" icon="check_circle"></status-pill> <status-pill label="已確認" tone="info"></status-pill></span>
-            </div>
-          </section>
           <!-- ============ PAGE CONTENT 結束 ============ -->
         </main>
 
@@ -547,16 +574,15 @@ const app = createApp({
     // 這張稿已經定下來的設計決定，逐條寫，實作時照這個做。
     const decisions = [
       'tone 與 FRONTEND-005 的 Tone 一一對應（success / warning / danger / info），neutral 是家長端額外的中性樣式；呼叫端直接把 statusMeta(...) 的 tone 傳入，元件內不寫任何狀態字串對應。',
-      '底 / 字色全部取 --m3-* token：success = primary-container / on-primary-container、warning = tertiary-container / on-tertiary-container、danger = error-container / on-error-container、info = secondary-container / on-secondary-container、neutral = surface-container-high / on-surface；淺 / 深色文字對比皆 ≥ 4.5:1（見右側表）。',
+      '底 / 字色全部取 --m3-* token：success = primary-container / on-primary-container、warning = warning-container / on-warning-container（新增 token，見下一條）、danger = error-container / on-error-container、info = secondary-container / on-secondary-container、neutral = surface-container-high / on-surface；淺 / 深色文字對比皆 ≥ 4.5:1（見右側表）。',
+      '新增 token：--m3-warning-container / --m3-on-warning-container，淺色 #ffddb0 / #2b1700，深色 #5b3a00 / #ffddb0，由 PARENT-051 寫入 m3-tokens.css（部分改寫 PARENT-001 產物）；warning 是琥珀色，與 success 的薄荷綠、info 的灰綠、danger 的粉紅可以分辨。',
       '視覺：高 28px、圓角 full、左右 padding 12px（含 icon 時左 8px）、label-large（14px / 500）；不可互動，不拿焦點、不放 state layer，因此不受 44px 觸控目標規則約束。',
       'icon 選填，18px，M3Icon 無 label（aria-hidden）；狀態意義由文字承擔。顏色不是唯一的資訊來源，因為每個 pill 都有文字。',
       '長文字單行省略（max-width: 100%），不換行、不撐破父層。',
       '無障礙：渲染為 span，無 role；文字就是無障礙名稱。需要在清單列被朗讀成「狀態：已到班」時由呼叫端的列文字負責。',
     ]
     // 需要使用者選的項目；每題兩個具體選項，不要寫成開放式問題。空陣列代表沒有待裁定。
-    const openQuestions = [
-      { question: 'warning 照 task 對應 tertiary-container，在目前色票是淡藍青色（不是黃 / 橘），家長容易把「待回覆」看成中性資訊色；且 success（薄荷綠）與 info（灰綠）底色相近。warning 要不要換成琥珀色？（見手機框最下方 A / B 預覽）', optionA: '維持 tertiary-container（不動 PARENT-001 色票；靠 icon 與文字區分）', optionB: '在 m3-tokens.css 新增 warning-container / on-warning-container（淺色 #ffddb0 / #2b1700，深色 #5b3a00 / #ffddb0），warning tone 改用它（需改 PARENT-001 與 PARENT-051 的 description）' },
-    ]
+    const openQuestions = []
     const themes = [{ value: 'light', label: '淺色' }, { value: 'dark', label: '深色' }]
     const theme = ref('light')
     watch(theme, (v) => {
@@ -572,7 +598,7 @@ const app = createApp({
     ]
     const contrast = [
       { tone: 'success', tokens: 'primary-container / on-primary-container', light: '13.3', dark: '7.2' },
-      { tone: 'warning', tokens: 'tertiary-container / on-tertiary-container', light: '13.3', dark: '7.3' },
+      { tone: 'warning', tokens: 'warning-container / on-warning-container', light: '13.2', dark: '7.9' },
       { tone: 'danger', tokens: 'error-container / on-error-container', light: '13.3', dark: '5.5' },
       { tone: 'info', tokens: 'secondary-container / on-secondary-container', light: '13.3', dark: '7.2' },
       { tone: 'neutral', tokens: 'surface-container-high / on-surface', light: '14.1', dark: '11.1' },
