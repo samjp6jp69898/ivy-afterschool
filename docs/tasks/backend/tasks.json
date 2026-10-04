@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 111,
-  "last_updated": "2026-10-04T06:46:13Z",
+  "version": 112,
+  "last_updated": "2026-10-04T06:52:40Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -359,7 +359,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/crypto.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-009"
@@ -382,9 +382,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。0ab8a33（紅）→ 566fcf6（綠）。tdd.run 5 個測試全綠，四條 red_case 皆選到（另有 test_keyed_hash_changes_with_secret 驗金鑰來源為 APP_SECRET_KEY）。金鑰為 derive_key(label) 的 HKDF 衍生值，與加密 / JWT 金鑰以 label 隔離；非 LABEL_HMAC_* 一律 ValueError（含 LABEL_FIELD_ENC、LABEL_JWT、任意 bytes）。constant_time_equals 先 encode 再 hmac.compare_digest，非 ASCII 字串不會 TypeError。殘留：沒有以 hmac.new(derive_key(label), ...) 對照的已知值測試（格式 / 決定性 / label 與金鑰敏感度已涵蓋，不擋）。"
       }
     },
     {
@@ -394,7 +394,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/request_meta.py",
       "source_ref": "BE:utils/request_ip.py::get_client_ip",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-004"
@@ -417,9 +417,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。27b3626（紅）→ 0e149d1（綠；impl commit 對測試只補型別標註，未改斷言）。tdd.run 6/6 綠，四條 red_case 皆選到。只取 request.client.host，不讀 X-Forwarded-For / X-Real-IP（有 test_request_meta_ignores_forwarded_headers 驗證），代理標頭交給 uvicorn --proxy-headers；ipaddress.ip_address 不合法 → None；UA 截 500；request_id 經 sync dependency 的 threadpool 仍與回應 X-Request-ID 相同（實際起迷你 app 驗證）。殘留：帶 zone id 的 IPv6（'fe80::1%eth0'）會通過 ipaddress 但 Postgres inet 拒收，只有 uvicorn --forwarded-allow-ips 設錯（信任任意來源）時可被用戶端注入，屬 INFRA-031 部署前提，不擋。"
       }
     },
     {
@@ -659,7 +659,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/scheduler.py",
       "source_ref": "BE:utils/advisory_lock.py::try_scheduler_lock",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-017",
@@ -686,9 +686,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。418d33f（紅）→ 1d4c9cf（綠）。tdd.run 7/7 綠，六條 red_case 皆選到。run_job_once：取鎖、執行、commit 都在 try 內，任何 Exception → rollback + logger.exception + sentry capture → 'failed'，不往外拋；skipped 測試以另一條 app_backend 連線實際持有 xact lock 驗 func 未被呼叫，鎖釋放後同 spec 回 'ran'；failed 測試驗 count == 0 與 caplog 含 job_id。台北日 run_key 以 spy 擷取 try_advisory_xact_lock 參數驗證 '2026-09-02'。被測 session 一律由 app_backend 的 db_engine 建立，owner 只用於探針 schema 的 DDL / 清表 / 計數。registry kwarg、tick_run_key / daily_run_key 已寫進 description，屬合理介面補充。殘留：(1) daily_run_key 本身沒有測試（台北日測試用 lambda），第一個每日工作 task 應以 daily_run_key 驗；(2) advisory lock 是 xact 級，工作函式若自行 commit（切批）會在第一批後釋放鎖，BACKEND-066 / 209 等工作模組應只 flush、由 runner commit，或改用 session 級鎖；(3) session_factory() 在 try 之外、except 內 rollback 若再拋例外會外漏給 APScheduler（其自身會記 log、不殺執行緒）。"
       }
     },
     {
@@ -951,7 +951,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/account.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-007",
@@ -977,9 +977,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。dafe128（紅）→ 713bce0（綠），測試先於實作。tdd.run 3/3 綠，--collect-only 帶 / 不帶 -k 一致，三條 red_case 皆有對應且斷言具體值（server default、inspect(staff).unloaded 不含 role 驗 joined、CHECK 違反 sqlstate 23514）。db_session 以 app_backend 連線。just schema-drift：roles / staff_users / refresh_tokens 無 drift，其餘只有預期的 table_missing_in_model。Base.type_annotation_map 加 str: Text 合理（migration 字串欄位一律 text，未加時 Mapped[str] 映成 VARCHAR 會被 drift 報 type_mismatch）；目前只有 account / audit 兩個 model 使用 Base，BACKEND-007 單元測試 4/4 綠，無副作用。lint / typecheck（動到的 16 檔）乾淨。"
       }
     },
     {
@@ -1064,7 +1064,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security/tokens.py",
       "source_ref": "BE:utils/auth.py::create_access_token",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-009",
@@ -1091,9 +1091,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。c59f5cb（紅）→ da71044（綠）。tdd.run 8/8 綠，六條 red_case 皆選到。alg 固定：先讀 unverified header 要求 HS256，jwt.decode 再限定 algorithms=['HS256']；require 六個 claim；typ 必須等於 expected_type；tv / iat / exp 拒絕 bool 與非 int；exp 以注入 clock 判斷（now >= exp 即拒）。另以未持金鑰的畸形 token 實測（alg=None / HS512 / RS256、alg 為陣列、header 為陣列、非 ASCII、四段、空簽章、100KB 字串）全部回 UnauthenticatedError。殘留（需持有簽章金鑰才能構造，實際只有本模組簽發，不擋）：合法簽章但 typ 為陣列 → TypeError（unhashable）、exp / iat 為 10**20 → OverflowError，會變 500 而非 UnauthenticatedError；可在 _parse_claims 加 isinstance(typ, str) 並把 datetime.fromtimestamp 包 (OverflowError, OSError, ValueError)。"
       }
     },
     {
@@ -3480,7 +3480,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/audit.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-007",
@@ -3503,9 +3503,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。245b989（紅）→ c0cfc77（綠）。tdd.run 2/2 綠且選到兩條 red_case。InetText（impl=INET，process_result_value 轉 str）合理：psycopg 讀回 ipaddress 物件，description 要求 Python 端為 str；drift 比對走 impl，audit_logs 無 drift。update 被 DB 以 42501 拒絕的測試斷言 orig.sqlstate，以 app_backend 實際驗證 append-only 授權。殘留：寫入非 IP 字串會在 flush 時 DataError，依賴 BACKEND-011 先過濾（已過濾）。"
       }
     },
     {
@@ -14713,7 +14713,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/logging.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-004"
@@ -14739,9 +14739,9 @@
         "notes": "run 會一併跑 BACKEND-004 既有測試，用來確認沒有回歸。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。8a6176e（紅；以 git archive 取測試 commit 快照實跑，6 條新測試確實紅）→ 64907bf（綠）。tdd.run 20/20 綠（含 BACKEND-004 既有測試），七條 red_case 皆選到。red_case 由 'token=TK2 ok' 改成 'user=amy token=TK2' 並斷言 msg == 'user=amy token=***' 正確（'ok' 是 'token' 子字串，原斷言恆真）。lookbehind 不再排除引號：dict repr / JSON 的 'key': 'value' 因 key 後接引號不會被 _KEY_VALUE_RE 誤吃，仍由 _QUOTED_KEY_VALUE_RE 處理；status_code / error_code 仍受識別字 lookbehind 保護，無回歸。fail-closed 改為直接測 filter 的判斷：production 只有 configure_logging 安裝的 _AppStreamHandler（掛 RedactingFilter）一個 handler，uvicorn / uvicorn.error 清 handler 並 propagate、uvicorn.access 停用，app 內沒有其他 addHandler；pytest 的 LogCaptureHandler 先於本 handler 格式化原始 record，舊寫法會被 pytest 自己的 handleError 輸出干擾。我另以子行程（無 pytest handler）實跑 configure_logging（production 與 development）驗證 production 路徑：__str__ 爆炸、'%s' + 爆炸物件、Mapping msg、物件 msg、logger.exception、chained exception（inner / outer 兩段訊息）、stack_info、'cookie: X'、'Authorization: Bearer X' 全部無明文。殘留：(1) test_logging_redact_quoted_literal 與實作同 commit 加入（其行為已由測試 commit 的 stack_info 測試先紅涵蓋，不擋）；(2) development 格式的 stack_info 遮罩沒有測試（實作有、子行程實測正確）；(3) __str__ 爆炸時實際輸出 '*** args=***'，description 寫「msg 整個換成 '***'」，語意上 fail-closed 已成立；(4) handler 級 filter 擋不到在 Logger.callHandlers 之前讀 record 的整合，見 BACKEND-020 的 Sentry 殘留。"
       }
     }
   ]
