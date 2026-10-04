@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 206,
-  "last_updated": "2026-10-04T16:49:07Z",
+  "version": 207,
+  "last_updated": "2026-10-04T16:49:39Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -786,7 +786,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/health.py",
       "source_ref": "BE:api/health.py::readiness",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-020",
@@ -812,9 +812,9 @@
         "notes": "健康檢查無權限與業務錯誤情境，endpoint 的 401/403/422 案例不適用。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試，tdd.run 5 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作。DB 失敗只回固定 JSON 與 503，log 只記例外類別名；SET LOCAL statement_timeout 在 session 的交易內生效；不需 cookie、不掛守衛、不寫 access log 皆有測試。"
       }
     },
     {
@@ -1408,7 +1408,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/auth.py",
       "source_ref": "BE:api/auth.py::login",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-041",
@@ -1435,9 +1435,9 @@
         "notes": "本 endpoint 不需登入，403 案例以 BACKEND-019 的外站 Origin 拒絕驗證。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（另有 username 大小寫 / must_change_password、未掛權限守衛的路由登記），tdd.run 7 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作。body 不含 token、只設 httpOnly cookie；失敗不 commit。e34b509 為修正測試錯誤：原 429 測試的 override 是 lambda: AuthThrottles()，每個請求都拿新實例，永遠不會 429；改成每個測試一個固定實例後才真的驗到鎖定。production 路徑不受影響：endpoint 依賴 get_auth_throttles，回傳 module 單例 _THROTTLES（unit test_throttle 已斷言兩次呼叫為同一實例）。對「協調者待使用者確認」的建議：staff_auth_out 抽成共用並先排序 permissions、測試以 autouse fixture 換獨立 AuthThrottles，皆合理。不需問使用者。"
       }
     },
     {
@@ -2256,7 +2256,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/me.py",
       "source_ref": "BE:api/parent_portal/profile.py::get_me",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-063",
@@ -2282,9 +2282,9 @@
         "notes": "GET 無輸入，422 不適用；家長端無權限碼，403 不適用，以 IDOR 隔離案例取代。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（另有 archived_links_hidden），tdd.run 6 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作。handler 只以 get_current_parent 的 parent 呼叫 get_me；IDOR 測試家長 A / B 各綁不同學生，A 看不到 B 的小孩；員工 cookie、停用家長 401。"
       }
     },
     {
@@ -2772,7 +2772,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/roles.py",
       "source_ref": "BE:api/permissions_admin.py::_role_query",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-077",
@@ -2798,9 +2798,9 @@
         "notes": "GET 無輸入，422 不適用。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（另有 guard_registered），tdd.run 6 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作。admin_routes_without_permission(app) == [] 的守衛測試通過。require_any_permission(roles:read, staff:read)，403 / 401 與 staff_count 皆有測。"
       }
     },
     {
@@ -3630,7 +3630,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/audit_logs.py",
       "source_ref": "BE:api/audit.py::get_audit_logs",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-103",
@@ -3656,9 +3656,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（另有 guard_registered、pagination_params_accepted），tdd.run 7 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作。admin_routes_without_permission(app) == [] 的守衛測試通過。red_case 預期遮罩改為 '***' 正確：BACKEND-102 audit_service 的 REDACTED 常數即為 '***'，對 key 含 token / secret / password 等一律取代；'****9999' 是 settings 讀取端（BACKEND-109 / 112）的遮罩格式，兩者本來就不同，不是迎合實作。query_model 審查：只排除 page / page_size，其餘參數一律交 forbid 的 model 驗證（未知參數、非法 actor_type、日期顛倒、非法 UUID 皆 422，測試有列）；分頁參數另由 page_params 驗上限（page_size=201 → 422）；錯誤轉成 RequestValidationError，經全域 handler 輸出 validation_error、details 只留 loc / msg / type，符合 errors.py 契約；守衛 dependency 宣告在前，未登入先得 401，不會先洩漏驗證結果。對「協調者待使用者確認」的建議：query_model 合理，可作為帶分頁列表 endpoint 的共用做法。不需問使用者。殘留：(1) query_model 從 Request 讀參數，OpenAPI 不會列出這些 query 參數（若前端由 OpenAPI 產生型別需另行補文件）；(2) 同名參數重複時只取最後一個值（Starlette query_params.items()），驗證與使用的是同一個值，無繞過，但 model 日後若有 list 型欄位不能用此 helper。"
       }
     },
     {
@@ -3895,7 +3895,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/settings.py",
       "source_ref": "BE:api/system_config.py::list_configs",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-109",
@@ -3921,9 +3921,9 @@
         "notes": "GET 無輸入，422 不適用。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（另有 guard_registered），tdd.run 6 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作。admin_routes_without_permission(app) == [] 的守衛測試通過。「7 個 key」改成 list(REGISTRY)（11 個）正確：BACKEND-106 REGISTRY 恰含 11 個 key，BACKEND-109 回傳 registry 全部 key，原數字是規格筆誤。secret 以 '****9999' 遮罩、明文不出現。"
       }
     },
     {
@@ -4142,7 +4142,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/reference.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-115",
@@ -4168,9 +4168,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（四資源 parametrize，另有 any_of_permissions ×3、filters、guard_registered），tdd.run 22 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作。admin_routes_without_permission(app) == [] 的守衛測試通過。ReferenceListQuery 為 forbid 的 RequestModel，以 Query() 收參數（無分頁，不需 query_model）。對「協調者待使用者確認」的建議：四資源以 build_reference_router 共用同一組讀取權限合理，與 description 一致；BACKEND-120~122 的寫入 handler 加在同一 builder 時須改用各自的寫入權限，不可沿用 READ_PERMISSIONS。不需問使用者。"
       }
     },
     {
@@ -4362,7 +4362,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/config.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-124",
@@ -4387,9 +4387,9 @@
         "notes": "公開 endpoint：無登入、無權限、無輸入，401/403/422 不適用。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（另有 reflects_settings），tdd.run 6 passed；test_security_middleware.py 9 passed（含新增的公開可快取路徑測試，私有路徑即使 handler 設 public 仍被改成 no-store）。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作。security_middleware 修改審查：PUBLIC_CACHEABLE_PATHS 以 scope['path'] 精確比對（不是 startswith）。實測 /api/parent/config/、/api/parent/config/x、/api/parent/Config、/api/parent//config、/api/parent/me、/api/admin/settings 仍為 no-store；query string 不在 scope['path']，?x=1 仍指向同一個公開回應；Starlette 路由區分大小寫，大小寫變體只會 404，不會拿到有身分資料的回應。回應內容只來自 public_config_service（registry 標記 public 的欄位），不讀 cookie、不依身分變化，no_secret 測試斷言無 token 明文與遮罩。BACKEND-019 的 description 已同步。對「協調者待使用者確認」的建議：改 BACKEND-019 middleware 是必要且範圍最小的做法，同意。不需問使用者。殘留：此路徑的錯誤回應（405 / 503 / 500）也不帶 no-store 且沒有 Cache-Control，內容是通用錯誤、不含個資，可接受。"
       }
     },
     {
@@ -5473,7 +5473,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::get_students",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-149",
@@ -5499,9 +5499,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（另有 filters_and_paging、guard_registered），tdd.run 7 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作。admin_routes_without_permission(app) == [] 的守衛測試通過。共用 query_model(StudentListQuery)（評估同 BACKEND-105）；actor 傳入 service，身分證搜尋仍需 students:sensitive；輸出不含敏感欄位有測試。"
       }
     },
     {
@@ -6388,7 +6388,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/children.py",
       "source_ref": "BE:api/parent_portal/profile.py::get_my_children",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-182",
@@ -6414,9 +6414,9 @@
         "notes": "GET 無輸入，422 不適用；家長端無權限碼，403 以 IDOR 隔離取代。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（另有 empty），tdd.run 6 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作。handler 以 get_current_parent 的 parent.id 呼叫 list_children；IDOR 隔離、員工 cookie / 停用家長 401、不含 id_number / health_note 皆有測。"
       }
     },
     {
