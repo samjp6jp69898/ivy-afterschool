@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 204,
-  "last_updated": "2026-10-04T16:46:43Z",
+  "version": 205,
+  "last_updated": "2026-10-04T16:47:59Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -7344,7 +7344,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/realtime/publish.py",
       "source_ref": "BE:services/ws/dismissal.py::schedule_broadcast_threadsafe",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-223",
