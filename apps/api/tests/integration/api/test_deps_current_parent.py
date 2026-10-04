@@ -6,10 +6,10 @@ load_current_parent）。
 """
 
 from collections.abc import Iterator
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import uuid4
 
-import httpx
+import httpx2
 import pytest
 from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
@@ -62,7 +62,7 @@ def client(db_session: Session, fake_clock: FakeClock) -> Iterator[TestClient]:
     app.dependency_overrides[get_clock] = lambda: fake_clock
 
     @app.get("/api/parent/probe")
-    def probe(request: Request, parent: Parent) -> dict:
+    def probe(request: Request, parent: Parent) -> dict[str, Any]:
         return {
             "id": str(parent.id),
             "line_user_id": parent.line_user_id,
@@ -92,12 +92,12 @@ def _token(
 
 def _get(
     client: TestClient, path: str, token: str | None, *, name: str = PARENT_ACCESS.name
-) -> httpx.Response:
+) -> httpx2.Response:
     headers = {"Cookie": f"{name}={token}"} if token is not None else {}
     return client.get(path, headers=headers)
 
 
-def _assert_401(response: httpx.Response) -> None:
+def _assert_401(response: httpx2.Response) -> None:
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "unauthenticated"
 
