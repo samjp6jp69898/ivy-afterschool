@@ -5,13 +5,14 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.clock import Clock
+from app.core.errors import ConflictError
 from app.models.parents import Guardian, ParentBindingCode
 from app.repositories.students import get_student_or_404
-from app.schemas.guardians import GuardianBindingOut, GuardianOut
+from app.schemas.guardians import GuardianBindingOut, GuardianCreateIn, GuardianOut
 
 
 def to_guardian_out(guardian: Guardian, latest_code_expires_at: datetime | None) -> GuardianOut:
@@ -64,3 +65,30 @@ def list_for_student(session: Session, student_id: UUID, *, clock: Clock) -> lis
         )
         latest_expiry = {guardian_id: expires_at for guardian_id, expires_at in rows}
     return [to_guardian_out(g, latest_expiry.get(g.id)) for g in guardians]
+
+
+def create_guardian(
+    session: Session, student_id: UUID, data: GuardianCreateIn, *, clock: Clock
+) -> GuardianOut:
+    """學生不存在 404、已封存 409 ``student_archived``。
+
+    鎖定學生列（FOR UPDATE）序列化同一學生的監護人異動；``is_primary=True`` 時先把同學生其他
+    未封存 guardian 的 is_primary 設 false，再 insert（避免 ``uq_guardians_one_primary`` 衝突）。
+    """
+    student = get_student_or_404(session, student_id, include_archived=True, for_update=True)
+    if student.archived_at is not None:
+        raise ConflictError("student_archived", "此學生已封存，無法新增監護人")
+    if data.is_primary:
+        session.execute(
+            update(Guardian)
+            .where(
+                Guardian.student_id == student_id,
+                Guardian.is_primary.is_(True),
+                Guardian.archived_at.is_(None),
+            )
+            .values(is_primary=False)
+        )
+    guardian = Guardian(student_id=student_id, **data.model_dump())
+    session.add(guardian)
+    session.flush()
+    return to_guardian_out(guardian, None)
