@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 233,
-  "last_updated": "2026-10-04T17:01:13Z",
+  "version": 234,
+  "last_updated": "2026-10-04T17:01:39Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5882,7 +5882,7 @@
         "BACKEND-169"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "比照 BACKEND-169：異動前先以 get_student_or_404(for_update=True) 鎖學生列，序列化同一學生的監護人異動；切換主要聯絡人時先把其他 primary 改 false 再寫入本列。uq_guardians_one_primary 只是最後防線，未取同一把鎖時 23505 會落成通用 409 conflict。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_guardian_service.py",
@@ -5918,7 +5918,7 @@
         "BACKEND-179"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "比照 BACKEND-169：異動前先以 get_student_or_404(for_update=True) 鎖學生列，序列化同一學生的監護人異動；切換主要聯絡人時先把其他 primary 改 false 再寫入本列。uq_guardians_one_primary 只是最後防線，未取同一把鎖時 23505 會落成通用 409 conflict。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_guardian_service.py",
