@@ -90,4 +90,11 @@ describe('AttendanceSummaryBar', () => {
 
     expect(wrapper.find('[data-test=attendance-rate] [data-test=stat-value]').text()).toBe('33%')
   })
+
+  it('AttendanceSummaryBar shows skeletons while loading', async () => {
+    const wrapper = await mountBar({ loading: true })
+
+    expect(wrapper.findAll('[data-test=stat-skeleton]')).toHaveLength(7)
+    expect(wrapper.findAll('[data-test=stat-value]')).toHaveLength(0)
+  })
 })
