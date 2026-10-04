@@ -350,7 +350,7 @@ def steps_using(name: str, prefix: str) -> list[dict[str, Any]]:
 
 
 def docker_build_contexts() -> list[str]:
-    """docker-build job 建置的 context（`docker build ... <ctx>` 的最後一個參數或 action 的 context）。"""
+    """docker-build job 建置的 context（`docker build` 最後一個參數或 action 的 context）。"""
     contexts: list[str] = []
     for line in run_lines("docker-build"):
         if "docker build" in line:
@@ -371,7 +371,7 @@ def test_ci_docker_build_job_uses_buildx_gha_cache() -> None:
 
     assert len(builds) == 2
     for build in builds:
-        assert build["with"]["cache-from"] == "type=gha"
+        assert build["with"]["cache-from"].startswith("type=gha")
         assert build["with"]["load"] is True
 
 

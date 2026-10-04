@@ -174,3 +174,52 @@ jobs:
       - name: 家長端 bundle 不得含 Element Plus 與後台程式碼
         working-directory: apps/web
         run: node scripts/check_parent_bundle.mjs
+
+  docker-build:
+    name: Docker 映像建置與容器煙霧測試
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v3
+
+      # 只建置不推送（Railway 自己建置）；load 讓映像留在本機供後續煙霧測試
+      - name: 建置 api 映像
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/api
+          load: true
+          push: false
+          tags: afterschool-api
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+
+      - name: api 套件可匯入（不啟動 uvicorn，因為需要 DATABASE_URL）
+        run: docker run --rm afterschool-api python -c "import app"
+
+      - name: 建置 web 映像
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/web
+          load: true
+          push: false
+          tags: afterschool-web
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+      - name: web 容器煙霧測試
+        run: |
+          docker run -d --name afterschool-web-smoke -e BACKEND_URL=http://127.0.0.1:9 -p 18080:8080 afterschool-web
+          for i in $(seq 1 15); do
+            if curl -fsS -o /dev/null http://127.0.0.1:18080/healthz; then break; fi
+            if [ "$i" -eq 15 ]; then docker logs afterschool-web-smoke; echo "healthz 未就緒" >&2; exit 1; fi
+            sleep 1
+          done
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/)" = "200"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/parent/)" = "200"
+          curl -s -D - -o /dev/null http://127.0.0.1:18080/ | grep -i '^Content-Security-Policy:'
+
+      - name: 移除容器
+        if: always()
+        run: docker rm -f afterschool-web-smoke
