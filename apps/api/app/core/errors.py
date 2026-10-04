@@ -10,6 +10,10 @@ service 層只拋 ``AppError``（或其子類），不得拋 ``HTTPException``�
 | HTTPException 404 / 405 / 其他 | 原 status | not_found / method_not_allowed / http_<status> |
 | sqlalchemy IntegrityError | 409 | conflict（不回 SQL 原文） |
 | 其他 Exception | 500 | internal_error（固定文案，server 端 logger.exception 帶 request id） |
+
+未處理例外的 500 由 Starlette 最外層的 ``ServerErrorMiddleware`` 送出，不經過
+``RequestContextMiddleware`` 與 ``SecurityMiddleware``，所以 500 handler 自己補 ``X-Request-ID``
+（取 ``request.state.request_id``）與 BACKEND-019 的安全標頭（BACKEND-020）。
 """
 
 from __future__ import annotations
@@ -24,6 +28,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from app.core.logging import REQUEST_ID_HEADER
+from app.core.security_middleware import security_headers_for
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +172,11 @@ async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSON
         exc,
         exc_info=exc,
     )
-    return _envelope(500, "internal_error", INTERNAL_ERROR_MESSAGE)
+    response = _envelope(500, "internal_error", INTERNAL_ERROR_MESSAGE)
+    response.headers[REQUEST_ID_HEADER] = request_id
+    for name, value in security_headers_for(request.url.path):
+        response.headers[name.decode("latin-1")] = value.decode("latin-1")
+    return response
 
 
 def register_exception_handlers(app: FastAPI) -> None:

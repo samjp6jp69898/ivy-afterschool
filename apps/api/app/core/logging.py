@@ -18,6 +18,11 @@
 - 例外 traceback 與 ``stack_info``（BACKEND-539）：兩種 formatter 寫出前都先經 ``redact_text``
   （不使用 ``record.exc_text`` 快取，避免拿到其他 handler 存下的未遮罩文字）；檔名、行號與例外型別
   名稱保留。
+- ``scrub_sentry_event`` / ``scrub_sentry_breadcrumb``（BACKEND-020）：Sentry 的 LoggingIntegration
+  在 ``Logger.callHandlers`` 階段就讀 record，會繞過 handler 級的 RedactingFilter，
+  ``capture_exception`` 也會原樣送出例外訊息；所以 ``sentry_sdk.init`` 掛 ``before_send`` /
+  ``before_breadcrumb``，整個 event / breadcrumb 深度走訪：敏感 key 的值換成 ***、所有字串經
+  ``redact_text``，``request.cookies`` 整個遮掉；遮罩過程拋例外時回傳 None（丟棄，fail-closed）。
 """
 
 from __future__ import annotations
@@ -31,8 +36,9 @@ import uuid
 from collections.abc import Mapping
 from contextvars import ContextVar
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
+from sentry_sdk.types import Event, Hint
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.config import Settings
@@ -54,7 +60,7 @@ _SENSITIVE_SUBSTRINGS = (
     "binding_code",
 )
 # 字串層遮罩只針對敏感 key（非敏感 key 的值可能含空白，不能用通用 key=value 掃描）：
-# key=value 與 header 樣式 key: value，值取到行尾 / 分隔符（, ; 全形逗號）或下一個 key= / key:
+# key=value 與 header 樣式 key: value，值取到行尾 / 分隔符（, ; & 全形逗號）或下一個 key= / key:
 # 之前，因此 'authorization=Bearer T5' 整段遮掉、'token=x status_code=200' 不吞掉後面的 pair。
 # lookbehind 只排除識別字字元（status_code 的 code 不算），引號內的字面值（traceback 原始碼行的
 # "password=x"）照樣遮。
@@ -63,7 +69,7 @@ _SENSITIVE_KEY_PATTERN = (
 )
 _KEY_VALUE_RE = re.compile(
     r"(?<![A-Za-z0-9_-])(?P<key>" + _SENSITIVE_KEY_PATTERN + r")\s*[=:]\s*"
-    r"(?P<value>(?:(?!\s+[A-Za-z_][A-Za-z0-9_-]*\s*[=:])[^,，;\n])+)",
+    r"(?P<value>(?:(?!\s+[A-Za-z_][A-Za-z0-9_-]*\s*[=:])[^,，;&\n])+)",
     re.IGNORECASE,
 )
 # 'key': 'value' / "key": "value"（dict repr），值為帶引號字串或裸 token
@@ -166,6 +172,43 @@ class RedactingFilter(logging.Filter):
             record.msg = f"{template} args={REDACTED}"
             record.args = None
         return True
+
+
+# --- Sentry（BACKEND-020）-----------------------------------------------------------------
+
+
+def _scrub_deep(value: Any) -> Any:
+    """深度複製並遮罩：敏感 key 的值換成 ***、字串經 redact_text、容器遞迴。"""
+    if isinstance(value, Mapping):
+        return {k: REDACTED if is_sensitive_key(k) else _scrub_deep(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return _rebuild_sequence(value, [_scrub_deep(item) for item in value])
+    if isinstance(value, str):
+        return redact_text(value)
+    if isinstance(value, bytes | bytearray):
+        return redact_text(bytes(value).decode("latin-1"))
+    return value
+
+
+def scrub_sentry_event(event: Event, hint: Hint) -> Event | None:
+    """``sentry_sdk.init(before_send=...)``：遮罩失敗回 None（丟棄整個 event）。"""
+    try:
+        scrubbed: dict[str, Any] = _scrub_deep(event)
+        request = scrubbed.get("request")
+        if isinstance(request, dict) and "cookies" in request:
+            request["cookies"] = REDACTED
+        return cast(Event, scrubbed)  # TypedDict 深度複製後仍是同形狀 dict
+    except Exception:
+        return None
+
+
+def scrub_sentry_breadcrumb(crumb: dict[str, Any], hint: Hint) -> dict[str, Any] | None:
+    """``sentry_sdk.init(before_breadcrumb=...)``：遮罩失敗回 None（丟棄該 breadcrumb）。"""
+    try:
+        result: dict[str, Any] = _scrub_deep(crumb)
+        return result
+    except Exception:
+        return None
 
 
 # --- formatter ----------------------------------------------------------------------------

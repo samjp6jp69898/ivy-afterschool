@@ -178,7 +178,9 @@ def test_main_routers_mounted(scheduler_spies: tuple[_Recorder, _Recorder]) -> N
 
     try:
         app = create_app(settings=_settings("test"))
-        paths = {getattr(r, "path", "") for r in app.routes}
+        # FastAPI 0.142 的 include_router 是 lazy 的 _IncludedRouter，app.routes 不會攤平子路由；
+        # 以 openapi 的 paths（公開 API）確認
+        paths = set(app.openapi()["paths"])
         assert "/api/admin/probe-admin" in paths
         assert "/api/parent/probe-parent" in paths
         assert any(p.startswith("/api/admin") for p in paths)
@@ -230,7 +232,7 @@ def test_main_unhandled_500_has_request_id_and_security_headers(
 
 
 def test_main_sentry_scrubs_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
-    event = {
+    event: Any = {
         "message": "raw token=TK8",
         "logentry": {"message": "login token=TK9", "params": ["secret=S1", {"password": "P2"}]},
         "exception": {
@@ -252,7 +254,7 @@ def test_main_sentry_scrubs_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
         "breadcrumbs": {"values": [{"message": "refresh_token=R6"}]},
     }
 
-    scrubbed = scrub_sentry_event(event, {})
+    scrubbed: Any = scrub_sentry_event(event, {})
 
     assert scrubbed is not None
     text = json.dumps(scrubbed, ensure_ascii=False)

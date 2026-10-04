@@ -12,6 +12,8 @@ http 與 websocket scope。
   （非瀏覽器）放行。
 - 所有 http 回應加 ``X-Content-Type-Options: nosniff``、``Referrer-Policy: same-origin``、
   ``X-Frame-Options: DENY``；``/api/`` 路徑另加 ``Cache-Control: no-store``（避免瀏覽器快取個資）。
+  標頭清單以 ``security_headers_for(path)`` 公開，BACKEND-003 的 500 handler 共用（未處理例外的 500
+  由最外層的 ServerErrorMiddleware 產生，不經過本 middleware；BACKEND-020）。
 """
 
 from __future__ import annotations
@@ -31,13 +33,22 @@ WS_CLOSE_ORIGIN_FORBIDDEN = 4403
 ORIGIN_FORBIDDEN_CODE = "origin_forbidden"
 ORIGIN_FORBIDDEN_MESSAGE = "來源不被允許"
 _DEFAULT_PORTS = {"http": 80, "https": 443}
-_API_PREFIX = "/api/"
-_SECURITY_HEADERS: tuple[tuple[bytes, bytes], ...] = (
+API_PREFIX = "/api/"
+# 公開給 BACKEND-003 的 500 handler 共用（未處理例外的 500 不經過本 middleware）
+SECURITY_HEADERS: tuple[tuple[bytes, bytes], ...] = (
     (b"x-content-type-options", b"nosniff"),
     (b"referrer-policy", b"same-origin"),
     (b"x-frame-options", b"DENY"),
 )
-_NO_STORE = (b"cache-control", b"no-store")
+NO_STORE_HEADER = (b"cache-control", b"no-store")
+
+
+def security_headers_for(path: str) -> list[tuple[bytes, bytes]]:
+    """該 path 的安全標頭；``/api/`` 路徑另加 ``Cache-Control: no-store``。"""
+    headers = list(SECURITY_HEADERS)
+    if path.startswith(API_PREFIX):
+        headers.append(NO_STORE_HEADER)
+    return headers
 
 
 def normalize_origin(value: str) -> str | None:
@@ -104,9 +115,7 @@ class SecurityMiddleware:
             return
 
         path = str(scope.get("path", ""))
-        extra_headers = list(_SECURITY_HEADERS)
-        if path.startswith(_API_PREFIX):
-            extra_headers.append(_NO_STORE)
+        extra_headers = security_headers_for(path)
 
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
