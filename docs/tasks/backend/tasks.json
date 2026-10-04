@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 156,
-  "last_updated": "2026-10-04T15:01:37Z",
+  "version": 157,
+  "last_updated": "2026-10-04T15:02:49Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1593,7 +1593,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/api/deps.py",
       "source_ref": "BE:utils/auth.py::get_current_user",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r6b",
       "depends_on": [
         "BACKEND-033",
@@ -2182,7 +2182,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/api/deps.py",
       "source_ref": "BE:api/parent_portal/_shared.py::_get_parent_user",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r6b",
       "depends_on": [
         "BACKEND-033",
