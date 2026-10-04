@@ -44,6 +44,8 @@ def _code(
             expires_at=expires_at,
             used_at=_NOW if used else None,
             created_by=staff_id,
+            # CHECK：expires_at 必須晚於 created_at；過期碼的 created_at 要更早
+            created_at=_NOW - timedelta(days=5),
         )
     )
     db.flush()
@@ -53,7 +55,7 @@ def test_list_guardians_order_and_archived(db_session: Session) -> None:
     student = make_student(db_session)
     first = make_guardian(db_session, student, name="爸爸", relation="father")
     primary = make_guardian(db_session, student, name="媽媽", is_primary=True)
-    gone = make_guardian(db_session, student, name="奶奶", relation="grandmother", archived=True)
+    gone = make_guardian(db_session, student, name="奶奶", relation="grandparent", archived=True)
     later = make_guardian(db_session, student, name="阿姨", relation="other")
     _stamp(db_session, first, primary, gone, later)
 
