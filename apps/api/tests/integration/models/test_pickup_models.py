@@ -1,4 +1,4 @@
-"""BACKEND-401：app/models/pickup.py（PickupPerson、PickupAuthorization、PickupRequest）與接送 factory。"""
+"""BACKEND-401：app/models/pickup.py（接送人、代理授權、接送請求）與接送 factory。"""
 
 from collections.abc import Iterator
 from datetime import UTC, date, datetime, time
