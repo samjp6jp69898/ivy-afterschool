@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 155,
-  "last_updated": "2026-10-04T15:01:27Z",
+  "version": 156,
+  "last_updated": "2026-10-04T15:01:37Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3831,7 +3831,7 @@
         "BACKEND-006"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "committing 測試會真的改到 seed 表 system_settings，teardown 必須以 owner 連線還原；audit_logs 為 append-only，清理只能走 INFRA-010 的 owner truncate。\nBACKEND-108 的 TTL cache（review-r5-backend）：invalidate_setting 只能在 commit 之後呼叫（本 task 第 6 步的 run_after_commit），在 commit 前呼叫會讓其他執行緒讀到舊值並以新世代回寫快取 60 秒；put_setting 的寫入交易內不得以同一個 session 呼叫 get_setting（會把尚未 commit 的值寫進快取，交易回滾後快取仍保留該值直到 TTL），需要讀現值時直接查 system_settings 列。\nSettingPutIn.value（BACKEND-111）內層字串若含 \\u0000，寫入 jsonb 會 DataError → 500：put_setting 在 registry schema 驗證之外要拒絕含 \\u0000 的字串並回 422。",
+      "risk_notes": "committing 測試會真的改到 seed 表 system_settings，teardown 必須以 owner 連線還原；audit_logs 為 append-only，清理只能走 INFRA-010 的 owner truncate。\nBACKEND-108 的 TTL cache（review-r5-backend）：invalidate_setting 只能在 commit 之後呼叫（本 task 第 6 步的 run_after_commit），在 commit 前呼叫會讓其他執行緒讀到舊值並以新世代回寫快取 60 秒；put_setting 的寫入交易內不得以同一個 session 呼叫 get_setting（會把尚未 commit 的值寫進快取，交易回滾後快取仍保留該值直到 TTL），需要讀現值時直接查 system_settings 列。\nSettingPutIn.value（BACKEND-111）是 dict[str, Any]：NUL 已由 RequestModel 擋下，但 JSON 的 NaN / Infinity 與孤立 surrogate（'\\ud800'）仍會通過，原樣寫入 jsonb 會 DataError / 編碼錯誤 → 500。put_setting 必須在 registry schema 驗證通過後才寫入，且寫入驗證後的 model_dump(mode='json')，不可寫原始 value；registry 日後新增 float 或 Any 欄位要設 allow_inf_nan=False。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_settings_service.py",
@@ -7897,7 +7897,7 @@
         "BACKEND-002"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "AttendanceAmendIn（BACKEND-301）在 status=null 與其他欄位一起送時，status 仍在 model_fields_set 內且值為 None：service 必須把 status is None 視為未提供，不可把 null 寫進 not null 欄位。",
+      "risk_notes": "AttendanceAmendIn（BACKEND-301）在 status=null 與其他欄位一起送時，status 仍在 model_fields_set 內且值為 None：service 必須把 status is None 視為未提供，不可把 null 寫進 not null 欄位。\nAttendanceAmendIn（BACKEND-301）接受 '9999-12-31T23:00:00-08:00'、'0001-01-01T00:00:00+08:00' 這類極端 datetime，轉成台北時間時會拋 OverflowError：比對「台北日期等於 service_date」前先捕捉 OverflowError，回 422 time_not_on_service_date，不可變成 500。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_attendance_service.py",
