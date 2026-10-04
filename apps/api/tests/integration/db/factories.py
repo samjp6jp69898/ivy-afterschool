@@ -4,7 +4,8 @@
 （學生「王小明」、電話 `0912-000-001`），寫入一律經 `backend_conn`。
 """
 
-from datetime import date
+import secrets
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -85,3 +86,15 @@ def make_staff_users(conn: psycopg.Connection[Any], **overrides: Any) -> dict[st
         "display_name": "林老師",
     }
     return insert_row(conn, "public.staff_users", **{**defaults, **overrides})
+
+
+def make_refresh_tokens(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    """token_hash 預設為亂數 sha256 hex，同一測試可多次呼叫；expires_at 預設為遠未來的固定時間。"""
+    defaults = {
+        "subject_type": "staff",
+        "subject_id": uuid4(),
+        "family_id": uuid4(),
+        "token_hash": secrets.token_hex(32),
+        "expires_at": datetime(2099, 1, 1, tzinfo=UTC),
+    }
+    return insert_row(conn, "public.refresh_tokens", **{**defaults, **overrides})
