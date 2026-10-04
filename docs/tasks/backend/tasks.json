@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 130,
-  "last_updated": "2026-10-04T11:31:12Z",
+  "version": 131,
+  "last_updated": "2026-10-04T11:33:16Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3745,11 +3745,11 @@
     {
       "id": "BACKEND-108",
       "title": "實作 SettingsService.get_setting：型別化讀取、TTL cache、secret 解密與失效",
-      "description": "建立 `apps/api/app/services/settings_service.py`（architecture_decisions §4：讀取走 TTL in-process cache，後台修改後立即失效該 key）。\n\n```python\nSETTINGS_CACHE_TTL_SECONDS = 60\n\ndef get_setting(session: Session, key: SettingKey[M]) -> M: ...     # 營運模組讀設定的唯一入口，例如 get_setting(db, PICKUP_WINDOW).auto_expire_minutes\ndef invalidate_setting(key: str) -> None: ...\ndef clear_settings_cache() -> None: ...                             # 測試用\n```\n- cache：`dict[str, tuple[M, float]]`，以 `time.monotonic()` 判斷過期，`threading.Lock` 保護。\n- miss：查 `system_settings`；列不存在 → 回 registry default（並 `logger.warning`）；value 不通過 schema → `logger.error` 後回 default（避免一筆壞資料讓功能全掛）。\n- secret 欄位：DB 存 `encrypt_token` 字串（BACKEND-009），讀取時解密後放進回傳的 model（只給後端內部使用，例如 LINE channel token）；解密失敗 → `logger.error`，該欄位視為 None。\n- 回傳的 model 為 frozen 實例，呼叫端不可修改。\n\n**驗收標準**\n- 回傳正確型別與值；TTL 內第二次讀取不查 DB；TTL 過後重新查。\n- invalidate 後立即重新查 DB。\n- 無列 / 壞資料回 default。\n- secret 欄位回傳解密後明文；解密失敗回 None。",
+      "description": "建立 `apps/api/app/services/settings_service.py`（architecture_decisions §4：讀取走 TTL in-process cache，後台修改後立即失效該 key）。\n\n```python\nSETTINGS_CACHE_TTL_SECONDS = 60\n\ndef get_setting(session: Session, key: SettingKey[M]) -> M: ...     # 營運模組讀設定的唯一入口，例如 get_setting(db, PICKUP_WINDOW).auto_expire_minutes\ndef invalidate_setting(key: str) -> None: ...\ndef clear_settings_cache() -> None: ...                             # 測試用\n```\n- cache：`dict[str, tuple[M, float]]`，以 `time.monotonic()` 判斷過期，`threading.Lock` 保護。invalidate / clear 時遞增世代計數，查詢期間被失效的結果不回寫快取（避免後台剛改完、舊值又被寫回快取 60 秒）。\n- miss：查 `system_settings`；列不存在 → 回 registry default（並 `logger.warning`）；value 不通過 schema → `logger.error` 後回 default（避免一筆壞資料讓功能全掛）。\n- secret 欄位：DB 存 `encrypt_token` 字串（BACKEND-009），讀取時解密後放進回傳的 model（只給後端內部使用，例如 LINE channel token）；解密失敗 → `logger.error`，該欄位視為 None。解密在 schema 驗證之前（密文長度會超過明文欄位的 max_length）。log 只記 key、欄位名與錯誤位置，不記值。\n- 回傳的 model 為 frozen 實例，呼叫端不可修改。\n\n**驗收標準**\n- 回傳正確型別與值；TTL 內第二次讀取不查 DB；TTL 過後重新查。\n- invalidate 後立即重新查 DB；查詢期間被 invalidate 的結果不回寫快取。\n- 無列 / 壞資料回 default。\n- secret 欄位回傳解密後明文；解密失敗回 None。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/settings_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-106",
@@ -3769,7 +3769,8 @@
           "test_get_setting_cache_ttl：第一次讀取後以 SQL 把 DB value 的 auto_expire_minutes 改為 90 → 第二次仍 120；monkeypatch time.monotonic 前進 61 秒 → 90",
           "test_get_setting_invalidate：改 DB 後 invalidate_setting('pickup.window') → 立即回 90",
           "test_get_setting_missing_or_invalid_falls_back：刪除 homework.defaults 列 → 回 default；把 org.service_hours value 改為 {'mon': 'bad'} → 回 default 且 caplog 含 'org.service_hours'",
-          "test_get_setting_secret_decrypted：DB line.messaging value = {'channel_access_token': encrypt_token('tok-123'), 'channel_secret': None} → get_setting(...).channel_access_token == 'tok-123'；改為 'v1:garbage' → None 且 caplog 有 error"
+          "test_get_setting_secret_decrypted：DB line.messaging value = {'channel_access_token': encrypt_token('tok-123'), 'channel_secret': None} → get_setting(...).channel_access_token == 'tok-123'；改為 'v1:garbage' → None 且 caplog 有 error",
+          "test_get_setting_invalidate_during_load_not_cached：讓 _load 回傳前呼叫 invalidate_setting('pickup.window') → 第一次讀到 120；之後 DB 改 90 → 第二次讀取（未經 TTL）回 90"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_settings_service.py -k \"test_get_setting_\"",
         "notes": ""
