@@ -222,4 +222,4 @@ jobs:
 
       - name: 移除容器
         if: always()
-        run: docker rm -f afterschool-web-smoke
+        run: docker rm -f afterschool-web-smoke || true
