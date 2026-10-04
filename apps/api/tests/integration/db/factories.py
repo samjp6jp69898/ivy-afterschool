@@ -203,3 +203,16 @@ def make_pickup_persons(conn: psycopg.Connection[Any], **overrides: Any) -> dict
         "phone": "0912-000-001",
     }
     return insert_row(conn, "public.pickup_persons", **{**defaults, **overrides})
+
+
+def make_exams(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    """未指定 exam_type_id 時另建一個考試類型；預設以 grade_level=3 為應考範圍。"""
+    defaults = {
+        "name": "第一次段考",
+        "exam_type_id": overrides.get("exam_type_id")
+        or make_exam_types(conn, name=f"類型{uuid4().hex[:8]}")["id"],
+        "exam_date": date(2026, 10, 20),
+    }
+    if "class_id" not in overrides:
+        defaults["grade_level"] = 3
+    return insert_row(conn, "public.exams", **{**defaults, **overrides})
