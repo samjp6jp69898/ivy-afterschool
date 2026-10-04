@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 132,
-  "last_updated": "2026-10-04T11:34:52Z",
+  "version": 133,
+  "last_updated": "2026-10-04T11:35:07Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5020,7 +5020,7 @@
     {
       "id": "BACKEND-147",
       "title": "實作 app/services/students/id_number.py：身分證字號正規化、格式檢查與 HMAC",
-      "description": "建立 `apps/api/app/services/students/id_number.py`（DB-014：HMAC 查重、AES-GCM 加密，正規化為去空白轉大寫）。\n\n```python\ndef normalize_id_number(raw: str) -> str: ...       # unicodedata NFKC（全形英數轉半形）→ 去除所有空白 → 轉大寫\ndef validate_id_number(normalized: str) -> None: ...\n    # 接受：國民身分證 ^[A-Z][12]\\d{8}$、新式居留證 ^[A-Z][89]\\d{8}$（皆驗檢查碼）、舊式居留證 ^[A-Z][A-D]\\d{8}$（驗檢查碼）；\n    # 不符 → AppError('invalid_id_number', '身分證字號格式不正確', status=422)\ndef id_number_hmac(normalized: str) -> str: ...     # keyed_hash(LABEL_HMAC_ID_NUMBER, normalized)\ndef mask_id_number(normalized: str) -> str: ...     # 'A12****789'（前 3 後 3）\n```\n- 驗證一律只收 ASCII：regex 用 `[0-9]` / `[A-Z]`，NFKC 後仍含非 ASCII 數字（例如阿拉伯-印度數字 '٧'）→ 422；未經 normalize 的全形輸入直接驗證也是 422（防止 `\\d` / `int()` 接受 Unicode 數字讓同一人以不同 HMAC 重複建檔）。\n- 檢查碼演算法：英文字母對應兩位數（A=10, B=11, ... 依內政部對照表，I=34、O=35 等特例），加權 1,9,8,7,6,5,4,3,2,1,1 總和 mod 10 == 0；舊式居留證第二碼字母取對應數的個位數。\n\n**驗收標準**\n- 正規化去空白轉大寫。\n- 合法國民身分證、新舊居留證通過；檢查碼錯誤、格式錯誤 → 422。\n- HMAC 對同值穩定且為 64 碼 hex。\n- 遮罩格式正確。\n- 'A12345678９'（末碼全形）與 'A１23456789'（第二碼全形）正規化後與 'A123456789' 的 HMAC 相同；'A123456٧89' 驗證失敗（422）。",
+      "description": "建立 `apps/api/app/services/students/id_number.py`（DB-014：HMAC 查重、AES-GCM 加密，正規化為去空白轉大寫）。\n\n```python\ndef normalize_id_number(raw: str) -> str: ...       # unicodedata NFKC（全形英數轉半形）→ 去除所有空白 → 轉大寫\ndef validate_id_number(normalized: str) -> None: ...\n    # 接受：國民身分證 ^[A-Z][12][0-9]{8}$、新式居留證 ^[A-Z][89][0-9]{8}$（皆驗檢查碼）、舊式居留證 ^[A-Z][A-D][0-9]{8}$（驗檢查碼）；\n    # 不符 → AppError('invalid_id_number', '身分證字號格式不正確', status=422)\ndef id_number_hmac(normalized: str) -> str: ...     # keyed_hash(LABEL_HMAC_ID_NUMBER, normalized)\ndef mask_id_number(normalized: str) -> str: ...     # 'A12****789'（前 3 後 3）\n```\n- 驗證一律只收 ASCII：regex 用 `[0-9]` / `[A-Z]`，NFKC 後仍含非 ASCII 數字（例如阿拉伯-印度數字 '٧'）→ 422；未經 normalize 的全形輸入直接驗證也是 422（防止 `\\d` / `int()` 接受 Unicode 數字讓同一人以不同 HMAC 重複建檔）。\n- 檢查碼演算法：英文字母對應兩位數（A=10, B=11, ... 依內政部對照表，I=34、O=35 等特例），加權 1,9,8,7,6,5,4,3,2,1,1 總和 mod 10 == 0；舊式居留證第二碼字母取對應數的個位數。\n\n**驗收標準**\n- 正規化去空白轉大寫。\n- 合法國民身分證、新舊居留證通過；檢查碼錯誤、格式錯誤 → 422。\n- HMAC 對同值穩定且為 64 碼 hex。\n- 遮罩格式正確。\n- 'A12345678９'（末碼全形）與 'A１23456789'（第二碼全形）正規化後與 'A123456789' 的 HMAC 相同；'A123456٧89' 驗證失敗（422）。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/students/id_number.py",
       "source_ref": null,
