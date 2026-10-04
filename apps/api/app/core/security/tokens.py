@@ -9,7 +9,9 @@
 - 解碼前先讀 unverified header，``alg != 'HS256'`` 一律拒絕（擋 alg=none / 混淆攻擊）。
 - 過期以注入的 clock 判斷（``verify_exp`` 關閉後自行比對），讓 FakeClock 可測過期。
 - 任何失敗（簽章錯、過期、typ 不符、缺 claim、sub 非 uuid）一律 ``UnauthenticatedError()``，
-  不區分原因。
+  不區分原因。claim 型別逐一驗證（BACKEND-540）：``typ`` / ``sub`` / ``jti`` 必須是非空 str、
+  ``tv`` / ``iat`` / ``exp`` 必須是 int（排除 bool），timestamp 轉換的 OverflowError / OSError /
+  ValueError 也轉成 UnauthenticatedError；不以 ``except Exception`` 吞掉程式錯誤。
 """
 
 from __future__ import annotations
@@ -59,6 +61,12 @@ def create_access_token(
     return jwt.encode(claims, derive_key(LABEL_JWT), algorithm=_ALGORITHM)
 
 
+def _require_str(value: Any) -> str:
+    if not isinstance(value, str) or not value:
+        raise UnauthenticatedError
+    return value
+
+
 def _as_int(value: Any) -> int:
     # bool 是 int 的子類，JSON 的 true / false 不能當數字
     if isinstance(value, bool) or not isinstance(value, int):
@@ -66,31 +74,19 @@ def _as_int(value: Any) -> int:
     return value
 
 
-def _parse_claims(payload: dict[str, Any], expected_type: SubjectType) -> AccessClaims:
-    typ = payload["typ"]
-    if typ not in _SUBJECT_TYPES or typ != expected_type:
-        raise UnauthenticatedError
-    sub = payload["sub"]
-    if not isinstance(sub, str):
-        raise UnauthenticatedError
+def _as_datetime(value: Any) -> datetime:
+    # 超大 / 負數 timestamp 會拋 OverflowError / OSError / ValueError，一律視為無效 token
     try:
-        subject_id = UUID(sub)
-    except ValueError:
+        return datetime.fromtimestamp(_as_int(value), tz=UTC)
+    except (OverflowError, OSError, ValueError):
         raise UnauthenticatedError from None
-    jti = payload["jti"]
-    if not isinstance(jti, str) or not jti:
-        raise UnauthenticatedError
-    return AccessClaims(
-        subject_type=typ,
-        subject_id=subject_id,
-        token_version=_as_int(payload["tv"]),
-        issued_at=datetime.fromtimestamp(_as_int(payload["iat"]), tz=UTC),
-        expires_at=datetime.fromtimestamp(_as_int(payload["exp"]), tz=UTC),
-        jti=jti,
-    )
 
 
-def decode_access_token(token: str, *, expected_type: SubjectType, clock: Clock) -> AccessClaims:
+def _decode_payload(token: str, *, typ: str, required: tuple[str, ...]) -> dict[str, Any]:
+    """驗簽章（HS256）與必要 claim 後回傳 payload；``typ`` 不符或任何失敗 → UnauthenticatedError。
+
+    時間 claim 不在此驗證（交給呼叫端以注入的 clock 判斷）。
+    """
     try:
         header = jwt.get_unverified_header(token)
     except jwt.PyJWTError:
@@ -103,7 +99,7 @@ def decode_access_token(token: str, *, expected_type: SubjectType, clock: Clock)
             derive_key(LABEL_JWT),
             algorithms=[_ALGORITHM],
             options={
-                "require": list(_REQUIRED_CLAIMS),
+                "require": list(required),
                 # 時間一律由注入的 clock 判斷，不用 pyjwt 的系統時間
                 "verify_exp": False,
                 "verify_iat": False,
@@ -112,6 +108,33 @@ def decode_access_token(token: str, *, expected_type: SubjectType, clock: Clock)
         )
     except jwt.PyJWTError:
         raise UnauthenticatedError from None
+    if not isinstance(payload, dict) or payload.get("typ") != typ:
+        raise UnauthenticatedError
+    return payload
+
+
+def _parse_claims(payload: dict[str, Any], expected_type: SubjectType) -> AccessClaims:
+    typ = _require_str(payload["typ"])
+    if typ != expected_type:
+        raise UnauthenticatedError
+    try:
+        subject_id = UUID(_require_str(payload["sub"]))
+    except ValueError:
+        raise UnauthenticatedError from None
+    return AccessClaims(
+        subject_type=expected_type,
+        subject_id=subject_id,
+        token_version=_as_int(payload["tv"]),
+        issued_at=_as_datetime(payload["iat"]),
+        expires_at=_as_datetime(payload["exp"]),
+        jti=_require_str(payload["jti"]),
+    )
+
+
+def decode_access_token(token: str, *, expected_type: SubjectType, clock: Clock) -> AccessClaims:
+    if expected_type not in _SUBJECT_TYPES:
+        raise ValueError(f"expected_type 只接受 staff / parent：{expected_type!r}")
+    payload = _decode_payload(token, typ=expected_type, required=_REQUIRED_CLAIMS)
     claims = _parse_claims(payload, expected_type)
     if clock.now() >= claims.expires_at:
         raise UnauthenticatedError
