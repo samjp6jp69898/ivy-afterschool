@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 160,
-  "last_updated": "2026-10-04T16:09:05Z",
+  "version": 161,
+  "last_updated": "2026-10-04T16:15:04Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2624,7 +2624,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/role_service.py",
       "source_ref": "BE:api/permissions_admin.py::_role_query",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-076",
@@ -3520,7 +3520,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/audit_service.py",
       "source_ref": "BE:utils/audit.py::write_audit_in_session",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-101",
@@ -3788,7 +3788,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/settings_service.py",
       "source_ref": "BE:api/system_config.py::list_configs",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-108",
@@ -4004,7 +4004,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/reference_data_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-114"
@@ -4516,7 +4516,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/repositories/students.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-131",
@@ -4525,7 +4525,7 @@
         "BACKEND-022"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：get_student_or_404(for_update=True) 實作為 FOR UPDATE OF students（Student 的 school / class_ 為 lazy=\"joined\"，Postgres 不允許鎖 outer join 可空側）；list_active_student_ids 依 student_no、id 排序以求結果穩定（description 未規定順序）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/repositories/test_student_repository.py",
@@ -5063,13 +5063,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/students.py",
       "source_ref": "BE:api/students.py::StudentCreate",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-167"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：ClassBrief 直接重用 BACKEND-134 的 ClassBriefOut（schemas/students.py 內 ClassBrief = ClassBriefOut，避免重複定義）；StudentUpdateIn 可給 null 的欄位為 gender、birthday、school_id、school_class、class_id、enrolled_on、withdrawn_on、note、id_number、health_note，student_no / name / grade_level / status 不可為 null。withdrawn 需 withdrawn_on、withdrawn_on 不得早於 enrolled_on 等跨欄位規則由學生 service 以明確錯誤碼處理（schema 不重複 DB CHECK）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_student_schemas.py",
@@ -6319,7 +6319,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_children_service.py",
       "source_ref": "BE:api/parent_portal/profile.py::get_my_children",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-179",
@@ -6327,7 +6327,7 @@
         "BACKEND-014"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：照片簽名 URL 使用 Storage 預設有效期（300 秒，architecture_decisions §10）；StorageError 時只讓該筆 photo_url 為 None 並 logger.warning（不含路徑），不讓整份清單失敗。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_parent_children_service.py",
@@ -14829,7 +14829,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/errors.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-003"
