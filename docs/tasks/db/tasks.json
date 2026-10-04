@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 36,
-  "last_updated": "2026-10-04T06:40:03Z",
+  "version": 37,
+  "last_updated": "2026-10-04T06:43:43Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -254,7 +254,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db007_create_system_settings.py",
       "source_ref": "BE:models/config.py::SystemConfig",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-004"
@@ -279,9 +279,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-db",
+        "notes": "通過。key regex 以 'org'（未跳脫的 . 會誤放行）與 'OrgProfile' 驗證、value 非物件、uq_system_settings_key 斷言 constraint 名稱；domain_spec M2 全部首批 key 皆符合 regex。tdd.run 實跑全綠，--collect-only 帶/不帶 -k 選到的測試相同且涵蓋每條 red_case；測試 commit 先於實作 commit；db-reset 從空 DB 升到 head=db026（單一 head），pg_catalog 核對欄位 / 約束 / 索引 / FK 行為 / trigger 與 description 一致；測試資料一律經 app_backend 寫入，owner 只用於 assert_backend_grants；改動路徑 just lint 乾淨；tests/integration/db 全目錄 205 passed。"
       }
     },
     {
@@ -480,7 +480,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db013_create_class_staff.py",
       "source_ref": "BE:models/classroom.py::Classroom",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-012",
@@ -505,9 +505,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-db",
+        "notes": "通過。unique 斷言 uq_class_staff_class_staff、cascade 兩方向（班級與員工）皆測。tdd.run 實跑全綠，--collect-only 帶/不帶 -k 選到的測試相同且涵蓋每條 red_case；測試 commit 先於實作 commit；db-reset 從空 DB 升到 head=db026（單一 head），pg_catalog 核對欄位 / 約束 / 索引 / FK 行為 / trigger 與 description 一致；測試資料一律經 app_backend 寫入，owner 只用於 assert_backend_grants；改動路徑 just lint 乾淨；tests/integration/db 全目錄 205 passed。 殘留：red_case 名稱 test_class_staff_role_domain 實際為 test_class_staff_default_role_and_domain（內容涵蓋）；just typecheck 報 test_class_staff.py:24 no-any-return（CI 不對 tests 跑 mypy）；實作 commit 6384ff4 順帶改 make_class_staff 班名亂數（測試支援修正）。"
       }
     },
     {
@@ -598,7 +598,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db016_create_guardians.py",
       "source_ref": "BE:models/guardian.py::Guardian",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-014",
@@ -626,9 +626,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-db",
+        "notes": "通過。兩個 partial unique 斷言 constraint 名稱、封存後可另設 primary、FK restrict / set null、預設值皆測。tdd.run 實跑全綠，--collect-only 帶/不帶 -k 選到的測試相同且涵蓋每條 red_case；測試 commit 先於實作 commit；db-reset 從空 DB 升到 head=db026（單一 head），pg_catalog 核對欄位 / 約束 / 索引 / FK 行為 / trigger 與 description 一致；測試資料一律經 app_backend 寫入，owner 只用於 assert_backend_grants；改動路徑 just lint 乾淨；tests/integration/db 全目錄 205 passed。 殘留：沒有測試覆蓋「封存後同一家長可再綁同一學生」（uq_guardians_student_parent 的 archived_at is null 條件；catalog 已核對存在）；guardians.student_id 只有 partial 前導索引（ix_guardians_student），與 students.class_id 同屬 DB-040 待決。"
       }
     },
     {
@@ -676,7 +676,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db018_create_student_leaves.py",
       "source_ref": "BE:models/student_leave.py::StudentLeaveRequest",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-014"
@@ -703,9 +703,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-db",
+        "notes": "通過。ex_student_leaves_no_overlap 以 app_backend 實測 23P01 並斷言 constraint 名稱，頭尾相接同日算重疊、cancelled 不擋、不同學生不擋；另以 app_backend 探針確認 cancelled 改回 active 造成重疊也拋 23P01、gist index scan（search_path 不含 extensions）可用。tdd.run 實跑全綠，--collect-only 帶/不帶 -k 選到的測試相同且涵蓋每條 red_case；測試 commit 先於實作 commit；db-reset 從空 DB 升到 head=db026（單一 head），pg_catalog 核對欄位 / 約束 / 索引 / FK 行為 / trigger 與 description 一致；測試資料一律經 app_backend 寫入，owner 只用於 assert_backend_grants；改動路徑 just lint 乾淨；tests/integration/db 全目錄 205 passed。 殘留：`create extension if not exists` 遇到雲端已在其他 schema 裝了 btree_gist 時，extensions.gist_uuid_ops 會找不到，部署實測時一併確認 extension 所在 schema。"
       }
     },
     {
@@ -794,7 +794,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db021_create_homework_items.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-014",
@@ -822,9 +822,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-db",
+        "notes": "通過。值域、title 空白 / 101 字（並驗 100 字合法）、subject set null、student restrict、同名允許皆測。tdd.run 實跑全綠，--collect-only 帶/不帶 -k 選到的測試相同且涵蓋每條 red_case；測試 commit 先於實作 commit；db-reset 從空 DB 升到 head=db026（單一 head），pg_catalog 核對欄位 / 約束 / 索引 / FK 行為 / trigger 與 description 一致；測試資料一律經 app_backend 寫入，owner 只用於 assert_backend_grants；改動路徑 just lint 乾淨；tests/integration/db 全目錄 205 passed。"
       }
     },
     {
@@ -834,7 +834,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db022_create_homework_daily_progress.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-014",
@@ -861,9 +861,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-db",
+        "notes": "通過。unique 斷言 constraint 名稱、ck_homework_daily_progress_eta_audit 斷言名稱、upsert 後仍 1 筆。tdd.run 實跑全綠，--collect-only 帶/不帶 -k 選到的測試相同且涵蓋每條 red_case；測試 commit 先於實作 commit；db-reset 從空 DB 升到 head=db026（單一 head），pg_catalog 核對欄位 / 約束 / 索引 / FK 行為 / trigger 與 description 一致；測試資料一律經 app_backend 寫入，owner 只用於 assert_backend_grants；改動路徑 just lint 乾淨；tests/integration/db 全目錄 205 passed。 BACKEND 規格核對：BACKEND-373 lock_progress_row 的 upsert 為 on conflict do nothing 不寫 ETA；BACKEND-382 設 ready_eta 時同時寫 eta_updated_by / eta_updated_at，清除時保留 eta_updated_at；BACKEND-370 factory 給 ready_eta 時自動補 eta_updated_at 並有 CHECK 測試——無規格缺口。 殘留：紅燈 commit 7d3123d 的 upsert 測試本身違反 ETA CHECK，修正混在實作 commit 67cdfba（red_case 已同步更新）。"
       }
     },
     {
@@ -873,7 +873,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db023_create_pickup_persons.py",
       "source_ref": "BE:models/pickup.py::StudentPickupPerson",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-014",
@@ -898,9 +898,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-db",
+        "notes": "通過。name / relation 空白與超長、phone 格式（含過短、過長、+886 合法）、FK restrict / set null、預設值皆測。tdd.run 實跑全綠，--collect-only 帶/不帶 -k 選到的測試相同且涵蓋每條 red_case；測試 commit 先於實作 commit；db-reset 從空 DB 升到 head=db026（單一 head），pg_catalog 核對欄位 / 約束 / 索引 / FK 行為 / trigger 與 description 一致；測試資料一律經 app_backend 寫入，owner 只用於 assert_backend_grants；改動路徑 just lint 乾淨；tests/integration/db 全目錄 205 passed。 殘留：pickup_persons.student_id 只有 partial 前導索引（ix_pickup_persons_student），與 students.class_id 同屬 DB-040 待決。"
       }
     },
     {
@@ -993,7 +993,7 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db026_create_exams.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-009",
@@ -1020,9 +1020,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-db",
+        "notes": "通過。ck_exams_scope 斷言名稱、grade_level 0 / 7、發布一致性三種反例、exam_types / classes restrict、name / note 長度皆測。tdd.run 實跑全綠，--collect-only 帶/不帶 -k 選到的測試相同且涵蓋每條 red_case；測試 commit 先於實作 commit；db-reset 從空 DB 升到 head=db026（單一 head），pg_catalog 核對欄位 / 約束 / 索引 / FK 行為 / trigger 與 description 一致；測試資料一律經 app_backend 寫入，owner 只用於 assert_backend_grants；改動路徑 just lint 乾淨；tests/integration/db 全目錄 205 passed。"
       }
     },
     {
