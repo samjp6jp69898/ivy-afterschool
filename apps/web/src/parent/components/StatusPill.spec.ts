@@ -1,8 +1,16 @@
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import StatusPill from './StatusPill.vue'
 import pillSource from './StatusPill.vue?raw'
-import tokens from '../styles/m3-tokens.css?raw'
+
+// vitest 的 css ?raw 會回傳空字串，改用 fs 讀原始檔
+const tokens = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), '../styles/m3-tokens.css'),
+  'utf-8',
+)
 
 /** 取出某個選擇器開頭的第一個樣式區塊內容 */
 function block(css: string, selector: string): string {
