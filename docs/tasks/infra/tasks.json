@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 123,
-  "last_updated": "2026-10-04T14:53:46Z",
+  "version": 124,
+  "last_updated": "2026-10-04T14:55:14Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1455,7 +1455,7 @@
       "granularity_unit": "doc",
       "target_path": "docs/deployment.md",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-infra-r6b",
       "depends_on": [
         "INFRA-049",
@@ -1465,7 +1465,7 @@
         "BACKEND-535"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "打回 1（api 的 PORT 必須在 Railway 明確設定）：docs/deployment.md §2 把 api 的 `PORT` 寫成「自動 / 由 Railway 注入」，web 的 `BACKEND_URL` 卻引用 `${{api.PORT}}`。Railway 注入的 PORT 只在執行期存在，dashboard 的 reference variable 讀不到（Railway 員工於 Help Station 的答覆：\"That PORT variable is only injected at runtime and is not available in the dashboard, so you would indeed have to set it in the service variables\"，https://station.railway.com/questions/private-networking-unable-to-access-por-5e15f237）。反例：照文件設定 → BACKEND_URL 渲染成 `http://api.railway.internal:` → nginx `proxy_pass $backend_upstream` 的 port 無效，所有 /api 請求失敗（smoke 第 4、5 項 FAIL）。修正：description 與文件改為 api 服務必須設定 `PORT=8080`（與 apps/api/Dockerfile 的 `ENV PORT=8080` 一致，讓 `${{api.PORT}}` 能解析），並補一條 red_case 鎖住文件中 api 的 PORT 值等於 Dockerfile 的 ENV PORT。\n打回 2（create-admin 的執行位置寫錯）：§6 第 5 步寫「在 Railway shell 執行 `python -m app.cli create-admin`」。Railway CLI 的 `railway shell` 是「Open a local subshell with Railway variables available」（railwayapp/docs content/docs/cli/shell.md），指令會在部署者本機執行；DATABASE_URL 指向 `${{Postgres.PGHOST}}`（private network 主機），從本機解析不到，指令必然失敗。要進入執行中的 api 容器應使用 `railway ssh --service api`（content/docs/cli/ssh.md：「Open an interactive shell session inside a deployed Railway service container」）。修正：description 第 6 節與文件同步改成 `railway ssh`（明示是 api 服務的執行中容器），並補進 red_case 的關鍵字。\n打回 3（§11 btree_gist 驗證項的出處與檢查內容錯誤）：文件寫「btree_gist extension 所在的 schema 與 app_backend 的 search_path 相容（baseline revision 於 Railway Postgres 實際執行結果）」。實際建立 btree_gist 的是 apps/api/alembic/versions/db018_create_student_leaves.py（`create extension if not exists btree_gist with schema extensions`），exclusion constraint 寫死 `extensions.gist_uuid_ops`，不依賴 search_path（檔頭 docstring 明寫）。真正的失敗情境是雲端 btree_gist 已裝在其他 schema 時，`if not exists` 會跳過，db018 因為找不到 `extensions.gist_uuid_ops` 而讓 pre-deploy migration 失敗；照文件去查 search_path 抓不到這個情境。修正：改成「雲端可安裝 btree_gist，且安裝在 extensions schema（例如 `select extnamespace::regnamespace from pg_extension where extname = 'btree_gist'` 應為 extensions）；DB-018 寫死 extensions.gist_uuid_ops」，與 docs/tasks/kickoff_prompt.md 的部署實測項目一致。",
+      "risk_notes": "打回（description 仍有被 shell 吞掉的內容）：§2 api 一項寫成「web 的  reference 讀不到」，缺少 `${{api.PORT}}`；§6 寫成「api 第一次部署完成後以  進入執行中的 api 容器（ 是本機 subshell…」，缺少 `railway ssh --service api` 與 `railway shell`。description 是唯一權威，§6 正是打回項「create-admin 改用 railway ssh」要同步的位置，目前讀不出該用哪個指令。修正：以 Python json.load → 改 → json.dump 寫回這三處（不要經過 shell 字串），寫入後以 `'railway ssh --service api' in description`、`'railway shell' in description`、`description.count('${{api.PORT}}') >= 2` 自檢。\n目前仍成立的風險（docs/deployment.md §11 已列為待驗證）：BACKEND-021 / 048 / 065 尚未實作，完成前 api healthcheck、smoke 與建立初始管理員都會失敗；api 只監聽 IPv6，與 Railway private DNS 雙棧解析的處理方式屬 INFRA-031 open_design_questions (3)。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "scripts/tests/test_deployment_doc.py",
@@ -1494,7 +1494,7 @@
       "review": {
         "status": "concern",
         "reviewer": "review-r6-infra",
-        "notes": "打回 3 項（見 risk_notes 打回 1~3：api PORT 未固定導致 BACKEND_URL 缺 port、create-admin 誤用 railway shell、btree_gist 驗證項出處錯誤）。已核對且正確的部分：12 條 red_case（含 config_file_absolute_paths）逐條有對應測試；tdd.run 實跑 12 passed，--collect-only 帶 / 不帶 -k deployment_doc 同為 12 條；測試 commit 1c462f0 早於文件 51eee82，取 1c462f0 的樹實跑 12 failed，確認紅燈；just typecheck、just lint 該測試檔皆 exit 0；文件無歷史敘述。內容對照：api 環境變數表的 11 個 key 與 apps/api/.env.example 一致；DATABASE_URL 用 postgresql:// 不會失敗（app/core/config.py `_normalize_database_url`、app/core/migrate.py `_normalize`、alembic/env.py 三處都接受 postgresql:// 並轉成 +psycopg）；`${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}` 與 `${{Postgres.DATABASE_URL}}` 指向同一個 host / port / db，通過 migrate 的同目標檢查；token_urlsafe 產生的密碼沒有保留字元，通過 `_parse` 的檢查；CORS_ORIGINS 留空時解析成 []，SENTRY_DSN 留空時為 None；railway.json 的 preDeployCommand、healthcheckPath（/api/health、/healthz）、numReplicas 1 與文件一致；web Dockerfile 的 TRUSTED_EDGE_CIDRS 預設值存在；`just smoke <base_url>` 與 justfile 一致；`python -m app.cli migrate` 存在；settings_registry 的 line.liff（liff_id、channel_id、add_friend_url）與 line.messaging（channel_access_token、channel_secret，secret_fields）與文件 §5 一致；architecture_decisions §11 的四項都列在 §11 待驗證清單。殘留（不擋）：(1) Railway 官方文件（railwayapp/docs content/docs/networking/domains/working-with-domains.md）明載「For new environments (created after October 16, 2025), this DNS name resolves to both internal IPv4 and IPv6 addresses」，新建專案的 api.railway.internal 會同時解析出 IPv4，而 api 只監聽 IPv6；§11 的 IPv6 項目與 INFRA-031 open_design_questions (3) 應以此為前提評估改成雙棧，建議協調者把這段官方說明寫進 INFRA-031。(2) `app.cli create-admin`（BACKEND-065）、`/api/health`（BACKEND-021）、`/api/admin/auth/me`（BACKEND-048）都還沒實作，文件引用的是規格中的指令與端點；§11 只列了 /api/health。(3) §3 的編號清單被粗體段落打斷（第 4 步與第 5 步之間），屬排版問題。"
+        "notes": "打回 1 項：description §2 與 §6 仍有被吞掉的反引號內容（見 risk_notes）。docs/deployment.md 本身已修正前次 3 項：§2 api 的 PORT 改為必填 `PORT=8080`，並說明 `${{api.PORT}}` 的限制；§6 改用 `railway ssh --service api`，並註明不要用 `railway shell`；§11 btree_gist 改查 extnamespace，並寫明 DB-018 寫死 extensions.gist_uuid_ops；§3 編號已修正，§11 補上 BACKEND-021 / 048 / 065 與 IPv6 雙棧待決。新增 red_case 兩條（api_port_matches_dockerfile、btree_gist_check），references_commands 加 'railway ssh'；dockerfile_port 解析 apps/api/Dockerfile 的 `PORT=8080`（ENV 續行），doc_api_port 只取環境變數章節，兩者都有合成輸入自檢。測試 commit 7a5c0d7、2aae197 早於文件 70594bf；取 2aae197 的樹實跑，新增 / 修改的 3 條 failed、其餘 11 條 passed，確認紅燈；tdd.run 實跑 14 passed，--collect-only 帶 / 不帶 -k deployment_doc 同為 14 條；just typecheck、just lint 測試檔皆 exit 0。"
       }
     },
     {
