@@ -20,16 +20,39 @@ defineSlots<{
   actions?: () => unknown
 }>()
 
+// 卡片內的控制項自己處理 click 與按鍵（使用者裁定：可點卡片內可以放控制項）
+const INTERACTIVE_SELECTOR = [
+  'button',
+  'a[href]',
+  'input',
+  'select',
+  'textarea',
+  'label',
+  '[role="button"]',
+  '[role="switch"]',
+  '[role="link"]',
+  '[role="checkbox"]',
+  '[contenteditable="true"]',
+].join(', ')
+
+function fromNestedControl(event: Event): boolean {
+  const target = event.target
+  if (!(target instanceof Element)) return false
+  const control = target.closest(INTERACTIVE_SELECTOR)
+  return control !== null && control !== event.currentTarget
+}
+
 function onClick(event: MouseEvent): void {
-  if (props.clickable) emit('click', event)
+  if (!props.clickable || fromNestedControl(event)) return
+  emit('click', event)
 }
 
 function onKeydown(event: KeyboardEvent): void {
   if (!props.clickable || (event.key !== 'Enter' && event.key !== ' ')) return
-  // 卡片內的輸入框 / 按鈕自己處理按鍵
-  if (event.target !== event.currentTarget) return
-  // Space 預設會捲動頁面
+  if (fromNestedControl(event)) return
+  // Space 預設會捲動頁面；按住不放的 repeat 也要擋
   event.preventDefault()
+  if (event.repeat) return
   emit('click', event)
 }
 </script>
