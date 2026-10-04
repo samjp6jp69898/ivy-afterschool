@@ -12,6 +12,9 @@ from sqlalchemy.orm import Session
 
 from app.core.clock import Clock
 from app.core.errors import AppError
+from app.core.permissions import Permission
+from app.models.account import StaffUser
+from app.models.parents import ParentAccount
 from app.services.auth import refresh_tokens
 from app.services.auth.throttle import AuthThrottles, get_auth_throttles
 from tests.support.factories import make_staff
@@ -19,6 +22,9 @@ from tests.support.route_audit import admin_routes_without_permission
 
 _URL = "/api/admin/auth/login"
 _LOGOUT = "/api/admin/auth/logout"
+_ME = "/api/admin/auth/me"
+StaffClientFactory = Callable[..., tuple[TestClient, StaffUser]]
+ParentClientFactory = Callable[..., tuple[TestClient, ParentAccount]]
 _PASSWORD = "Passw0rd-Test1"  # noqa: S105  測試假值
 _WRONG = "Wrong-Passw0rd1"
 AssertError = Callable[..., None]
@@ -244,3 +250,84 @@ def test_admin_logout_other_device_kept(
     assert rotated.subject_type == "staff"
     with pytest.raises(AppError):
         refresh_tokens.rotate(db_session, raw1, clock=fake_clock)
+
+
+def test_admin_me_success(staff_client: StaffClientFactory) -> None:
+    client, staff = staff_client(
+        permissions=["students:read", "classes:read"], display_name="林老師"
+    )
+
+    resp = client.get(_ME)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["permissions"] == ["classes:read", "students:read"]
+    assert body["must_change_password"] is False
+    assert body["id"] == str(staff.id)
+    assert body["username"] == staff.username
+    assert body["display_name"] == "林老師"
+    assert set(body["role"]) == {"id", "code", "name"}
+    assert set(body) == {
+        "id",
+        "username",
+        "display_name",
+        "role",
+        "permissions",
+        "must_change_password",
+    }
+
+
+def test_admin_me_permissions_sorted_with_extra_and_revoked(
+    staff_client: StaffClientFactory,
+) -> None:
+    client, _ = staff_client(
+        permissions=["students:read", "homework:write"],
+        extra_permissions=["audit:read"],
+        revoked_permissions=["homework:write"],
+    )
+
+    assert client.get(_ME).json()["permissions"] == ["audit:read", "students:read"]
+
+
+def test_admin_me_admin_expands_wildcard(
+    api_client: TestClient,
+    db_session: Session,
+    login_staff: Callable[[TestClient, StaffUser], None],
+) -> None:
+    admin = make_staff(db_session, role_code="admin")
+    db_session.commit()
+    login_staff(api_client, admin)
+
+    body = api_client.get(_ME).json()
+
+    assert body["permissions"] == sorted(p.value for p in Permission)
+    assert "*" not in body["permissions"]
+    assert body["role"]["code"] == "admin"
+
+
+def test_admin_me_401(
+    api_client: TestClient, parent_client: ParentClientFactory, assert_error: AssertError
+) -> None:
+    assert_error(api_client.get(_ME), 401, "unauthenticated")
+    parent, _ = parent_client()
+    assert_error(parent.get(_ME), 401, "unauthenticated")
+
+
+def test_admin_me_must_change_password_allowed(staff_client: StaffClientFactory) -> None:
+    client, _ = staff_client(permissions=["students:read"], must_change_password=True)
+
+    resp = client.get(_ME)
+
+    assert resp.status_code == 200
+    assert resp.json()["must_change_password"] is True
+
+
+def test_admin_me_inactive_401(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client, staff = staff_client(permissions=["students:read"])
+    assert client.get(_ME).status_code == 200
+    staff.is_active = False
+    db_session.commit()
+
+    assert_error(client.get(_ME), 401, "unauthenticated")
