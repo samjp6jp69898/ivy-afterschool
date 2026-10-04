@@ -1,4 +1,6 @@
-"""BACKEND-004：app/core/logging.py（logging 設定、request id middleware、敏感欄位遮罩）。"""
+"""BACKEND-004：app/core/logging.py（logging 設定、request id middleware、敏感欄位遮罩）。
+BACKEND-539：RedactingFilter 補遮罩非字串 msg 與例外 traceback。
+"""
 
 import json
 import logging
@@ -295,3 +297,115 @@ def test_logging_redacting_filter_header_pairs() -> None:
 
     nested_pair = _filtered_message("%s", ("Set-Cookie", "sid=T10; Path=/"))
     assert "T10" not in nested_pair
+
+
+# --- BACKEND-539：非字串 msg 與 traceback ----------------------------------------------------
+
+
+def _stderr_lines(capsys: pytest.CaptureFixture[str]) -> list[str]:
+    return [line for line in capsys.readouterr().err.splitlines() if line.strip()]
+
+
+@pytest.mark.usefixtures("restore_root_logging")
+def test_logging_redact_nonstr_mapping_msg(capsys: pytest.CaptureFixture[str]) -> None:
+    configure_logging(_settings("production"))
+
+    logging.getLogger("app.test").info({"password": "PW1", "user": "amy"})
+    logging.getLogger("app.test").info([("authorization", "Bearer PW3"), ("accept", "*/*")])
+
+    lines = _stderr_lines(capsys)
+    assert len(lines) == 2
+    assert "PW1" not in lines[0]
+    assert "amy" in lines[0]
+    assert "***" in json.loads(lines[0])["msg"]
+    assert "PW3" not in lines[1]
+    assert "accept" in lines[1]
+
+
+class _Describable:
+    def __str__(self) -> str:
+        return "token=TK2 ok"
+
+
+@pytest.mark.usefixtures("restore_root_logging")
+def test_logging_redact_nonstr_object_msg(capsys: pytest.CaptureFixture[str]) -> None:
+    configure_logging(_settings("production"))
+
+    logging.getLogger("app.test").info(_Describable())
+
+    lines = _stderr_lines(capsys)
+    assert len(lines) == 1
+    assert "TK2" not in lines[0]
+    assert "ok" in json.loads(lines[0])["msg"]
+
+
+class _Exploding:
+    def __str__(self) -> str:
+        raise RuntimeError("str 爆炸 password=PW5")
+
+
+@pytest.mark.usefixtures("restore_root_logging")
+def test_logging_redact_nonstr_object_msg_fail_closed(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_logging(_settings("production"))
+
+    logging.getLogger("app.test").info(_Exploding())
+
+    lines = _stderr_lines(capsys)
+    assert len(lines) == 1
+    assert "PW5" not in lines[0]
+    assert "***" in json.loads(lines[0])["msg"]
+
+
+def _log_exception_with_secret(logger_name: str) -> None:
+    try:
+        raise RuntimeError("db password=xyz")
+    except RuntimeError:
+        logging.getLogger(logger_name).exception("boom")
+
+
+@pytest.mark.usefixtures("restore_root_logging")
+def test_logging_redact_exception_traceback_json(capsys: pytest.CaptureFixture[str]) -> None:
+    configure_logging(_settings("production"))
+
+    _log_exception_with_secret("app.test")
+
+    lines = _stderr_lines(capsys)
+    assert len(lines) == 1
+    entry = json.loads(lines[0])
+    assert "xyz" not in lines[0]
+    assert "RuntimeError" in entry["exc"]
+    assert "test_logging.py" in entry["exc"]
+    assert "_log_exception_with_secret" in entry["exc"]
+    assert "***" in entry["exc"]
+    assert entry["msg"] == "boom"
+
+
+@pytest.mark.usefixtures("restore_root_logging")
+def test_logging_redact_exception_traceback_text(capsys: pytest.CaptureFixture[str]) -> None:
+    configure_logging(_settings("development"))
+
+    _log_exception_with_secret("app.test")
+
+    output = capsys.readouterr().err
+    assert "xyz" not in output
+    assert "RuntimeError" in output
+    assert "test_logging.py" in output
+    assert "boom" in output
+
+
+@pytest.mark.usefixtures("restore_root_logging")
+def test_logging_redact_stack_info(capsys: pytest.CaptureFixture[str]) -> None:
+    configure_logging(_settings("production"))
+
+    def _helper_frame_abc9() -> None:  # 函式名進 stack 文字，用來確認 stack_info 有輸出
+        logging.getLogger("app.test").info("secret=S9 in stack", stack_info=True)
+
+    _helper_frame_abc9()
+
+    lines = _stderr_lines(capsys)
+    assert len(lines) == 1
+    entry = json.loads(lines[0])
+    assert "S9" not in lines[0]
+    assert "_helper_frame_abc9" in entry["stack"]
