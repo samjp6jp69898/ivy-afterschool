@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 122,
-  "last_updated": "2026-10-04T07:59:49Z",
+  "version": 123,
+  "last_updated": "2026-10-04T11:05:26Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -384,7 +384,7 @@
       "review": {
         "status": "pass",
         "reviewer": "review-r5-backend",
-        "notes": "通過。0ab8a33（紅）→ 566fcf6（綠）。tdd.run 5 個測試全綠，四條 red_case 皆選到（另有 test_keyed_hash_changes_with_secret 驗金鑰來源為 APP_SECRET_KEY）。金鑰為 derive_key(label) 的 HKDF 衍生值，與加密 / JWT 金鑰以 label 隔離；非 LABEL_HMAC_* 一律 ValueError（含 LABEL_FIELD_ENC、LABEL_JWT、任意 bytes）。constant_time_equals 先 encode 再 hmac.compare_digest，非 ASCII 字串不會 TypeError。殘留：沒有以 hmac.new(derive_key(label), ...) 對照的已知值測試（格式 / 決定性 / label 與金鑰敏感度已涵蓋，不擋）。"
+        "notes": "通過。0ab8a33（紅）→ 566fcf6（綠）。tdd.run 5 個測試全綠，四條 red_case 皆選到（另有 test_keyed_hash_changes_with_secret 驗金鑰來源為 APP_SECRET_KEY）。金鑰為 derive_key(label) 的 HKDF 衍生值，與加密 / JWT 金鑰以 label 隔離；非 LABEL_HMAC_* 一律 ValueError（含 LABEL_FIELD_ENC、LABEL_JWT、任意 bytes）。constant_time_equals 先 encode 再 hmac.compare_digest，非 ASCII 字串不會 TypeError。殘留：沒有以 hmac.new(derive_key(label), ...) 對照的已知值測試（格式 / 決定性 / label 與金鑰敏感度已涵蓋，不擋）。 複審補記（BACKEND-400 commit d2ef597）：已補 test_keyed_hash_known_answer，以獨立的 HKDF + hmac.new 從 APP_SECRET_KEY 重算並比對，非恆真；上述 known-answer 殘留已解除。"
       }
     },
     {
@@ -688,7 +688,7 @@
       "review": {
         "status": "pass",
         "reviewer": "review-r5-backend",
-        "notes": "通過。418d33f（紅）→ 1d4c9cf（綠）。tdd.run 7/7 綠，六條 red_case 皆選到。run_job_once：取鎖、執行、commit 都在 try 內，任何 Exception → rollback + logger.exception + sentry capture → 'failed'，不往外拋；skipped 測試以另一條 app_backend 連線實際持有 xact lock 驗 func 未被呼叫，鎖釋放後同 spec 回 'ran'；failed 測試驗 count == 0 與 caplog 含 job_id。台北日 run_key 以 spy 擷取 try_advisory_xact_lock 參數驗證 '2026-09-02'。被測 session 一律由 app_backend 的 db_engine 建立，owner 只用於探針 schema 的 DDL / 清表 / 計數。registry kwarg、tick_run_key / daily_run_key 已寫進 description，屬合理介面補充。殘留：(1) daily_run_key 本身沒有測試（台北日測試用 lambda），第一個每日工作 task 應以 daily_run_key 驗；(2) advisory lock 是 xact 級，工作函式若自行 commit（切批）會在第一批後釋放鎖，BACKEND-066 / 209 等工作模組應只 flush、由 runner commit，或改用 session 級鎖；(3) session_factory() 在 try 之外、except 內 rollback 若再拋例外會外漏給 APScheduler（其自身會記 log、不殺執行緒）。"
+        "notes": "通過。418d33f（紅）→ 1d4c9cf（綠）。tdd.run 7/7 綠，六條 red_case 皆選到。run_job_once：取鎖、執行、commit 都在 try 內，任何 Exception → rollback + logger.exception + sentry capture → 'failed'，不往外拋；skipped 測試以另一條 app_backend 連線實際持有 xact lock 驗 func 未被呼叫，鎖釋放後同 spec 回 'ran'；failed 測試驗 count == 0 與 caplog 含 job_id。台北日 run_key 以 spy 擷取 try_advisory_xact_lock 參數驗證 '2026-09-02'。被測 session 一律由 app_backend 的 db_engine 建立，owner 只用於探針 schema 的 DDL / 清表 / 計數。registry kwarg、tick_run_key / daily_run_key 已寫進 description，屬合理介面補充。殘留：(1) daily_run_key 本身沒有測試（台北日測試用 lambda），第一個每日工作 task 應以 daily_run_key 驗；(2) advisory lock 是 xact 級，工作函式若自行 commit（切批）會在第一批後釋放鎖，BACKEND-066 / 209 等工作模組應只 flush、由 runner commit，或改用 session 級鎖；(3) session_factory() 在 try 之外、except 內 rollback 若再拋例外會外漏給 APScheduler（其自身會記 log、不殺執行緒）。 複審補記（9b4aeea）：已補 test_scheduler_run_key_helpers，斷言 tick_run_key 恆為 'tick'、daily_run_key 在 UTC 15:59 / 16:00 分別為 '2026-09-01' / '2026-09-02'、JobSpec 預設 run_key 為 tick_run_key，整合測試 20 個一起跑全綠；殘留 (1) 已解除。殘留 (2) 已寫入 BACKEND-066 / 209 規格（a40f9f0）。"
       }
     },
     {
@@ -736,7 +736,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/main.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-001",
@@ -749,7 +749,7 @@
         "BACKEND-223"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "Sentry 預設 LoggingIntegration 會在 RedactingFilter 之前讀 record，未掛 before_send / before_breadcrumb 時 breadcrumb 與 event 會帶未遮罩的 msg / args / 例外訊息（review-r5-backend 指出）；本 task 以 scrub_sentry_event / scrub_sentry_breadcrumb 處理。",
+      "risk_notes": "Sentry 預設 LoggingIntegration 會在 RedactingFilter 之前讀 record，未掛 before_send / before_breadcrumb 時 breadcrumb 與 event 會帶未遮罩的 msg / args / 例外訊息（review-r5-backend 指出）；本 task 以 scrub_sentry_event / scrub_sentry_breadcrumb 處理。\n【review-r5-backend 打回】(1) & 終止符讓含 & 的敏感值只遮前段：redact_text('login password=Abc&123') → 'login password=***&123'、'secret=a&b&c' → 'secret=***&b&c'、'Authorization: Bearer abc&def' → 'Authorization=***&def'、'cookie: sid=X&Y; path=/' → 'cookie=***&Y; path=/'，Sentry exception value 'password=Pw&rd!' → 'password=***&rd!'；改動前整段遮掉。修正方向：& 只在後面緊接 '識別字=' 時才終止（例如 (?!&[A-Za-z_][A-Za-z0-9_.-]*=) 的反向條件），或移除 & 終止符並放寬測試的 'page=2' 斷言（過度遮罩是 fail-safe）；上列四個字串都要有「後段不外漏」的測試，'code=Q5&page=2' 的期望依所選方向寫明。(2) 補測試：settings.sentry_dsn 有值時 lifespan 以 before_send=scrub_sentry_event、before_breadcrumb=scrub_sentry_breadcrumb、send_default_pii=False 呼叫 sentry_sdk.init（monkeypatch 記錄參數），sentry_dsn 為 None 時不呼叫。(3) 補測試：lifespan 進入時 broadcaster.start、離開時 broadcaster.stop 各呼叫一次（以 spy broadcaster 斷言），並建議同測試涵蓋 set_main_loop 啟動時設定 / 關閉時清為 None、install_tx_hooks 被呼叫、engine 曾建立時 dispose。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/test_main.py",
@@ -770,9 +770,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r5-backend",
+        "notes": "打回。300ef95（紅）→ 407bfc3（綠），tdd.run 8/8 綠、八條 red_case 皆選到，lint / typecheck 乾淨。已確認正確的部分：middleware 外到內 RequestContext → Security → CORS；未處理例外的 500 回應帶入站 X-Request-ID 與 security_headers_for(path) 的四個標頭（含 /api/ 的 no-store），回應不含例外訊息；production 關 docs / openapi；CORS 只對允許 origin 回 allow-credentials；session_factory 綁 get_engine()、engine 曾建立才 dispose 合理；routers_mounted 改以 openapi paths + 實際請求驗證合理；Sentry scrub 深度走訪、不就地修改原 event、遮罩拋例外回 None（fail-closed），比 description 寬但方向正確。打回原因三項：(1) redact_text 的 & 終止符造成遮罩漏洞（BACKEND-004 產物回歸）；(2) Sentry init 掛 before_send / before_breadcrumb 沒有測試；(3) 驗收標準「broadcaster 正確啟動 / 停止」沒有測試。突變驗證（在 scratch 副本）：拿掉 before_send / before_breadcrumb、整個不呼叫 _init_sentry、拿掉 broadcaster.start() / stop()、install_tx_hooks()、engine.dispose()，test_main 8 個測試全部仍綠。"
       }
     },
     {
@@ -1104,7 +1104,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security/tokens.py",
       "source_ref": "BE:api/parent_portal/auth.py::_issue_bind_temp_token",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-033"
@@ -1127,9 +1127,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。d0e085d（紅）→ 4effd13（綠）。tdd.run 5 個 test_bind_token_ 全綠，四條 red_case 皆選到。typ 隔離：_decode_payload 先驗 payload['typ'] == 期望值，bind token 以 expected_type staff / parent 解碼都拒、staff / parent access token 以 decode_bind_token 解碼都拒；decode_access_token 的 expected_type 不接受 'bind'（ValueError，屬程式錯誤）。line_user_id 在簽發（ValueError）與解碼（fullmatch ^U[0-9a-f]{32}$，大寫 hex / 小寫 u / 非字串 / None 皆拒）兩端檢查。null claim 不列 pyjwt require、改以 payload.get + _optional_str 驗型別，合理（pyjwt 把 null 當缺漏）。"
       }
     },
     {
@@ -1139,7 +1139,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security/cookies.py",
       "source_ref": "BE:utils/cookie.py::set_staff_refresh_cookie",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-001",
@@ -1164,9 +1164,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。6942b43（紅）→ a16ec02（綠）。tdd.run 6/6 綠，五條 red_case 皆選到。五個 cookie 的名稱、path、max-age 與表一致；全部 HttpOnly、SameSite=lax，Secure 跟 settings.is_production。clear 走 delete_cookie 且 path / secure / httponly / samesite 與 set 相同（測試對 staff、parent、bind 三組都斷言 path 與 max-age=0）。refresh_token=None 只設 access。read_cookie 收 HTTPConnection，涵蓋 Request 與 WebSocket。"
       }
     },
     {
@@ -3441,7 +3441,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/reference.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-007",
@@ -3469,9 +3469,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。b1acfa3（紅）→ c34a4e9（綠）。tdd.run 4/4 綠，三條 red_case 皆選到；另以 '  probe subject ' 驗 functional unique index 在 ORM 寫入時生效（23505）。just schema-drift：system_settings / subjects / exam_types / schools / closed_days 無 drift。Index(text('lower(btrim(name))')) 同名宣告合理（drift 不比對 index，只作文件與 metadata 對照）。測試以 app_backend 的 db_session 讀 DB-038 seed。"
       }
     },
     {
@@ -4394,7 +4394,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/classes.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-007",
@@ -4420,9 +4420,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。318b112（紅）→ 046e939（綠）。tdd.run 3/3 綠，三條 red_case 皆選到；selectin / joined 以 inspect().unloaded 驗證。classes / class_staff 無 drift。明確命名 uq_class_staff_class_staff 正確（migration 名稱不是 naming convention 產生的）。staff_links 的 cascade='all, delete-orphan' 合理：沒有 ORM cascade 時刪除已載入子列的班級，SQLAlchemy 會把 class_id 設成 NULL 而違反 NOT NULL；副作用是從 staff_links 移除元素即刪除該列，符合關聯表語意。殘留：cascade 測試走的是 ORM cascade，DB 的 on delete cascade 由 DB-013 測試涵蓋。"
       }
     },
     {
@@ -5018,14 +5018,14 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/students/id_number.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-010",
         "BACKEND-003"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "外籍學生若只有護照號碼會被格式檢查擋下；目前不支援護照號碼。",
+      "risk_notes": "外籍學生若只有護照號碼會被格式檢查擋下；目前不支援護照號碼。\n【review-r5-backend 打回】validate_id_number 的 \\d 接受 Unicode 數字（全形 '９'、阿拉伯-印度 '٧'），使 'A12345678９' 通過驗證但 HMAC 與 'A123456789' 不同，身分證查重可被繞過。修正方向（二擇一，description 一併寫明）：(a) 三條 regex 改用 [0-9]（或 re.ASCII），非 ASCII 數字一律 422；(b) normalize 先做 NFKC 轉半形再驗證。驗收反例：'A12345678９'、'A123456٧89'、'A１23456789' 依所選方向分別 422 或正規化成 'A123456789'（HMAC 相同），需有對應測試。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/services/students/test_id_number.py",
@@ -5043,9 +5043,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r5-backend",
+        "notes": "打回。50f6607（紅）→ 7754bf7（綠），tdd.run 13/13 綠、red_case 皆選到，國民身分證 / 新舊式居留證檢查碼實作正確，但有可構造的查重繞過：_CITIZEN_RE / _NEW_RESIDENT_RE / _OLD_RESIDENT_RE 的 \\d 在 Python 會比對 Unicode 數字，int() 也接受，normalize_id_number 只去空白轉大寫不轉半形。實測 validate_id_number(normalize_id_number('A12345678９'))（末碼全形）與 'A123456٧89'（阿拉伯-印度數字）都通過，id_number_hmac 與 'A123456789' 不同，同一人可重複建檔；mask 也輸出全形字元。中文輸入法打出全形數字是常見情境。"
       }
     },
     {
@@ -9996,7 +9996,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/codes.py",
       "source_ref": "BE:services/pickup_code.py::generate_pickup_code",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-009",
@@ -10020,9 +10020,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。d65e3c0（紅）→ d2ef597（綠）。tdd.run 5/5 綠，四條 red_case 皆選到。generate 用 secrets.randbelow；normalize 去空白與 '-' 後要求 ASCII 6 位數（全形數字回 None，有測試）；hash 走 keyed_hash（LABEL_HMAC_PICKUP_CODE 已入白名單）；matches 以 constant_time_equals 比對（spy 斷言實際呼叫參數），格式錯回 False。"
       }
     },
     {
@@ -14752,7 +14752,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security/tokens.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-033"
@@ -14775,9 +14775,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。b41cc42（紅）→ 0286e06（綠）。tdd.run 12 個 test_tokens_ 全綠，四條 red_case 皆選到，BACKEND-033 既有測試仍綠。typ / sub / jti 以 _require_str、tv / iat / exp 以 _as_int（排除 bool），timestamp 轉換只攔 OverflowError / OSError / ValueError，沒有 except Exception。typ 為陣列時 _decode_payload 以 != 比較，不會 TypeError。驗證放在 _decode_payload / 共用 helper，綁定 token 一併受益。"
       }
     }
   ]
