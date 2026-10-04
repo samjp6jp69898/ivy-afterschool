@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 102,
-  "last_updated": "2026-10-04T04:59:23Z",
+  "version": 103,
+  "last_updated": "2026-10-04T05:00:05Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -133,7 +133,7 @@
         "BACKEND-001"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "exc_info 的 traceback 文字未經遮罩（review-r4-be 殘留，不擋）；未處理例外的 500 回應由 ServerErrorMiddleware 產生、不帶 X-Request-ID，由 BACKEND-020 處理。\nmsg 不是字串時（例如直接 logger.info(dict)）RedactingFilter 不遮罩，dict 內的秘密會原樣輸出（review-r4-be 殘留，不擋）。",
+      "risk_notes": "exc_info 的 traceback 文字與非字串 msg（例如 logger.info(dict)）目前不遮罩，由 BACKEND-539 處理；未處理例外的 500 回應由 ServerErrorMiddleware 產生、不帶 X-Request-ID，由 BACKEND-020 處理。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/core/test_logging.py",
@@ -14704,6 +14704,41 @@
         "status": "pass",
         "reviewer": "review-r3-fe",
         "notes": "通過。tdd.run 4 條 red_case 全綠，test_storage.py + test_config.py 共 87 項全綠。紅燈 commit 先於實作 commit，實作 commit 未動任何測試；storage.py / config.py / test_storage.py / test_config.py 的 ruff 乾淨，mypy 對 storage.py、config.py 乾淨；pytest --disable-socket 只允許 127.0.0.1，無網路。覆寫 Settings.__init__ 重建 ValidationError 的改法合理：實測欄位錯誤的 loc / type / msg 保留（database_url、app_secret_key、r2_bucket missing 與 model 層 production 規則），正常建立 Settings 不受影響。實測三種情況（DATABASE_URL=mysql://u:Pw123@h/db；production + R2_SECRET_ACCESS_KEY=change-me；APP_SECRET_KEY 過短）str(e)、repr(e.errors())、e.json() 都不含 DB 密碼與 APP_SECRET_KEY 值，__cause__ 與 __context__ 皆為 None。storage 的 _s3_call 讓 upload / create_signed_url / delete 的 StorageError 都沒有 __cause__ 與 __context__，traceback 不含 AWSAccessKeyId 與 StringToSign。突變驗證：拿掉 __init__ 覆寫、保留 input、在 except 內 raise、丟掉 ctx、storage 改回 from None、sign 不經 helper，皆被測試抓到。殘留（不打回）：model_config 的 hide_input_in_errors=True 拿掉後測試仍綠（重建後的錯誤本來就不帶 input，該設定屬冗餘防護）；重建會丟掉 pydantic 錯誤的 url 欄位，無影響。"
+      }
+    },
+    {
+      "id": "BACKEND-539",
+      "title": "RedactingFilter 補遮罩：非字串 msg 與例外 traceback 文字",
+      "description": "review-r4-be 審 BACKEND-004 時發現兩條仍可讓秘密明文進 log 的路徑，本 task 一併收斂（修改 `apps/api/app/core/logging.py` 的 `RedactingFilter` / formatter，屬部分改寫 BACKEND-004 產物，BACKEND-004 維持 done）。\n\n1. **非字串 msg**：`RedactingFilter.filter` 目前在 `record.msg` 不是 `str` 時直接放行，`logger.info({'password': 'PW1'})` 會原樣輸出。改為：`msg` 是 Mapping / list / tuple 時以 `redact_mapping` 遮罩；其他非字串物件先 `str()` 再以 `redact_text` 遮罩。遮罩失敗時沿用 BACKEND-004 的 fail-closed 退路，不保留原始內容。\n2. **例外 traceback**：`logger.exception(...)`（例如 BACKEND-003 的 500 handler）輸出的 traceback 含例外訊息，`RuntimeError('db password=xyz')` 會讓 `xyz` 明文進 log。`JsonFormatter` 的 `exc` 欄位與開發環境文字 formatter 的 traceback 輸出，一律先經 `redact_text` 再寫出；`stack_info` 同樣處理。traceback 的檔名、行號與例外型別名稱要保留，方便除錯。\n\n**驗收標準**：\n- `logger.info({'password': 'PW1', 'user': 'amy'})` 的輸出不含 'PW1'，含 'amy'。\n- msg 是自訂物件、`__str__` 回傳 'token=TK2 ok' 時，輸出不含 'TK2'，含 'ok'。\n- 在 except 區塊內呼叫 `logger.exception('boom')`，例外是 `RuntimeError('db password=xyz')`：production（JSON）與 development（文字）兩種格式的輸出都不含 'xyz'，仍含 'RuntimeError' 與測試檔名。\n- BACKEND-004 既有測試全綠。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/core/logging.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "BACKEND-004"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/unit/core/test_logging.py",
+        "markers": [
+          "unit"
+        ],
+        "red_cases": [
+          "test_logging_redact_nonstr_mapping_msg：configure_logging(production) 後 logger.info({'password':'PW1','user':'amy'}) → 擷取的輸出不含 'PW1'、含 'amy'",
+          "test_logging_redact_nonstr_object_msg：msg 為 __str__ 回傳 'token=TK2 ok' 的物件 → 輸出不含 'TK2'、含 'ok'",
+          "test_logging_redact_exception_traceback_json：production 格式，在 except RuntimeError('db password=xyz') 內 logger.exception('boom') → JSON 的 exc 欄位不含 'xyz'，含 'RuntimeError' 與 'test_logging.py'",
+          "test_logging_redact_exception_traceback_text：development 格式，同上情境 → 輸出不含 'xyz'，含 'RuntimeError'"
+        ],
+        "run": "just test apps/api/tests/unit/core/test_logging.py -k \"test_logging_\"",
+        "notes": "run 會一併跑 BACKEND-004 既有測試，用來確認沒有回歸。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
       }
     }
   ]
