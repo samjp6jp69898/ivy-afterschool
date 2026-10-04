@@ -41,15 +41,16 @@ def test_guardians_parent_bound_once_per_student(backend_conn: Conn) -> None:
     first = make_guardians(backend_conn, parent_account_id=parent["id"])
 
     with pg_error(backend_conn, UNIQUE_VIOLATION) as err:
-        make_guardians(
-            backend_conn, student_id=first["student_id"], parent_account_id=parent["id"]
-        )
+        make_guardians(backend_conn, student_id=first["student_id"], parent_account_id=parent["id"])
     assert err.constraint_name == "uq_guardians_student_parent"
 
     other_student = make_students(backend_conn)
-    assert make_guardians(
-        backend_conn, student_id=other_student["id"], parent_account_id=parent["id"]
-    )["parent_account_id"] == parent["id"]
+    assert (
+        make_guardians(
+            backend_conn, student_id=other_student["id"], parent_account_id=parent["id"]
+        )["parent_account_id"]
+        == parent["id"]
+    )
 
 
 def test_guardians_relation_domain(backend_conn: Conn) -> None:

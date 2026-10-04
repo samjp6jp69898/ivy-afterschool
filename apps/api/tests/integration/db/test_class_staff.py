@@ -17,7 +17,9 @@ from tests.integration.db.factories import make_class_staff, make_classes, make_
 
 
 def _count(conn: Conn, row_id: object) -> int:
-    row = conn.execute("select count(*) from public.class_staff where id = %s", (row_id,)).fetchone()
+    row = conn.execute(
+        "select count(*) from public.class_staff where id = %s", (row_id,)
+    ).fetchone()
     assert row is not None
     return row[0]
 
@@ -26,9 +28,7 @@ def test_class_staff_unique_pair(backend_conn: Conn) -> None:
     row = make_class_staff(backend_conn)
 
     with pg_error(backend_conn, UNIQUE_VIOLATION) as err:
-        make_class_staff(
-            backend_conn, class_id=row["class_id"], staff_user_id=row["staff_user_id"]
-        )
+        make_class_staff(backend_conn, class_id=row["class_id"], staff_user_id=row["staff_user_id"])
     assert err.constraint_name == "uq_class_staff_class_staff"
 
 
@@ -54,7 +54,9 @@ def test_class_staff_fk(backend_conn: Conn) -> None:
     assert _count(backend_conn, by_class["id"]) == 0
 
     by_staff = make_class_staff(backend_conn)
-    backend_conn.execute("delete from public.staff_users where id = %s", (by_staff["staff_user_id"],))
+    backend_conn.execute(
+        "delete from public.staff_users where id = %s", (by_staff["staff_user_id"],)
+    )
     assert _count(backend_conn, by_staff["id"]) == 0
 
 

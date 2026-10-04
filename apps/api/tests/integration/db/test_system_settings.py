@@ -56,9 +56,7 @@ def test_system_settings_grants(owner_conn: Conn, backend_conn: Conn) -> None:
     assert_backend_grants(owner_conn, "public.system_settings")
 
     row = make_system_settings(backend_conn)
-    assert_backend_read_write(
-        backend_conn, "public.system_settings", row, is_secret=True
-    )
+    assert_backend_read_write(backend_conn, "public.system_settings", row, is_secret=True)
 
 
 def test_system_settings_updated_at_trigger(backend_conn: Conn) -> None:
