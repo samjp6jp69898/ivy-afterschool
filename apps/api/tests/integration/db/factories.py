@@ -173,3 +173,13 @@ def make_student_leaves(conn: psycopg.Connection[Any], **overrides: Any) -> dict
         "created_by_id": uuid4(),
     }
     return insert_row(conn, "public.student_leaves", **{**defaults, **overrides})
+
+
+def make_homework_items(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    """未指定 student_id 時另建一位學生。"""
+    defaults = {
+        "student_id": overrides.get("student_id") or make_students(conn)["id"],
+        "service_date": date(2026, 10, 5),
+        "title": "數學習作 p.12-13",
+    }
+    return insert_row(conn, "public.homework_items", **{**defaults, **overrides})
