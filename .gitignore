@@ -4,6 +4,8 @@ __pycache__/
 *.pyc
 *.egg-info/
 build/
+# apps/web/build 是 vite plugin 原始碼（INFRA-050），不是建置產物
+!apps/web/build/
 dist/
 .ruff_cache/
 .pytest_cache/

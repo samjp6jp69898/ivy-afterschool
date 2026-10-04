@@ -4,11 +4,14 @@ import AutoImport from 'unplugin-auto-import/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import Components from 'unplugin-vue-components/vite'
 import { defineConfig } from 'vite'
+import { parentModuleGraph } from './build/parentModuleGraph'
 
 // 單一 Vite 專案、兩個 HTML 入口：index.html（後台）與 parent/index.html（家長端）
 export default defineConfig({
   plugins: [
     vue(),
+    // 輸出 chunk 模組圖，供家長端 bundle 檢查（INFRA-050）
+    parentModuleGraph(),
     AutoImport({
       resolvers: [ElementPlusResolver()],
       dts: 'src/auto-imports.d.ts',
