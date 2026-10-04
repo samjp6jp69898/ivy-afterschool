@@ -1,4 +1,4 @@
-"""BACKEND-204：家長通知收件人解析（domain_spec M9）。
+"""BACKEND-204 / 205：通知收件人解析（domain_spec M9）。
 
 收件人 = 該學生 ``receives_notifications = true`` 且已綁定的 guardian 帳號；guardian 與學生
 皆未封存、家長帳號 ``status = 'active'``。同一家長去重，依 parent id 排序。
@@ -14,6 +14,9 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.permissions import Permission, resolve_effective_permissions
+from app.models.account import StaffUser
+from app.models.classes import ClassStaff
 from app.models.parents import Guardian, ParentAccount
 from app.models.students import Student
 
@@ -54,3 +57,38 @@ def parent_recipients_bulk(
         if parent_id is not None:  # inner join 已排除 null，供型別收斂
             result[student_id].append(Recipient("parent", parent_id))
     return result
+
+
+def staff_recipients(
+    session: Session,
+    *,
+    permission: Permission | None = None,
+    class_ids: Iterable[UUID] = (),
+) -> list[Recipient]:
+    """（啟用中且有效權限含 permission 的員工）加上（class_ids 任一班的 class_staff 中啟用的員工）。
+
+    有效權限以 ``resolve_effective_permissions`` 計算（含 admin ``*`` 展開、revoked 排除）；
+    StaffUser.role 為 joined 載入，一次查詢取回全部角色，不 N+1。去重、依 id 排序。
+    """
+    ids: set[UUID] = set()
+    if permission is not None:
+        for staff in (
+            session.execute(select(StaffUser).where(StaffUser.is_active.is_(True)))
+            .unique()
+            .scalars()
+        ):
+            effective = resolve_effective_permissions(
+                staff.role.permissions, staff.extra_permissions, staff.revoked_permissions
+            )
+            if str(permission) in effective:
+                ids.add(staff.id)
+    class_id_list = list(dict.fromkeys(class_ids))
+    if class_id_list:
+        ids.update(
+            session.execute(
+                select(ClassStaff.staff_user_id)
+                .join(StaffUser, StaffUser.id == ClassStaff.staff_user_id)
+                .where(ClassStaff.class_id.in_(class_id_list), StaffUser.is_active.is_(True))
+            ).scalars()
+        )
+    return [Recipient("staff", staff_id) for staff_id in sorted(ids)]
