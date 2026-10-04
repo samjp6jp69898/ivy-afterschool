@@ -25,6 +25,7 @@ from app.core.settings_registry import (
     PickupWindow,
     ServiceHours,
 )
+from app.services import settings_service
 from app.services.settings_service import (
     SETTINGS_CACHE_TTL_SECONDS,
     clear_settings_cache,
@@ -192,3 +193,22 @@ def test_get_setting_secret_decrypted(
     # 密文與明文都不進 log
     assert all("garbage" not in r.getMessage() for r in caplog.records)
     assert all(_CHANNEL_SECRET not in r.getMessage() for r in caplog.records)
+
+
+def test_get_setting_invalidate_during_load_not_cached(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 查詢期間被 invalidate（後台剛改完）時，查到的舊值不可回寫快取
+    original_load = settings_service._load
+
+    def load_then_invalidated(session: Session, key: Any) -> Any:
+        value = original_load(session, key)
+        invalidate_setting(key.key)
+        return value
+
+    monkeypatch.setattr(settings_service, "_load", load_then_invalidated)
+    assert get_setting(db_session, PICKUP_WINDOW).auto_expire_minutes == 120
+    monkeypatch.setattr(settings_service, "_load", original_load)
+
+    _set_auto_expire(db_session, 90)
+    assert get_setting(db_session, PICKUP_WINDOW).auto_expire_minutes == 90
