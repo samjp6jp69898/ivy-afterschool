@@ -95,9 +95,7 @@ def test_require_permission_type_check() -> None:
 def test_require_permission_route_audit() -> None:
     mini = FastAPI()
 
-    @mini.get(
-        "/api/admin/x", dependencies=[Depends(require_permission(Permission.STUDENTS_READ))]
-    )
+    @mini.get("/api/admin/x", dependencies=[Depends(require_permission(Permission.STUDENTS_READ))])
     def guarded() -> str:
         return "x"
 

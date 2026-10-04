@@ -21,12 +21,18 @@ ivy ``api/parent_portal/_shared.py::_get_parent_user``）。
 - ``get_optional_parent``：驗證失敗回 None 不拋例外（給 /bind 判斷是首次綁定或加綁）。
 - ``load_current_parent`` 同樣供 WebSocket 重用；``get_current_parent`` 把結果存進
   ``request.state.current_parent``。
+
+BACKEND-073：權限守衛 factory ``require_permission``（all-of）/ ``require_any_permission``
+（any-of），移植 ivy ``utils/auth.py::require_permission`` / ``require_any_permission``。所有
+``/api/admin/*`` 路由（auth 與個人收件匣除外）都必須掛它，``tests/support/route_audit.py``
+掃描未掛守衛的路由。
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Annotated, Final
+from typing import Annotated, Final, Literal
 from uuid import UUID
 
 from fastapi import Depends, Request
@@ -105,6 +111,55 @@ def get_current_staff(
     )
     request.state.current_staff = staff
     return staff
+
+
+# require_permission / require_any_permission 產生的 dependency 都掛這個屬性，供
+# tests/support/route_audit.py 掃描未掛守衛的 /api/admin 路由
+PERMISSION_GUARD_ATTR: Final = "__afterschool_permission_guard__"
+PERMISSION_DENIED_MESSAGE: Final = "您沒有此功能的權限"
+
+
+def _check_permission_args(permissions: tuple[Permission, ...]) -> list[str]:
+    """factory 參數必須是至少一個 Permission（字串會在啟動時 TypeError，避免拼錯）。"""
+    if not permissions:
+        raise TypeError("至少要指定一個 Permission")
+    for permission in permissions:
+        if not isinstance(permission, Permission):
+            raise TypeError(f"權限守衛只接受 Permission enum，收到 {permission!r}")
+    return sorted(str(p) for p in permissions)
+
+
+def _permission_guard(
+    permissions: tuple[Permission, ...], *, mode: Literal["all", "any"]
+) -> Callable[..., CurrentStaff]:
+    required = _check_permission_args(permissions)
+    check = all if mode == "all" else any
+
+    def dependency(staff: Annotated[CurrentStaff, Depends(get_current_staff)]) -> CurrentStaff:
+        if not check(staff.has(p) for p in permissions):
+            raise ForbiddenError(
+                PERMISSION_DENIED_MESSAGE,
+                code="permission_denied",
+                details={"required": required},
+            )
+        return staff
+
+    setattr(dependency, PERMISSION_GUARD_ATTR, True)
+    return dependency
+
+
+def require_permission(*permissions: Permission) -> Callable[..., CurrentStaff]:
+    """後台權限守衛（all-of）：``staff = Depends(require_permission(Permission.STUDENTS_WRITE))``。
+
+    缺任一 → 403 ``permission_denied``，``details.required`` 列出全部需要的碼；未登入由
+    ``get_current_staff`` 先拋 401。
+    """
+    return _permission_guard(permissions, mode="all")
+
+
+def require_any_permission(*permissions: Permission) -> Callable[..., CurrentStaff]:
+    """後台權限守衛（any-of）：持有其中任一即放行。"""
+    return _permission_guard(permissions, mode="any")
 
 
 @dataclass(frozen=True)
