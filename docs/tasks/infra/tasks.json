@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 105,
-  "last_updated": "2026-10-04T06:46:52Z",
+  "version": 106,
+  "last_updated": "2026-10-04T06:49:52Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1858,7 +1858,7 @@
       "granularity_unit": "script",
       "target_path": "apps/web/scripts/check_parent_bundle.mjs",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r5",
       "depends_on": [
         "INFRA-029"
@@ -1883,9 +1883,9 @@
         "notes": "lint / typecheck 只跑動到的檔：just web-lint 指定 build/parentModuleGraph.ts、scripts/check_parent_bundle.mjs、spec 與 vite.config.ts。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-infra",
+        "notes": "通過。6 條 red_case 都有對應測試，其中 5 條是用 Vite build() 實際打包 fixture 專案，只有「缺 parent entry」那條用手寫 graph（description 允許）。`just web-test scripts/check_parent_bundle.spec.ts -t \"parent module graph\"` 11 passed；TDD 順序：35a6dd1 → 66b8a85、42487ab → 4562419。上一輪的反例改用新 plugin 與新腳本重跑，全部 exit 1：(a) 後台與家長都引入 element-plus 加 auth store，element-plus 31 個模組被併進名為 auth 的共用 chunk；(b) 後台 lazy 載入、家長靜態引入的 LoginView 成為無 src 的共用 chunk；(c) 只有家長引入的 src/stores/only.ts 併進 parent entry chunk；另補 (d) 家長只引入 @element-plus/icons-vue（併進 entry）、(e) 家長引入 src/components。pnpm 路徑形狀已涵蓋：真實 build 的模組路徑是 `.../node_modules/.pnpm/element-plus@2.14.7_.../node_modules/element-plus/es/...`與 `.../.pnpm/@element-plus+icons-vue@.../node_modules/@element-plus/icons-vue/...`，都會命中。對 apps/web 實際 vite build 後跑腳本 exit 0（2 個 chunk、6 個模組）；graph 檔不存在時 exit 1。web 映像實測：/usr/share/nginx/html 底下沒有 .vite；`/.vite/manifest.json` 與 `/.vite/parent-module-graph.json` 回 200 text/html，內容與 `/` 的 index.html 逐位元組相同，只是 SPA fallback。eslint、`vue-tsc -p tsconfig.node.json`、ruff 都乾淨。範圍調整都合理：.gitignore 加 `!apps/web/build/` 是必要的，否則 plugin 不會進版控、CI 與 docker build 會壞；fixture 排除在 tsconfig 與 eslint 之外；輸出最多列 20 筆；Dockerfile 移除 .vite 減少對外暴露；移除 manifest 版測試是 description 要求的。殘留（不影響判定）：(1) fixture shared-element-plus 的後台沒有引入 element-plus，實際 build 後 element-plus 被併進 parent entry chunk，不在共用 chunk；測試名稱「in shared chunk」和註解「共用 chunk 與 parent entry chunk 是不同檔案」都與實況不符，也沒有斷言 element-plus 不在 entry chunk。共用 chunk 的檢查邏輯已經由 admin-view 測試與探針 (a) 證實，但建議讓 fixture 的 src/main.ts 也引入 element-plus，並斷言違規所在的 chunk 不是 entry。(2) vite build 會警告 vite.config.ts 引入 `./build/parentModuleGraph` 沒有寫副檔名，未來 Vite 預設改用 configLoader native 時會出問題。(3) vite.config.ts 的註解「manifest 供家長端 bundle 檢查（INFRA-029）」已經過時，INFRA-029 的 description 也還寫著 manifest 版的檢查邏輯，與「只記錄最終決策」不符，應改成檢查邏輯由 INFRA-050 取代。"
       }
     },
     {
@@ -1895,7 +1895,7 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/e2e.yml",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r5",
       "depends_on": [
         "INFRA-030",
@@ -1917,9 +1917,9 @@
         "notes": "另跑：uvx --from actionlint-py actionlint .github/workflows/ci.yml .github/workflows/e2e.yml"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-infra",
+        "notes": "通過。2 條 red_case 都有對應測試，`just test scripts/tests/test_ci_workflow.py -k \"service_logs or cleanup_tolerates\"` 2 passed；TDD 順序 65ecd62 → 66fad14（測試 commit 時 e2e.yml 還沒有 var/log）。已確認 dev_up.sh 的 LOG_DIR 是 repo 根目錄的 var/log，artifact path 寫 `var/log/` 正確；`docker rm -f afterschool-web-smoke || true` 符合 description。actionlint、ruff 乾淨。"
       }
     }
   ]
