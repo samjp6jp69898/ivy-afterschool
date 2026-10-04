@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 57,
-  "last_updated": "2026-10-04T06:38:19Z",
+  "version": 58,
+  "last_updated": "2026-10-04T06:41:49Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -755,7 +755,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3TopAppBar.vue",
       "source_ref": "FE:src/parent/components/m3/M3TopAppBar.vue::props",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-001",
@@ -778,9 +778,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-parent",
+        "notes": "tdd.run 7/7 綠，兩條 red_case 皆選到；3ef75f5（測試）先於 9318074（實作）；web-lint 乾淨。實作與 parent-component-m3-kit.html 的 M3TopAppBar decisions 一致（64px、48px leading 欄、單行省略、sticky z-index 5、is-scrolled 換 surface-container、150ms、無陰影）。scrolled 選用 prop 合理（稿件元件本身就有，PARENT-024 版面以 window 捲動為準）。殘留：actions 測試只斷言存在、沒斷言位於標題右側（DOM 順序）；樣式決策以 ?raw 正則斷言。"
       }
     },
     {
@@ -912,7 +912,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/ParentBottomSheet.vue",
       "source_ref": "FE:src/parent/components/ParentBottomSheet.vue::props",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-001",
@@ -920,7 +920,7 @@
         "PARENT-016"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "[review-r5-parent 打回] (1) 捲動鎖計數不是共用狀態：scrollLockCount / scrollLockPrev 宣告在 <script setup> 內，每個實例各一份，註解宣稱的多 sheet 共用不成立。反例：同一頁兩個 sheet，template 中接送碼 sheet 在前、建立授權 sheet 在後，同一 tick 設 auth=false、code=true → 接送碼 sheet 開著時 body.style.overflow 已被還原為 ''（背景可捲）；再關閉接送碼 sheet → overflow 永久停在 'hidden'，整頁無法捲動（vitest 實測重現）。要求：計數與原值移到模組層級（獨立 <script> 區塊），並補一條「兩個實例交錯開關後 overflow 正確還原」的測試。 (2) 焦點鎖只靠 dialog 自身的 keydown：dismissible=false 時點擊 scrim，焦點落到 body，之後 Shift+Tab 由瀏覽器從 scrim 往前找，焦點進入背景頁按鈕（Chromium 實測：activeElement 由 sheet 內按鈕 → BODY → 背景最後一個按鈕），違反「焦點鎖在其中」。要求：Tab 攔截改掛在 document（或以 document focusin 把焦點拉回 sheet），並補「焦點在 sheet 外時按 Tab / Shift+Tab 會回到 sheet 內」的測試。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/components/ParentBottomSheet.spec.ts",
@@ -939,9 +939,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r5-parent",
+        "notes": "tdd.run 18/18 綠，六條 red_case 皆選到；ec6e5ed / acf7ca4（測試）先於 2c98034（實作）；web-lint 乾淨。稿 decisions 其餘各條（高度 100dvh−56px、只有 body 捲動、把手 32×4、footer safe-area、400/200ms 動畫、拖曳 1:1 / 80px / 阻尼 24px、關閉鈕 pointerdown 不拖曳、Esc 在 document、z-index 10 < snackbar 20）一致。打回兩項見 risk_notes。殘留（不擋）：多個 sheet 疊開時 Esc 用 stopPropagation 擋不住同在 document 上的另一個 listener（需 stopImmediatePropagation），會一次關掉兩層；拖曳超過 80px 後若父層不接受關閉，sheet 停在位移後的位置不回彈；title 為空時 aria-labelledby 指向空 h2；同 tick 交換 sheet 時新 sheet 記住的 prevFocus 是舊 sheet 內即將移除的元素，關閉後焦點落到 body。"
       }
     },
     {
