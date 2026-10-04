@@ -345,8 +345,8 @@ def test_e2e_workflow_no_supabase() -> None:
     assert "supabase" not in text.lower()
 
 
-def steps_using(name: str, prefix: str) -> list[dict[str, Any]]:
-    return [s for s in steps_of(name) if str(s.get("uses", "")).startswith(prefix)]
+def steps_using(name: str, prefix: str, file: str = "ci.yml") -> list[dict[str, Any]]:
+    return [s for s in steps_of(name, file) if str(s.get("uses", "")).startswith(prefix)]
 
 
 def docker_build_contexts() -> list[str]:
@@ -394,3 +394,22 @@ def test_ci_docker_build_job_never_pushes() -> None:
     assert not [line for line in run_lines("docker-build") if "docker push" in line]
     for step in steps_using("docker-build", "docker/build-push-action"):
         assert step["with"].get("push") in (None, False)
+
+
+def test_e2e_workflow_uploads_service_logs_on_failure() -> None:
+    uploads = [
+        s
+        for s in steps_using("e2e", "actions/upload-artifact", E2E_YML)
+        if "failure()" in str(s.get("if"))
+    ]
+
+    assert len(uploads) == 1
+    assert "var/log/" in uploads[0]["with"]["path"]
+
+
+def test_ci_docker_build_job_cleanup_tolerates_missing_container() -> None:
+    cleanup = [s for s in steps_of("docker-build") if "always()" in str(s.get("if"))]
+
+    assert len(cleanup) == 1
+    assert "docker rm -f" in cleanup[0]["run"]
+    assert "|| true" in cleanup[0]["run"]
