@@ -2,6 +2,8 @@
 BACKEND-043：refresh（輪替 refresh 並以目前 token_version 重簽 access；停用帳號 / 家長 token 撤銷
 family）。
 BACKEND-045：logout（撤銷目前 refresh family，冪等；其他裝置的 family 不受影響）。
+BACKEND-049：change_password（舊密碼 / 強度 / 相同檢查、鎖定、token_version +1、撤銷全部 family 後為
+當前裝置重新簽發）。
 
 帳密驗證、(帳號, IP) 鎖定、不存在帳號仍跑一次 argon2（防帳號列舉）、停用帳號同一個 401、
 成功後更新 last_login_at / 簽發 access + refresh token / needs_rehash 透明升級。
@@ -14,16 +16,17 @@ from argon2 import PasswordHasher
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api.deps import CurrentStaff
 from app.core.config import get_settings
 from app.core.crypto import derive_key
 from app.core.errors import AppError
 from app.core.request_meta import RequestMeta
-from app.core.security.passwords import needs_rehash
+from app.core.security.passwords import needs_rehash, verify_password
 from app.core.security.tokens import decode_access_token
 from app.models.account import RefreshToken, StaffUser
 from app.services.auth import staff_auth
 from app.services.auth.refresh_tokens import hash_refresh, issue, revoke_family_by_raw
-from app.services.auth.staff_auth import StaffSession, login, logout, refresh
+from app.services.auth.staff_auth import StaffSession, change_password, login, logout, refresh
 from app.services.auth.throttle import AuthThrottles
 from tests.support.factories import make_parent, make_staff
 from tests.support.fake_clock import FakeClock
@@ -452,3 +455,169 @@ def test_logout_idempotent(
     assert logout(db_session, raw_refresh=s1.refresh_token, clock=fake_clock) == 1
     # 再登出同一個 raw：已撤銷，回 0 不拋例外
     assert logout(db_session, raw_refresh=s1.refresh_token, clock=fake_clock) == 0
+
+
+# --- BACKEND-049：change_password ------------------------------------------------------------
+
+_NEW_PASSWORD = "Afterschool2026"  # noqa: S105  測試固定新密碼
+
+
+def _current(staff: StaffUser) -> CurrentStaff:
+    return CurrentStaff(
+        id=staff.id,
+        username=staff.username,
+        display_name=staff.display_name,
+        role_id=staff.role.id,
+        role_code=staff.role.code,
+        role_name=staff.role.name,
+        permissions=frozenset(staff.role.permissions),
+        must_change_password=staff.must_change_password,
+        token_version=staff.token_version,
+    )
+
+
+def _change(
+    db_session: Session,
+    throttles: AuthThrottles,
+    fake_clock: FakeClock,
+    staff: StaffUser,
+    *,
+    current: str = _PASSWORD,
+    new: str = _NEW_PASSWORD,
+) -> StaffSession:
+    return change_password(
+        db_session,
+        staff=_current(staff),
+        current_password=current,
+        new_password=new,
+        throttles=throttles,
+        clock=fake_clock,
+    )
+
+
+def test_change_password_success(
+    db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock
+) -> None:
+    staff = make_staff(db_session, must_change_password=True, permissions=["students:read"])
+    s1 = _login(db_session, throttles, fake_clock, username=staff.username, password=_PASSWORD)
+    s2 = _login(db_session, throttles, fake_clock, username=staff.username, password=_PASSWORD)
+    old_hash = staff.password_hash
+
+    s3 = _change(db_session, throttles, fake_clock, staff)
+
+    assert staff.token_version == 1
+    assert staff.must_change_password is False
+    assert staff.password_hash != old_hash
+    assert verify_password(_NEW_PASSWORD, staff.password_hash) is True
+    assert verify_password(_PASSWORD, staff.password_hash) is False
+    _assert_family_revoked(db_session, s1.refresh_token, revoked=True)
+    _assert_family_revoked(db_session, s2.refresh_token, revoked=True)
+    _assert_family_revoked(db_session, s3.refresh_token, revoked=False)
+    assert s3.refresh_token not in (s1.refresh_token, s2.refresh_token)
+    # 回傳的新 token 可用：access 的 tv 是新值、refresh 可輪替
+    claims = decode_access_token(s3.access_token, expected_type="staff", clock=fake_clock)
+    assert claims.subject_id == staff.id
+    assert claims.token_version == 1
+    assert s3.permissions == frozenset({"students:read"})
+    assert refresh(db_session, raw_refresh=s3.refresh_token, clock=fake_clock).staff.id == staff.id
+    # 新密碼可登入、舊密碼不行
+    assert (
+        _login(
+            db_session, throttles, fake_clock, username=staff.username, password=_NEW_PASSWORD
+        ).staff.id
+        == staff.id
+    )
+    with pytest.raises(AppError) as old:
+        _login(db_session, throttles, fake_clock, username=staff.username, password=_PASSWORD)
+    assert old.value.code == "invalid_credentials"
+
+
+def test_change_password_wrong_current(
+    db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock
+) -> None:
+    staff = make_staff(db_session)
+    s1 = _login(db_session, throttles, fake_clock, username=staff.username, password=_PASSWORD)
+    old_hash = staff.password_hash
+
+    with pytest.raises(AppError) as excinfo:
+        _change(db_session, throttles, fake_clock, staff, current="bad")
+
+    assert excinfo.value.status == 400
+    assert excinfo.value.code == "current_password_incorrect"
+    assert staff.password_hash == old_hash
+    assert staff.token_version == 0
+    _assert_family_revoked(db_session, s1.refresh_token, revoked=False)
+
+
+def test_change_password_lockout(
+    db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock
+) -> None:
+    staff = make_staff(db_session)
+    for _ in range(5):
+        with pytest.raises(AppError) as excinfo:
+            _change(db_session, throttles, fake_clock, staff, current="bad")
+        assert excinfo.value.code == "current_password_incorrect"
+
+    with pytest.raises(AppError) as locked:
+        _change(db_session, throttles, fake_clock, staff)
+    assert locked.value.status == 429
+    assert locked.value.code == "too_many_attempts"
+    assert staff.token_version == 0
+    assert verify_password(_PASSWORD, staff.password_hash) is True
+
+    # 鎖定以帳號為單位：另一個帳號不受影響
+    other = make_staff(db_session)
+    assert _change(db_session, throttles, fake_clock, other).staff.id == other.id
+
+    fake_clock.advance(minutes=15, seconds=1)
+    assert _change(db_session, throttles, fake_clock, staff).staff.id == staff.id
+
+
+def test_change_password_success_clears_failures(
+    db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock
+) -> None:
+    staff = make_staff(db_session)
+    for _ in range(4):
+        with pytest.raises(AppError):
+            _change(db_session, throttles, fake_clock, staff, current="bad")
+    _change(db_session, throttles, fake_clock, staff)
+    for _ in range(4):
+        with pytest.raises(AppError) as excinfo:
+            _change(db_session, throttles, fake_clock, staff, current="bad")
+        assert excinfo.value.status == 400
+
+
+def test_change_password_weak(
+    db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock
+) -> None:
+    staff = make_staff(db_session, username="lin.teacher")
+
+    with pytest.raises(AppError) as excinfo:
+        _change(db_session, throttles, fake_clock, staff, new="short1")
+    assert excinfo.value.status == 422
+    assert excinfo.value.code == "weak_password"
+    assert excinfo.value.details is not None
+    assert excinfo.value.details["reasons"]
+    assert staff.token_version == 0
+
+    # 強度檢查帶入 username：與帳號相同（不分大小寫）列入原因
+    with pytest.raises(AppError) as same:
+        _change(db_session, throttles, fake_clock, staff, new="LIN.TEACHER")
+    assert same.value.code == "weak_password"
+    assert same.value.details is not None
+    assert "不可與帳號相同" in same.value.details["reasons"]
+
+
+def test_change_password_unchanged(
+    db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock
+) -> None:
+    staff = make_staff(db_session)
+    s1 = _login(db_session, throttles, fake_clock, username=staff.username, password=_PASSWORD)
+
+    with pytest.raises(AppError) as excinfo:
+        _change(db_session, throttles, fake_clock, staff, new=_PASSWORD)
+
+    assert excinfo.value.status == 422
+    assert excinfo.value.code == "password_unchanged"
+    assert staff.token_version == 0
+    _assert_family_revoked(db_session, s1.refresh_token, revoked=False)
