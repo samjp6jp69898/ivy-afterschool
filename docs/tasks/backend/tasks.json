@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 90,
-  "last_updated": "2026-10-04T04:21:17Z",
+  "version": 91,
+  "last_updated": "2026-10-04T04:21:56Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -854,7 +854,7 @@
     {
       "id": "BACKEND-023",
       "title": "建立 API 整合測試 fixtures：api_client、登入 helper、dependency overrides",
-      "description": "建立 `apps/api/tests/integration/api/conftest.py` 與 `apps/api/tests/support/auth_cookies.py`，供所有 endpoint 整合測試（含營運模組）使用。INFRA-010 的 `apps/api/tests/integration/conftest.py` 提供 `db_session`，本檔建立在它之上。\n\n**fixtures**\n- `app`：`create_app(settings=<test settings>, start_background=False)`，dependency_overrides：`get_db` → `override_get_db(db_session)`（BACKEND-005，`tests/support/db_override.py`；請求結束一律 rollback 到 savepoint，不可用 `lambda: db_session`）；`get_clock` → `fake_clock`（INFRA-011）；`get_storage` → `FakeStorage()`（BACKEND-013，另以 `fake_storage` fixture 暴露同一實例）。\n- `api_client`：`TestClient(app, base_url=\"http://testserver\")`，**不**帶 Origin header（避開 BACKEND-019）。\n- `login_staff(client, staff) -> None`：以 BACKEND-033 `create_access_token(subject_type='staff', subject_id=staff.id, token_version=staff.token_version, clock=fake_clock)` 簽發 token，並以 BACKEND-035 的 cookie 名稱設進 `client.cookies`（不走 /login，避免節流與密碼雜湊成本）。\n- `login_parent(client, parent) -> None`：同上，subject_type='parent'。\n- `staff_client(permissions=[...])` factory fixture：`make_staff` + `login_staff` 一步完成，回傳 `(client, staff)`。\n- `parent_client` factory fixture：`make_parent` + `login_parent`，回傳 `(client, parent)`；需要兩個家長時各自建立獨立 TestClient（cookie jar 分開）。\n- `assert_error(resp, status, code)` helper：斷言 status 與 `resp.json()['error']['code']`。\n\n**驗收標準**\n- login_staff 後，掛在測試 app 上、使用 `get_current_staff`（BACKEND-047）的臨時路由回 200 且 username 正確（本 task 不依賴任何 endpoint task，避免循環依賴）。\n- 兩個 parent_client 的 cookie 互不影響。\n- endpoint 內取得的 clock 為 fake_clock、storage 為 fake_storage。",
+      "description": "建立 `apps/api/tests/integration/api/conftest.py` 與 `apps/api/tests/support/auth_cookies.py`，供所有 endpoint 整合測試（含營運模組）使用。INFRA-010 的 `apps/api/tests/integration/conftest.py` 提供 `db_session`，本檔建立在它之上。\n\n**fixtures**\n- `app`：`create_app(settings=<test settings>, start_background=False)`，dependency_overrides：`get_db` → `override_get_db(db_session)`（BACKEND-005，`tests/support/db_override.py`；請求結束一律 rollback 到 savepoint，不可用 `lambda: db_session`）；`get_clock` → `fake_clock`（INFRA-011）；`get_storage` → `FakeStorage()`（BACKEND-013，另以 `fake_storage` fixture 暴露同一實例）。\n- `api_client`：`TestClient(app, base_url=\"http://testserver\")`，**不**帶 Origin header（避開 BACKEND-019）。\n- `login_staff(client, staff) -> None`：以 BACKEND-033 `create_access_token(subject_type='staff', subject_id=staff.id, token_version=staff.token_version, clock=fake_clock)` 簽發 token，並以 BACKEND-035 的 cookie 名稱設進 `client.cookies`（不走 /login，避免節流與密碼雜湊成本）。\n- `login_parent(client, parent) -> None`：同上，subject_type='parent'。\n- `staff_client(permissions=[...])` factory fixture：`make_staff` + `login_staff` 一步完成，回傳 `(client, staff)`。\n- **測資先 commit**：`override_get_db` 在每個請求結束時 rollback 到 savepoint，BACKEND-022 的 factory 只 flush。`staff_client` / `parent_client` 與任何建立登入帳號的 fixture，在 `make_*` 與 `login_*` 之後呼叫 `db_session.commit()`（只釋放 savepoint，測試結束仍整筆 rollback），否則帳號在第一個請求結束後被退回，第二個請求 401。\n- `parent_client` factory fixture：`make_parent` + `login_parent`，回傳 `(client, parent)`；需要兩個家長時各自建立獨立 TestClient（cookie jar 分開）。\n- `assert_error(resp, status, code)` helper：斷言 status 與 `resp.json()['error']['code']`。\n\n**驗收標準**\n- login_staff 後，掛在測試 app 上、使用 `get_current_staff`（BACKEND-047）的臨時路由回 200 且 username 正確（本 task 不依賴任何 endpoint task，避免循環依賴）。\n- 兩個 parent_client 的 cookie 互不影響。\n- staff_client 取得的 client 連續兩次請求都通過驗證（測資已 commit）。\n- endpoint 內取得的 clock 為 fake_clock、storage 為 fake_storage。",
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/api/conftest.py",
       "source_ref": null,
@@ -872,7 +872,7 @@
         "INFRA-011"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "【review-r3-fe（BACKEND-005 複審）】override_get_db 在請求結束一律 rollback 到 savepoint，BACKEND-022 的 factory 只 flush 不 commit，因此 staff_client / parent_client / 任何建立登入帳號的 fixture 必須在 make_* 與 login 之後呼叫 db_session.commit()（只釋放 savepoint），否則帳號在第一個請求結束後就被退回，第二個請求 401。需新增 red_case：以 staff_client 取得 client 後連續兩次 GET 臨時路由皆回 200；並在 docs/testing_conventions.md 記錄「endpoint 測試的測資先 commit 再打 API；請求之間用 flush 改的資料只對下一個請求有效」。BACKEND-047 的 test_current_staff_permissions_live 在第一次與第二次請求之間改資料時，改完要 commit。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/test_api_fixtures.py",
@@ -883,7 +883,8 @@
           "test_api_fixtures_login_staff_probe：測試檔在 app 上掛臨時路由 GET /__probe/staff（Depends(get_current_staff) 回傳 username 與 sorted(permissions)）；client, staff = staff_client(permissions=['students:read']) → 200，JSON == {'username': staff.username, 'permissions': ['students:read']}",
           "test_api_fixtures_parent_clients_isolated：臨時路由 GET /__probe/parent（Depends(get_current_parent) 回傳 id）；(c1,p1) 與 (c2,p2) 兩個 parent_client → c1 回 str(p1.id)、c2 回 str(p2.id)",
           "test_api_fixtures_clock_and_storage_overrides：app.dependency_overrides[get_clock]() is fake_clock 且 app.dependency_overrides[get_storage]() is fake_storage",
-          "test_api_fixtures_assert_error_helper：未登入的 api_client GET /__probe/staff → assert_error(resp, 401, 'unauthenticated') 通過；以 assert_error(resp, 403, 'unauthenticated') 呼叫 → AssertionError"
+          "test_api_fixtures_assert_error_helper：未登入的 api_client GET /__probe/staff → assert_error(resp, 401, 'unauthenticated') 通過；以 assert_error(resp, 403, 'unauthenticated') 呼叫 → AssertionError",
+          "test_api_fixtures_staff_client_survives_requests：client, staff = staff_client(permissions=['students:read']) → 連續兩次 GET /__probe/staff 皆 200 且 username == staff.username"
         ],
         "run": "just test-int apps/api/tests/integration/api/test_api_fixtures.py -k \"test_api_fixtures_\"",
         "notes": ""
@@ -1602,11 +1603,11 @@
           "integration"
         ],
         "red_cases": [
-          "test_current_staff_ok：迷你 app（get_db→db_session、get_clock→fake_clock）路由 GET /api/admin/probe 回 sorted(permissions)；make_staff(permissions=['students:read','pickup:read']) 的 token 設 staff_access cookie → 200 ['pickup:read','students:read']",
+          "test_current_staff_ok：迷你 app（get_db→override_get_db(db_session)、get_clock→fake_clock）路由 GET /api/admin/probe 回 sorted(permissions)；make_staff(permissions=['students:read','pickup:read']) 的 token 設 staff_access cookie → 200 ['pickup:read','students:read']",
           "test_current_staff_missing_or_bad_token：無 cookie → 401 unauthenticated；cookie='garbage' → 401；以 subject_type='parent' 簽的 token → 401",
           "test_current_staff_inactive_or_version_mismatch：staff.is_active=False → 401；staff.token_version 改為 1（token 內為 0）→ 401",
           "test_current_staff_must_change_password：must_change_password=True 時 GET /api/admin/probe → 403 password_change_required；同一 token 打 GET /api/admin/auth/me 路徑的探針 → 200",
-          "test_current_staff_permissions_live：第一次請求後把 role.permissions 改為 ['exams:read'] 並 flush → 第二次請求回 ['exams:read']"
+          "test_current_staff_permissions_live：第一次請求後把 role.permissions 改為 ['exams:read'] 並 db_session.commit() → 第二次請求回 ['exams:read']"
         ],
         "run": "just test-int apps/api/tests/integration/api/test_deps_current_staff.py -k \"test_current_staff_\"",
         "notes": ""

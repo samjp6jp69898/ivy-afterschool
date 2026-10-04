@@ -18,6 +18,7 @@
 - **家長端 endpoint 必測 IDOR**：家長 A 用家長 B 小孩的 `student_id` / 資源 id 存取要回 404（不洩漏存在與否）。
 - 時間相關邏輯一律注入 `app/core/clock.py` 的時鐘，不在測試裡 sleep 或依賴真實時間；「今天」以 `Asia/Taipei` 判斷，要有跨午夜（UTC 16:00）的邊界案例。
 - 測資擬真但不用真實個資（學生姓名用「王小明」這類常見假名，電話用 `0912-000-xxx`）。
+- **endpoint 整合測試的測資先 commit 再打 API**：`get_db` 以 BACKEND-005 的 `override_get_db(db_session)` 覆寫，每個請求結束時 rollback 到 savepoint（與正式 `get_db` 的 close 同語意）。factory 只 flush 的資料要先 `db_session.commit()`（只釋放 savepoint，測試結束仍整筆 rollback）才能跨請求存在；兩次請求之間改的資料同樣要 commit。不可用 `lambda: db_session` 覆寫（DB 錯誤後 session 會停在 aborted）。
 - 寫完測試後以突變自我檢查：把實作改壞一處，確認至少一條測試轉紅；轉不紅的斷言視為恆真，要改。
 
 ### 前端測試的已知陷阱（vitest + happy-dom）
