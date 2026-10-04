@@ -73,3 +73,57 @@ def test_common_schemas_sort_order_bounds() -> None:
     for bad in (2147483648, -1):
         with pytest.raises(ValidationError):
             _Sorted(sort_order=bad)
+
+
+def _nest(depth: int, leaf: object) -> object:
+    value = leaf
+    for _ in range(depth):
+        value = {"k": [value]}
+    return value
+
+
+def test_common_schemas_deep_nesting_valid_input_keeps_extra_forbidden() -> None:
+    with pytest.raises(ValidationError) as exc:
+        _Req.model_validate({"name": "a", "x": _nest(1000, "ok")})
+    assert exc.value.errors()[0]["type"] == "extra_forbidden"
+
+
+def test_common_schemas_deep_nesting_nul_at_bottom_rejected() -> None:
+    with pytest.raises(ValidationError, match="NUL"):
+        _Req.model_validate({"name": "a", "x": _nest(1000, "bo\x00ttom")})
+
+
+def test_common_schemas_nul_in_nested_dict_key_and_value_rejected() -> None:
+    with pytest.raises(ValidationError, match="NUL"):
+        _Req.model_validate({"name": "a", "x": {"a": {"b\x00": 1}}})
+    with pytest.raises(ValidationError, match="NUL"):
+        _Req.model_validate({"name": "a", "x": {"a": {"b": "v\x00"}}})
+
+
+def test_common_schemas_wide_containers_and_odd_keys_do_not_raise_non_validation_errors() -> None:
+    wide = {"name": "a", "x": list(range(200_000)), "y": {i: i for i in range(50_000)}}
+    with pytest.raises(ValidationError) as exc:
+        _Req.model_validate(wide)
+    assert {e["type"] for e in exc.value.errors()} == {"extra_forbidden"}
+    assert _Req.model_validate({"name": "a"}).name == "a"
+
+
+def test_common_schemas_bytes_with_nul_rejected() -> None:
+    with pytest.raises(ValidationError, match="NUL"):
+        _Req.model_validate({"name": b"a\x00b"})
+    with pytest.raises(ValidationError, match="NUL"):
+        _Req.model_validate({"name": "a", "x": [bytearray(b"\x00")]})
+
+
+def test_common_schemas_cyclic_input_terminates() -> None:
+    cyc: dict[str, object] = {}
+    cyc["self"] = cyc
+    with pytest.raises(ValidationError) as exc:
+        _Req.model_validate({"name": "a", "x": cyc})
+    assert exc.value.errors()[0]["type"] == "extra_forbidden"
+
+
+def test_common_schemas_shared_substructure_is_scanned_once_and_still_detected() -> None:
+    shared = ["a\x00"]
+    with pytest.raises(ValidationError, match="NUL"):
+        _Req.model_validate({"name": "a", "x": [shared, shared]})
