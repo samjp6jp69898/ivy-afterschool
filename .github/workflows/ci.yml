@@ -84,3 +84,31 @@ jobs:
 
       - name: scripts 單元測試
         run: apps/api/.venv/bin/pytest scripts/tests -m "not integration"
+
+  integration:
+    name: 整合測試（Postgres / SeaweedFS）
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+        with:
+          node: false
+
+      - name: 啟動 Postgres 與 SeaweedFS
+        run: docker compose -f compose.yaml up -d --wait db storage
+
+      - name: 重建 DB
+        run: just db-reset --yes
+
+      - name: apps/api 整合測試
+        working-directory: apps/api
+        run: uv run --frozen pytest -m integration
+
+      - name: scripts 整合測試
+        run: apps/api/.venv/bin/pytest scripts/tests -m integration
+
+      - name: 關閉服務並清除 volume
+        if: always()
+        run: docker compose -f compose.yaml down -v
