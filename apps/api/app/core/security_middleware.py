@@ -12,6 +12,8 @@ http 與 websocket scope。
   （非瀏覽器）放行。
 - 所有 http 回應加 ``X-Content-Type-Options: nosniff``、``Referrer-Policy: same-origin``、
   ``X-Frame-Options: DENY``；``/api/`` 路徑另加 ``Cache-Control: no-store``（避免瀏覽器快取個資）。
+  例外：``PUBLIC_CACHEABLE_PATHS``（不含個資的公開資源，例如 ``/api/parent/config``）不加 no-store，
+  保留 handler 自己設定的 Cache-Control（BACKEND-125）。
   標頭清單以 ``security_headers_for(path)`` 公開，BACKEND-003 的 500 handler 共用（未處理例外的 500
   由最外層的 ServerErrorMiddleware 產生，不經過本 middleware；BACKEND-020）。
 """
@@ -41,12 +43,14 @@ SECURITY_HEADERS: tuple[tuple[bytes, bytes], ...] = (
     (b"x-frame-options", b"DENY"),
 )
 NO_STORE_HEADER = (b"cache-control", b"no-store")
+# 不含個資、允許 handler 自訂 Cache-Control 的公開路徑（其餘 /api/ 一律 no-store）
+PUBLIC_CACHEABLE_PATHS = frozenset({"/api/parent/config"})
 
 
 def security_headers_for(path: str) -> list[tuple[bytes, bytes]]:
     """該 path 的安全標頭；``/api/`` 路徑另加 ``Cache-Control: no-store``。"""
     headers = list(SECURITY_HEADERS)
-    if path.startswith(API_PREFIX):
+    if path.startswith(API_PREFIX) and path not in PUBLIC_CACHEABLE_PATHS:
         headers.append(NO_STORE_HEADER)
     return headers
 

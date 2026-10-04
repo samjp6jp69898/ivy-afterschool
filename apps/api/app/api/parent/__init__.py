@@ -2,6 +2,9 @@
 
 from fastapi import APIRouter
 
+from app.api.parent import config
+
 parent_router = APIRouter(prefix="/api/parent")
+parent_router.include_router(config.router)
 
 __all__ = ["parent_router"]
