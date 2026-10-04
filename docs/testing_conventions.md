@@ -18,6 +18,18 @@
 - **家長端 endpoint 必測 IDOR**：家長 A 用家長 B 小孩的 `student_id` / 資源 id 存取要回 404（不洩漏存在與否）。
 - 時間相關邏輯一律注入 `app/core/clock.py` 的時鐘，不在測試裡 sleep 或依賴真實時間；「今天」以 `Asia/Taipei` 判斷，要有跨午夜（UTC 16:00）的邊界案例。
 - 測資擬真但不用真實個資（學生姓名用「王小明」這類常見假名，電話用 `0912-000-xxx`）。
+- 寫完測試後以突變自我檢查：把實作改壞一處，確認至少一條測試轉紅；轉不紅的斷言視為恆真，要改。
+
+### 前端測試的已知陷阱（vitest + happy-dom）
+
+- spec 讀 repo 內檔案時用 `resolve(dirname(fileURLToPath(import.meta.url)), '<相對路徑>')`；不要用 `new URL('<相對路徑>', import.meta.url)`，Vite 會把它改寫成 asset URL，`fileURLToPath` 會失敗。
+- 判斷 axios 錯誤一律用 `axios.isAxiosError(e)`，不用 `instanceof AxiosError`：axios-mock-adapter 載入的是另一份 axios，`instanceof` 會判斷失敗。
+- 只有 `.vue` SFC 會觸發 unplugin 的 Element Plus 自動 import；在 `.ts` 裡用 `defineComponent({ template })` 的字串 template 不會，測試 Element Plus 行為要用 SFC fixture。
+- Element Plus 的 `el-select` 清除 icon 要對根元素 `.el-select` 觸發 `mouseenter` 才會出現，對內層元素觸發會讓「不可清除」的測試恆真。
+- Element Plus 的 dialog 要等關閉動畫結束才 emit `update:modelValue`、才套用 `destroy-on-close`，happy-dom 不會觸發動畫結束事件。元件要自己在 `before-close` 中 emit 關閉，敏感內容（臨時密碼等）以 `v-if` 在關閉當下移除；斷言不得依賴動畫結束。
+- `ElMessageBox` 要等下一個 tick 才渲染，斷言前先等待；已關閉的 message box 仍可能留在 DOM，找按鈕時取最後一個符合的元素。
+- `useId()` 只在同一個 app 內唯一，比較兩個 id 要在同一次 mount 內放兩個元件，不能用兩次 mount 比對。
+- happy-dom 不計算版面：版面相關的 decision（固定 footer、只有 body 捲動等）用 class / 結構斷言加 `?raw` 讀原始碼斷言樣式規則，並在回報說明；必要時用 Playwright 在真實 Chromium 量測。
 
 ## 3. 測試分層
 
@@ -54,3 +66,5 @@ just web-lint src/components/pickup/QueueCard.vue
 - 本機服務由 repo root 的 `compose.yaml` 提供：Postgres 17（`127.0.0.1:54342`，owner `postgres` / `postgres`）、SeaweedFS（S3 API `127.0.0.1:54344`，bucket `afterschool-local`，帳密 `afterschool` / `afterschool-local-secret`；只發佈 S3 port）。全部只綁 loopback，port 避開 5432x / 5433x。
 - `just db-start` / `just db-stop` 啟停上述服務（停止保留 volume）；`just db-reset --yes` 重建本機 DB（drop / create `postgres` database → `alembic upgrade head` → 設定 `app_backend` 本機密碼 `app_backend_local`）；`just db-migrate` 只套用尚未套用的 revision。
 - 測試用員工 / 家長帳號由 integration fixture 建立，不寫在任何 migration。
+- docker 測試的陷阱：`docker run -v <來源>:<目標>` 的來源檔不存在時，Docker Desktop 會在主機建同名空目錄，容器改用映像內建設定而造成假綠；測試要先確認來源檔存在。容器之間互連用 user-defined network 與容器名稱，不要依賴 `host.docker.internal`（Linux CI 上連不到主機 loopback）。
+- 會連 DB 的指令與腳本一律移除或拒絕 `PGHOST` / `PGHOSTADDR` / `PGSERVICE` / `PGSERVICEFILE`，否則 libpq 會依環境變數把 127.0.0.1 的 URL 導向別台主機。
