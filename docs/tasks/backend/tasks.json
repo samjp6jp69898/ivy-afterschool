@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 227,
-  "last_updated": "2026-10-04T16:58:20Z",
+  "version": 228,
+  "last_updated": "2026-10-04T16:58:43Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10711,7 +10711,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/persons.py",
       "source_ref": "BE:api/parent_portal/pickup.py::create_pickup_person",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7c",
       "depends_on": [
         "BACKEND-401",
