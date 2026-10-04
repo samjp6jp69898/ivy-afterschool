@@ -30,6 +30,8 @@ NAMING_CONVENTION = {
 class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
     type_annotation_map: ClassVar[dict[Any, Any]] = {
+        # migration 的字串欄位一律 text（長度由 CHECK 約束把關），不用 varchar
+        str: Text,
         datetime: DateTime(timezone=True),
         UUID: postgresql.UUID(as_uuid=True),
         dict[str, Any]: postgresql.JSONB,

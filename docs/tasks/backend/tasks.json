@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 104,
-  "last_updated": "2026-10-04T06:34:34Z",
+  "version": 105,
+  "last_updated": "2026-10-04T06:37:55Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -947,11 +947,11 @@
     {
       "id": "BACKEND-030",
       "title": "建立帳號模組 SQLAlchemy models：Role、StaffUser、RefreshToken",
-      "description": "建立 `apps/api/app/models/account.py`，對應 DB-003 `roles`、DB-004 `staff_users`、DB-005 `refresh_tokens`（欄位、型別、nullable、FK、unique 必須與 migration 完全一致，由 BACKEND-024 drift 測試把關）。在 `app/models/__init__.py` 加入 import。\n\n- `Role`：code、name、description、permissions（`ARRAY(Text)`，`list[str]`）、is_system；relationship `staff_users`（lazy='raise'，避免 N+1）。\n- `StaffUser`：username、password_hash、display_name、phone、email、role_id（FK roles.id，`relationship('Role', lazy='joined')`）、extra_permissions、revoked_permissions、is_active、token_version、last_login_at、must_change_password。\n- `RefreshToken`：subject_type（`Literal['staff','parent']`）、subject_id（無 FK）、family_id、token_hash（unique）、expires_at、revoked_at、replaced_by（自參照 FK，on delete set null）。\n- 全部使用 BACKEND-007 的 `UUIDPkMixin`、`TimestampMixin`。\n\n**驗收標準**\n- 三個 model 可在 db_session 中寫入 / 讀回，server default（id、created_at、token_version=0、must_change_password=true）生效。\n- StaffUser.role 以 joined 載入。\n- 與 migration 無 drift（BACKEND-024 的 modeled tables 測試涵蓋這三張表）。",
+      "description": "建立 `apps/api/app/models/account.py`，對應 DB-003 `roles`、DB-004 `staff_users`、DB-005 `refresh_tokens`（欄位、型別、nullable、FK、unique 必須與 migration 完全一致，由 BACKEND-024 drift 測試把關）。在 `app/models/__init__.py` 加入 import。\n\n- `Role`：code、name、description、permissions（`ARRAY(Text)`，`list[str]`）、is_system；relationship `staff_users`（lazy='raise'，避免 N+1）。\n- `StaffUser`：username、password_hash、display_name、phone、email、role_id（FK roles.id，`relationship('Role', lazy='joined')`）、extra_permissions、revoked_permissions、is_active、token_version、last_login_at、must_change_password。\n- `RefreshToken`：subject_type（`Literal['staff','parent']`）、subject_id（無 FK）、family_id、token_hash（unique）、expires_at、revoked_at、replaced_by（自參照 FK，on delete set null）。\n- 全部使用 BACKEND-007 的 `UUIDPkMixin`、`TimestampMixin`。\n\n**驗收標準**\n- 三個 model 可在 db_session 中寫入 / 讀回，server default（id、created_at、token_version=0、must_change_password=true）生效。\n- StaffUser.role 以 joined 載入。\n- 與 migration 無 drift（BACKEND-024 的 modeled tables 測試涵蓋這三張表）。\n\n**對 BACKEND-007 產物的改寫**：`app/models/base.py` 的 `Base.type_annotation_map` 加入 `str: Text`（migration 的字串欄位一律 `text`，長度由 CHECK 把關；未加時 `Mapped[str]` 會映成 varchar 而被 drift 測試報 type_mismatch）。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/account.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-007",
