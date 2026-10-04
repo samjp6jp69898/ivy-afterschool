@@ -48,6 +48,12 @@ function messageBoxText(): string {
     .join('')
 }
 
+function lastMessageBox(): HTMLElement {
+  const box = Array.from(document.body.querySelectorAll<HTMLElement>('.el-message-box')).at(-1)
+  if (!box) throw new Error('message box 沒有出現')
+  return box
+}
+
 function closeEmits(wrapper: VueWrapper): unknown[][] | undefined {
   return wrapper.emitted('update:modelValue')
 }
@@ -102,7 +108,7 @@ describe('BindingCodeDialog', () => {
     expect(closeEmits(wrapper)).toBeUndefined()
 
     await clickIn(dialogEl(), '完成')
-    await clickIn(document.body.querySelector('.el-message-box')!, '確定關閉')
+    await clickIn(lastMessageBox(), '確定關閉')
     expect(closeEmits(wrapper)?.[0]).toEqual([false])
   })
 
