@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 174,
-  "last_updated": "2026-10-04T16:23:20Z",
+  "version": 175,
+  "last_updated": "2026-10-04T16:24:14Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -912,7 +912,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/test_schema_drift.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "INFRA-020",
@@ -944,9 +944,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。4 條 red_case 對應同名測試，tdd.run 4 passed，-k 與不帶 -k 收集相同（純測試 task，單一 commit 7b0de4c）。收斂性：已建 model 的表只過濾 table_missing_in_model，其餘 drift（含 table_missing_in_db）全進第 1 個測試；DB 新表沒 model 又不在 PENDING → 第 2 個測試紅（突變：從 PENDING 移除 exams → 紅）；PENDING 內的表一旦建 model → 第 3 個測試紅並要求移除（突變：PENDING 加 students → 紅），移除後其欄位 drift 自動受第 1 個測試把關，不會無聲漏檢。Base.metadata.tables 的 key 無 schema 前綴，與 Drift.target 的表名可直接比對。owner 連線只讀 information_schema 且先 assert_loopback，符合 description。殘留：PENDING 中 devices / nfc_cards 目前 DB 尚無此表（NFC blocked），若日後表名改變，PENDING 留下的過期名稱不會被偵測（只影響清單整潔，不會漏檢）。"
       }
     },
     {
@@ -6612,7 +6612,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/recipients.py",
       "source_ref": "BE:services/notification/parent_recipients.py::gather_guardian_user_ids",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-132",
@@ -6635,9 +6635,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。3 條 red_case 對應 test_parent_recipients_filters / _bulk / _archived_student（另有 dedup_and_sorted、bulk_empty_input），tdd.run 5 passed，-k 與不帶 -k 收集相同。測試 commit 7c0170e 先於實作 dc62d49。條件（guardian 未封存、receives_notifications、parent_account_id 非 null（inner join）、學生未封存、parent status active）逐條以突變驗證（拿掉任一條件、排序反向、bulk 改逐學生查詢、bulk 丟掉空 key）皆有測試轉紅；收件人只來自該學生自己的 guardian 列，不會送給無關家長。去重與排序為 description 明文規定，不需使用者確認；parent id 排序在 Postgres uuid（位元組序）與 Python UUID（整數序）一致。殘留：同學生同家長的重複列已由 uq_guardians_student_parent（未封存）在 DB 擋下，distinct 屬防禦性，dedup_and_sorted 測試實際只驗到排序（封存列本就被過濾），拿掉 distinct 觀測不到。"
       }
     },
     {
@@ -7164,7 +7164,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/preference_service.py",
       "source_ref": "BE:api/parent_portal/notifications.py::get_preferences",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-200",
@@ -7187,9 +7187,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。2 條 red_case 對應 test_get_preferences_defaults / _sparse（另有 isolated_per_parent），tdd.run 3 passed，-k 與不帶 -k 收集相同。測試 commit 7c0170e 先於實作 dc62d49。順序以 Event 列舉迭代，已確認與 events._DEFS 定義順序完全一致；label 取自 EventDef.label；突變（缺列預設 False、忽略已存列、改字母序、拿掉 parent 過濾）皆轉紅。無殘留。"
       }
     },
     {
@@ -8007,13 +8007,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_export.py",
       "source_ref": "BE:api/student_attendance.py::_write_class_sheet",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-301"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：公式注入前綴採 description 列的 = + - @ Tab CR（ivy SafeWorksheet 另含 | 與 %，且會先 lstrip Tab / CR / LF；本實作不 lstrip，而是對以 Tab / CR 開頭者同樣補 '）。是否要比照 ivy 加上 | 與 % 待確認。非營業日的「-」與簡碼、表頭為程式常數，不經防護。xlsx 的 XML 會把 CR 正規化為 LF，回讀時為 LF，前綴仍在。",
+      "risk_notes": "協調者待使用者確認：公式注入前綴採 description 列的 = + - @ Tab CR（ivy SafeWorksheet 另含 | 與 %，且會先 lstrip Tab / CR / LF；本實作不 lstrip，而是對以 Tab / CR 開頭者同樣補 '）。是否要比照 ivy 加上 | 與 % 待確認。非營業日的「-」與簡碼、表頭為程式常數，不經防護。xlsx 的 XML 會把 CR 正規化為 LF，回讀時為 LF，前綴仍在。\nreview-r7-b2 打回：使用者輸入字串（姓名、學號、班名）含 openpyxl 不接受的控制字元（openpyxl.cell.cell.ILLEGAL_CHARACTERS_RE，例如 \\x07、\\x0b）時，build_monthly_attendance_xlsx 拋 IllegalCharacterError，整份月報匯出失敗。StudentCreateIn.name 只擋 NUL，此資料可經 API 正常存入。要求：寫入前移除這些控制字元，且「先移除再判斷公式前綴」（否則 '\\x07=cmd' 移除後變成 '=cmd' 會被 openpyxl 當公式寫入）。補測試：姓名 '王\\x0b小明' → B3 == '王小明' 且不拋例外；姓名 '\\x07=HYPERLINK(\"x\")' → B3 == '\\'=HYPERLINK(\"x\")'；班名含 \\x07 時 A1 不含該字元。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/services/test_attendance_export.py",
@@ -8029,9 +8029,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r7-b2",
+        "notes": "打回。red_case 3 條對應 test_attendance_xlsx_layout / _non_service_day / _formula_injection（另有 status_codes、column_width），tdd.run 5 passed，-k 與不帶 -k 收集相同；測試 35f2710 先於實作 fee9a66。3bc0dc2 確認為修測試資料錯誤而非放寬斷言迎合實作：合併範圍 2+30+4=36 欄本就是 AJ（原寫 AF 為算錯）；expected 原放 9/5 週六，依 description 非營業日必須是「-」，原期望 None 與規格矛盾；CR 經 XML 正規化為 LF 是 openpyxl 回讀行為，斷言仍要求「'」前綴。版面、簡碼、灰底、stats、欄寬、公式注入（=、+、-、@、Tab、CR，含標題班名）以突變驗證皆有測試轉紅。打回原因（可構造反例）：使用者輸入字串含 openpyxl 不接受的控制字元時整份匯出拋 IllegalCharacterError（端點會 500）。StudentCreateIn.name 只擋 NUL，name='王\\x0b小明'（Word 複製貼上的手動換行即為 \\x0b）或 '王小明\\x07' 皆可存入，之後 build_monthly_attendance_xlsx 對該班整份月報失敗，實測已重現。班名（title_class_name）同理。對 risk_notes「協調者待使用者確認」的建議：xlsx 內容以字串型別寫入，Excel 不會把字串儲存格當公式或 DDE 執行，實際風險只有 openpyxl 把以 = 開頭的字串存成公式（已擋）；| 與 % 主要是 CSV / DDE 情境，description 未列，不加不違規；要與 ivy 一致可順手加入，非必要。不 lstrip 而對 Tab / CR 開頭補 ' 同樣安全（RequestModel 也會 strip 前後空白）。此點不構成打回理由。"
       }
     },
     {
@@ -9216,7 +9216,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/homework.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "INFRA-004",
@@ -9240,9 +9240,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。4 條 red_case 對應同名測試（另有 item_create、output_models、parent_output），tdd.run 7 passed，-k 與不帶 -k 收集相同。測試 commit c8f4703 先於實作 eda4c8c。欄位與 description 逐項相符；TimeHM 直接重用 settings_registry（與 BACKEND-106 同一 pattern，全形 / 阿拉伯數字被拒、結尾換行經 strip）；突變（拿掉 student_ids 去重、service_date 算入變更、overall 放寬、student_ids min_length 0、title 無下限、TimeHM 改 str）皆轉紅。lint / typecheck 乾淨。對 risk_notes「協調者待使用者確認」三點的建議：(1) overall 不可給 null：description 寫「Literal['done','auto'] | 未給」，未列 null，現行做法與規格一致；(2) student_ids 空陣列 422：description「給值時 1~100 個」，一致；(3) ready_eta / note 給 null = 清除：description 明文 ready_eta null 代表清除、note 型別為「≤200 | null」，一致。三點都不與 description / domain_spec 衝突，不需要再問使用者，協調者可把該段改寫成一般風險說明（或刪除）。殘留：overall=null → 422 沒有獨立測試（實作有擋）。"
       }
     },
     {
