@@ -260,13 +260,13 @@ def test_get_student_decrypt_failure_logged(
 
 def test_get_student_photo_url(db_session: Session, fake_clock: FakeClock) -> None:
     student = make_student(db_session)
-    student.photo_path = f"{student.id}/abcdef0123456789.jpg"
+    student.photo_path = f"{student.id}/{'ab' * 16}.jpg"
     db_session.flush()
     storage = FakeStorage()
 
     out = _get(db_session, student.id, _actor("students:read"), fake_clock, storage)
     assert out.photo_url == (
-        f"https://storage.test/student-photos/{student.id}/abcdef0123456789.jpg?exp=300"
+        f"https://storage.test/student-photos/{student.id}/{'ab' * 16}.jpg?exp=300"
     )
 
     storage.sign_error = StorageError("簽名失敗")
