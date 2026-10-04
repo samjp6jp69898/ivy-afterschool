@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 225,
-  "last_updated": "2026-10-04T16:58:02Z",
+  "version": 226,
+  "last_updated": "2026-10-04T16:58:11Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -9286,14 +9286,14 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7c",
       "depends_on": [
         "BACKEND-370",
         "BACKEND-005"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "",
+      "risk_notes": "併發測試的 lock_timeout 必須用 SET LOCAL：session 級 SET 會隨連線回到 pool 污染之後借到該連線的測試。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_homework_service.py",
@@ -9698,14 +9698,14 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7c",
       "depends_on": [
         "BACKEND-370",
         "BACKEND-371"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "家長端 IDOR 由 endpoint 層（BACKEND-391 get_owned_student）負責，本 service 不收 parent。updated_at 由 DB trigger 維護，同一交易內 now() 相同，測試只能驗證資料來源（items / progress）而無法驗證 max 的跨列比較。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_homework_service.py",
