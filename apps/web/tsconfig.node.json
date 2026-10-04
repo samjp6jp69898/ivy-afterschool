@@ -16,5 +16,6 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["vite.config.ts", "vitest.config.ts", "playwright.config.ts", "e2e/**/*.ts", "scripts/**/*.ts", "scripts/**/*.d.mts"]
+  "include": ["vite.config.ts", "vitest.config.ts", "playwright.config.ts", "e2e/**/*.ts", "scripts/**/*.ts", "scripts/**/*.d.mts"],
+  "exclude": ["scripts/fixtures"]
 }

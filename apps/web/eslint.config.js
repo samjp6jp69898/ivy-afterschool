@@ -55,6 +55,7 @@ export default defineConfig(
       'coverage/**',
       'playwright-report/**',
       'test-results/**',
+      'scripts/fixtures/**',
       'src/auto-imports.d.ts',
       'src/components.d.ts',
     ],
