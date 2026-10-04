@@ -1,6 +1,6 @@
 {
   "area": "backend",
-  "version": 108,
+  "version": 109,
   "last_updated": "2026-10-04T06:41:55Z",
   "tasks": [
     {
@@ -394,7 +394,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/request_meta.py",
       "source_ref": "BE:utils/request_ip.py::get_client_ip",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-004"

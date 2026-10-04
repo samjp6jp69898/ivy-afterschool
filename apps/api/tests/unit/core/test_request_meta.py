@@ -1,5 +1,8 @@
 """BACKEND-011：app/core/request_meta.py（RequestMeta：client IP、User-Agent、request id）。"""
 
+from collections.abc import MutableMapping
+from typing import Any
+
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from starlette.requests import Request
@@ -13,7 +16,7 @@ def _request(
     client: tuple[str, int] | None = ("203.0.113.5", 1234), headers: dict[str, str] | None = None
 ) -> Request:
     raw_headers = [(k.lower().encode(), v.encode("latin-1")) for k, v in (headers or {}).items()]
-    scope = {
+    scope: dict[str, Any] = {
         "type": "http",
         "method": "GET",
         "path": "/",
@@ -74,7 +77,7 @@ def test_request_meta_request_id() -> None:
 
 
 def test_request_meta_ws() -> None:
-    scope = {
+    scope: dict[str, Any] = {
         "type": "websocket",
         "path": "/ws",
         "query_string": b"",
@@ -83,10 +86,10 @@ def test_request_meta_ws() -> None:
         "state": {},
     }
 
-    async def _receive() -> dict[str, object]:
+    async def _receive() -> MutableMapping[str, Any]:
         return {"type": "websocket.connect"}
 
-    async def _send(message: dict[str, object]) -> None:
+    async def _send(message: MutableMapping[str, Any]) -> None:
         return None
 
     meta = get_ws_meta(WebSocket(scope, _receive, _send))
