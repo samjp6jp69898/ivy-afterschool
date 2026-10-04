@@ -217,10 +217,10 @@ def test_tokens_claim_types_exp_overflow(fake_clock: FakeClock) -> None:
         with pytest.raises(UnauthenticatedError):
             decode_access_token(token, expected_type="staff", clock=fake_clock)
     # 非整數時間
-    for exp in ("later", 1.5, [1]):
+    for bad_exp in ("later", 1.5, [1]):
         with pytest.raises(UnauthenticatedError):
             decode_access_token(
-                _signed(fake_clock, exp=exp), expected_type="staff", clock=fake_clock
+                _signed(fake_clock, exp=bad_exp), expected_type="staff", clock=fake_clock
             )
 
 
