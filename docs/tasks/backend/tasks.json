@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 194,
-  "last_updated": "2026-10-04T16:42:17Z",
+  "version": 195,
+  "last_updated": "2026-10-04T16:42:46Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -4588,7 +4588,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": "BE:api/classrooms.py::get_classrooms",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-134",
@@ -4597,7 +4597,7 @@
         "BACKEND-047"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "review-r7-b2 打回：排序規格的 sort_order 沒有測試（拿掉 order_by 的 SchoolClass.sort_order 後 tdd.run 仍全綠）。補測試：同一學年兩班，name='A班' sort_order=1、name='B班' sort_order=0 → B班 在 A班 前（確認 sort_order 優先於 name），並與另一學年的班一起驗證學年仍優先。",
+      "risk_notes": "班名排序依 DB collation（本機 en_US.utf8，中文依字碼：丙班、乙班、甲班），不會照天干或筆畫；要固定顯示順序靠 sort_order。Railway 的 collation 於部署時確認。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_class_service.py",
@@ -4614,9 +4614,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r7-b2",
-        "notes": "打回。4 條 red_case 對應同名測試（另有 academic_year_filter），tdd.run 全綠、-k 選到每條 red_case（未選到的只有同檔其他 task 的測試）；lint / typecheck 乾淨；測試 commit 先於實作。突變（學年改升冪、名稱改降冪、含停用員工、人數含 withdrawn / 封存、拿掉 mine 篩選）皆轉紅。打回原因：description 的排序「academic_year desc、sort_order、name」中 sort_order 完全沒有測試——把 order_by 的 SchoolClass.sort_order 拿掉，tdd.run 仍 5 passed。85e1e60 改用 ASCII 班名本身沒有少驗：原測試期望「甲班」排在「乙班」前，但本機 DB collation 為 en_US.utf8（libc），實測排序為 丙班、乙班、甲班（依字碼），原期望本來就錯；name 作為最後一層排序仍由 A班 / B班 驗到。少驗的是 sort_order，與 ASCII 改動無關。殘留（給使用者知悉，非本 task 範圍）：中文班名依 DB collation 排序，「甲乙丙」不會照天干順序，要靠 sort_order 調整；Railway 的 collation 需部署時確認。"
+        "notes": "複審通過（只核對打回項）。新增 test_list_classes_order_sort_order_within_year（beb4435，實作未改）：拿掉 order_by 的 sort_order → 該測試轉紅；把 sort_order 移到學年之前 → 同樣轉紅（另一學年 sort_order=0 的班不可排到前面），證明學年仍優先於 sort_order、sort_order 優先於班名。tdd.run 6 passed，test_class_service.py lint / typecheck 乾淨。初審結論保留：85e1e60 改 ASCII 班名是修正錯誤期望（en_US.utf8 collation 下中文依字碼排序），未少驗。"
       }
     },
     {
