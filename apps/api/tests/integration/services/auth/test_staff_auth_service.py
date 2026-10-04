@@ -1,5 +1,6 @@
 """BACKEND-041：app/services/auth/staff_auth.py（StaffAuthService.login）。
-BACKEND-043：refresh（輪替 refresh 並以目前 token_version 重簽 access；停用帳號 / 家長 token 撤銷 family）。
+BACKEND-043：refresh（輪替 refresh 並以目前 token_version 重簽 access；停用帳號 / 家長 token 撤銷
+family）。
 
 帳密驗證、(帳號, IP) 鎖定、不存在帳號仍跑一次 argon2（防帳號列舉）、停用帳號同一個 401、
 成功後更新 last_login_at / 簽發 access + refresh token / needs_rehash 透明升級。
@@ -316,7 +317,8 @@ def test_refresh_uses_current_token_version(
 
     s2 = refresh(db_session, raw_refresh=s1.refresh_token, clock=fake_clock)
 
-    assert decode_access_token(s2.access_token, expected_type="staff", clock=fake_clock).token_version == 3
+    claims = decode_access_token(s2.access_token, expected_type="staff", clock=fake_clock)
+    assert claims.token_version == 3
 
 
 def test_refresh_missing_cookie(db_session: Session, fake_clock: FakeClock) -> None:

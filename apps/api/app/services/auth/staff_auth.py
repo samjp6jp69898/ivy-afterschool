@@ -11,6 +11,18 @@
   staff.token_version）與新 family 的 refresh token；有效權限以 BACKEND-072 計算。
 - 只 flush 不 commit（endpoint commit）。``must_change_password`` 仍可登入，由 BACKEND-047 限制
   可用路徑。
+
+BACKEND-043：``refresh``（移植 ivy ``api/auth.py::refresh_token`` 的 staff rotation 分支；去掉 JWT
+grace fallback 與 absolute lifetime）。
+
+- 無 cookie → 401 ``unauthenticated``；``rotate``（BACKEND-037）的錯誤（invalid / revoked /
+  expired / reused / in_progress）原樣往外拋。
+- 輪替出的 token 不是 staff（家長 refresh token 不得換員工 access）→ 撤銷該 family，401
+  ``refresh_invalid``；帳號不存在或停用 → 撤銷該 family，401 ``unauthenticated``。
+  這兩個撤銷與 ``rotate`` 的重用偵測一樣**在 raise 前 commit**：endpoint（BACKEND-044）只在成功時
+  commit，401 路徑會 rollback，不先 commit 撤銷就會跟著退回而失效。
+- 成功：以帳號**目前**的 ``token_version`` 重簽 access（管理員重設密碼 / 停用後 tv 已變），
+  有效權限即時重算；只 flush。
 """
 
 from __future__ import annotations
@@ -50,6 +62,27 @@ class StaffSession:
 
 def _invalid_credentials() -> UnauthenticatedError:
     return UnauthenticatedError(INVALID_CREDENTIALS_MESSAGE, code="invalid_credentials")
+
+
+def _revoke_family_and_commit(session: Session, raw: str, clock: Clock) -> None:
+    """撤銷 raw 所屬 family 並 commit：呼叫端接著 raise，endpoint 的 rollback 不會退回撤銷。"""
+    refresh_tokens.revoke_family_by_raw(session, raw, clock=clock)
+    session.commit()
+
+
+def _staff_session(staff: StaffUser, *, refresh_token: str, clock: Clock) -> StaffSession:
+    access_token = create_access_token(
+        subject_type="staff", subject_id=staff.id, token_version=staff.token_version, clock=clock
+    )
+    permissions = resolve_effective_permissions(
+        staff.role.permissions, staff.extra_permissions, staff.revoked_permissions
+    )
+    return StaffSession(
+        staff=staff,
+        permissions=permissions,
+        access_token=access_token,
+        refresh_token=refresh_token,
+    )
 
 
 def login(
@@ -95,16 +128,24 @@ def login(
     staff.last_login_at = now
 
     issued = refresh_tokens.issue(session, subject_type="staff", subject_id=staff.id, clock=clock)
-    access_token = create_access_token(
-        subject_type="staff", subject_id=staff.id, token_version=staff.token_version, clock=clock
-    )
-    permissions = resolve_effective_permissions(
-        staff.role.permissions, staff.extra_permissions, staff.revoked_permissions
-    )
+    result = _staff_session(staff, refresh_token=issued.raw, clock=clock)
     session.flush()
-    return StaffSession(
-        staff=staff,
-        permissions=permissions,
-        access_token=access_token,
-        refresh_token=issued.raw,
-    )
+    return result
+
+
+def refresh(session: Session, *, raw_refresh: str | None, clock: Clock) -> StaffSession:
+    if not raw_refresh:
+        raise UnauthenticatedError
+    rotated = refresh_tokens.rotate(session, raw_refresh, clock=clock)
+    if rotated.subject_type != "staff":
+        _revoke_family_and_commit(session, rotated.raw, clock)
+        raise UnauthenticatedError(code="refresh_invalid")
+    staff = session.execute(
+        select(StaffUser).where(StaffUser.id == rotated.subject_id)
+    ).scalar_one_or_none()
+    if staff is None or not staff.is_active:
+        _revoke_family_and_commit(session, rotated.raw, clock)
+        raise UnauthenticatedError
+    result = _staff_session(staff, refresh_token=rotated.raw, clock=clock)
+    session.flush()
+    return result
