@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 129,
-  "last_updated": "2026-10-04T11:29:36Z",
+  "version": 130,
+  "last_updated": "2026-10-04T11:31:12Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1176,11 +1176,11 @@
     {
       "id": "BACKEND-036",
       "title": "實作 RefreshTokenService.issue：建立 refresh token（family）",
-      "description": "建立 `apps/api/app/services/auth/refresh_tokens.py`（DB-005；移植 ivy `services/staff_refresh.py::issue_refresh_token`，員工與家長共用；去掉 tenant、user_agent / ip 欄位）。\n\n```python\n@dataclass(frozen=True)\nclass IssuedRefresh:\n    raw: str\n    family_id: UUID\n    token_id: UUID\n\ndef hash_refresh(raw: str) -> str: ...      # sha256 hex（DB CHECK ^[0-9a-f]{64}$）\ndef issue(session: Session, *, subject_type: SubjectType, subject_id: UUID, clock: Clock, family_id: UUID | None = None) -> IssuedRefresh: ...\n```\n- raw = `secrets.token_urlsafe(48)`；DB 只存 hash。\n- `expires_at = clock.now() + REFRESH_TTL[subject_type]`（BACKEND-035）。\n- family_id 未給 → 新 uuid4（新的登入工作階段）。\n- 只 add + flush，不 commit。\n\n**驗收標準**\n- DB 列的 token_hash == sha256(raw)，raw 本身不在 DB。\n- staff 到期 14 天、parent 30 天。\n- 未給 family_id 時每次不同；給定時沿用。",
+      "description": "建立 `apps/api/app/services/auth/refresh_tokens.py`（DB-005；移植 ivy `services/staff_refresh.py::issue_refresh_token`，員工與家長共用；去掉 tenant、user_agent / ip 欄位）。\n\n```python\n@dataclass(frozen=True)\nclass IssuedRefresh:\n    raw: str\n    family_id: UUID\n    token_id: UUID\n\ndef hash_refresh(raw: str) -> str: ...      # sha256 hex（DB CHECK ^[0-9a-f]{64}$）\ndef issue(session: Session, *, subject_type: SubjectType, subject_id: UUID, clock: Clock, family_id: UUID | None = None) -> IssuedRefresh: ...\n```\n- raw = `secrets.token_urlsafe(48)`；DB 只存 hash。\n- `expires_at = clock.now() + REFRESH_TTL[subject_type]`（BACKEND-035）；`created_at` 也以同一個 `clock.now()` 寫入（DB CHECK `expires_at > created_at`，不可讓 DB `now()` 與注入時鐘混用）。\n- family_id 未給 → 新 uuid4（新的登入工作階段）。\n- 只 add + flush，不 commit。\n\n**驗收標準**\n- DB 列的 token_hash == sha256(raw)，raw 本身不在 DB。\n- staff 到期 14 天、parent 30 天；created_at == clock.now()。\n- 未給 family_id 時每次不同；給定時沿用。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/refresh_tokens.py",
       "source_ref": "BE:services/staff_refresh.py::issue_refresh_token",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-030",
@@ -1197,7 +1197,7 @@
         ],
         "red_cases": [
           "test_issue_refresh_hash_only：r = issue(db_session, subject_type='staff', subject_id=staff.id, clock=fake_clock) → 查 RefreshToken.id == r.token_id 的 token_hash == hashlib.sha256(r.raw.encode()).hexdigest()，且沒有任何欄位等於 r.raw",
-          "test_issue_refresh_ttl：staff → expires_at == fake_clock.now() + timedelta(days=14)；parent → + timedelta(days=30)",
+          "test_issue_refresh_ttl：staff → created_at == fake_clock.now()、expires_at == fake_clock.now() + timedelta(days=14)；parent → + timedelta(days=30)",
           "test_issue_refresh_family：兩次未給 family_id → family_id 不同；給 family_id=f → 回傳與 DB 皆為 f"
         ],
         "run": "just test-int apps/api/tests/integration/services/auth/test_refresh_tokens.py -k \"test_issue_refresh_\"",
