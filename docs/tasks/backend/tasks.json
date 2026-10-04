@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 139,
-  "last_updated": "2026-10-04T11:44:06Z",
+  "version": 140,
+  "last_updated": "2026-10-04T11:45:19Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14796,7 +14796,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/settings_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-108"
@@ -14817,9 +14817,9 @@
         "notes": "tdd.run 沿用 BACKEND-108 的指令；測試名稱以 test_get_setting_ 開頭，確認 -k 選得到。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。bd92bf4、1fe571d（紅）→ 2593288（綠）→ 58f7a6f（狀態）。tdd.run 8/8 綠（含 BACKEND-108 既有 6 條），兩條 red_case 皆選到。命中快取與查 DB（含無列回 registry default）兩條路徑都回傳 model_copy(deep=True)，快取保存原物件。突變自證（scratch 副本）：拿掉命中路徑的 copy → 1 紅；拿掉查詢路徑的 copy → 2 紅（含 registry default 被污染）；改成只把副本存進快取、查詢路徑回傳原物件 → 1 紅；deep=False 仍全綠，實作者已說明為等價突變（pydantic 淺複製會複製 RootModel 的 root dict，其餘巢狀 model 皆 frozen）。副作用：deep copy 後與原值 ==，巢狀 DayHours 仍 frozen（賦值拋 ValidationError），LineMessaging 的 secret 欄位原樣保留、不重跑驗證也不重新解密。效能殘留（不擋）：每次呼叫複製一次，實測 2.7~9.7 µs（service_hours 最大），相對一次 DB 查詢可忽略；若日後有熱迴圈大量呼叫，呼叫端應在迴圈外取一次。"
       }
     }
   ]
