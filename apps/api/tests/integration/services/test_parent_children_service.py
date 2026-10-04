@@ -1,12 +1,15 @@
 """BACKEND-182：app/services/parent_children_service.py（list_children）。"""
 
+from datetime import date
 from uuid import uuid4
 
+import pytest
 from sqlalchemy.orm import Session
 
+from app.core.errors import AppError
 from app.core.storage import StorageError
-from app.schemas.parent_children import ChildSummaryOut
-from app.services.parent_children_service import list_children
+from app.schemas.parent_children import ChildDetailOut, ChildGuardianOut, ChildSummaryOut
+from app.services.parent_children_service import get_child, list_children
 from app.services.parent_scope import get_parent_student_ids
 from tests.support.factories import (
     make_class,
@@ -110,3 +113,63 @@ def test_list_children_photo_sign_failure_returns_none(db_session: Session) -> N
 
 def test_list_children_empty(db_session: Session) -> None:
     assert list_children(db_session, make_parent(db_session).id, storage=FakeStorage()) == []
+
+
+def test_get_child_detail(db_session: Session) -> None:
+    parent = make_parent(db_session)
+    school = make_school(db_session, name="新生國民小學")
+    school.short_name = "新生"
+    klass = make_class(db_session, name="低年級 A 班")
+    ming = make_student(db_session, name="王小明", grade_level=2, class_=klass, school=school)
+    ming.school_class = "二年三班"
+    ming.enrolled_on = date(2025, 9, 1)
+    ming.photo_path = _photo_path(ming.id)
+    mine = make_guardian(db_session, ming, parent=parent, relation="mother", is_primary=True)
+    mine.receives_notifications = False
+    # 同學生的其他監護人（另一位家長）不影響 my_guardian
+    make_guardian(
+        db_session, ming, parent=make_parent(db_session), relation="father", can_pickup=False
+    )
+    db_session.flush()
+
+    out = get_child(db_session, parent.id, ming.id, storage=FakeStorage())
+
+    assert isinstance(out, ChildDetailOut)
+    assert out.my_guardian == ChildGuardianOut(
+        relation="mother", is_primary=True, can_pickup=True, receives_notifications=False
+    )
+    assert out.name == "王小明"
+    assert out.class_name == "低年級 A 班"
+    assert out.school_name == "新生"
+    assert out.school_class == "二年三班"
+    assert out.enrolled_on == date(2025, 9, 1)
+    assert out.photo_url == f"https://storage.test/student-photos/{ming.photo_path}?exp=300"
+    # 家長端不輸出敏感 / 內部欄位
+    assert not {"id_number", "health_note", "note"} & set(out.model_dump())
+
+
+def test_get_child_idor(db_session: Session) -> None:
+    parent = make_parent(db_session)
+    other = make_parent(db_session)
+    others_child = make_student(db_session, name="陳小華")
+    make_guardian(db_session, others_child, parent=other)
+    revoked = make_student(db_session, name="已解除")
+    make_guardian(db_session, revoked, parent=parent, archived=True)
+
+    for student_id in (others_child.id, revoked.id, uuid4()):
+        with pytest.raises(AppError) as exc:
+            get_child(db_session, parent.id, student_id, storage=FakeStorage())
+        assert (exc.value.status, exc.value.code) == (404, "student_not_found")
+
+
+def test_get_child_withdrawn_still_readable(db_session: Session) -> None:
+    parent = make_parent(db_session)
+    student = make_student(db_session)
+    student.status = "withdrawn"
+    student.withdrawn_on = date(2026, 9, 1)
+    make_guardian(db_session, student, parent=parent)
+    db_session.flush()
+
+    out = get_child(db_session, parent.id, student.id, storage=FakeStorage())
+
+    assert out.status == "withdrawn"
