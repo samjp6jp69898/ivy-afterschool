@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 93,
-  "last_updated": "2026-10-04T04:38:08Z",
+  "version": 94,
+  "last_updated": "2026-10-04T04:39:12Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -317,7 +317,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/crypto.py",
       "source_ref": "BE:utils/medical_encryption.py::encrypt_medical",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-001",
