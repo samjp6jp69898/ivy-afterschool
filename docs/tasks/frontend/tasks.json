@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 73,
-  "last_updated": "2026-10-04T04:40:17Z",
+  "version": 74,
+  "last_updated": "2026-10-04T04:43:43Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -940,7 +940,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/layout/NotificationPanel.vue",
       "source_ref": "FE:src/components/layout/NotificationPanel.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r4",
       "depends_on": [
         "FRONTEND-003",
@@ -963,9 +963,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4-ui",
+        "notes": "pass。3 條 red_case 均有對應測試且斷言具體文字 / emit payload（列內容含 2026/10/02 16:05 與事件標籤、unread-dot；open 的 id、read-all 次數、unreadCount 0 時 disabled；空狀態「目前沒有通知」、點「未讀」emit [true] 後顯示「沒有未讀通知」），另補已讀列無圓點、loading 3 列 skeleton。tdd.run 實跑 5/5 綠，名稱清單涵蓋全部 red_case；測試 7b759f8 先於實作 c039fa2；web-lint 乾淨。偏離「全部 / 未讀由面板內部持有」成立：稿中 NotificationBell 的 unreadOnly 只用來把 filter 事件回灌給 prop，沒有其他外部控制；FRONTEND-034 store 不持有篩選、FRONTEND-035 只需在 filter 時 fetch({unreadOnly})，呼叫端不需外部控制。版面、文案、skeleton、空狀態與稿 decisions 一致。殘留：面板若被卸載再掛載（例如 FRONTEND-035 改用 destroy-on-close / 非 persistent popover）內部狀態會回到「全部」而 store 仍是未讀清單，FRONTEND-035 實作時保持 popover 內容常駐或在重開時重新 fetch。"
       }
     },
     {
@@ -2905,7 +2905,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/student/BindingCodeDialog.vue",
       "source_ref": "FE:src/components/student/GuardianManager.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r4",
       "depends_on": [
         "FRONTEND-003",
@@ -2928,9 +2928,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4-ui",
+        "notes": "pass。3 條 red_case 均有對應測試：data-test=binding-code 精確等於 K7M2-Q9XP 且說明文字含完整效期句（2026/10/09 16:00）；複製時 writeText 收到 K7M2Q9XP、之後「完成」直接 emit [false] 且不出現確認框；未複製點「完成」出現確認文字、取消不關、確定才關。另補複製失敗提示「無法複製，請手動抄寫」、X / Esc 需確認、點遮罩不關、關閉後 DOM 移除綁定碼與重開重置已複製狀態。tdd.run 實跑 6/6 綠；測試 7da0971 先於實作 32b3f5c（實作 commit 對 spec 的改動只是改取最後一個 message box，未放寬斷言）；web-lint 乾淨。與 page-students 稿（沿用 TempPasswordDialog：440px、warning alert、26px 等寬碼、成功綠字 / 失敗紅字、footer 只有「完成」）一致。殘留：確認框開著時再按「完成」會疊出第二個確認框（與 TempPasswordDialog 同樣行為），觀測不到錯誤結果。"
       }
     },
     {
@@ -3335,7 +3335,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/attendance/AttendanceSummaryBar.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r4",
       "depends_on": [
         "FRONTEND-005",
@@ -3358,9 +3358,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4-ui",
+        "notes": "pass。3 條 red_case 均有對應測試：chip 依序「標籤 數值」整列深等於（含 預計到班 5、已到班 10、請假 2），出席率卡標籤「出席率」與數值 67%；active null 點缺席 emit [absent]、active absent 再點 emit [null]；total 2 / leave 2 顯示「—」。另補 tone 色、全部 chip 選中與 emit null、33% 取整、loading 7 張 skeleton。偏離 4（標籤與數值逐張組合後比對）成立：StatCard 標籤與數值是分開節點，逐張組合再整列比對比 toContain 更嚴格；出席率以 label + value 分開斷言等價於「出席率 67%」。偏離 2（選用 prop loading?: boolean）成立：對應稿 decisions「載入中：摘要 chip 顯示 StatCard skeleton」，預設 false 不影響既有呼叫端。tdd.run 實跑 7/7 綠；測試 aa3a236 先於實作 88c2712（實作 commit 只新增 loading 測試）；web-lint 乾淨。7 欄 grid、出席率 hint 與稿一致。"
       }
     },
     {
@@ -3997,7 +3997,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/homework/ReadyEtaDialog.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r4",
       "depends_on": [
         "FRONTEND-003",
@@ -4021,9 +4021,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4-ui",
+        "notes": "pass。4 條 red_case 均有對應測試：fake now 台北 16:07 點 +30 分 → 時間欄顯示 16:40、儲存 emit {ready_eta:16:40,note:null}；清除後 emit {ready_eta:null,note:訂正中}；「上次由 陳老師 於 16:10 設定」與「儲存後會通知家長」；未修改時儲存 disabled。另補 +15 / +60 進位、20:40 時 +30 / +60 disabled、note trim 與空白送 null、無設定者時不顯示、重開重置、error alert。tdd.run 實跑 10/10 綠；測試 2eb46c8 先於實作 93f9664（實作 commit 把時間欄讀值改為 el-select 實際顯示文字並多斷言清除後回到 placeholder，屬補強）；web-lint 乾淨。偏離 3 成立：快捷鈕超過 21:00 disabled 避免產生選單範圍外的值；note trim 與稿 submitEta 的 trim 一致；ReadyEtaProgress 為 Progress 欄位子集，FRONTEND-150 落地後型別相容。與 page-homework-board 稿（FormDialog sm、標題、5 分一格起點進位到 21:00、44px 快捷鈕、danger 清除鈕有值才出現、textarea ≤100 與 placeholder、上次設定者、鈴鐺提示、未變更停用）一致。殘留：quickDisabled 以開啟當下時間計算、applyQuick 以點擊當下計算，對話框跨越時間開著時可能出現鈕可按但點了無作用（例如 20:44 開啟、20:46 點 +15）；note 只差前後空白時 dirty 判定為已變更但送出內容相同。兩者皆不產生錯誤資料。"
       }
     },
     {
