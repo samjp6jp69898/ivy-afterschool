@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 125,
-  "last_updated": "2026-10-04T11:26:03Z",
+  "version": 126,
+  "last_updated": "2026-10-04T11:26:25Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1180,8 +1180,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/refresh_tokens.py",
       "source_ref": "BE:services/staff_refresh.py::issue_refresh_token",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-030",
         "BACKEND-035",
@@ -2405,8 +2405,8 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/test_permission_seed_consistency.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-070",
         "BACKEND-030",
@@ -3711,8 +3711,8 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/test_settings_seed_consistency.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-106",
         "BACKEND-100",
@@ -3749,8 +3749,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/settings_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-106",
         "BACKEND-100",
@@ -4436,8 +4436,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/students.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-007",
         "BACKEND-100",
@@ -6461,8 +6461,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/notifications.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-007",
         "DB-029",
