@@ -23,8 +23,6 @@ from tests.support import db_urls
 PENDING_MODEL_TABLES = frozenset(
     {
         "student_attendances",
-        "homework_items",
-        "homework_daily_progress",
         "pickup_persons",
         "pickup_authorizations",
         "pickup_requests",

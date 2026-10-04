@@ -15,7 +15,7 @@ from __future__ import annotations
 import itertools
 import secrets
 from collections.abc import Sequence
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from typing import Final
 from uuid import UUID, uuid4
 
@@ -25,6 +25,12 @@ from sqlalchemy.orm import Session
 from app.core.security.passwords import hash_password
 from app.models.account import Role, StaffUser
 from app.models.classes import ClassStaff, ClassStaffRole, SchoolClass
+from app.models.homework import (
+    HomeworkDailyProgress,
+    HomeworkItem,
+    HomeworkItemStatus,
+    OverallStatus,
+)
 from app.models.leaves import (
     LeaveActorType,
     LeaveStatus,
@@ -33,7 +39,7 @@ from app.models.leaves import (
     StudentLeaveAttachment,
 )
 from app.models.parents import Guardian, GuardianRelation, ParentAccount, ParentStatus
-from app.models.reference import School
+from app.models.reference import School, Subject
 from app.models.students import Student, StudentStatus
 
 SYSTEM_ROLE_CODES: Final = frozenset({"admin", "director", "clerk", "tutor"})
@@ -269,3 +275,47 @@ def make_leave_attachment(
     )
     _add(session, attachment)
     return attachment
+
+
+def make_homework_item(
+    session: Session,
+    student: Student,
+    *,
+    service_date: date,
+    title: str = "數學習作 p.12-13",
+    status: HomeworkItemStatus = "todo",
+    subject: Subject | None = None,
+    sort_order: int = 0,
+) -> HomeworkItem:
+    item = HomeworkItem(
+        student_id=student.id,
+        service_date=service_date,
+        title=title,
+        status=status,
+        subject_id=subject.id if subject is not None else None,
+        sort_order=sort_order,
+    )
+    _add(session, item)
+    return item
+
+
+def make_homework_progress(
+    session: Session,
+    student: Student,
+    *,
+    service_date: date,
+    overall_status: OverallStatus = "not_started",
+    ready_eta: time | None = None,
+    note: str | None = None,
+) -> HomeworkDailyProgress:
+    """給 ready_eta 時自動補 eta_updated_at（滿足 ck_homework_daily_progress_eta_audit）。"""
+    progress = HomeworkDailyProgress(
+        student_id=student.id,
+        service_date=service_date,
+        overall_status=overall_status,
+        ready_eta=ready_eta,
+        eta_updated_at=ARCHIVED_AT if ready_eta is not None else None,
+        note=note,
+    )
+    _add(session, progress)
+    return progress
