@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 221,
-  "last_updated": "2026-10-04T16:57:47Z",
+  "version": 223,
+  "last_updated": "2026-10-04T16:58:00Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2036,7 +2036,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/parent_auth.py",
       "source_ref": "BE:api/parent_portal/auth.py::_issue_refresh_token",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-052",
@@ -2111,7 +2111,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/parent_auth.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-038",
