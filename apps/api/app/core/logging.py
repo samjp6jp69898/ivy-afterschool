@@ -10,7 +10,9 @@
   http 回應加 ``X-Request-ID``，請求結束記一行 access log（method、path、status、duration_ms；
   不含 query string，``/api/health`` 不記）。websocket 只設定 request id，不記 access log。
 - ``RedactingFilter``：把 msg 與 args 中敏感 key（password、token、code、cookie、authorization、
-  secret 等）的值遮成 ``***``；dict 遞迴處理，字串另以 ``key=value`` / ``'key': 'value'`` 樣式比對。
+  secret 等）的值遮成 ``***``；dict / list / tuple 遞迴處理（含 namedtuple 與 header pair
+  ``("authorization", "Bearer x")`` / ``(b"cookie", b"...")``），字串另以 ``key=value``、
+  ``key: value``（整個值到行尾或分隔符）與 ``'key': 'value'`` 樣式比對；遮罩失敗時 fail-closed。
 """
 
 from __future__ import annotations
@@ -46,8 +48,18 @@ _SENSITIVE_SUBSTRINGS = (
     "authorization",
     "binding_code",
 )
-# 字串層遮罩：key=value（value 取到下一個空白 / 逗號）與 'key': 'value'（引號單雙皆可、值可為裸字）
-_KEY_VALUE_RE = re.compile(r"(?P<key>[A-Za-z_][A-Za-z0-9_-]*)=(?P<value>[^\s,，;]+)")
+# 字串層遮罩只針對敏感 key（非敏感 key 的值可能含空白，不能用通用 key=value 掃描）：
+# key=value 與 header 樣式 key: value，值取到行尾 / 分隔符（, ; 全形逗號）或下一個 key= / key:
+# 之前，因此 'authorization=Bearer T5' 整段遮掉、'token=x status_code=200' 不吞掉後面的 pair。
+_SENSITIVE_KEY_PATTERN = (
+    r"[A-Za-z0-9_-]*(?:" + "|".join(_SENSITIVE_SUBSTRINGS) + r")[A-Za-z0-9_-]*|code"
+)
+_KEY_VALUE_RE = re.compile(
+    r"(?<![A-Za-z0-9_'\"-])(?P<key>" + _SENSITIVE_KEY_PATTERN + r")\s*[=:]\s*"
+    r"(?P<value>(?:(?!\s+[A-Za-z_][A-Za-z0-9_-]*\s*[=:])[^,，;\n])+)",
+    re.IGNORECASE,
+)
+# 'key': 'value' / "key": "value"（dict repr），值為帶引號字串或裸 token
 _QUOTED_KEY_VALUE_RE = re.compile(
     r"""(?P<kq>['"])(?P<key>[A-Za-z_][A-Za-z0-9_-]*)(?P=kq)\s*:\s*"""
     r"""(?P<value>'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|[^\s,，}\]{'"]+)"""
@@ -61,23 +73,48 @@ access_logger = logging.getLogger(ACCESS_LOGGER_NAME)
 
 
 def is_sensitive_key(key: object) -> bool:
-    name = str(key).lower()
+    if isinstance(key, bytes | bytearray):
+        key = bytes(key).decode("latin-1")
+    if not isinstance(key, str):
+        return False
+    name = key.lower()
     return name in _SENSITIVE_EXACT or any(s in name for s in _SENSITIVE_SUBSTRINGS)
 
 
+def _redacted_like(value: object) -> object:
+    return REDACTED.encode() if isinstance(value, bytes | bytearray) else REDACTED
+
+
+def _rebuild_sequence(value: tuple[Any, ...] | list[Any], items: list[Any]) -> Any:
+    if type(value) in (tuple, list):
+        return type(value)(items)
+    if isinstance(value, tuple) and hasattr(value, "_fields"):  # namedtuple
+        return type(value)(*items)
+    try:
+        return type(value)(items)
+    except Exception:
+        return tuple(items)
+
+
 def redact_mapping(value: Any) -> Any:
-    """遞迴複製 dict / list，敏感 key 的值換成 ***；其他型別原樣回傳。"""
+    """遞迴複製 dict / list / tuple，敏感 key 的值換成 ***；其他型別原樣回傳。
+
+    二元 tuple / list 的第一個元素是敏感 key（str 或 bytes）時視為 header pair，第二個元素遮掉
+    （HTTP header 清單、ASGI ``scope["headers"]``）。
+    """
     if isinstance(value, Mapping):
         return {k: REDACTED if is_sensitive_key(k) else redact_mapping(v) for k, v in value.items()}
     if isinstance(value, list | tuple):
-        return type(value)(redact_mapping(item) for item in value)
+        if len(value) == 2 and is_sensitive_key(value[0]):
+            items = [value[0], _redacted_like(value[1])]
+        else:
+            items = [redact_mapping(item) for item in value]
+        return _rebuild_sequence(value, items)
     return value
 
 
 def _replace_kv(match: re.Match[str]) -> str:
-    if is_sensitive_key(match.group("key")):
-        return f"{match.group('key')}={REDACTED}"
-    return match.group(0)
+    return f"{match.group('key')}={REDACTED}"
 
 
 def _replace_quoted(match: re.Match[str]) -> str:
@@ -93,15 +130,16 @@ def redact_text(text: str) -> str:
 
 
 class RedactingFilter(logging.Filter):
-    """先遮 args 內的 dict，再 format 成字串對 key=value 樣式遮罩，最後清掉 args。
+    """先遮 args 內的 dict / pair，再 format 成字串對 key=value 樣式遮罩，最後清掉 args。
 
-    任何例外都不擋 record（回傳 True），只退回對原始 msg 做字串遮罩。
+    任何例外都不擋 record（回傳 True），但退路 fail-closed：args 整個換成 ***、msg 只保留遮罩後的
+    樣板文字，不保留未遮罩的原始 args。
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
+        if not isinstance(record.msg, str):
+            return True
         try:
-            if not isinstance(record.msg, str):
-                return True
             if record.args:
                 record.args = redact_mapping(record.args)
                 record.msg = redact_text(record.getMessage())
@@ -109,8 +147,8 @@ class RedactingFilter(logging.Filter):
             else:
                 record.msg = redact_text(record.msg)
         except Exception:
-            if isinstance(record.msg, str):
-                record.msg = redact_text(record.msg)
+            record.msg = redact_text(record.msg) + f" args={REDACTED}"
+            record.args = None
         return True
 
 
@@ -178,7 +216,7 @@ def _incoming_request_id(scope: Scope) -> str:
     for name, value in scope.get("headers") or ():
         if name == b"x-request-id":
             candidate = str(value.decode("latin-1"))
-            if _REQUEST_ID_RE.match(candidate):
+            if _REQUEST_ID_RE.fullmatch(candidate):
                 return candidate
             break
     return uuid.uuid4().hex

@@ -236,8 +236,8 @@ def test_logging_redacting_filter_fail_closed_on_tuple_subclass() -> None:
     """namedtuple 等 tuple 子類不可讓遮罩中斷；同一筆 log 其他 dict 的秘密仍要遮。"""
     from collections import namedtuple
 
-    point = namedtuple("P", "x y")
-    message = _filtered_message("%s %s", point(1, 2), {"password": "PW4"})
+    P = namedtuple("P", "x y")
+    message = _filtered_message("%s %s", P(1, 2), {"password": "PW4"})
 
     assert "PW4" not in message
     assert "***" in message

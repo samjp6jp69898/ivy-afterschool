@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 100,
-  "last_updated": "2026-10-04T04:56:14Z",
+  "version": 101,
+  "last_updated": "2026-10-04T04:57:52Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -123,17 +123,17 @@
     {
       "id": "BACKEND-004",
       "title": "實作 app/core/logging.py：logging 設定、request id middleware、敏感欄位遮罩",
-      "description": "建立 `apps/api/app/core/logging.py`。\n\n**介面**\n```python\ndef configure_logging(settings: Settings) -> None: ...          # production 輸出單行 JSON（ts、level、logger、msg、request_id）；其他環境人類可讀格式；level INFO\nrequest_id_var: ContextVar[str | None]\nclass RequestContextMiddleware:                                 # 純 ASGI middleware（同時處理 http 與 websocket scope）\n    # 讀入站 X-Request-ID（只接受 ^[A-Za-z0-9-]{8,64}$，否則重新產生 uuid4 hex），設進 request_id_var 與 scope['state']['request_id']，\n    # http 回應加 X-Request-ID header；請求結束記一行 access log：method、path（不含 query string）、status、duration_ms\nclass RedactingFilter(logging.Filter): ...                     # 把 msg 與 args 中 password、token、id_token、code、cookie、authorization、secret 等 key 的值遮成 '***'\n```\n- access log 不記 query string（避免綁定碼、token 出現在 log）；`/api/health` 不記 access log。\n- 移植 ivy `utils/request_logging.py` 的 request id filter 概念與 `utils/log_pii_filter.py` 的遮罩精神；去掉 tenant 與 parent metric。\n\n**驗收標準**\n- 回應帶 X-Request-ID；合法的入站值被沿用，不合法的被替換。\n- access log 一行含 method / path / status，不含 query string。\n- RedactingFilter 遮掉敏感 key 的值。\n- production 模式輸出可被 json.loads 解析且含 request_id。",
+      "description": "建立 `apps/api/app/core/logging.py`。\n\n**介面**\n```python\ndef configure_logging(settings: Settings) -> None: ...          # production 輸出單行 JSON（ts、level、logger、msg、request_id）；其他環境人類可讀格式；level INFO\nrequest_id_var: ContextVar[str | None]\nclass RequestContextMiddleware:                                 # 純 ASGI middleware（同時處理 http 與 websocket scope；websocket 只設 request id，不記 access log）\n    # 讀入站 X-Request-ID（fullmatch ^[A-Za-z0-9-]{8,64}$，否則重新產生 uuid4 hex），設進 request_id_var 與 scope['state']['request_id']，\n    # http 回應加 X-Request-ID header；請求結束記一行 access log：method、path（不含 query string）、status、duration_ms\nclass RedactingFilter(logging.Filter): ...                     # 把 msg 與 args 中 password、token、id_token、code、cookie、authorization、secret 等 key 的值遮成 '***'；dict / list / tuple（含 namedtuple）遞迴處理，二元 pair 的第一個元素是敏感 key（str 或 bytes，大小寫不敏感）時第二個元素遮掉；字串樣式 key=value 與 key: value 的整個值（到行尾 / 分隔符或下一個 key 之前）遮掉；遮罩過程拋例外時 fail-closed（args 換成 ***，不保留原始 args）\n```\n- access log 不記 query string（避免綁定碼、token 出現在 log）；`/api/health` 不記 access log。\n- 移植 ivy `utils/request_logging.py` 的 request id filter 概念與 `utils/log_pii_filter.py` 的遮罩精神；去掉 tenant 與 parent metric。\n\n**驗收標準**\n- 回應帶 X-Request-ID；合法的入站值被沿用，不合法的被替換。\n- access log 一行含 method / path / status，不含 query string。\n- RedactingFilter 遮掉敏感 key 的值。\n- production 模式輸出可被 json.loads 解析且含 request_id。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/logging.py",
       "source_ref": "BE:utils/request_logging.py::RequestLoggingMiddleware",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-001"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "【review-r4-be 打回，以下三項皆須修並各補測試】(1) 遮罩失敗時 fail-open：args 內含 namedtuple 等建構子不接受單一 iterable 的 tuple 子類時，redact_mapping 的 type(value)(generator) 拋 TypeError，filter 進 except 只遮 msg 樣板、保留原始 args，同一筆 log 的其他 dict 秘密全數外洩。反例：logger.info('%s %s', namedtuple('P','x y')(1, 2), {'password': 'PW4'}) → 輸出含 'PW4'。修正要求：tuple 子類不可讓遮罩中斷，且任何例外的退路必須 fail-closed（例如把 args 格式化成字串後再做字串遮罩，或整個 args 換成 '***'），不得保留未遮罩的原始 args。(2) authorization / cookie 值含空白時只遮第一段：'authorization=Bearer T5' → 'authorization=*** T5'，token 本體外洩；HTTP header 樣式 'Authorization: Bearer T6'（未加引號的 key: value）完全不遮。修正要求：這兩種樣式下敏感 key 的整個值（含 'Bearer <token>'，到行尾或分隔符）都遮成 ***。(3) header pair 序列不遮：logger.info('headers %s', [('authorization', 'Bearer T3')]) 與 ASGI scope['headers'] 形式 [(b'cookie', b'sid=T7')] 原樣輸出。修正要求：二元 tuple / list 的第一個元素是敏感 key（str 或 bytes，大小寫不敏感）時，第二個元素遮成 ***。",
+      "risk_notes": "exc_info 的 traceback 文字未經遮罩（review-r4-be 殘留，不擋）；未處理例外的 500 回應由 ServerErrorMiddleware 產生、不帶 X-Request-ID，由 BACKEND-020 處理。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/core/test_logging.py",
@@ -146,7 +146,11 @@
           "test_logging_access_log_no_query：caplog 下 GET /ping?code=SECRET88 → access log 紀錄含 'GET'、'/ping'、'200'，所有 log 文字不含 'SECRET88'",
           "test_logging_redacting_filter：logger.info('login %s', {'username':'amy','password':'P@ss-1234'}) 經 RedactingFilter → 輸出含 'amy'、含 '***'、不含 'P@ss-1234'",
           "test_logging_production_json：configure_logging(settings app_env=production) 後記一筆 log → 該行 json.loads 成功且含 keys {'ts','level','logger','msg','request_id'}",
-          "test_logging_health_not_logged：GET /api/health → caplog 無 access log 紀錄"
+          "test_logging_health_not_logged：GET /api/health → caplog 無 access log 紀錄",
+          "test_logging_redacting_filter_fail_closed_on_tuple_subclass：logger.info('%s %s', namedtuple('P','x y')(1,2), {'password':'PW4'}) → 輸出不含 'PW4'、含 '***'",
+          "test_logging_redacting_filter_fail_closed_on_error：monkeypatch redact_mapping 拋 RuntimeError 後過濾 ('login %s', ({'password':'PW9'},)) → getMessage 與 repr(record.args) 皆不含 'PW9'、訊息含 '***'",
+          "test_logging_redacting_filter_value_with_spaces：'authorization=Bearer T5 user=amy' → 不含 'T5' 與 'Bearer'、含 'user=amy'；'Authorization: Bearer T6' → 不含 'T6'；'Cookie: sid=T8; other=1' → 不含 'T8'；'token=abc def, status_code=200' → 不含 'abc'、含 'status_code=200'",
+          "test_logging_redacting_filter_header_pairs：[('authorization','Bearer T3'),('accept','*/*')] → 不含 'T3'、含 'accept' 與 '*/*'；{'headers':[(b'cookie',b'sid=T7'),(b'Authorization',b'Bearer T9')]} → 不含 'T7' / 'T9'；('Set-Cookie','sid=T10; Path=/') → 不含 'T10'"
         ],
         "run": "just test apps/api/tests/unit/core/test_logging.py -k \"test_logging_\"",
         "notes": ""
