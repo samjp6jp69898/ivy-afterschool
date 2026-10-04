@@ -10,6 +10,17 @@ guest token）。
 - 有效權限每個請求即時以 BACKEND-072 計算，角色權限變更立即生效。
 - 核心邏輯 ``load_current_staff`` 不依賴 Request，供 WebSocket（BACKEND-225）重用；
   ``get_current_staff`` 另把結果存進 ``request.state.current_staff`` 供 log / audit。
+
+BACKEND-062：家長守衛 ``get_current_parent``（architecture_decisions §6 ``require_parent()``；移植
+ivy ``api/parent_portal/_shared.py::_get_parent_user``）。
+
+- 只讀 ``parent_access`` cookie；員工 token（typ=staff）、家長不存在、``status='disabled'``、
+  ``token_version`` 不符一律 401 ``unauthenticated``。
+- **不**檢查是否有綁定小孩（無小孩的家長仍需能呼叫 /me 與 /bind）；學生層級授權一律由
+  BACKEND-180 ``assert_parent_owns_student`` 處理。
+- ``get_optional_parent``：驗證失敗回 None 不拋例外（給 /bind 判斷是首次綁定或加綁）。
+- ``load_current_parent`` 同樣供 WebSocket 重用；``get_current_parent`` 把結果存進
+  ``request.state.current_parent``。
 """
 
 from __future__ import annotations
@@ -26,9 +37,10 @@ from app.core.clock import Clock, get_clock
 from app.core.db import get_db
 from app.core.errors import ForbiddenError, UnauthenticatedError
 from app.core.permissions import Permission, resolve_effective_permissions
-from app.core.security.cookies import STAFF_ACCESS, read_cookie
+from app.core.security.cookies import PARENT_ACCESS, STAFF_ACCESS, read_cookie
 from app.core.security.tokens import decode_access_token
 from app.models.account import StaffUser
+from app.models.parents import ParentAccount
 
 PASSWORD_CHANGE_ALLOWED_PATHS: Final = frozenset(
     {"/api/admin/auth/me", "/api/admin/auth/change-password", "/api/admin/auth/logout"}
@@ -93,3 +105,56 @@ def get_current_staff(
     )
     request.state.current_staff = staff
     return staff
+
+
+@dataclass(frozen=True)
+class CurrentParent:
+    id: UUID
+    line_user_id: str
+    display_name: str | None
+    token_version: int
+
+
+def load_current_parent(db: Session, token: str | None, *, clock: Clock) -> CurrentParent:
+    """驗證家長 access token 並載入帳號；任何失敗一律 401。"""
+    if not token:
+        raise UnauthenticatedError
+    claims = decode_access_token(token, expected_type="parent", clock=clock)
+    parent = db.execute(
+        select(ParentAccount).where(ParentAccount.id == claims.subject_id)
+    ).scalar_one_or_none()
+    if (
+        parent is None
+        or parent.status == "disabled"
+        or parent.token_version != claims.token_version
+    ):
+        raise UnauthenticatedError
+    return CurrentParent(
+        id=parent.id,
+        line_user_id=parent.line_user_id,
+        display_name=parent.display_name,
+        token_version=parent.token_version,
+    )
+
+
+def get_current_parent(
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> CurrentParent:
+    """FastAPI dependency：家長登入守衛。"""
+    parent = load_current_parent(db, read_cookie(request, PARENT_ACCESS.name), clock=clock)
+    request.state.current_parent = parent
+    return parent
+
+
+def get_optional_parent(
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> CurrentParent | None:
+    """同 get_current_parent，但驗證失敗回 None（只吞 401，其他例外照常拋出）。"""
+    try:
+        return get_current_parent(request, db, clock)
+    except UnauthenticatedError:
+        return None
