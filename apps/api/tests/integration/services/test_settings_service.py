@@ -1,6 +1,8 @@
 """BACKEND-108：app/services/settings_service.py（get_setting、invalidate_setting、clear_settings_cache）。
+BACKEND-110：put_setting（驗證、secret 加密與遮罩保留、稽核、commit 後失效 cache）。
 
-DB 的變更都在 db_session 的 transaction 內，測試結束 rollback，不影響 seed。
+DB 的變更都在 db_session 的 transaction 內，測試結束 rollback，不影響 seed；唯一的 committing 測試
+以 owner 連線還原 pickup.window。
 """
 
 import json
@@ -8,14 +10,21 @@ import logging
 import time
 from collections.abc import Iterator
 from typing import Any
+from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from app.api.deps import CurrentStaff
 from app.core.config import get_settings
-from app.core.crypto import derive_key, encrypt_token
+from app.core.crypto import decrypt_token, derive_key, encrypt_token
+from app.core.errors import AppError
+from app.core.request_meta import RequestMeta
+from app.core.tx_hooks import install_tx_hooks
+from app.models.account import StaffUser
+from app.models.audit import AuditLog
 from app.core.settings_registry import (
     HOMEWORK_DEFAULTS,
     LINE_MESSAGING,
@@ -28,6 +37,7 @@ from app.core.settings_registry import (
     ServiceHours,
 )
 from app.services import settings_service
+from app.schemas.settings import SettingOut
 from app.services.settings_service import (
     SETTINGS_CACHE_TTL_SECONDS,
     clear_settings_cache,
@@ -35,7 +45,9 @@ from app.services.settings_service import (
     invalidate_setting,
     list_settings_for_admin,
     mask_secret,
+    put_setting,
 )
+from tests.integration.db.conftest import connect_owner
 from tests.support.factories import make_staff
 
 _LOGGER = "app.services.settings_service"
@@ -330,3 +342,266 @@ def test_mask_secret() -> None:
     assert mask_secret("12345678") == "********"
     assert mask_secret("123456789") == "****6789"
     assert mask_secret("abcdefghijkl1234") == "****1234"
+
+
+# --- BACKEND-110：put_setting ------------------------------------------------------------------
+
+_META = RequestMeta(ip="203.0.113.5", user_agent="pytest", request_id=None)
+_NEW_TOKEN = "tok-abcdefgh9999"  # noqa: S105  測試假值
+_NEW_SECRET = "sec-12345678"  # noqa: S105  測試假值
+
+
+def _current(staff: StaffUser) -> CurrentStaff:
+    return CurrentStaff(
+        id=staff.id,
+        username=staff.username,
+        display_name=staff.display_name,
+        role_id=staff.role.id,
+        role_code=staff.role.code,
+        role_name=staff.role.name,
+        permissions=frozenset(staff.role.permissions),
+        must_change_password=staff.must_change_password,
+        token_version=staff.token_version,
+    )
+
+
+@pytest.fixture
+def actor(db_session: Session) -> CurrentStaff:
+    return _current(make_staff(db_session, permissions=["settings:write"], display_name="陳主任"))
+
+
+def _put(session: Session, actor: CurrentStaff, key: str, value: dict[str, Any]) -> SettingOut:
+    return put_setting(session, key, value, actor=actor, meta=_META)
+
+
+def _raw_value(session: Session, key: str) -> dict[str, Any]:
+    row = session.execute(
+        text("select value, updated_by from public.system_settings where key = :k"), {"k": key}
+    ).one()
+    return dict(row.value)
+
+
+def _audit_rows(session: Session, key: str) -> list[AuditLog]:
+    return list(
+        session.execute(
+            select(AuditLog)
+            .where(AuditLog.action == "settings.update", AuditLog.entity_id == key)
+            .order_by(AuditLog.created_at)
+        ).scalars()
+    )
+
+
+def test_put_setting_success(db_session: Session, actor: CurrentStaff) -> None:
+    value = {"name": "快樂安親班", "address": "臺北市", "phone": "02-0000-0001", "logo_url": None}
+
+    out = _put(db_session, actor, "org.profile", value)
+
+    assert out.key == "org.profile"
+    assert out.value["name"] == "快樂安親班"
+    assert out.value == value
+    assert out.is_secret is False
+    assert out.updated_by_name == "陳主任"
+    assert out.updated_at is not None
+    row = db_session.execute(
+        text("select value, updated_by, is_secret from public.system_settings where key = :k"),
+        {"k": "org.profile"},
+    ).one()
+    assert row.value == value
+    assert row.updated_by == actor.id
+    assert row.is_secret is False
+    logs = _audit_rows(db_session, "org.profile")
+    assert len(logs) == 1
+    assert logs[0].entity_type == "system_setting"
+    assert logs[0].actor_type == "staff"
+    assert logs[0].actor_id == actor.id
+    assert logs[0].after is not None
+    assert logs[0].after["name"] == "快樂安親班"
+    assert logs[0].before is not None
+    assert logs[0].before["name"] == ""
+    assert logs[0].ip == "203.0.113.5"
+
+
+def test_put_setting_missing_row_is_inserted(db_session: Session, actor: CurrentStaff) -> None:
+    db_session.execute(text("delete from public.system_settings where key = 'homework.window'"))
+
+    out = _put(db_session, actor, "homework.window", {"past_days": 10, "future_days": 3})
+
+    assert out.value == {"past_days": 10, "future_days": 3}
+    assert _raw_value(db_session, "homework.window") == {"past_days": 10, "future_days": 3}
+
+
+def test_put_setting_secret_encrypted(db_session: Session, actor: CurrentStaff) -> None:
+    out = _put(
+        db_session,
+        actor,
+        "line.messaging",
+        {"channel_access_token": _NEW_TOKEN, "channel_secret": _NEW_SECRET},
+    )
+
+    stored = _raw_value(db_session, "line.messaging")
+    assert stored["channel_access_token"].startswith("v1:")
+    assert stored["channel_secret"].startswith("v1:")
+    assert _NEW_TOKEN not in json.dumps(stored)
+    assert _NEW_SECRET not in json.dumps(stored)
+    assert decrypt_token(stored["channel_access_token"]) == _NEW_TOKEN
+    assert decrypt_token(stored["channel_secret"]) == _NEW_SECRET
+    assert out.value == {"channel_access_token": "****9999", "channel_secret": "********"}
+    assert out.is_secret is True
+    row = db_session.execute(
+        text("select is_secret from public.system_settings where key = 'line.messaging'")
+    ).one()
+    assert row.is_secret is True
+    # audit 不含明文與密文
+    logs = _audit_rows(db_session, "line.messaging")
+    assert len(logs) == 1
+    dumped = json.dumps([logs[0].before, logs[0].after])
+    assert _NEW_TOKEN not in dumped
+    assert _NEW_SECRET not in dumped
+    assert stored["channel_access_token"] not in dumped
+
+
+def test_put_setting_secret_keep_masked(db_session: Session, actor: CurrentStaff) -> None:
+    _put(
+        db_session,
+        actor,
+        "line.messaging",
+        {"channel_access_token": _NEW_TOKEN, "channel_secret": _NEW_SECRET},
+    )
+    first = _raw_value(db_session, "line.messaging")
+
+    out = _put(
+        db_session,
+        actor,
+        "line.messaging",
+        {"channel_access_token": "****9999", "channel_secret": None},
+    )
+
+    stored = _raw_value(db_session, "line.messaging")
+    assert stored["channel_access_token"] == first["channel_access_token"]
+    assert decrypt_token(stored["channel_access_token"]) == _NEW_TOKEN
+    assert stored["channel_secret"] is None
+    assert out.value == {"channel_access_token": "****9999", "channel_secret": None}
+
+    # 全遮罩值（短 secret）同樣代表不修改；遮罩值不會被當成新明文存入
+    _put(db_session, actor, "line.messaging", {"channel_secret": "short1"})
+    _put(
+        db_session,
+        actor,
+        "line.messaging",
+        {"channel_access_token": "********", "channel_secret": "********"},
+    )
+    stored = _raw_value(db_session, "line.messaging")
+    assert decrypt_token(stored["channel_access_token"]) == _NEW_TOKEN
+    assert decrypt_token(stored["channel_secret"]) == "short1"
+
+
+def test_put_setting_unknown_key(db_session: Session, actor: CurrentStaff) -> None:
+    with pytest.raises(AppError) as excinfo:
+        _put(db_session, actor, "foo.bar", {})
+    assert excinfo.value.status == 404
+    assert excinfo.value.code == "setting_not_found"
+    assert _audit_rows(db_session, "foo.bar") == []
+
+
+def test_put_setting_invalid(db_session: Session, actor: CurrentStaff) -> None:
+    value = {
+        "request_start": "12:00",
+        "request_end": "19:00",
+        "latest_expected_arrival": "19:00",
+        "auto_expire_minutes": 5,
+    }
+
+    with pytest.raises(AppError) as excinfo:
+        _put(db_session, actor, "pickup.window", value)
+
+    assert excinfo.value.status == 422
+    assert excinfo.value.code == "invalid_setting_value"
+    details = excinfo.value.details
+    assert isinstance(details, list)
+    assert "auto_expire_minutes" in details[0]["loc"]
+    assert set(details[0]) == {"loc", "msg", "type"}
+    assert _raw_value(db_session, "pickup.window")["auto_expire_minutes"] == 120
+    assert _audit_rows(db_session, "pickup.window") == []
+
+    # 多餘欄位（extra='forbid'）也是 422
+    with pytest.raises(AppError) as extra:
+        _put(db_session, actor, "pickup.window", {**value, "auto_expire_minutes": 60, "x": 1})
+    assert extra.value.code == "invalid_setting_value"
+    # 非 dict 的 secret 值（例如數字）不會被誤當遮罩，由 schema 擋下
+    with pytest.raises(AppError) as bad_secret:
+        _put(db_session, actor, "line.messaging", {"channel_access_token": 123})
+    assert bad_secret.value.code == "invalid_setting_value"
+
+
+def test_put_setting_cache_not_polluted_before_commit(
+    db_session: Session, actor: CurrentStaff
+) -> None:
+    """交易內 put 後、commit 前，快取仍是舊值（invalidate 掛在 after_commit）。"""
+    assert get_setting(db_session, PICKUP_WINDOW).auto_expire_minutes == 120
+    value = {
+        "request_start": "12:00",
+        "request_end": "19:00",
+        "latest_expected_arrival": "19:00",
+        "auto_expire_minutes": 90,
+    }
+    _put(db_session, actor, "pickup.window", value)
+    assert get_setting(db_session, PICKUP_WINDOW).auto_expire_minutes == 120
+
+    db_session.rollback()
+    assert get_setting(db_session, PICKUP_WINDOW).auto_expire_minutes == 120
+
+
+@pytest.fixture
+def owner_restore_pickup_window() -> Iterator[list[UUID]]:
+    """測試結束以 owner 連線把 pickup.window 還原為 seed 值，並刪掉測試建立的 staff / role。
+
+    排在 committing_db_session 之前（先 close session 再刪列）。
+    """
+    ids: list[UUID] = []
+    yield ids
+    default = PICKUP_WINDOW.definition().default.model_dump(mode="json")
+    with connect_owner() as conn:
+        conn.execute("set lock_timeout = '5s'")
+        conn.execute(
+            "update public.system_settings set value = %s::jsonb, updated_by = null "
+            "where key = 'pickup.window'",
+            (json.dumps(default),),
+        )
+        for staff_id in ids:
+            conn.execute(
+                "delete from public.roles where id = "
+                "(select role_id from public.staff_users where id = %s)",
+                (staff_id,),
+            )
+            conn.execute("delete from public.staff_users where id = %s", (staff_id,))
+        conn.commit()
+    clear_settings_cache()
+
+
+@pytest.mark.cleanup_tables("audit_logs")
+def test_put_setting_invalidate_after_commit(
+    owner_restore_pickup_window: list[UUID], committing_db_session: Session
+) -> None:
+    install_tx_hooks()
+    session = committing_db_session
+    staff = make_staff(session, permissions=["settings:write"])
+    role_id = staff.role.id
+    session.commit()
+    owner_restore_pickup_window.append(staff.id)
+    actor = _current(staff)
+    assert get_setting(session, PICKUP_WINDOW).auto_expire_minutes == 120
+    value = {
+        "request_start": "12:00",
+        "request_end": "19:00",
+        "latest_expected_arrival": "19:00",
+        "auto_expire_minutes": 90,
+    }
+
+    _put(session, actor, "pickup.window", value)
+    # commit 前快取仍是舊值
+    assert get_setting(session, PICKUP_WINDOW).auto_expire_minutes == 120
+    session.commit()
+
+    # commit 後立即反映（不需等 TTL）
+    assert get_setting(session, PICKUP_WINDOW).auto_expire_minutes == 90
+    assert role_id is not None
