@@ -90,7 +90,10 @@ def test_class_models_role_check(db_session: Session) -> None:
     with pytest.raises(IntegrityError) as excinfo:
         db_session.flush()
     assert getattr(excinfo.value.orig, "sqlstate", None) == "23514"
+    # savepoint 模式的 rollback 會連同本測試先前建立的資料一起退回，重建後再驗 server default
     db_session.rollback()
+    staff = _make_staff(db_session)
+    school_class = _make_class(db_session)
 
     # 預設角色 assistant（server default）
     link = ClassStaff(class_id=school_class.id, staff_user_id=staff.id)
