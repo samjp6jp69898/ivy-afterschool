@@ -11,6 +11,7 @@ nginx 綁在 127.0.0.1 的 port 發請求，記錄後端不對主機發佈任何
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import socket
@@ -19,7 +20,7 @@ import time
 import urllib.request
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 import pytest
@@ -584,3 +585,55 @@ def test_web_dockerfile_removes_build_metadata_from_runtime_image() -> None:
 
     # .vite/ 只有模組圖 parent-module-graph.json（含所有原始碼與依賴路徑），不該由 nginx 對外提供
     assert "rm -rf /usr/share/nginx/html/.vite" in text
+
+
+# --- INFRA-032 / INFRA-035：Railway config-as-code ---------------------------------------------------
+
+API_DIR = REPO_ROOT / "apps" / "api"
+
+
+def _railway(service_dir: Path) -> dict[str, Any]:
+    return json.loads((service_dir / "railway.json").read_text(encoding="utf-8"))
+
+
+def test_api_railway_builder() -> None:
+    build = _railway(API_DIR)["build"]
+
+    assert build["builder"] == "DOCKERFILE"
+    assert build["dockerfilePath"] == "Dockerfile"
+
+
+def test_api_railway_single_replica() -> None:
+    assert _railway(API_DIR)["deploy"]["numReplicas"] == 1
+
+
+def test_api_railway_healthcheck() -> None:
+    deploy = _railway(API_DIR)["deploy"]
+
+    assert deploy["healthcheckPath"] == "/api/health"
+    timeout = deploy["healthcheckTimeout"]
+    assert isinstance(timeout, int)
+    assert 30 <= timeout <= 300
+
+
+def test_api_railway_watch_patterns() -> None:
+    assert _railway(API_DIR)["build"]["watchPatterns"] == ["/apps/api/**"]
+
+
+def test_api_railway_pre_deploy_migrate() -> None:
+    assert _railway(API_DIR)["deploy"]["preDeployCommand"] == ["python -m app.cli migrate"]
+
+
+def test_web_railway_builder() -> None:
+    build = _railway(WEB_DIR)["build"]
+
+    assert build["builder"] == "DOCKERFILE"
+    assert build["watchPatterns"] == ["/apps/web/**"]
+
+
+def test_web_railway_healthcheck() -> None:
+    path = _railway(WEB_DIR)["deploy"]["healthcheckPath"]
+
+    assert path == "/healthz"
+    # nginx 範本必須有同一路徑的精確比對 location，healthcheck 才不會落到 SPA fallback
+    assert location_block(_template(), f"= {path}")
