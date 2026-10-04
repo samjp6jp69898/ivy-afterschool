@@ -2,7 +2,8 @@
 
 版面移植 ivy ``api/student_attendance.py::_write_class_sheet``（單一班級工作表，去掉全園摘要與
 中文狀態欄）。使用者輸入字串（班名、學號、姓名）寫入前先做公式注入防護：以 ``=``、``+``、``-``、
-``@``、Tab、CR 開頭者前面補 ``'``。程式自己產生的常數（表頭、簡碼、「-」）不經防護。
+``@``、Tab、CR 開頭者前面補 ``'``；同時移除 openpyxl 不接受的控制字元（例如 Word 換行 0x0B）。
+程式自己產生的常數（表頭、簡碼、「-」）不經防護。
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from typing import Final
 
 from openpyxl import Workbook
 from openpyxl.cell import Cell
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
@@ -30,7 +32,12 @@ _MAX_WIDTH: Final = 40
 
 
 def _safe(value: str) -> str:
-    return "'" + value if value.startswith(_FORMULA_PREFIXES) else value
+    """使用者輸入寫入儲存格前的清理：先移除 openpyxl 不接受的控制字元，再判斷公式前綴。
+
+    順序不可對調：0x07 開頭的 '=cmd' 先判斷前綴會漏掉，移除後卻變成未防護的 '=cmd'。
+    """
+    cleaned: str = ILLEGAL_CHARACTERS_RE.sub("", value)
+    return "'" + cleaned if cleaned.startswith(_FORMULA_PREFIXES) else cleaned
 
 
 def _display_width(value: object) -> int:
