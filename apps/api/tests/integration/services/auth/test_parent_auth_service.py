@@ -1,4 +1,6 @@
 """BACKEND-052：app/services/auth/parent_auth.py（ParentAuthService.liff_login）。
+BACKEND-058：refresh（與 BACKEND-043 對稱；停用 / 不存在 / 員工 token 撤銷 family 並先 commit）。
+BACKEND-060：logout（撤銷目前 family，冪等）。
 
 已綁定家長直接登入（同步暱稱、last_login_at、簽 access + refresh）；未建帳號或沒有任何有效綁定
 → NeedsBinding（發綁定臨時 token，不建立 parent_accounts）；停用 403；LIFF 未設定 503。
@@ -9,6 +11,7 @@
 import json
 from collections.abc import Iterator
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import func, select, text
@@ -22,10 +25,11 @@ from app.core.security.tokens import decode_access_token, decode_bind_token
 from app.models.account import RefreshToken
 from app.models.parents import ParentAccount
 from app.services.auth.line_id_token import LineProfile
-from app.services.auth.parent_auth import NeedsBinding, ParentSession, liff_login
+from app.services.auth.parent_auth import NeedsBinding, ParentSession, liff_login, logout, refresh
+from app.services.auth.refresh_tokens import hash_refresh, issue
 from app.services.auth.throttle import AuthThrottles
 from app.services.settings_service import clear_settings_cache, invalidate_setting
-from tests.support.factories import make_guardian, make_parent, make_student
+from tests.support.factories import make_guardian, make_parent, make_staff, make_student
 from tests.support.fake_clock import FakeClock
 from tests.support.fake_line import FakeLineVerifier
 
@@ -280,3 +284,161 @@ def test_liff_login_ip_rate_limited(
         _login(db_session, verifier, throttles, fake_clock)
     assert excinfo.value.status == 429
     assert len(verifier.calls) == 30
+
+
+# --- BACKEND-058：refresh、BACKEND-060：logout -------------------------------------------------
+
+
+def _family_rows(db_session: Session, raw: str) -> list[RefreshToken]:
+    family_id = db_session.execute(
+        select(RefreshToken.family_id).where(RefreshToken.token_hash == hash_refresh(raw))
+    ).scalar_one()
+    return list(
+        db_session.execute(
+            select(RefreshToken).where(RefreshToken.family_id == family_id)
+        ).scalars()
+    )
+
+
+def _assert_family_revoked(db_session: Session, raw: str, *, revoked: bool) -> None:
+    rows = _family_rows(db_session, raw)
+    assert rows
+    assert all((row.revoked_at is not None) is revoked for row in rows)
+
+
+def _issue_parent(db_session: Session, parent: ParentAccount, fake_clock: FakeClock) -> str:
+    return issue(db_session, subject_type="parent", subject_id=parent.id, clock=fake_clock).raw
+
+
+def test_parent_refresh_success(db_session: Session, fake_clock: FakeClock) -> None:
+    p = make_parent(db_session)
+    make_guardian(db_session, make_student(db_session), parent=p)
+    raw = _issue_parent(db_session, p, fake_clock)
+    fake_clock.advance(minutes=10)
+
+    result = refresh(db_session, raw_refresh=raw, clock=fake_clock)
+
+    assert isinstance(result, ParentSession)
+    assert result.parent.id == p.id
+    assert result.refresh_token != raw
+    claims = decode_access_token(result.access_token, expected_type="parent", clock=fake_clock)
+    assert claims.subject_id == p.id
+    assert claims.token_version == p.token_version
+    assert claims.issued_at == fake_clock.now()
+    rows = {row.token_hash: row for row in _family_rows(db_session, raw)}
+    assert set(rows) == {hash_refresh(raw), hash_refresh(result.refresh_token)}
+    assert all(row.revoked_at is None for row in rows.values())
+    # 沒有任何有效綁定的家長仍可 refresh
+    q = make_parent(db_session)
+    assert (
+        refresh(
+            db_session, raw_refresh=_issue_parent(db_session, q, fake_clock), clock=fake_clock
+        ).parent.id
+        == q.id
+    )
+    # token_version 取 DB 現值
+    p.token_version = 2
+    db_session.flush()
+    again = refresh(db_session, raw_refresh=result.refresh_token, clock=fake_clock)
+    assert (
+        decode_access_token(
+            again.access_token, expected_type="parent", clock=fake_clock
+        ).token_version
+        == 2
+    )
+
+
+def test_parent_refresh_disabled(db_session: Session, fake_clock: FakeClock) -> None:
+    p = make_parent(db_session)
+    raw = _issue_parent(db_session, p, fake_clock)
+    db_session.commit()
+    p.status = "disabled"
+    db_session.flush()
+
+    with pytest.raises(AppError) as excinfo:
+        refresh(db_session, raw_refresh=raw, clock=fake_clock)
+
+    assert excinfo.value.status == 401
+    assert excinfo.value.code == "unauthenticated"
+    _assert_family_revoked(db_session, raw, revoked=True)
+    # 撤銷在 raise 前已 commit：endpoint 的 rollback 不會退回
+    db_session.rollback()
+    _assert_family_revoked(db_session, raw, revoked=True)
+
+
+def test_parent_refresh_missing_parent(db_session: Session, fake_clock: FakeClock) -> None:
+    raw = issue(db_session, subject_type="parent", subject_id=uuid4(), clock=fake_clock).raw
+
+    with pytest.raises(AppError) as excinfo:
+        refresh(db_session, raw_refresh=raw, clock=fake_clock)
+
+    assert excinfo.value.code == "unauthenticated"
+    _assert_family_revoked(db_session, raw, revoked=True)
+
+
+def test_parent_refresh_staff_token_rejected(db_session: Session, fake_clock: FakeClock) -> None:
+    staff = make_staff(db_session)
+    raw = issue(db_session, subject_type="staff", subject_id=staff.id, clock=fake_clock).raw
+
+    with pytest.raises(AppError) as excinfo:
+        refresh(db_session, raw_refresh=raw, clock=fake_clock)
+
+    assert excinfo.value.status == 401
+    assert excinfo.value.code == "refresh_invalid"
+    _assert_family_revoked(db_session, raw, revoked=True)
+
+
+def test_parent_refresh_missing(db_session: Session, fake_clock: FakeClock) -> None:
+    for raw in (None, ""):
+        with pytest.raises(AppError) as excinfo:
+            refresh(db_session, raw_refresh=raw, clock=fake_clock)
+        assert excinfo.value.status == 401
+        assert excinfo.value.code == "unauthenticated"
+
+
+def test_parent_refresh_propagates_rotate_errors(
+    db_session: Session, fake_clock: FakeClock
+) -> None:
+    p = make_parent(db_session)
+    raw = _issue_parent(db_session, p, fake_clock)
+    refresh(db_session, raw_refresh=raw, clock=fake_clock)
+    fake_clock.advance(seconds=2)
+    with pytest.raises(AppError) as in_progress:
+        refresh(db_session, raw_refresh=raw, clock=fake_clock)
+    assert (in_progress.value.status, in_progress.value.code) == (409, "refresh_in_progress")
+
+    fake_clock.advance(seconds=10)
+    with pytest.raises(AppError) as reused:
+        refresh(db_session, raw_refresh=raw, clock=fake_clock)
+    assert (reused.value.status, reused.value.code) == (401, "refresh_reused")
+    _assert_family_revoked(db_session, raw, revoked=True)
+    with pytest.raises(AppError) as invalid:
+        refresh(db_session, raw_refresh="no-such-token", clock=fake_clock)
+    assert invalid.value.code == "refresh_invalid"
+
+
+def test_parent_logout_revokes(db_session: Session, fake_clock: FakeClock) -> None:
+    p = make_parent(db_session)
+    first = _issue_parent(db_session, p, fake_clock)
+    second = _issue_parent(db_session, p, fake_clock)
+
+    assert logout(db_session, raw_refresh=first, clock=fake_clock) == 1
+
+    _assert_family_revoked(db_session, first, revoked=True)
+    _assert_family_revoked(db_session, second, revoked=False)
+    assert refresh(db_session, raw_refresh=second, clock=fake_clock).parent.id == p.id
+    with pytest.raises(AppError) as excinfo:
+        refresh(db_session, raw_refresh=first, clock=fake_clock)
+    assert excinfo.value.code == "refresh_revoked"
+
+
+def test_parent_logout_idempotent(db_session: Session, fake_clock: FakeClock) -> None:
+    p = make_parent(db_session)
+    raw = _issue_parent(db_session, p, fake_clock)
+
+    assert logout(db_session, raw_refresh=None, clock=fake_clock) == 0
+    assert logout(db_session, raw_refresh="", clock=fake_clock) == 0
+    assert logout(db_session, raw_refresh="nope", clock=fake_clock) == 0
+    _assert_family_revoked(db_session, raw, revoked=False)
+    assert logout(db_session, raw_refresh=raw, clock=fake_clock) == 1
+    assert logout(db_session, raw_refresh=raw, clock=fake_clock) == 0
