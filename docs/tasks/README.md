@@ -80,19 +80,19 @@ pending → in_progress → in_review → done
 
 `tdd.test_path` 為 `null` 的 task（純設定），照 `tdd.notes` 寫明的可執行指令驗收。
 
-## 執行方式：區域分工 + 單一 reviewer（每一輪都要做）
+## 執行方式：區域分工 + 獨立 reviewer（每一輪都要做）
 
 ### 1. 實作 agent 以「區域」為單位
 
-用 `Agent` 工具派實作 agent，**一個區域同一時間只有一個實作 agent**（同區域 task 常改同一批檔案）。agent 在自己的區域內依 `--ready` 清單依序完成一批 task 的 TDD 循環。不同區域的 agent 可以平行。
+用 `Agent` 工具派實作 agent，**一個區域原則上同一時間只有一個實作 agent**（同區域 task 常改同一批檔案）；ready 數量多時可同時派 2~3 位，條件是協調者明列每位可改 / 不可碰的檔案、共用的路由註冊檔只歸一位、審查中的檔案任何人都不改。agent 在自己的區域內依 `--ready` 清單依序完成一批 task 的 TDD 循環。不同區域的 agent 可以平行。
 
 ### 2. 實作 agent 完成一批後標 `in_review`，回報給協調者
 
 回報內容：做了哪些 task、對應 commit hash、每個 task 的 `tdd.run` 是否全綠、有沒有偏離 `description`（有的話是否已依下一節修正規格）、附上當下的 `git log --oneline -1`。
 
-### 3. 協調者派「一個」獨立 reviewer
+### 3. 協調者派獨立 reviewer
 
-**這一步強制，不能省略。** reviewer 必須是新開的 agent（不是實作 agent 的延續或 fork），只給它 task 的 `description`、`tdd` 與實際 diff。一輪只需要一個 reviewer，負責該輪所有 `in_review` 的 task（`--in-review` 查詢）。逐一檢查：
+**這一步強制，不能省略。** reviewer 必須是新開的 agent（不是實作 agent 的延續或 fork），只給它 task 的 `description`、`tdd` 與實際 diff。一位 reviewer 負責一批或多批 `in_review` 的 task（`--in-review` 查詢）；同時有多位實作者時可分派多位 reviewer，各自只審、只寫自己負責的 task。逐一檢查：
 
 - `tdd.red_cases` 每一條都有對應測試，且斷言具體行為（非恆真、非只斷言 mock 被呼叫）。
 - **實跑 `tdd.run`**，確認全綠且真的選到每一條 red_case（pytest 用 `--collect-only` 對照、vitest 看測試名稱清單），不可只用眼睛比對。
@@ -104,7 +104,7 @@ pending → in_progress → in_review → done
 
 判決寫入：通過 → `status = done`、`review = {status: pass, reviewer, notes}`；不通過 → 見上方「打回」。**寫入判決前重讀被打回項目對應的程式碼**，寫入當下已被修好的項目就撤回不寫。
 
-**reviewer 與該區域的實作 agent 不並行**：實作 agent 回報收工、commit 落地（有 hash）後，reviewer 才進場；reviewer 判決 commit 後，才派實作 agent 修打回項目。
+**reviewer 與被審批次的實作 agent 不並行**：實作 agent 回報收工、commit 落地（有 hash）後，reviewer 才進場（實作 agent 可同時做檔案不重疊的下一批）；reviewer 判決 commit 後，才派實作 agent 修打回項目。
 
 ### 4. 收尾
 
