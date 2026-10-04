@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 112,
-  "last_updated": "2026-10-04T06:52:40Z",
+  "version": 113,
+  "last_updated": "2026-10-04T07:47:07Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -732,7 +732,7 @@
     {
       "id": "BACKEND-020",
       "title": "實作 app/main.py：create_app() 工廠、lifespan、router 彙整與 middleware 掛載",
-      "description": "建立 `apps/api/app/main.py`（INFRA-002 `just api` 與 Dockerfile 以 `uvicorn app.main:create_app --factory` 啟動）。\n\n**介面**\n```python\ndef create_app(*, settings: Settings | None = None, start_background: bool | None = None) -> FastAPI: ...\n```\n- `start_background` 預設：`settings.app_env != \"test\"`。\n- 部署前提：api 單一實例、uvicorn `--workers 1`（INFRA-031 / INFRA-032），in-process broadcaster 與 APScheduler 依此成立；nginx 以同源反代 `/api` 與 `/api/ws/`（INFRA-033）。\n- **lifespan**：`configure_logging` → `install_tx_hooks()`（BACKEND-006）→ 記錄 main event loop（BACKEND-223 的 `set_main_loop`）→ broadcaster `start()` → 若 start_background：`import app.jobs` 後 `start_scheduler(session_factory=SessionLocal, clock=get_clock())`；shutdown 時反向停止（scheduler → broadcaster → engine.dispose()）。\n- **middleware 順序**（外到內）：`RequestContextMiddleware`（BACKEND-004）→ `SecurityMiddleware`（BACKEND-019）→ `CORSMiddleware`（allow_origins=settings.cors_origins、allow_credentials=True、methods GET/POST/PUT/PATCH/DELETE、headers Content-Type/X-Request-ID；cors_origins 為空時不掛）。\n- `register_exception_handlers(app)`（BACKEND-003）。\n- **未處理例外的 500 回應**：Starlette 的 `ServerErrorMiddleware` 位在所有 user middleware 外層，未處理例外產生的 500 不會經過 `RequestContextMiddleware` 與 `SecurityMiddleware`。因此 BACKEND-003 的 500 handler 要自己補上 `X-Request-ID`（取 `request.state.request_id`）和 BACKEND-019 的安全標頭（把 `security_middleware.py` 的安全標頭常數改成公開名稱共用，不要複製一份）。本 task 負責這段改寫（部分改寫 BACKEND-003 / 019 產物，那兩個 task 維持 done）。\n- Sentry：`settings.sentry_dsn` 有值時 `sentry_sdk.init(dsn, environment=app_env, send_default_pii=False, traces_sample_rate=0.0)`。\n- **router 彙整**：`app/api/admin/__init__.py` 匯出 `admin_router = APIRouter(prefix=\"/api/admin\")`、`app/api/parent/__init__.py` 匯出 `parent_router = APIRouter(prefix=\"/api/parent\")`、`app/api/ws/__init__.py` 匯出 `ws_router`、`app/api/health.py`。各 endpoint task 在自己的模組檔建立 `router = APIRouter(...)` 並在對應 `__init__.py` 以 `include_router` 掛上（營運模組亦同）。本 task 建立這些空的彙整檔。\n- 文件：production 關閉 `/docs`、`/redoc`、`/openapi.json`；其他環境開啟於 `/api/docs`。\n\n**驗收標準**\n- `create_app()` 回傳 FastAPI，且 test 環境不啟動 scheduler。\n- production 下 /api/docs 回 404；development 下回 200。\n- 錯誤 envelope 生效（未知路由回 not_found 格式）。\n- 未處理例外的 500 回應帶 `X-Request-ID`（與請求帶入的值相同）和安全標頭。\n- CORS preflight 對允許的 origin 回 allow-credentials。\n- lifespan 啟停時 scheduler 與 broadcaster 正確啟動 / 停止（start_background=True 時）。",
+      "description": "建立 `apps/api/app/main.py`（INFRA-002 `just api` 與 Dockerfile 以 `uvicorn app.main:create_app --factory` 啟動）。\n\n**介面**\n```python\ndef create_app(*, settings: Settings | None = None, start_background: bool | None = None) -> FastAPI: ...\n```\n- `start_background` 預設：`settings.app_env != \"test\"`。\n- 部署前提：api 單一實例、uvicorn `--workers 1`（INFRA-031 / INFRA-032），in-process broadcaster 與 APScheduler 依此成立；nginx 以同源反代 `/api` 與 `/api/ws/`（INFRA-033）。\n- **lifespan**：`configure_logging` → `install_tx_hooks()`（BACKEND-006）→ 記錄 main event loop（BACKEND-223 的 `set_main_loop`）→ broadcaster `start()` → 若 start_background：`import app.jobs` 後 `start_scheduler(session_factory=SessionLocal, clock=get_clock())`；shutdown 時反向停止（scheduler → broadcaster → engine.dispose()）。\n- **middleware 順序**（外到內）：`RequestContextMiddleware`（BACKEND-004）→ `SecurityMiddleware`（BACKEND-019）→ `CORSMiddleware`（allow_origins=settings.cors_origins、allow_credentials=True、methods GET/POST/PUT/PATCH/DELETE、headers Content-Type/X-Request-ID；cors_origins 為空時不掛）。\n- `register_exception_handlers(app)`（BACKEND-003）。\n- **未處理例外的 500 回應**：Starlette 的 `ServerErrorMiddleware` 位在所有 user middleware 外層，未處理例外產生的 500 不會經過 `RequestContextMiddleware` 與 `SecurityMiddleware`。因此 BACKEND-003 的 500 handler 要自己補上 `X-Request-ID`（取 `request.state.request_id`）和 BACKEND-019 的安全標頭（把 `security_middleware.py` 的安全標頭常數改成公開名稱共用，不要複製一份）。本 task 負責這段改寫（部分改寫 BACKEND-003 / 019 產物，那兩個 task 維持 done）。\n- Sentry：`settings.sentry_dsn` 有值時 `sentry_sdk.init(dsn, environment=app_env, send_default_pii=False, traces_sample_rate=0.0, before_send=scrub_sentry_event, before_breadcrumb=scrub_sentry_breadcrumb)`。Sentry 的 LoggingIntegration 在 `Logger.callHandlers` 階段就讀 record，會繞過 handler 級的 RedactingFilter（BACKEND-004 / 539），`capture_exception`（BACKEND-018）也會原樣送出例外訊息；因此在 `app/core/logging.py` 提供 `scrub_sentry_event(event, hint)` / `scrub_sentry_breadcrumb(crumb, hint)`，以既有的 `redact_text` / `redact_mapping` 遮罩 event 的 `message`、`logentry.message` / `logentry.params`、`exception.values[*].value`、`extra`、`request.headers` / `request.cookies` / `request.query_string`，以及 breadcrumb 的 `message` / `data`；遮罩過程拋例外時回傳 None（丟棄該 event / breadcrumb，fail-closed）。\n- **router 彙整**：`app/api/admin/__init__.py` 匯出 `admin_router = APIRouter(prefix=\"/api/admin\")`、`app/api/parent/__init__.py` 匯出 `parent_router = APIRouter(prefix=\"/api/parent\")`、`app/api/ws/__init__.py` 匯出 `ws_router`、`app/api/health.py`。各 endpoint task 在自己的模組檔建立 `router = APIRouter(...)` 並在對應 `__init__.py` 以 `include_router` 掛上（營運模組亦同）。本 task 建立這些空的彙整檔。\n- 文件：production 關閉 `/docs`、`/redoc`、`/openapi.json`；其他環境開啟於 `/api/docs`。\n\n**驗收標準**\n- `create_app()` 回傳 FastAPI，且 test 環境不啟動 scheduler。\n- production 下 /api/docs 回 404；development 下回 200。\n- 錯誤 envelope 生效（未知路由回 not_found 格式）。\n- 未處理例外的 500 回應帶 `X-Request-ID`（與請求帶入的值相同）和安全標頭。\n- CORS preflight 對允許的 origin 回 allow-credentials。\n- 送往 Sentry 的 event 與 breadcrumb 不含敏感值明文（token=、Authorization、cookie 等），遮罩失敗時丟棄。\n- lifespan 啟停時 scheduler 與 broadcaster 正確啟動 / 停止（start_background=True 時）。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/main.py",
       "source_ref": null,
@@ -749,7 +749,7 @@
         "BACKEND-223"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "",
+      "risk_notes": "Sentry 預設 LoggingIntegration 會在 RedactingFilter 之前讀 record，未掛 before_send / before_breadcrumb 時 breadcrumb 與 event 會帶未遮罩的 msg / args / 例外訊息（review-r5-backend 指出）；本 task 以 scrub_sentry_event / scrub_sentry_breadcrumb 處理。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/test_main.py",
@@ -763,7 +763,8 @@
           "test_main_error_envelope_wired：GET /api/does-not-exist → 404 JSON error.code == 'not_found'",
           "test_main_cors_preflight：CORS_ORIGINS='http://127.0.0.1:5341'，OPTIONS /api/health 帶 Origin 與 Access-Control-Request-Method: GET → access-control-allow-origin == 'http://127.0.0.1:5341'、access-control-allow-credentials == 'true'",
           "test_main_routers_mounted：app.routes 中存在 path 以 '/api/admin' 與 '/api/parent' 開頭的路由（至少 health 與各彙整 router 已 include）",
-          "test_main_unhandled_500_has_request_id_and_security_headers：create_app 後加一條會拋 RuntimeError 的測試路由，以 TestClient(raise_server_exceptions=False) 帶 X-Request-ID: req-12345678 請求 → 500，header X-Request-ID == 'req-12345678'，且帶 x-content-type-options: nosniff 等 BACKEND-019 的安全標頭"
+          "test_main_unhandled_500_has_request_id_and_security_headers：create_app 後加一條會拋 RuntimeError 的測試路由，以 TestClient(raise_server_exceptions=False) 帶 X-Request-ID: req-12345678 請求 → 500，header X-Request-ID == 'req-12345678'，且帶 x-content-type-options: nosniff 等 BACKEND-019 的安全標頭",
+          "test_main_sentry_scrubs_secrets：scrub_sentry_event({'logentry': {'message': 'login token=TK9', 'params': ['secret=S1']}, 'exception': {'values': [{'value': 'Authorization: Bearer abc.def'}]}, 'request': {'headers': {'Authorization': 'Bearer x', 'Cookie': 'staff_access=y'}}}, {}) 的 JSON 序列化結果不含 'TK9'、'S1'、'abc.def'、'Bearer x'、'staff_access=y'；scrub_sentry_breadcrumb({'message': 'refresh_token=R2', 'data': {'password': 'P3'}}, {}) 不含 'R2'、'P3'；monkeypatch redact_text 拋 RuntimeError → scrub_sentry_event 回 None"
         ],
         "run": "just test apps/api/tests/unit/test_main.py -k \"test_main_\"",
         "notes": ""
@@ -2327,7 +2328,7 @@
     {
       "id": "BACKEND-066",
       "title": "實作 refresh token 過期清理背景工作",
-      "description": "建立 `apps/api/app/jobs/auth_cleanup.py`，以 BACKEND-018 `@scheduled_job(\"auth.refresh_token_cleanup\", CronTrigger(hour=3, minute=30, timezone=\"Asia/Taipei\"), run_key=lambda c: c.today().isoformat())` 註冊，並在 `app/jobs/__init__.py` import。\n\n```python\ndef cleanup_refresh_tokens(session: Session, clock: Clock) -> int: ...\n```\n- 刪除 `expires_at < now - 7 天` 或 `revoked_at < now - 7 天` 的列（保留 7 天供重用偵測與調查）；以 `replaced_by` 自參照 on delete set null，刪除順序不影響。\n- 每次最多刪 5000 筆（分批避免長交易），回傳刪除數。\n\n**驗收標準**\n- 過期 8 天、撤銷 8 天的列被刪；過期 6 天、未過期的列保留。\n- job 已註冊於 JOB_REGISTRY。",
+      "description": "建立 `apps/api/app/jobs/auth_cleanup.py`，以 BACKEND-018 `@scheduled_job(\"auth.refresh_token_cleanup\", CronTrigger(hour=3, minute=30, timezone=\"Asia/Taipei\"), run_key=lambda c: c.today().isoformat())` 註冊，並在 `app/jobs/__init__.py` import。\n\n```python\ndef cleanup_refresh_tokens(session: Session, clock: Clock) -> int: ...\n```\n- 刪除 `expires_at < now - 7 天` 或 `revoked_at < now - 7 天` 的列（保留 7 天供重用偵測與調查）；以 `replaced_by` 自參照 on delete set null，刪除順序不影響。\n- 單次執行最多刪 5000 筆，回傳刪除數；只 `flush`，不自行 commit（BACKEND-018 runner 的 advisory lock 是交易級，工作函式自行 commit 會提前釋放鎖），剩餘的列留待下次執行。\n\n**驗收標準**\n- 過期 8 天、撤銷 8 天的列被刪；過期 6 天、未過期的列保留。\n- job 已註冊於 JOB_REGISTRY。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/jobs/auth_cleanup.py",
       "source_ref": "BE:api/parent_portal/auth.py::gc_expired_refresh_tokens",
@@ -2338,7 +2339,7 @@
         "BACKEND-036"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "BACKEND-018 的 advisory lock 為 pg_advisory_xact_lock：工作函式內 commit 會釋放鎖，讓另一個實例可重入；本工作與所有 scheduled job 一律只 flush、由 run_job_once 負責 commit / rollback。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/jobs/test_auth_cleanup.py",
@@ -6802,7 +6803,7 @@
         "BACKEND-005"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "",
+      "risk_notes": "sweep_outbox 經 BACKEND-018 run_job_once 執行，advisory lock 為交易級：sweep 內的 dispatch_due 不可自行 commit（會提前釋放鎖），由 runner commit；kick_outbox 走自己的 session_scope，不經 runner，不受此限。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/notifications/test_outbox_jobs.py",
@@ -14742,6 +14743,41 @@
         "status": "pass",
         "reviewer": "review-r5-backend",
         "notes": "通過。8a6176e（紅；以 git archive 取測試 commit 快照實跑，6 條新測試確實紅）→ 64907bf（綠）。tdd.run 20/20 綠（含 BACKEND-004 既有測試），七條 red_case 皆選到。red_case 由 'token=TK2 ok' 改成 'user=amy token=TK2' 並斷言 msg == 'user=amy token=***' 正確（'ok' 是 'token' 子字串，原斷言恆真）。lookbehind 不再排除引號：dict repr / JSON 的 'key': 'value' 因 key 後接引號不會被 _KEY_VALUE_RE 誤吃，仍由 _QUOTED_KEY_VALUE_RE 處理；status_code / error_code 仍受識別字 lookbehind 保護，無回歸。fail-closed 改為直接測 filter 的判斷：production 只有 configure_logging 安裝的 _AppStreamHandler（掛 RedactingFilter）一個 handler，uvicorn / uvicorn.error 清 handler 並 propagate、uvicorn.access 停用，app 內沒有其他 addHandler；pytest 的 LogCaptureHandler 先於本 handler 格式化原始 record，舊寫法會被 pytest 自己的 handleError 輸出干擾。我另以子行程（無 pytest handler）實跑 configure_logging（production 與 development）驗證 production 路徑：__str__ 爆炸、'%s' + 爆炸物件、Mapping msg、物件 msg、logger.exception、chained exception（inner / outer 兩段訊息）、stack_info、'cookie: X'、'Authorization: Bearer X' 全部無明文。殘留：(1) test_logging_redact_quoted_literal 與實作同 commit 加入（其行為已由測試 commit 的 stack_info 測試先紅涵蓋，不擋）；(2) development 格式的 stack_info 遮罩沒有測試（實作有、子行程實測正確）；(3) __str__ 爆炸時實際輸出 '*** args=***'，description 寫「msg 整個換成 '***'」，語意上 fail-closed 已成立；(4) handler 級 filter 擋不到在 Logger.callHandlers 之前讀 record 的整合，見 BACKEND-020 的 Sentry 殘留。"
+      }
+    },
+    {
+      "id": "BACKEND-540",
+      "title": "access token 解碼對 claim 型別異常一律回 UnauthenticatedError",
+      "description": "補強 BACKEND-033 `decode_access_token`（改寫該 task 產物，BACKEND-033 維持 done）。目前持有簽章金鑰才能構造、但簽章合法的畸形 claim 會讓解碼拋出非預期例外而變成 500：`typ` 為陣列 / 物件時比較拋 TypeError，`exp` / `iat` 為超大整數（例如 10**20）時 `datetime.fromtimestamp` 拋 OverflowError / ValueError / OSError。\n\n**要求**：解碼時逐一驗證 claim 型別——`typ` 必須是 str 且屬 `staff` / `parent`；`tv` 必須是 int（排除 bool）；`iat`、`exp` 必須是 int（排除 bool）且可轉成 aware datetime；`sub` 必須是 str 且為 uuid；`jti` 必須是非空 str。任何不符，以及轉換時拋出的 TypeError / ValueError / OverflowError / OSError，一律轉成 `UnauthenticatedError()`，不區分原因。不得以 `except Exception` 吞掉所有例外（程式錯誤仍應外漏）。\n\n**驗收標準**：每一條對應下列 red_case；BACKEND-033 既有 tokens 測試仍全綠。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/core/security/tokens.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "BACKEND-033"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "BACKEND-034（綁定 token）若共用解碼 helper，同樣受益；實作時把型別驗證放在共用處。",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/unit/core/security/test_tokens.py",
+        "markers": [
+          "unit"
+        ],
+        "red_cases": [
+          "test_tokens_claim_types_typ_not_str：以 derive_key(LABEL_JWT) 簽 HS256、typ=['staff'] 的 token → decode_access_token(..., expected_type='staff') 拋 UnauthenticatedError（不是 TypeError）",
+          "test_tokens_claim_types_exp_overflow：exp=10**20、iat=10**20 的合法簽章 token → UnauthenticatedError（不是 OverflowError / ValueError / OSError）",
+          "test_tokens_claim_types_tv_bool：tv=True 的合法簽章 token → UnauthenticatedError",
+          "test_tokens_claim_types_jti_missing_or_empty：jti 缺漏或為 '' 的合法簽章 token → UnauthenticatedError"
+        ],
+        "run": "just test apps/api/tests/unit/core/security/test_tokens.py -k \"test_tokens_\"",
+        "notes": ""
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
       }
     }
   ]

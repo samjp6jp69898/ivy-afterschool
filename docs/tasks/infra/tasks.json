@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 106,
-  "last_updated": "2026-10-04T06:49:52Z",
+  "version": 107,
+  "last_updated": "2026-10-04T07:47:07Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1037,7 +1037,7 @@
     {
       "id": "INFRA-029",
       "title": "實作家長端 bundle 檢查腳本並新增 CI job web-build",
-      "description": "新增 `apps/web/scripts/check_parent_bundle.mjs`，並在 `.github/workflows/ci.yml` 加入 job `web-build`。\n\n**check_parent_bundle.mjs**：讀 `dist/.vite/manifest.json`（INFRA-005 已開 `build.manifest`），從 `parent/index.html` 這個 entry 出發，沿 `imports`（靜態 import，不含 `dynamicImports`）遞迴收集 chunk。任一 chunk 的 `src` 或 `name` 符合下列任一條件即違規：\n- 來自 `node_modules/element-plus/` 或 `node_modules/@element-plus/`（家長端用自製 M3 元件，不得載入 Element Plus）。\n- 來自 `src/views/`、`src/components/`、`src/layouts/`、`src/stores/`（後台程式碼）。\n違規時印出「家長端 entry 靜態引入了 <chunk>（經由 <路徑鏈>）」並 exit 1；無違規印收集到的 chunk 數並 exit 0。manifest 沒有 `parent/index.html` entry 時丟錯並 exit 1（fail-fast，避免 entry 改名後檢查靜默通過）。腳本以 `--manifest <path>` 參數覆寫 manifest 位置（測試用）。`apps/web/tsconfig.node.json` 的 include 納入 `scripts/`，並以 `check_parent_bundle.d.mts` 提供型別，讓 spec 能 import `.mjs` 並進 web-typecheck。測試 `apps/web/scripts/check_parent_bundle.spec.ts` 用 vitest 呼叫匯出的 `findViolations(manifest)` 函式；`vitest.config.ts` 的 include 加入 `scripts/**/*.spec.ts`。\n\n**web-build job**：checkout → setup（node，python: false）→ `pnpm exec vite build` → `node scripts/check_parent_bundle.mjs`（working-directory 皆為 `apps/web`）。`timeout-minutes: 10`。\n\n**驗收標準**：每一條對應下列 red_case，且 CI 結構測試確認 web-build job 在 build 之後執行檢查。",
+      "description": "新增 `apps/web/scripts/check_parent_bundle.mjs`，並在 `.github/workflows/ci.yml` 加入 job `web-build`。\n\n**check_parent_bundle.mjs**：家長端 entry 不得靜態引入 Element Plus 與後台程式碼的檢查腳本；檢查邏輯（vite plugin 輸出的 chunk 模組圖、涵蓋 entry chunk 與共用 chunk）以 INFRA-050 為準。`vitest.config.ts` 的 include 加入 `scripts/**/*.spec.ts`；`apps/web/tsconfig.node.json` 的 include 納入 `scripts/`，以 `check_parent_bundle.d.mts` 提供型別。\n\n**web-build job**：checkout → setup（node，python: false）→ `pnpm exec vite build` → `node scripts/check_parent_bundle.mjs`（working-directory 皆為 `apps/web`）。`timeout-minutes: 10`。\n\n**驗收標準**：CI 結構測試確認 web-build job 在 build 之後執行檢查；腳本的行為驗收見 INFRA-050。",
       "granularity_unit": "script",
       "target_path": "apps/web/scripts/check_parent_bundle.mjs",
       "source_ref": null,
@@ -1048,22 +1048,19 @@
         "INFRA-005"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "只比對 manifest chunk 的 src / name，在 Vite 8（rolldown）的真實 build 上抓不到靜態共用 chunk 與併進 parent entry chunk 的模組；改為模組層級檢查由 INFRA-050 接手。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
-        "test_path": "apps/web/scripts/check_parent_bundle.spec.ts",
+        "test_path": "scripts/tests/test_ci_workflow.py",
         "markers": [
-          "vitest"
+          "unit"
         ],
         "red_cases": [
-          "parent bundle check passes clean manifest：manifest 中 parent/index.html 只 import 'src/shared/http.ts' 與 'node_modules/vue/...' → findViolations 回 []",
-          "parent bundle check flags element-plus：parent entry → chunk A → 'node_modules/element-plus/es/index.mjs' → 回一筆，鏈為 ['parent/index.html', 'A', 'node_modules/element-plus/es/index.mjs']",
-          "parent bundle check flags admin views：parent entry 靜態 import 'src/views/LoginView.vue' → 回一筆違規",
-          "parent bundle check ignores dynamic imports：parent entry 的 dynamicImports 含 element-plus chunk、imports 不含 → 回 []",
-          "parent bundle check handles cycles：A imports B、B imports A → findViolations 正常結束並回 []"
+          "test_ci_web_build_job_checks_after_build：run_lines('web-build') 中 'vite build' 的索引 < 'check_parent_bundle.mjs' 的索引",
+          "test_ci_web_build_job_skips_python：web-build job 的 setup step 帶 python: false（不安裝 Python 工具鏈）"
         ],
-        "run": "just web-test scripts/check_parent_bundle.spec.ts -t \"parent bundle check\"",
-        "notes": "CI 結構測試另加 test_ci_web_build_job_checks_after_build（run_lines('web-build') 中 'vite build' 索引 < 'check_parent_bundle.mjs' 索引），以 `just test scripts/tests/test_ci_workflow.py -k web_build_job` 執行。"
+        "run": "just test scripts/tests/test_ci_workflow.py -k web_build_job",
+        "notes": "腳本行為測試由 INFRA-050 的 apps/web/scripts/check_parent_bundle.spec.ts（-t \"parent module graph\"）負責。"
       },
       "review": {
         "status": "pass",
@@ -1920,6 +1917,39 @@
         "status": "pass",
         "reviewer": "review-r5-infra",
         "notes": "通過。2 條 red_case 都有對應測試，`just test scripts/tests/test_ci_workflow.py -k \"service_logs or cleanup_tolerates\"` 2 passed；TDD 順序 65ecd62 → 66fad14（測試 commit 時 e2e.yml 還沒有 var/log）。已確認 dev_up.sh 的 LOG_DIR 是 repo 根目錄的 var/log，artifact path 寫 `var/log/` 正確；`docker rm -f afterschool-web-smoke || true` 符合 description。actionlint、ruff 乾淨。"
+      }
+    },
+    {
+      "id": "INFRA-052",
+      "title": "家長端 bundle 檢查收尾：fixture 真正驗共用 chunk、vite.config 引入補副檔名、移除過時註解",
+      "description": "review-r5-infra 對 INFRA-050 留下的小修：\n1. fixture `apps/web/scripts/fixtures/parent-bundle/shared-element-plus/`：後台 entry（`src/main.ts`）也要靜態引入 element-plus，讓 element-plus 實際落在後台與家長共用的 chunk，而不是被併進 parent entry chunk；測試除了斷言有違規，也要斷言違規所在的 chunk 不是 parent entry chunk（`isEntry` 為 false）。測試名稱與註解要和實況一致。\n2. `apps/web/vite.config.ts` 引入 plugin 時寫出副檔名（`./build/parentModuleGraph.ts`，或依 tsconfig 允許的寫法），vite build 不再出現缺副檔名的警告。\n3. `vite.config.ts` 中「manifest 供家長端 bundle 檢查（INFRA-029）」的註解已不成立：檢查改讀模組圖後若 `build.manifest` 已無用途就移除該設定並同步 INFRA-005 description；仍有用途就把註解改成正確用途。\n\n**驗收標準**：每一條對應下列 red_case；`vite build` 輸出不含缺副檔名警告；對 apps/web 實際 build 後腳本 exit 0。",
+      "granularity_unit": "script",
+      "target_path": "apps/web/scripts/check_parent_bundle.spec.ts",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "INFRA-050"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "移除 build.manifest 前確認沒有其他程式（Dockerfile、nginx、e2e、後端）讀 dist/.vite/manifest.json。",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/web/scripts/check_parent_bundle.spec.ts",
+        "markers": [
+          "vitest"
+        ],
+        "red_cases": [
+          "parent module graph flags element-plus in shared chunk：後台與家長 entry 都靜態引入 element-plus 與 src/stores/auth.ts → 實際 build 後至少一筆違規的模組路徑含 node_modules/element-plus/，且該違規所在 chunk 的 isEntry 為 false",
+          "parent module graph shared fixture admin imports element-plus：fixture 的後台 entry src/main.ts 靜態引入 element-plus（讀檔斷言含 \"from 'element-plus'\" 或 import 'element-plus'），確保 fixture 形狀不再退化成只有家長引入"
+        ],
+        "run": "just web-test scripts/check_parent_bundle.spec.ts -t \"parent module graph\"",
+        "notes": "另跑：just web-lint 指定 vite.config.ts 與 spec；vite build 輸出檢查無缺副檔名警告。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
       }
     }
   ]
