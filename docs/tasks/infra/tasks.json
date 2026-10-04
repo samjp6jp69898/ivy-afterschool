@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 120,
-  "last_updated": "2026-10-04T14:06:57Z",
+  "version": 121,
+  "last_updated": "2026-10-04T14:07:38Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1126,7 +1126,7 @@
       "suggested_model": "opus-5",
       "risk_notes": "GET /api/health 由 BACKEND 提供；尚未存在時 Railway healthcheck（INFRA-032）會失敗，部署前要確認 BACKEND 已完成 health endpoint。",
       "open_design_questions": [
-        "Railway 的實際網路行為需上線時實測（部署時驗證）：(1) Railway edge 轉送到 web 服務時，來源 IP 落在哪個範圍（決定 nginx `set_real_ip_from` 的值），以及真實 client IP 放在 `X-Forwarded-For` 還是 `X-Real-IP` / 其他標頭；(2) web 服務經 private network 連 api 時的來源位址範圍（決定 uvicorn `FORWARDED_ALLOW_IPS`，目前預設 `fd12::/16`，若環境為雙棧需加上對應 IPv4 範圍）。驗證方式：部署後在 api 暫時記錄 request.client 與原始標頭，用已知 IP 的裝置連線比對；確認後更新 nginx 範本與 Dockerfile 的值，並刪除本問題。 (3) api 以 `--host ::` 只監聽 IPv6：確認 Railway private network（web → api）與 Railway healthcheck（INFRA-032，GET /api/health）都經 IPv6 連到 api；若任一走 IPv4，需改為同時監聽兩種位址（uvicorn 單一 --host 無法雙棧，需另議做法，例如改用 0.0.0.0 並確認 private network 有 IPv4）。"
+        "Railway 的實際網路行為需上線時實測（部署時驗證）：(1) Railway edge 轉送到 web 服務時，來源 IP 落在哪個範圍（決定 nginx `set_real_ip_from` 的值），以及真實 client IP 放在 `X-Forwarded-For` 還是 `X-Real-IP` / 其他標頭；(2) web 服務經 private network 連 api 時的來源位址範圍（決定 uvicorn `FORWARDED_ALLOW_IPS`，目前預設 `fd12::/16`，若環境為雙棧需加上對應 IPv4 範圍）。驗證方式：部署後在 api 暫時記錄 request.client 與原始標頭，用已知 IP 的裝置連線比對；確認後更新 nginx 範本與 Dockerfile 的值，並刪除本問題。 (3) api 以 `--host ::` 只監聽 IPv6：確認 Railway private network（web → api）與 Railway healthcheck（INFRA-032，GET /api/health）都經 IPv6 連到 api；若任一走 IPv4，需改為同時監聽兩種位址（uvicorn 單一 --host 無法雙棧，需另議做法，例如改用 0.0.0.0 並確認 private network 有 IPv4）。 已知事實：Railway 官方文件（working-with-domains）寫明 2025-10-16 之後建立的環境，private DNS 會同時解析出 IPv4 與 IPv6 位址，新建專案必落在此範圍，nginx 解析 `api.railway.internal` 可能先拿到 IPv4 而連線失敗；Python asyncio 以 `::` 建立的 socket 會設 IPV6_V6ONLY，uvicorn 單一 --host 無法雙棧，雙棧大概率需要處理（候選做法：nginx 端只取 IPv6 位址，或 api 改以自建 dual-stack socket 經 --fd 交給 uvicorn），部署前決定。"
       ],
       "tdd": {
         "test_path": "scripts/tests/test_deploy_configs.py",
