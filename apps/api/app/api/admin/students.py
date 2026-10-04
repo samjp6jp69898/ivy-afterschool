@@ -4,22 +4,26 @@
 ``/students/{student_id}`` 之前註冊，由本模組內的宣告順序保證。
 
 ``GET /api/admin/students``：students:read；列表只回 ``StudentListItemOut``（不含任何敏感欄位）。
+``GET /api/admin/students/{student_id}/guardians``（BACKEND-173）：students:read；監護人與綁定狀態。
 """
 
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.admin._query import query_model
 from app.api.deps import CurrentStaff, require_permission
+from app.core.clock import Clock, get_clock
 from app.core.db import get_db
 from app.core.pagination import Page, PageParams, page_params
 from app.core.permissions import Permission
+from app.schemas.guardians import GuardianOut
 from app.schemas.students import StudentListItemOut, StudentListQuery
-from app.services import student_service
+from app.services import guardian_service, student_service
 
 router = APIRouter(prefix="/students", tags=["admin-students"])
 
@@ -32,3 +36,13 @@ def list_students(
     db: Annotated[Session, Depends(get_db)],
 ) -> Page[StudentListItemOut]:
     return student_service.list_students(db, query, page, actor=staff)
+
+
+@router.get("/{student_id}/guardians", response_model=list[GuardianOut])
+def list_guardians(
+    student_id: UUID,
+    _: Annotated[CurrentStaff, Depends(require_permission(Permission.STUDENTS_READ))],
+    db: Annotated[Session, Depends(get_db)],
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> list[GuardianOut]:
+    return guardian_service.list_for_student(db, student_id, clock=clock)
