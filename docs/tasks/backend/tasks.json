@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 207,
-  "last_updated": "2026-10-04T16:49:39Z",
+  "version": 208,
+  "last_updated": "2026-10-04T16:50:06Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -4187,7 +4187,7 @@
         "BACKEND-119"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "寫入 handler 加在 BACKEND-119 的 build_reference_router(spec) 內時，必須掛本 task 指定的寫入權限，不可沿用 119 的 READ_PERMISSIONS（任一讀取權限）；測試要含「只有讀取權限 → 403」與 route audit == []。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_reference_endpoints.py",
@@ -4224,7 +4224,7 @@
         "BACKEND-119"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "寫入 handler 加在 BACKEND-119 的 build_reference_router(spec) 內時，必須掛本 task 指定的寫入權限，不可沿用 119 的 READ_PERMISSIONS（任一讀取權限）；測試要含「只有讀取權限 → 403」與 route audit == []。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_reference_endpoints.py",
@@ -4261,7 +4261,7 @@
         "BACKEND-119"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "寫入 handler 加在 BACKEND-119 的 build_reference_router(spec) 內時，必須掛本 task 指定的寫入權限，不可沿用 119 的 READ_PERMISSIONS（任一讀取權限）；測試要含「只有讀取權限 → 403」與 route audit == []。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_reference_endpoints.py",
