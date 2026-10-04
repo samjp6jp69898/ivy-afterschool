@@ -93,22 +93,30 @@ def test_line_client_409_is_ok() -> None:
 def test_line_client_retryable() -> None:
     result, _ = _push(_json(429, {"message": "Too many requests"}))
     assert (result.ok, result.retryable) == (False, True)
-    assert result.error is not None and "429" in result.error
+    assert result.error is not None
+
+    assert "429" in result.error
 
     result, _ = _push(_json(503, {"message": "Service Unavailable"}))
     assert (result.ok, result.retryable) == (False, True)
-    assert result.error is not None and "503" in result.error
+    assert result.error is not None
+
+    assert "503" in result.error
 
     result, _ = _push(_json(500, {}))
     assert (result.ok, result.retryable) == (False, True)
 
     result, _ = _push(_raise(httpx.ReadTimeout("timed out")))
     assert (result.ok, result.retryable) == (False, True)
-    assert result.error is not None and "ReadTimeout" in result.error
+    assert result.error is not None
+
+    assert "ReadTimeout" in result.error
 
     result, _ = _push(_raise(httpx.ConnectError("connection refused")))
     assert (result.ok, result.retryable) == (False, True)
-    assert result.error is not None and "ConnectError" in result.error
+    assert result.error is not None
+
+    assert "ConnectError" in result.error
 
 
 def test_line_client_permanent() -> None:
@@ -122,7 +130,9 @@ def test_line_client_permanent() -> None:
     for status in (401, 403, 404):
         result, _ = _push(_json(status, {"message": f"error {status}"}))
         assert (result.ok, result.retryable) == (False, False), status
-        assert result.error is not None and str(status) in result.error
+        assert result.error is not None
+
+        assert str(status) in result.error
 
 
 def test_line_client_error_truncated_and_token_free() -> None:
@@ -158,4 +168,6 @@ def test_line_client_build_without_token(monkeypatch: pytest.MonkeyPatch) -> Non
     )
     client = build_line_client(object())  # type: ignore[arg-type]
     assert isinstance(client, HttpLineMessagingClient)
-    assert isinstance(client, LineMessagingClient)
+    # 結構相容 Protocol：靜態型別檢查把關，這裡只確認方法存在
+    typed: LineMessagingClient = client
+    assert callable(typed.push_text)
