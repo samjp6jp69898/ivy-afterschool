@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 112,
-  "last_updated": "2026-10-04T12:36:26Z",
+  "version": 113,
+  "last_updated": "2026-10-04T12:38:02Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1158,7 +1158,7 @@
       "granularity_unit": "config",
       "target_path": "apps/api/railway.json",
       "source_ref": "BE:railway.json::deploy",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r6",
       "depends_on": [
         "INFRA-031",
@@ -1274,7 +1274,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/railway.json",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r6",
       "depends_on": [
         "INFRA-034"
@@ -1417,7 +1417,7 @@
       "granularity_unit": "script",
       "target_path": "scripts/smoke_deploy.sh",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r6",
       "depends_on": [
         "INFRA-008",
