@@ -1,4 +1,4 @@
-"""BACKEND-022：tests/support/factories.py（ORM 測資 factory，經 app_backend 的 db_session 寫入）。"""
+"""BACKEND-022：tests/support/factories.py（ORM 測資 factory，經 app_backend 寫入）。"""
 
 import re
 
