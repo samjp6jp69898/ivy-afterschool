@@ -143,9 +143,10 @@ def make_system_settings(conn: psycopg.Connection[Any], **overrides: Any) -> dic
 
 
 def make_class_staff(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
-    """未指定 class_id / staff_user_id 時各另建一筆。"""
+    """未指定 class_id / staff_user_id 時各另建一筆（班名帶亂數，同一測試可多次呼叫）。"""
     defaults = {
-        "class_id": overrides.get("class_id") or make_classes(conn)["id"],
+        "class_id": overrides.get("class_id")
+        or make_classes(conn, name=f"班{uuid4().hex[:8]}")["id"],
         "staff_user_id": overrides.get("staff_user_id") or make_staff_users(conn)["id"],
     }
     return insert_row(conn, "public.class_staff", **{**defaults, **overrides})
