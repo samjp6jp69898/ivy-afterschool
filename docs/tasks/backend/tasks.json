@@ -1,6 +1,6 @@
 {
   "area": "backend",
-  "version": 96,
+  "version": 97,
   "last_updated": "2026-10-04T04:45:07Z",
   "tasks": [
     {
@@ -277,11 +277,11 @@
     {
       "id": "BACKEND-008",
       "title": "實作 app/core/pagination.py：PageParams、Page[T] 與 paginate 查詢工具",
-      "description": "建立 `apps/api/app/core/pagination.py`（domain_spec §2：`?page=&page_size=`，回 `{\"items\": [...], \"total\": n}`）。\n\n**介面**\n```python\nclass PageParams(BaseModel):                      # FastAPI dependency：def page_params(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=200)) -> PageParams\n    page: int\n    page_size: int\n    @property\n    def offset(self) -> int: ...\n\nclass Page(BaseModel, Generic[T]):\n    items: list[T]\n    total: int\n\ndef paginate(session: Session, stmt: Select[tuple[M]], params: PageParams) -> tuple[list[M], int]: ...\n```\n- `paginate`：total 用 `select(func.count()).select_from(stmt.order_by(None).subquery())`；items 用 `stmt.limit(page_size).offset(offset)`；stmt 未帶 order_by 時 raise `ValueError(\"paginate 需要明確的 order_by\")`（避免分頁順序不穩定）。\n- page 超過最後一頁 → items=[]、total 照實回。\n- 移植 ivy `utils/pagination.py::paginate` 的 count/offset 作法；去掉 legacy cap。\n\n**驗收標準**\n- page_size 超過 200 或 page < 1 → 422。\n- total 與 items 正確；超出範圍頁回空 items。\n- 沒有 order_by 時拒絕。",
+      "description": "建立 `apps/api/app/core/pagination.py`（domain_spec §2：`?page=&page_size=`，回 `{\"items\": [...], \"total\": n}`）。\n\n**介面**\n```python\nclass PageParams(BaseModel):                      # FastAPI dependency：def page_params(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=200)) -> PageParams\n    page: int\n    page_size: int\n    @property\n    def offset(self) -> int: ...\n\nclass Page(BaseModel, Generic[T]):\n    items: list[T]\n    total: int\n\ndef paginate(session: Session, stmt: Select[M], params: PageParams) -> tuple[list[M], int]: ...   # SQLAlchemy 2.1 的 Select 為 variadic generic：單一 entity / 欄位的 select 型別是 Select[M]，不是 2.0 的 Select[tuple[M]]\n```\n- `paginate`：total 用 `select(func.count()).select_from(stmt.order_by(None).subquery())`；items 用 `stmt.limit(page_size).offset(offset)`；stmt 未帶 order_by 時 raise `ValueError(\"paginate 需要明確的 order_by\")`（避免分頁順序不穩定）。\n- page 超過最後一頁 → items=[]、total 照實回。\n- 移植 ivy `utils/pagination.py::paginate` 的 count/offset 作法；去掉 legacy cap。\n\n**驗收標準**\n- page_size 超過 200 或 page < 1 → 422。\n- total 與 items 正確；超出範圍頁回空 items。\n- 沒有 order_by 時拒絕。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/pagination.py",
       "source_ref": "BE:utils/pagination.py::paginate",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-005",
