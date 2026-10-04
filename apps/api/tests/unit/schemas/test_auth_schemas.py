@@ -1,5 +1,7 @@
 """BACKEND-039：認證模組 schemas（員工登入 / 改密碼 / me，家長 LIFF / 綁定）。"""
 
+# ruff: noqa: S105, S106  測試用的密碼 / token 字面值
+
 from __future__ import annotations
 
 from types import SimpleNamespace
