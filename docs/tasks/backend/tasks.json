@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 140,
-  "last_updated": "2026-10-04T11:45:19Z",
+  "version": 141,
+  "last_updated": "2026-10-04T12:36:26Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -824,8 +824,8 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/support/factories.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6",
       "depends_on": [
         "BACKEND-030",
         "BACKEND-031",
@@ -1216,8 +1216,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/refresh_tokens.py",
       "source_ref": "BE:services/staff_refresh.py::rotate_refresh_token",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6",
       "depends_on": [
         "BACKEND-036",
         "BACKEND-132"
@@ -1254,8 +1254,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/refresh_tokens.py",
       "source_ref": "BE:services/staff_refresh.py::revoke_family",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6",
       "depends_on": [
         "BACKEND-036"
       ],
@@ -2336,8 +2336,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/jobs/auth_cleanup.py",
       "source_ref": "BE:api/parent_portal/auth.py::gc_expired_refresh_tokens",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6",
       "depends_on": [
         "BACKEND-018",
         "BACKEND-036"
@@ -4291,8 +4291,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/service_calendar.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6",
       "depends_on": [
         "BACKEND-108",
         "BACKEND-100"
@@ -4328,8 +4328,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/public_config_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6",
       "depends_on": [
         "BACKEND-108"
       ],
@@ -6730,8 +6730,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/channels/line.py",
       "source_ref": "BE:services/notification/_channels/line.py::LineAdapter",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r6",
       "depends_on": [
         "BACKEND-108"
       ],
