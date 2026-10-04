@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 127,
-  "last_updated": "2026-10-04T11:27:53Z",
+  "version": 128,
+  "last_updated": "2026-10-04T11:28:50Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -4432,7 +4432,7 @@
     {
       "id": "BACKEND-131",
       "title": "建立學生 SQLAlchemy model：Student",
-      "description": "建立 `apps/api/app/models/students.py`，對應 DB-014 `students`（BACKEND-024 drift 把關）。在 `app/models/__init__.py` 加入 import。\n\n- 欄位：student_no、name、gender（`Literal['male','female','other'] | None`）、birthday、grade_level、school_id（FK restrict）、school_class、class_id（FK set null）、status（`Literal['active','suspended','withdrawn']`）、enrolled_on、withdrawn_on、photo_path、id_number_enc（`LargeBinary | None`）、id_number_hmac、health_note_enc（`LargeBinary | None`）、note、archived_at。\n- relationship：`school`（lazy='joined'）、`school_class`（`SchoolClass`，lazy='joined'）、`guardians`（lazy='raise'，需要時明確 selectinload）。\n- **不**提供自動解密的 property；解密只在 BACKEND-150 有 `students:sensitive` 時呼叫 BACKEND-009。\n\n**驗收標準**\n- 可寫入讀回；bytea 欄位讀回為 bytes。\n- 與 migration 無 drift。\n- guardians 關係未明確載入時存取會拋例外（防 N+1）。",
+      "description": "建立 `apps/api/app/models/students.py`，對應 DB-014 `students`（BACKEND-024 drift 把關）。在 `app/models/__init__.py` 加入 import。\n\n- 欄位：student_no、name、gender（`Literal['male','female','other'] | None`）、birthday、grade_level、school_id（FK restrict）、school_class、class_id（FK set null）、status（`Literal['active','suspended','withdrawn']`）、enrolled_on、withdrawn_on、photo_path、id_number_enc（`LargeBinary | None`）、id_number_hmac、health_note_enc（`LargeBinary | None`）、note、archived_at。\n- relationship：`school`（lazy='joined'）、`class_`（`SchoolClass`，lazy='joined'）。安親班班級的關係屬性名為 `class_`：`school_class` 已是就讀國小班級的文字欄位（例如「三年二班」），與 BACKEND-148 `StudentOut` 的 `school_class` / `class_` 及 BACKEND-022 `make_student(class_=...)` 對應。\n- `guardians` 關係（lazy='raise'）由 BACKEND-132 負責：Guardian model 在 BACKEND-132（依賴本 task），本 task 宣告會讓 mapper 設定失敗；驗收見 BACKEND-132 的 test_parent_models_student_guardians_raise。\n- **不**提供自動解密的 property；解密只在 BACKEND-150 有 `students:sensitive` 時呼叫 BACKEND-009。\n\n**驗收標準**\n- 可寫入讀回；bytea 欄位讀回為 bytes。\n- 與 migration 無 drift。\n- school / class_ 以 joined 載入，查回後不需另外查詢即可存取。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/students.py",
       "source_ref": null,
@@ -4456,7 +4456,7 @@
         "red_cases": [
           "test_student_model_roundtrip：Student(student_no='S115001', name='王小明', grade_level=3, id_number_enc=b'\\x01abc', id_number_hmac='a'*64) flush+refresh → status == 'active'、isinstance(id_number_enc, bytes)",
           "test_student_model_pair_check：只給 id_number_enc 不給 hmac → flush 拋 IntegrityError（ck_students_id_number_pair）",
-          "test_student_model_guardians_raise：新 session 查回 student 後存取 student.guardians → 拋 sqlalchemy.exc.InvalidRequestError"
+          "test_student_model_relationships_joined：Student(school_id=school.id, class_id=c.id, school_class='3年2班') flush 後 expunge_all 再查回 → Student.school / Student.class_ 的 lazy == 'joined'、兩者不在 inspect(student).unloaded、student.class_.name == c.name、student.school_class == '3年2班'"
         ],
         "run": "just test-int apps/api/tests/integration/models/test_student_model.py -k \"test_student_model_\"",
         "notes": ""
@@ -4470,7 +4470,7 @@
     {
       "id": "BACKEND-132",
       "title": "建立家長 SQLAlchemy models：ParentAccount、Guardian、ParentBindingCode",
-      "description": "建立 `apps/api/app/models/parents.py`，對應 DB-015 `parent_accounts`、DB-016 `guardians`、DB-017 `parent_binding_codes`（BACKEND-024 drift 把關）。在 `app/models/__init__.py` 加入 import。\n\n- `ParentAccount`：line_user_id（unique）、display_name、picture_url、phone、status（`Literal['active','disabled']`）、token_version、last_login_at。\n- `Guardian`：student_id（FK restrict）、parent_account_id（FK set null）、name、relation（`Literal['father','mother','grandparent','other']`）、phone、is_primary、can_pickup、receives_notifications、archived_at；relationship `student`（lazy='joined'）、`parent_account`（lazy='joined'）。\n- `ParentBindingCode`：guardian_id（FK cascade）、code_hash（unique）、expires_at、used_at、created_by（FK staff_users restrict）。\n\n**驗收標準**\n- 三個 model 可寫入讀回，預設值生效（status active、token_version 0、can_pickup / receives_notifications true）。\n- 同一學生兩位未封存 is_primary guardian → flush 違反 partial unique。\n- 與 migration 無 drift。",
+      "description": "建立 `apps/api/app/models/parents.py`，對應 DB-015 `parent_accounts`、DB-016 `guardians`、DB-017 `parent_binding_codes`（BACKEND-024 drift 把關）。在 `app/models/__init__.py` 加入 import。\n\n- `ParentAccount`：line_user_id（unique）、display_name、picture_url、phone、status（`Literal['active','disabled']`）、token_version、last_login_at。\n- `Guardian`：student_id（FK restrict）、parent_account_id（FK set null）、name、relation（`Literal['father','mother','grandparent','other']`）、phone、is_primary、can_pickup、receives_notifications、archived_at；relationship `student`（lazy='joined'）、`parent_account`（lazy='joined'）。\n- 在 `Student`（BACKEND-131，`app/models/students.py`）加入 `guardians: Mapped[list[Guardian]] = relationship(back_populates='student', lazy='raise')`，需要時明確 `selectinload(Student.guardians)`（防 N+1）；`Guardian.student` 以 `back_populates='guardians'` 對應。\n- `ParentBindingCode`：guardian_id（FK cascade）、code_hash（unique）、expires_at、used_at、created_by（FK staff_users restrict）。\n\n**驗收標準**\n- 三個 model 可寫入讀回，預設值生效（status active、token_version 0、can_pickup / receives_notifications true）。\n- 同一學生兩位未封存 is_primary guardian → flush 違反 partial unique。\n- 與 migration 無 drift。\n- Student.guardians 未明確載入時存取會拋例外（防 N+1）；以 selectinload 查回則可存取。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/parents.py",
       "source_ref": null,
@@ -4496,7 +4496,8 @@
         "red_cases": [
           "test_parent_models_defaults：ParentAccount(line_user_id='U'+'a'*32) flush+refresh → status == 'active'、token_version == 0；Guardian(student_id=s.id, name='王媽媽', relation='mother') → can_pickup is True、receives_notifications is True",
           "test_parent_models_one_primary：同一學生兩筆 is_primary=True 未封存 guardian → 第二筆 flush 拋 IntegrityError",
-          "test_parent_models_binding_code：ParentBindingCode(guardian_id=g.id, code_hash='b'*64, expires_at=now+7d, created_by=staff.id) flush → 讀回 used_at is None"
+          "test_parent_models_binding_code：ParentBindingCode(guardian_id=g.id, code_hash='b'*64, expires_at=now+7d, created_by=staff.id) flush → 讀回 used_at is None",
+          "test_parent_models_student_guardians_raise：新 session 查回 student 後存取 student.guardians → 拋 sqlalchemy.exc.InvalidRequestError；改以 select(Student).options(selectinload(Student.guardians)) 查回 → [g.name for g in student.guardians] == ['王媽媽']"
         ],
         "run": "just test-int apps/api/tests/integration/models/test_parent_models.py -k \"test_parent_models_\"",
         "notes": ""
@@ -6457,7 +6458,7 @@
     {
       "id": "BACKEND-200",
       "title": "建立通知 SQLAlchemy models：Notification、NotificationOutbox、NotificationPreference",
-      "description": "建立 `apps/api/app/models/notifications.py`，對應 DB-029 `notifications`、DB-030 `notification_outbox`、DB-031 `notification_preferences`（BACKEND-024 drift 把關）。在 `app/models/__init__.py` 加入 import。\n\n- `Notification`：recipient_type（`Literal['staff','parent']`）、recipient_id（無 FK）、event、title、body、payload（JSONB dict）、read_at。\n- `NotificationOutbox`：notification_id（FK cascade）、channel（`Literal['line']`）、status（`Literal['pending','sent','failed','dead']`）、attempts、next_attempt_at、last_error；relationship `notification`（lazy='joined'）。\n- `NotificationPreference`：parent_account_id（FK cascade）、event、line_enabled。\n\n**驗收標準**\n- 三個 model 可寫入讀回，預設值生效（payload {}、outbox status pending / attempts 0、line_enabled true）。\n- 不在 DB CHECK 清單的 event → flush 拋 IntegrityError。\n- 與 migration 無 drift。",
+      "description": "建立 `apps/api/app/models/notifications.py`，對應 DB-029 `notifications`、DB-030 `notification_outbox`、DB-031 `notification_preferences`（BACKEND-024 drift 把關）。在 `app/models/__init__.py` 加入 import。\n\n- `Notification`：recipient_type（`Literal['staff','parent']`）、recipient_id（無 FK）、event、title、body、payload（JSONB dict）、read_at。\n- `NotificationOutbox`：notification_id（FK cascade）、channel（`Literal['line']`）、status（`Literal['pending','sent','failed','dead']`）、attempts、next_attempt_at、last_error；relationship `notification`（lazy='joined'）。\n- `NotificationPreference`：parent_account_id（FK cascade）、event、line_enabled。\n- 依賴 BACKEND-132：parent_account_id 的 FK 指向 parent_accounts，ParentAccount 不在 metadata 時整個 registry 的 flush 會拋 NoReferencedTableError。\n\n**驗收標準**\n- 三個 model 可寫入讀回，預設值生效（payload {}、outbox status pending / attempts 0、line_enabled true）。\n- 不在 DB CHECK 清單的 event → flush 拋 IntegrityError。\n- 與 migration 無 drift。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/notifications.py",
       "source_ref": null,
@@ -6468,7 +6469,8 @@
         "DB-029",
         "DB-030",
         "DB-031",
-        "INFRA-010"
+        "INFRA-010",
+        "BACKEND-132"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
