@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 44,
-  "last_updated": "2026-10-04T01:50:05Z",
+  "version": 45,
+  "last_updated": "2026-10-04T04:16:36Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -981,7 +981,7 @@
     {
       "id": "PARENT-027",
       "title": "移植 PullToRefresh 元件（下拉重新整理）",
-      "description": "建立 `apps/web/src/parent/components/PullToRefresh.vue`：\n```ts\nprops: { onRefresh: () => Promise<unknown>; threshold?: number /* 預設 64 */; disabled?: boolean }\nslots: default\n```\n- 只在頁面捲動位置為 0（`window.scrollY`，ParentLayout 以頁面捲動）時按下才啟動；下拉途中頁面被捲走就取消；往上滑照常捲動。touch 下拉位移 = 手指距離 × 0.5，上限 threshold × 2；位移 ≥ threshold 放開 → 內容停在 56px、顯示轉圈並 await onRefresh，完成（含 reject，錯誤由元件吞下、失敗提示由呼叫端負責）後收回到 0；未達門檻放開直接回彈。refresh 進行中再次下拉不觸發也不位移；disabled 時完全不攔截手勢。\n- 只在確定進入下拉（起點在頂端且往下拉）時 `preventDefault`（touchmove 以 `passive: false` 註冊），擋掉 iOS 回彈與 Android 原生下拉刷新。只聽 touch 事件。\n- 指示器（`role=\"status\"`）固定存在、高度 = 位移，refresh 中 `aria-label=\"重新整理中\"`；內含 36px 圓形進度環與 `arrow_downward`（超過門檻轉 180°；refresh 中換成不定進度轉圈）與一行可見文字（`下拉重新整理` / `放開即可重新整理` / `重新整理中…`，`aria-hidden`）。內容以 translateY 跟著下移。reduced-motion 時不做回彈、箭頭旋轉與轉圈動畫。\n\n移植 ivy `FE:src/parent/components/PullToRefresh.vue` 與 `FE:src/parent/composables/usePullToRefresh.ts::usePullToRefresh`（邏輯併入元件，不另建 composable）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-pull-to-refresh.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：靜止 / 下拉未達門檻 / 超過門檻 / 重新整理中。\n\n**驗收標準**：每一條對應 red_case（以 TouchEvent 模擬）。",
+      "description": "建立 `apps/web/src/parent/components/PullToRefresh.vue`：\n```ts\nprops: { onRefresh: () => Promise<unknown>; threshold?: number /* 預設 64 */; disabled?: boolean }\nslots: default\n```\n- 只在頁面捲動位置為 0（`window.scrollY`，ParentLayout 以頁面捲動）時按下才啟動；下拉途中頁面被捲走就取消；往上滑照常捲動。touch 下拉位移 = 手指距離 × 0.5，上限 threshold × 2；位移 ≥ threshold 放開 → 內容停在 56px、顯示轉圈並 await onRefresh，完成（含 reject，錯誤由元件吞下、失敗提示由呼叫端負責）後收回到 0；未達門檻放開直接回彈。refresh 進行中再次下拉不觸發也不位移；disabled 時完全不攔截手勢。\n- 只在確定進入下拉時 `preventDefault`（touchmove 以 `passive: false` 註冊），擋掉 iOS 回彈與 Android 原生下拉刷新：起點在頂端，位移超過 8px 判定距離後若 |dx| ≥ |dy| 判為水平滑動，整個手勢放棄（不攔截、不接管，chip 列等水平捲動照常）；|dy| > |dx| 且往下才進入下拉。判定距離內的移動不攔截。只聽 touch 事件。\n- 手勢中斷：touchcancel 時若正在下拉就收回、不觸發；重新整理中收到 touchcancel 不影響指示器（維持 56px 與 aria-label）。多指觸控（下拉途中第二指按下）視為取消；touchend 時仍有手指按著不觸發。\n- 指示器（`role=\"status\"`）固定存在、高度 = 位移，refresh 中 `aria-label=\"重新整理中\"`；內含 36px 圓形進度環與 `arrow_downward`（超過門檻轉 180°；refresh 中換成不定進度轉圈）與一行可見文字（`下拉重新整理` / `放開即可重新整理` / `重新整理中…`，`aria-hidden`）。內容以 translateY 跟著下移。reduced-motion 時不做回彈、箭頭旋轉與轉圈動畫。\n\n移植 ivy `FE:src/parent/components/PullToRefresh.vue` 與 `FE:src/parent/composables/usePullToRefresh.ts::usePullToRefresh`（邏輯併入元件，不另建 composable）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-pull-to-refresh.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：靜止 / 下拉未達門檻 / 超過門檻 / 重新整理中。\n\n**驗收標準**：每一條對應 red_case（以 TouchEvent 模擬）。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/PullToRefresh.vue",
       "source_ref": "FE:src/parent/components/PullToRefresh.vue::props",
@@ -1007,7 +1007,13 @@
           "PullToRefresh collapses after reject：onRefresh reject → 指示器 aria-label 移除、高度 0px（不拋出未處理的錯誤）",
           "PullToRefresh caps pull at twice threshold and arms past threshold：touchmove y=1000 → 高度 128px、內容 translateY(128px)、文字 '放開即可重新整理' 且文字元素 aria-hidden === 'true'；threshold=100 時下拉 180（位移 90）放開 → 不觸發",
           "PullToRefresh prevents default only while pulling down：touchstart y=300 → touchmove y=200（往上）未 preventDefault；再 touchmove y=400（往下）→ defaultPrevented === true",
-          "PullToRefresh only starts at page top：window.scrollY = 120 → 下拉 300 的 touchmove 未 preventDefault、onRefresh 未被呼叫、高度 0px"
+          "PullToRefresh only starts at page top：window.scrollY = 120 → 下拉 300 的 touchmove 未 preventDefault、onRefresh 未被呼叫、高度 0px",
+          "PullToRefresh keeps indicator on touchcancel while refreshing：pull(200) 進入重新整理後 touchstart + touchcancel → 高度仍 56px、aria-label 仍 '重新整理中'、內容 translateY(56px)；resolve 後高度 0px",
+          "PullToRefresh touchcancel while pulling collapses without refresh：touchstart 0 → touchmove 200 → touchcancel → touchend → onRefresh 未被呼叫、高度 0px",
+          "PullToRefresh ignores near horizontal swipe：(200,100) → (80,104) 的 touchmove 未 preventDefault，同一手勢再移到 (60,300) 仍未 preventDefault，放開不觸發、高度 0px；(100,0) → (102,4) 判定距離內未 preventDefault，再到 (110,60) → preventDefault 且高度 30px",
+          "PullToRefresh multi touch does not trigger early：單指拉到 200 後第二指按下（touchstart 帶兩個 touches）再抬起（touchend 剩一指）→ onRefresh 未被呼叫；最後一指抬起也不呼叫、高度 0px",
+          "PullToRefresh cancels when page scrolls during pull：下拉到 100（高度 50px）後 window.scrollY = 40，再 touchmove 200 → 未 preventDefault、高度 0px，touchend 後 onRefresh 未被呼叫",
+          "PullToRefresh triggers exactly at threshold and arms arrow：touchmove 126（63px）→ '.ptr__arrow' 無 'is-armed'；touchmove 128（64px）→ 高度 64px、'.ptr__arrow' 含 'is-armed'、文字 '放開即可重新整理'；touchend → onRefresh 呼叫 1 次"
         ],
         "run": "just web-test src/parent/components/PullToRefresh.spec.ts -t \"PullToRefresh\"",
         "notes": ""
