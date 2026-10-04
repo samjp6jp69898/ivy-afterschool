@@ -1,6 +1,6 @@
 """BACKEND-179：app/services/parent_scope.py（get_parent_student_ids，家長可見學生範圍）。
-BACKEND-180：``assert_parent_owns_student`` 與 ``get_owned_student`` / ``get_owned_student_for_write``
-dependency（IDOR 一律 404，不洩漏存在與否；for_write 對 withdrawn 409）。
+BACKEND-180：``assert_parent_owns_student`` 與 ``get_owned_student`` /
+``get_owned_student_for_write`` dependency（IDOR 一律 404，不洩漏存在與否；for_write 對 withdrawn 409）。
 
 domain_spec M3：``guardians.parent_account_id = 自己`` 且 guardian / student 皆未封存；withdrawn
 仍可見；每次呼叫都查 DB。這是家長端 IDOR 防護的根基。

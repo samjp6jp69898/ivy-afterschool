@@ -26,6 +26,10 @@ BACKEND-073：權限守衛 factory ``require_permission``（all-of）/ ``require
 （any-of），移植 ivy ``utils/auth.py::require_permission`` / ``require_any_permission``。所有
 ``/api/admin/*`` 路由（auth 與個人收件匣除外）都必須掛它，``tests/support/route_audit.py``
 掃描未掛守衛的路由。
+
+BACKEND-180：家長端 path 參數 ``student_id`` 的 IDOR 守衛 ``get_owned_student`` /
+``get_owned_student_for_write``（包 ``services/parent_scope.py::assert_parent_owns_student``，
+不屬於自己的小孩一律 404）。
 """
 
 from __future__ import annotations
@@ -47,6 +51,8 @@ from app.core.security.cookies import PARENT_ACCESS, STAFF_ACCESS, read_cookie
 from app.core.security.tokens import decode_access_token
 from app.models.account import StaffUser
 from app.models.parents import ParentAccount
+from app.models.students import Student
+from app.services.parent_scope import assert_parent_owns_student
 
 PASSWORD_CHANGE_ALLOWED_PATHS: Final = frozenset(
     {"/api/admin/auth/me", "/api/admin/auth/change-password", "/api/admin/auth/logout"}
@@ -213,3 +219,21 @@ def get_optional_parent(
         return get_current_parent(request, db, clock)
     except UnauthenticatedError:
         return None
+
+
+def get_owned_student(
+    student_id: UUID,
+    parent: Annotated[CurrentParent, Depends(get_current_parent)],
+    db: Annotated[Session, Depends(get_db)],
+) -> Student:
+    """家長端讀取用：path 的 student_id 必須是自己的小孩，否則 404（與不存在相同）。"""
+    return assert_parent_owns_student(db, parent.id, student_id)
+
+
+def get_owned_student_for_write(
+    student_id: UUID,
+    parent: Annotated[CurrentParent, Depends(get_current_parent)],
+    db: Annotated[Session, Depends(get_db)],
+) -> Student:
+    """家長端寫入用：同 get_owned_student，另對 withdrawn 學生 409 ``student_not_active``。"""
+    return assert_parent_owns_student(db, parent.id, student_id, for_write=True)
