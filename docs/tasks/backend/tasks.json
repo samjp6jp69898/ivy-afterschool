@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 209,
-  "last_updated": "2026-10-04T16:50:41Z",
+  "version": 210,
+  "last_updated": "2026-10-04T16:51:43Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2955,17 +2955,17 @@
     {
       "id": "BACKEND-086",
       "title": "建立員工帳號模組 Pydantic schemas",
-      "description": "建立 `apps/api/app/schemas/staff_users.py`（request `extra='forbid'`、`str_strip_whitespace=True`）。\n\n- `StaffUserCreateIn`：username（`^[A-Za-z0-9][A-Za-z0-9._-]{2,31}$`，service 轉小寫）、display_name（1~50）、phone（≤20，可空）、email（EmailStr，可空）、role_id（UUID）、extra_permissions（list[str]，預設 []）、revoked_permissions（list[str]，預設 []）。\n- `StaffUserUpdateIn`：display_name / phone / email / role_id / extra_permissions / revoked_permissions 皆 optional，全部未給 → 422。username 不可改。\n- `StaffUserListQuery`：q（≤50）、role_id、is_active（bool | None）。\n- `StaffUserOut`：id、username、display_name、phone、email、role（RoleBrief）、extra_permissions、revoked_permissions、effective_permissions（排序）、is_active、must_change_password、last_login_at、created_at。\n- `StaffUserCreatedOut`：user（StaffUserOut）、temp_password（str，只在建立時回傳一次）。\n- `TempPasswordOut`：temp_password。\n- `StaffOptionOut`：id、display_name（班級負責員工指派下拉用，不含帳號與權限資訊）。\n\n**驗收標準**\n- username 格式、display_name 長度、email 格式、extra 欄位受限。\n- Update 空 body 被拒；送 username 被拒。",
+      "description": "建立 `apps/api/app/schemas/staff_users.py`（request `extra='forbid'`、`str_strip_whitespace=True`）。\n\n- `StaffUserCreateIn`：username（`^[A-Za-z0-9][A-Za-z0-9._-]{2,31}$`，service 轉小寫）、display_name（1~50）、phone（≤20，可空）、email（符合 DB CHECK `^[^@\\s]+@[^@\\s]+$`、≤254 的字串，可空；專案無 email-validator）、role_id（UUID）、extra_permissions（list[str]，預設 []）、revoked_permissions（list[str]，預設 []）。\n- `StaffUserUpdateIn`：display_name / phone / email / role_id / extra_permissions / revoked_permissions 皆 optional，全部未給 → 422。username 不可改。\n- `StaffUserListQuery`：q（≤50）、role_id、is_active（bool | None）。\n- `StaffUserOut`：id、username、display_name、phone、email、role（RoleBrief）、extra_permissions、revoked_permissions、effective_permissions（排序）、is_active、must_change_password、last_login_at、created_at。\n- `StaffUserCreatedOut`：user（StaffUserOut）、temp_password（str，只在建立時回傳一次）。\n- `TempPasswordOut`：temp_password。\n- `StaffOptionOut`：id、display_name（班級負責員工指派下拉用，不含帳號與權限資訊）。\n\n**驗收標準**\n- username 格式、display_name 長度、email 格式、extra 欄位受限。\n- Update 空 body 被拒；送 username 被拒。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/staff_users.py",
       "source_ref": "BE:api/auth.py::CreateUserRequest",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-039"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：專案沒有 email-validator 相依，email 不用 EmailStr，改以 DB-004 CHECK 的 ^[^@\\s]+@[^@\\s]+$ 加 max_length=254 驗證（與 DB 一致）；StaffUserUpdateIn 的 nullable_fields 為 phone、email（給 null 清除），display_name / role_id / 權限清單不可為 null；建立請求不接受 password 欄位（臨時密碼由系統產生）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_staff_user_schemas.py",
@@ -4072,7 +4072,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/reference_data_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-116"
@@ -4626,13 +4626,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": "BE:api/classrooms.py::get_classroom",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-135"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：get_class / create_class 以新增的 _class_out helper 組 ClassOut；為不動複審中的 list_classes，未把 list_classes 改用同一 helper（ClassOut 組裝有兩處）。get_class 的 404 沿用 repositories/students.get_class_or_404。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_class_service.py",
@@ -4659,7 +4659,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": "BE:api/classrooms.py::create_classroom",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-135"
@@ -4796,7 +4796,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/classes.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-135",
@@ -6911,13 +6911,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/inbox_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-211"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：mark_read 以 FOR UPDATE 讀取後只在 read_at 為 null 時寫入；他人通知、不同 recipient_type、不存在的 id 皆回同一個 404 notification_not_found（訊息「找不到通知」）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/notifications/test_inbox_service.py",
@@ -6944,7 +6944,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/inbox_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-211"
@@ -6977,7 +6977,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/notifications.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-211",
@@ -6985,7 +6985,7 @@
         "BACKEND-023"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：列表 query 驗證共用 app/api/admin/_query.py 的 query_model（排除 page / page_size 後驗證 forbid 的 query model）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_notifications_endpoints.py",
@@ -7089,7 +7089,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/notifications.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-211",
@@ -7097,7 +7097,7 @@
         "BACKEND-023"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：家長端列表直接 import app/api/admin/_query.py 的 query_model（目前放在 admin 套件底下；日後可搬到 app/api/ 共用位置）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/parent/test_notifications_endpoints.py",
@@ -7508,7 +7508,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/attendance.py",
       "source_ref": "BE:models/classroom.py::StudentAttendance",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-007",
