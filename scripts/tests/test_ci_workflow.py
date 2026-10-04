@@ -123,3 +123,142 @@ def test_ci_setup_action_steps_follow_inputs(needle: str, condition: str) -> Non
 
     assert len(matched) == 1
     assert matched[0]["if"] == condition
+
+
+def steps_of(name: str) -> list[dict[str, Any]]:
+    steps: list[dict[str, Any]] = job(name).get("steps", [])
+    return steps
+
+
+def line_index(lines: list[str], *needles: str) -> int:
+    """第一個同時含所有 needles 的行索引；找不到時直接讓測試失敗並印出所有行。"""
+    for index, line in enumerate(lines):
+        if all(needle in line for needle in needles):
+            return index
+    raise AssertionError(f"找不到同時含 {needles} 的行：{lines}")
+
+
+def step_with_run(name: str, needle: str) -> dict[str, Any]:
+    matched = [s for s in steps_of(name) if needle in str(s.get("run", ""))]
+    assert len(matched) == 1, f"job {name} 含 {needle!r} 的 step 數量為 {len(matched)}"
+    return matched[0]
+
+
+def test_ci_lint_job_runs_ruff() -> None:
+    lines = run_lines("lint")
+
+    check = lines[line_index(lines, "ruff check", "apps/api", "scripts")]
+    assert "--config apps/api/pyproject.toml" in check
+    assert line_index(lines, "ruff format --check", "apps/api", "scripts") >= 0
+
+
+def test_ci_lint_job_runs_eslint() -> None:
+    step = step_with_run("lint", "eslint .")
+
+    assert step["working-directory"] == "apps/web"
+
+
+def test_ci_lint_job_uses_setup_action() -> None:
+    assert [s for s in steps_of("lint") if s.get("uses") == "./.github/actions/setup"]
+    assert job("lint")["timeout-minutes"] == 10
+
+
+def test_ci_typecheck_job_runs_mypy() -> None:
+    lines = run_lines("typecheck")
+
+    assert line_index(lines, "mypy app") >= 0
+    assert line_index(lines, "mypy scripts") >= 0
+    assert step_with_run("typecheck", "mypy app")["working-directory"] == "apps/api"
+    assert "working-directory" not in step_with_run("typecheck", "mypy scripts")
+
+
+def test_ci_typecheck_job_runs_vue_tsc() -> None:
+    assert "just web-typecheck" in run_lines("typecheck")
+    assert job("typecheck")["timeout-minutes"] == 15
+
+
+def test_ci_unit_job_runs_api_and_scripts() -> None:
+    lines = run_lines("unit")
+
+    api_line = lines[line_index(lines, "pytest", '-m "not integration"')]
+    assert "scripts/tests" not in api_line
+    assert step_with_run("unit", api_line)["working-directory"] == "apps/api"
+    assert line_index(lines, "pytest scripts/tests") >= 0
+    assert job("unit")["timeout-minutes"] == 15
+
+
+def test_ci_unit_job_has_no_db() -> None:
+    for line in run_lines("unit"):
+        assert "docker compose" not in line
+        assert "db-reset" not in line
+
+
+def test_ci_integration_job_order() -> None:
+    lines = run_lines("integration")
+
+    up = line_index(lines, "docker compose", "up")
+    reset = lines.index("just db-reset --yes")
+    api_tests = line_index(lines, "pytest -m integration")
+    assert up < reset < api_tests
+    assert job("integration")["timeout-minutes"] == 25
+
+
+def test_ci_integration_job_waits_for_services() -> None:
+    lines = run_lines("integration")
+
+    up_line = lines[line_index(lines, "docker compose", "up")]
+    assert "--wait" in up_line
+    assert up_line.split().count("db") == 1
+    assert up_line.split().count("storage") == 1
+
+
+def test_ci_integration_job_tears_down_always() -> None:
+    last = steps_of("integration")[-1]
+
+    assert last["if"] == "always()"
+    assert "docker compose" in last["run"]
+    assert "down" in last["run"]
+
+
+def test_ci_integration_job_runs_scripts_integration() -> None:
+    assert line_index(run_lines("integration"), "pytest scripts/tests -m integration") >= 0
+
+
+def test_ci_db_checks_job_order() -> None:
+    lines = run_lines("db-checks")
+
+    reset = lines.index("just db-reset --yes")
+    heads = line_index(lines, "alembic heads")
+    drift = lines.index("just schema-drift")
+    assert reset < heads < drift
+    assert job("db-checks")["timeout-minutes"] == 20
+
+
+def test_ci_db_checks_single_head() -> None:
+    lines = run_lines("db-checks")
+
+    heads_line = lines[line_index(lines, "alembic heads")]
+    assert "wc -l" in heads_line
+    assert "-eq 1" in heads_line
+
+
+def test_ci_db_checks_job_tears_down_always() -> None:
+    last = steps_of("db-checks")[-1]
+
+    assert last["if"] == "always()"
+    assert "docker compose" in last["run"]
+    assert "down" in last["run"]
+
+
+def test_ci_web_test_job_runs_vitest() -> None:
+    step = step_with_run("web-test", "vitest run")
+
+    assert step["working-directory"] == "apps/web"
+    assert job("web-test")["timeout-minutes"] == 15
+
+
+def test_ci_web_test_job_skips_python() -> None:
+    setup = [s for s in steps_of("web-test") if s.get("uses") == "./.github/actions/setup"]
+
+    assert len(setup) == 1
+    assert setup[0]["with"]["python"] is False
