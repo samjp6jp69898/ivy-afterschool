@@ -23,8 +23,15 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.clock import combine_taipei
 from app.core.security.passwords import hash_password
 from app.models.account import Role, StaffUser
+from app.models.attendance import (
+    AttendanceStatus,
+    CheckInSource,
+    CheckOutSource,
+    StudentAttendance,
+)
 from app.models.classes import ClassStaff, ClassStaffRole, SchoolClass
 from app.models.exams import Exam, ExamScore, ExamStatus, ExamSubject
 from app.models.homework import (
@@ -485,3 +492,43 @@ def make_exam_score(
     )
     _add(session, exam_score)
     return exam_score
+
+
+def make_attendance(
+    session: Session,
+    student: Student,
+    *,
+    service_date: date,
+    status: AttendanceStatus = "expected",
+    check_in_at: datetime | None = None,
+    check_out_at: datetime | None = None,
+    check_in_source: CheckInSource | None = None,
+    check_out_source: CheckOutSource | None = None,
+    leave: StudentLeave | None = None,
+    note: str | None = None,
+) -> StudentAttendance:
+    """status 為 present / left 而未給時間時補 check_in_at（台北 15:00）；left 再補 check_out_at
+    （台北 18:00）；有時間而未給 source 時補 'manual'。status='leave' 必須給 leave。"""
+    if status == "leave" and leave is None:
+        raise ValueError("status='leave' 必須提供 leave")
+    if status in ("present", "left") and check_in_at is None:
+        check_in_at = combine_taipei(service_date, time(15, 0))
+    if status == "left" and check_out_at is None:
+        check_out_at = combine_taipei(service_date, time(18, 0))
+    if check_in_at is not None and check_in_source is None:
+        check_in_source = "manual"
+    if check_out_at is not None and check_out_source is None:
+        check_out_source = "manual"
+    row = StudentAttendance(
+        student_id=student.id,
+        service_date=service_date,
+        status=status,
+        check_in_at=check_in_at,
+        check_out_at=check_out_at,
+        check_in_source=check_in_source,
+        check_out_source=check_out_source,
+        leave_id=leave.id if leave is not None else None,
+        note=note,
+    )
+    _add(session, row)
+    return row

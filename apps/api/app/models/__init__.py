@@ -6,6 +6,7 @@ INFRA-020 的 ``scripts/check_schema_drift.py`` 以 ``from app.models import Bas
 
 from app.models import (
     account,
+    attendance,
     audit,
     classes,
     exams,
@@ -22,6 +23,7 @@ from app.models.base import Base
 __all__ = [
     "Base",
     "account",
+    "attendance",
     "audit",
     "classes",
     "exams",

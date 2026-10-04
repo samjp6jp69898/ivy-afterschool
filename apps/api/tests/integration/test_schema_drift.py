@@ -22,7 +22,6 @@ from tests.support import db_urls
 # 營運模組尚未建 model 的表；每完成一個 models task 就從這裡移除對應表
 PENDING_MODEL_TABLES = frozenset(
     {
-        "student_attendances",
         "devices",
         "nfc_cards",
     }
