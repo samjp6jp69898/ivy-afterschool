@@ -21,8 +21,8 @@ from app.core.security.cookies import (
 )
 
 _LOCAL_R2_SECRET = "afterschool-local-secret"  # noqa: S105  本機 SeaweedFS 固定開發值
-_ACCESS = "a"  # noqa: S105  假 token 值
-_REFRESH = "r"  # noqa: S105  假 token 值
+_ACCESS = "a"
+_REFRESH = "r"
 
 
 def _settings(app_env: str) -> Settings:
