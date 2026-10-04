@@ -6,9 +6,10 @@
 
 from fastapi import APIRouter
 
-from app.api.admin import auth
+from app.api.admin import auth, roles
 
 admin_router = APIRouter(prefix="/api/admin")
 admin_router.include_router(auth.router)
+admin_router.include_router(roles.router)
 
 __all__ = ["admin_router"]
