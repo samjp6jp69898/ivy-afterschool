@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 146,
-  "last_updated": "2026-10-04T14:01:50Z",
+  "version": 147,
+  "last_updated": "2026-10-04T14:06:47Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2586,11 +2586,11 @@
     {
       "id": "BACKEND-076",
       "title": "建立角色模組 Pydantic schemas（RoleOut、RoleCreateIn、RoleUpdateIn、PermissionCatalogOut）",
-      "description": "建立 `apps/api/app/schemas/roles.py`（request `extra='forbid'`、`str_strip_whitespace=True`）。\n\n- `RoleCreateIn`：code（`^[a-z][a-z0-9_]{1,31}$`，對齊 DB-003 CHECK）、name（1~50）、description（≤200，可空）、permissions（`list[str]`，最多 50 項；合法性在 service 以 BACKEND-074 驗證以回傳一致的錯誤碼）。\n- `RoleUpdateIn`：name / description / permissions 皆 optional；全部未給 → 422（model_validator「至少要修改一個欄位」）。code 不可改（未宣告，送了會被 extra=forbid 擋）。\n- `RoleOut`：id、code、name、description、is_system、permissions（DB 原值，admin 為 `['*']`）、effective_permissions（展開後排序）、staff_count、created_at、updated_at。\n- `PermissionItemOut`：code、label；`PermissionGroupOut`：key、label、permissions（list[PermissionItemOut]）；`PermissionCatalogOut`：groups。\n\n**驗收標準**\n- code 格式、name 長度、extra 欄位受限。\n- RoleUpdateIn 空 body 被拒，送 code 被拒。\n- RoleOut 可由 ORM + 計算值建構。",
+      "description": "建立 `apps/api/app/schemas/roles.py`（request `extra='forbid'`、`str_strip_whitespace=True`）。\n\n- `RoleCreateIn`：code（`^[a-z][a-z0-9_]{1,31}$`，對齊 DB-003 CHECK）、name（1~50）、description（≤200，可空）、permissions（`list[str]`，最多 50 項；合法性在 service 以 BACKEND-074 驗證以回傳一致的錯誤碼）。\n- `RoleUpdateIn`：name / description / permissions 皆 optional；全部未給 → 422（model_validator「至少要修改一個欄位」）。code 不可改（未宣告，送了會被 extra=forbid 擋）。\n- `RoleOut`：id、code、name、description、is_system、permissions（DB 原值，admin 為 `['*']`）、effective_permissions（展開後排序）、staff_count、created_at、updated_at。\n- `PermissionItemOut`：code、label；`PermissionGroupOut`：key、label、permissions（list[PermissionItemOut]）；`PermissionCatalogOut`：groups。\n\n**驗收標準**\n- code 格式、name 長度、extra 欄位受限。\n- RoleUpdateIn 空 body 被拒，送 code 被拒。\n- RoleOut 可由 ORM + 計算值建構。\n\n共用基底放 `apps/api/app/schemas/common.py`（`RequestModel`：extra='forbid' + strip；`UpdateModel`：至少要修改一個欄位、只有 `nullable_fields` 內的欄位可明確給 null；`OutModel`：from_attributes），本批其他 schemas 沿用。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/roles.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
@@ -3597,7 +3597,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/audit.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
@@ -3862,7 +3862,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/settings.py",
       "source_ref": "BE:api/system_config.py::SystemConfigUpdate",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
@@ -3970,7 +3970,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/reference.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "BACKEND-100"
@@ -4550,11 +4550,11 @@
     {
       "id": "BACKEND-134",
       "title": "建立班級模組 Pydantic schemas",
-      "description": "建立 `apps/api/app/schemas/classes.py`（request extra='forbid'、strip）。\n- `ClassCreateIn`：name 1~30、grade_levels（list[int]，1~6，至少 1 個、不重複，輸出排序）、academic_year 100~200、sort_order ≥0（預設 0）。\n- `ClassUpdateIn`：全 optional，空 body 422。\n- `ClassListQuery`：academic_year（int | None）、include_archived（預設 false）、mine（預設 false：只列目前員工在 class_staff 中的班）。\n- `ClassStaffItemIn`：staff_user_id、role（lead / assistant）；`ClassStaffPutIn`：items（≤20，staff_user_id 不可重複）。\n- `ClassStaffOut`：staff_user_id、display_name、role；`ClassOut`：id、name、grade_levels、academic_year、sort_order、archived_at、student_count（未封存且 status active 的學生數）、staff（list[ClassStaffOut]）。\n\n**驗收標準**\n- grade_levels 範圍、重複、空清單被拒；ClassStaffPutIn 重複 staff 被拒。",
+      "description": "建立 `apps/api/app/schemas/classes.py`（request extra='forbid'、strip）。\n- `ClassCreateIn`：name 1~30、grade_levels（list[int]，1~6，至少 1 個、不重複，輸出排序）、academic_year 100~200、sort_order ≥0（預設 0）。\n- `ClassUpdateIn`：全 optional，空 body 422。\n- `ClassListQuery`：academic_year（int | None）、include_archived（預設 false）、mine（預設 false：只列目前員工在 class_staff 中的班）。\n- `ClassStaffItemIn`：staff_user_id、role（lead / assistant）；`ClassStaffPutIn`：items（≤20，staff_user_id 不可重複）。\n- `ClassBriefOut`：id、name（exams 等跨模組共用）。\n- `ClassStaffOut`：staff_user_id、display_name、role；`ClassOut`：id、name、grade_levels、academic_year、sort_order、archived_at、student_count（未封存且 status active 的學生數）、staff（list[ClassStaffOut]）。\n\n**驗收標準**\n- grade_levels 範圍、重複、空清單被拒；ClassStaffPutIn 重複 staff 被拒。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/classes.py",
       "source_ref": "BE:api/classrooms.py::ClassroomCreate",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
@@ -5772,7 +5772,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/guardians.py",
       "source_ref": "BE:api/students.py::GuardianCreate",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
@@ -6285,7 +6285,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/parent_children.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
@@ -6841,7 +6841,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/notifications.py",
       "source_ref": "BE:api/parent_portal/notifications.py::PreferenceUpdate",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "BACKEND-201"
@@ -7551,7 +7551,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/attendance.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
@@ -8470,7 +8470,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/leaves.py",
       "source_ref": "BE:api/parent_portal/leaves.py::CreateLeaveRequest",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
@@ -12003,7 +12003,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/exams.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
@@ -13114,7 +13114,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/dashboard.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
