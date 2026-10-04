@@ -60,6 +60,7 @@ def test_deployment_doc_references_commands() -> None:
     for token in (
         "just smoke",
         "app.cli create-admin",
+        "railway ssh",
         "app.cli migrate",
         "preDeployCommand",
         "Wait for CI",
