@@ -1,11 +1,13 @@
 """BACKEND-020：app/main.py（create_app 工廠、lifespan、middleware、router 彙整、Sentry 遮罩）。"""
 
+import asyncio
 import json
 import logging
 from collections.abc import Iterator
 from typing import Any
 
 import pytest
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -14,7 +16,7 @@ from app.api.admin import admin_router
 from app.api.parent import parent_router
 from app.core import logging as app_logging
 from app.core.config import Settings
-from app.core.logging import scrub_sentry_breadcrumb, scrub_sentry_event
+from app.core.logging import redact_text, scrub_sentry_breadcrumb, scrub_sentry_event
 from app.main import create_app
 from app.realtime.broadcaster import reset_broadcaster_for_tests
 
@@ -277,7 +279,8 @@ def test_main_sentry_scrubs_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
     assert scrubbed["exception"]["values"][0]["stacktrace"]["frames"][0]["filename"] == "x.py"
     assert scrubbed["extra"]["user"] == "amy"
     assert scrubbed["request"]["headers"]["Accept"] == "*/*"
-    assert "page=2" in scrubbed["request"]["query_string"]
+    # query_string 的 code 值被遮即可（過度遮罩後段是 fail-safe，不要求保留 page=2）
+    assert scrubbed["request"]["query_string"].startswith("code=***")
     # 原 event 未被就地修改
     assert event["message"] == "raw token=TK8"
 
@@ -296,3 +299,132 @@ def test_main_sentry_scrubs_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(app_logging, "redact_text", _boom)
     assert scrub_sentry_event({"message": "token=TK1"}, {}) is None
     assert scrub_sentry_breadcrumb({"message": "token=TK1"}, {}) is None
+
+
+def test_main_redact_ampersand_values() -> None:
+    """含 & 的敏感值要整段遮掉（& 不是 key=value 的終止符；過度遮罩是 fail-safe）。"""
+    cases = {
+        "login password=Abc&123": ("Abc", "123"),
+        "secret=a&b&c": ("b&c", "&b", "&c"),
+        "Authorization: Bearer abc&def": ("abc", "def", "Bearer"),
+        "cookie: sid=X&Y; path=/": ("X", "Y", "sid="),
+    }
+    for text, leaked in cases.items():
+        redacted = redact_text(text)
+        assert "***" in redacted, text
+        for fragment in leaked:
+            assert fragment not in redacted, (text, fragment)
+    assert "path=/" in redact_text("cookie: sid=X&Y; path=/")
+
+    event: Any = {"exception": {"values": [{"value": "password=Pw&rd!"}]}}
+    scrubbed: Any = scrub_sentry_event(event, {})
+    assert "rd!" not in json.dumps(scrubbed)
+    assert "Pw" not in json.dumps(scrubbed)
+
+
+# --- lifespan 細節：Sentry init、broadcaster、main loop、tx hooks、engine --------------------
+
+
+class _SentryRecorder:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    def __call__(self, dsn: str | None = None, **kwargs: Any) -> None:
+        self.calls.append({"dsn": dsn, **kwargs})
+
+
+def test_main_sentry_init_with_scrubbers(
+    scheduler_spies: tuple[_Recorder, _Recorder], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init = _SentryRecorder()
+    monkeypatch.setattr(sentry_sdk, "init", init)
+    dsn = "https://examplePublicKey@o0.ingest.sentry.io/0"
+    settings = _settings("test").model_copy(update={"sentry_dsn": dsn})
+
+    with TestClient(create_app(settings=settings)):
+        pass
+
+    assert len(init.calls) == 1
+    call = init.calls[0]
+    assert call["dsn"] == dsn
+    assert call["environment"] == "test"
+    assert call["send_default_pii"] is False
+    assert call["traces_sample_rate"] == 0.0
+    assert call["before_send"] is scrub_sentry_event
+    assert call["before_breadcrumb"] is scrub_sentry_breadcrumb
+
+
+def test_main_sentry_not_initialized_without_dsn(
+    scheduler_spies: tuple[_Recorder, _Recorder], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init = _SentryRecorder()
+    monkeypatch.setattr(sentry_sdk, "init", init)
+    settings = _settings("test")
+    assert settings.sentry_dsn is None
+
+    with TestClient(create_app(settings=settings)):
+        pass
+
+    assert init.calls == []
+
+
+class _SpyBroadcaster:
+    def __init__(self) -> None:
+        self.events: list[str] = []
+
+    async def start(self) -> None:
+        self.events.append("start")
+
+    async def stop(self) -> None:
+        self.events.append("stop")
+
+
+class _FakeEngine:
+    def __init__(self) -> None:
+        self.disposed = 0
+
+    def dispose(self) -> None:
+        self.disposed += 1
+
+
+class _FakeGetEngine:
+    """模擬 lru_cache 包住的 get_engine：cache_info().currsize 表示 engine 是否已建立。"""
+
+    def __init__(self, created: bool) -> None:
+        self.engine = _FakeEngine()
+        self._created = created
+
+    def cache_info(self) -> Any:
+        return type("Info", (), {"currsize": 1 if self._created else 0})()
+
+    def __call__(self) -> _FakeEngine:
+        return self.engine
+
+
+@pytest.mark.parametrize("engine_created", [True, False])
+def test_main_lifespan_starts_and_stops_broadcaster(
+    scheduler_spies: tuple[_Recorder, _Recorder],
+    monkeypatch: pytest.MonkeyPatch,
+    engine_created: bool,
+) -> None:
+    broadcaster = _SpyBroadcaster()
+    loops: list[asyncio.AbstractEventLoop | None] = []
+    tx_hooks = _Recorder()
+    fake_get_engine = _FakeGetEngine(created=engine_created)
+    monkeypatch.setattr(main_module, "get_broadcaster", lambda: broadcaster)
+    monkeypatch.setattr(main_module, "set_main_loop", loops.append)
+    monkeypatch.setattr(main_module, "install_tx_hooks", tx_hooks)
+    monkeypatch.setattr(main_module, "get_engine", fake_get_engine)
+
+    with TestClient(create_app(settings=_settings("test"))):
+        assert broadcaster.events == ["start"]
+        assert len(loops) == 1
+        assert isinstance(loops[0], asyncio.AbstractEventLoop)
+        assert len(tx_hooks.calls) == 1
+        assert fake_get_engine.engine.disposed == 0
+
+    assert broadcaster.events == ["start", "stop"]
+    assert loops[-1] is None
+    assert len(loops) == 2
+    assert len(tx_hooks.calls) == 1
+    assert fake_get_engine.engine.disposed == (1 if engine_created else 0)
