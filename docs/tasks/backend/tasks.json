@@ -1,6 +1,6 @@
 {
   "area": "backend",
-  "version": 118,
+  "version": 119,
   "last_updated": "2026-10-04T07:54:01Z",
   "tasks": [
     {
@@ -9996,7 +9996,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/codes.py",
       "source_ref": "BE:services/pickup_code.py::generate_pickup_code",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-009",

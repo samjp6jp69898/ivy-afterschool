@@ -6,6 +6,8 @@ import re
 from collections.abc import Iterator
 
 import pytest
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from app.core import crypto
 from app.core.config import get_settings
@@ -195,3 +197,25 @@ def test_keyed_hash_constant_time_equals() -> None:
     assert constant_time_equals("ab", "ac") is False
     assert constant_time_equals("ab", "abc") is False
     assert constant_time_equals("", "") is True
+
+
+def test_keyed_hash_known_answer() -> None:
+    """與直接以 hmac.new(derive_key(label), value, sha256) 計算的結果一致（金鑰與演算法對照）。"""
+    import hashlib
+    import hmac
+
+    expected = hmac.new(
+        derive_key(LABEL_HMAC_ID_NUMBER), _ID_NUMBER.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+
+    assert keyed_hash(LABEL_HMAC_ID_NUMBER, _ID_NUMBER) == expected
+    # APP_SECRET_KEY 固定時輸出固定：換演算法或 label 字串會讓既有 DB 的 HMAC 全部對不上
+    assert keyed_hash(LABEL_HMAC_ID_NUMBER, _ID_NUMBER) == (
+        hmac.new(
+            HKDF(algorithm=hashes.SHA256(), length=32, salt=None, info=LABEL_HMAC_ID_NUMBER).derive(
+                _SECRET_A.encode("utf-8")
+            ),
+            _ID_NUMBER.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+    )

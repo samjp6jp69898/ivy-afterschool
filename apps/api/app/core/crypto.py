@@ -39,8 +39,11 @@ from app.core.config import get_settings
 LABEL_FIELD_ENC: Final = b"afterschool/field-encryption/v1"
 LABEL_HMAC_ID_NUMBER: Final = b"afterschool/hmac/id-number/v1"
 LABEL_HMAC_BINDING_CODE: Final = b"afterschool/hmac/binding-code/v1"
+LABEL_HMAC_PICKUP_CODE: Final = b"afterschool/hmac/pickup-code/v1"  # BACKEND-400
 LABEL_JWT: Final = b"afterschool/jwt/v1"
-_HMAC_LABELS: Final = frozenset({LABEL_HMAC_ID_NUMBER, LABEL_HMAC_BINDING_CODE})
+_HMAC_LABELS: Final = frozenset(
+    {LABEL_HMAC_ID_NUMBER, LABEL_HMAC_BINDING_CODE, LABEL_HMAC_PICKUP_CODE}
+)
 
 _KEY_LEN: Final = 32
 _VERSION: Final = b"\x01"
