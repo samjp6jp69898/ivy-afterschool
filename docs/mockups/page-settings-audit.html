@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="FRONTEND-072,FRONTEND-073">
 <meta name="preview-route" content="/settings/audit">
 <meta name="preview-updated" content="2026-10-04">
@@ -689,14 +689,14 @@ const ACTION_LABELS = {
   'exam_score.update': '修改已發布成績', 'exam.unpublish': '取消發布成績',
   'pickup.override_complete': '代理接送強制完成', 'pickup.visual_match': '代理接送目視核對',
 }
-/** 動作類別 → action_prefix（FRONTEND-072）；exam. 為待裁定 1 的推薦選項 */
+/** 動作類別 → action_prefix（FRONTEND-072） */
 const ACTION_CATEGORIES = [
   { value: 'staff_user.', label: '帳號' }, { value: 'role.', label: '角色' }, { value: 'settings.', label: '系統設定' },
   { value: 'student.', label: '學生' }, { value: 'guardian.', label: '監護人' }, { value: 'attendance.', label: '出勤改判' },
   { value: 'exam_score.', label: '成績修改' }, { value: 'exam.', label: '考試發布' },
   { value: 'pickup.', label: '接送強制完成 / 目視核對' },
 ]
-/** 已知 entity_type（待裁定 2 推薦 A：下拉 + 可輸入其他值） */
+/** 已知 entity_type 的中文名稱（對象類型下拉；仍可輸入其他代碼） */
 const ENTITY_LABELS = {
   staff_user: '員工帳號', role: '角色', system_setting: '系統設定', student: '學生', student_import: '學生匯入',
   academic_year: '學年度', guardian: '監護人', student_attendance: '出勤', exam: '考試', exam_score: '成績',
@@ -898,6 +898,8 @@ const app = createApp({
 
     const decisions = [
       '版面：PageHeader「稽核紀錄」+ 副標「帳號、角色、系統設定與重要營運異動的紀錄；紀錄只能查詢，無法修改或刪除」；下方一個白底面板：篩選列 → 表格 → 分頁。本頁沒有任何寫入操作，audit:read 以外沒有權限差異。',
+      '動作類別共 9 類：帳號 staff_user.、角色 role.、系統設定 settings.、學生 student.、監護人 guardian.、出勤改判 attendance.、成績修改 exam_score.、考試發布 exam.（取消發布成績 exam.unpublish）、接送強制完成 / 目視核對 pickup.。',
+      '對象類型是可輸入的下拉（filterable + allow-create）：列出已知類型的中文名稱（員工帳號、角色、系統設定、學生、學生匯入、學年度、監護人、出勤、考試、成績、接送請求、代理接送授權），值為 entity_type 代碼；輸入清單外的文字時直接以該文字查詢。',
       '篩選列沿用 AdminListToolbar 的版面樣式（灰字標籤 + 下拉、右側「共 N 筆」），但不使用該元件，因為本頁沒有關鍵字搜尋。順序：動作類別（170px）→ 對象類型（150px）→ 操作者（員工 / 家長 / 系統 / 裝置）→ 日期區間 → 「重設」文字按鈕（篩選與預設相同時 disabled）。每個下拉第一項是「全部」。',
       '日期區間預設近 7 天（迄日 = todayTaipei，起日 = 迄日 − 6），不可清空（一定有區間，避免一次撈全部）；快捷選項「今天」「近 7 天」「近 30 天」；今天以後的日期不可選。改任何篩選回到第 1 頁；篩選條件與頁碼同步到網址（usePagedList syncQuery）。',
       '表格欄位：時間（150，2026/10/04 09:42）、操作者（姓名 + 類型線框 tag：員工灰、家長綠、系統橘、裝置藍）、動作（中文對照為主、下一行 12px 等寬灰字 action 原文；未知 action 只顯示原文）、對象（類型中文 + 下一行等寬灰字 ID）、IP（等寬）、「詳情」連結。整列可點開抽屜，「詳情」給鍵盤與不知道列可點的人。依時間新到舊（後端排序），不提供欄位排序。',
@@ -907,10 +909,7 @@ const app = createApp({
       '差異表：「欄位變更」標題右側摘要「變更 x・新增 x・刪除 x・未變更 x」與「顯示未變更欄位」開關（預設關，沒有未變更欄位時 disabled）。三欄「欄位 / 變更前 / 變更後」：變更的列舊值灰字、新值正常；新增列（before 沒有）變更後格綠底 +「新增」tag、變更前顯示「—」；刪除列（after 沒有）變更前格紅底刪除線 +「刪除」tag；未變更列整列淡灰。null 顯示斜體「（空）」以區分「沒有這個欄位」的「—」。',
       '巢狀物件展開到第二層（scores.math），更深的與陣列以 JSON 字串顯示並自動換行。遮罩值（***、****a91f）原樣顯示。before / after 皆為 null：「此紀錄沒有欄位變更資料」；全部欄位都相同（例如敏感欄位遮罩後一樣）：「沒有欄位內容變更」+ 引導打開開關。',
     ]
-    const openQuestions = [
-      { question: '1. 「取消發布成績」（exam.unpublish）不在規格的 8 個動作類別內（成績修改的前綴是 exam_score.），選任何類別都篩不到它。', optionA: '（推薦，稿已照畫）多一個類別「考試發布」= exam.', optionB: '維持 8 類，exam.unpublish 只在「全部」裡看得到' },
-      { question: '2. 對象類型篩選要用什麼輸入？規格寫「文字」，但員工不會知道 student_attendance 這類代碼。', optionA: '（推薦，稿已照畫）下拉列出已知類型的中文名稱（員工帳號、角色、系統設定、學生、出勤…），仍可輸入其他代碼', optionB: '照規格用文字輸入框，輸入 entity_type 原文' },
-    ]
+    const openQuestions = []
 
     return {
       meta, decisions, openQuestions, roles: ROLES, viewAs, perms, can, user, device, onNavigate, notesOpen: ref(false),

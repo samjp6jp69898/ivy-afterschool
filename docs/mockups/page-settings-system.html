@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="FRONTEND-055,FRONTEND-057,FRONTEND-058">
 <meta name="preview-route" content="/settings/system">
 <meta name="preview-updated" content="2026-10-04">
@@ -837,7 +837,7 @@ const resolveNode = (raw, root, seen = []) => {
   else n.kind = 'unsupported'
   return n
 }
-/** 前端依 schema 先驗證（待裁定 2 推薦 A）：訊息一律中文 */
+/** 前端依 schema 先驗證（pattern / uri / minLength），訊息一律中文；不合格不送出 */
 const validateValue = (node, v) => {
   if (v === null || v === undefined) return ''
   if (node.kind === 'url' && v !== '' && !/^https?:\/\/\S+$/.test(v)) return '請輸入有效的網址（例如 https://…）'
@@ -864,7 +864,7 @@ const SchemaFields = {
       const secret = props.secretFields.includes(p)
       return { key, node, path: p, secret, label: node.title ?? key }
     }))
-    /** 待裁定 3 推薦 B：只有要求非空（minLength ≥ 1）的字串才標必填 */
+    /** 只有要求非空（minLength ≥ 1）的字串才標必填星號 */
     const showRequired = (f) => f.node.kind === 'text' && f.node.minLength >= 1
     const onBlur = (f) => { const msg = validateValue(f.node, props.model[f.key]); if (msg) props.errors[f.path] = msg; else delete props.errors[f.path] }
     const onInput = (f, v) => {
@@ -890,7 +890,7 @@ const SchemaFields = {
                     :class="{ 'sf-item--nested': nested }">
         <template #label>
           <span v-if="nested && f.node.description" class="sf-label-tip">{{ f.label }}
-            <el-tooltip :content="f.node.description" placement="top"><el-icon><icon-question-filled></icon-question-filled></el-icon></el-tooltip>
+            <el-tooltip :content="f.node.description" placement="top"><el-icon role="img" :aria-label="f.node.description" tabindex="0"><icon-question-filled></icon-question-filled></el-icon></el-tooltip>
           </span>
           <span v-else>{{ f.label }}</span>
         </template>
@@ -1121,16 +1121,14 @@ const app = createApp({
       '儲存中：「儲存」轉圈、「還原」disabled，表單整張 disabled（避免送出中的值與畫面不一致）。成功：ElMessage.success「已儲存「{label}」」、副標更新為剛剛的時間與自己的名字、以回傳值重建表單（secret 欄位回到「已設定（****xxxx）」或「未設定」）。',
       '422 invalid_setting_value（修改該欄位或該列任一欄位即清除對應錯誤）：details 的 loc 以「.」串成欄位路徑；對得到欄位的錯誤顯示在該欄位下方（巢狀 object 的錯誤顯示在該列 fieldset 下方並把框線變紅），loc 為空（跨欄位的 model_validator）的訊息放進卡片頂端的紅色 alert「部分欄位不正確」清單。訊息去掉 Pydantic 的「Value error, 」前綴。其他錯誤 ElMessage.error。試法：接送分頁把開始時間改成晚於結束時間後儲存；營業時段把週一結束時間改早於開始時間。',
       'JsonSchemaForm 欄位對應：HH:MM pattern → el-time-select（00:00~23:55、每 5 分，寬 128）；integer → el-input-number（min / max，寬 180，控制鈕在右）；boolean → el-switch；string → el-input（最寬 420，有 maxLength 時顯示字數）；format uri → url 輸入、可清空送 null；enum → el-select；secret 欄位 → 已核可的 SecretInput。',
-      'JsonSchemaForm 標籤取 schema title，description 以 12px 灰字放在欄位下方；巢狀 object（營業時段的每一天）畫成一列 fieldset：左邊 legend「週一」，子欄位橫排、label 在左，子欄位的 description 改成 label 旁的 ? tooltip（待裁定 1）。',
+      'JsonSchemaForm 標籤取 schema title，description 以 12px 灰字放在欄位下方；巢狀 object（營業時段的每一天）畫成一列 fieldset：左邊 legend「週一」，子欄位橫排、label 在左，子欄位的 description 不顯示灰字，改成 label 旁的 ? icon（hover / focus 出 tooltip，icon 的 aria-label = description）。',
+      '欄位驗證：前端依 schema 先驗證並顯示中文——pattern 不符「格式不正確」、format uri 不符「請輸入有效的網址（例如 https://…）」、minLength ≥ 1 的字串空白「此欄位不可空白」；離開欄位（blur）時驗證該欄，按「儲存」時驗證全部，有錯就不送出。後端 422 的欄位錯誤（Pydantic 英文訊息）理論上只剩跨欄位錯誤，照 loc 對應顯示。',
+      '必填星號只標在 minLength ≥ 1 的字串欄位（目前只有「自動回覆文案」）；schema required 但可留空的字串、boolean、數字、nullable 欄位都不標。',
       'notification.toggles（additionalProperties: boolean）畫成開關格線：每格「事件中文名稱（x-labels）＋ 開關」，自動換欄（寬 ≥ 220px 一格），不顯示欄位標籤。',
       '不支援的 schema 形狀（例如 array）：橘字警告「此欄位格式不支援線上編輯」＋ 灰底等寬字顯示目前 JSON 值，儲存時原值照送。',
       '載入中：分頁列骨架 + 兩張卡片骨架；載入失敗：EmptyState error「無法載入系統設定」＋「重試」。本頁沒有空狀態（registry 每個 key 一定回傳，無列時以預設值呈現）。',
     ]
-    const openQuestions = [
-      { question: '1. 巢狀欄位（營業時段週一~週六的「是否營業 / 開始 / 結束」）的說明文字怎麼顯示？', optionA: '照規格一律在欄位下方灰字，六天各重複一次「當天是否營業」「營業開始時間（HH:MM）」…', optionB: '（推薦，稿已照畫）巢狀欄位的說明改成 label 旁的 ? tooltip，頂層欄位維持灰字' },
-      { question: '2. 欄位格式錯誤的訊息從哪來？後端 422 的欄位訊息是 Pydantic 預設英文（例如 “String should match pattern …”）。', optionA: '（推薦，稿已照畫）前端依 schema 先驗證（pattern、uri、minLength）並顯示中文「格式不正確」「請輸入有效的網址」「此欄位不可空白」，不合格不送出；後端 422 只剩跨欄位錯誤（registry 的中文訊息）', optionB: '照現行規格直接顯示後端 msg（會出現英文），或另開 BACKEND task 把 Pydantic 錯誤翻成中文' },
-      { question: '3. 必填星號：Pydantic 的 required 只代表「key 必須存在」，安親班名稱、LIFF ID 等其實可留空。星號標在哪？', optionA: '照規格 schema required 的欄位全部標（幾乎每欄都有星號，含可留空的欄位）', optionB: '（推薦，稿已照畫）只有要求非空（minLength ≥ 1）的字串欄位標星號（目前只有「自動回覆文案」），boolean / 數字 / nullable / 可留空字串不標' },
-    ]
+    const openQuestions = []
 
     return {
       meta, decisions, openQuestions, roles: ROLES, viewAs, perms, can, user, device, onNavigate, notesOpen: ref(false),

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="FRONTEND-067,FRONTEND-068,FRONTEND-069,FRONTEND-070,FRONTEND-071">
 <meta name="preview-route" content="/settings/roles">
 <meta name="preview-updated" content="2026-10-04">
@@ -920,7 +920,7 @@ const RoleDetailPanel = {
           deleting.value = true
           setTimeout(() => {
             deleting.value = false
-            if (props.simError === 'role_in_use') { ElMessage.error('仍有 2 位員工使用此角色，請先調整他們的角色'); return }
+            if (props.simError === 'role_in_use') { ElMessage.error('仍有 2 位員工（含已停用的帳號）使用此角色，請先調整他們的角色'); return }
             ElMessage.success('已刪除')
             emit('deleted', props.role.id)
           }, 700)
@@ -957,7 +957,7 @@ const RoleDetailPanel = {
             <span class="role-detail__code mono">{{ role.code }}</span>
           </el-form-item>
           <el-form-item label="名稱" :required="editable" :error="nameError">
-            <el-input v-model="form.name" :disabled="!editable || saving" maxlength="30" show-word-limit style="max-width: 360px"></el-input>
+            <el-input v-model="form.name" :disabled="!editable || saving" maxlength="50" show-word-limit style="max-width: 360px"></el-input>
           </el-form-item>
           <el-form-item label="說明">
             <el-input v-model="form.description" :disabled="!editable || saving" type="textarea" :rows="2" maxlength="200" show-word-limit
@@ -977,7 +977,7 @@ const RoleDetailPanel = {
 }
 
 /* ==================== RoleCreateDialog（FRONTEND-070） ==================== */
-const CODE_RE = /^[a-z][a-z0-9_]{1,29}$/
+const CODE_RE = /^[a-z][a-z0-9_]{1,31}$/   // 對齊 BACKEND-076 / DB-003 CHECK
 const RoleCreateDialog = {
   props: { modelValue: Boolean, roles: Array, catalog: Object, perms: Array, simError: String },
   emits: ['update:modelValue', 'created', 'request'],
@@ -999,7 +999,7 @@ const RoleCreateDialog = {
       form.permissions = [...ok].sort()
     }
     const submit = () => {
-      errors.code = !form.code ? '請輸入代碼' : CODE_RE.test(form.code) ? '' : '只能用小寫英文、數字與底線，並以英文字母開頭（2~30 字）'
+      errors.code = !form.code ? '請輸入代碼' : CODE_RE.test(form.code) ? '' : '只能用小寫英文、數字與底線，並以英文字母開頭（2~32 字）'
       errors.name = form.name.trim() ? '' : '請輸入角色名稱'
       if (errors.code || errors.name) return
       const body = { code: form.code, name: form.name.trim(), description: form.description, permissions: form.permissions }
@@ -1022,11 +1022,11 @@ const RoleCreateDialog = {
       <el-form label-position="top" @submit.prevent>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px">
           <el-form-item label="代碼" required :error="errors.code">
-            <el-input v-model="form.code" maxlength="30" placeholder="例如 weekend_helper" class="mono" @input="errors.code = ''"></el-input>
+            <el-input v-model="form.code" maxlength="32" placeholder="例如 weekend_helper" class="mono" @input="errors.code = ''"></el-input>
             <div class="form-hint">建立後不可修改</div>
           </el-form-item>
           <el-form-item label="名稱" required :error="errors.name">
-            <el-input v-model="form.name" maxlength="30" show-word-limit placeholder="例如 週六支援老師" @input="errors.name = ''"></el-input>
+            <el-input v-model="form.name" maxlength="50" show-word-limit placeholder="例如 週六支援老師" @input="errors.name = ''"></el-input>
           </el-form-item>
         </div>
         <el-form-item label="說明">
@@ -1099,19 +1099,16 @@ const app = createApp({
       'RoleCardsGrid 卡片：名稱（14px / 600，過長省略）+ 系統角色灰色「系統」tag；下一行等寬小字 code；最後一行「28 項權限・1 位員工」（員工數只在 showStaffCount 時顯示）。選中：primary 框線 + 淺底；排序 admin → director → clerk → tutor，自訂角色依名稱。',
       'RoleCardsGrid 是 radiogroup：每張卡 role=radio，只有選中那張可 Tab 進入，方向鍵移到上一張 / 下一張並直接選取（頭尾循環），Enter / 空白鍵選取；disabled 時整組變淡、不可點、不 emit。欄數自動（每欄最小 200px）：在左欄是一欄，在員工表單（控制列按鈕看）是多欄。',
       'RoleDetailPanel 標題列：名稱 18px + 「系統角色」tag + 有變更時「未儲存」tag，下面灰字「N 位員工使用・N 項權限」；右側是「刪除角色」（只有非系統角色且有 roles:write）或沒有 roles:write 時的灰字「你只有檢視權限」。',
-      '表單：代碼唯讀（等寬字純文字）、名稱（必填、字數計數）、說明（textarea 兩行、200 字）、權限 PermissionPicker。footer 左邊 info icon 灰字「權限變更會在員工下一次操作時立即生效」，右邊「儲存」（沒變更時 disabled）。只送有變更的欄位（控制列「最後送出」可看 body）。',
+      '表單：代碼唯讀（等寬字純文字）、名稱（必填、1~50 字、字數計數）、說明（textarea 兩行、200 字）、權限 PermissionPicker。footer 左邊 info icon 灰字「權限變更會在員工下一次操作時立即生效」，右邊「儲存」（沒變更時 disabled）。只送有變更的欄位（控制列「最後送出」可看 body）。',
       'admin 角色：頂端 info alert「管理員角色擁有全部權限（含未來新增），不可修改」，所有欄位 disabled、權限全勾、沒有任何按鈕。沒有 roles:write（主任）：全部 disabled、沒有按鈕。',
       '儲存失敗：cannot_grant_permissions 與 last_role_manager / last_staff_manager 顯示在表單頂端的紅色 alert（可關閉，列出權限中文名稱或後端訊息），因為使用者要對照勾選清單修改；其他錯誤 ElMessage.error。',
-      '刪除：確認框「確定要刪除角色「{name}」嗎？」（useConfirmDelete，按鈕「刪除」/「取消」）。仍有員工使用時按鈕先 disabled，hover tooltip「仍有 N 位員工使用此角色，請先調整他們的角色」（待裁定 2）；清單過期而後端回 409 role_in_use 時 ElMessage.error 同一句。刪除成功選第一個角色。',
+      '刪除：確認框「確定要刪除角色「{name}」嗎？」（useConfirmDelete，按鈕「刪除」/「取消」）。仍有員工使用時按鈕先 disabled，hover tooltip「仍有 N 位員工使用此角色，請先調整他們的角色」（N = RoleOut.staff_count，只算啟用帳號）；後端 409 role_in_use 的人數含停用帳號，所以 staff_count 為 0 仍可能被擋，此時 ElMessage.error「仍有 {details.staff_count} 位員工（含已停用的帳號）使用此角色，請先調整他們的角色」。刪除成功選第一個角色。',
       'PermissionPicker：上方搜尋框（240px，比對中文名稱與代碼、不分大小寫）+「已選 N / 28」；每組一個框：組標頭（淺灰底）有收合鈕、整組勾選（部分勾選時 indeterminate）、右側「已選 x / y」；組內每項是 checkbox：中文名稱 + 下一行等寬小字代碼，自動多欄（每欄 ≥ 240px）。搜尋時只列出命中的組與項目並強制展開；沒有命中顯示「找不到符合的權限」。',
       'PermissionPicker 不可授出：沒勾的碼若不在自己的權限內 → disabled（文字變淡）+ hover tooltip「你沒有此權限，無法授出」；已勾選的照樣可以取消。整組勾選只勾可授出的碼；組內全部不可操作時整組勾選也 disabled。highlight 的碼在名稱後加灰色線框「角色預設」小 tag（員工表單用）。',
-      '新增角色 dialog（FormDialog lg 800px，送出鈕「建立」）：代碼與名稱並排，代碼下方灰字「建立後不可修改」；「從既有角色複製權限」下拉列出角色名稱與權限數，選了就把可授出的碼帶入權限勾選器，有略過時橘字「已略過 N 項你沒有的權限」。代碼格式錯誤與「代碼已被使用」（409 role_code_taken）顯示在代碼欄位下方。建立後選中新角色。',
+      '新增角色 dialog（FormDialog lg 800px，送出鈕「建立」）：代碼與名稱並排，代碼下方灰字「建立後不可修改」；「從既有角色複製權限」下拉列出角色名稱與權限數，選了就把可授出的碼帶入權限勾選器，有略過時橘字「已略過 N 項你沒有的權限」。代碼格式錯誤與「代碼已被使用」（409 role_code_taken）顯示在代碼欄位下方。長度對齊後端：代碼 ^[a-z][a-z0-9_]{1,31}$（2~32 字）、名稱 1~50 字。建立後選中新角色。',
       '切換角色時詳情有未儲存變更 → confirmDiscardChanges；選中的角色存在 ?role={code}。載入中：左欄 5 張卡骨架 + 右側段落骨架；載入失敗：EmptyState error「無法載入角色」+「重試」。角色清單不會是空的（4 個系統角色恆在），沒有空狀態。',
     ]
-    const openQuestions = [
-      { question: '1. 名稱與代碼長度前後端規格不一致：FRONTEND-069/070 寫名稱 ≤30、代碼 ^[a-z][a-z0-9_]{1,29}$；BACKEND-076 與已完成的 DB-003 CHECK 是名稱 1~50、代碼 {1,31}（最長 32 字）。', optionA: '（推薦）前端改成對齊後端：名稱 ≤50、代碼 2~32 字（不用動 DB）', optionB: '後端 schema 收緊成名稱 ≤30、代碼 ≤30（DB CHECK 維持較寬，靠 API 擋）' },
-      { question: '2. 有員工使用中的自訂角色，「刪除角色」按鈕怎麼呈現？', optionA: '（推薦，稿已照畫）先 disabled + tooltip「仍有 N 位員工使用此角色，請先調整他們的角色」，後端 409 只當清單過期時的保險', optionB: '按鈕一律可按，按下確認後才由後端 409 回錯誤訊息（照規格字面）' },
-    ]
+    const openQuestions = []
 
     return {
       meta, decisions, openQuestions, roles: ROLES, viewAs, perms, can, user, device, onNavigate, notesOpen: ref(false),
