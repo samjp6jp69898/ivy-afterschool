@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 186,
-  "last_updated": "2026-10-04T16:35:56Z",
+  "version": 187,
+  "last_updated": "2026-10-04T16:36:50Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -6765,7 +6765,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/dispatcher.py",
       "source_ref": "BE:services/notification/retry_scheduler.py::tick_line_retry",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-200",
