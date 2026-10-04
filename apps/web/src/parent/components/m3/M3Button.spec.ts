@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
+import { defineComponent, h } from 'vue'
 import M3Button from './M3Button.vue'
 
 describe('M3Button', () => {
@@ -69,5 +70,32 @@ describe('M3Button', () => {
     const plain = mount(M3Button, { slots: { default: '確認' } })
     expect(plain.find('.m3-icon').exists()).toBe(false)
     expect(plain.classes()).not.toContain('has-icon')
+  })
+
+  it('M3Button loading submit button does not submit its form', async () => {
+    function mountForm(loading: boolean) {
+      let submitted = 0
+      const Host = defineComponent({
+        render: () =>
+          h('form', { onSubmit: (e: Event) => { e.preventDefault(); submitted += 1 } }, [
+            h(M3Button, { type: 'submit', loading }, () => '送出'),
+          ]),
+      })
+      return { wrapper: mount(Host, { attachTo: document.body }), count: () => submitted }
+    }
+
+    const loading = mountForm(true)
+    await loading.wrapper.get('button').trigger('click')
+    expect(loading.count()).toBe(0)
+    // 欄位內按 Enter 的隱式送出，瀏覽器會對預設送出鈕觸發 click
+    loading.wrapper.get('button').element.click()
+    expect(loading.count()).toBe(0)
+    expect(loading.wrapper.get('button').attributes('disabled')).toBeUndefined()
+    loading.wrapper.unmount()
+
+    const idle = mountForm(false)
+    await idle.wrapper.get('button').trigger('click')
+    expect(idle.count()).toBe(1)
+    idle.wrapper.unmount()
   })
 })
