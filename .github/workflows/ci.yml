@@ -66,3 +66,21 @@ jobs:
 
       - name: vue-tsc
         run: just web-typecheck
+
+  unit:
+    name: 單元測試（後端與 scripts）
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+        with:
+          node: false
+
+      - name: apps/api 單元測試
+        working-directory: apps/api
+        run: uv run --frozen pytest -m "not integration"
+
+      - name: scripts 單元測試
+        run: apps/api/.venv/bin/pytest scripts/tests -m "not integration"
