@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 183,
-  "last_updated": "2026-10-04T16:33:57Z",
+  "version": 184,
+  "last_updated": "2026-10-04T16:34:50Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2222,7 +2222,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_account_service.py",
       "source_ref": "BE:api/parent_portal/profile.py::get_me",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-182",
@@ -2244,9 +2244,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。2 條 red_case 對應同名測試（另有 archived_student_hidden），tdd.run 全綠、-k 選到每條 red_case（未選到的只有同檔其他 task 的測試）；lint / typecheck 乾淨；測試 commit 先於實作。children 直接用 list_children(session, account.id)（BACKEND-182，以 get_parent_student_ids 限定本人綁定），另一位家長的小孩不會出現（test_parent_get_me_children 有他人小孩做對照）。對「協調者待使用者確認」的建議：帳號不存在 → 401 合理（BACKEND-062 的 load_current_parent 已先擋，這裡是防禦）；clock 依 description 簽名保留未用可接受。殘留：帳號不存在 → 401 的分支沒有測試。"
       }
     },
     {
@@ -2294,7 +2294,7 @@
       "granularity_unit": "script",
       "target_path": "apps/api/app/cli.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-030",
@@ -2324,9 +2324,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（另有 main_success、only_inactive_admin、bad_username ×5、duplicate_username、missing_args、function_rejects_weak_password），tdd.run 全綠、-k 選到每條 red_case（未選到的只有同檔其他 task 的測試）；lint / typecheck 乾淨；測試 commit 先於實作。突變（拿掉 admin 檢查、admin 檢查不看 is_active、成功訊息印出密碼、must_change_password=False、密碼不一致回 1、username 不轉小寫、拿掉格式檢查、audit actor 非 system）皆轉紅。密碼只經 getpass 取得，stdout / stderr 只印 username、AppError.message（validate_password_strength 的訊息只列規則）或例外類別名稱，不含密碼；已有啟用中 admin → exit 1 且不新增。red_case 'x2' → 'owner2' 合理：'x2' 違反 description 與 DB CHECK 的 3 字元下限，會先在格式檢查回 2，測不到「已有 admin」這條；改用合法帳號才能隔離受測條件。88d8be8 的 --username= 形式只是讓 '-bad' 不被 argparse 當成選項，未放寬斷言。對「協調者待使用者確認」的建議：create_admin 函式本身也擋已有 admin（防禦）、重複帳號 exit 1、不合格輸入 exit 2、其他例外 exit 1 只印類別名，皆與 description 一致，不需問使用者。殘留：(1) 兩個 create-admin 同時執行可能各建一個 admin（一次性指令，實務上不會並行）；(2) display_name 沒有長度 / 空白驗證，違反 DB 約束時只會印「建立失敗：IntegrityError」。"
       }
     },
     {
@@ -2736,7 +2736,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/role_service.py",
       "source_ref": "BE:api/permissions_admin.py::delete_role",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-077",
@@ -2760,9 +2760,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。4 條 red_case 對應同名測試，tdd.run 全綠、-k 選到每條 red_case（未選到的只有同檔其他 task 的測試）；lint / typecheck 乾淨；測試 commit 先於實作。突變（拿掉 is_system 檢查、員工計數只算啟用、不寫 audit、before 缺 permissions）皆轉紅。競態：角色列 FOR UPDATE 與 staff_users 寫入 FK 檢查取的 FOR KEY SHARE 互斥：指派先拿鎖 → 刪除等其 commit 後計數看得到新員工 → 409；刪除先拿鎖 → 指派的 FK 檢查等刪除 commit 後得到 23503（由指派端 / 全域 handler 處理），不會留下指向已刪角色的員工。roles 只被 staff_users.role_id 參照，無其他 FK 漏算。對「協調者待使用者確認」的建議：FOR UPDATE 與其他 IntegrityError 交全域 handler 皆合理，與 description 不衝突，不需問使用者。"
       }
     },
     {
@@ -3559,7 +3559,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/audit_service.py",
       "source_ref": "BE:api/audit.py::get_audit_logs",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-102",
@@ -3585,9 +3585,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。4 條 red_case 對應同名測試（另有 prefix_is_literal、pagination），tdd.run 全綠、-k 選到每條 red_case（未選到的只有同檔其他 task 的測試）；lint / typecheck 乾淨；測試 commit 先於實作。突變（action_prefix 不跳脫、date_to 改含次日 00:00、date_from 偏移 8 小時、排序反向、拿掉 entity_id 篩選、parent 名稱不查、system 名稱改字）皆轉紅；UTC 16:00 兩側與 date_to 次日 00:00 邊界都有測。taipei_date_range 測試以 app_backend 在 insert 時指定 created_at（red_case 寫 owner 連線，效果相同且符合「測資經 app_backend 寫入」）。對「協調者待使用者確認」的建議：actor_name 改為「本頁 actor 每類一次 IN 查詢」（共 count + 本頁 + 至多 2 次，與頁面大小無關，無 N+1），結果與 outer join 相同、可接受；但 description 仍寫「以 outer join 一次查出」，description 是唯一權威，請協調者把該句改寫成實際做法。已不存在的 actor → None、action_prefix 以 autoescape 比對皆合理。"
       }
     },
     {
@@ -4038,7 +4038,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/reference_data_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-115"
@@ -4060,9 +4060,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。3 條 red_case 對應同名測試（另有 exam_type_conflict），tdd.run 全綠、-k 選到每條 red_case（未選到的只有同檔其他 task 的測試）；lint / typecheck 乾淨；測試 commit 先於實作。突變（拿掉 savepoint → session 進入 PendingRollback、IntegrityError 不轉譯）皆轉紅。名稱唯一由 DB 的 lower(btrim(name)) unique index 把關，' abc國小 ' 經 RequestModel strip 後撞索引 → 409。對「協調者待使用者確認」的建議：只轉 23505、其他 IntegrityError 原樣拋出合理（CHECK 違反屬 schema 漏驗，應由全域 handler 暴露）；訊息「名稱已存在」/「日期已存在」可接受。"
       }
     },
     {
@@ -4588,7 +4588,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": "BE:api/classrooms.py::get_classrooms",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-134",
@@ -4597,7 +4597,7 @@
         "BACKEND-047"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "review-r7-b2 打回：排序規格的 sort_order 沒有測試（拿掉 order_by 的 SchoolClass.sort_order 後 tdd.run 仍全綠）。補測試：同一學年兩班，name='A班' sort_order=1、name='B班' sort_order=0 → B班 在 A班 前（確認 sort_order 優先於 name），並與另一學年的班一起驗證學年仍優先。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_class_service.py",
@@ -4614,9 +4614,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r7-b2",
+        "notes": "打回。4 條 red_case 對應同名測試（另有 academic_year_filter），tdd.run 全綠、-k 選到每條 red_case（未選到的只有同檔其他 task 的測試）；lint / typecheck 乾淨；測試 commit 先於實作。突變（學年改升冪、名稱改降冪、含停用員工、人數含 withdrawn / 封存、拿掉 mine 篩選）皆轉紅。打回原因：description 的排序「academic_year desc、sort_order、name」中 sort_order 完全沒有測試——把 order_by 的 SchoolClass.sort_order 拿掉，tdd.run 仍 5 passed。85e1e60 改用 ASCII 班名本身沒有少驗：原測試期望「甲班」排在「乙班」前，但本機 DB collation 為 en_US.utf8（libc），實測排序為 丙班、乙班、甲班（依字碼），原期望本來就錯；name 作為最後一層排序仍由 A班 / B班 驗到。少驗的是 sort_order，與 ASCII 改動無關。殘留（給使用者知悉，非本 task 範圍）：中文班名依 DB collation 排序，「甲乙丙」不會照天干順序，要靠 sort_order 調整；Railway 的 collation 需部署時確認。"
       }
     },
     {
@@ -5097,7 +5097,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": "BE:api/students.py::get_students",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-148",
@@ -5123,9 +5123,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。4 條 red_case 對應同名測試（另有 order），tdd.run 全綠、-k 選到每條 red_case（未選到的只有同檔其他 task 的測試）；lint / typecheck 乾淨；測試 commit 先於實作。突變（拿掉 sensitive 權限檢查、HMAC 前不 normalize、學號改 contains、學號區分大小寫、姓名不跳脫、預設含封存、拿掉 school 篩選、無班級排前）皆轉紅。無 sensitive 權限時完全不做 HMAC 比對，輸出 StudentListItemOut 不含 id_number / health_note，不洩漏；page_size 上限由 page_params（MAX_PAGE_SIZE）在 endpoint 層把關。5dab74d 確認為修測試資料：sorted(['甲','丙']) 實為 ['丙','甲']（原期望寫錯），改集合比對；全形 ａ 改跳脫序列，順帶拿掉前後半形空白，但 q 的前後空白本就由 RequestModel strip，未削弱對實作的檢驗。對「協調者待使用者確認」的建議：以 normalize + validate_id_number（含檢查碼）判斷才做 HMAC 合理——拿掉 validate 的突變觀測不到差異（寫入端已驗證，不合法字串不可能撞到已存的 HMAC），等於只省一次無效比對；% / _ 以 autoescape 處理合理。皆不需問使用者。"
       }
     },
     {
@@ -5805,7 +5805,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/guardian_service.py",
       "source_ref": "BE:api/students.py::list_guardians",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-167",
@@ -5829,9 +5829,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。3 條 red_case 對應同名測試（另有 bound_ignores_codes、archived_student_visible、to_guardian_out），tdd.run 全綠、-k 選到每條 red_case（未選到的只有同檔其他 task 的測試）；lint / typecheck 乾淨；測試 commit 先於實作。突變（不看到期、不看 used_at、max 改 min、含封存 guardian、primary 排序反向、拿掉 404、封存學生改 404）皆轉紅。輸出只有綁定狀態、家長暱稱與碼的到期時間，不含 code_hash 或明碼。e4c98a3 確認為修測試資料（relation 'grandmother' 不在 CHECK、過期碼 created_at 須早於 expires_at）。"
       }
     },
     {
