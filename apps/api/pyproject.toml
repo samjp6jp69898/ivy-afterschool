@@ -87,7 +87,7 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
   "unit: 單元測試，不碰 DB 與網路",
-  "integration: 整合測試，只連本機 Supabase 127.0.0.1:54342",
+  "integration: 整合測試，只連本機 Postgres 127.0.0.1:54342 與 SeaweedFS S3 127.0.0.1:54344",
 ]
 # 命令列另帶的 -m 會覆蓋這裡的 -m
 addopts = "-m 'not integration' --strict-markers --import-mode=importlib --disable-socket --allow-unix-socket --allow-hosts=127.0.0.1,::1"

@@ -63,17 +63,17 @@ def test_scripts_conftest_run_cmd_defaults_to_repo_root(run_cmd: RunCmd, repo_ro
 def test_scripts_conftest_fake_bin_records_calls(
     run_cmd: RunCmd, fake_bin: FakeBin, tmp_path: Path
 ) -> None:
-    fake_bin.add("supabase", stdout="ok", exit_code=4)
+    fake_bin.add("probe-tool", stdout="ok", exit_code=4)
 
     result = run_cmd(
-        ["supabase", "db", "push", "--dry-run"],
+        ["probe-tool", "db", "push", "--dry-run"],
         cwd=tmp_path,
         env={"PATH": fake_bin.path_env()},
     )
 
     assert result.returncode == 4
     assert result.stdout == "ok"
-    calls = fake_bin.calls("supabase")
+    calls = fake_bin.calls("probe-tool")
     assert calls[0]["argv"] == ["db", "push", "--dry-run"]
     assert Path(calls[0]["cwd"]).resolve() == tmp_path.resolve()
     assert fake_bin.calls("docker") == []

@@ -139,7 +139,7 @@ def docker_just(run_cmd: RunCmd, fake_bin: FakeBin, repo_root: Path) -> DockerJu
     def _run(recipe: str, docker_exit: int = 0) -> subprocess.CompletedProcess[str]:
         fake_bin.add("docker", exit_code=docker_exit)
         # 守衛失效或舊版 recipe 時也只會呼叫到假指令，不會真的啟動服務
-        fake_bin.add("supabase")
+        fake_bin.add("probe-tool")
         return run_cmd(
             ["just", "--justfile", str(repo_root / "justfile"), recipe],
             env={"PATH": fake_bin.path_env()},

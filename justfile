@@ -6,7 +6,7 @@
 # - 本專案禁止全量 lint / typecheck / test：標 ★ 的 recipe 無參數時印用法並 exit 1。
 #   唯一例外是 web-typecheck（vue-tsc 只能全專案跑），只在送 PR 前執行一次。
 # - Python 類 recipe 的路徑路由見 scripts/_pyroute.sh（只支援 apps/api/ 與 scripts/ 底下）。
-# - supabase / pnpm / uv / docker 一律從 PATH 找執行檔（回歸測試會用假執行檔替換）。
+# - pnpm / uv / docker 一律從 PATH 找執行檔（回歸測試會用假執行檔替換）。
 
 set dotenv-load := false
 set positional-arguments := true
@@ -31,7 +31,7 @@ test *ARGS:
     # 使用者另帶 -m 時排在後面，pytest 以最後一個 -m 為準。
     py_exec pytest "${PY_PATHS[@]}" -m "not integration" ${PY_EXTRA[@]+"${PY_EXTRA[@]}"}
 
-# ★ 後端整合測試：just test-int PATH... [pytest 參數...]（需本機 Supabase）
+# ★ 後端整合測試：just test-int PATH... [pytest 參數...]（需本機 DB）
 test-int *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -41,7 +41,7 @@ test-int *ARGS:
     # JUST_TEST_INT_DB_PORT 只供 justfile 回歸測試指向未監聽的 port，平常不要設定。
     db_port="${JUST_TEST_INT_DB_PORT:-54342}"
     if ! python3 -c 'import socket, sys; socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=1).close()' "$db_port" 2>/dev/null; then
-        echo "錯誤：本機 Supabase 未啟動（127.0.0.1:${db_port} 連不上），先跑 just db-start" >&2
+        echo "錯誤：本機 DB 未啟動（127.0.0.1:${db_port} 連不上），先跑 just db-start" >&2
         exit 1
     fi
     py_exec pytest "${PY_PATHS[@]}" -m integration ${PY_EXTRA[@]+"${PY_EXTRA[@]}"}
@@ -178,16 +178,6 @@ db-reset *ARGS:
     fi
     # uv 從 PATH 找（回歸測試以假執行檔替換）；腳本本身不接受參數、只連本機
     uv run --frozen --project "{{ root }}/apps/api" python "{{ root }}/scripts/db_reset_local.py"
-
-# RLS / 權限檢查（INFRA-007）：just check-rls [--db-url URL] [--schema public] [--allow-empty] [--allow-remote]
-check-rls *ARGS:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ ! -x "{{ root }}/apps/api/.venv/bin/python" ]; then
-        echo "錯誤：找不到 apps/api/.venv，先在 apps/api 執行 uv sync --frozen（或 just bootstrap）。" >&2
-        exit 2
-    fi
-    "{{ root }}/apps/api/.venv/bin/python" "{{ root }}/scripts/check_rls.py" "$@"
 
 # 對本機 DB 套用尚未套用的 Alembic revision（只連 127.0.0.1:54342，不採用呼叫端的 MIGRATION_DATABASE_URL）
 db-migrate:

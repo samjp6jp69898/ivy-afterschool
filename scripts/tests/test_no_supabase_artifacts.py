@@ -32,7 +32,11 @@ NEGATIVE_ASSERTION_FILES = frozenset(
 
 def tracked_files(root: Path) -> list[str]:
     out = subprocess.run(
-        ["git", "ls-files"], cwd=root, check=True, capture_output=True, text=True
+        ["git", "ls-files"],  # noqa: S607
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout
     return [line for line in out.splitlines() if line]
 
@@ -58,7 +62,7 @@ def find_violations(root: Path, rel_paths: list[str]) -> list[str]:
 def test_no_supabase_dir() -> None:
     assert not (REPO_ROOT / "supabase").exists()
     out = subprocess.run(
-        ["git", "ls-files", "supabase"],
+        ["git", "ls-files", "supabase"],  # noqa: S607
         cwd=REPO_ROOT,
         check=True,
         capture_output=True,

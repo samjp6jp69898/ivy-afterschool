@@ -2,7 +2,7 @@
 
 - repo_root：repo root 路徑（由本檔位置推得，不依賴 cwd）。
 - run_cmd：執行外部指令並捕捉輸出，預設 cwd 為 repo root。
-- fake_bin：在 tmp_path/bin 建立假的 supabase / uv / pnpm / docker / just 等指令並記錄呼叫。
+- fake_bin：在 tmp_path/bin 建立假的 uv / pnpm / docker / just 等指令並記錄呼叫。
 - local_db_url / local_db_conn：只允許本機 loopback 的 DB 連線（integration 專用）。
 
 loopback 守衛是唯一防線：psycopg 走 libpq 的 C socket，pytest-socket 攔不到。判斷規則共用
@@ -161,7 +161,7 @@ def local_db_conn(local_db_url: str) -> Iterator[psycopg.Connection[Any]]:
             _db_urls.to_psycopg_dsn(local_db_url), autocommit=False, connect_timeout=3
         )
     except psycopg.OperationalError as exc:
-        pytest.fail(f"無法連線本機 Supabase（{exc.__class__.__name__}），先跑 just db-start")
+        pytest.fail(f"無法連線本機 DB（{exc.__class__.__name__}），先跑 just db-start")
     # 縱深防禦：以實際連上的位址再驗一次
     try:
         _db_urls.assert_connected_loopback(conn.info.hostaddr)

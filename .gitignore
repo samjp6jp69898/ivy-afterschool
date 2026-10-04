@@ -28,10 +28,6 @@ apps/web/e2e/.auth/
 !.env.example
 !.env.*.example
 
-# --- Supabase CLI 本地狀態 ---
-supabase/.temp/
-supabase/.branches/
-
 # --- 本地執行期資料 ---
 var/
 

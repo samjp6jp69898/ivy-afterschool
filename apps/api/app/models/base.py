@@ -1,6 +1,6 @@
 """BACKEND-007：SQLAlchemy 2 宣告式基底與共用欄位 mixin。
 
-- naming convention 與 supabase/migrations 的約束命名一致（uq_<table>_<col> 等），
+- naming convention 與 Alembic revision 的約束命名一致（uq_<table>_<col> 等），
   schema drift 測試（INFRA-020）才對得上。
 - enum 欄位一律 ``Text`` + Python ``Literal`` 型別註記，不用 SQLAlchemy Enum（DB 為 text + CHECK）。
 - 加密欄位型別為 ``LargeBinary``（bytea）；加解密在 service 層呼叫 BACKEND-009，
