@@ -115,3 +115,9 @@ def make_students(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, 
     """student_no 預設帶亂數，同一測試可多次呼叫。"""
     defaults = {"student_no": f"S{uuid4().hex[:10]}", "name": "王小明", "grade_level": 3}
     return insert_row(conn, "public.students", **{**defaults, **overrides})
+
+
+def make_parent_accounts(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    """line_user_id 預設為亂數的合法 LINE userId，同一測試可多次呼叫。"""
+    defaults = {"line_user_id": f"U{uuid4().hex}", "display_name": "王媽媽"}
+    return insert_row(conn, "public.parent_accounts", **{**defaults, **overrides})
