@@ -250,3 +250,16 @@ def make_student_attendances(conn: psycopg.Connection[Any], **overrides: Any) ->
         "service_date": date(2026, 10, 5),
     }
     return insert_row(conn, "public.student_attendances", **{**defaults, **overrides})
+
+
+def make_pickup_authorizations(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    """未指定 student_id 時另建一位學生；code_hash 預設為亂數 64 碼 hex。"""
+    defaults = {
+        "student_id": overrides.get("student_id") or make_students(conn)["id"],
+        "service_date": date(2026, 10, 5),
+        "proxy_name": "李阿姨",
+        "proxy_phone": "0912-000-001",
+        "code_hash": secrets.token_hex(32),
+        "code_last4": "1234",
+    }
+    return insert_row(conn, "public.pickup_authorizations", **{**defaults, **overrides})
