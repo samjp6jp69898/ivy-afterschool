@@ -1,5 +1,8 @@
-"""BACKEND-009：app/core/crypto.py（HKDF 金鑰衍生與 AES-256-GCM 應用層加解密）。"""
+"""BACKEND-009：app/core/crypto.py（HKDF 金鑰衍生與 AES-256-GCM 應用層加解密）。
+BACKEND-010：keyed_hash / constant_time_equals（身分證查重與綁定碼的 HMAC-SHA256）。
+"""
 
+import re
 from collections.abc import Iterator
 
 import pytest
@@ -12,11 +15,13 @@ from app.core.crypto import (
     LABEL_HMAC_ID_NUMBER,
     LABEL_JWT,
     DecryptionError,
+    constant_time_equals,
     decrypt_bytes,
     decrypt_token,
     derive_key,
     encrypt_bytes,
     encrypt_token,
+    keyed_hash,
 )
 
 _SECRET_A = "a" * 48
@@ -146,3 +151,47 @@ def test_crypto_key_not_in_module_repr() -> None:
     derive_key(LABEL_FIELD_ENC)
 
     assert _SECRET_A not in repr(vars(crypto))
+
+
+# --- BACKEND-010：keyed_hash ---------------------------------------------------------------
+
+
+def test_keyed_hash_format() -> None:
+    digest = keyed_hash(LABEL_HMAC_ID_NUMBER, _ID_NUMBER)
+
+    assert re.fullmatch(r"[0-9a-f]{64}", digest)
+    assert keyed_hash(LABEL_HMAC_ID_NUMBER, _ID_NUMBER) == digest
+    # 不做正規化：大小寫 / 空白不同視為不同值（正規化由呼叫端負責）
+    assert keyed_hash(LABEL_HMAC_ID_NUMBER, _ID_NUMBER.lower()) != digest
+    assert keyed_hash(LABEL_HMAC_ID_NUMBER, "A123456780") != digest
+
+
+def test_keyed_hash_label_separation() -> None:
+    by_id = keyed_hash(LABEL_HMAC_ID_NUMBER, "ABCD2345")
+    by_code = keyed_hash(LABEL_HMAC_BINDING_CODE, "ABCD2345")
+
+    assert by_id != by_code
+    assert re.fullmatch(r"[0-9a-f]{64}", by_code)
+
+
+def test_keyed_hash_changes_with_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    digest_a = keyed_hash(LABEL_HMAC_ID_NUMBER, _ID_NUMBER)
+    _set_env(monkeypatch, _SECRET_B)
+
+    assert keyed_hash(LABEL_HMAC_ID_NUMBER, _ID_NUMBER) != digest_a
+
+
+def test_keyed_hash_rejects_non_hmac_label() -> None:
+    with pytest.raises(ValueError, match="HMAC"):
+        keyed_hash(LABEL_FIELD_ENC, "x")
+    with pytest.raises(ValueError, match="HMAC"):
+        keyed_hash(LABEL_JWT, "x")
+    with pytest.raises(ValueError, match="HMAC"):
+        keyed_hash(b"other", "x")
+
+
+def test_keyed_hash_constant_time_equals() -> None:
+    assert constant_time_equals("ab", "ab") is True
+    assert constant_time_equals("ab", "ac") is False
+    assert constant_time_equals("ab", "abc") is False
+    assert constant_time_equals("", "") is True
