@@ -23,6 +23,10 @@ grace fallback 與 absolute lifetime）。
   commit，401 路徑會 rollback，不先 commit 撤銷就會跟著退回而失效。
 - 成功：以帳號**目前**的 ``token_version`` 重簽 access（管理員重設密碼 / 停用後 tv 已變），
   有效權限即時重算；只 flush。
+
+BACKEND-045：``logout``（移植 ivy ``api/auth.py::logout`` 的「清 cookie 優先」：登出永遠成功）。
+無 cookie 或 raw 不存在 / 已撤銷 → 0；否則撤銷整個 family（``revoke_family_by_raw``）回撤銷筆數。
+不檢查 access token（過期的 access 也能登出），其他裝置的 family 不受影響；只 flush。
 """
 
 from __future__ import annotations
@@ -149,3 +153,9 @@ def refresh(session: Session, *, raw_refresh: str | None, clock: Clock) -> Staff
     result = _staff_session(staff, refresh_token=rotated.raw, clock=clock)
     session.flush()
     return result
+
+
+def logout(session: Session, *, raw_refresh: str | None, clock: Clock) -> int:
+    if not raw_refresh:
+        return 0
+    return refresh_tokens.revoke_family_by_raw(session, raw_refresh, clock=clock)
