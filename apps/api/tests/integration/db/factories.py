@@ -241,3 +241,12 @@ def make_student_leave_attachments(
         "size_bytes": 204800,
     }
     return insert_row(conn, "public.student_leave_attachments", **{**defaults, **overrides})
+
+
+def make_student_attendances(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    """未指定 student_id 時另建一位學生；預設為 2026-10-05 的 expected。"""
+    defaults = {
+        "student_id": overrides.get("student_id") or make_students(conn)["id"],
+        "service_date": date(2026, 10, 5),
+    }
+    return insert_row(conn, "public.student_attendances", **{**defaults, **overrides})
