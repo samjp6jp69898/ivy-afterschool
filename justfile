@@ -258,3 +258,7 @@ install-hooks:
 # 驗證 docs/tasks 的 tasks.json（參數原樣轉給 scripts/validate_tasks.py，例如 --ready INFRA）
 validate-tasks *ARGS:
     python3 "{{ root }}/scripts/validate_tasks.py" "{{ root }}" "$@"
+
+# 部署後煙霧測試（exit code = FAIL 項數；base_url 必填，須為 https://）：just smoke <base_url>
+smoke *ARGS:
+    @bash "{{ root }}/scripts/smoke_deploy.sh" "$@"
