@@ -4,7 +4,6 @@
 觸發 after_commit，見 BACKEND-006）。
 """
 
-from collections.abc import Iterator
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -31,7 +30,7 @@ Call = tuple[list[str], dict[str, Any]]
 
 
 @pytest.fixture
-def published(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[Call]]:
+def published(monkeypatch: pytest.MonkeyPatch) -> list[Call]:
     install_tx_hooks()
     calls: list[Call] = []
 
@@ -39,7 +38,7 @@ def published(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[Call]]:
         calls.append((list(channels), dict(message)))
 
     monkeypatch.setattr(publish_module, "publish_threadsafe", record)
-    yield calls
+    return calls
 
 
 def test_publish_channel_names() -> None:
@@ -48,7 +47,7 @@ def test_publish_channel_names() -> None:
     assert staff_channel(UUID(int=3)) == "staff:00000000-0000-0000-0000-000000000003"
     assert parent_channel(UUID(int=4)) == "parent:00000000-0000-0000-0000-000000000004"
     assert student_channel(UUID(int=1)) == "student:00000000-0000-0000-0000-000000000001"
-    assert PARENT_VISIBLE_TOPICS == frozenset({"pickup", "homework", "attendance"})
+    assert frozenset({"pickup", "homework", "attendance"}) == PARENT_VISIBLE_TOPICS
 
 
 def test_publish_envelope(fake_clock: FakeClock) -> None:
@@ -61,7 +60,7 @@ def test_publish_envelope(fake_clock: FakeClock) -> None:
     data: dict[str, Any] = {"at": fake_clock.now(), "nested": {"id": UUID(int=5)}}
     out = envelope("homework.progress_updated", data, clock=fake_clock)
     assert out["data"] == {
-        "at": "2026-09-01T01:00:00Z",
+        "at": "2026-09-01T01:00:00+00:00",
         "nested": {"id": "00000000-0000-0000-0000-000000000005"},
     }
     assert out["data"] is not data
@@ -141,7 +140,7 @@ def test_publish_validation(
     db_session: Session, fake_clock: FakeClock, published: list[Call]
 ) -> None:
     s = uuid4()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="pickup\\."):
         broadcast_after_commit(
             db_session,
             topic="pickup",
@@ -149,7 +148,7 @@ def test_publish_validation(
             data={},
             clock=fake_clock,
         )
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="type"):
         envelope("", {}, clock=fake_clock)
     db_session.commit()
     assert published == []
@@ -220,7 +219,7 @@ def test_publish_push_to_student(
         )
     ]
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="attendance\\."):
         push_to_student_after_commit(
             db_session, s, topic="attendance", type="pickup.x", data={}, clock=fake_clock
         )
