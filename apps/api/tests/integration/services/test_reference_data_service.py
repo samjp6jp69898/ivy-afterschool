@@ -1,6 +1,7 @@
 """BACKEND-115：app/services/reference_data_service.py（list_items）。"""
 
 from datetime import date
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import func, select
@@ -11,12 +12,15 @@ from app.models.reference import ClosedDay, School, Subject
 from app.schemas.reference import (
     ClosedDayCreateIn,
     ClosedDayOut,
+    ClosedDayUpdateIn,
     NamedItemCreateIn,
     NamedItemOut,
+    NamedItemUpdateIn,
     ReferenceListQuery,
     SchoolCreateIn,
+    SchoolUpdateIn,
 )
-from app.services.reference_data_service import create_item, list_items
+from app.services.reference_data_service import create_item, list_items, update_item
 from app.services.reference_specs import SPECS
 
 
@@ -140,3 +144,73 @@ def test_reference_create_closed_day_conflict(db_session: Session) -> None:
         create_item(db_session, SPECS["closed-days"], ClosedDayCreateIn(date=date(2026, 10, 10)))
 
     assert (exc.value.status, exc.value.code) == (409, "closed_day_exists")
+
+
+def test_reference_update_partial(db_session: Session) -> None:
+    created = create_item(
+        db_session, SPECS["subjects"], NamedItemCreateIn(name="書法", sort_order=5)
+    )
+    assert isinstance(created, NamedItemOut)
+
+    out = update_item(db_session, SPECS["subjects"], created.id, NamedItemUpdateIn(is_active=False))
+
+    assert isinstance(out, NamedItemOut)
+    assert out.is_active is False
+    assert out.sort_order == 5
+    assert out.name == "書法"
+    stored = db_session.execute(select(Subject).where(Subject.id == created.id)).scalar_one()
+    assert (stored.name, stored.sort_order, stored.is_active) == ("書法", 5, False)
+
+
+def test_reference_update_clear_nullable_field(db_session: Session) -> None:
+    created = create_item(
+        db_session, SPECS["schools"], SchoolCreateIn(name="仁愛國小", short_name="仁愛")
+    )
+
+    kept = update_item(db_session, SPECS["schools"], created.id, SchoolUpdateIn(is_active=False))
+    cleared = update_item(
+        db_session,
+        SPECS["schools"],
+        created.id,
+        SchoolUpdateIn.model_validate({"short_name": None}),
+    )
+
+    assert kept.short_name == "仁愛"  # type: ignore[attr-defined]
+    assert cleared.short_name is None  # type: ignore[attr-defined]
+    assert cleared.is_active is False  # type: ignore[attr-defined]
+
+
+def test_reference_update_closed_day_reason(db_session: Session) -> None:
+    created = create_item(
+        db_session, SPECS["closed-days"], ClosedDayCreateIn(date=date(2026, 10, 10), reason="國慶")
+    )
+
+    out = update_item(
+        db_session, SPECS["closed-days"], created.id, ClosedDayUpdateIn(reason="國慶日")
+    )
+
+    assert isinstance(out, ClosedDayOut)
+    assert (out.date, out.reason) == (date(2026, 10, 10), "國慶日")
+
+
+def test_reference_update_not_found(db_session: Session) -> None:
+    with pytest.raises(AppError) as exc:
+        update_item(db_session, SPECS["exam-types"], uuid4(), NamedItemUpdateIn(name="新名稱"))
+
+    assert (exc.value.status, exc.value.code) == (404, "exam_type_not_found")
+
+
+def test_reference_update_conflict(db_session: Session) -> None:
+    created = create_item(db_session, SPECS["subjects"], NamedItemCreateIn(name="書法"))
+    assert isinstance(created, NamedItemOut)
+
+    with pytest.raises(AppError) as exc:
+        update_item(db_session, SPECS["subjects"], created.id, NamedItemUpdateIn(name="國語"))
+
+    assert (exc.value.status, exc.value.code) == (409, "subject_name_taken")
+    # savepoint 已 rollback：原名稱不變、session 仍可用
+    stored = db_session.execute(select(Subject).where(Subject.id == created.id)).scalar_one()
+    assert stored.name == "書法"
+    # 改成自己的名稱（大小寫變化）不算衝突
+    out = update_item(db_session, SPECS["subjects"], created.id, NamedItemUpdateIn(name="書法"))
+    assert out.name == "書法"  # type: ignore[attr-defined]
