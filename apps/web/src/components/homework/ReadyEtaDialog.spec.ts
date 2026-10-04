@@ -54,9 +54,9 @@ async function click(text: string): Promise<void> {
 }
 
 function timeValue(): string {
-  const input = dialogEl().querySelector<HTMLInputElement>('.el-select input')
-  if (!input) throw new Error('找不到時間欄')
-  return input.value
+  const shown = dialogEl().querySelector('.el-select .el-select__placeholder')
+  if (!shown) throw new Error('找不到時間欄')
+  return shown.textContent?.trim() ?? ''
 }
 
 function submitted(wrapper: VueWrapper): unknown[] {
@@ -110,6 +110,7 @@ describe('ReadyEtaDialog', () => {
     expect(timeValue()).toBe('17:30')
 
     await click('清除預計時間')
+    expect(timeValue()).toBe('選擇時間')
     expect(buttonIn('清除預計時間')).toBeUndefined()
     await click('儲存')
 
