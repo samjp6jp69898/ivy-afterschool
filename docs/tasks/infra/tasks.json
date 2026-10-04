@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 100,
-  "last_updated": "2026-10-04T06:34:34Z",
+  "version": 101,
+  "last_updated": "2026-10-04T06:38:42Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1041,7 +1041,7 @@
       "granularity_unit": "script",
       "target_path": "apps/web/scripts/check_parent_bundle.mjs",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r5",
       "depends_on": [
         "INFRA-022",
@@ -1078,7 +1078,7 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/e2e.yml",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r5",
       "depends_on": [
         "INFRA-022",
@@ -1310,7 +1310,7 @@
       "granularity_unit": "config",
       "target_path": ".github/workflows/ci.yml",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-infra-r5",
       "depends_on": [
         "INFRA-022",
