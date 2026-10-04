@@ -40,4 +40,6 @@ def test_settings_schemas_out_and_list() -> None:
     with_meta = item.model_copy(
         update={"updated_at": datetime(2026, 9, 1, tzinfo=UTC), "updated_by_name": "王老師"}
     )
-    assert SettingsListOut(items=[with_meta]).model_dump()["items"][0]["updated_by_name"] == "王老師"
+    assert (
+        SettingsListOut(items=[with_meta]).model_dump()["items"][0]["updated_by_name"] == "王老師"
+    )
