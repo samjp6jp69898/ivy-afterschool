@@ -304,3 +304,16 @@ def make_pickup_requests(conn: psycopg.Connection[Any], **overrides: Any) -> dic
         "requested_by_id": uuid4(),
     }
     return insert_row(conn, "public.pickup_requests", **{**defaults, **overrides})
+
+
+def make_exam_scores(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    """未指定 exam_id / subject_id 時另建考試與滿分 100 的科目；未指定 student_id 時另建學生。"""
+    if "exam_id" not in overrides or "subject_id" not in overrides:
+        exam_subject = make_exam_subjects(conn)
+        overrides = {
+            "exam_id": exam_subject["exam_id"],
+            "subject_id": exam_subject["subject_id"],
+            **overrides,
+        }
+    defaults = {"student_id": overrides.get("student_id") or make_students(conn)["id"]}
+    return insert_row(conn, "public.exam_scores", **{**defaults, **overrides})
