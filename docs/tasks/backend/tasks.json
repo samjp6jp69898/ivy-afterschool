@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 182,
-  "last_updated": "2026-10-04T16:33:18Z",
+  "version": 183,
+  "last_updated": "2026-10-04T16:33:57Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3823,7 +3823,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/settings_service.py",
       "source_ref": "BE:api/system_config.py::upsert_config",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-109",
