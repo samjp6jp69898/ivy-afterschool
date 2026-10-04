@@ -4,8 +4,8 @@
 全部透過 INFRA-010 的 ``db_session``（app_backend 角色）寫入，``session.add`` + ``flush`` 後回傳
 ORM 物件、不 commit；factory 能寫入即代表各表對 app_backend 的 grant 正確，禁止 fallback 到 owner。
 
-- 唯一欄位（username、student_no、班名、校名、角色 code）預設以模組層遞增序號產生，
-  同一測試多次呼叫不衝突。
+- 唯一欄位（username、student_no、班名、校名、角色 code）預設以「本行程隨機前綴 + 模組層遞增
+  序號」產生：同一測試多次呼叫不衝突，committing 測試被中斷而殘留的列也不會撞到下一次執行。
 - 預設值擬真但非真實個資（王小明、林老師、王媽媽）。
 - 營運模組新增自己的 factory（``make_leave``、``make_attendance`` 等）時加在本檔。
 """
@@ -13,6 +13,7 @@ ORM 物件、不 commit；factory 能寫入即代表各表對 app_backend 的 gr
 from __future__ import annotations
 
 import itertools
+import secrets
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Final
@@ -33,6 +34,7 @@ SYSTEM_ROLE_CODES: Final = frozenset({"admin", "director", "clerk", "tutor"})
 ARCHIVED_AT: Final = datetime(2026, 8, 1, 0, 0, tzinfo=UTC)
 
 _seq = itertools.count(1)
+_RUN: Final = secrets.token_hex(2)
 # 同一明文只做一次 argon2 雜湊（每次約數十毫秒），測試批量建帳號時省時間
 _password_hash_cache: dict[str, str] = {}
 
@@ -64,7 +66,7 @@ def make_role(
 ) -> Role:
     n = _next()
     role = Role(
-        code=code or f"test_role_{n}",
+        code=code or f"test_{_RUN}_{n}",
         name=name or f"測試角色 {n}",
         permissions=list(permissions),
         is_system=is_system,
@@ -97,7 +99,7 @@ def make_staff(
     else:
         role = make_role(session, permissions=permissions or ())
     staff = StaffUser(
-        username=username or f"staff{_next():04d}",
+        username=username or f"staff-{_RUN}-{_next():04d}",
         password_hash=_cached_hash(password),
         display_name=display_name,
         role=role,
@@ -127,7 +129,7 @@ def make_parent(
 
 
 def make_school(session: Session, *, name: str | None = None) -> School:
-    school = School(name=name or f"測試國小 {_next()}")
+    school = School(name=name or f"測試國小 {_RUN}-{_next()}")
     _add(session, school)
     return school
 
@@ -141,7 +143,7 @@ def make_class(
     archived: bool = False,
 ) -> SchoolClass:
     klass = SchoolClass(
-        name=name or f"測試班 {_next()}",
+        name=name or f"測試班 {_RUN}-{_next()}",
         grade_levels=list(grade_levels),
         academic_year=academic_year,
         archived_at=ARCHIVED_AT if archived else None,
@@ -162,7 +164,7 @@ def make_student(
     school: School | None = None,
 ) -> Student:
     student = Student(
-        student_no=student_no or f"S{_next():04d}",
+        student_no=student_no or f"S{_RUN}-{_next():04d}",
         name=name,
         grade_level=grade_level,
         class_=class_,
