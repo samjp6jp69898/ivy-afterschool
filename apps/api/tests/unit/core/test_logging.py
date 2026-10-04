@@ -227,3 +227,71 @@ def test_logging_development_human_readable(capsys: pytest.CaptureFixture[str]) 
     assert "t-1" not in lines[0]
     assert logging.getLogger().level == logging.INFO
     assert logging.getLogger("uvicorn.access").disabled is True
+
+
+# --- review-r4-be 打回：RedactingFilter 外洩反例 -------------------------------------------
+
+
+def test_logging_redacting_filter_fail_closed_on_tuple_subclass() -> None:
+    """namedtuple 等 tuple 子類不可讓遮罩中斷；同一筆 log 其他 dict 的秘密仍要遮。"""
+    from collections import namedtuple
+
+    point = namedtuple("P", "x y")
+    message = _filtered_message("%s %s", point(1, 2), {"password": "PW4"})
+
+    assert "PW4" not in message
+    assert "***" in message
+
+
+def test_logging_redacting_filter_fail_closed_on_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """遮罩過程拋例外時退路必須 fail-closed：原始 args 不得保留。"""
+    from app.core import logging as app_logging
+
+    def _boom(value: object) -> object:
+        raise RuntimeError("redact 爆炸")
+
+    monkeypatch.setattr(app_logging, "redact_mapping", _boom)
+    record = logging.LogRecord(
+        "t", logging.INFO, __file__, 1, "login %s", ({"password": "PW9"},), None
+    )
+
+    assert RedactingFilter().filter(record) is True
+    assert "PW9" not in record.getMessage()
+    assert "PW9" not in repr(record.args)
+    assert "***" in record.getMessage()
+
+
+def test_logging_redacting_filter_value_with_spaces() -> None:
+    kv = _filtered_message("hdr authorization=Bearer T5 user=amy")
+    assert "T5" not in kv
+    assert "Bearer" not in kv
+    assert "user=amy" in kv
+
+    header_style = _filtered_message("Authorization: Bearer T6")
+    assert "T6" not in header_style
+    assert "***" in header_style
+
+    cookie_header = _filtered_message("Cookie: sid=T8; other=1, next=2")
+    assert "T8" not in cookie_header
+
+    multi = _filtered_message("token=abc def, status_code=200")
+    assert "abc" not in multi
+    assert "status_code=200" in multi
+
+
+def test_logging_redacting_filter_header_pairs() -> None:
+    pairs = _filtered_message("headers %s", [("authorization", "Bearer T3"), ("accept", "*/*")])
+    assert "T3" not in pairs
+    assert "Bearer" not in pairs
+    assert "accept" in pairs
+    assert "*/*" in pairs
+
+    asgi = _filtered_message(
+        "scope %s", {"headers": [(b"cookie", b"sid=T7"), (b"Authorization", b"Bearer T9")]}
+    )
+    assert "T7" not in asgi
+    assert "T9" not in asgi
+    assert "cookie" in asgi
+
+    nested_pair = _filtered_message("%s", ("Set-Cookie", "sid=T10; Path=/"))
+    assert "T10" not in nested_pair
