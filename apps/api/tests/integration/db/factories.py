@@ -98,3 +98,14 @@ def make_refresh_tokens(conn: psycopg.Connection[Any], **overrides: Any) -> dict
         "expires_at": datetime(2099, 1, 1, tzinfo=UTC),
     }
     return insert_row(conn, "public.refresh_tokens", **{**defaults, **overrides})
+
+
+def make_audit_logs(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    defaults = {
+        "actor_type": "staff",
+        "actor_id": uuid4(),
+        "action": "settings.update",
+        "entity_type": "system_settings",
+        "entity_id": "org.profile",
+    }
+    return insert_row(conn, "public.audit_logs", **{**defaults, **overrides})
