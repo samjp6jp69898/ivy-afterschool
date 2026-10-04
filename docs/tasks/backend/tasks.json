@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 216,
-  "last_updated": "2026-10-04T16:55:44Z",
+  "version": 217,
+  "last_updated": "2026-10-04T16:56:23Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2959,7 +2959,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/staff_users.py",
       "source_ref": "BE:api/auth.py::CreateUserRequest",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-039"
@@ -2981,9 +2981,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。3 條 red_case 對應同名測試（另有 create_fields、list_query、outputs），tdd.run 6 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作；commit 只含本 task 範圍內的檔案。對「協調者待使用者確認」的建議：email 以 DB-004 CHECK 的 ^[^@\\s]+@[^@\\s]+$ 加 max_length=254 驗證合理——不引入新相依、與 DB 規則一致；實測 pydantic（Rust regex）的 \\s 涵蓋 NBSP、全形空白、U+2028、U+0085，比 Postgres 的 [[:space:]] 只會更嚴，不會出現 schema 收、DB 拒的 500。nullable_fields 為 phone / email、建立請求不接受 password（extra=forbid）皆合理。不需問使用者。"
       }
     },
     {
@@ -4072,7 +4072,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/reference_data_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-116"
@@ -4094,9 +4094,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。3 條 red_case 對應同名測試（另有 clear_nullable_field、closed_day_reason），tdd.run 5 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作；commit 只含本 task 範圍內的檔案。抽出 _translate_unique_conflict 後 create_item 行為不變（BACKEND-116 的 4 個 test_reference_create_ 仍全綠）。突變（model_dump 不帶 exclude_unset、拿掉 savepoint）皆轉紅；衝突後 savepoint rollback、原名稱不變、session 可繼續使用有測。"
       }
     },
     {
@@ -4626,7 +4626,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": "BE:api/classrooms.py::get_classroom",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-135"
@@ -4647,9 +4647,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。2 條 red_case 對應同名測試，tdd.run 2 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作；commit 只含本 task 範圍內的檔案。_class_out 與 list_classes 的組裝一致：以同一班（2 位 active、1 位 withdrawn、1 位封存學生；lead、assistant、停用員工各一）與一個封存班實測，get_class 與 list_classes(include_archived=True) 的 ClassOut 完全相等。人數條件、staff 查詢共用 _active_staff。突變（人數不篩 status / 封存、封存班改 404）皆轉紅。對「協調者待使用者確認」的建議：ClassOut 暫時兩處組裝可接受（輸出已實測一致）；135 已 done，下一個動 class_service 的 task 可順手讓 list_classes 改用 _class_out。get_class_or_404 沿用合理。不需問使用者。"
       }
     },
     {
@@ -4659,7 +4659,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": "BE:api/classrooms.py::create_classroom",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-135"
@@ -4681,9 +4681,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。3 條 red_case 對應同名測試，tdd.run 3 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作；commit 只含本 task 範圍內的檔案。savepoint 內 insert，只把 23505 轉 409 class_name_taken；classes 唯一的 unique 只有 uq_classes_year_name（未封存、lower(btrim(name))），不同學年與封存班同名可建皆有測。突變（不轉譯）轉紅。"
       }
     },
     {
@@ -4796,7 +4796,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/classes.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-135",
@@ -4822,9 +4822,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（另有 archived、guard_registered），tdd.run 7 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作；commit 只含本 task 範圍內的檔案。require_permission(classes:read)，admin_routes_without_permission == []；ClassListQuery 以 Query() 收（forbid，無分頁）。app/api/admin/__init__.py 的 import 合併後所有既有路由仍掛載：auth、roles、audit-logs、settings、四個參考資料、students、classes、notifications 各測試檔都通過（test_auth_endpoints.py 目前另有別人未提交的 logout / refresh 紅燈測試，不屬本批）。"
       }
     },
     {
@@ -6911,7 +6911,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/inbox_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-211"
@@ -6932,9 +6932,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。2 條 red_case 對應同名測試（另有 keeps_existing_read_at），tdd.run 3 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作；commit 只含本 task 範圍內的檔案。他人通知、同 id 不同 recipient_type、不存在 id 三者回完全相同的 (404, notification_not_found, 找不到通知)，且別人的列 read_at 未被動。突變（拿掉 recipient_type / recipient_id 條件、已讀仍覆寫）皆轉紅。_to_out 抽出後 BACKEND-211 的 6 個 test_inbox_list_ 測試未改（765f74a 只動 import 行）且全綠，行為不變。對「協調者待使用者確認」的建議：FOR UPDATE 後只在 read_at 為 null 時寫入、三種情況同一個 404，合理。不需問使用者。"
       }
     },
     {
@@ -6944,7 +6944,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/inbox_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-211"
@@ -6965,9 +6965,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。2 條 red_case 對應同名測試，tdd.run 2 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作；commit 只含本 task 範圍內的檔案。bulk update 條件為 recipient_type + recipient_id + read_at is null；突變（拿掉 read_at 條件、拿掉 recipient_id）皆轉紅，已讀列 read_at 不變、他人未讀數不變有測。"
       }
     },
     {
@@ -6977,7 +6977,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/notifications.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-211",
@@ -7003,9 +7003,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（另有 requires_no_permission_code、unread_only_and_paging），tdd.run 7 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作；commit 只含本 task 範圍內的檔案。只掛 get_current_staff（強制改密碼 403 有測），/api/admin/notifications 在 tests/support/route_audit.py 白名單（BACKEND-073 既有），其餘 admin 路由仍需權限守衛。對「協調者待使用者確認」的建議：共用 query_model 合理（評估見 BACKEND-105）。不需問使用者。"
       }
     },
     {
@@ -7089,7 +7089,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/notifications.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-211",
@@ -7115,9 +7115,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 案例取代。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（另有 disabled_parent），tdd.run 6 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作；commit 只含本 task 範圍內的檔案。以 get_current_parent 的 parent.id 組 Recipient；家長 B 的通知不出現在 A 的列表、員工 cookie 401、停用家長 401 皆有測。對「協調者待使用者確認」的建議：家長端 import app/api/admin/_query.py 功能上沒問題，但讓 parent 套件依賴 admin 套件，建議日後搬到 app/api/_query.py（或 app/api/common.py）供兩端共用；列為殘留，不打回。"
       }
     },
     {
@@ -7508,7 +7508,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/attendance.py",
       "source_ref": "BE:models/classroom.py::StudentAttendance",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-007",
@@ -7539,9 +7539,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b2",
+        "notes": "通過。5 條 red_case 對應同名測試（另有 constants、factory_leave、factory_present_and_absent），tdd.run 8 passed。tdd.run 全綠且 -k 選到每條 red_case；動到的檔案 lint / typecheck 乾淨；測試 commit 先於實作；commit 只含本 task 範圍內的檔案。PENDING_MODEL_TABLES 已清空，test_schema_drift 4 passed（欄位、型別、nullable、FK、uq_student_attendances_student_date 與 DB-020 一致）。make_attendance 預設值逐條對照 CHECK：present / left 補台北 15:00 / 18:00 與 source='manual'（check_in_pair / check_out_pair / check_out_after_in / status_times 皆滿足），leave 狀態未給 leave 直接 ValueError。"
       }
     },
     {
