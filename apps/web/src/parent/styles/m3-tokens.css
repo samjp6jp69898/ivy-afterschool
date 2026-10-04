@@ -17,6 +17,8 @@
   --m3-on-tertiary: #ffffff;
   --m3-tertiary-container: #beeaf7;
   --m3-on-tertiary-container: #001f26;
+  --m3-warning-container: #ffddb0;
+  --m3-on-warning-container: #2b1700;
   --m3-error: #ba1a1a;
   --m3-on-error: #ffffff;
   --m3-error-container: #ffdad6;
@@ -54,6 +56,8 @@
   --m3-on-tertiary: #023640;
   --m3-tertiary-container: #214c57;
   --m3-on-tertiary-container: #beeaf7;
+  --m3-warning-container: #5b3a00;
+  --m3-on-warning-container: #ffddb0;
   --m3-error: #ffb4ab;
   --m3-on-error: #690005;
   --m3-error-container: #93000a;
