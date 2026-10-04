@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import M3TopAppBar from './M3TopAppBar.vue'
 import source from './M3TopAppBar.vue?raw'
 
@@ -62,11 +62,21 @@ describe('M3TopAppBar', () => {
     expect(wrapper.classes()).toContain('is-scrolled')
   })
 
-  it('M3TopAppBar stops listening to scroll after unmount', async () => {
+  it('M3TopAppBar removes the same scroll listener it added on unmount', () => {
+    const added: unknown[] = []
+    const removed: unknown[] = []
+    const add = vi.spyOn(window, 'addEventListener').mockImplementation((type, fn) => {
+      if (type === 'scroll') added.push(fn)
+    })
+    const remove = vi.spyOn(window, 'removeEventListener').mockImplementation((type, fn) => {
+      if (type === 'scroll') removed.push(fn)
+    })
     const wrapper = mount(M3TopAppBar, { props: { title: '成績' } })
     wrapper.unmount()
-    setScrollY(50)
-    expect(wrapper.element.classList.contains('is-scrolled')).toBe(false)
+    add.mockRestore()
+    remove.mockRestore()
+    expect(added).toHaveLength(1)
+    expect(removed).toEqual(added)
   })
 
   it('M3TopAppBar style follows design decisions', () => {
