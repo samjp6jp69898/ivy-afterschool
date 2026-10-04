@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 69,
-  "last_updated": "2026-10-04T11:40:57Z",
+  "version": 70,
+  "last_updated": "2026-10-04T11:41:09Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -2008,7 +2008,7 @@
           "ArrivalTimePicker recomputes when now changes：now 台北 17:31:20 選「約 10 分鐘後」→ setProps now 台北 17:36:20 → 該 chip 文字含 '17:47'，最後一筆 emit 深等於 ['17:47']；改選「自選時間」輸入 '17:40' → setProps now 台北 17:41:00 → 含「預計抵達時間不能早於現在」且最後一筆 emit 深等於 [null]",
           "ArrivalTimePicker falls back when option crosses midnight：now 台北 23:45:00 選「約 10 分鐘後」（23:55）→ setProps now 台北 23:50:00 → 「約 10 分鐘後」chip disabled、「不指定」aria-pressed === 'true'，最後一筆 emit 深等於 [null]",
           "ArrivalTimePicker ticks every minute without now prop：vi.useFakeTimers + vi.setSystemTime(2026-10-02T09:31:20Z)、不傳 now → 選「約 10 分鐘後」→ 最後一筆 emit ['17:42']；vi.advanceTimersByTime(60_000) → 最後一筆 emit 深等於 ['17:43']；unmount 後 vi.getTimerCount() === 0",
-          "ArrivalTimePicker syncs controlled modelValue：以 modelValue '18:15' 掛載（now 台北 17:31:20）→「自選時間」aria-pressed === 'true'、time input 值為 '18:15'、未 emit；setProps modelValue 改為 null → 「不指定」aria-pressed === 'true' 且無 time input；改以 '18:15' 掛載後輸入 '17:00'（元件自己 emit [null]）再 setProps modelValue null → 仍為自選時間、input 值 '17:00' 且含「預計抵達時間不能早於現在」"
+          "ArrivalTimePicker initializes custom time from a non-null modelValue：以 modelValue '18:15' 掛載（now 台北 17:31:20）→「自選時間」aria-pressed === 'true'、time input 值為 '18:15'、未 emit。ArrivalTimePicker returns to unspecified when parent clears a non-null modelValue：上述掛載後 setProps modelValue 為 null → 「不指定」aria-pressed === 'true' 且無 time input。ArrivalTimePicker keeps custom time when parent mirrors its own null emit：以 '18:15' 掛載後輸入 '17:00'（元件自己 emit [null]）再 setProps modelValue null → 仍為自選時間、input 值 '17:00' 且含「預計抵達時間不能早於現在」"
         ],
         "run": "just web-test src/parent/components/pickup/ArrivalTimePicker.spec.ts -t \"ArrivalTimePicker\"",
         "notes": ""
