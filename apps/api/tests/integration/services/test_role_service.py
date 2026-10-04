@@ -1,10 +1,35 @@
 """BACKEND-077：app/services/role_service.py（list_roles）。"""
 
+from uuid import UUID, uuid4
+
+import pytest
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.deps import CurrentStaff
+from app.core.errors import AppError
 from app.core.permissions import ALL_PERMISSIONS
-from app.services.role_service import list_roles
+from app.core.request_meta import RequestMeta
+from app.models.account import Role
+from app.models.audit import AuditLog
+from app.services.role_service import delete_role, list_roles
 from tests.support.factories import make_role, make_staff
+
+_META = RequestMeta(ip="203.0.113.5", user_agent="UA", request_id="r1")
+
+
+def _actor(staff_id: UUID) -> CurrentStaff:
+    return CurrentStaff(
+        id=staff_id,
+        username="admin",
+        display_name="管理員",
+        role_id=uuid4(),
+        role_code="admin",
+        role_name="管理員",
+        permissions=frozenset(ALL_PERMISSIONS),
+        must_change_password=False,
+        token_version=0,
+    )
 
 
 def test_list_roles_order_and_counts(db_session: Session) -> None:
@@ -33,3 +58,63 @@ def test_list_roles_admin_effective(db_session: Session) -> None:
     assert admin.permissions == ["*"]
     assert len(admin.effective_permissions) == 28
     assert admin.effective_permissions == sorted(ALL_PERMISSIONS)
+
+
+def test_delete_role_success(db_session: Session) -> None:
+    admin = make_staff(db_session)
+    role = make_role(db_session, code="temp_role", name="臨時角色", permissions=["students:read"])
+    role_id = role.id
+
+    delete_role(db_session, role_id, actor=_actor(admin.id), meta=_META)
+
+    assert db_session.execute(select(Role).where(Role.id == role_id)).first() is None
+    log = db_session.execute(
+        select(AuditLog).where(AuditLog.action == "role.delete", AuditLog.entity_id == str(role_id))
+    ).scalar_one()
+    assert log.actor_type == "staff"
+    assert log.actor_id == admin.id
+    assert log.entity_type == "role"
+    assert log.before == {"code": "temp_role", "name": "臨時角色", "permissions": ["students:read"]}
+    assert log.after is None
+    assert log.ip == "203.0.113.5"
+
+
+def test_delete_role_system(db_session: Session) -> None:
+    admin = make_staff(db_session)
+    tutor = db_session.execute(select(Role).where(Role.code == "tutor")).scalar_one()
+
+    with pytest.raises(AppError) as exc:
+        delete_role(db_session, tutor.id, actor=_actor(admin.id), meta=_META)
+
+    assert (exc.value.status, exc.value.code) == (409, "system_role_protected")
+    assert db_session.execute(select(Role).where(Role.id == tutor.id)).scalar_one() is tutor
+    assert (
+        db_session.execute(select(AuditLog).where(AuditLog.action == "role.delete")).first() is None
+    )
+
+
+def test_delete_role_in_use(db_session: Session) -> None:
+    admin = make_staff(db_session)
+    role = make_role(db_session, code="in_use_role")
+    make_staff(db_session, is_active=False).role = role
+    db_session.flush()
+    role_id = role.id
+
+    with pytest.raises(AppError) as exc:
+        delete_role(db_session, role_id, actor=_actor(admin.id), meta=_META)
+
+    assert (exc.value.status, exc.value.code) == (409, "role_in_use")
+    assert exc.value.details == {"staff_count": 1}
+    assert db_session.execute(select(Role).where(Role.id == role_id)).first() is not None
+    assert (
+        db_session.execute(select(AuditLog).where(AuditLog.action == "role.delete")).first() is None
+    )
+
+
+def test_delete_role_not_found(db_session: Session) -> None:
+    admin = make_staff(db_session)
+
+    with pytest.raises(AppError) as exc:
+        delete_role(db_session, uuid4(), actor=_actor(admin.id), meta=_META)
+
+    assert (exc.value.status, exc.value.code) == (404, "role_not_found")
