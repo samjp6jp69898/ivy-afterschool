@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 187,
-  "last_updated": "2026-10-04T16:36:50Z",
+  "version": 188,
+  "last_updated": "2026-10-04T16:37:19Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -6647,7 +6647,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/recipients.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-204",
@@ -6656,7 +6656,7 @@
         "BACKEND-070"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：有效權限在 Python 端以 resolve_effective_permissions 逐一計算（載入全部啟用員工，role 為 joined 載入、一次查詢）；員工數少，不另做 SQL 端權限預篩。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/notifications/test_recipients.py",
@@ -6874,7 +6874,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/inbox_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-200",
@@ -6883,7 +6883,7 @@
         "BACKEND-204"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：deep_link 對未知 event（DB CHECK 之外的值）退回 \"/\"，不拋例外；排序以 created_at desc、id desc 保持穩定。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/notifications/test_inbox_service.py",
@@ -7199,13 +7199,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/preference_service.py",
       "source_ref": "BE:api/parent_portal/notifications.py::update_preferences",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-219"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：details 格式為 {\"events\": [不可設定的事件…]}；任一事件不可設定時整批拒絕、不寫入合法的那幾筆。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/notifications/test_preference_service.py",
@@ -8429,7 +8429,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/leaves.py",
       "source_ref": "BE:models/student_leave.py::StudentLeaveRequest",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-007",
@@ -9173,7 +9173,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/homework.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-007",
@@ -10041,7 +10041,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/pickup.py",
       "source_ref": "BE:models/dismissal.py::StudentDismissalCall",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-007",
@@ -10057,7 +10057,7 @@
         "INFRA-010"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：make_pickup_authorization 以 HMAC 計算 code_hash（BACKEND-400），呼叫它的測試必須自行提供 APP_SECRET_KEY 環境（test_pickup_models.py 有 autouse fixture 可參照）；make_pickup_request 的 requested_by_type 依 source 決定（staff → staff，其餘 → parent）。PENDING_MODEL_TABLES 目前剩 student_attendances、devices、nfc_cards。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/models/test_pickup_models.py",
@@ -10086,7 +10086,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/pickup.py",
       "source_ref": "BE:api/dismissal_calls.py::DismissalCallOut",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "INFRA-004",
@@ -10094,7 +10094,7 @@
         "BACKEND-301"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：PickupRequestOut 與 ParentPickupRequestOut 的 expected_arrival_at 一律以 TimeHM（HH:MM，台北當地時間）輸出，與 request 端一致（description 對家長端欄位未標型別）；PickupReplyIn 的「至少一個」以非 null 判斷（兩者皆 null 視為未給）；PickupCompleteIn 在 method=guardian 時不禁止多給 note、override 時不禁止多給 guardian_id（只檢查必填）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_pickup_schemas.py",
@@ -11958,7 +11958,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/exams.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-007",
