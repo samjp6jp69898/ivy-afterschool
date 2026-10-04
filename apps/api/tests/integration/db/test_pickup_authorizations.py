@@ -19,8 +19,12 @@ NOW = datetime(2026, 10, 5, 18, 0, tzinfo=UTC)
 def test_pickup_authorizations_status_domain(backend_conn: Conn) -> None:
     with pg_error(backend_conn, CHECK_VIOLATION):
         make_pickup_authorizations(backend_conn, status="expired")
-    with pg_error(backend_conn, CHECK_VIOLATION):
-        make_pickup_authorizations(backend_conn, verification_method="face")
+    # 其餘欄位維持一致的 completed 資料，只讓 verification_method 違反值域 CHECK
+    with pg_error(backend_conn, CHECK_VIOLATION) as err:
+        make_pickup_authorizations(
+            backend_conn, status="completed", verified_at=NOW, verification_method="face"
+        )
+    assert err.constraint_name == "pickup_authorizations_verification_method_check"
 
     assert make_pickup_authorizations(backend_conn)["status"] == "active"
 
