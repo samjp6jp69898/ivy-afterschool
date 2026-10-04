@@ -1176,7 +1176,7 @@ const ParentEmptyState = {
 /* ============================================================
    本稿元件與稿件資料
    ============================================================ */
-/* 待裁定 1（推薦 A）：M3TextField 增加 min / max props，直接傳給 input[type=date]。稿內就地擴充共用元件的複本。 */
+/* 已定案：M3TextField 增加選填 min / max props，原樣傳給 input（PARENT-134 一併修改並補測試）。稿內就地擴充共用元件的複本。 */
 M3TextField.props.min = { type: String, default: undefined }
 M3TextField.props.max = { type: String, default: undefined }
 M3TextField.template = M3TextField.template.replace(':maxlength="maxlength" :inputmode="inputmode"', ':maxlength="maxlength" :min="min" :max="max" :inputmode="inputmode"')
@@ -1340,6 +1340,7 @@ function pageSetup({ snack }) {
   const decisions = [
     '單欄表單，由上而下：假別 → 日期 → 事由 → 附件 → 按鈕列；區塊間距 20px，各區塊標題 title-small（「假別」「日期」「附件（選填）」），事由用 TextField 自己的浮動 label。不在表單內選小孩（頁面的選中小孩決定）。',
     '假別：PARENT-098 M3SegmentedButton 三段（病假 sick / 事假 personal / 其他 other，aria-label「假別」），預設病假。',
+    '日期欄 min / max（已定案）：M3TextField 新增選填 min / max props，原樣傳給 input（只對 date / time 有意義），在 PARENT-134 一併修改並補 M3TextField 測試；LeaveForm 直接用 M3TextField。',
     '日期：開始日期、結束日期兩個 M3TextField type="date" 上下排列（全寬，比並排好點、錯誤訊息也有空間），min = today − leave_past_days、max = today + leave_future_days（兩欄相同），預設皆為 today。開始日期的支援文字提示可選範圍「可選 09/02～12/01」。改開始日晚於結束日時，結束日自動設為開始日。',
     '日期驗證只在送出時做：超出範圍 → 該欄 errorText「請假日期需在今天前 30 天到後 60 天內」（開始、結束各自判斷）；結束早於開始 → 結束欄「結束日期不可早於開始日期」。錯誤時該欄紅框 + 右側 error 圖示 + aria-invalid，不 emit submit；任一日期再變更即清除兩欄錯誤。',
     '事由：M3TextField textarea，label「事由（選填）」、placeholder「例如：發燒看醫生」、maxlength 200 + 右下「n/200」計數；送出時 trim，空白送 ""。',
@@ -1348,15 +1349,7 @@ function pageSetup({ snack }) {
     '按鈕列：左「取消」（outlined，emit cancel）、右「送出請假」（filled + send 圖示，type=submit），等寬並排。submitting：送出鈕 loading（轉圈、aria-busy）、取消 disabled、全部欄位以 fieldset disabled 鎖定（不淡化，避免閃爍）。',
     '建立錯誤（leave_overlap 等）與附件上傳結果由 LeavesView（PARENT-138）顯示在表單上方 / snackbar，不屬於本元件。',
   ]
-  const openQuestions = [
-    {
-      question: '待使用者裁定 1：日期欄的 min / max。已完成的 M3TextField（PARENT-018）沒有 min / max props，但 PARENT-134 要求日期 input 帶 min / max（驗收直接檢查 input 的 min 屬性）。',
-      options: [
-        { text: '擴充 M3TextField：新增選填 min / max props，原樣傳給 input（只對 date / time 有意義）；在 PARENT-134 一併修改並補 M3TextField 測試，description 補註（稿已照此畫）', recommended: true },
-        { text: 'M3TextField 不動，LeaveForm 自己畫兩個原生 input[type=date]，外觀複製 M3TextField outlined 樣式' },
-      ],
-    },
-  ]
+  const openQuestions = []
   return { TODAY, LIMITS, presets: PRESETS, presetKey, formSeq, currentPreset, setPreset, submitting, onSubmit, onCancel, decisions, openQuestions }
 }
 const app = createApp({
