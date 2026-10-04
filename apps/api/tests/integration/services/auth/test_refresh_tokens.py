@@ -207,10 +207,15 @@ def test_rotate_refresh_race_window(db_session: Session, fake_clock: FakeClock) 
 
 @pytest.fixture
 def owner_cleanup() -> Iterator[list[tuple[str, UUID]]]:
-    """(table, id) 清單；teardown 以 owner 連線逐筆刪除（roles 是 seed 表，不可 truncate）。"""
+    """(table, id) 清單；teardown 以 owner 連線逐筆刪除（roles 是 seed 表，不可 truncate）。
+
+    測試參數必須把本 fixture 排在 committing_db_session **之前**：pytest 依參數順序建立、反序
+    拆除，session 先 close（釋放未 commit 的列鎖）owner 才刪列；反過來會等鎖。lock_timeout 當保險。
+    """
     rows: list[tuple[str, UUID]] = []
     yield rows
     with connect_owner() as conn:
+        conn.execute("set lock_timeout = '5s'")
         for table, row_id in rows:
             conn.execute(
                 psycopg.sql.SQL("delete from public.{} where id = %s").format(
@@ -252,9 +257,9 @@ def _token_version_via_new_connection(table: str, row_id: UUID) -> int:
 
 @pytest.mark.cleanup_tables("refresh_tokens")
 def test_rotate_refresh_reuse_revokes_family(
+    owner_cleanup: list[tuple[str, UUID]],
     committing_db_session: Session,
     fake_clock: FakeClock,
-    owner_cleanup: list[tuple[str, UUID]],
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     session = committing_db_session
@@ -290,9 +295,9 @@ def test_rotate_refresh_reuse_revokes_family(
 
 @pytest.mark.cleanup_tables("refresh_tokens")
 def test_rotate_refresh_reuse_parent_bumps_parent_version(
+    owner_cleanup: list[tuple[str, UUID]],
     committing_db_session: Session,
     fake_clock: FakeClock,
-    owner_cleanup: list[tuple[str, UUID]],
 ) -> None:
     session = committing_db_session
     parent = make_parent(session)
