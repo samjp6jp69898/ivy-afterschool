@@ -9,7 +9,7 @@ from uuid import UUID
 from pydantic import AfterValidator, Field, model_validator
 
 from app.models.classes import ClassStaffRole
-from app.schemas.common import OutModel, RequestModel, UpdateModel
+from app.schemas.common import OutModel, RequestModel, SortOrder, UpdateModel
 
 
 def _unique_sorted(levels: list[int]) -> list[int]:
@@ -29,14 +29,14 @@ class ClassCreateIn(RequestModel):
     name: str = Field(min_length=1, max_length=30)
     grade_levels: GradeLevels
     academic_year: int = Field(ge=100, le=200)  # 民國學年度
-    sort_order: int = Field(default=0, ge=0)
+    sort_order: SortOrder = 0
 
 
 class ClassUpdateIn(UpdateModel):
     name: str | None = Field(default=None, min_length=1, max_length=30)
     grade_levels: GradeLevels | None = None
     academic_year: int | None = Field(default=None, ge=100, le=200)
-    sort_order: int | None = Field(default=None, ge=0)
+    sort_order: SortOrder | None = None
 
 
 class ClassListQuery(RequestModel):

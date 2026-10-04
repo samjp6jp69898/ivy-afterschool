@@ -7,18 +7,18 @@ from uuid import UUID
 
 from pydantic import Field
 
-from app.schemas.common import OutModel, RequestModel, UpdateModel
+from app.schemas.common import OutModel, RequestModel, SortOrder, UpdateModel
 
 
 class NamedItemCreateIn(RequestModel):
     name: str = Field(min_length=1, max_length=20)
-    sort_order: int = Field(default=0, ge=0)
+    sort_order: SortOrder = 0
     is_active: bool = True
 
 
 class NamedItemUpdateIn(UpdateModel):
     name: str | None = Field(default=None, min_length=1, max_length=20)
-    sort_order: int | None = Field(default=None, ge=0)
+    sort_order: SortOrder | None = None
     is_active: bool | None = None
 
 

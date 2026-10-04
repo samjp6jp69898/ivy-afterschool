@@ -14,7 +14,7 @@ from uuid import UUID
 from pydantic import ConfigDict, Field, PlainSerializer, model_validator
 
 from app.schemas.classes import ClassBriefOut
-from app.schemas.common import OutModel, RequestModel, UpdateModel
+from app.schemas.common import OutModel, RequestModel, SortOrder, UpdateModel
 
 Score = Annotated[Decimal, Field(ge=0, le=1000, max_digits=6, decimal_places=2)]
 FullScore = Annotated[Decimal, Field(gt=0, le=1000, max_digits=6, decimal_places=2)]
@@ -65,7 +65,7 @@ class ExamListQuery(RequestModel):
 class ExamSubjectIn(RequestModel):
     subject_id: UUID
     full_score: FullScore = Decimal(100)
-    sort_order: int = Field(default=0, ge=0)
+    sort_order: SortOrder = 0
 
 
 class ExamSubjectsPutIn(RequestModel):
