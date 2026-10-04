@@ -108,3 +108,20 @@ def test_list_classes_order(db_session: Session) -> None:
     rows = _mine(list_classes(db_session, ClassListQuery(), actor=actor), ids)
 
     assert [r.id for r in rows] == [first_by_name.id, second.id, old.id]
+
+
+def test_list_classes_order_sort_order_within_year(db_session: Session) -> None:
+    first_by_sort = make_class(db_session, name="B班", academic_year=115)
+    second_by_sort = make_class(db_session, name="A班", academic_year=115)
+    first_by_sort.sort_order = 0
+    second_by_sort.sort_order = 1
+    other_year_low_sort = make_class(db_session, name="A班", academic_year=114)
+    other_year_low_sort.sort_order = 0
+    db_session.flush()
+    actor = _actor(make_staff(db_session).id)
+    ids = {first_by_sort.id, second_by_sort.id, other_year_low_sort.id}
+
+    rows = _mine(list_classes(db_session, ClassListQuery(), actor=actor), ids)
+
+    # 同學年先看 sort_order（B班 sort_order=0 在 A班 sort_order=1 前），學年仍優先於 sort_order
+    assert [r.id for r in rows] == [first_by_sort.id, second_by_sort.id, other_year_low_sort.id]
