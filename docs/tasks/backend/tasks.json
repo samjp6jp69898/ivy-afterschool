@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 159,
-  "last_updated": "2026-10-04T15:09:03Z",
+  "version": 160,
+  "last_updated": "2026-10-04T16:09:05Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -868,8 +868,8 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/api/conftest.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-020",
         "BACKEND-022",
@@ -1288,8 +1288,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/auth.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "INFRA-004",
         "BACKEND-181"
@@ -1447,8 +1447,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/staff_auth.py",
       "source_ref": "BE:api/auth.py::refresh_token",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-041",
         "BACKEND-037",
@@ -1522,8 +1522,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/staff_auth.py",
       "source_ref": "BE:api/auth.py::logout",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-038",
         "BACKEND-041"
@@ -1673,8 +1673,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/staff_auth.py",
       "source_ref": "BE:api/auth.py::change_password",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-041",
         "BACKEND-032",
@@ -2482,8 +2482,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/api/deps.py",
       "source_ref": "BE:utils/auth.py::require_permission",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-047",
         "BACKEND-070"
@@ -2519,8 +2519,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/rbac_guards.py",
       "source_ref": "BE:api/permissions_admin.py::_assert_can_grant",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-072",
         "BACKEND-047"
@@ -2624,8 +2624,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/role_service.py",
       "source_ref": "BE:api/permissions_admin.py::_role_query",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-076",
         "BACKEND-072",
@@ -3520,8 +3520,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/audit_service.py",
       "source_ref": "BE:utils/audit.py::write_audit_in_session",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-101",
         "BACKEND-011",
@@ -3788,8 +3788,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/settings_service.py",
       "source_ref": "BE:api/system_config.py::list_configs",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-108",
         "BACKEND-111"
@@ -4004,8 +4004,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/reference_data_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-114"
       ],
@@ -4516,8 +4516,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/repositories/students.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-131",
         "BACKEND-130",
@@ -5063,8 +5063,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/students.py",
       "source_ref": "BE:api/students.py::StudentCreate",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-167"
       ],
@@ -6247,8 +6247,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_scope.py",
       "source_ref": "BE:api/parent_portal/_shared.py::_assert_student_owned",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-179",
         "BACKEND-062",
@@ -6319,8 +6319,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_children_service.py",
       "source_ref": "BE:api/parent_portal/profile.py::get_my_children",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-179",
         "BACKEND-181",
@@ -14829,8 +14829,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/errors.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-003"
       ],
