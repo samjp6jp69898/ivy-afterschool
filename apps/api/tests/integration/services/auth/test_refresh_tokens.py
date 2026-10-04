@@ -43,6 +43,8 @@ def test_issue_refresh_ttl(db_session: Session, fake_clock: FakeClock) -> None:
             select(RefreshToken).where(RefreshToken.id.in_([staff.token_id, parent.token_id]))
         ).scalars()
     }
+    # created_at 以注入時鐘寫入，DB CHECK expires_at > created_at 與時鐘一致
+    assert rows[staff.token_id].created_at == fake_clock.now()
     assert rows[staff.token_id].expires_at == fake_clock.now() + timedelta(days=14)
     assert rows[parent.token_id].expires_at == fake_clock.now() + timedelta(days=30)
     assert rows[parent.token_id].subject_type == "parent"
