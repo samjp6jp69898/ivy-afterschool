@@ -4,6 +4,7 @@
 """
 
 from decimal import Decimal
+from uuid import uuid4
 
 from tests.integration.db.conftest import (
     CHECK_VIOLATION,
@@ -14,9 +15,19 @@ from tests.integration.db.conftest import (
     assert_backend_grants,
     assert_backend_read_write,
     assert_updated_at_trigger,
+    connect_backend,
+    connect_owner,
     pg_error,
 )
-from tests.integration.db.factories import make_exam_scores, make_exam_subjects, make_students
+from tests.integration.db.factories import (
+    make_exam_scores,
+    make_exam_subjects,
+    make_exam_types,
+    make_exams,
+    make_staff_users,
+    make_students,
+    make_subjects,
+)
 
 WITHIN_FULL_SCORE = "ck_exam_scores_within_full_score"
 FULL_SCORE_FLOOR = "ck_exam_subjects_full_score_floor"
@@ -147,6 +158,18 @@ def test_exam_scores_subject_must_belong_to_exam(backend_conn: Conn) -> None:
     assert err.constraint_name == "fk_exam_scores_exam_subject"
 
 
+def test_exam_scores_updated_by_set_null(backend_conn: Conn) -> None:
+    staff = make_staff_users(backend_conn)
+    row = make_exam_scores(backend_conn, updated_by=staff["id"])
+
+    backend_conn.execute("delete from public.staff_users where id = %s", (staff["id"],))
+
+    after = backend_conn.execute(
+        "select updated_by from public.exam_scores where id = %s", (row["id"],)
+    ).fetchone()
+    assert after == (None,)
+
+
 def test_exam_scores_student_restrict(backend_conn: Conn) -> None:
     row = make_exam_scores(backend_conn)
 
@@ -218,3 +241,56 @@ def test_exam_scores_updated_at_trigger(backend_conn: Conn) -> None:
     row = make_exam_scores(backend_conn, updated_at=SEEDED_UPDATED_AT)
 
     assert_updated_at_trigger(backend_conn, "public.exam_scores", row["id"], note="訂正後")
+
+
+LOCK_NOT_AVAILABLE = "55P03"
+
+
+def test_exam_scores_full_score_lowering_waits_for_concurrent_score() -> None:
+    """登分 transaction 未結束時，下修滿分要等它（不會讓「分數 > 滿分」同時成立）。
+
+    資料必須 commit 才看得到：兩條 app_backend 連線，結束後以 owner 清除自己建的測資。
+    """
+    conn_setup, conn_score, conn_lower = connect_backend(), connect_backend(), connect_backend()
+    exam_type_id = exam_id = subject_id = student_id = None
+    try:
+        with conn_setup.transaction():
+            exam_type_id = make_exam_types(conn_setup, name=f"類型{uuid4().hex[:8]}")["id"]
+            exam_id = make_exams(conn_setup, exam_type_id=exam_type_id)["id"]
+            subject_id = make_subjects(conn_setup, name=f"科目{uuid4().hex[:8]}")["id"]
+            make_exam_subjects(
+                conn_setup, exam_id=exam_id, subject_id=subject_id, full_score=Decimal("100")
+            )
+            student_id = make_students(conn_setup)["id"]
+
+        make_exam_scores(
+            conn_score,
+            exam_id=exam_id,
+            subject_id=subject_id,
+            student_id=student_id,
+            score=Decimal("80"),
+        )  # 未 commit，持有 exam_subjects 列的共享鎖
+
+        conn_lower.execute("set lock_timeout = '300ms'")
+        lower = "update public.exam_subjects set full_score = 70 where exam_id = %s"
+        with pg_error(conn_lower, LOCK_NOT_AVAILABLE):
+            conn_lower.execute(lower, (exam_id,))
+
+        conn_score.commit()
+        with pg_error(conn_lower, CHECK_VIOLATION) as err:
+            conn_lower.execute(lower, (exam_id,))
+        assert err.constraint_name == FULL_SCORE_FLOOR
+    finally:
+        for conn in (conn_score, conn_lower, conn_setup):
+            conn.rollback()
+            conn.close()
+        with connect_owner() as owner:
+            if exam_id is not None:
+                owner.execute("delete from public.exams where id = %s", (exam_id,))
+            if student_id is not None:
+                owner.execute("delete from public.students where id = %s", (student_id,))
+            if subject_id is not None:
+                owner.execute("delete from public.subjects where id = %s", (subject_id,))
+            if exam_type_id is not None:
+                owner.execute("delete from public.exam_types where id = %s", (exam_type_id,))
+            owner.commit()
