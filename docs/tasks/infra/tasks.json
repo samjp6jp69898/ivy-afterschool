@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 116,
-  "last_updated": "2026-10-04T12:42:58Z",
+  "version": 117,
+  "last_updated": "2026-10-04T12:43:47Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1158,14 +1158,14 @@
       "granularity_unit": "config",
       "target_path": "apps/api/railway.json",
       "source_ref": "BE:railway.json::deploy",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r6",
       "depends_on": [
         "INFRA-031",
         "BACKEND-535"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "打回：just typecheck scripts/tests/test_deploy_configs.py 失敗（exit 1）：scripts/tests/test_deploy_configs.py:596 error: Returning Any from function declared to return \"dict[str, Any]\" [no-any-return]（_railway 回傳 json.loads 的 Any）。CI typecheck job 執行 `mypy scripts --config-file apps/api/pyproject.toml`，此錯誤會讓 CI 變紅，而 Railway 開啟 Wait for CI 時部署會被擋。修正：_railway 內以具型別變數接 json.loads 結果或 cast，修完 just typecheck 該檔須 exit 0。",
+      "risk_notes": "/api/health 由 BACKEND-021（pending）實作，完成前 api 部署的 healthcheck 會失敗；api 只監聽 IPv6，Railway healthcheck 是否經 IPv6 連入屬 INFRA-031 open_design_questions (3)，上線實測。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "scripts/tests/test_deploy_configs.py",
@@ -1183,9 +1183,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r6-infra",
-        "notes": "打回：just typecheck scripts/tests/test_deploy_configs.py 失敗（exit 1）：scripts/tests/test_deploy_configs.py:596 error: Returning Any from function declared to return \"dict[str, Any]\" [no-any-return]（_railway 回傳 json.loads 的 Any）。CI typecheck job 執行 `mypy scripts --config-file apps/api/pyproject.toml`，此錯誤會讓 CI 變紅，而 Railway 開啟 Wait for CI 時部署會被擋。修正：_railway 內以具型別變數接 json.loads 結果或 cast，修完 just typecheck 該檔須 exit 0。 已核對：red_cases 逐條有對應測試且斷言具體值；tdd.run 實跑全綠，--collect-only 帶 -k 選到全部 red_case；af70ce8（測試）早於 b58acdf（實作），以 git archive 取 1ff72e7 樹實跑確認紅燈（FileNotFoundError）；兩份 railway.json 以 https://railway.com/railway.schema.json（2026-10-04 下載）用 jsonschema Draft 2020-12 驗證通過，preDeployCommand 陣列（maxItems 1）、overlapSeconds / drainingSeconds、numReplicas（integer 1~200）、restartPolicyType ON_FAILURE 均為 schema 合法欄位；watchPatterns 依 Railway build-configuration 文件「設了 Root Directory 時 pattern 仍從 / 起算」，'/apps/<svc>/**' 正確；dockerfilePath 'Dockerfile' 相對於 Root Directory（apps/<svc>），與 Dockerfile 的 build context 一致；just lint 兩支測試檔乾淨。 殘留（不擋）：(1) Railway monorepo 文件明載「Railway Config File 不跟隨 Root Directory，需填絕對路徑，例如 /backend/railway.toml」，服務設定的 Config File 若沒填 /apps/api/railway.json、/apps/web/railway.json，這兩份檔案會被靜默忽略（api 的 preDeployCommand 不會執行 migration）；INFRA-040 description 第 6 節目前只寫設定 Root Directory，建議協調者補進 INFRA-040 的 description 與 red_case。(2) /api/health 由 BACKEND-021（目前 pending）實作，完成前 api 部署的 healthcheck 會失敗（INFRA-031 risk_notes 已記）。(3) api 只監聽 IPv6，Railway healthcheck 是否經 IPv6 連入屬 INFRA-031 open_design_questions (3)，上線實測。"
+        "notes": "通過。red_cases 逐條有對應測試且斷言具體值；tdd.run 實跑全綠，--collect-only 帶 -k 選到全部 red_case；測試 commit af70ce8 早於實作 b58acdf，取 1ff72e7 樹實跑確認紅燈；兩份 railway.json 以 https://railway.com/railway.schema.json（2026-10-04 下載）用 jsonschema Draft 2020-12 驗證通過（preDeployCommand 陣列 maxItems 1、overlapSeconds / drainingSeconds、numReplicas integer 1~200、restartPolicyType ON_FAILURE 皆合法）；watchPatterns 依 Railway 文件在設了 Root Directory 時仍從 / 起算，'/apps/<svc>/**' 正確；dockerfilePath 'Dockerfile' 相對於 Root Directory，與 build context 一致；just lint、just typecheck scripts/tests/test_deploy_configs.py 皆 exit 0。殘留：/api/health 由 BACKEND-021（pending）實作，完成前 api 部署的 healthcheck 會失敗；api 只監聽 IPv6，Railway healthcheck 是否經 IPv6 連入屬 INFRA-031 open_design_questions (3)，上線實測。"
       }
     },
     {
@@ -1274,13 +1274,13 @@
       "granularity_unit": "config",
       "target_path": "apps/web/railway.json",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r6",
       "depends_on": [
         "INFRA-034"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "打回：just typecheck scripts/tests/test_deploy_configs.py 失敗（exit 1）：scripts/tests/test_deploy_configs.py:596 error: Returning Any from function declared to return \"dict[str, Any]\" [no-any-return]（_railway 回傳 json.loads 的 Any）。CI typecheck job 執行 `mypy scripts --config-file apps/api/pyproject.toml`，此錯誤會讓 CI 變紅，而 Railway 開啟 Wait for CI 時部署會被擋。修正：_railway 內以具型別變數接 json.loads 結果或 cast，修完 just typecheck 該檔須 exit 0。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "scripts/tests/test_deploy_configs.py",
@@ -1295,9 +1295,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r6-infra",
-        "notes": "打回：just typecheck scripts/tests/test_deploy_configs.py 失敗（exit 1）：scripts/tests/test_deploy_configs.py:596 error: Returning Any from function declared to return \"dict[str, Any]\" [no-any-return]（_railway 回傳 json.loads 的 Any）。CI typecheck job 執行 `mypy scripts --config-file apps/api/pyproject.toml`，此錯誤會讓 CI 變紅，而 Railway 開啟 Wait for CI 時部署會被擋。修正：_railway 內以具型別變數接 json.loads 結果或 cast，修完 just typecheck 該檔須 exit 0。 已核對：red_cases 逐條有對應測試且斷言具體值；tdd.run 實跑全綠，--collect-only 帶 -k 選到全部 red_case；af70ce8（測試）早於 b58acdf（實作），以 git archive 取 1ff72e7 樹實跑確認紅燈（FileNotFoundError）；兩份 railway.json 以 https://railway.com/railway.schema.json（2026-10-04 下載）用 jsonschema Draft 2020-12 驗證通過，preDeployCommand 陣列（maxItems 1）、overlapSeconds / drainingSeconds、numReplicas（integer 1~200）、restartPolicyType ON_FAILURE 均為 schema 合法欄位；watchPatterns 依 Railway build-configuration 文件「設了 Root Directory 時 pattern 仍從 / 起算」，'/apps/<svc>/**' 正確；dockerfilePath 'Dockerfile' 相對於 Root Directory（apps/<svc>），與 Dockerfile 的 build context 一致；just lint 兩支測試檔乾淨。 殘留（不擋）：(1) Railway monorepo 文件明載「Railway Config File 不跟隨 Root Directory，需填絕對路徑，例如 /backend/railway.toml」，服務設定的 Config File 若沒填 /apps/api/railway.json、/apps/web/railway.json，這兩份檔案會被靜默忽略（api 的 preDeployCommand 不會執行 migration）；INFRA-040 description 第 6 節目前只寫設定 Root Directory，建議協調者補進 INFRA-040 的 description 與 red_case。(2) /api/health 由 BACKEND-021（目前 pending）實作，完成前 api 部署的 healthcheck 會失敗（INFRA-031 risk_notes 已記）。(3) api 只監聽 IPv6，Railway healthcheck 是否經 IPv6 連入屬 INFRA-031 open_design_questions (3)，上線實測。"
+        "notes": "通過。red_cases 逐條有對應測試且斷言具體值；tdd.run 實跑全綠，--collect-only 帶 -k 選到全部 red_case；測試 commit af70ce8 早於實作 b58acdf，取 1ff72e7 樹實跑確認紅燈；兩份 railway.json 以 https://railway.com/railway.schema.json（2026-10-04 下載）用 jsonschema Draft 2020-12 驗證通過（preDeployCommand 陣列 maxItems 1、overlapSeconds / drainingSeconds、numReplicas integer 1~200、restartPolicyType ON_FAILURE 皆合法）；watchPatterns 依 Railway 文件在設了 Root Directory 時仍從 / 起算，'/apps/<svc>/**' 正確；dockerfilePath 'Dockerfile' 相對於 Root Directory，與 build context 一致；just lint、just typecheck scripts/tests/test_deploy_configs.py 皆 exit 0。殘留：/api/health 由 BACKEND-021（pending）實作，完成前 api 部署的 healthcheck 會失敗；api 只監聽 IPv6，Railway healthcheck 是否經 IPv6 連入屬 INFRA-031 open_design_questions (3)，上線實測。"
       }
     },
     {
@@ -1417,14 +1417,14 @@
       "granularity_unit": "script",
       "target_path": "scripts/smoke_deploy.sh",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r6",
       "depends_on": [
         "INFRA-008",
         "INFRA-033"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "打回：just typecheck scripts/tests/test_smoke_deploy.py 失敗（exit 1）：scripts/tests/test_smoke_deploy.py:28 error: Need type annotation for \"SPA\" [var-annotated]（SPA = (200, {}, ...) 的空 dict 無法推斷型別）。CI typecheck job 執行 `mypy scripts --config-file apps/api/pyproject.toml`，此錯誤會讓 CI 變紅。修正：為 SPA 加上 tuple[int, dict[str, str], str] 型別註記（可與 _all_pass_routes 的回傳型別共用別名），修完 just typecheck 該檔須 exit 0。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "scripts/tests/test_smoke_deploy.py",
@@ -1443,9 +1443,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r6-infra",
-        "notes": "打回：just typecheck scripts/tests/test_smoke_deploy.py 失敗（exit 1）：scripts/tests/test_smoke_deploy.py:28 error: Need type annotation for \"SPA\" [var-annotated]（SPA = (200, {}, ...) 的空 dict 無法推斷型別）。CI typecheck job 執行 `mypy scripts --config-file apps/api/pyproject.toml`，此錯誤會讓 CI 變紅。修正：為 SPA 加上 tuple[int, dict[str, str], str] 型別註記（可與 _all_pass_routes 的回傳型別共用別名），修完 just typecheck 該檔須 exit 0。 已核對：6 條 red_case 都有對應測試且斷言 exit code 與 FAIL 行內容；tdd.run 實跑 6 passed，--collect-only 帶 / 不帶 -k smoke 皆為同樣 6 條；1ff72e7（測試）早於 300d8c7（實作），以 git archive 取 1ff72e7 樹實跑 6 failed 確認紅燈；腳本：7 項檢查、exit = FAIL 數（上限 125）、curl 一律 --max-time 10、https 時要求 HSTS，皆符合 description；just smoke 無參數 exit 1 印用法、just smoke http://example.com exit 2；以 http://localhost:1@evil.com、http://localhost.evil.com、http://evil.com#@127.0.0.1、ftp://x、http://[::1]:9 嘗試繞過 host 限制皆 exit 2；實測 curl 連線失敗時會截斷 -D 標頭檔，不會沿用前一個回應的標頭造成誤判；腳本不送 cookie / token，輸出只有路徑與狀態碼；just lint 測試檔乾淨，bash -n 通過（本機無 shellcheck）。 殘留（不擋）：(1) test_smoke_rejects_plain_http_remote 的 server.requests == [] 恆成立（腳本收到的是 example.com，假伺服器本來就收不到請求），實際保護來自 exit 2 與 stderr 斷言。(2) 參數錯誤時錯誤訊息原樣回顯 $1，若使用者在 base_url 帶 user:pass@ 會被印到 stderr（腳本本身會拒絕這種網址）。"
+        "notes": "通過。6 條 red_case 都有對應測試且斷言 exit code 與 FAIL 行內容；tdd.run 實跑 6 passed，--collect-only 帶 / 不帶 -k smoke 同為 6 條；測試 commit 1ff72e7 早於實作 300d8c7，取 1ff72e7 樹實跑 6 failed 確認紅燈；腳本 7 項檢查、exit = FAIL 數（上限 125）、curl 一律 --max-time 10、https 時要求 HSTS，符合 description；just smoke 無參數 exit 1、just smoke http://example.com exit 2；http://localhost:1@evil.com、http://localhost.evil.com、http://evil.com#@127.0.0.1、ftp://x、http://[::1]:9 皆 exit 2；curl 連線失敗時會截斷 -D 標頭檔，不會沿用前一回應的標頭；腳本不送 cookie / token，輸出只有路徑與狀態碼；just lint、just typecheck scripts/tests/test_smoke_deploy.py 皆 exit 0，bash -n 通過。殘留：(1) test_smoke_rejects_plain_http_remote 的 server.requests == [] 恆成立，實際保護來自 exit 2 與 stderr 斷言；(2) 參數錯誤時錯誤訊息原樣回顯 $1，base_url 帶 user:pass@ 會印到 stderr；(3) 本機無 shellcheck，只跑 bash -n。"
       }
     },
     {
