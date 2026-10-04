@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 83,
-  "last_updated": "2026-10-04T01:31:17Z",
+  "version": 84,
+  "last_updated": "2026-10-04T01:31:18Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14587,7 +14587,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/core/test_storage_local_s3.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r3",
       "depends_on": [
         "BACKEND-013",
@@ -14618,9 +14618,9 @@
         "notes": "需要先 just db-start（storage 的 healthcheck 通過即代表 bucket afterschool-local 已建立）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-fe",
+        "notes": "通過。flock /tmp/afterschool_db.lock 內跑 just test-int apps/api/tests/integration/core/test_storage_local_s3.py -k storage_local_s3：10 項全綠（9 條 red_case 全部有對應測試，其中 other_prefixes 為 2 個參數）；紅燈 5b6cea3 先於實作 c88d5c3，實作 commit 只補 fixture 與 boto3 monkeypatch 寫法，未放寬斷言；ruff、mypy 乾淨。fixture：endpoint host 非 loopback 時 pytest.exit(returncode=2)，且在建立 R2Storage / boto3 client 之前（突變把 client 建立移到守衛之前會被 remote_endpoint 測試抓到）；服務沒啟動時 TCP 探測失敗 exit 2 並提示 just db-start。清理：測試用 build_object_path(uuid4(), …) 建立物件並只刪自己記錄的 (bucket, path)，key 帶 uuid 無法與他人物件混淆；實測跑前、跑後 bucket afterschool-local 的 KeyCount 都是 0。錯誤 secret 案例在真實 SeaweedFS 上：StorageError 含 403、不含錯誤與正確 secret，__context__ is None（突變改回 from exc 會紅）。重驗 storage.py 突變（暫時副本）：upload 不帶 ContentType、簽章 Key 少分區前綴、delete 什麼都不做、fixture 拿掉 loopback 守衛、拿掉 TCP 探測、client 建立在守衛之前、例外鏈未切斷，皆被抓到。殘留（不打回）：(1) fixture 清理若 delete 失敗會讓迴圈中止、剩餘物件留在 bucket，也沒有測試斷言「跑完 bucket 為空」（把清理改成不做的突變測試仍綠）；(2) bad_credentials 測試不使用 fixture，不經 loopback 守衛，若 TEST_R2_ENDPOINT_URL 指向遠端，實測會被 pytest-socket 擋下而斷言失敗（HTTPClientError），不會送出遠端流量，但行為是失敗而非 exit 2；(3) pyproject 的 integration marker 描述與 justfile test-int 的錯誤訊息仍寫 Supabase，非本 task 範圍。"
       }
     },
     {
