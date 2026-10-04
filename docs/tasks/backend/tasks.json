@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 234,
-  "last_updated": "2026-10-04T17:01:39Z",
+  "version": 235,
+  "last_updated": "2026-10-04T17:02:07Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10201,7 +10201,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/transitions.py",
       "source_ref": "BE:api/portal/dismissal_calls.py::_db_transition_call",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-401",
