@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 236,
-  "last_updated": "2026-10-04T17:02:25Z",
+  "version": 237,
+  "last_updated": "2026-10-04T17:04:05Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -6805,7 +6805,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/outbox_jobs.py",
       "source_ref": "BE:services/notification/outbox_sweeper.py::tick_outbox_sweep",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-208",
@@ -6813,7 +6813,7 @@
         "BACKEND-005"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "sweep_outbox 經 BACKEND-018 run_job_once 執行，advisory lock 為交易級：sweep 內的 dispatch_due 不可自行 commit（會提前釋放鎖），由 runner commit；kick_outbox 走自己的 session_scope，不經 runner，不受此限。\nBACKEND-207 的 HttpLineMessagingClient 持有 httpx.Client 但沒有 close() / context manager：dispatch_due 不可每批重建 client 而不關閉（會累積連線），由呼叫端長期持有單一實例，或先為 client 補 close() 並在用完時呼叫。",
+      "risk_notes": "sweep_outbox 經 BACKEND-018 run_job_once 執行，advisory lock 為交易級：sweep 內的 dispatch_due 不可自行 commit（會提前釋放鎖），由 runner commit；kick_outbox 走自己的 session_scope，不經 runner，不受此限。\nBACKEND-207 的 HttpLineMessagingClient 持有 httpx.Client 但沒有 close() / context manager：dispatch_due 不可每批重建 client 而不關閉（會累積連線），由呼叫端長期持有單一實例，或先為 client 補 close() 並在用完時呼叫。\n協調者待使用者確認：LINE client 以 channel access token 為 key 在 outbox_jobs 快取單一實例（每次 kick / sweep 仍呼叫 build_line_client，但只在 token 變更時重建；舊實例若有 close() 則關閉）。HttpLineMessagingClient（BACKEND-207）目前沒有 close()，token 變更時舊實例交給 GC；若要完全避免，請為 HttpLineMessagingClient 補 close()（本 task 不改 channels/line.py）。測試用 reset_line_client_cache() 清快取。另依 description 在 app/jobs/__init__.py 加一行 import 註冊 job。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/notifications/test_outbox_jobs.py",
