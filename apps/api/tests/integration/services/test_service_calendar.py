@@ -105,7 +105,8 @@ def test_service_calendar_list(db_session: Session) -> None:
     finally:
         event.remove(bind, "before_cursor_execute", _count)
 
-    assert days == [date(2026, 9, 1), date(2026, 9, 2), date(2026, 9, 4)]
+    # 9/3 休息日、9/5 週六不營業、9/6 週日、9/7 週一營業
+    assert days == [date(2026, 9, 1), date(2026, 9, 2), date(2026, 9, 4), date(2026, 9, 7)]
     assert len(closed_queries) == 1
 
     # 含頭尾、單日區間、全休區間

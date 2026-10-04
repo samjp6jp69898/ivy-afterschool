@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 141,
-  "last_updated": "2026-10-04T12:36:26Z",
+  "version": 142,
+  "last_updated": "2026-10-04T12:48:02Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -4309,7 +4309,7 @@
           "test_service_calendar_weekday_and_sunday：seed 預設 → is_service_day(date(2026,9,1)) is True（週二）、date(2026,9,6)（週日）False、date(2026,9,5)（週六，sat.open=false）False",
           "test_service_calendar_closed_day：新增 ClosedDay(date(2026,9,1)) → is_service_day(date(2026,9,1)) is False",
           "test_service_calendar_hours：service_hours_for(date(2026,9,1)) == DayHours(open=True, start='12:00', end='19:00')；週日 → None",
-          "test_service_calendar_list：2026-09-01~2026-09-07 且 9/3 為休息日 → [9/1, 9/2, 9/4]；以 SQLAlchemy event 計數 closed_days 查詢次數 == 1",
+          "test_service_calendar_list：2026-09-01~2026-09-07 且 9/3 為休息日 → [9/1, 9/2, 9/4, 9/7]（9/5 週六不營業、9/6 週日、9/7 週一營業）；以 SQLAlchemy event 計數 closed_days 查詢次數 == 1",
           "test_service_calendar_range_errors：end < start → ValueError；跨 400 天 → ValueError"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_service_calendar.py -k \"test_service_calendar_\"",
