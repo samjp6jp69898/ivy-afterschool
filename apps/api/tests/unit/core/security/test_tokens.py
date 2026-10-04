@@ -1,5 +1,6 @@
 """BACKEND-033：app/core/security/tokens.py（access token 簽發與驗證）。
 BACKEND-540：簽章合法但 claim 型別異常一律 UnauthenticatedError。
+BACKEND-034：家長綁定臨時 token（typ=bind，10 分鐘）。
 
 HS256、typ 區分員工 / 家長、token_version、以注入的 clock 判斷過期。
 """
@@ -16,9 +17,13 @@ from app.core.crypto import LABEL_JWT, derive_key
 from app.core.errors import UnauthenticatedError
 from app.core.security.tokens import (
     ACCESS_TOKEN_TTL,
+    BIND_TOKEN_TTL,
     AccessClaims,
+    BindClaims,
     create_access_token,
+    create_bind_token,
     decode_access_token,
+    decode_bind_token,
 )
 from tests.support.fake_clock import FakeClock
 
@@ -239,3 +244,121 @@ def test_tokens_claim_types_jti_missing_or_empty(fake_clock: FakeClock) -> None:
     # sub 不是字串
     with pytest.raises(UnauthenticatedError):
         decode_access_token(_signed(fake_clock, sub=123), expected_type="staff", clock=fake_clock)
+
+
+# --- BACKEND-034：綁定臨時 token -----------------------------------------------------------
+
+_LINE_USER_ID = "U" + "a" * 32
+
+
+def test_bind_token_roundtrip(fake_clock: FakeClock) -> None:
+    claims = BindClaims(line_user_id=_LINE_USER_ID, display_name="王媽媽", picture_url=None)
+    token = create_bind_token(claims, clock=fake_clock)
+
+    assert decode_bind_token(token, clock=fake_clock) == claims
+    assert BIND_TOKEN_TTL.total_seconds() == 10 * 60
+
+    payload = jwt.decode(
+        token, derive_key(LABEL_JWT), algorithms=["HS256"], options={"verify_exp": False}
+    )
+    assert payload["typ"] == "bind"
+    assert payload["line_user_id"] == _LINE_USER_ID
+    assert payload["display_name"] == "王媽媽"
+    assert payload["picture_url"] is None
+    assert payload["exp"] - payload["iat"] == 600
+    assert payload["jti"]
+
+    with_picture = BindClaims(
+        line_user_id=_LINE_USER_ID,
+        display_name=None,
+        picture_url="https://profile.line-scdn.net/abc",
+    )
+    assert decode_bind_token(
+        create_bind_token(with_picture, clock=fake_clock), clock=fake_clock
+    ) == (with_picture)
+
+
+def test_bind_token_expires(fake_clock: FakeClock) -> None:
+    claims = BindClaims(line_user_id=_LINE_USER_ID, display_name=None, picture_url=None)
+    token = create_bind_token(claims, clock=fake_clock)
+
+    fake_clock.advance(minutes=9, seconds=59)
+    assert decode_bind_token(token, clock=fake_clock).line_user_id == _LINE_USER_ID
+
+    fake_clock.advance(seconds=2)
+    with pytest.raises(UnauthenticatedError):
+        decode_bind_token(token, clock=fake_clock)
+
+
+def test_bind_token_not_access(fake_clock: FakeClock) -> None:
+    bind_token = create_bind_token(
+        BindClaims(line_user_id=_LINE_USER_ID, display_name=None, picture_url=None),
+        clock=fake_clock,
+    )
+    parent_token = create_access_token(
+        subject_type="parent", subject_id=uuid4(), token_version=0, clock=fake_clock
+    )
+    staff_token = create_access_token(
+        subject_type="staff", subject_id=uuid4(), token_version=0, clock=fake_clock
+    )
+
+    with pytest.raises(UnauthenticatedError):
+        decode_access_token(bind_token, expected_type="parent", clock=fake_clock)
+    with pytest.raises(UnauthenticatedError):
+        decode_access_token(bind_token, expected_type="staff", clock=fake_clock)
+    with pytest.raises(UnauthenticatedError):
+        decode_bind_token(parent_token, clock=fake_clock)
+    with pytest.raises(UnauthenticatedError):
+        decode_bind_token(staff_token, clock=fake_clock)
+
+
+def test_bind_token_bad_line_user_id(fake_clock: FakeClock) -> None:
+    with pytest.raises(ValueError, match="line_user_id"):
+        create_bind_token(
+            BindClaims(line_user_id="U123", display_name=None, picture_url=None), clock=fake_clock
+        )
+
+    now = int(fake_clock.now().timestamp())
+    for line_user_id in ("U123", "u" + "a" * 32, "U" + "A" * 32, "", 123, None):
+        token = jwt.encode(
+            {
+                "typ": "bind",
+                "line_user_id": line_user_id,
+                "display_name": None,
+                "picture_url": None,
+                "iat": now,
+                "exp": now + 600,
+                "jti": "jti-bind-0001",
+            },
+            derive_key(LABEL_JWT),
+            algorithm="HS256",
+        )
+        with pytest.raises(UnauthenticatedError):
+            decode_bind_token(token, clock=fake_clock)
+
+
+def test_bind_token_malformed(fake_clock: FakeClock) -> None:
+    with pytest.raises(UnauthenticatedError):
+        decode_bind_token("abc.def", clock=fake_clock)
+    now = int(fake_clock.now().timestamp())
+    base = {
+        "typ": "bind",
+        "line_user_id": _LINE_USER_ID,
+        "display_name": None,
+        "picture_url": None,
+        "iat": now,
+        "exp": now + 600,
+        "jti": "jti-bind-0002",
+    }
+    # display_name / picture_url 型別錯、exp 超大、以其他金鑰簽
+    for bad in (
+        {**base, "display_name": ["x"]},
+        {**base, "picture_url": 1},
+        {**base, "exp": 10**20},
+    ):
+        with pytest.raises(UnauthenticatedError):
+            decode_bind_token(
+                jwt.encode(bad, derive_key(LABEL_JWT), algorithm="HS256"), clock=fake_clock
+            )
+    with pytest.raises(UnauthenticatedError):
+        decode_bind_token(jwt.encode(base, "other-key-" * 4, algorithm="HS256"), clock=fake_clock)
