@@ -147,7 +147,7 @@ def test_audit_record_system_actor(db_session: Session) -> None:
     assert stored.ip is None
 
 
-def test_audit_actor_constructors() -> None:
+def test_audit_record_actor_constructors() -> None:
     sid, pid = uuid4(), uuid4()
     staff = CurrentStaff(
         id=sid,
