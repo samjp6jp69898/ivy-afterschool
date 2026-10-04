@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 237,
-  "last_updated": "2026-10-04T17:04:05Z",
+  "version": 238,
+  "last_updated": "2026-10-04T17:07:15Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1840,7 +1840,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/auth.py",
       "source_ref": "BE:api/parent_portal/auth.py::liff_login",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-052",
@@ -1868,9 +1868,9 @@
         "notes": "本 endpoint 不需登入，403 案例以 BACKEND-019 的外站 Origin 拒絕驗證。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。5 條 red_case 對應（另加測 503 未設定、路由註冊），tdd.run 7 passed；lint / typecheck 乾淨；commit 0da7b1c 先於 de01781（實作 commit 只把測試的 cookie 斷言拆成變數，語意相同）。ok 路徑：get_me → commit → set_auth_cookies(parent) + clear_bind_cookie，回應 body 不含 token；needs_binding 路徑：只設 parent_bind cookie、不建帳號、不設 access / refresh、之後 /me 仍 401。cookie 屬性由 BACKEND-035 統一（httponly、samesite=lax、secure=is_production、refresh / bind 的 path 限 /api/parent/auth）。401 invalid_id_token 不設任何 cookie；403 parent_disabled；外站 Origin 403 origin_forbidden。IDOR 面：身分只由 verifier 回傳的 line_user_id 決定，使用者輸入只有 id_token。無殘留。"
       }
     },
     {
@@ -1920,7 +1920,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/binding_code_service.py",
       "source_ref": "BE:api/parent_portal/auth.py::_claim_binding_code_atomic",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-054"
@@ -1945,9 +1945,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。6 條 red_case 對應（另加測產碼後 guardian / 學生被封存 → invalid），tdd.run 7 passed；lint / typecheck 乾淨；commit ab231a2 先於 86707a6。normalize 後長度 / 字母表檢查 → 單一條件式 UPDATE（code_hash、used_at is null、expires_at > now）RETURNING guardian_id 原子消耗 → 0 列再診斷：查無 invalid、過期優先於已用；guardian / 學生封存 → invalid；條件式 UPDATE guardians（parent_account_id is null 或 = 自己）0 列 → 409 guardian_already_bound，同一家長重綁自己已綁的 guardian 冪等；savepoint 內撞 uq_guardians_student_parent → 409 already_bound_to_student 且 session 可續用；409 路徑呼叫端 rollback 後碼的 used_at 仍為 null。並發：committing session + 兩條 app_backend 連線 + Barrier，恰一成功、另一條 binding_code_used，guardian 綁給成功者。reviewer 另驗格式錯誤與格式正確但不存在回完全相同的 400 body；expired / used 區分為 description 明定。暴力嘗試節流與失敗計數依 description 由 BACKEND-056 負責。無殘留。"
       }
     },
     {
@@ -2036,7 +2036,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/parent_auth.py",
       "source_ref": "BE:api/parent_portal/auth.py::_issue_refresh_token",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-052",
@@ -2061,9 +2061,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。4 條 red_case 對應（另加測 parent 不存在撤銷、rotate 的 in_progress / reused / invalid 原樣傳遞、無綁定家長仍可 refresh、tv 取 DB 現值），tdd.run 6 passed；lint / typecheck 乾淨；commit c254f61 先於 36f347b。與 BACKEND-043 完全對稱：員工 token → 撤銷 family + 401 refresh_invalid；parent 不存在 / disabled → 撤銷 family + 401 unauthenticated；兩個 401 撤銷路徑在 raise 前 commit（測試以 rollback 後仍撤銷驗證），與 037 description 的例外清單一致。無殘留。"
       }
     },
     {
@@ -2111,7 +2111,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/parent_auth.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-038",
@@ -2133,9 +2133,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。2 條 red_case 對應（另加測空字串 / 不存在 raw 回 0、重複登出回 0、登出後 refresh → refresh_revoked），tdd.run 2 passed；commit c254f61 先於 36f347b。同 BACKEND-045。無殘留。"
       }
     },
     {
@@ -3934,7 +3934,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/settings.py",
       "source_ref": "BE:api/system_config.py::upsert_config",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-110",
@@ -3959,9 +3959,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。5 條 red_case 對應（另加測 secret 回應遮罩、body 不是物件 / 缺 value 422、外站 Origin 403），tdd.run 6 passed；lint / typecheck 乾淨；commit 0437987 先於 4decaa4。require_permission(SETTINGS_WRITE) 掛守衛、route audit 為空；put_setting → commit 後 GET /api/parent/config 立即反映（after_commit 失效快取）；寫 audit settings.update；422 不回顯輸入值。reviewer 另經 endpoint 驗證：遮罩值原樣送回 → DB 密文不變且可解回原值；空字串 / 只含空白 → 清除為 None；三次回應都不含明文。無殘留。"
       }
     },
     {
@@ -6805,7 +6805,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/outbox_jobs.py",
       "source_ref": "BE:services/notification/outbox_sweeper.py::tick_outbox_sweep",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-208",
@@ -6830,9 +6830,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。4 條 red_case 對應（另加測 sweep 不自行 commit、thread 模式背景執行、set_kick_mode 驗證），tdd.run 7 passed；lint / typecheck 乾淨；commit 7fa596e 先於 24f60e0（實作 commit 只把測試的 lambda spy 改成具名函式）。sync kick 立即 sent；off 不派送、run_job_once 的 sweep 補送；kick 例外只記 logger.exception 不外拋；JOB_REGISTRY 註冊 IntervalTrigger 30 秒且 app/jobs/__init__.py 已 import 註冊（符合 description）；sweep 只 flush 由 runner commit（advisory lock 交易級）。對「協調者待使用者確認」的判斷：以 channel access token 為 key 快取單一 LINE client、token 變更才重建，合理且符合 risk_notes 「由呼叫端長期持有單一實例」的要求；thread-safe（lock 內讀寫快取）。缺口是 HttpLineMessagingClient 沒有 close()，token 變更時舊實例交給 GC（httpx.Client 的連線池在 GC 時釋放，不會洩漏 fd，但時機不確定）；建議另開一個小 task 為 BACKEND-207 補 close()（與 __enter__ / __exit__），outbox_jobs 已寫好「舊實例若有 close 則關閉」的呼叫，補上即生效，不需回頭改 209。殘留（不擋）：模組層 ThreadPoolExecutor 沒有明確 shutdown，程序結束時由 concurrent.futures 的 atexit 等待在途 kick（每筆 kick 最長約 5 秒 × 筆數），description 未要求；thread 模式的 kick 用真實 SystemClock，與 sweep 的注入時鐘不同來源，正式環境兩者一致。"
       }
     },
     {
@@ -10201,7 +10201,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/transitions.py",
       "source_ref": "BE:api/portal/dismissal_calls.py::_db_transition_call",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-401",
@@ -10226,9 +10226,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。4 條 red_case 對應，tdd.run 4 passed；lint / typecheck 乾淨；commit 8d4c088 先於 c27b30d。單一條件式 UPDATE（id、status = ANY(from)、可選 student_id = ANY(scope)）RETURNING，to_status=None 只改欄位、values 可帶 SQL 表達式、無任何變更時以 no-op 指派維持單一 UPDATE；0 列再查：不存在 / 越權 / 空範圍 → 同一個 404 body（不洩漏），存在且狀態不符 → 409 帶 current_status；越權且狀態也不符仍 404。並發：兩條連線同時完成，一個成功一個 409，completed_by 為成功者。populate_existing 重新載入避免 session 內舊屬性。殘留（不擋）：0 列後的診斷 SELECT 不加鎖，details.current_status 在極端情況可能是再被改過的值，只影響錯誤訊息。"
       }
     },
     {
