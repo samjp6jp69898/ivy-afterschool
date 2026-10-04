@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 109,
-  "last_updated": "2026-10-04T06:41:55Z",
+  "version": 110,
+  "last_updated": "2026-10-04T06:44:29Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14709,11 +14709,11 @@
     {
       "id": "BACKEND-539",
       "title": "RedactingFilter 補遮罩：非字串 msg 與例外 traceback 文字",
-      "description": "review-r4-be 審 BACKEND-004 時發現兩條仍可讓秘密明文進 log 的路徑，本 task 一併收斂（修改 `apps/api/app/core/logging.py` 的 `RedactingFilter` / formatter，屬部分改寫 BACKEND-004 產物，BACKEND-004 維持 done）。\n\n1. **非字串 msg**：`RedactingFilter.filter` 目前在 `record.msg` 不是 `str` 時直接放行，`logger.info({'password': 'PW1'})` 會原樣輸出。改為：`msg` 是 Mapping / list / tuple 時以 `redact_mapping` 遮罩；其他非字串物件先 `str()` 再以 `redact_text` 遮罩。遮罩失敗時沿用 BACKEND-004 的 fail-closed 退路，不保留原始內容。\n2. **例外 traceback**：`logger.exception(...)`（例如 BACKEND-003 的 500 handler）輸出的 traceback 含例外訊息，`RuntimeError('db password=xyz')` 會讓 `xyz` 明文進 log。`JsonFormatter` 的 `exc` 欄位與開發環境文字 formatter 的 traceback 輸出，一律先經 `redact_text` 再寫出；`stack_info` 同樣處理。traceback 的檔名、行號與例外型別名稱要保留，方便除錯。\n\n**驗收標準**：\n- `logger.info({'password': 'PW1', 'user': 'amy'})` 的輸出不含 'PW1'，含 'amy'。\n- msg 是自訂物件、`__str__` 回傳 'token=TK2 ok' 時，輸出不含 'TK2'，含 'ok'。\n- 在 except 區塊內呼叫 `logger.exception('boom')`，例外是 `RuntimeError('db password=xyz')`：production（JSON）與 development（文字）兩種格式的輸出都不含 'xyz'，仍含 'RuntimeError' 與測試檔名。\n- BACKEND-004 既有測試全綠。",
+      "description": "review-r4-be 審 BACKEND-004 時發現兩條仍可讓秘密明文進 log 的路徑，本 task 一併收斂（修改 `apps/api/app/core/logging.py` 的 `RedactingFilter` / formatter，屬部分改寫 BACKEND-004 產物，BACKEND-004 維持 done）。\n\n1. **非字串 msg**：`RedactingFilter.filter` 目前在 `record.msg` 不是 `str` 時直接放行，`logger.info({'password': 'PW1'})` 會原樣輸出。改為：`msg` 是 Mapping / list / tuple 時以 `redact_mapping` 遮罩；其他非字串物件先 `str()` 再以 `redact_text` 遮罩。遮罩失敗時沿用 BACKEND-004 的 fail-closed 退路，不保留原始內容。\n2. **例外 traceback**：`logger.exception(...)`（例如 BACKEND-003 的 500 handler）輸出的 traceback 含例外訊息，`RuntimeError('db password=xyz')` 會讓 `xyz` 明文進 log。`JsonFormatter` 的 `exc` 欄位與開發環境文字 formatter 的 traceback 輸出，一律先經 `redact_text` 再寫出；`stack_info` 同樣處理。traceback 的檔名、行號與例外型別名稱要保留，方便除錯。\n\n**驗收標準**：\n- `logger.info({'password': 'PW1', 'user': 'amy'})` 的輸出不含 'PW1'，含 'amy'。\n- msg 是自訂物件、`__str__` 回傳 'user=amy token=TK2' 時，輸出不含 'TK2'，含 'user=amy'（敏感值之後到分隔符為止的文字依 BACKEND-004 設計整段遮掉，所以非敏感內容放在前面驗證）。\n- `__str__` 本身拋例外時 msg 整個換成 '***'。\n- 引號包住的字面值（traceback 原始碼行的 `\"secret=S9\"`、`'cookie=T11'`）也要遮：`_KEY_VALUE_RE` 的 lookbehind 只排除識別字字元，不再排除引號。\n- 在 except 區塊內呼叫 `logger.exception('boom')`，例外是 `RuntimeError('db password=xyz')`：production（JSON）與 development（文字）兩種格式的輸出都不含 'xyz'，仍含 'RuntimeError' 與測試檔名。\n- BACKEND-004 既有測試全綠。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/logging.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-004"
@@ -14728,9 +14728,12 @@
         ],
         "red_cases": [
           "test_logging_redact_nonstr_mapping_msg：configure_logging(production) 後 logger.info({'password':'PW1','user':'amy'}) → 擷取的輸出不含 'PW1'、含 'amy'",
-          "test_logging_redact_nonstr_object_msg：msg 為 __str__ 回傳 'token=TK2 ok' 的物件 → 輸出不含 'TK2'、含 'ok'",
+          "test_logging_redact_nonstr_object_msg：msg 為 __str__ 回傳 'user=amy token=TK2' 的物件 → JSON msg == 'user=amy token=***'",
+          "test_logging_redact_nonstr_object_msg_fail_closed：msg 為 __str__ 拋例外的物件 → RedactingFilter 後 record.msg 為字串、含 '***'、不含例外訊息內的秘密",
           "test_logging_redact_exception_traceback_json：production 格式，在 except RuntimeError('db password=xyz') 內 logger.exception('boom') → JSON 的 exc 欄位不含 'xyz'，含 'RuntimeError' 與 'test_logging.py'",
-          "test_logging_redact_exception_traceback_text：development 格式，同上情境 → 輸出不含 'xyz'，含 'RuntimeError'"
+          "test_logging_redact_exception_traceback_text：development 格式，同上情境 → 輸出不含 'xyz'，含 'RuntimeError'",
+          "test_logging_redact_quoted_literal：'raise RuntimeError(\"secret=S9 in stack\")' 與 \"value 'cookie=T11'\" 經 RedactingFilter 後不含 S9 / T11；status_code=500 保留",
+          "test_logging_redact_stack_info：production 格式 logger.info('secret=S9 in stack', stack_info=True) → JSON 的 stack 欄位含呼叫端函式名、整行不含 'S9'"
         ],
         "run": "just test apps/api/tests/unit/core/test_logging.py -k \"test_logging_\"",
         "notes": "run 會一併跑 BACKEND-004 既有測試，用來確認沒有回歸。"

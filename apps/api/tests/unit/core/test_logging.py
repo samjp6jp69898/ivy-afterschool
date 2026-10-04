@@ -324,7 +324,7 @@ def test_logging_redact_nonstr_mapping_msg(capsys: pytest.CaptureFixture[str]) -
 
 class _Describable:
     def __str__(self) -> str:
-        return "token=TK2 ok"
+        return "user=amy token=TK2"
 
 
 @pytest.mark.usefixtures("restore_root_logging")
@@ -336,7 +336,7 @@ def test_logging_redact_nonstr_object_msg(capsys: pytest.CaptureFixture[str]) ->
     lines = _stderr_lines(capsys)
     assert len(lines) == 1
     assert "TK2" not in lines[0]
-    assert "ok" in json.loads(lines[0])["msg"]
+    assert json.loads(lines[0])["msg"] == "user=amy token=***"
 
 
 class _Exploding:
@@ -344,18 +344,21 @@ class _Exploding:
         raise RuntimeError("str 爆炸 password=PW5")
 
 
-@pytest.mark.usefixtures("restore_root_logging")
-def test_logging_redact_nonstr_object_msg_fail_closed(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    configure_logging(_settings("production"))
+def test_logging_redact_nonstr_object_msg_fail_closed() -> None:
+    """str() 爆炸時退路 fail-closed：msg 整個換成 ***，不保留原物件。"""
+    record = logging.LogRecord("t", logging.INFO, __file__, 1, _Exploding(), None, None)
 
-    logging.getLogger("app.test").info(_Exploding())
+    assert RedactingFilter().filter(record) is True
+    assert isinstance(record.msg, str)
+    assert "PW5" not in record.getMessage()
+    assert "***" in record.getMessage()
 
-    lines = _stderr_lines(capsys)
-    assert len(lines) == 1
-    assert "PW5" not in lines[0]
-    assert "***" in json.loads(lines[0])["msg"]
+
+def test_logging_redact_quoted_literal() -> None:
+    """引號包住的 key=value（traceback 原始碼行的字串字面值）也要遮。"""
+    assert "S9" not in _filtered_message('raise RuntimeError("secret=S9 in stack")')
+    assert "T11" not in _filtered_message("value 'cookie=T11'")
+    assert "status_code=500" in _filtered_message("status_code=500 'password=PW6'")
 
 
 def _log_exception_with_secret(logger_name: str) -> None:

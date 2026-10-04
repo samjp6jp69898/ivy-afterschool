@@ -13,6 +13,11 @@
   secret 等）的值遮成 ``***``；dict / list / tuple 遞迴處理（含 namedtuple 與 header pair
   ``("authorization", "Bearer x")`` / ``(b"cookie", b"...")``），字串另以 ``key=value``、
   ``key: value``（整個值到行尾或分隔符）與 ``'key': 'value'`` 樣式比對；遮罩失敗時 fail-closed。
+  非字串 msg（BACKEND-539）：Mapping / list / tuple 先 ``redact_mapping`` 再轉字串；其他物件
+  ``str()`` 後以 ``redact_text`` 遮罩。
+- 例外 traceback 與 ``stack_info``（BACKEND-539）：兩種 formatter 寫出前都先經 ``redact_text``
+  （不使用 ``record.exc_text`` 快取，避免拿到其他 handler 存下的未遮罩文字）；檔名、行號與例外型別
+  名稱保留。
 """
 
 from __future__ import annotations
@@ -51,11 +56,13 @@ _SENSITIVE_SUBSTRINGS = (
 # 字串層遮罩只針對敏感 key（非敏感 key 的值可能含空白，不能用通用 key=value 掃描）：
 # key=value 與 header 樣式 key: value，值取到行尾 / 分隔符（, ; 全形逗號）或下一個 key= / key:
 # 之前，因此 'authorization=Bearer T5' 整段遮掉、'token=x status_code=200' 不吞掉後面的 pair。
+# lookbehind 只排除識別字字元（status_code 的 code 不算），引號內的字面值（traceback 原始碼行的
+# "password=x"）照樣遮。
 _SENSITIVE_KEY_PATTERN = (
     r"[A-Za-z0-9_-]*(?:" + "|".join(_SENSITIVE_SUBSTRINGS) + r")[A-Za-z0-9_-]*|code"
 )
 _KEY_VALUE_RE = re.compile(
-    r"(?<![A-Za-z0-9_'\"-])(?P<key>" + _SENSITIVE_KEY_PATTERN + r")\s*[=:]\s*"
+    r"(?<![A-Za-z0-9_-])(?P<key>" + _SENSITIVE_KEY_PATTERN + r")\s*[=:]\s*"
     r"(?P<value>(?:(?!\s+[A-Za-z_][A-Za-z0-9_-]*\s*[=:])[^,，;\n])+)",
     re.IGNORECASE,
 )
@@ -129,17 +136,25 @@ def redact_text(text: str) -> str:
     return _QUOTED_KEY_VALUE_RE.sub(_replace_quoted, text)
 
 
+def _coerce_msg(msg: object) -> str:
+    """非字串 msg 轉成已遮罩的字串：容器先結構化遮罩，其他物件 str() 後做文字遮罩。"""
+    if isinstance(msg, Mapping | list | tuple):
+        msg = redact_mapping(msg)
+    return redact_text(str(msg))
+
+
 class RedactingFilter(logging.Filter):
     """先遮 args 內的 dict / pair，再 format 成字串對 key=value 樣式遮罩，最後清掉 args。
 
     任何例外都不擋 record（回傳 True），但退路 fail-closed：args 整個換成 ***、msg 只保留遮罩後的
-    樣板文字，不保留未遮罩的原始 args。
+    樣板文字（msg 不是字串時整個換成 ***），不保留未遮罩的原始內容。
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
-        if not isinstance(record.msg, str):
-            return True
+        original_msg = record.msg
         try:
+            if not isinstance(record.msg, str):
+                record.msg = _coerce_msg(record.msg)
             if record.args:
                 record.args = redact_mapping(record.args)
                 record.msg = redact_text(record.getMessage())
@@ -147,7 +162,8 @@ class RedactingFilter(logging.Filter):
             else:
                 record.msg = redact_text(record.msg)
         except Exception:
-            record.msg = redact_text(record.msg) + f" args={REDACTED}"
+            template = redact_text(original_msg) if isinstance(original_msg, str) else REDACTED
+            record.msg = f"{template} args={REDACTED}"
             record.args = None
         return True
 
@@ -171,7 +187,9 @@ class JsonFormatter(logging.Formatter):
             "request_id": getattr(record, "request_id", None),
         }
         if record.exc_info:
-            entry["exc"] = self.formatException(record.exc_info)
+            entry["exc"] = redact_text(self.formatException(record.exc_info))
+        if record.stack_info:
+            entry["stack"] = redact_text(self.formatStack(record.stack_info))
         return json.dumps(entry, ensure_ascii=False, default=str)
 
 
@@ -182,7 +200,16 @@ class _TextFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         if getattr(record, "request_id", None) is None:
             record.request_id = "-"
-        return super().format(record)
+        # 不走 logging.Formatter.format：它會沿用 record.exc_text 快取（可能是別的 handler 存下的
+        # 未遮罩文字），traceback 與 stack 一律現算並遮罩
+        record.message = record.getMessage()
+        record.asctime = self.formatTime(record, self.datefmt)
+        output = self.formatMessage(record)
+        if record.exc_info:
+            output = output.rstrip("\n") + "\n" + redact_text(self.formatException(record.exc_info))
+        if record.stack_info:
+            output = output.rstrip("\n") + "\n" + redact_text(self.formatStack(record.stack_info))
+        return output
 
 
 class _AppStreamHandler(logging.StreamHandler):  # type: ignore[type-arg]
