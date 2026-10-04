@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 184,
-  "last_updated": "2026-10-04T16:34:50Z",
+  "version": 185,
+  "last_updated": "2026-10-04T16:34:51Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1212,7 +1212,7 @@
     {
       "id": "BACKEND-037",
       "title": "實作 RefreshTokenService.rotate：輪替、重用偵測（撤銷整個 family + token_version +1）、併發容忍",
-      "description": "在 `apps/api/app/services/auth/refresh_tokens.py` 實作輪替（domain_spec M1：refresh 輪替 + 偵測重用即撤銷整個 family）。移植 ivy `services/staff_refresh.py::rotate_refresh_token` 與 `_revoke_locked`；去掉 tenant 校驗、absolute lifetime、user_agent。\n\n```python\n@dataclass(frozen=True)\nclass RotatedRefresh:\n    raw: str\n    subject_type: SubjectType\n    subject_id: UUID\n    family_id: UUID\n\ndef rotate(session: Session, raw: str, *, clock: Clock) -> RotatedRefresh: ...\n```\n**流程**\n1. `select ... where token_hash = :h for update`。不存在 → `UnauthenticatedError(code='refresh_invalid')`。\n2. `revoked_at` 非 null → 401 `refresh_revoked`；`expires_at <= now` → 401 `refresh_expired`。\n3. `replaced_by` 非 null（已被用過）：\n   - 取後繼 token 的 `created_at`；`now - created_at <= 5 秒` → `ConflictError('refresh_in_progress', '登入狀態更新中，請重試')`（同一 token 併發的兩個請求，前端重打原請求即可；不撤銷）。\n   - 超過 5 秒 → **重用**：以「先 `select id ... for update` 再 update」撤銷同 family 全部未撤銷 token（避免併發輪替漏撤新列，ivy F14），對應帳號（`staff_users` 或 `parent_accounts`）`token_version + 1`，**在 raise 前 `session.commit()`**（本專案 service 不 commit 原則的唯一例外：否則 get_db 的 rollback 會把撤銷一起回滾），然後 raise 401 `refresh_reused`，並 `logger.warning` 記錄 subject 與 family（不記 raw）。\n4. 正常：建立新 token（同 family、新 expires_at），舊列 `replaced_by = 新 id`，flush，回傳新 raw。\n- 帳號狀態（停用、改密碼）的檢查由呼叫端 service 負責（BACKEND-043 / 058），本方法只處理 token 本身。\n\n**驗收標準**\n- 正常輪替回新 raw，舊列 replaced_by 指向新列，新列同 family。\n- 不存在 / 已撤銷 / 過期各回對應 401 code。\n- 5 秒內重送舊 token → 409 refresh_in_progress，family 未被撤銷。\n- 超過 5 秒重送舊 token → 401 refresh_reused，同 family 全部列 revoked_at 有值且已 commit，帳號 token_version +1；其他 family 不受影響。",
+      "description": "在 `apps/api/app/services/auth/refresh_tokens.py` 實作輪替（domain_spec M1：refresh 輪替 + 偵測重用即撤銷整個 family）。移植 ivy `services/staff_refresh.py::rotate_refresh_token` 與 `_revoke_locked`；去掉 tenant 校驗、absolute lifetime、user_agent。\n\n```python\n@dataclass(frozen=True)\nclass RotatedRefresh:\n    raw: str\n    subject_type: SubjectType\n    subject_id: UUID\n    family_id: UUID\n\ndef rotate(session: Session, raw: str, *, clock: Clock) -> RotatedRefresh: ...\n```\n**流程**\n1. `select ... where token_hash = :h for update`。不存在 → `UnauthenticatedError(code='refresh_invalid')`。\n2. `revoked_at` 非 null → 401 `refresh_revoked`；`expires_at <= now` → 401 `refresh_expired`。\n3. `replaced_by` 非 null（已被用過）：\n   - 取後繼 token 的 `created_at`；`now - created_at <= 5 秒` → `ConflictError('refresh_in_progress', '登入狀態更新中，請重試')`（同一 token 併發的兩個請求，前端重打原請求即可；不撤銷）。\n   - 超過 5 秒 → **重用**：以「先 `select id ... for update` 再 update」撤銷同 family 全部未撤銷 token（避免併發輪替漏撤新列，ivy F14），對應帳號（`staff_users` 或 `parent_accounts`）`token_version + 1`，**在 raise 前 `session.commit()`**（service 不 commit 原則的例外只有兩處：BACKEND-037 rotate 重用分支、BACKEND-043 / 058 refresh 的 401 撤銷路徑；否則 get_db 的 rollback 會把撤銷一起回滾），然後 raise 401 `refresh_reused`，並 `logger.warning` 記錄 subject 與 family（不記 raw）。\n4. 正常：建立新 token（同 family、新 expires_at），舊列 `replaced_by = 新 id`，flush，回傳新 raw。\n- 帳號狀態（停用、改密碼）的檢查由呼叫端 service 負責（BACKEND-043 / 058），本方法只處理 token 本身。\n\n**驗收標準**\n- 正常輪替回新 raw，舊列 replaced_by 指向新列，新列同 family。\n- 不存在 / 已撤銷 / 過期各回對應 401 code。\n- 5 秒內重送舊 token → 409 refresh_in_progress，family 未被撤銷。\n- 超過 5 秒重送舊 token → 401 refresh_reused，同 family 全部列 revoked_at 有值且已 commit，帳號 token_version +1；其他 family 不受影響。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/refresh_tokens.py",
       "source_ref": "BE:services/staff_refresh.py::rotate_refresh_token",
@@ -1417,7 +1417,7 @@
         "BACKEND-023"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "回傳 StaffAuthOut / StaffMeOut 時 permissions 要先排序再傳入（BACKEND-039 的 StaffMeOut 不自行排序）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_auth_endpoints.py",
@@ -1455,7 +1455,7 @@
         "BACKEND-038"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "協調者待使用者確認：refresh 在「家長 token」與「帳號不存在 / 停用」兩個 401 路徑撤銷 family 後**在 raise 前 session.commit()**（與 BACKEND-037 rotate 重用偵測相同的例外做法）。理由：BACKEND-044 endpoint 只在成功時 commit、401 路徑 rollback，不先 commit 撤銷就會隨 rollback 退回、形同沒撤銷。若使用者不接受 service commit，改法是 BACKEND-044 在 401 路徑自行 commit 再回應。",
+      "risk_notes": "家長 token 與帳號不存在 / 停用兩個 401 路徑撤銷 family 後在 raise 前 session.commit()（service 不 commit 原則的例外只有兩處：BACKEND-037 rotate 重用分支、BACKEND-043 / 058 refresh 的 401 撤銷路徑）；BACKEND-044 endpoint 只在成功時 commit、401 路徑照常 rollback，不先 commit 撤銷會被退回。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/auth/test_staff_auth_service.py",
@@ -1481,7 +1481,7 @@
     {
       "id": "BACKEND-044",
       "title": "實作 POST /api/admin/auth/refresh endpoint",
-      "description": "在 `apps/api/app/api/admin/auth.py` 新增 `POST /api/admin/auth/refresh`：\n- 從 `staff_refresh` cookie 取 raw（path 限 `/api/admin/auth`，只有本路由收得到）。無 body（送出 body 視為忽略；不宣告 request model）。\n- 呼叫 BACKEND-043 → commit → `set_auth_cookies` → 200 `StaffAuthOut`。\n- 401 時 `clear_auth_cookies(subject_type='staff')`（回應仍為錯誤 envelope）；409 refresh_in_progress 不清 cookie。\n- 不需 access token（access 可能已過期）。\n\n**驗收標準**\n- 有效 refresh cookie → 200，cookie 被替換。\n- 無 cookie → 401 且回應清除 cookie。\n- 重用 → 401 refresh_reused；併發 → 409。\n- 外站 Origin → 403。",
+      "description": "在 `apps/api/app/api/admin/auth.py` 新增 `POST /api/admin/auth/refresh`：\n- 從 `staff_refresh` cookie 取 raw（path 限 `/api/admin/auth`，只有本路由收得到）。無 body（送出 body 視為忽略；不宣告 request model）。\n- 呼叫 BACKEND-043 → commit → `set_auth_cookies` → 200 `StaffAuthOut`。\n- 401 時 `clear_auth_cookies(subject_type='staff')`（回應仍為錯誤 envelope；401 路徑的 family 撤銷已由 BACKEND-043 在 raise 前 commit，endpoint 不需再 commit）；409 refresh_in_progress 不清 cookie。\n- 不需 access token（access 可能已過期）。\n\n**驗收標準**\n- 有效 refresh cookie → 200，cookie 被替換。\n- 無 cookie → 401 且回應清除 cookie。\n- 重用 → 401 refresh_reused；併發 → 409。\n- 外站 Origin → 403。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/auth.py",
       "source_ref": "BE:api/auth.py::refresh_token",
@@ -1492,7 +1492,7 @@
         "BACKEND-042"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "",
+      "risk_notes": "回傳 StaffAuthOut / StaffMeOut 時 permissions 要先排序再傳入（BACKEND-039 的 StaffMeOut 不自行排序）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_auth_endpoints.py",
@@ -1643,7 +1643,7 @@
         "BACKEND-070"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "回傳 StaffAuthOut / StaffMeOut 時 permissions 要先排序再傳入（BACKEND-039 的 StaffMeOut 不自行排序）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_auth_endpoints.py",
@@ -1719,7 +1719,7 @@
         "BACKEND-042"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "",
+      "risk_notes": "回傳 StaffAuthOut / StaffMeOut 時 permissions 要先排序再傳入（BACKEND-039 的 StaffMeOut 不自行排序）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_auth_endpoints.py",
@@ -2032,7 +2032,7 @@
     {
       "id": "BACKEND-058",
       "title": "實作 ParentAuthService.refresh：家長 refresh 輪替（檢查帳號狀態）",
-      "description": "在 `apps/api/app/services/auth/parent_auth.py` 實作：\n```python\ndef refresh(session: Session, *, raw_refresh: str | None, clock: Clock) -> ParentSession: ...\n```\n- 與 BACKEND-043 對稱：raw None → 401；`rotate`；subject_type 不是 parent → 撤銷 family + 401 `refresh_invalid`；parent 不存在或 `status='disabled'` → 撤銷 family + 401 `unauthenticated`；以目前 token_version 簽 access。\n- 沒有任何有效綁定的家長仍可 refresh（可看到空清單並前往加綁頁）。\n\n**驗收標準**\n- 正常輪替；停用家長 401 且 family 撤銷；員工 refresh token 不可用；rotate 錯誤原樣拋出。",
+      "description": "在 `apps/api/app/services/auth/parent_auth.py` 實作：\n```python\ndef refresh(session: Session, *, raw_refresh: str | None, clock: Clock) -> ParentSession: ...\n```\n- 與 BACKEND-043 對稱：raw None → 401；`rotate`；subject_type 不是 parent → 撤銷 family + 401 `refresh_invalid`；parent 不存在或 `status='disabled'` → 撤銷 family + 401 `unauthenticated`（兩個 401 撤銷路徑都比照 BACKEND-043 在 raise 前 `session.commit()`，否則 endpoint 的 rollback 會把撤銷退回）；以目前 token_version 簽 access。\n- 沒有任何有效綁定的家長仍可 refresh（可看到空清單並前往加綁頁）。\n\n**驗收標準**\n- 正常輪替；停用家長 401 且 family 撤銷（session rollback 後撤銷仍在）；員工 refresh token 不可用；rotate 錯誤原樣拋出。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/parent_auth.py",
       "source_ref": "BE:api/parent_portal/auth.py::_issue_refresh_token",
