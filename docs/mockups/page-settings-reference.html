@@ -742,7 +742,7 @@ const RefTable = {
       setTimeout(() => {
         loading.value = false
         if (props.saveResult === '422') {
-          if (props.kind.isDay) errors.reason = '原因最多 50 字'; else errors.name = '名稱不可空白'
+          if (props.kind.isDay) errors.reason = '原因最多 100 字'; else errors.name = '名稱不可空白'
           return
         }
         if (props.saveResult === '409') {
@@ -765,7 +765,7 @@ const RefTable = {
         setTimeout(() => {
           if (!props.kind.isDay && props.deleteResult === 'deactivated') {
             all.value = all.value.map((r) => (r.id === row.id ? { ...r, is_active: false } : r))
-            ElMessage.warning(`「${row.name}」已有資料引用，已改為停用`)
+            ElMessage.success(`「${row.name}」已有資料引用，已改為停用`)
             return
           }
           all.value = all.value.filter((r) => r.id !== row.id)
@@ -847,7 +847,7 @@ const RefTable = {
               <div v-if="editing" class="form-hint">日期不可修改；要改日期請刪除後重新新增</div>
             </el-form-item>
             <el-form-item label="原因" :error="errors.reason">
-              <el-input v-model="form.reason" maxlength="50" show-word-limit placeholder="例如 國慶日、員工旅遊" :disabled="loading" @input="errors.reason = ''"></el-input>
+              <el-input v-model="form.reason" maxlength="100" show-word-limit placeholder="例如 國慶日、員工旅遊" :disabled="loading" @input="errors.reason = ''"></el-input>
             </el-form-item>
           </template>
           <template v-else>
@@ -856,7 +856,7 @@ const RefTable = {
                         :placeholder="kind.hasShort ? '例如 某某國民小學' : ''" @input="errors.name = ''"></el-input>
             </el-form-item>
             <el-form-item v-if="kind.hasShort" label="簡稱" :error="errors.short_name">
-              <el-input v-model="form.short_name" maxlength="10" show-word-limit placeholder="例如 某某國小" :disabled="loading"></el-input>
+              <el-input v-model="form.short_name" maxlength="20" show-word-limit placeholder="例如 某某國小" :disabled="loading"></el-input>
               <div class="form-hint">學生列表與家長端顯示用；空白時顯示完整名稱</div>
             </el-form-item>
             <el-form-item v-if="kind.hasSort" label="排序">
@@ -912,10 +912,10 @@ const app = createApp({
       '合作國小表格：名稱、簡稱（空白顯示「—」）、狀態、操作；依名稱排序。',
       '休息日表格：日期（灰色小字年份 + formatDateWithWeekday，例「2026 10/10（六）」，範圍跨年所以補年份）、原因（空白顯示「—」）、操作。預設只顯示今天起 12 個月內，依日期由近到遠排（後端回 date desc，前端反轉）；左上「顯示過去日期」勾選後往前多載入一年，過去的列文字變灰並加「已過」小 tag。',
       '只有 settings:read（行政）：沒有新增按鈕、沒有操作欄（整欄移除），其他照常。沒有 settings:read（課輔老師）：側欄沒有此頁，網址直接進會導向 /forbidden。',
-      '新增 / 編輯 dialog（FormDialog sm 420px，標題「新增科目」「編輯科目」等，送出「儲存」）：科目 / 考試類型 = 名稱（必填，≤20 字計數）、排序（數字輸入框，≥0 整數，新增時預設為目前最大值 + 1，下方灰字「數字小的排前面」）、啟用（switch，旁邊灰字說明是否出現在下拉選單）。合作國小 = 名稱（必填，≤50）、簡稱（≤10，下方灰字「學生列表與家長端顯示用；空白時顯示完整名稱」）、啟用。',
-      '休息日 dialog：新增時頂端 info alert「設定為休息日後，當天不會建立出勤名單」；日期（date picker，顯示 2026/12/25，必填「請選擇日期」；編輯時 disabled 並在下方灰字「日期不可修改；要改日期請刪除後重新新增」）、原因（≤50 字計數，選填）。',
+      '新增 / 編輯 dialog（FormDialog sm 420px，標題「新增科目」「編輯科目」等，送出「儲存」）：科目 / 考試類型 = 名稱（必填，≤20 字計數）、排序（數字輸入框，≥0 整數，新增時預設為目前最大值 + 1，下方灰字「數字小的排前面」）、啟用（switch，旁邊灰字說明是否出現在下拉選單）。合作國小 = 名稱（必填，≤50）、簡稱（≤20 字計數，下方灰字「學生列表與家長端顯示用；空白時顯示完整名稱」）、啟用。',
+      '休息日 dialog：新增時頂端 info alert「設定為休息日後，當天不會建立出勤名單」；日期（date picker，顯示 2026/12/25，必填「請選擇日期」；編輯時 disabled 並在下方灰字「日期不可修改；要改日期請刪除後重新新增」）、原因（≤100 字計數，選填）。',
       '錯誤：422 欄位錯誤以 validationFieldErrors 顯示在對應欄位下方；409（名稱重複 / closed_day_exists「該日期已設定為休息日」）也顯示在衝突的欄位下方（名稱或日期），dialog 不關閉。',
-      '刪除：useConfirmDelete 確認框「確定要刪除科目「國語」嗎？」（休息日為「確定要刪除休息日「10/10（六） 國慶日」嗎？」），按鈕「刪除」/「取消」。回 deleted → ElMessage.success「已刪除」並重新載入；回 deactivated（已被引用）→ ElMessage.warning「「國語」已有資料引用，已改為停用」並重新載入（該列變成停用）。休息日沒有改停用的情況。',
+      '刪除：useConfirmDelete 確認框「確定要刪除科目「國語」嗎？」（休息日為「確定要刪除休息日「10/10（六） 國慶日」嗎？」），按鈕「刪除」/「取消」。回 deleted → ElMessage.success「已刪除」並重新載入；回 deactivated（已被引用，只有科目 / 考試類型 / 合作國小）→ 經 useConfirmDelete 的 successMessage 顯示 ElMessage.success「「國語」已有資料引用，已改為停用」並重新載入（該列變成停用）。休息日只會真刪除，沒有改停用的分支（控制列「刪除結果」對休息日不起作用）。',
       '空清單：EmptyState「尚未建立科目 / 考試類型 / 合作國小 / 休息日」（休息日附說明「今天起 12 個月內沒有設定休息日」），有 settings:write 時附「新增…」按鈕。載入中：表格 v-loading；載入失敗：EmptyState error「無法載入科目」+「重試」取代表格。',
       '任一表格寫入成功後呼叫 useLookupsStore().invalidate（科目 subjects、考試類型 examTypes、國小 schools；休息日不需要），畫面上沒有額外提示。',
     ]
