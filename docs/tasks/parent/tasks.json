@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 58,
-  "last_updated": "2026-10-04T06:41:49Z",
+  "version": 59,
+  "last_updated": "2026-10-04T06:43:15Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -908,11 +908,11 @@
     {
       "id": "PARENT-025",
       "title": "移植 ParentBottomSheet 元件（v-model 開關、拖曳關閉、焦點鎖定）",
-      "description": "建立 `apps/web/src/parent/components/ParentBottomSheet.vue`：\n```ts\nprops: { modelValue: boolean; title?: string; dismissible?: boolean /* 預設 true */; fullHeight?: boolean }\nemits: { 'update:modelValue': [boolean] }\nslots: default、footer\n```\n- Teleport 到 body；scrim 點擊、Esc、標題列關閉鈕、從把手或標題列向下拖曳超過 80px（dismissible 時）→ emit `update:modelValue(false)`；dismissible=false 時都不關閉（用於接送碼只顯示一次的確認流程）。\n- 關閉鈕：dismissible 時標題列右側渲染 PARENT-016 M3IconButton（icon `close`、label「關閉」）；dismissible=false 時不渲染。在關閉鈕上按下不會開始拖曳。\n- 拖曳：只有把手與標題列可拖曳（Pointer Events），內容區不攔截拖曳手勢；下移未超過 80px 放開時回彈；往上拖不移動。dismissible=false 時拖曳只回彈、不關閉。\n- 開啟時 `role=\"dialog\"`、`aria-modal=\"true\"`、`aria-labelledby` 指向標題，焦點移入 sheet 並鎖在其中，關閉後還原到開啟前的元素；開啟期間鎖 body 捲動。\n- footer slot 固定在底部並加 `env(safe-area-inset-bottom)`。\n- 層級：`.sheet-layer` z-index 10（高於 M3TopAppBar 的 5、低於 M3Snackbar 的 20），接送碼 sheet 上的 snackbar 回饋才看得到。\n\n移植 ivy `FE:src/parent/components/ParentBottomSheet.vue`；**去掉** snapPoints 多段高度（改為內容自適應 + fullHeight 一個選項）、showHandle prop（固定顯示把手）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-bottom-sheet.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：一般內容 / 長內容可捲動 / fullHeight / 含 footer 按鈕 / 不可關閉模式。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/ParentBottomSheet.vue`：\n```ts\nprops: { modelValue: boolean; title?: string; dismissible?: boolean /* 預設 true */; fullHeight?: boolean }\nemits: { 'update:modelValue': [boolean] }\nslots: default、footer\n```\n- Teleport 到 body；scrim 點擊、Esc、標題列關閉鈕、從把手或標題列向下拖曳超過 80px（dismissible 時）→ emit `update:modelValue(false)`；dismissible=false 時都不關閉（用於接送碼只顯示一次的確認流程）。\n- 關閉鈕：dismissible 時標題列右側渲染 PARENT-016 M3IconButton（icon `close`、label「關閉」）；dismissible=false 時不渲染。在關閉鈕上按下不會開始拖曳。\n- 拖曳：只有把手與標題列可拖曳（Pointer Events），內容區不攔截拖曳手勢；下移未超過 80px 放開時回彈；往上拖不移動。dismissible=false 時拖曳只回彈、不關閉。\n- 開啟時 `role=\"dialog\"`、`aria-modal=\"true\"`、`aria-labelledby` 指向標題，焦點移入 sheet 並鎖在其中，關閉後還原到開啟前的元素；開啟期間鎖 body 捲動。\n- footer slot 固定在底部並加 `env(safe-area-inset-bottom)`。\n- 層級：`.sheet-layer` z-index 10（高於 M3TopAppBar 的 5、低於 M3Snackbar 的 20），接送碼 sheet 上的 snackbar 回饋才看得到。\n- 多層 sheet：捲動鎖計數與 sheet 堆疊為模組層級共享；只有最上層處理 Esc 與 Tab 焦點鎖，焦點落到 sheet 外（focusin 或 Tab）時拉回 sheet 內；關閉時開啟前的元素已不在 DOM 則不還原焦點。\n\n移植 ivy `FE:src/parent/components/ParentBottomSheet.vue`；**去掉** snapPoints 多段高度（改為內容自適應 + fullHeight 一個選項）、showHandle prop（固定顯示把手）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-bottom-sheet.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：一般內容 / 長內容可捲動 / fullHeight / 含 footer 按鈕 / 不可關閉模式。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/ParentBottomSheet.vue",
       "source_ref": "FE:src/parent/components/ParentBottomSheet.vue::props",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-001",
