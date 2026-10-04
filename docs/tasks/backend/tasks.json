@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 177,
-  "last_updated": "2026-10-04T16:27:32Z",
+  "version": 178,
+  "last_updated": "2026-10-04T16:29:24Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2222,14 +2222,14 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_account_service.py",
       "source_ref": "BE:api/parent_portal/profile.py::get_me",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-182",
         "BACKEND-062"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：token 有效但家長帳號已不存在 → 401 UnauthenticatedError；clock 參數依 description 簽名保留，目前未使用。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_parent_account_service.py",
@@ -2294,7 +2294,7 @@
       "granularity_unit": "script",
       "target_path": "apps/api/app/cli.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-030",
@@ -2306,7 +2306,7 @@
         "BACKEND-535"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：規格內 red_case 的 username 'x2' 只有 2 字元，不符 description 與 DB CHECK 的 ^[a-z0-9][a-z0-9._-]{2,31}$（至少 3 字元），已把 red_cases 的 'x2' 改為 'owner2'。create_admin 函式本身也檢查「已有啟用中的 admin」（拒絕 → ConflictError admin_exists，main 轉 exit 1）；username 重複 → exit 1；輸入不合格（密碼強度、username 格式）→ exit 2；密碼不一致 → exit 2；其他例外 → exit 1，錯誤訊息只印例外類別。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/test_cli_create_admin.py",
@@ -2315,7 +2315,7 @@
         ],
         "red_cases": [
           "test_cli_create_admin_success：db_session 中無 admin 帳號，create_admin(db_session, username='Owner', display_name='負責人', password='Afterschool2026') → staff.username == 'owner'、staff.role.code == 'admin'、must_change_password is True；audit_logs 有 action 'staff_user.create' 且 actor_type == 'system'",
-          "test_cli_create_admin_refuses_when_admin_exists：先 make_staff(role_code='admin') → main(['create-admin','--username','x2','--display-name','X']) 回 1，staff_users 筆數不變（main 以 monkeypatch 的 session_scope 綁到 db_session、getpass 回 'Afterschool2026'）",
+          "test_cli_create_admin_refuses_when_admin_exists：先 make_staff(role_code='admin') → main(['create-admin','--username','owner2','--display-name','X']) 回 1，staff_users 筆數不變（main 以 monkeypatch 的 session_scope 綁到 db_session、getpass 回 'Afterschool2026'）",
           "test_cli_create_admin_password_mismatch：getpass 依序回 'Afterschool2026'、'Afterschool2027' → main 回 2，未新增",
           "test_cli_create_admin_weak_password：getpass 兩次回 'abc' → main 回非 0，capsys stderr 含 '密碼強度不足'",
           "test_cli_create_admin_no_password_in_output：成功執行後 capsys.readouterr().out 不含 'Afterschool2026'"
@@ -2736,14 +2736,14 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/role_service.py",
       "source_ref": "BE:api/permissions_admin.py::delete_role",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-077",
         "BACKEND-102"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：刪除前以 FOR UPDATE 鎖角色列，避免與同時指派員工到該角色競爭；其他 IntegrityError 交全域 handler。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_role_service.py",
@@ -3559,7 +3559,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/audit_service.py",
       "source_ref": "BE:api/audit.py::get_audit_logs",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-102",
@@ -3568,7 +3568,7 @@
         "BACKEND-002"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：actor_name 不是單一 outer join，而是先以 paginate 取本頁 audit_logs，再對本頁出現的 staff / parent actor 各做一次 IN 查詢取名稱（paginate 只回單一 entity；總查詢數與頁面大小無關，沒有 N+1）。staff / parent 已不存在時 actor_name 為 None。action_prefix 以 autoescape 比對（prefix 內的 _ % 視為字面字元）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_audit_service.py",
@@ -4038,13 +4038,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/reference_data_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-115"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：只有 SQLSTATE 23505（unique violation）轉 409 spec.conflict_code；其他 IntegrityError 原樣拋出交全域 handler。訊息為「名稱已存在」/「日期已存在」（closed-days）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_reference_data_service.py",
@@ -4588,7 +4588,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": "BE:api/classrooms.py::get_classrooms",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-134",
@@ -5097,7 +5097,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": "BE:api/students.py::get_students",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-148",
@@ -5106,7 +5106,7 @@
         "BACKEND-008"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：q 是否為身分證以 normalize_id_number + validate_id_number（含檢查碼）判斷，不合法的格式不做 HMAC 比對。q 的 student_no 前綴與 name 模糊比對以 autoescape 處理 % 與 _。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_student_service.py",
@@ -5805,7 +5805,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/guardian_service.py",
       "source_ref": "BE:api/students.py::list_guardians",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-167",
