@@ -160,3 +160,16 @@ def make_guardians(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str,
         "relation": "father",
     }
     return insert_row(conn, "public.guardians", **{**defaults, **overrides})
+
+
+def make_student_leaves(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    """未指定 student_id 時另建一位學生；預設為單日 active 請假（2026-10-05）。"""
+    defaults = {
+        "student_id": overrides.get("student_id") or make_students(conn)["id"],
+        "leave_type": "sick",
+        "start_date": date(2026, 10, 5),
+        "end_date": date(2026, 10, 5),
+        "created_by_type": "parent",
+        "created_by_id": uuid4(),
+    }
+    return insert_row(conn, "public.student_leaves", **{**defaults, **overrides})
