@@ -1,11 +1,12 @@
 """CI workflow 結構測試（INFRA-022 起，後續每個 CI job task 在此檔加自己的測試）。
 
 helper：
-- `workflow()`：載入 .github/workflows/ci.yml。
-- `job(name)`：取得指定 job 的 dict。
-- `run_lines(name)`：展開該 job 所有 step 的 `run`（多行 run 拆成逐行、去掉前後空白）。
+- `workflow(file)`：載入 .github/workflows/<file>（預設 ci.yml）。
+- `job(name, file)`：取得指定 job 的 dict。
+- `run_lines(name, file)`：展開該 job 所有 step 的 `run`（多行 run 拆成逐行、去掉前後空白）。
 """
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +14,8 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CI_YML = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+WORKFLOWS = REPO_ROOT / ".github" / "workflows"
+CI_YML = WORKFLOWS / "ci.yml"
 SETUP_ACTION = REPO_ROOT / ".github" / "actions" / "setup" / "action.yml"
 
 
@@ -23,28 +25,28 @@ def _load(path: Path) -> dict[Any, Any]:
     return data
 
 
-def workflow() -> dict[Any, Any]:
-    return _load(CI_YML)
+def workflow(file: str = "ci.yml") -> dict[Any, Any]:
+    return _load(WORKFLOWS / file)
 
 
-def triggers() -> dict[str, Any]:
-    wf = workflow()
+def triggers(file: str = "ci.yml") -> dict[str, Any]:
+    wf = workflow(file)
     # YAML 1.1 會把裸字 on 解析成布林 True
     on = wf.get("on", wf.get(True))
-    assert isinstance(on, dict), "ci.yml 的 on 必須是 mapping"
+    assert isinstance(on, dict), f"{file} 的 on 必須是 mapping"
     return on
 
 
-def job(name: str) -> dict[str, Any]:
-    jobs = workflow()["jobs"]
-    assert name in jobs, f"ci.yml 沒有 job {name}（現有：{sorted(jobs)}）"
+def job(name: str, file: str = "ci.yml") -> dict[str, Any]:
+    jobs = workflow(file)["jobs"]
+    assert name in jobs, f"{file} 沒有 job {name}（現有：{sorted(jobs)}）"
     result: dict[str, Any] = jobs[name]
     return result
 
 
-def run_lines(name: str) -> list[str]:
+def run_lines(name: str, file: str = "ci.yml") -> list[str]:
     lines: list[str] = []
-    for step in job(name).get("steps", []):
+    for step in job(name, file).get("steps", []):
         run = step.get("run")
         if run:
             lines += [line.strip() for line in str(run).splitlines() if line.strip()]
@@ -125,8 +127,8 @@ def test_ci_setup_action_steps_follow_inputs(needle: str, condition: str) -> Non
     assert matched[0]["if"] == condition
 
 
-def steps_of(name: str) -> list[dict[str, Any]]:
-    steps: list[dict[str, Any]] = job(name).get("steps", [])
+def steps_of(name: str, file: str = "ci.yml") -> list[dict[str, Any]]:
+    steps: list[dict[str, Any]] = job(name, file).get("steps", [])
     return steps
 
 
@@ -280,3 +282,64 @@ def test_ci_web_build_job_skips_python() -> None:
 
     assert len(setup) == 1
     assert setup[0]["with"]["python"] is False
+
+
+E2E_YML = "e2e.yml"
+
+
+def test_e2e_workflow_triggers() -> None:
+    on = triggers(E2E_YML)
+
+    assert "workflow_dispatch" in on
+    assert on["schedule"][0]["cron"] == "0 18 * * *"
+    assert "pull_request" not in on
+    assert "push" not in on
+    assert workflow(E2E_YML)["permissions"] == {"contents": "read"}
+    assert job("e2e", E2E_YML)["timeout-minutes"] == 30
+
+
+def test_e2e_workflow_order() -> None:
+    lines = run_lines("e2e", E2E_YML)
+
+    up = line_index(lines, "docker compose", "up")
+    reset = lines.index("just db-reset --yes")
+    dev_up = line_index(lines, "dev_up.sh")
+    playwright = line_index(lines, "playwright test")
+    assert up < reset < dev_up < playwright
+    assert line_index(lines, "DEV_UP_SKIP_DB=1", "dev_up.sh") == dev_up
+
+
+def test_e2e_workflow_uploads_report_on_failure() -> None:
+    uploads = [
+        s
+        for s in steps_of("e2e", E2E_YML)
+        if str(s.get("uses", "")).startswith("actions/upload-artifact")
+    ]
+
+    assert len(uploads) == 1
+    assert uploads[0]["if"] == "failure()"
+    assert "playwright-report" in uploads[0]["with"]["path"]
+    assert "test-results" in uploads[0]["with"]["path"]
+    assert uploads[0]["with"]["retention-days"] == 7
+
+
+def test_e2e_workflow_tears_down_always() -> None:
+    last = steps_of("e2e", E2E_YML)[-1]
+
+    assert last["if"] == "always()"
+    assert "dev_down.sh --all" in last["run"]
+
+
+def test_e2e_workflow_generates_secret() -> None:
+    lines = run_lines("e2e", E2E_YML)
+
+    secret_lines = [line for line in lines if "APP_SECRET_KEY" in line]
+    assert any("openssl rand" in line for line in secret_lines)
+    fixed = re.compile(r"APP_SECRET_KEY\s*[=:]\s*['\"]?[A-Za-z0-9]")
+    assert [line for line in lines if fixed.search(line)] == []
+
+
+def test_e2e_workflow_no_supabase() -> None:
+    text = (WORKFLOWS / E2E_YML).read_text(encoding="utf-8")
+
+    assert "supabase" not in text.lower()
