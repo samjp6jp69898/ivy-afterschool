@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 203,
-  "last_updated": "2026-10-04T16:46:21Z",
+  "version": 204,
+  "last_updated": "2026-10-04T16:46:43Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1880,7 +1880,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/binding_code_service.py",
       "source_ref": "BE:api/guardians_admin.py::create_binding_code",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-132",
@@ -1889,7 +1889,7 @@
         "BACKEND-047"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "review-r7-a 打回：同一 guardian 併發 generate 會留下兩筆有效碼（兩個交易各自 delete 舊碼再 insert，後到者等鎖後的 delete 看不到前者剛 insert 的列）。修法：_load_guardian_for_issue 以 with_for_update(of=Guardian) 鎖住 guardian 列（student / parent_account relationship 為 lazy='joined'，比照 BACKEND-049 用 of= 避開 outer join），同一 guardian 的 generate 序列化；後到者等鎖後再執行 delete 即可刪掉前者 commit 的碼。驗收（紅燈測試）：committing_db_session（cleanup_tables('audit_logs')，其他列以 owner 連線依 id 刪除）+ 兩條 app_backend Session + thread：A generate 未 commit 時 B 的 generate 必須阻塞；A commit 後 B 完成，該 guardian used_at is null 的列恰 1 筆且 code_hash == hash_code(B 的碼)。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_binding_code_service.py",
@@ -1908,9 +1908,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r7-a",
-        "notes": "concern。8 條測試全綠（6 條 red_case 加 unique 衝突 savepoint 重試 / 3 次仍衝突 500、每次產碼不同），HMAC 存放且原始列不含明碼、只回傳一次、作廢未使用舊碼而保留已使用、封存 404 / 409、已綁定 409、audit 不含明碼與 hash 皆驗證通過；lint / typecheck 乾淨；commit ef36be0 先於 84f2689。打回一項（reviewer 以 committing session + 兩條 app_backend Session + thread 實跑）：同一 guardian 併發 generate——A 刪舊碼並 insert 新碼未 commit 時，B 的 delete 等 A 的列鎖；A commit 後 B 的 delete 只刪到 A 之前的舊碼、看不到 A 剛 insert 的列，再 insert 自己的 → 該 guardian 兩筆 used_at is null 的碼同時有效，違反「產新碼時作廢舊碼」；DB 的 ix_parent_binding_codes_guardian_unused 不是 unique，沒有第二道防線。"
+        "notes": "pass（複審）。打回項已修正：_load_guardian_for_issue 以 with_for_update(of=Guardian) 鎖 guardian 列，新測試 test_generate_binding_code_concurrent_same_guardian（committing session + 兩條 app_backend Session + thread）驗證 A 未 commit 時 B 阻塞、A commit 後 B 完成且該 guardian used_at is null 的列恰 1 筆、hash == B 的碼；reviewer 以 scratchpad plugin 在記憶體還原成打回前實作重跑，新測試轉紅（B 未被阻塞），證明測試有效。tdd.run 9 passed；lint / typecheck 乾淨；commit 81cf341（測試）先於 cbd11c7（修正）。測試前後以 owner 連線查 parent_binding_codes / guardians / students / staff_users / roles / audit_logs 列數與 pg_locks 均不變（含測試失敗時的清理），不留殘留列、不卡鎖。初審通過的項目（HMAC 存放且原始列不含明碼、只回傳一次、作廢未使用舊碼保留已使用、封存 404 / 409、已綁定 409、unique 衝突 savepoint 重試與 500 上限、audit 不含明碼與 hash）維持不變。無殘留。"
       }
     },
     {
@@ -3823,7 +3823,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/settings_service.py",
       "source_ref": "BE:api/system_config.py::upsert_config",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-109",
@@ -3831,7 +3831,7 @@
         "BACKEND-006"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "committing 測試會真的改到 seed 表 system_settings，teardown 必須以 owner 連線還原；audit_logs 為 append-only，清理只能走 INFRA-010 的 owner truncate。\nBACKEND-108 的 TTL cache（review-r5-backend）：invalidate_setting 只能在 commit 之後呼叫（本 task 第 6 步的 run_after_commit），在 commit 前呼叫會讓其他執行緒讀到舊值並以新世代回寫快取 60 秒；put_setting 的寫入交易內不得以同一個 session 呼叫 get_setting（會把尚未 commit 的值寫進快取，交易回滾後快取仍保留該值直到 TTL），需要讀現值時直接查 system_settings 列。\nSettingPutIn.value（BACKEND-111）是 dict[str, Any]：NUL 已由 RequestModel 擋下，但 JSON 的 NaN / Infinity 與孤立 surrogate（'\\ud800'）仍會通過，原樣寫入 jsonb 會 DataError / 編碼錯誤 → 500。put_setting 必須在 registry schema 驗證通過後才寫入，且寫入驗證後的 model_dump(mode='json')，不可寫原始 value；registry 日後新增 float 或 Any 欄位要設 allow_inf_nan=False。\nreview-r7-a 打回：secret 欄位送 ''（或只含空白）會存成 encrypt_token('')，讀回 '' 而畫面顯示 '********'。修法：_merge_secret_fields 中 secret 欄位的值為字串且 strip() 後為空 → 視同 null（清除，存 None）；description 第 2 點同步補上「空字串 → 視同 null 清除」。驗收（紅燈測試）：put line.messaging {'channel_access_token': '', 'channel_secret': '  '} → DB 兩欄皆 None、回傳 value 兩欄皆 None、invalidate 後 get_setting 兩欄皆 None；任何路徑不得寫入 encrypt_token('')。",
+      "risk_notes": "committing 測試會真的改到 seed 表 system_settings，teardown 必須以 owner 連線還原；audit_logs 為 append-only，清理只能走 INFRA-010 的 owner truncate。\nBACKEND-108 的 TTL cache（review-r5-backend）：invalidate_setting 只能在 commit 之後呼叫（本 task 第 6 步的 run_after_commit），在 commit 前呼叫會讓其他執行緒讀到舊值並以新世代回寫快取 60 秒；put_setting 的寫入交易內不得以同一個 session 呼叫 get_setting（會把尚未 commit 的值寫進快取，交易回滾後快取仍保留該值直到 TTL），需要讀現值時直接查 system_settings 列。\nSettingPutIn.value（BACKEND-111）是 dict[str, Any]：NUL 已由 RequestModel 擋下，但 JSON 的 NaN / Infinity 與孤立 surrogate（'\\ud800'）仍會通過，原樣寫入 jsonb 會 DataError / 編碼錯誤 → 500。put_setting 必須在 registry schema 驗證通過後才寫入，且寫入驗證後的 model_dump(mode='json')，不可寫原始 value；registry 日後新增 float 或 Any 欄位要設 allow_inf_nan=False。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_settings_service.py",
@@ -3850,9 +3850,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r7-a",
-        "notes": "concern。8 條測試全綠（6 條 red_case 加缺列插入、commit 前不污染快取），整檔 23 passed；lint / typecheck 乾淨；commit 3b790de 先於 b7a85e2（實作 commit 修正測試對 12 字元 secret 的遮罩預期 '********' → '****5678'，與 mask_secret 規則一致，不是弱化）。with_for_update 鎖列、直接讀列不走 get_setting、寫入驗證後的 model_dump(mode='json')、422 details 不回顯輸入、audit 只含遮罩值、after_commit 才失效快取、遮罩值在 DB 密文壞掉 / 缺列時分別沿用原密文 / 存 None，皆驗證通過。打回一項（reviewer 實跑）：secret 欄位送空字串 '' 既不是遮罩也不是 null → 被當新明文存成 encrypt_token('')；get_setting 解回 ''，put 回應與 list_settings_for_admin 顯示 '********'（看起來已設定），前端再把 '********' 送回就永久保留此狀態，管理者無法從畫面分辨未設定——即 review-r7-b 在 109 留下的殘留，寫入端是產生此狀態的源頭。LINE client 對 '' 走 if not token 視為未設定，推播不會壞，但畫面狀態錯誤。"
+        "notes": "pass（複審）。打回項已修正：_merge_secret_fields 對 secret 欄位為字串且 strip() 後為空 → 視同 null 清除，description 第 2 點已補「null、空字串或只含空白 → 清除（存 null）」；新測試 test_put_setting_secret_empty_string_clears 驗證有既有值時送 '' / '  ' → 回傳、DB、invalidate 後 get_setting 皆 None，首次設定就送空字串同樣存 None；reviewer 以 scratchpad plugin 還原成打回前實作重跑，新測試轉紅（回傳 '********'），證明測試有效；reviewer 自己的探測（空字串 → 遮罩值回送、DB 密文壞掉送遮罩、缺列送遮罩）在修正後任何路徑都不再寫入 encrypt_token('')。tdd.run 9 passed，整檔 24 passed；lint / typecheck 乾淨；commit 81cf341 先於 cbd11c7。初審通過的項目（with_for_update 鎖列、不走 get_setting、寫入 model_dump(mode='json')、422 不回顯輸入、audit 只含遮罩值、after_commit 才失效快取、遮罩值沿用原密文 / 缺列存 None）維持不變。無殘留。"
       }
     },
     {
