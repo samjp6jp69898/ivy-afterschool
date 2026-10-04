@@ -1,6 +1,6 @@
 {
   "area": "parent",
-  "version": 65,
+  "version": 66,
   "last_updated": "2026-10-04T11:29:19Z",
   "tasks": [
     {
@@ -947,11 +947,11 @@
     {
       "id": "PARENT-026",
       "title": "移植 ConfirmDialog 元件（確認 / 取消、破壞性操作樣式）",
-      "description": "建立 `apps/web/src/parent/components/ConfirmDialog.vue`：\n```ts\nprops: { open: boolean; title: string; message?: string; confirmLabel?: string /* 預設 確定 */; cancelLabel?: string /* 預設 取消 */; destructive?: boolean; loading?: boolean }\nemits: { confirm: []; cancel: [] }\nslots: default（額外內容，例如「下次不再提醒」勾選）\n```\n- Teleport 到 body，`role=\"alertdialog\"`、`aria-modal`；開啟時焦點在取消按鈕（避免誤觸破壞性操作）；Esc（監聽在 document）與 scrim 點擊 emit cancel；loading 時確認按鈕走 M3Button loading（轉圈、`aria-disabled=\"true\"` + `aria-busy`，點擊不 emit，防重複送出），同時取消按鈕原生 disabled、Esc 與 scrim 都不 emit cancel（送出中不能取消）。destructive 時確認按鈕用 error 色。\n- 元件不自行關閉：只 emit confirm / cancel，由呼叫端把 `open` 設回 false（loading 流程成功才關，失敗時呼叫端保持開啟並以 snackbar 告知）。\n- 標題本身含「取消」的對話框（取消接送、取消代理接送）由呼叫端傳 `cancelLabel`「先不要」；元件預設仍是「取消」。\n- 層級與鎖：對話框 z-index 15（高於 ParentBottomSheet 10、低於 M3Snackbar 20）；與 ParentBottomSheet 共用 `apps/web/src/parent/utils/overlayStack.ts` 的疊層堆疊與 body 捲動鎖，只有最上層處理 Esc 與 Tab 焦點鎖，疊在 sheet 上時 Esc 只取消對話框、關閉後 body 仍維持鎖定。\n\n移植 ivy `FE:src/parent/components/ConfirmDialog.vue`（open/title/message/confirmLabel/cancelLabel/destructive 保留），**新增** loading 與 default slot。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-confirm-dialog.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：一般確認 / 破壞性（取消接送、刪除接送人）/ loading 中 / 含勾選 slot。（稿已核可，實作需符合稿中 decisions）\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/ConfirmDialog.vue`：\n```ts\nprops: { open: boolean; title: string; message?: string; confirmLabel?: string /* 預設 確定 */; cancelLabel?: string /* 預設 取消 */; destructive?: boolean; loading?: boolean }\nemits: { confirm: []; cancel: [] }\nslots: default（額外內容，例如「下次不再提醒」勾選）\n```\n- Teleport 到 body，`role=\"alertdialog\"`、`aria-modal`；開啟時焦點在取消按鈕（避免誤觸破壞性操作）；Esc（監聽在 document）與 scrim 點擊 emit cancel；loading 時確認按鈕走 M3Button loading（轉圈、`aria-disabled=\"true\"` + `aria-busy`，點擊不 emit，防重複送出），同時取消按鈕原生 disabled、Esc 與 scrim 都不 emit cancel（送出中不能取消）。destructive 時確認按鈕用 error 色。\n- 元件不自行關閉：只 emit confirm / cancel，由呼叫端把 `open` 設回 false（loading 流程成功才關，失敗時呼叫端保持開啟並以 snackbar 告知）。\n- 標題本身含「取消」的對話框（取消接送、取消代理接送）由呼叫端傳 `cancelLabel`「先不要」；元件預設仍是「取消」。\n- 層級與鎖：對話框 z-index 15（高於 ParentBottomSheet 10、低於 M3Snackbar 20）；與 ParentBottomSheet 共用 `apps/web/src/parent/utils/overlayStack.ts` 的疊層堆疊與 body 捲動鎖，只有最上層處理 Esc 與 Tab 焦點鎖，疊在 sheet 上時 Esc 只取消對話框、關閉後 body 仍維持鎖定。 開啟前元素的焦點還原也在 overlayStack：移除最上層時還原；同一 tick 先移除下層時不動焦點、並把其上疊層的還原目標接到最底層開啟前的元素，關完整串疊層後焦點回到頁面按鈕，與宣告順序無關。\n\n移植 ivy `FE:src/parent/components/ConfirmDialog.vue`（open/title/message/confirmLabel/cancelLabel/destructive 保留），**新增** loading 與 default slot。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-confirm-dialog.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：一般確認 / 破壞性（取消接送、刪除接送人）/ loading 中 / 含勾選 slot。（稿已核可，實作需符合稿中 decisions）\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/ConfirmDialog.vue",
       "source_ref": "FE:src/parent/components/ConfirmDialog.vue::defineEmits",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-001",
