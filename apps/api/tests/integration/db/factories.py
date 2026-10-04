@@ -192,3 +192,14 @@ def make_homework_daily_progress(conn: psycopg.Connection[Any], **overrides: Any
         "service_date": date(2026, 10, 5),
     }
     return insert_row(conn, "public.homework_daily_progress", **{**defaults, **overrides})
+
+
+def make_pickup_persons(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    """未指定 student_id 時另建一位學生。"""
+    defaults = {
+        "student_id": overrides.get("student_id") or make_students(conn)["id"],
+        "name": "李阿姨",
+        "relation": "阿姨",
+        "phone": "0912-000-001",
+    }
+    return insert_row(conn, "public.pickup_persons", **{**defaults, **overrides})
