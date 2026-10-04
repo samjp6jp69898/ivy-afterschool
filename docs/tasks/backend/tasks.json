@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 199,
-  "last_updated": "2026-10-04T16:45:08Z",
+  "version": 200,
+  "last_updated": "2026-10-04T16:45:25Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -7381,7 +7381,7 @@
     {
       "id": "BACKEND-225",
       "title": "實作 app/api/ws/common.py：WebSocket cookie 認證、關閉碼、定期重驗與訊息迴圈",
-      "description": "建立 `apps/api/app/api/ws/common.py`。移植 ivy `utils/ws_hub.py::run_ws_connection` / `get_token_from_ws` 與 `api/inbox_ws.py::_token_still_valid` 的「握手驗證 + 連線中定期重驗」；去掉 query string token、tenant、連線數限制。\n\n```python\nWS_CLOSE_UNAUTHENTICATED = 4401\nWS_CLOSE_FORBIDDEN = 4403            # 與 BACKEND-019 origin 拒絕共用\nWS_CLOSE_BAD_MESSAGE = 4400\nREVALIDATE_SECONDS = 60\n\ndef ws_load_staff(ws: WebSocket, *, clock: Clock) -> CurrentStaff: ...     # 讀 staff_access cookie → BACKEND-047 load_current_staff(path=None)；以 SessionLocal 開短 session，用完即關\ndef ws_load_parent(ws: WebSocket, *, clock: Clock) -> CurrentParent: ...   # 讀 parent_access cookie → BACKEND-062 load_current_parent\nasync def run_ws_loop(ws: WebSocket, *, on_message: Callable[[dict[str, Any]], Awaitable[None]], revalidate: Callable[[], Awaitable[bool]],\n                      interval: float = REVALIDATE_SECONDS) -> None: ...\n```\n- DB 存取在 `anyio.to_thread.run_sync` 執行，不阻塞 event loop。\n- `run_ws_loop`：同時等待 client 訊息與重驗計時器；client 訊息必須是 JSON 物件且有 `action` 字串，否則回 `{\"type\":\"error\",\"code\":\"bad_message\"}`（連續 5 次錯誤 → close 4400）；`{\"action\":\"ping\"}` → 回 `{\"type\":\"pong\"}`；`revalidate()` 回 False → close 4401；client 斷線 → 正常結束。\n- 強制改密碼的員工：`load_current_staff(path=None)` 會拋 403 → 握手以 4403 拒絕。\n\n**驗收標準**\n- 有效 cookie 取得 CurrentStaff / CurrentParent；無效 → 拋 AppError 供 endpoint 轉成關閉碼。\n- ping / pong；錯誤訊息回 error；連續錯誤關閉 4400。\n- 重驗失敗關閉 4401。",
+      "description": "建立 `apps/api/app/api/ws/common.py`。移植 ivy `utils/ws_hub.py::run_ws_connection` / `get_token_from_ws` 與 `api/inbox_ws.py::_token_still_valid` 的「握手驗證 + 連線中定期重驗」；去掉 query string token、tenant、連線數限制。\n\n```python\nWS_CLOSE_UNAUTHENTICATED = 4401\nWS_CLOSE_FORBIDDEN = 4403            # 與 BACKEND-019 origin 拒絕共用\nWS_CLOSE_BAD_MESSAGE = 4400\nREVALIDATE_SECONDS = 60\n\ndef ws_load_staff(ws: WebSocket, *, clock: Clock) -> CurrentStaff: ...     # 讀 staff_access cookie → BACKEND-047 load_current_staff(path=None)；以 SessionLocal 開短 session，用完即關\ndef ws_load_parent(ws: WebSocket, *, clock: Clock) -> CurrentParent: ...   # 讀 parent_access cookie → BACKEND-062 load_current_parent\nasync def run_ws_loop(ws: WebSocket, *, on_message: Callable[[dict[str, Any]], Awaitable[None]], revalidate: Callable[[], Awaitable[bool]],\n                      interval: float = REVALIDATE_SECONDS) -> None: ...\nasync def run_in_thread(fn: Callable[..., T], *args: Any, **kwargs: Any) -> T: ...   # anyio.to_thread.run_sync 包裝；endpoint 以 await run_in_thread(ws_load_staff, ws, clock=clock) 呼叫\ndef close_code_for(exc: AppError) -> int: ...      # 401 → 4401、403 → 4403、其他 → 4400\ndef open_session() -> ContextManager[Session]: ... # ws_load_* 的短 session 開啟點（測試以 monkeypatch 綁到測試連線）\n```\n- DB 存取在 thread 執行，不阻塞 event loop：`ws_load_*` 維持同步簽章，由 endpoint 經 `run_in_thread` 呼叫。\n- `run_ws_loop`：同時等待 client 訊息與重驗計時器；client 訊息必須是 JSON 物件且有 `action` 字串，否則回 `{\"type\":\"error\",\"code\":\"bad_message\"}`（連續 5 次錯誤 → close 4400）；`{\"action\":\"ping\"}` → 回 `{\"type\":\"pong\"}`；`revalidate()` 回 False → close 4401；client 斷線 → 正常結束。\n- 強制改密碼的員工：`load_current_staff(path=None)` 會拋 403 → 握手以 4403 拒絕。\n\n**驗收標準**\n- 有效 cookie 取得 CurrentStaff / CurrentParent；無效 → 拋 AppError 供 endpoint 轉成關閉碼。\n- ping / pong；錯誤訊息回 error；連續錯誤關閉 4400。\n- 重驗失敗關閉 4401。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/api/ws/common.py",
       "source_ref": "BE:utils/ws_hub.py::run_ws_connection",
@@ -7394,7 +7394,7 @@
         "BACKEND-002"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "協調者待使用者確認：描述的「DB 存取在 anyio.to_thread.run_sync 執行」以 common.run_in_thread(fn, ...) 提供（ws_load_staff / ws_load_parent 本身維持描述的同步簽章），endpoint task（BACKEND-226 / 227）要用 `await run_in_thread(ws_load_staff, ws, clock=clock)` 呼叫；另提供 close_code_for(AppError) 把 401 / 403 / 其他轉成 4401 / 4403 / 4400。短 session 經 common.open_session() 開啟（測試以 monkeypatch 綁到測試連線）。\n已知限制：starlette TestClient 在 client 離開 websocket context 時會直接取消 app task，無法觀察「client 斷線 → run_ws_loop 正常結束」，該路徑改以替身 WebSocket 驅動 run_ws_loop 驗證。",
+      "risk_notes": "已知限制：starlette TestClient 在 client 離開 websocket context 時會直接取消 app task，無法觀察「client 斷線 → run_ws_loop 正常結束」，該路徑改以替身 WebSocket 驅動 run_ws_loop 驗證。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/ws/test_ws_common.py",
@@ -7435,7 +7435,7 @@
         "BACKEND-073"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "WS 測試需真 commit（WS handler 用獨立 SessionLocal，看不到 db_session 的未提交資料）：測資以 committing_db_session 建立並清理。",
+      "risk_notes": "WS 測試需真 commit（WS handler 用獨立 SessionLocal，看不到 db_session 的未提交資料）：測資以 committing_db_session 建立並清理。\nBACKEND-225 的 run_ws_loop 中 on_message 拋出的例外會以 ExceptionGroup（anyio task group）往外拋；要以 close code 回應業務錯誤須在 on_message 內自行 try / except（或用 except*）。run_ws_loop 不做 server 端 ping，閒置連線存活偵測交給 60 秒重驗；revalidate 由本 endpoint 提供（重新 load_current_*，token_version / 停用的實際檢查與測試在這裡）。握手驗證以 `await run_in_thread(ws_load_*, ws, clock=clock)` 取得身分，AppError 以 `close_code_for(exc)` 轉關閉碼。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/ws/test_ws_endpoints.py",
@@ -7477,7 +7477,7 @@
         "BACKEND-023"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "同 BACKEND-226：測資需以 committing_db_session 建立。",
+      "risk_notes": "同 BACKEND-226：測資需以 committing_db_session 建立。\nBACKEND-225 的 run_ws_loop 中 on_message 拋出的例外會以 ExceptionGroup（anyio task group）往外拋；要以 close code 回應業務錯誤須在 on_message 內自行 try / except（或用 except*）。run_ws_loop 不做 server 端 ping，閒置連線存活偵測交給 60 秒重驗；revalidate 由本 endpoint 提供（重新 load_current_*，token_version / 停用的實際檢查與測試在這裡）。握手驗證以 `await run_in_thread(ws_load_*, ws, clock=clock)` 取得身分，AppError 以 `close_code_for(exc)` 轉關閉碼。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/ws/test_ws_endpoints.py",
