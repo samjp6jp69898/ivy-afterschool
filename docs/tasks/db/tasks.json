@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 51,
-  "last_updated": "2026-10-04T12:47:10Z",
+  "version": 52,
+  "last_updated": "2026-10-04T12:48:28Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -1581,7 +1581,7 @@
           "test_grants_baseline_schema_conventions_reports_each_rule：parametrize 六種各違反一條的臨時表（id 非 uuid、id 無 default、created_at nullable、updated_at 無 default、沒有 trigger、after update trigger）→ 檢查函式只回報該表且含對應描述",
           "test_grants_baseline_schema_conventions_accepts_compliant_table：符合全部慣例的臨時表 → 檢查函式回傳空 dict",
           "test_grants_baseline_no_naive_timestamps：information_schema.columns where table_schema='public' and data_type='timestamp without time zone' → 0 列；建 _naive(at timestamp) 後 → [('_naive','at')]",
-          "test_grants_baseline_fk_columns_indexed：對 pg_constraint contype='f' 的每個 FK，存在前導欄位恰為 FK 欄位的 index（partial 只在 predicate 恰為 `<fk 欄位> is not null` 時算）→ 缺索引清單為空；再建 _child(student_id references students) 依序驗證：無索引 → 回報；`where archived_at is null` partial → 仍回報；後導欄位索引 → 仍回報；`where student_id is not null` partial → 不回報；drop 後 → 回報；(student_id, archived_at) 全表索引 → 不回報"
+          "test_grants_baseline_fk_columns_indexed：對 pg_constraint contype='f' 的每個 FK，存在前導欄位恰為 FK 欄位的 index（partial 只在 predicate 恰為 `<fk 欄位> is not null` 時算）→ 缺索引清單為空；再建 _child(student_id references students) 依序驗證：無索引 → 回報；`where archived_at is null` partial → 仍回報；後導欄位索引 → 仍回報；`where student_id is not null and archived_at is null` 複合 predicate → 仍回報（predicate 以 pg_get_expr 輸出完全相等比對，不是字串包含）；`where student_id is not null` partial → 不回報；drop 後 → 回報；(student_id, archived_at) 全表索引 → 不回報"
         ],
         "run": "just test-int apps/api/tests/integration/db/test_grants_baseline.py apps/api/tests/integration/db/test_schema_conventions.py -k grants_baseline",
         "notes": "schema 慣例測試放在 test_schema_conventions.py，函式名稱以 test_grants_baseline_ 開頭以便 -k 選取。VERIFY_SQL 以 conftest.load_revision_sql(revision_file, 'VERIFY_SQL') 依檔案路徑載入。目錄層級的正向斷言在第一道防線（grant_backend）已達標的 DB 上一開始就綠，每條都附臨時表反例證明檢查函式會回報違規；真正因 db040 轉綠的是 VERIFY_SQL 五條與 FK 索引一條。"

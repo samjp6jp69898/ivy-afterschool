@@ -263,6 +263,16 @@ def test_grants_baseline_fk_columns_indexed(owner_conn: Conn) -> None:
     owner_conn.execute("create index _child_trailing on public._child (archived_at, student_id)")
     assert _fk_columns_without_index(owner_conn) == missing
 
+    # 含 <fk 欄位> is not null 的複合 predicate 仍排除了可能命中的列，不算
+    # （predicate 比對是完全相等，不是字串包含）
+    owner_conn.execute(
+        """
+        create index _child_compound on public._child (student_id)
+        where student_id is not null and archived_at is null
+        """
+    )
+    assert _fk_columns_without_index(owner_conn) == missing
+
     # predicate 恰為 <fk 欄位> is not null 的 partial index 算
     owner_conn.execute(
         "create index _child_not_null on public._child (student_id) where student_id is not null"
