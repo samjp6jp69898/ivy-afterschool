@@ -13,6 +13,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
+from app.api.deps import CurrentStaff, get_current_staff
 from app.core.clock import Clock, get_clock
 from app.core.config import Settings, get_settings
 from app.core.db import get_db
@@ -88,3 +89,16 @@ def logout(
     db.commit()
     clear_auth_cookies(response, subject_type="staff", settings=settings)
     return MessageOut(message="已登出")
+
+
+@router.get("/me", response_model=StaffMeOut)
+def me(staff: Annotated[CurrentStaff, Depends(get_current_staff)]) -> StaffMeOut:
+    """目前登入員工（前端以此建立權限選單）；本路徑在強制改密碼的 allowlist 內。"""
+    return StaffMeOut(
+        id=staff.id,
+        username=staff.username,
+        display_name=staff.display_name,
+        role=RoleBrief(id=staff.role_id, code=staff.role_code, name=staff.role_name),
+        permissions=sorted(staff.permissions),
+        must_change_password=staff.must_change_password,
+    )
