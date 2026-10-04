@@ -33,7 +33,7 @@ def test_homework_daily_progress_upsert_on_conflict(backend_conn: Conn) -> None:
         insert into public.homework_daily_progress
             (student_id, service_date, ready_eta, eta_updated_at)
         values (%s, %s, '17:30', now())
-        on conflict (student_id, service_date) do update set ready_eta = '17:30'
+        on conflict (student_id, service_date) do update set ready_eta = '17:30', eta_updated_at = now()
         """,
         (first["student_id"], first["service_date"]),
     )
