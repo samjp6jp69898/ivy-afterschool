@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 70,
-  "last_updated": "2026-10-04T11:41:09Z",
+  "version": 71,
+  "last_updated": "2026-10-04T11:41:54Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -1983,7 +1983,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/ArrivalTimePicker.vue",
       "source_ref": "FE:src/parent/views/PickupNoticeView.vue::selectPreset",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r5",
       "depends_on": [
         "FRONTEND-003",
@@ -1992,7 +1992,7 @@
         "INFRA-012"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "review-r5-parent：「modelValue 初值非 null 時初始化為自選時間、父層清成 null 時回到不指定」已寫進 description（ca86480）但沒有測試（spec 從未以非 null 初值掛載），依 TDD 規則未驗收；補 red_case 與測試後再送審。",
+      "risk_notes": "計時器從 mount 起每 60 秒觸發、未對齊整分，換算時刻最多落後約 1 分鐘；秒數進位不看毫秒。modelValue 初值為已過去的時間時，畫面顯示「預計抵達時間不能早於現在」但不主動 emit null，父層仍持舊值，送出後由後端 pickup.window 判斷。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/components/pickup/ArrivalTimePicker.spec.ts",
@@ -2014,9 +2014,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r5-parent",
-        "notes": "tdd.run 13/13 綠，八條 red_case 皆選到。web-lint 對元件、spec 與 overlayStack 皆 exit 0；測試 commit 先於實作 commit。換算（秒數進位）、跨午夜停用與回到不指定、自選預填 / 早於現在錯誤 / 清空 emit null、注入 now 不計時、未注入每 60 秒重算且 unmount 清除（getTimerCount 0）皆有測試。初值非 null 時初始化為「自選時間」合理（PARENT-097 重開表單帶回值時需要），但屬可觀測行為，建議寫回 description。殘留：計時器從 mount 起每 60 秒觸發、未對齊整分，換算時刻最多落後約 1 分鐘；進位只看秒數不看毫秒；初值為已過去的時間時畫面顯示錯誤但不會主動 emit null（父層仍持舊值，送出後由後端判斷）。 補充：ca86480 寫回的「受控值同步」與實作一致（初值非 null → 自選時間並帶入值；父層清成 null 且上次 emit 非 null → 回到不指定）；「父層清成 null」有測試，「初值非 null 初始化為自選時間」目前沒有測試，建議補一條。"
+        "notes": "複審通過。tdd.run 16/16 綠（exit 0），所有 red_case 皆選到；受控值同步那條 red_case 的三個測試名稱（initializes custom time from a non-null modelValue / returns to unspecified when parent clears a non-null modelValue / keeps custom time when parent mirrors its own null emit）與 spec 一致。屬純補測試（17851ee，實作未改），以突變證明：拿掉初始化 → 2 條紅；拿掉「上次 emit 不是 null」條件 → 1 條紅；拿掉重設 → 2 條紅。web-lint 對 spec exit 0。description 的受控值同步規格（ca86480）與實作一致。其餘驗收（相對換算、跨午夜停用與回退、自選預填與早於現在錯誤、計時器 unmount 清除、注入 now 不計時）沿用前次審查結論。殘留見 risk_notes。"
       }
     },
     {
