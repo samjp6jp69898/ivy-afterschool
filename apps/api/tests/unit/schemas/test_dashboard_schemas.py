@@ -20,9 +20,12 @@ from app.schemas.dashboard import (
 def test_dashboard_schemas_rate_rounding() -> None:
     h = HomeworkCountsOut(total=3, done=1, in_progress=1, not_started=1, completion_rate=33.333)
     assert h.completion_rate == 33.3
-    assert HomeworkCountsOut(
-        total=3, done=2, in_progress=1, not_started=0, completion_rate=66.667
-    ).completion_rate == 66.7
+    assert (
+        HomeworkCountsOut(
+            total=3, done=2, in_progress=1, not_started=0, completion_rate=66.667
+        ).completion_rate
+        == 66.7
+    )
 
 
 def test_dashboard_schemas_rate_bounds() -> None:
@@ -30,9 +33,7 @@ def test_dashboard_schemas_rate_bounds() -> None:
     assert zero.completion_rate == 0.0
     for bad in (-0.1, 100.1):
         with pytest.raises(ValidationError):
-            HomeworkCountsOut(
-                total=1, done=0, in_progress=0, not_started=1, completion_rate=bad
-            )
+            HomeworkCountsOut(total=1, done=0, in_progress=0, not_started=1, completion_rate=bad)
 
 
 def _today(recent: list[RecentLeaveOut]) -> DashboardTodayOut:
