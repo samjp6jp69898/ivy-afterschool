@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 64,
-  "last_updated": "2026-10-04T11:27:37Z",
+  "version": 65,
+  "last_updated": "2026-10-04T11:29:19Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -1979,7 +1979,7 @@
     {
       "id": "PARENT-096",
       "title": "建立 ArrivalTimePicker 元件：選擇預計抵達時間（可不指定）",
-      "description": "建立 `apps/web/src/parent/components/pickup/ArrivalTimePicker.vue`：\n```ts\nprops: { modelValue: string | null /* 'HH:MM' 台北時間 */; now?: Date /* 測試注入，預設 new Date() */ }\nemits: { 'update:modelValue': [string | null] }\n```\n- 選項（PARENT-019 M3Chip filter，單選）：「不指定」（null，預設）、「約 10 分鐘後」、「約 20 分鐘後」、「約 30 分鐘後」、「自選時間」。相對選項以 now（台北時間，FRONTEND-003）加分鐘、秒數無條件進位到分鐘，轉成 'HH:MM'，chip 旁顯示換算結果（例如「約 10 分鐘後 · 17:42」）。\n- 「自選時間」展開 `type=\"time\"` 欄位（PARENT-018，label「抵達時間」），展開時預填「約 10 分鐘後」的換算時刻並立即 emit（該選項跨午夜時預填空白、emit null）；以分鐘比較，早於 now 的時:分 → 欄位錯誤「預計抵達時間不能早於現在」且 emit null（同一分鐘可以）；清空欄位 → emit null。最晚時間由後端 `pickup.window` 判斷（錯誤 `expected_arrival_too_late` 由 PARENT-097 顯示）。\n- 跨午夜（now + 分鐘超過 23:59）的相對選項停用（chip 不顯示換算時刻）；目前選中的相對選項因此停用時回到「不指定」並 emit null。\n- **時間更新**：未傳 `now` 時元件以 `setInterval` 每 60 秒重算 now（unmount 清除）；傳入 `now` 時不啟動計時器，以 prop 為準、prop 改變即重算。重算後 chip 換算時刻更新、已選的相對選項同步 emit 新值；自選時間被時間追過 → 顯示上述欄位錯誤並 emit null。\n- 整組 `role=\"group\"` + `aria-labelledby` 指向小標「預計抵達時間」；chip 以 `aria-pressed` 表達選取。\n\n參考 ivy `FE:src/parent/views/PickupNoticeView.vue::selectPreset` 的快捷分鐘選項；本專案後端收絕對時間 HH:MM，因此改為前端換算；**去掉** 滾輪選擇器。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-arrival-time-picker.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：預設不指定、選相對時間（顯示換算時刻）、自選時間展開、自選早於現在的錯誤、接近午夜時相對選項停用。（稿已核可，實作需符合稿中 decisions）\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/pickup/ArrivalTimePicker.vue`：\n```ts\nprops: { modelValue: string | null /* 'HH:MM' 台北時間 */; now?: Date /* 測試注入，預設 new Date() */ }\nemits: { 'update:modelValue': [string | null] }\n```\n- 選項（PARENT-019 M3Chip filter，單選）：「不指定」（null，預設）、「約 10 分鐘後」、「約 20 分鐘後」、「約 30 分鐘後」、「自選時間」。相對選項以 now（台北時間，FRONTEND-003）加分鐘、秒數無條件進位到分鐘，轉成 'HH:MM'，chip 旁顯示換算結果（例如「約 10 分鐘後 · 17:42」）。\n- 「自選時間」展開 `type=\"time\"` 欄位（PARENT-018，label「抵達時間」），展開時預填「約 10 分鐘後」的換算時刻並立即 emit（該選項跨午夜時預填空白、emit null）；以分鐘比較，早於 now 的時:分 → 欄位錯誤「預計抵達時間不能早於現在」且 emit null（同一分鐘可以）；清空欄位 → emit null。最晚時間由後端 `pickup.window` 判斷（錯誤 `expected_arrival_too_late` 由 PARENT-097 顯示）。\n- 跨午夜（now + 分鐘超過 23:59）的相對選項停用（chip 不顯示換算時刻）；目前選中的相對選項因此停用時回到「不指定」並 emit null。\n- **時間更新**：未傳 `now` 時元件以 `setInterval` 每 60 秒重算 now（unmount 清除）；傳入 `now` 時不啟動計時器，以 prop 為準、prop 改變即重算。重算後 chip 換算時刻更新、已選的相對選項同步 emit 新值；自選時間被時間追過 → 顯示上述欄位錯誤並 emit null。\n- 整組 `role=\"group\"` + `aria-labelledby` 指向小標「預計抵達時間」；chip 以 `aria-pressed` 表達選取。\n- **受控值同步**：`modelValue` 初值非 null 時初始化為「自選時間」並以該值為欄位內容；父層把 `modelValue` 清成 null（且元件上次 emit 的不是 null）時回到「不指定」。\n\n參考 ivy `FE:src/parent/views/PickupNoticeView.vue::selectPreset` 的快捷分鐘選項；本專案後端收絕對時間 HH:MM，因此改為前端換算；**去掉** 滾輪選擇器。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-arrival-time-picker.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：預設不指定、選相對時間（顯示換算時刻）、自選時間展開、自選早於現在的錯誤、接近午夜時相對選項停用。（稿已核可，實作需符合稿中 decisions）\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/ArrivalTimePicker.vue",
       "source_ref": "FE:src/parent/views/PickupNoticeView.vue::selectPreset",
