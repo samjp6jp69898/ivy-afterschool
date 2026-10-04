@@ -18,7 +18,7 @@ from app.models.account import StaffUser
 from app.models.audit import AuditLog
 from tests.support.factories import make_staff
 
-_PASSWORD = "Afterschool2026"
+_PASSWORD = "Afterschool2026"  # noqa: S105  測試假值
 
 
 def _staff_count(db: Session) -> int:
@@ -42,7 +42,7 @@ def _answers(monkeypatch: pytest.MonkeyPatch, *answers: str) -> None:
     monkeypatch.setattr(getpass, "getpass", lambda prompt="": queue.pop(0))
 
 
-_ARGV = ["create-admin", "--username", "x2", "--display-name", "X"]
+_ARGV = ["create-admin", "--username", "owner2", "--display-name", "X"]
 
 
 def test_cli_create_admin_success(db_session: Session) -> None:
@@ -76,7 +76,7 @@ def test_cli_create_admin_main_success(
 
     assert code == 0
     assert _staff_count(bound_session) == before + 1
-    assert "x2" in capsys.readouterr().out
+    assert "owner2" in capsys.readouterr().out
 
 
 def test_cli_create_admin_refuses_when_admin_exists(
@@ -137,7 +137,7 @@ def test_cli_create_admin_bad_username(
     before = _staff_count(bound_session)
     _answers(monkeypatch, _PASSWORD, _PASSWORD)
 
-    code = main(["create-admin", "--username", username, "--display-name", "X"])
+    code = main(["create-admin", f"--username={username}", "--display-name", "X"])
 
     assert code != 0
     assert _staff_count(bound_session) == before
@@ -166,7 +166,7 @@ def test_cli_create_admin_missing_args() -> None:
 
 def test_cli_create_admin_function_rejects_weak_password(db_session: Session) -> None:
     with pytest.raises(AppError) as exc:
-        create_admin(db_session, username="owner", display_name="負責人", password="abc")
+        create_admin(db_session, username="owner", display_name="負責人", password="abc")  # noqa: S106
 
     assert exc.value.code == "weak_password"
 
