@@ -1,11 +1,3 @@
-<script lang="ts">
-// 跨實例共享：多個 sheet 同時存在時，只有第一個記錄 body 原值、最後一個還原；
-// 堆疊順序決定誰處理 Esc 與焦點鎖（只有最上層）
-let scrollLockCount = 0
-let scrollLockPrev = ''
-const sheetStack: symbol[] = []
-</script>
-
 <script setup lang="ts">
 /**
  * 家長端 bottom sheet：Teleport 到 body，v-model 開關。
@@ -14,6 +6,7 @@ const sheetStack: symbol[] = []
  * 鎖 body 捲動，關閉後焦點回到開啟前的元素。
  */
 import { nextTick, onBeforeUnmount, ref, useId, useSlots, watch } from 'vue'
+import { isTopOverlay, pushOverlay, removeOverlay } from '../utils/overlayStack'
 import M3IconButton from './m3/M3IconButton.vue'
 
 const props = withDefaults(
@@ -48,7 +41,7 @@ function requestClose(): void {
 }
 
 function isTop(): boolean {
-  return sheetStack[sheetStack.length - 1] === self
+  return isTopOverlay(self)
 }
 
 function focusables(dialog: HTMLElement): HTMLElement[] {
@@ -131,13 +124,9 @@ function activate(): void {
   if (active) return
   active = true
   prevFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
-  sheetStack.push(self)
+  pushOverlay(self)
   document.addEventListener('keydown', onDocKeydown)
   document.addEventListener('focusin', onDocFocusin)
-  if (scrollLockCount++ === 0) {
-    scrollLockPrev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-  }
   void nextTick(() => {
     const dialog = dialogRef.value
     if (!dialog) return
@@ -148,13 +137,12 @@ function activate(): void {
 function deactivate(): void {
   if (!active) return
   active = false
-  sheetStack.splice(sheetStack.indexOf(self), 1)
+  removeOverlay(self)
   document.removeEventListener('keydown', onDocKeydown)
   document.removeEventListener('focusin', onDocFocusin)
   stopDragListeners()
   offset.value = 0
   dragging.value = false
-  if (--scrollLockCount === 0) document.body.style.overflow = scrollLockPrev
   if (prevFocus?.isConnected) prevFocus.focus({ preventScroll: true })
   prevFocus = null
 }
