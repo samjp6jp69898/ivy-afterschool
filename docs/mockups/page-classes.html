@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+
+<meta name="preview-status" content="draft">
+<meta name="preview-tasks" content="FRONTEND-097,FRONTEND-098,FRONTEND-099">
+<meta name="preview-route" content="/classes">
+<meta name="preview-updated" content="2026-10-05">
+
+<title>設計稿：班級管理</title>
+
+<!-- 版號對齊 apps/web/pnpm-lock.yaml 的實際安裝版本 -->
+<link rel="stylesheet" href="https://unpkg.com/element-plus@2.14.7/dist/index.css">
+<script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/locale/zh-tw.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue@2.3.2/dist/index.iife.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+#app { display: flex; flex-direction: column; height: 100%; }
+body { font-family: var(--el-font-family); background: var(--el-fill-color); color: var(--el-text-color-primary); }
+
+.preview-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 6px 16px; font-size: 12px;
+  color: var(--el-color-info-dark-2);
+  background: var(--el-color-info-light-9);
+  border-bottom: 1px dashed var(--el-border-color);
+}
+.preview-bar__spacer { flex: 1; }
+.preview-bar code { font-size: 12px; }
+.text-secondary { color: var(--el-text-color-secondary); font-size: 13px; }
+.el-button > span > .el-icon { margin-right: 4px; }
+.stage { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+.control-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; font-size: 12px; color: var(--el-text-color-secondary); background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-lighter); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.last-request { font-size: 12px; color: var(--el-text-color-secondary); }
+
+/* ==================== ADMIN SHELL CSS START（各頁稿逐字複製這一段） ==================== */
+/* 裝置框：只存在於設計稿，模擬桌機 / 平板 1024×768 / 手機 390×844 */
+.device-frame { position: relative; margin: 0 auto; overflow: hidden; background: var(--el-bg-color-page); border: 1px solid var(--el-border-color); border-radius: 10px; box-shadow: var(--el-box-shadow-light); }
+.device-frame.is-desktop { width: 1200px; height: 760px; }
+.device-frame.is-tablet { width: 1024px; height: 768px; }
+.device-frame.is-mobile { width: 390px; height: 844px; border-radius: 24px; }
+
+.shell { display: flex; height: 100%; }
+.shell__aside { display: flex; flex-direction: column; flex-shrink: 0; width: 220px; background: var(--el-bg-color); border-right: 1px solid var(--el-border-color-light); transition: width 0.2s ease; }
+.shell__aside.is-collapsed { width: 64px; }
+.shell__brand { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 22px; flex-shrink: 0; white-space: nowrap; overflow: hidden; font-weight: 600; color: var(--el-text-color-primary); border-bottom: 1px solid var(--el-border-color-lighter); }
+.shell__brand .el-icon { font-size: 20px; color: var(--el-color-primary); flex-shrink: 0; }
+.shell__menu { flex: 1; min-height: 0; overflow: hidden auto; }
+.shell__menu .el-menu { border-right: none; }
+.shell__menu .el-menu-item-group__title { padding-top: 14px; font-size: 12px; }
+.shell__menu .el-menu--collapse .el-menu-item-group__title { height: 1px; padding: 0; margin: 8px 12px; background: var(--el-border-color-lighter); overflow: hidden; }
+.shell__menu .el-menu-item { height: 44px; line-height: 44px; }
+.shell__empty { padding: 24px 16px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.shell__collapse { flex-shrink: 0; height: 44px; border-top: 1px solid var(--el-border-color-lighter); display: flex; align-items: center; justify-content: center; }
+.shell__body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.shell__header { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 12px 0 8px; flex-shrink: 0; background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-light); }
+.shell__toggle { width: 44px; height: 44px; }
+.shell__title { margin: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shell__spacer { flex: 1; }
+.ws-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-info-light-3); margin: 0 6px; }
+.ws-dot.is-open { background: var(--el-color-success); }
+.ws-dot.is-reconnecting { background: var(--el-color-warning); }
+.shell__bell { width: 44px; height: 44px; font-size: 18px; }
+.shell__bell .el-badge__content { top: 10px; right: 12px; }
+.shell__user { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 8px; cursor: pointer; border-radius: 6px; color: var(--el-text-color-regular); font-size: 14px; }
+.shell__user:hover { background: var(--el-fill-color-light); }
+.shell__banner { flex-shrink: 0; border-radius: 0; }
+.shell__main { flex: 1; min-height: 0; overflow: auto; padding: 20px; }
+.device-frame.is-tablet .shell__main { padding: 16px; }
+.device-frame.is-mobile .shell__main { padding: 12px; }
+/* 手機：側欄改抽屜（實作用 el-drawer，稿裡在裝置框內模擬） */
+.shell__scrim { position: absolute; inset: 0; z-index: 20; background: var(--el-overlay-color-lighter); }
+.shell__drawer { position: absolute; top: 0; bottom: 0; left: 0; z-index: 21; width: 240px; display: flex; flex-direction: column; background: var(--el-bg-color); box-shadow: var(--el-box-shadow-dark); }
+
+/* 通知面板（FRONTEND-036） */
+.notif { width: 360px; margin: -12px; }
+.notif__head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 10px 16px; border-bottom: 1px solid var(--el-border-color-lighter); }
+.notif__title { font-size: 15px; font-weight: 600; }
+.notif__list { max-height: 420px; overflow: auto; }
+.notif__row { position: relative; display: block; width: 100%; padding: 12px 16px 12px 28px; text-align: left; cursor: pointer; border: none; border-bottom: 1px solid var(--el-border-color-extra-light); background: var(--el-bg-color); font-family: inherit; color: inherit; }
+.notif__row:hover, .notif__row:focus-visible { background: var(--el-fill-color-light); outline: none; }
+.notif__row.is-unread { background: var(--el-color-primary-light-9); }
+.notif__row.is-unread:hover { background: var(--el-color-primary-light-8); }
+.notif__dot { position: absolute; left: 12px; top: 18px; width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-primary); }
+.notif__row-title { font-size: 14px; font-weight: 600; color: var(--el-text-color-primary); }
+.notif__row-body { margin-top: 2px; font-size: 13px; line-height: 1.5; color: var(--el-text-color-regular); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+.notif__row-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--el-text-color-secondary); }
+.notif__empty { padding: 40px 16px; text-align: center; font-size: 13px; color: var(--el-text-color-secondary); }
+.notif__skeleton { padding: 12px 16px; }
+/* ==================== ADMIN SHELL CSS END ==================== */
+
+/* ==== 以下逐字複製自 component-common.html（已核可） ==== */
+/* ---------- PageHeader（FRONTEND-039） ---------- */
+.page-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+.page-header__body { flex: 1; min-width: 0; }
+.page-header__title { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; color: var(--el-text-color-primary); }
+.page-header__subtitle { margin: 4px 0 0; font-size: 13px; color: var(--el-text-color-secondary); }
+.page-header__extra { margin-top: 8px; }
+.page-header__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+.page-header__actions .el-button + .el-button { margin-left: 0; }
+/* 實作用 @media (max-width: 767.98px)；稿裡用 .is-narrow 在 375px 框內示意 */
+.is-narrow .page-header { flex-wrap: wrap; }
+.is-narrow .page-header__body { flex-basis: 100%; }
+.is-narrow .page-header__actions { width: 100%; }
+
+/* ---------- AdminListToolbar（FRONTEND-041） ---------- */
+.list-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.list-toolbar__search { width: 240px; }
+.list-toolbar__filter { display: flex; align-items: center; gap: 6px; }
+.list-toolbar__filter-label { font-size: 13px; color: var(--el-text-color-secondary); white-space: nowrap; }
+.list-toolbar__spacer { flex: 1 1 auto; }
+.list-toolbar__count { font-size: 13px; color: var(--el-text-color-secondary); white-space: nowrap; }
+.list-toolbar__actions { display: flex; gap: 8px; }
+.list-toolbar__actions .el-button + .el-button { margin-left: 0; }
+.is-narrow .list-toolbar__search { width: 100%; }
+.is-narrow .list-toolbar__filter { flex: 1 1 calc(50% - 6px); }
+.is-narrow .list-toolbar__filter .el-select { flex: 1; }
+
+/* ---------- EmptyState（FRONTEND-042） ---------- */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 16px; }
+.empty-state__icon { font-size: 48px; color: var(--el-text-color-placeholder); margin-bottom: 16px; }
+.empty-state__title { margin: 0 0 6px; font-size: 16px; font-weight: 500; color: var(--el-text-color-regular); }
+.empty-state__desc { margin: 0; max-width: 360px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.empty-state__action { margin-top: 16px; display: flex; gap: 8px; }
+.empty-state.is-error .empty-state__icon { color: var(--el-color-danger); }
+.empty-state.is-inline { padding: 16px 8px; }
+.empty-state.is-inline .empty-state__title { font-size: 14px; margin-bottom: 2px; }
+.empty-state.is-inline .empty-state__action { margin-top: 8px; }
+
+/* ==== 以下逐字複製自 component-common-extra.html（已核可） ==== */
+/* ---------- FormDialog（FRONTEND-040） ---------- */
+.form-dialog__footer { display: flex; justify-content: flex-end; gap: 8px; }
+.form-dialog__footer .el-button + .el-button { margin-left: 0; }
+
+
+/* ==================== 班級管理（FRONTEND-097） ==================== */
+.panel { background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter); border-radius: 8px; padding: 16px; }
+.cls-staff strong { font-weight: 600; color: var(--el-text-color-primary); }
+.cls-none { color: var(--el-text-color-placeholder); }
+.cls-row-archived td .cell { color: var(--el-text-color-secondary); }
+.cls-archived { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--el-text-color-secondary); }
+.cls-count { font-variant-numeric: tabular-nums; }
+.cls-ops { display: inline-flex; gap: 12px; }
+.cls-ops .el-button + .el-button { margin-left: 0; }
+.form-hint { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); }
+
+/* ClassFormDialog（FRONTEND-098） */
+.cf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+
+/* ClassStaffDialog（FRONTEND-099） */
+.cs-hint { margin: 0 0 12px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.cs-head, .cs-row { display: grid; grid-template-columns: minmax(0, 1fr) 132px 32px; gap: 8px; align-items: center; }
+.cs-head { padding: 0 0 6px; font-size: 12px; color: var(--el-text-color-secondary); }
+.cs-row { padding: 6px 0; border-top: 1px solid var(--el-border-color-extra-light); }
+.cs-row__staff { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cs-row__staff .el-select { flex: 1; min-width: 0; }
+.cs-row.is-error .cs-row__staff .el-select__wrapper { box-shadow: 0 0 0 1px var(--el-color-danger) inset; }
+.cs-row__error { grid-column: 1 / -1; margin-top: -2px; font-size: 12px; color: var(--el-color-danger); }
+.cs-empty { padding: 16px 0; text-align: center; font-size: 13px; color: var(--el-text-color-secondary); border-top: 1px solid var(--el-border-color-extra-light); }
+.cs-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--el-border-color-extra-light); }
+.cs-foot__count { margin-left: auto; font-size: 12px; color: var(--el-text-color-secondary); }
+.cs-load-error { margin-bottom: 12px; }
+</style>
+</head>
+
+<body>
+<div id="app">
+  <div class="preview-bar">
+    <el-tag :type="meta.status === 'approved' ? 'success' : 'warning'" size="small" effect="dark" disable-transitions>
+      {{ meta.status === 'approved' ? '已核可' : '待核可' }}
+    </el-tag>
+    <span>{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span>以身分檢視</span>
+    <el-select v-model="viewAs" size="small" style="width: 250px">
+      <el-option v-for="(r, key) in roles" :key="key" :label="r.label" :value="key"></el-option>
+    </el-select>
+    <span>裝置</span>
+    <el-radio-group v-model="device" size="small">
+      <el-radio-button value="desktop">桌機 1200</el-radio-button>
+      <el-radio-button value="tablet">平板 1024</el-radio-button>
+    </el-radio-group>
+    <span class="preview-bar__spacer"></span>
+    <span>更新 {{ meta.updated }}</span>
+    <el-button size="small" text type="primary" @click="notesOpen = true">
+      設計說明 / 待裁定（{{ openQuestions.length }}）
+    </el-button>
+  </div>
+  <div class="control-bar">
+    <span>稿件控制：</span>
+    <span>列表</span>
+    <el-radio-group v-model="listState" size="small">
+      <el-radio-button value="data">有資料</el-radio-button>
+      <el-radio-button value="loading">載入中</el-radio-button>
+      <el-radio-button value="error">載入失敗</el-radio-button>
+    </el-radio-group>
+    <span>封存</span>
+    <el-select v-model="archiveResult" size="small" style="width: 220px">
+      <el-option label="成功" value="ok"></el-option>
+      <el-option label="409 class_has_students（5 位）" value="has_students"></el-option>
+    </el-select>
+    <span>班級表單儲存</span>
+    <el-select v-model="formResult" size="small" style="width: 200px">
+      <el-option label="成功" value="ok"></el-option>
+      <el-option label="409 class_name_taken" value="class_name_taken"></el-option>
+    </el-select>
+    <span>指派老師</span>
+    <el-select v-model="staffSim" size="small" style="width: 230px">
+      <el-option label="成功" value="ok"></el-option>
+      <el-option label="員工清單載入失敗（可重試）" value="options_error"></el-option>
+      <el-option label="儲存：422 invalid_staff" value="invalid_staff"></el-option>
+    </el-select>
+    <el-checkbox v-model="staleStaff" size="small">低年級B班有已停用的老師（資料過期）</el-checkbox>
+    <span class="last-request">網址：<span class="mono">/classes{{ queryString }}</span></span>
+    <span v-if="lastRequest" class="last-request">最後送出：<span class="mono">{{ lastRequest }}</span></span>
+  </div>
+
+  <div class="stage">
+    <admin-shell :key="device + viewAs" :device="device" :perms="perms" :user="user" active-path="/classes" @navigate="onNavigate">
+      <page-header title="班級管理" subtitle="安親班內部的班級；學生就讀國小的班級在學生資料裡填寫">
+        <template #actions v-if="can('classes:write')">
+          <el-button type="primary" :disabled="listState !== 'data'" @click="openCreate"><el-icon><icon-plus></icon-plus></el-icon>新增班級</el-button>
+        </template>
+      </page-header>
+
+      <section class="panel">
+        <!-- 沿用 AdminListToolbar 的版面樣式，但本頁沒有關鍵字搜尋，不使用該元件 -->
+        <div class="list-toolbar">
+          <div class="list-toolbar__filter">
+            <span class="list-toolbar__filter-label">學年度</span>
+            <el-select v-model="filters.academic_year" style="width: 130px">
+              <el-option v-for="o in yearOptions" :key="o.value" :label="o.label" :value="o.value"></el-option>
+            </el-select>
+          </div>
+          <el-checkbox v-model="filters.mine">只看我的班</el-checkbox>
+          <el-checkbox v-model="filters.include_archived">含已封存</el-checkbox>
+          <span class="list-toolbar__spacer"></span>
+          <span v-if="listState === 'data'" class="list-toolbar__count">共 {{ rows.length }} 班</span>
+        </div>
+
+        <empty-state v-if="listState === 'error'" variant="error" title="無法載入班級" description="網路連線中斷，請確認網路後再試一次">
+          <template #action><el-button @click="retry">重試</el-button></template>
+        </empty-state>
+        <el-table v-else v-loading="listState === 'loading'" :data="listState === 'data' ? rows : []" :row-class-name="rowClass" style="width: 100%">
+          <el-table-column prop="name" label="班級名稱" min-width="120" show-overflow-tooltip></el-table-column>
+          <el-table-column label="年級" min-width="100">
+            <template #default="{ row }">{{ gradeLevelsLabel(row.grade_levels) }}</template>
+          </el-table-column>
+          <el-table-column label="在學人數" width="90" align="right">
+            <template #default="{ row }">
+              <el-button v-if="row.student_count > 0" class="cls-count" link type="primary" @click="goStudents(row)">{{ row.student_count }}</el-button>
+              <span v-else class="cls-count cls-none">0</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="負責老師" min-width="160">
+            <template #default="{ row }">
+              <span v-if="row.staff.length" class="cls-staff">
+                <template v-for="(s, i) in orderedStaff(row)" :key="s.staff_user_id"><template v-if="i">、</template><strong v-if="s.role === 'lead'">{{ s.display_name }}</strong><span v-else>{{ s.display_name }}</span></template>
+              </span>
+              <span v-else class="cls-none">尚未指派</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="sort_order" label="排序" width="70" align="right"></el-table-column>
+          <el-table-column v-if="filters.include_archived" label="狀態" width="160">
+            <template #default="{ row }">
+              <span v-if="row.archived_at" class="cls-archived">
+                <el-tag size="small" type="info" effect="plain" disable-transitions>已封存</el-tag>{{ row.archived_at }}
+              </span>
+              <span v-else class="cls-none">—</span>
+            </template>
+          </el-table-column>
+          <el-table-column v-if="can('classes:write')" label="操作" width="180" fixed="right">
+            <template #default="{ row }">
+              <span v-if="!row.archived_at" class="cls-ops">
+                <el-button link type="primary" @click="openEdit(row)">編輯</el-button>
+                <el-button link type="primary" @click="openStaff(row)">指派老師</el-button>
+                <el-button link type="danger" @click="archive(row)">封存</el-button>
+              </span>
+              <span v-else class="cls-none">—</span>
+            </template>
+          </el-table-column>
+          <template #empty>
+            <template v-if="listState === 'data'">
+              <empty-state v-if="filters.mine" :title="filters.academic_year + ' 學年度沒有你負責的班級'"
+                           description="負責老師由有「管理班級」權限的人在「指派老師」設定">
+                <template #action><el-button @click="filters.mine = false">顯示全部班級</el-button></template>
+              </empty-state>
+              <empty-state v-else :title="filters.academic_year + ' 學年度還沒有班級'">
+                <template v-if="can('classes:write')" #action>
+                  <el-button type="primary" @click="openCreate"><el-icon><icon-plus></icon-plus></el-icon>新增班級</el-button>
+                </template>
+              </empty-state>
+            </template>
+            <span v-else></span>
+          </template>
+        </el-table>
+      </section>
+
+      <class-form-dialog v-model="formOpen" :klass="editing" :default-academic-year="filters.academic_year" :year-options="yearOptions"
+                         :sim="formResult" @saved="onSaved" @request="(r) => lastRequest = r"></class-form-dialog>
+      <class-staff-dialog v-if="staffKlass" v-model="staffOpen" :klass="staffKlass" :sim="staffSim"
+                          @saved="onSaved" @request="(r) => lastRequest = r"></class-staff-dialog>
+    </admin-shell>
+  </div>
+
+  <el-drawer v-model="notesOpen" title="設計說明 / 待裁定" size="520px">
+    <el-alert v-if="openQuestions.length" title="以下項目需要你裁定，未回覆前這張稿不會進入實作"
+              type="warning" :closable="false" show-icon style="margin-bottom: 16px"></el-alert>
+    <h4>設計決策</h4>
+    <ol>
+      <li v-for="(d, i) in decisions" :key="i" style="margin-bottom: 6px">{{ d }}</li>
+    </ol>
+    <h4 v-if="openQuestions.length">待裁定</h4>
+    <ol>
+      <li v-for="(q, i) in openQuestions" :key="i" style="margin-bottom: 8px">
+        <div>{{ q.question }}</div>
+        <div style="color: var(--el-text-color-secondary); font-size: 13px">
+          A. {{ q.optionA }}<br>B. {{ q.optionB }}
+        </div>
+      </li>
+    </ol>
+  </el-drawer>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch, onBeforeUnmount, nextTick } = Vue
+const { ElMessage, ElMessageBox } = ElementPlus
+
+/* ==================== ADMIN SHELL JS START（各頁稿逐字複製這一段） ==================== */
+/** 各角色預設權限碼，與 docs/domain_spec.md §3「預設授予」一致；admin 擁有全部。 */
+const ALL_STAFF = [
+  'dashboard:read', 'classes:read', 'students:read',
+  'attendance:read', 'attendance:operate', 'leaves:read',
+  'homework:read', 'homework:write', 'pickup:read', 'pickup:operate', 'exams:read',
+]
+const DIRECTOR = [...ALL_STAFF,
+  'staff:read', 'roles:read', 'settings:read', 'settings:write', 'audit:read',
+  'classes:write', 'students:write', 'students:sensitive', 'guardians:write',
+  'attendance:amend', 'leaves:write', 'pickup:override', 'exams:write', 'exams:publish']
+const CLERK = [...ALL_STAFF, 'settings:read', 'classes:write', 'students:write', 'guardians:write',
+  'leaves:write', 'exams:write', 'exams:publish']
+const TUTOR = [...ALL_STAFF, 'exams:write']
+const ADMIN = [...DIRECTOR, 'staff:write', 'roles:write', 'students:purge']
+const SHELL_USERS = {
+  admin: { display_name: '系統管理員', role: '系統管理員' },
+  director: { display_name: '張主任', role: '主任' },
+  clerk: { display_name: '林行政', role: '行政' },
+  tutor: { display_name: '陳老師', role: '課輔老師' },
+}
+
+/** 與 apps/web/src/constants/navigation.ts 的 NAVIGATION 逐項一致（原檔是權威） */
+const NAVIGATION = [
+  { key: 'home', label: '首頁', items: [{ label: '今日儀表板', path: '/', icon: 'icon-odometer', permission: 'dashboard:read' }] },
+  { key: 'daily', label: '日常營運', items: [
+    { label: '今日出勤', path: '/attendance', icon: 'icon-calendar', permission: 'attendance:read' },
+    { label: '作業進度', path: '/homework', icon: 'icon-edit-pen', permission: 'homework:read' },
+    { label: '接送', path: '/pickup', icon: 'icon-van', permission: 'pickup:read' },
+    { label: '代理接送核驗', path: '/pickup/authorizations', icon: 'icon-stamp', permission: 'pickup:read' },
+    { label: '請假', path: '/leaves', icon: 'icon-tickets', permission: 'leaves:read' },
+  ] },
+  { key: 'students', label: '學生與班級', items: [
+    { label: '學生工作台', path: '/students', icon: 'icon-user', permission: 'students:read' },
+    { label: '班級管理', path: '/classes', icon: 'icon-school', permission: 'classes:read' },
+    { label: '月出勤報表', path: '/attendance/monthly', icon: 'icon-data-line', permission: 'attendance:read' },
+  ] },
+  { key: 'exams', label: '成績', items: [{ label: '考試', path: '/exams', icon: 'icon-trophy', permission: 'exams:read' }] },
+  { key: 'settings', label: '設定', items: [
+    { label: '系統設定', path: '/settings/system', icon: 'icon-setting', permission: 'settings:read' },
+    { label: '參考資料', path: '/settings/reference', icon: 'icon-collection', permission: 'settings:read' },
+    { label: '員工帳號', path: '/settings/accounts', icon: 'icon-user-filled', permission: 'staff:read' },
+    { label: '角色權限', path: '/settings/roles', icon: 'icon-lock', permission: 'roles:read' },
+    { label: '稽核紀錄', path: '/settings/audit', icon: 'icon-list', permission: 'audit:read' },
+  ] },
+]
+/** 與 apps/web/src/router/routes.ts 的 meta.title / meta.tablet 一致 */
+const ROUTE_META = {
+  '/': { title: '今日儀表板' }, '/students': { title: '學生工作台' }, '/classes': { title: '班級管理' },
+  '/attendance': { title: '今日出勤', tablet: true }, '/attendance/monthly': { title: '月出勤報表' }, '/leaves': { title: '請假' },
+  '/homework': { title: '作業進度', tablet: true }, '/pickup': { title: '接送', tablet: true },
+  '/pickup/authorizations': { title: '代理接送核驗', tablet: true }, '/exams': { title: '考試' }, '/exams/e1': { title: '考試成績' },
+  '/settings/system': { title: '系統設定' }, '/settings/reference': { title: '參考資料' }, '/settings/accounts': { title: '員工帳號' },
+  '/settings/roles': { title: '角色權限' }, '/settings/audit': { title: '稽核紀錄' },
+}
+/** 與 apps/web/src/shared/constants/statusLabels.ts 的 NOTIFICATION_EVENT_LABELS 一致 */
+const NOTIFICATION_EVENT_LABELS = {
+  'attendance.checked_in': '到班通知', 'attendance.checked_out': '離班通知', 'leave.created': '學生請假',
+  'leave.cancelled': '學生取消請假', 'homework.eta_updated': '預計可接送時間', 'homework.done': '作業完成',
+  'pickup.requested': '家長發起接送', 'pickup.replied': '老師回覆接送', 'pickup.arrived': '家長已抵達',
+  'pickup.completed': '接送完成', 'pickup.cancelled': '接送取消', 'exam.published': '成績公布', 'binding.completed': '綁定完成',
+}
+/** 員工收得到的站內通知（domain_spec M9）；文案依 BACKEND-203 templates */
+const SAMPLE_NOTIFICATIONS = () => [
+  { id: 'n1', event: 'pickup.requested', title: '王小明 家長要來接', body: '家長預計 17:30 抵達。', deep_link: '/pickup', created_at: '2026/10/02 17:05', read_at: null },
+  { id: 'n2', event: 'leave.created', title: '陳小美 請假', body: '陳小美 2026-10-05～2026-10-06 病假。', deep_link: '/leaves', created_at: '2026/10/02 16:40', read_at: null },
+  { id: 'n3', event: 'pickup.cancelled', title: '李承恩 接送已取消', body: '家長已取消今天的接送請求。\n原因：改由爺爺來接', deep_link: '/pickup', created_at: '2026/10/02 16:12', read_at: null },
+  { id: 'n4', event: 'leave.cancelled', title: '林小華 取消請假', body: '林小華 2026-10-02～2026-10-02 的請假已取消。', deep_link: '/leaves', created_at: '2026/10/01 20:31', read_at: '2026/10/01 21:00' },
+  { id: 'n5', event: 'pickup.requested', title: '張語晴 家長要來接', body: '家長已發起接送。', deep_link: '/pickup', created_at: '2026/10/01 17:48', read_at: '2026/10/01 17:50' },
+]
+
+const NotificationPanel = {
+  props: { items: Array, unreadCount: Number, loading: Boolean, unreadOnly: Boolean },
+  emits: ['open', 'read-all', 'filter'],
+  setup() { return { LABELS: NOTIFICATION_EVENT_LABELS } },
+  template: `
+    <div class="notif">
+      <div class="notif__head">
+        <span class="notif__title">通知</span>
+        <el-segmented :model-value="unreadOnly ? 'unread' : 'all'" size="small"
+                      :options="[{ label: '全部', value: 'all' }, { label: '未讀', value: 'unread' }]"
+                      @change="(v) => $emit('filter', v === 'unread')"></el-segmented>
+        <span style="flex: 1"></span>
+        <el-button link type="primary" :disabled="unreadCount === 0" @click="$emit('read-all')">全部標為已讀</el-button>
+      </div>
+      <div class="notif__list">
+        <template v-if="loading">
+          <div v-for="i in 3" :key="i" class="notif__skeleton"><el-skeleton :rows="1" animated></el-skeleton></div>
+        </template>
+        <div v-else-if="!items.length" class="notif__empty">{{ unreadOnly ? '沒有未讀通知' : '目前沒有通知' }}</div>
+        <template v-else>
+          <button v-for="n in items" :key="n.id" type="button" class="notif__row" :class="{ 'is-unread': !n.read_at }" @click="$emit('open', n)">
+            <span v-if="!n.read_at" class="notif__dot" data-test="unread-dot" aria-label="未讀"></span>
+            <div class="notif__row-title">{{ n.title }}</div>
+            <div class="notif__row-body">{{ n.body }}</div>
+            <div class="notif__row-meta">
+              <el-tag size="small" type="info" disable-transitions>{{ LABELS[n.event] || n.event }}</el-tag>
+              <span>{{ n.created_at }}</span>
+            </div>
+          </button>
+        </template>
+      </div>
+    </div>`,
+}
+
+/**
+ * AdminShell：AdminLayout + AdminSidebar + AdminHeader + NotificationBell 的稿內合體。
+ * props 只有 device / perms / user / activePath 是各頁需要傳的；wsStatus / notifState 只有外框稿用來切狀態。
+ * emits navigate(path)：點側欄項目或通知 deep_link 時發出，各頁稿可以忽略或顯示提示。
+ */
+const AdminShell = {
+  components: { NotificationPanel },
+  props: {
+    device: { type: String, default: 'desktop' },
+    perms: { type: Array, required: true },
+    user: { type: Object, required: true },
+    activePath: { type: String, required: true },
+    wsStatus: { type: String, default: 'open' },
+    notifState: { type: String, default: 'data' },
+  },
+  emits: ['navigate'],
+  setup(props, { emit }) {
+    const isMobile = computed(() => props.device === 'mobile')
+    // 模擬 localStorage['admin.sidebarCollapsed']：使用者沒切過（remembered = null）時，依路由 meta.tablet 決定預設
+    const remembered = ref(null)
+    const collapsed = computed({
+      get: () => remembered.value ?? !!ROUTE_META[props.activePath]?.tablet,
+      set: (v) => { remembered.value = v },
+    })
+    const drawerOpen = ref(false)
+    const groups = computed(() => NAVIGATION
+      .map((g) => ({ ...g, items: g.items.filter((i) => props.perms.includes(i.permission)) }))
+      .filter((g) => g.items.length))
+    const activeItem = computed(() => {
+      const segs = (p) => p.split('/').filter(Boolean)
+      const route = segs(props.activePath)
+      let best = null
+      for (const g of groups.value) for (const it of g.items) {
+        const s = segs(it.path)
+        const match = it.path === '/' ? props.activePath === '/' : s.every((x, i) => route[i] === x)
+        if (match && (!best || s.length > segs(best).length)) best = it.path
+      }
+      return best ?? ''
+    })
+    const title = computed(() => ROUTE_META[props.activePath]?.title ?? '')
+    const go = (path) => { drawerOpen.value = false; emit('navigate', path) }
+    const toggle = () => { if (isMobile.value) drawerOpen.value = !drawerOpen.value; else collapsed.value = !collapsed.value }
+
+    // 通知（NotificationBell + store 的稿內模擬）
+    const items = ref(SAMPLE_NOTIFICATIONS())
+    const unreadOnly = ref(false)
+    const popoverOpen = ref(false)
+    const unreadCount = computed(() => {
+      if (props.notifState === 'many') return 120
+      if (props.notifState === 'empty') return 0
+      return items.value.filter((n) => !n.read_at).length
+    })
+    const shownItems = computed(() => {
+      if (props.notifState === 'empty' || props.notifState === 'loading') return []
+      return unreadOnly.value ? items.value.filter((n) => !n.read_at) : items.value
+    })
+    const openNotif = (n) => {
+      if (!n.read_at) n.read_at = '剛剛'
+      popoverOpen.value = false
+      if (n.deep_link) go(n.deep_link)
+    }
+    const readAll = () => { items.value.forEach((n) => { if (!n.read_at) n.read_at = '剛剛' }) }
+    const loggingOut = ref(false)
+    const onUserCommand = (cmd) => {
+      if (cmd === 'password') { ElMessage.info('（稿）導頁至 /change-password'); return }
+      loggingOut.value = true
+      setTimeout(() => { loggingOut.value = false; ElMessage.success('（稿）已登出，導回 /login') }, 800)
+    }
+    const wsTip = computed(() => ({ open: '即時連線正常', reconnecting: '即時連線重試中' }[props.wsStatus] ?? '即時連線未建立'))
+    return {
+      isMobile, collapsed, drawerOpen, groups, activeItem, title, go, toggle,
+      shownItems, unreadCount, unreadOnly, popoverOpen, openNotif, readAll, loggingOut, onUserCommand, wsTip,
+    }
+  },
+  template: `
+    <div class="device-frame" :class="'is-' + device">
+      <div class="shell">
+        <aside v-if="!isMobile" class="shell__aside" :class="{ 'is-collapsed': collapsed }" data-test="admin-sidebar">
+          <div class="shell__brand"><el-icon><icon-school></icon-school></el-icon><span v-show="!collapsed">安親班管理系統</span></div>
+          <div class="shell__menu">
+            <div v-if="!groups.length" class="shell__empty" v-show="!collapsed">沒有可使用的功能，請聯絡管理員</div>
+            <el-menu v-else :default-active="activeItem" :collapse="collapsed" :collapse-transition="false" @select="go">
+              <el-menu-item-group v-for="g in groups" :key="g.key" :title="g.label">
+                <el-menu-item v-for="it in g.items" :key="it.path" :index="it.path">
+                  <el-icon><component :is="it.icon"></component></el-icon>
+                  <template #title>{{ it.label }}</template>
+                </el-menu-item>
+              </el-menu-item-group>
+            </el-menu>
+          </div>
+          <div class="shell__collapse">
+            <el-button text :aria-label="collapsed ? '展開側欄' : '收合側欄'" @click="collapsed = !collapsed">
+              <el-icon><icon-arrow-right v-if="collapsed"></icon-arrow-right><icon-arrow-left v-else></icon-arrow-left></el-icon>
+              <span v-if="!collapsed">收合</span>
+            </el-button>
+          </div>
+        </aside>
+
+        <div class="shell__body">
+          <header class="shell__header">
+            <el-button class="shell__toggle" text aria-label="切換側欄" @click="toggle">
+              <el-icon :size="18"><icon-expand v-if="isMobile || collapsed"></icon-expand><icon-fold v-else></icon-fold></el-icon>
+            </el-button>
+            <h1 class="shell__title">{{ title }}</h1>
+            <span class="shell__spacer"></span>
+            <el-tooltip :content="wsTip" placement="bottom">
+              <span class="ws-dot" :class="'is-' + wsStatus" data-test="ws-dot" :aria-label="wsTip" role="img"></span>
+            </el-tooltip>
+            <el-popover v-model:visible="popoverOpen" trigger="click" placement="bottom-end" :width="360" :show-arrow="false">
+              <template #reference>
+                <el-button class="shell__bell" text aria-label="通知">
+                  <el-badge :value="unreadCount" :max="99" :hidden="unreadCount === 0">
+                    <el-icon :size="18"><icon-bell></icon-bell></el-icon>
+                  </el-badge>
+                </el-button>
+              </template>
+              <notification-panel :items="shownItems" :unread-count="unreadCount" :loading="notifState === 'loading'"
+                                  :unread-only="unreadOnly" @open="openNotif" @read-all="readAll"
+                                  @filter="(v) => unreadOnly = v"></notification-panel>
+            </el-popover>
+            <el-dropdown trigger="click" @command="onUserCommand">
+              <span class="shell__user">
+                <el-icon><icon-avatar></icon-avatar></el-icon>
+                <span v-if="!isMobile">{{ user.display_name }}</span>
+                <el-tag v-if="!isMobile" size="small" type="info" disable-transitions>{{ user.role }}</el-tag>
+                <el-icon><icon-arrow-down></icon-arrow-down></el-icon>
+              </span>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-if="isMobile" disabled>{{ user.display_name }}（{{ user.role }}）</el-dropdown-item>
+                  <el-dropdown-item command="password"><el-icon><icon-key></icon-key></el-icon>修改密碼</el-dropdown-item>
+                  <el-dropdown-item command="logout" divided :disabled="loggingOut">
+                    <el-icon><icon-loading v-if="loggingOut" class="is-loading"></icon-loading><icon-switch-button v-else></icon-switch-button></el-icon>
+                    {{ loggingOut ? '登出中…' : '登出' }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </header>
+          <el-alert v-if="wsStatus === 'reconnecting'" class="shell__banner" type="warning" :closable="false" show-icon
+                    title="即時連線中斷，畫面每 15 秒自動更新"></el-alert>
+          <main class="shell__main"><slot></slot></main>
+        </div>
+
+        <template v-if="isMobile && drawerOpen">
+          <div class="shell__scrim" @click="drawerOpen = false"></div>
+          <aside class="shell__drawer" data-test="admin-sidebar">
+            <div class="shell__brand"><el-icon><icon-school></icon-school></el-icon><span>安親班管理系統</span></div>
+            <div class="shell__menu">
+              <div v-if="!groups.length" class="shell__empty">沒有可使用的功能，請聯絡管理員</div>
+              <el-menu v-else :default-active="activeItem" @select="go">
+                <el-menu-item-group v-for="g in groups" :key="g.key" :title="g.label">
+                  <el-menu-item v-for="it in g.items" :key="it.path" :index="it.path">
+                    <el-icon><component :is="it.icon"></component></el-icon><span>{{ it.label }}</span>
+                  </el-menu-item>
+                </el-menu-item-group>
+              </el-menu>
+            </div>
+          </aside>
+        </template>
+      </div>
+    </div>`,
+}
+/* ==================== ADMIN SHELL JS END ==================== */
+
+/* ==== 以下逐字複製自 component-common.html（已核可） ==== */
+/* ---------- PageHeader ---------- */
+const PageHeader = {
+  props: { title: { type: String, required: true }, subtitle: { type: String, default: '' } },
+  template: `
+    <div class="page-header">
+      <div class="page-header__body">
+        <h1 class="page-header__title">{{ title }}</h1>
+        <p v-if="subtitle" class="page-header__subtitle" data-test="page-subtitle">{{ subtitle }}</p>
+        <div v-if="$slots.default" class="page-header__extra"><slot></slot></div>
+      </div>
+      <div v-if="$slots.actions" class="page-header__actions"><slot name="actions"></slot></div>
+    </div>`,
+}
+
+/* ---------- AdminListToolbar ---------- */
+const ALL = '__all__'
+const AdminListToolbar = {
+  props: {
+    search: { type: String, default: '' },
+    searchPlaceholder: { type: String, default: '搜尋' },
+    filters: { type: Array, default: () => [] },
+    filterValues: { type: Object, default: () => ({}) },
+    total: { type: Number, default: undefined },
+  },
+  emits: ['update:search', 'update:filterValues'],
+  setup(props, { emit }) {
+    const text = ref(props.search)
+    watch(() => props.search, (v) => { if (v !== text.value.trim()) text.value = v })
+    let timer = null
+    const flush = () => { clearTimeout(timer); timer = null; emit('update:search', text.value.trim()) }
+    const onInput = (v) => { text.value = v; clearTimeout(timer); timer = setTimeout(flush, 300) }
+    onBeforeUnmount(() => clearTimeout(timer))
+    const clearable = (g) => g.clearable !== false
+    const current = (g) => {
+      const v = props.filterValues[g.key]
+      return v === undefined && clearable(g) ? ALL : v
+    }
+    const onSelect = (g, v) => {
+      emit('update:filterValues', { ...props.filterValues, [g.key]: v === ALL || v === '' ? undefined : v })
+    }
+    return { text, onInput, flush, clearable, current, onSelect, ALL }
+  },
+  template: `
+    <div class="list-toolbar">
+      <el-input class="list-toolbar__search" :model-value="text" :placeholder="searchPlaceholder"
+                :aria-label="searchPlaceholder" clearable
+                @update:model-value="onInput" @keyup.enter="flush" @clear="flush">
+        <template #prefix><el-icon><icon-search></icon-search></el-icon></template>
+      </el-input>
+      <div v-for="g in filters" :key="g.key" class="list-toolbar__filter">
+        <span class="list-toolbar__filter-label">{{ g.label }}</span>
+        <el-select :model-value="current(g)" :clearable="clearable(g) && current(g) !== ALL"
+                   style="width: 130px" @update:model-value="(v) => onSelect(g, v)">
+          <el-option v-if="clearable(g)" label="全部" :value="ALL"></el-option>
+          <el-option v-for="o in g.options" :key="String(o.value)" :label="o.label" :value="o.value"></el-option>
+        </el-select>
+      </div>
+      <slot name="extra-filters"></slot>
+      <span class="list-toolbar__spacer"></span>
+      <span v-if="total !== undefined" class="list-toolbar__count">共 {{ total }} 筆</span>
+      <div v-if="$slots.actions" class="list-toolbar__actions"><slot name="actions"></slot></div>
+    </div>`,
+}
+
+/* ---------- EmptyState ---------- */
+const EmptyState = {
+  props: {
+    title: { type: String, required: true },
+    description: { type: String, default: '' },
+    variant: { type: String, default: 'default' },
+    icon: { type: String, default: '' },
+  },
+  computed: {
+    iconName() { return this.icon || (this.variant === 'error' ? 'icon-warning-filled' : 'icon-folder-opened') },
+  },
+  template: `
+    <div class="empty-state" :class="{ 'is-error': variant === 'error', 'is-inline': variant === 'inline' }" role="status">
+      <el-icon v-if="variant !== 'inline'" class="empty-state__icon" data-test="empty-icon">
+        <component :is="iconName"></component>
+      </el-icon>
+      <p class="empty-state__title">{{ title }}</p>
+      <p v-if="description" class="empty-state__desc">{{ description }}</p>
+      <div v-if="$slots.action" class="empty-state__action"><slot name="action"></slot></div>
+    </div>`,
+}
+
+/* ==== 以下逐字複製自 component-common-extra.html（已核可） ==== */
+/** 與 apps/web/src/composables/useFormDirty.ts 的 confirmDiscardChanges 一致 */
+const confirmDiscardChanges = () => ElMessageBox.confirm('尚未儲存的變更將會遺失，確定要關閉嗎？', '未儲存的變更', {
+  confirmButtonText: '放棄變更', cancelButtonText: '繼續編輯',
+}).then(() => true).catch(() => false)
+
+/* ---------- FormDialog ----------
+   fullscreen prop 只用於稿裡模擬視窗寬 < 768；實作依視窗寬自動判斷。 */
+const WIDTH = { sm: '420px', md: '560px', lg: '800px' }
+const FormDialog = {
+  props: {
+    modelValue: Boolean, title: { type: String, required: true }, size: { type: String, default: 'md' },
+    loading: Boolean, submitText: { type: String, default: '儲存' }, cancelText: { type: String, default: '取消' },
+    submitDisabled: Boolean, dirty: Boolean, hideFooter: Boolean, autofocus: { type: Boolean, default: true },
+    fullscreen: Boolean,
+  },
+  emits: ['update:modelValue', 'submit', 'closed'],
+  setup(props, { emit }) {
+    const body = ref(null)
+    const canClose = async () => !props.loading && (!props.dirty || await confirmDiscardChanges())
+    const beforeClose = async (done) => { if (await canClose()) done() }
+    const cancel = async () => { if (await canClose()) emit('update:modelValue', false) }
+    const onOpened = () => {
+      if (!props.autofocus) return
+      const PICKERS = '.el-select, .el-date-editor, .el-time-picker, .el-cascader, .el-autocomplete'
+      const el = [...(body.value?.querySelectorAll('input:not([disabled]):not([readonly]):not([type=checkbox]):not([type=radio]), textarea:not([disabled]):not([readonly])') ?? [])]
+        .find((x) => !x.closest(PICKERS))
+      el?.focus()
+    }
+    return { body, width: computed(() => WIDTH[props.size]), beforeClose, cancel, onOpened }
+  },
+  template: `
+    <el-dialog :model-value="modelValue" :title="title" :width="width" :fullscreen="fullscreen"
+               :show-close="!loading" :before-close="beforeClose" append-to-body
+               @update:model-value="(v) => $emit('update:modelValue', v)" @opened="onOpened" @closed="$emit('closed')">
+      <div ref="body"><slot></slot></div>
+      <template v-if="!hideFooter" #footer>
+        <div class="form-dialog__footer">
+          <el-button :disabled="loading" @click="cancel">{{ cancelText }}</el-button>
+          <el-button type="primary" :loading="loading" :disabled="loading || submitDisabled" @click="$emit('submit')">{{ submitText }}</el-button>
+        </div>
+      </template>
+    </el-dialog>`,
+}
+
+
+/* ==================== utils/academicYear.ts（FRONTEND-084，已實作）的稿內複本 ==================== */
+const CURRENT_YEAR = 115   // 2026-10-05 台北時間 → 115 學年度
+const academicYearOptions = (center, before = 2, after = 1) => {
+  const out = []
+  for (let y = center + after; y >= center - before; y--) out.push({ label: `${y} 學年度`, value: y })
+  return out
+}
+const GRADE_TEXT = ['一', '二', '三', '四', '五', '六']
+const GRADE_OPTIONS = GRADE_TEXT.map((t, i) => ({ label: `${t}年級`, value: i + 1 }))
+const gradeLevelsLabel = (levels) => {
+  const uniq = [...new Set(levels)].sort((a, b) => a - b)
+  return uniq.length ? uniq.map((l) => GRADE_TEXT[l - 1] ?? `${l} `).join('、') + '年級' : '—'
+}
+
+/* ==================== 資料 ==================== */
+const STAFF_OPTIONS = [
+  { id: 'u2', display_name: '張主任' }, { id: 'u3', display_name: '林行政' }, { id: 'u4', display_name: '陳老師' },
+  { id: 'u6', display_name: '林老師' }, { id: 'u8', display_name: '吳老師' }, { id: 'u5', display_name: '周人事' },
+]
+const ST = (id, role) => ({ staff_user_id: id, display_name: STAFF_OPTIONS.find((s) => s.id === id)?.display_name ?? '王老師', role })
+/** GET /admin/classes（BACKEND-135）：依 sort_order、名稱 */
+const CLASS_FIXTURE = () => [
+  { id: 'c1', name: '低年級A班', grade_levels: [1, 2], academic_year: 115, sort_order: 1, archived_at: null, student_count: 18, staff: [ST('u4', 'lead'), ST('u6', 'assistant')] },
+  { id: 'c2', name: '低年級B班', grade_levels: [1, 2], academic_year: 115, sort_order: 2, archived_at: null, student_count: 15, staff: [ST('u8', 'lead')] },
+  { id: 'c3', name: '中年級班', grade_levels: [3, 4], academic_year: 115, sort_order: 3, archived_at: null, student_count: 20, staff: [ST('u4', 'assistant'), ST('u6', 'lead')] },
+  { id: 'c4', name: '高年級班', grade_levels: [5, 6], academic_year: 115, sort_order: 4, archived_at: null, student_count: 0, staff: [] },
+  { id: 'c5', name: '國中先修班', grade_levels: [6], academic_year: 115, sort_order: 5, archived_at: '2026/09/01', student_count: 0, staff: [ST('u4', 'lead')] },
+  { id: 'k1', name: '低年級班', grade_levels: [1, 2, 3], academic_year: 114, sort_order: 1, archived_at: '2026/08/05', student_count: 0, staff: [ST('u4', 'lead')] },
+  { id: 'k2', name: '高年級班', grade_levels: [4, 5, 6], academic_year: 114, sort_order: 2, archived_at: '2026/08/05', student_count: 0, staff: [ST('u6', 'lead')] },
+]
+const ROLE_LABELS = { lead: '負責老師', assistant: '協助老師' }
+
+/* ==================== ClassFormDialog（FRONTEND-098） ==================== */
+const ClassFormDialog = {
+  props: { modelValue: Boolean, klass: { type: Object, default: null }, defaultAcademicYear: Number, yearOptions: Array, sim: String },
+  emits: ['update:modelValue', 'saved', 'request'],
+  setup(props, { emit }) {
+    const initial = () => ({
+      name: props.klass?.name ?? '', grade_levels: [...(props.klass?.grade_levels ?? [])],
+      academic_year: props.klass?.academic_year ?? props.defaultAcademicYear, sort_order: props.klass?.sort_order ?? 0,
+    })
+    const form = reactive(initial())
+    const baseline = ref(JSON.stringify(initial()))
+    const errors = reactive({ name: '', grade_levels: '' })
+    const loading = ref(false)
+    const dirty = computed(() => JSON.stringify(form) !== baseline.value)
+    watch(() => props.modelValue, (open) => {
+      if (!open) return
+      Object.assign(form, initial()); baseline.value = JSON.stringify(initial()); errors.name = ''; errors.grade_levels = ''
+    })
+    const submit = () => {
+      errors.name = form.name.trim() ? '' : '請輸入班級名稱'
+      errors.grade_levels = form.grade_levels.length ? '' : '請至少選擇一個年級'
+      if (errors.name || errors.grade_levels) return
+      const full = { name: form.name.trim(), grade_levels: [...form.grade_levels].sort((a, b) => a - b), academic_year: form.academic_year, sort_order: form.sort_order }
+      let body = full
+      if (props.klass) {
+        const b = JSON.parse(baseline.value)
+        body = {}
+        for (const k of Object.keys(full)) if (JSON.stringify(full[k]) !== JSON.stringify(k === 'grade_levels' ? [...b[k]].sort((x, y) => x - y) : b[k])) body[k] = full[k]
+      }
+      emit('request', `${props.klass ? 'PATCH /admin/classes/' + props.klass.id : 'POST /admin/classes'} ${JSON.stringify(body)}`)
+      loading.value = true
+      setTimeout(() => {
+        loading.value = false
+        if (props.sim === 'class_name_taken') { errors.name = '此學年度已有同名班級'; return }
+        ElMessage.success(props.klass ? '已更新' : '已新增班級')
+        emit('saved', { ...(props.klass ?? { id: 'c' + Date.now(), archived_at: null, student_count: 0, staff: [] }), ...full })
+        emit('update:modelValue', false)
+      }, 700)
+    }
+    return { form, errors, loading, dirty, submit, GRADE_OPTIONS }
+  },
+  template: `
+    <form-dialog :model-value="modelValue" :title="klass ? '編輯班級' : '新增班級'" :loading="loading" :dirty="dirty"
+                 :submit-disabled="!!klass && !dirty" @update:model-value="(v) => $emit('update:modelValue', v)" @submit="submit">
+      <el-form label-position="top" @submit.prevent>
+        <el-form-item label="班級名稱" required :error="errors.name">
+          <el-input v-model="form.name" maxlength="30" show-word-limit placeholder="例如 中年級A班" :disabled="loading" @input="errors.name = ''"></el-input>
+        </el-form-item>
+        <el-form-item label="年級" required :error="errors.grade_levels">
+          <el-checkbox-group v-model="form.grade_levels" :disabled="loading" @change="errors.grade_levels = ''">
+            <el-checkbox-button v-for="g in GRADE_OPTIONS" :key="g.value" :value="g.value">{{ g.label }}</el-checkbox-button>
+          </el-checkbox-group>
+          <div v-if="!errors.grade_levels" class="form-hint" style="width: 100%">可複選（混齡班）</div>
+        </el-form-item>
+        <div class="cf-grid">
+          <el-form-item label="學年度">
+            <el-select v-model="form.academic_year" :disabled="loading" style="width: 100%">
+              <el-option v-for="o in yearOptions" :key="o.value" :label="o.label" :value="o.value"></el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item label="排序">
+            <el-input-number v-model="form.sort_order" :min="0" :step="1" step-strictly controls-position="right" :disabled="loading" style="width: 100%"></el-input-number>
+            <div class="form-hint" style="width: 100%">數字小的排前面，也是班級下拉選單的順序</div>
+          </el-form-item>
+        </div>
+      </el-form>
+    </form-dialog>`,
+}
+
+/* ==================== ClassStaffDialog（FRONTEND-099） ==================== */
+const MAX_ROWS = 20
+const ClassStaffDialog = {
+  props: { modelValue: Boolean, klass: Object, sim: String },
+  emits: ['update:modelValue', 'saved', 'request'],
+  setup(props, { emit }) {
+    const options = ref([])
+    const optionsState = ref('loading')
+    let attempts = 0
+    const loadOptions = () => {
+      optionsState.value = 'loading'
+      emit('request', 'GET /admin/staff-users/options')
+      setTimeout(() => {
+        attempts += 1
+        if (props.sim === 'options_error' && attempts === 1) { optionsState.value = 'error'; return }
+        options.value = STAFF_OPTIONS; optionsState.value = 'ok'
+      }, 500)
+    }
+    const toRows = () => props.klass.staff.map((s, i) => ({ key: i, staff_user_id: s.staff_user_id, role: s.role, display_name: s.display_name }))
+    const rows = ref(toRows())
+    const baseline = ref('')
+    const alertMsg = ref('')
+    const rowErrors = reactive({})
+    const loading = ref(false)
+    let seq = 100
+    watch(() => props.modelValue, (open) => {
+      if (!open) return
+      rows.value = toRows(); baseline.value = JSON.stringify(rows.value.map(({ staff_user_id, role }) => ({ staff_user_id, role })))
+      alertMsg.value = ''; Object.keys(rowErrors).forEach((k) => delete rowErrors[k]); attempts = 0
+      loadOptions()
+    }, { immediate: true })
+    const items = computed(() => rows.value.map(({ staff_user_id, role }) => ({ staff_user_id, role })))
+    const dirty = computed(() => JSON.stringify(items.value) !== baseline.value)
+    const isDeactivated = (r) => optionsState.value === 'ok' && r.staff_user_id && !options.value.some((o) => o.id === r.staff_user_id)
+    const takenBy = (id, row) => rows.value.some((r) => r !== row && r.staff_user_id === id)
+    const canAdd = computed(() => optionsState.value === 'ok' && rows.value.length < MAX_ROWS && !loading.value)
+    const addRow = () => {
+      rows.value = [...rows.value, { key: seq++, staff_user_id: null, role: rows.value.some((r) => r.role === 'lead') ? 'assistant' : 'lead', display_name: '' }]
+    }
+    const removeRow = (row) => { rows.value = rows.value.filter((r) => r !== row); delete rowErrors[row.key] }
+    const onPick = (row) => { delete rowErrors[row.key]; alertMsg.value = '' }
+    const submit = () => {
+      Object.keys(rowErrors).forEach((k) => delete rowErrors[k])
+      for (const r of rows.value) {
+        if (!r.staff_user_id) rowErrors[r.key] = '請選擇員工'
+        else if (isDeactivated(r)) rowErrors[r.key] = '此員工已停用，請移除或更換'
+      }
+      if (Object.keys(rowErrors).length) return
+      emit('request', `PUT /admin/classes/${props.klass.id}/staff ${JSON.stringify({ items: items.value })}`)
+      loading.value = true
+      setTimeout(() => {
+        loading.value = false
+        if (props.sim === 'invalid_staff' && rows.value.length) {
+          alertMsg.value = '部分員工已停用或不存在，請重新選擇'
+          const bad = rows.value[rows.value.length - 1]
+          rowErrors[bad.key] = '此員工已停用或不存在'
+          return
+        }
+        ElMessage.success('已更新負責老師')
+        emit('saved', { ...props.klass, staff: rows.value.map((r) => ({ staff_user_id: r.staff_user_id, role: r.role,
+          display_name: options.value.find((o) => o.id === r.staff_user_id)?.display_name ?? r.display_name })) })
+        emit('update:modelValue', false)
+      }, 700)
+    }
+    return { options, optionsState, loadOptions, rows, alertMsg, rowErrors, loading, dirty, isDeactivated, takenBy, canAdd,
+      addRow, removeRow, onPick, submit, MAX_ROWS, ROLE_LABELS }
+  },
+  template: `
+    <form-dialog :model-value="modelValue" :title="'指派老師：' + klass.name" :loading="loading" :dirty="dirty" :autofocus="false"
+                 :submit-disabled="optionsState === 'loading'" @update:model-value="(v) => $emit('update:modelValue', v)" @submit="submit">
+      <p class="cs-hint">負責老師用於後台「只看我的班」篩選與班級相關通知，不影響可操作的權限。可指派多位老師，最多 {{ MAX_ROWS }} 位。</p>
+      <el-alert v-if="optionsState === 'error'" class="cs-load-error" type="error" :closable="false" show-icon title="無法載入員工清單">
+        <template #default><el-button size="small" style="margin-top: 4px" @click="loadOptions">重試</el-button></template>
+      </el-alert>
+      <el-alert v-if="alertMsg" class="cs-load-error" type="error" show-icon :title="alertMsg" @close="alertMsg = ''"></el-alert>
+
+      <div v-if="rows.length" class="cs-head"><span>員工</span><span>角色</span><span></span></div>
+      <div v-for="row in rows" :key="row.key" class="cs-row" :class="{ 'is-error': rowErrors[row.key] }">
+        <div class="cs-row__staff">
+          <el-select v-model="row.staff_user_id" filterable placeholder="選擇員工" :loading="optionsState === 'loading'"
+                     :disabled="loading" @change="onPick(row)">
+            <el-option v-if="isDeactivated(row)" :label="row.display_name + '（已停用）'" :value="row.staff_user_id" disabled></el-option>
+            <el-option v-for="o in options" :key="o.id" :label="o.display_name" :value="o.id" :disabled="takenBy(o.id, row)"></el-option>
+          </el-select>
+          <el-tag v-if="isDeactivated(row)" size="small" type="danger" effect="plain" disable-transitions>已停用</el-tag>
+        </div>
+        <el-select v-model="row.role" :disabled="loading" aria-label="角色">
+          <el-option label="負責老師" value="lead"></el-option>
+          <el-option label="協助老師" value="assistant"></el-option>
+        </el-select>
+        <el-button text circle :disabled="loading" :aria-label="'移除 ' + (row.display_name || '這一列')" @click="removeRow(row)">
+          <el-icon><icon-delete></icon-delete></el-icon>
+        </el-button>
+        <div v-if="rowErrors[row.key]" class="cs-row__error">{{ rowErrors[row.key] }}</div>
+      </div>
+      <div v-if="!rows.length" class="cs-empty">尚未指派老師；直接儲存會清除這個班的所有負責老師</div>
+      <div class="cs-foot">
+        <el-button :disabled="!canAdd" @click="addRow"><el-icon><icon-plus></icon-plus></el-icon>新增老師</el-button>
+        <span class="cs-foot__count">{{ rows.length }} / {{ MAX_ROWS }}</span>
+      </div>
+    </form-dialog>`,
+}
+
+const ROLES = {
+  director: { label: '主任（classes:write）', permissions: DIRECTOR, staffId: 'u2' },
+  clerk: { label: '行政（classes:write）', permissions: CLERK, staffId: 'u3' },
+  tutor: { label: '課輔老師 陳老師（只有 classes:read）', permissions: TUTOR, staffId: 'u4' },
+}
+
+const app = createApp({
+  components: { AdminShell, PageHeader, ClassFormDialog, ClassStaffDialog },
+  setup() {
+    const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
+    const meta = {
+      status: readMeta('preview-status'), tasks: readMeta('preview-tasks'),
+      route: readMeta('preview-route'), updated: readMeta('preview-updated'),
+    }
+    const viewAs = ref('director')
+    const perms = computed(() => ROLES[viewAs.value].permissions)
+    const can = (code) => perms.value.includes(code)
+    const user = computed(() => SHELL_USERS[viewAs.value])
+    const device = ref('desktop')
+    const onNavigate = (p) => { if (p !== '/classes') ElMessage.info(`（稿）導頁至 ${p}`) }
+
+    const listState = ref('data')
+    const archiveResult = ref('has_students')
+    const formResult = ref('ok')
+    const staffSim = ref('ok')
+    const staleStaff = ref(false)
+    const lastRequest = ref('')
+    const all = ref(CLASS_FIXTURE())
+    const yearOptions = academicYearOptions(CURRENT_YEAR)
+    const filters = reactive({ academic_year: CURRENT_YEAR, mine: false, include_archived: false })
+    const queryString = computed(() => `?academic_year=${filters.academic_year}&include_archived=${filters.include_archived}&mine=${filters.mine}`)
+    const withStale = (k) => (staleStaff.value && k.id === 'c2' ? { ...k, staff: [...k.staff, { staff_user_id: 'u7', display_name: '黃老師', role: 'assistant' }] } : k)
+    const rows = computed(() => all.value
+      .filter((k) => k.academic_year === filters.academic_year && (filters.include_archived || !k.archived_at)
+        && (!filters.mine || k.staff.some((s) => s.staff_user_id === ROLES[viewAs.value].staffId)))
+      .map(withStale)
+      .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, 'zh-Hant')))
+    const orderedStaff = (row) => [...row.staff.filter((s) => s.role === 'lead'), ...row.staff.filter((s) => s.role !== 'lead')]
+    const rowClass = ({ row }) => (row.archived_at ? 'cls-row-archived' : '')
+    const retry = () => { listState.value = 'loading'; setTimeout(() => { listState.value = 'data' }, 900) }
+    const goStudents = (row) => ElMessage.info(`（稿）router.push({ path: '/students', query: { class_id: '${row.id}' } })`)
+
+    const formOpen = ref(false)
+    const editing = ref(null)
+    const openCreate = () => { editing.value = null; formOpen.value = true }
+    const openEdit = (row) => { editing.value = all.value.find((k) => k.id === row.id); formOpen.value = true }
+    const staffOpen = ref(false)
+    const staffKlass = ref(null)
+    const openStaff = (row) => { staffKlass.value = row; staffOpen.value = true }
+    const onSaved = (k) => {
+      const exists = all.value.some((x) => x.id === k.id)
+      all.value = exists ? all.value.map((x) => (x.id === k.id ? k : x)) : [...all.value, k]
+    }
+    const archive = (row) => {
+      ElMessageBox.confirm(`封存後此班級不會出現在班級選單，確定要封存 ${row.name} 嗎？`, '封存班級', {
+        type: 'warning', confirmButtonText: '封存', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger',
+      }).then(() => {
+        lastRequest.value = `POST /admin/classes/${row.id}/archive`
+        setTimeout(() => {
+          if (archiveResult.value === 'has_students' && row.student_count > 0) {
+            ElMessageBox.confirm('班級仍有 5 位在學學生，請先將學生調班或退班', '無法封存', {
+              type: 'warning', confirmButtonText: '查看班上學生', cancelButtonText: '關閉',
+            }).then(() => goStudents(row)).catch(() => {})
+            return
+          }
+          all.value = all.value.map((x) => (x.id === row.id ? { ...x, archived_at: '2026/10/05' } : x))
+          ElMessage.success(`已封存 ${row.name}`)
+        }, 500)
+      }).catch(() => {})
+    }
+
+    const decisions = [
+      '版面：PageHeader「班級管理」+ 副標「安親班內部的班級；學生就讀國小的班級在學生資料裡填寫」（避免和國小班級混淆），右側「新增班級」（只有 classes:write）。下方白底面板：篩選列 → 表格。班級數量少，不分頁。',
+      '篩選列沿用 AdminListToolbar 的版面樣式（灰字標籤 + 下拉、右側「共 N 班」），但本頁沒有關鍵字搜尋，不使用該元件：學年度下拉（academicYearOptions：116 ~ 113 學年度，新到舊，預設 currentAcademicYear）→ 勾選框「只看我的班」→ 勾選框「含已封存」。三個值同步到網址 query。',
+      '表格欄位：班級名稱、年級（gradeLevelsLabel：「一、二年級」）、在學人數（靠右；> 0 是連結 → /students?class_id={id}；0 顯示淡灰「0」不可點）、負責老師（負責老師粗體在前、協助老師在後，以「、」分隔；沒有 →淡灰「尚未指派」）、排序、狀態、操作。依排序、再依名稱排列，不提供欄位排序。',
+      '狀態欄只在勾選「含已封存」時出現：已封存的列顯示灰色線框「已封存」+ 封存日（2026/09/01），整列文字變灰；未封存顯示「—」。',
+      '操作欄（只有 classes:write）：未封存的列有「編輯」「指派老師」「封存」（紅字）；已封存的列顯示「—」（後端 class_archived 不允許修改與指派）。只有 classes:read（課輔老師）：沒有「新增班級」，整個操作欄移除。',
+      '封存：確認框「封存後此班級不會出現在班級選單，確定要封存 {name} 嗎？」（紅色「封存」）。成功 ElMessage.success「已封存 {name}」，列從清單消失（含已封存時改顯示封存狀態）。',
+      '【待使用者裁定】封存被 409 class_has_students 擋下時：跳警告框「班級仍有 {student_count} 位在學學生，請先將學生調班或退班」，按鈕「查看班上學生」（→ /students?class_id={id}）/「關閉」；替代選項：只以 ElMessage.error 顯示同一句話。目前照推薦畫（控制列預設就是 409，點有學生的班「封存」可看）。人數用 details.student_count（後端含暫停中的學生），可能比表格的在學人數多。',
+      '空清單：EmptyState「{year} 學年度還沒有班級」，有 classes:write 時附「新增班級」（切到 116 或 114 學年度可看）。載入中：表格 v-loading；載入失敗：EmptyState error「無法載入班級」+「重試」取代表格。',
+      '【待使用者裁定】勾「只看我的班」後沒有結果時改用專用文案：EmptyState「{year} 學年度沒有你負責的班級」+ 說明「負責老師由有「管理班級」權限的人在「指派老師」設定」+「顯示全部班級」按鈕（取消勾選）；替代選項：沿用「{year} 學年度還沒有班級」。目前照推薦畫（以主任身分勾選可看）。',
+      'ClassFormDialog（FormDialog md 560px，標題「新增班級」/「編輯班級」，送出「儲存」，編輯沒有變更時 disabled）：班級名稱（必填 ≤30 字計數）、年級（一~六年級的 checkbox 按鈕組，可複選，下方灰字「可複選（混齡班）」，沒選「請至少選擇一個年級」）、學年度（新增預設為目前篩選的學年度，編輯可改）、排序（≥0 整數，預設 0，灰字「數字小的排前面，也是班級下拉選單的順序」）。學年度與排序並排。',
+      'ClassFormDialog 錯誤：409 class_name_taken → 名稱欄「此學年度已有同名班級」；409 class_archived → ElMessage.error 顯示後端 message。編輯只送有變更的欄位（例：只改排序 → {"sort_order":2}）。寫入成功後 useLookupsStore().invalidate(\'classes\')。',
+      'ClassStaffDialog（FormDialog md 560px，標題「指派老師：{班級名稱}」）：上方灰字說明「負責老師用於後台「只看我的班」篩選與班級相關通知，不影響可操作的權限。可指派多位老師，最多 20 位。」；每列 = 員工下拉（可搜尋）+ 角色下拉（負責老師 / 協助老師，132px）+ 垃圾桶移除鈕；下方「新增老師」+ 右側「N / 20」。',
+      'ClassStaffDialog 規則：已被其他列選走的員工在下拉中 disabled；新增的列預設角色 = 目前沒有負責老師時為「負責老師」，否則「協助老師」；送出時沒選員工的列顯示「請選擇員工」。沒有任何列時顯示「尚未指派老師；直接儲存會清除這個班的所有負責老師」，仍可儲存（送 {items: []}）。',
+      'ClassStaffDialog 員工清單：開啟時呼叫 listStaffOptions()，載入中下拉顯示 loading、「儲存」disabled；失敗 → 紅色 alert「無法載入員工清單」+「重試」，「新增老師」disabled，重試成功後恢復。',
+      'ClassStaffDialog 已停用員工：班上已指派但不在員工清單中的人（資料過期時才會出現，見控制列勾選），下拉顯示「黃老師（已停用）」並在旁邊加紅色線框「已停用」tag；送出時該列紅框 +「此員工已停用，請移除或更換」，不發請求。後端 422 invalid_staff → 頂端紅色 alert「部分員工已停用或不存在，請重新選擇」，並把 details 中的 id 所在列標紅框（class is-error）。',
+    ]
+    const openQuestions = [
+      {
+        question: '封存班級被「仍有在學學生」擋下時，要不要提供前往學生清單的捷徑？（目前稿上已照 A 畫）',
+        optionA: '警告框附「查看班上學生」按鈕，直接開學生工作台並篩選該班（推薦）',
+        optionB: '只用 ElMessage.error 顯示「班級仍有 N 位在學學生，請先將學生調班或退班」（FRONTEND-097 description 現況）',
+      },
+      {
+        question: '勾「只看我的班」後沒有結果時，空狀態文案要不要分開？（目前稿上已照 A 畫）',
+        optionA: '分開：「{year} 學年度沒有你負責的班級」+「顯示全部班級」按鈕（推薦，避免誤以為整個學年度都沒有班）',
+        optionB: '沿用「{year} 學年度還沒有班級」（FRONTEND-097 description 現況）',
+      },
+    ]
+
+    return {
+      meta, decisions, openQuestions, roles: ROLES, viewAs, perms, can, user, device, onNavigate, notesOpen: ref(false),
+      listState, archiveResult, formResult, staffSim, staleStaff, lastRequest, yearOptions, filters, queryString, rows,
+      orderedStaff, rowClass, retry, goStudents, gradeLevelsLabel, formOpen, editing, openCreate, openEdit,
+      staffOpen, staffKlass, openStaff, onSaved, archive,
+    }
+  },
+})
+
+app.use(ElementPlus, { locale: ElementPlusLocaleZhTw })
+app.component('EmptyState', EmptyState)
+app.component('FormDialog', FormDialog)
+const toKebab = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+for (const [name, component] of Object.entries(ElementPlusIconsVue)) {
+  app.component(`icon-${toKebab(name)}`, component)
+}
+app.mount('#app')
+</script>
+</body>
+</html>

@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+
+<meta name="preview-status" content="draft">
+<meta name="preview-tasks" content="FRONTEND-059,FRONTEND-060,FRONTEND-061,FRONTEND-062,FRONTEND-063">
+<meta name="preview-route" content="/settings/reference">
+<meta name="preview-updated" content="2026-10-05">
+
+<title>設計稿：參考資料</title>
+
+<!-- 版號對齊 apps/web/pnpm-lock.yaml 的實際安裝版本 -->
+<link rel="stylesheet" href="https://unpkg.com/element-plus@2.14.7/dist/index.css">
+<script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/locale/zh-tw.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue@2.3.2/dist/index.iife.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+#app { display: flex; flex-direction: column; height: 100%; }
+body { font-family: var(--el-font-family); background: var(--el-fill-color); color: var(--el-text-color-primary); }
+
+.preview-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 6px 16px; font-size: 12px;
+  color: var(--el-color-info-dark-2);
+  background: var(--el-color-info-light-9);
+  border-bottom: 1px dashed var(--el-border-color);
+}
+.preview-bar__spacer { flex: 1; }
+.preview-bar code { font-size: 12px; }
+.text-secondary { color: var(--el-text-color-secondary); font-size: 13px; }
+.el-button > span > .el-icon { margin-right: 4px; }
+.stage { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+.control-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; font-size: 12px; color: var(--el-text-color-secondary); background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-lighter); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.last-request { font-size: 12px; color: var(--el-text-color-secondary); }
+
+/* ==================== ADMIN SHELL CSS START（各頁稿逐字複製這一段） ==================== */
+/* 裝置框：只存在於設計稿，模擬桌機 / 平板 1024×768 / 手機 390×844 */
+.device-frame { position: relative; margin: 0 auto; overflow: hidden; background: var(--el-bg-color-page); border: 1px solid var(--el-border-color); border-radius: 10px; box-shadow: var(--el-box-shadow-light); }
+.device-frame.is-desktop { width: 1200px; height: 760px; }
+.device-frame.is-tablet { width: 1024px; height: 768px; }
+.device-frame.is-mobile { width: 390px; height: 844px; border-radius: 24px; }
+
+.shell { display: flex; height: 100%; }
+.shell__aside { display: flex; flex-direction: column; flex-shrink: 0; width: 220px; background: var(--el-bg-color); border-right: 1px solid var(--el-border-color-light); transition: width 0.2s ease; }
+.shell__aside.is-collapsed { width: 64px; }
+.shell__brand { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 22px; flex-shrink: 0; white-space: nowrap; overflow: hidden; font-weight: 600; color: var(--el-text-color-primary); border-bottom: 1px solid var(--el-border-color-lighter); }
+.shell__brand .el-icon { font-size: 20px; color: var(--el-color-primary); flex-shrink: 0; }
+.shell__menu { flex: 1; min-height: 0; overflow: hidden auto; }
+.shell__menu .el-menu { border-right: none; }
+.shell__menu .el-menu-item-group__title { padding-top: 14px; font-size: 12px; }
+.shell__menu .el-menu--collapse .el-menu-item-group__title { height: 1px; padding: 0; margin: 8px 12px; background: var(--el-border-color-lighter); overflow: hidden; }
+.shell__menu .el-menu-item { height: 44px; line-height: 44px; }
+.shell__empty { padding: 24px 16px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.shell__collapse { flex-shrink: 0; height: 44px; border-top: 1px solid var(--el-border-color-lighter); display: flex; align-items: center; justify-content: center; }
+.shell__body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.shell__header { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 12px 0 8px; flex-shrink: 0; background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-light); }
+.shell__toggle { width: 44px; height: 44px; }
+.shell__title { margin: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shell__spacer { flex: 1; }
+.ws-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-info-light-3); margin: 0 6px; }
+.ws-dot.is-open { background: var(--el-color-success); }
+.ws-dot.is-reconnecting { background: var(--el-color-warning); }
+.shell__bell { width: 44px; height: 44px; font-size: 18px; }
+.shell__bell .el-badge__content { top: 10px; right: 12px; }
+.shell__user { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 8px; cursor: pointer; border-radius: 6px; color: var(--el-text-color-regular); font-size: 14px; }
+.shell__user:hover { background: var(--el-fill-color-light); }
+.shell__banner { flex-shrink: 0; border-radius: 0; }
+.shell__main { flex: 1; min-height: 0; overflow: auto; padding: 20px; }
+.device-frame.is-tablet .shell__main { padding: 16px; }
+.device-frame.is-mobile .shell__main { padding: 12px; }
+/* 手機：側欄改抽屜（實作用 el-drawer，稿裡在裝置框內模擬） */
+.shell__scrim { position: absolute; inset: 0; z-index: 20; background: var(--el-overlay-color-lighter); }
+.shell__drawer { position: absolute; top: 0; bottom: 0; left: 0; z-index: 21; width: 240px; display: flex; flex-direction: column; background: var(--el-bg-color); box-shadow: var(--el-box-shadow-dark); }
+
+/* 通知面板（FRONTEND-036） */
+.notif { width: 360px; margin: -12px; }
+.notif__head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 10px 16px; border-bottom: 1px solid var(--el-border-color-lighter); }
+.notif__title { font-size: 15px; font-weight: 600; }
+.notif__list { max-height: 420px; overflow: auto; }
+.notif__row { position: relative; display: block; width: 100%; padding: 12px 16px 12px 28px; text-align: left; cursor: pointer; border: none; border-bottom: 1px solid var(--el-border-color-extra-light); background: var(--el-bg-color); font-family: inherit; color: inherit; }
+.notif__row:hover, .notif__row:focus-visible { background: var(--el-fill-color-light); outline: none; }
+.notif__row.is-unread { background: var(--el-color-primary-light-9); }
+.notif__row.is-unread:hover { background: var(--el-color-primary-light-8); }
+.notif__dot { position: absolute; left: 12px; top: 18px; width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-primary); }
+.notif__row-title { font-size: 14px; font-weight: 600; color: var(--el-text-color-primary); }
+.notif__row-body { margin-top: 2px; font-size: 13px; line-height: 1.5; color: var(--el-text-color-regular); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+.notif__row-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--el-text-color-secondary); }
+.notif__empty { padding: 40px 16px; text-align: center; font-size: 13px; color: var(--el-text-color-secondary); }
+.notif__skeleton { padding: 12px 16px; }
+/* ==================== ADMIN SHELL CSS END ==================== */
+
+/* ==== 以下逐字複製自 component-common.html（已核可） ==== */
+/* ---------- PageHeader（FRONTEND-039） ---------- */
+.page-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+.page-header__body { flex: 1; min-width: 0; }
+.page-header__title { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; color: var(--el-text-color-primary); }
+.page-header__subtitle { margin: 4px 0 0; font-size: 13px; color: var(--el-text-color-secondary); }
+.page-header__extra { margin-top: 8px; }
+.page-header__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+.page-header__actions .el-button + .el-button { margin-left: 0; }
+/* 實作用 @media (max-width: 767.98px)；稿裡用 .is-narrow 在 375px 框內示意 */
+.is-narrow .page-header { flex-wrap: wrap; }
+.is-narrow .page-header__body { flex-basis: 100%; }
+.is-narrow .page-header__actions { width: 100%; }
+
+/* ---------- AdminListToolbar（FRONTEND-041） ---------- */
+.list-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.list-toolbar__search { width: 240px; }
+.list-toolbar__filter { display: flex; align-items: center; gap: 6px; }
+.list-toolbar__filter-label { font-size: 13px; color: var(--el-text-color-secondary); white-space: nowrap; }
+.list-toolbar__spacer { flex: 1 1 auto; }
+.list-toolbar__count { font-size: 13px; color: var(--el-text-color-secondary); white-space: nowrap; }
+.list-toolbar__actions { display: flex; gap: 8px; }
+.list-toolbar__actions .el-button + .el-button { margin-left: 0; }
+.is-narrow .list-toolbar__search { width: 100%; }
+.is-narrow .list-toolbar__filter { flex: 1 1 calc(50% - 6px); }
+.is-narrow .list-toolbar__filter .el-select { flex: 1; }
+
+/* ---------- EmptyState（FRONTEND-042） ---------- */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 16px; }
+.empty-state__icon { font-size: 48px; color: var(--el-text-color-placeholder); margin-bottom: 16px; }
+.empty-state__title { margin: 0 0 6px; font-size: 16px; font-weight: 500; color: var(--el-text-color-regular); }
+.empty-state__desc { margin: 0; max-width: 360px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.empty-state__action { margin-top: 16px; display: flex; gap: 8px; }
+.empty-state.is-error .empty-state__icon { color: var(--el-color-danger); }
+.empty-state.is-inline { padding: 16px 8px; }
+.empty-state.is-inline .empty-state__title { font-size: 14px; margin-bottom: 2px; }
+.empty-state.is-inline .empty-state__action { margin-top: 8px; }
+
+/* ==== 以下逐字複製自 component-common-extra.html（已核可） ==== */
+/* ---------- FormDialog（FRONTEND-040） ---------- */
+.form-dialog__footer { display: flex; justify-content: flex-end; gap: 8px; }
+.form-dialog__footer .el-button + .el-button { margin-left: 0; }
+
+
+/* ==================== 參考資料（FRONTEND-059~063） ==================== */
+.panel { background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter); border-radius: 8px; padding: 4px 16px 16px; }
+.ref-tabs .el-tabs__header { margin-bottom: 12px; }
+.ref-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 32px; margin-bottom: 12px; }
+.ref-toolbar__hint { font-size: 13px; color: var(--el-text-color-secondary); }
+.ref-toolbar__spacer { flex: 1; }
+.ref-row-inactive td .cell { color: var(--el-text-color-secondary); }
+.ref-row-past td .cell { color: var(--el-text-color-secondary); }
+.ref-date { display: inline-flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
+.ref-date__year { font-size: 12px; color: var(--el-text-color-secondary); }
+.ref-ops { display: inline-flex; gap: 12px; }
+.ref-ops .el-button + .el-button { margin-left: 0; }
+.form-hint { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); }
+.ref-dialog-alert { margin-bottom: 16px; }
+</style>
+</head>
+
+<body>
+<div id="app">
+  <div class="preview-bar">
+    <el-tag :type="meta.status === 'approved' ? 'success' : 'warning'" size="small" effect="dark" disable-transitions>
+      {{ meta.status === 'approved' ? '已核可' : '待核可' }}
+    </el-tag>
+    <span>{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span>以身分檢視</span>
+    <el-select v-model="viewAs" size="small" style="width: 250px">
+      <el-option v-for="(r, key) in roles" :key="key" :label="r.label" :value="key"></el-option>
+    </el-select>
+    <span>裝置</span>
+    <el-radio-group v-model="device" size="small">
+      <el-radio-button value="desktop">桌機 1200</el-radio-button>
+      <el-radio-button value="tablet">平板 1024</el-radio-button>
+    </el-radio-group>
+    <span class="preview-bar__spacer"></span>
+    <span>更新 {{ meta.updated }}</span>
+    <el-button size="small" text type="primary" @click="notesOpen = true">
+      設計說明 / 待裁定（{{ openQuestions.length }}）
+    </el-button>
+  </div>
+  <div class="control-bar">
+    <span>稿件控制：</span>
+    <span>列表</span>
+    <el-radio-group v-model="listState" size="small">
+      <el-radio-button value="data">有資料</el-radio-button>
+      <el-radio-button value="empty">空清單</el-radio-button>
+      <el-radio-button value="loading">載入中</el-radio-button>
+      <el-radio-button value="error">載入失敗</el-radio-button>
+    </el-radio-group>
+    <span>刪除結果</span>
+    <el-select v-model="deleteResult" size="small" style="width: 220px">
+      <el-option label="未被引用 → 真刪除" value="deleted"></el-option>
+      <el-option label="已被引用 → 改為停用" value="deactivated"></el-option>
+    </el-select>
+    <span>儲存時</span>
+    <el-select v-model="saveResult" size="small" style="width: 220px">
+      <el-option label="成功" value="ok"></el-option>
+      <el-option label="422 欄位錯誤（名稱）" value="422"></el-option>
+      <el-option label="409 名稱 / 日期重複" value="409"></el-option>
+    </el-select>
+    <span class="last-request">網址：<span class="mono">/settings/reference?tab={{ tab }}</span></span>
+    <span class="last-request">已發出的 GET：<span class="mono">{{ requested.join('、') }}</span></span>
+    <span v-if="lastRequest" class="last-request">最後送出：<span class="mono">{{ lastRequest }}</span></span>
+  </div>
+
+  <div class="stage">
+    <admin-shell :key="device + viewAs" :device="device" :perms="perms" :user="user" active-path="/settings/reference" @navigate="onNavigate">
+      <el-alert v-if="!can('settings:read')" type="info" :closable="false" show-icon style="margin-bottom: 16px"
+                title="此身分沒有 settings:read：側欄沒有「參考資料」，直接輸入網址會被導向 /forbidden（見 page-error.html）。以下內容僅供對照。"></el-alert>
+      <page-header title="參考資料" subtitle="科目、考試類型、合作國小與休息日"></page-header>
+
+      <section class="panel">
+        <el-tabs v-model="tab" class="ref-tabs" @tab-change="onTab">
+          <el-tab-pane v-for="k in KINDS" :key="k.tab" :label="k.tabLabel" :name="k.tab" lazy>
+            <ref-table :kind="k" :can-write="can('settings:write')" :list-state="listState" :delete-result="deleteResult"
+                       :save-result="saveResult" @request="(r) => lastRequest = r"></ref-table>
+          </el-tab-pane>
+        </el-tabs>
+      </section>
+    </admin-shell>
+  </div>
+
+  <el-drawer v-model="notesOpen" title="設計說明 / 待裁定" size="520px">
+    <el-alert v-if="openQuestions.length" title="以下項目需要你裁定，未回覆前這張稿不會進入實作"
+              type="warning" :closable="false" show-icon style="margin-bottom: 16px"></el-alert>
+    <h4>設計決策</h4>
+    <ol>
+      <li v-for="(d, i) in decisions" :key="i" style="margin-bottom: 6px">{{ d }}</li>
+    </ol>
+    <h4 v-if="openQuestions.length">待裁定</h4>
+    <ol>
+      <li v-for="(q, i) in openQuestions" :key="i" style="margin-bottom: 8px">
+        <div>{{ q.question }}</div>
+        <div style="color: var(--el-text-color-secondary); font-size: 13px">
+          A. {{ q.optionA }}<br>B. {{ q.optionB }}
+        </div>
+      </li>
+    </ol>
+  </el-drawer>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch, onBeforeUnmount, nextTick } = Vue
+const { ElMessage, ElMessageBox } = ElementPlus
+
+/* ==================== ADMIN SHELL JS START（各頁稿逐字複製這一段） ==================== */
+/** 各角色預設權限碼，與 docs/domain_spec.md §3「預設授予」一致；admin 擁有全部。 */
+const ALL_STAFF = [
+  'dashboard:read', 'classes:read', 'students:read',
+  'attendance:read', 'attendance:operate', 'leaves:read',
+  'homework:read', 'homework:write', 'pickup:read', 'pickup:operate', 'exams:read',
+]
+const DIRECTOR = [...ALL_STAFF,
+  'staff:read', 'roles:read', 'settings:read', 'settings:write', 'audit:read',
+  'classes:write', 'students:write', 'students:sensitive', 'guardians:write',
+  'attendance:amend', 'leaves:write', 'pickup:override', 'exams:write', 'exams:publish']
+const CLERK = [...ALL_STAFF, 'settings:read', 'classes:write', 'students:write', 'guardians:write',
+  'leaves:write', 'exams:write', 'exams:publish']
+const TUTOR = [...ALL_STAFF, 'exams:write']
+const ADMIN = [...DIRECTOR, 'staff:write', 'roles:write', 'students:purge']
+const SHELL_USERS = {
+  admin: { display_name: '系統管理員', role: '系統管理員' },
+  director: { display_name: '張主任', role: '主任' },
+  clerk: { display_name: '林行政', role: '行政' },
+  tutor: { display_name: '陳老師', role: '課輔老師' },
+}
+
+/** 與 apps/web/src/constants/navigation.ts 的 NAVIGATION 逐項一致（原檔是權威） */
+const NAVIGATION = [
+  { key: 'home', label: '首頁', items: [{ label: '今日儀表板', path: '/', icon: 'icon-odometer', permission: 'dashboard:read' }] },
+  { key: 'daily', label: '日常營運', items: [
+    { label: '今日出勤', path: '/attendance', icon: 'icon-calendar', permission: 'attendance:read' },
+    { label: '作業進度', path: '/homework', icon: 'icon-edit-pen', permission: 'homework:read' },
+    { label: '接送', path: '/pickup', icon: 'icon-van', permission: 'pickup:read' },
+    { label: '代理接送核驗', path: '/pickup/authorizations', icon: 'icon-stamp', permission: 'pickup:read' },
+    { label: '請假', path: '/leaves', icon: 'icon-tickets', permission: 'leaves:read' },
+  ] },
+  { key: 'students', label: '學生與班級', items: [
+    { label: '學生工作台', path: '/students', icon: 'icon-user', permission: 'students:read' },
+    { label: '班級管理', path: '/classes', icon: 'icon-school', permission: 'classes:read' },
+    { label: '月出勤報表', path: '/attendance/monthly', icon: 'icon-data-line', permission: 'attendance:read' },
+  ] },
+  { key: 'exams', label: '成績', items: [{ label: '考試', path: '/exams', icon: 'icon-trophy', permission: 'exams:read' }] },
+  { key: 'settings', label: '設定', items: [
+    { label: '系統設定', path: '/settings/system', icon: 'icon-setting', permission: 'settings:read' },
+    { label: '參考資料', path: '/settings/reference', icon: 'icon-collection', permission: 'settings:read' },
+    { label: '員工帳號', path: '/settings/accounts', icon: 'icon-user-filled', permission: 'staff:read' },
+    { label: '角色權限', path: '/settings/roles', icon: 'icon-lock', permission: 'roles:read' },
+    { label: '稽核紀錄', path: '/settings/audit', icon: 'icon-list', permission: 'audit:read' },
+  ] },
+]
+/** 與 apps/web/src/router/routes.ts 的 meta.title / meta.tablet 一致 */
+const ROUTE_META = {
+  '/': { title: '今日儀表板' }, '/students': { title: '學生工作台' }, '/classes': { title: '班級管理' },
+  '/attendance': { title: '今日出勤', tablet: true }, '/attendance/monthly': { title: '月出勤報表' }, '/leaves': { title: '請假' },
+  '/homework': { title: '作業進度', tablet: true }, '/pickup': { title: '接送', tablet: true },
+  '/pickup/authorizations': { title: '代理接送核驗', tablet: true }, '/exams': { title: '考試' }, '/exams/e1': { title: '考試成績' },
+  '/settings/system': { title: '系統設定' }, '/settings/reference': { title: '參考資料' }, '/settings/accounts': { title: '員工帳號' },
+  '/settings/roles': { title: '角色權限' }, '/settings/audit': { title: '稽核紀錄' },
+}
+/** 與 apps/web/src/shared/constants/statusLabels.ts 的 NOTIFICATION_EVENT_LABELS 一致 */
+const NOTIFICATION_EVENT_LABELS = {
+  'attendance.checked_in': '到班通知', 'attendance.checked_out': '離班通知', 'leave.created': '學生請假',
+  'leave.cancelled': '學生取消請假', 'homework.eta_updated': '預計可接送時間', 'homework.done': '作業完成',
+  'pickup.requested': '家長發起接送', 'pickup.replied': '老師回覆接送', 'pickup.arrived': '家長已抵達',
+  'pickup.completed': '接送完成', 'pickup.cancelled': '接送取消', 'exam.published': '成績公布', 'binding.completed': '綁定完成',
+}
+/** 員工收得到的站內通知（domain_spec M9）；文案依 BACKEND-203 templates */
+const SAMPLE_NOTIFICATIONS = () => [
+  { id: 'n1', event: 'pickup.requested', title: '王小明 家長要來接', body: '家長預計 17:30 抵達。', deep_link: '/pickup', created_at: '2026/10/02 17:05', read_at: null },
+  { id: 'n2', event: 'leave.created', title: '陳小美 請假', body: '陳小美 2026-10-05～2026-10-06 病假。', deep_link: '/leaves', created_at: '2026/10/02 16:40', read_at: null },
+  { id: 'n3', event: 'pickup.cancelled', title: '李承恩 接送已取消', body: '家長已取消今天的接送請求。\n原因：改由爺爺來接', deep_link: '/pickup', created_at: '2026/10/02 16:12', read_at: null },
+  { id: 'n4', event: 'leave.cancelled', title: '林小華 取消請假', body: '林小華 2026-10-02～2026-10-02 的請假已取消。', deep_link: '/leaves', created_at: '2026/10/01 20:31', read_at: '2026/10/01 21:00' },
+  { id: 'n5', event: 'pickup.requested', title: '張語晴 家長要來接', body: '家長已發起接送。', deep_link: '/pickup', created_at: '2026/10/01 17:48', read_at: '2026/10/01 17:50' },
+]
+
+const NotificationPanel = {
+  props: { items: Array, unreadCount: Number, loading: Boolean, unreadOnly: Boolean },
+  emits: ['open', 'read-all', 'filter'],
+  setup() { return { LABELS: NOTIFICATION_EVENT_LABELS } },
+  template: `
+    <div class="notif">
+      <div class="notif__head">
+        <span class="notif__title">通知</span>
+        <el-segmented :model-value="unreadOnly ? 'unread' : 'all'" size="small"
+                      :options="[{ label: '全部', value: 'all' }, { label: '未讀', value: 'unread' }]"
+                      @change="(v) => $emit('filter', v === 'unread')"></el-segmented>
+        <span style="flex: 1"></span>
+        <el-button link type="primary" :disabled="unreadCount === 0" @click="$emit('read-all')">全部標為已讀</el-button>
+      </div>
+      <div class="notif__list">
+        <template v-if="loading">
+          <div v-for="i in 3" :key="i" class="notif__skeleton"><el-skeleton :rows="1" animated></el-skeleton></div>
+        </template>
+        <div v-else-if="!items.length" class="notif__empty">{{ unreadOnly ? '沒有未讀通知' : '目前沒有通知' }}</div>
+        <template v-else>
+          <button v-for="n in items" :key="n.id" type="button" class="notif__row" :class="{ 'is-unread': !n.read_at }" @click="$emit('open', n)">
+            <span v-if="!n.read_at" class="notif__dot" data-test="unread-dot" aria-label="未讀"></span>
+            <div class="notif__row-title">{{ n.title }}</div>
+            <div class="notif__row-body">{{ n.body }}</div>
+            <div class="notif__row-meta">
+              <el-tag size="small" type="info" disable-transitions>{{ LABELS[n.event] || n.event }}</el-tag>
+              <span>{{ n.created_at }}</span>
+            </div>
+          </button>
+        </template>
+      </div>
+    </div>`,
+}
+
+/**
+ * AdminShell：AdminLayout + AdminSidebar + AdminHeader + NotificationBell 的稿內合體。
+ * props 只有 device / perms / user / activePath 是各頁需要傳的；wsStatus / notifState 只有外框稿用來切狀態。
+ * emits navigate(path)：點側欄項目或通知 deep_link 時發出，各頁稿可以忽略或顯示提示。
+ */
+const AdminShell = {
+  components: { NotificationPanel },
+  props: {
+    device: { type: String, default: 'desktop' },
+    perms: { type: Array, required: true },
+    user: { type: Object, required: true },
+    activePath: { type: String, required: true },
+    wsStatus: { type: String, default: 'open' },
+    notifState: { type: String, default: 'data' },
+  },
+  emits: ['navigate'],
+  setup(props, { emit }) {
+    const isMobile = computed(() => props.device === 'mobile')
+    // 模擬 localStorage['admin.sidebarCollapsed']：使用者沒切過（remembered = null）時，依路由 meta.tablet 決定預設
+    const remembered = ref(null)
+    const collapsed = computed({
+      get: () => remembered.value ?? !!ROUTE_META[props.activePath]?.tablet,
+      set: (v) => { remembered.value = v },
+    })
+    const drawerOpen = ref(false)
+    const groups = computed(() => NAVIGATION
+      .map((g) => ({ ...g, items: g.items.filter((i) => props.perms.includes(i.permission)) }))
+      .filter((g) => g.items.length))
+    const activeItem = computed(() => {
+      const segs = (p) => p.split('/').filter(Boolean)
+      const route = segs(props.activePath)
+      let best = null
+      for (const g of groups.value) for (const it of g.items) {
+        const s = segs(it.path)
+        const match = it.path === '/' ? props.activePath === '/' : s.every((x, i) => route[i] === x)
+        if (match && (!best || s.length > segs(best).length)) best = it.path
+      }
+      return best ?? ''
+    })
+    const title = computed(() => ROUTE_META[props.activePath]?.title ?? '')
+    const go = (path) => { drawerOpen.value = false; emit('navigate', path) }
+    const toggle = () => { if (isMobile.value) drawerOpen.value = !drawerOpen.value; else collapsed.value = !collapsed.value }
+
+    // 通知（NotificationBell + store 的稿內模擬）
+    const items = ref(SAMPLE_NOTIFICATIONS())
+    const unreadOnly = ref(false)
+    const popoverOpen = ref(false)
+    const unreadCount = computed(() => {
+      if (props.notifState === 'many') return 120
+      if (props.notifState === 'empty') return 0
+      return items.value.filter((n) => !n.read_at).length
+    })
+    const shownItems = computed(() => {
+      if (props.notifState === 'empty' || props.notifState === 'loading') return []
+      return unreadOnly.value ? items.value.filter((n) => !n.read_at) : items.value
+    })
+    const openNotif = (n) => {
+      if (!n.read_at) n.read_at = '剛剛'
+      popoverOpen.value = false
+      if (n.deep_link) go(n.deep_link)
+    }
+    const readAll = () => { items.value.forEach((n) => { if (!n.read_at) n.read_at = '剛剛' }) }
+    const loggingOut = ref(false)
+    const onUserCommand = (cmd) => {
+      if (cmd === 'password') { ElMessage.info('（稿）導頁至 /change-password'); return }
+      loggingOut.value = true
+      setTimeout(() => { loggingOut.value = false; ElMessage.success('（稿）已登出，導回 /login') }, 800)
+    }
+    const wsTip = computed(() => ({ open: '即時連線正常', reconnecting: '即時連線重試中' }[props.wsStatus] ?? '即時連線未建立'))
+    return {
+      isMobile, collapsed, drawerOpen, groups, activeItem, title, go, toggle,
+      shownItems, unreadCount, unreadOnly, popoverOpen, openNotif, readAll, loggingOut, onUserCommand, wsTip,
+    }
+  },
+  template: `
+    <div class="device-frame" :class="'is-' + device">
+      <div class="shell">
+        <aside v-if="!isMobile" class="shell__aside" :class="{ 'is-collapsed': collapsed }" data-test="admin-sidebar">
+          <div class="shell__brand"><el-icon><icon-school></icon-school></el-icon><span v-show="!collapsed">安親班管理系統</span></div>
+          <div class="shell__menu">
+            <div v-if="!groups.length" class="shell__empty" v-show="!collapsed">沒有可使用的功能，請聯絡管理員</div>
+            <el-menu v-else :default-active="activeItem" :collapse="collapsed" :collapse-transition="false" @select="go">
+              <el-menu-item-group v-for="g in groups" :key="g.key" :title="g.label">
+                <el-menu-item v-for="it in g.items" :key="it.path" :index="it.path">
+                  <el-icon><component :is="it.icon"></component></el-icon>
+                  <template #title>{{ it.label }}</template>
+                </el-menu-item>
+              </el-menu-item-group>
+            </el-menu>
+          </div>
+          <div class="shell__collapse">
+            <el-button text :aria-label="collapsed ? '展開側欄' : '收合側欄'" @click="collapsed = !collapsed">
+              <el-icon><icon-arrow-right v-if="collapsed"></icon-arrow-right><icon-arrow-left v-else></icon-arrow-left></el-icon>
+              <span v-if="!collapsed">收合</span>
+            </el-button>
+          </div>
+        </aside>
+
+        <div class="shell__body">
+          <header class="shell__header">
+            <el-button class="shell__toggle" text aria-label="切換側欄" @click="toggle">
+              <el-icon :size="18"><icon-expand v-if="isMobile || collapsed"></icon-expand><icon-fold v-else></icon-fold></el-icon>
+            </el-button>
+            <h1 class="shell__title">{{ title }}</h1>
+            <span class="shell__spacer"></span>
+            <el-tooltip :content="wsTip" placement="bottom">
+              <span class="ws-dot" :class="'is-' + wsStatus" data-test="ws-dot" :aria-label="wsTip" role="img"></span>
+            </el-tooltip>
+            <el-popover v-model:visible="popoverOpen" trigger="click" placement="bottom-end" :width="360" :show-arrow="false">
+              <template #reference>
+                <el-button class="shell__bell" text aria-label="通知">
+                  <el-badge :value="unreadCount" :max="99" :hidden="unreadCount === 0">
+                    <el-icon :size="18"><icon-bell></icon-bell></el-icon>
+                  </el-badge>
+                </el-button>
+              </template>
+              <notification-panel :items="shownItems" :unread-count="unreadCount" :loading="notifState === 'loading'"
+                                  :unread-only="unreadOnly" @open="openNotif" @read-all="readAll"
+                                  @filter="(v) => unreadOnly = v"></notification-panel>
+            </el-popover>
+            <el-dropdown trigger="click" @command="onUserCommand">
+              <span class="shell__user">
+                <el-icon><icon-avatar></icon-avatar></el-icon>
+                <span v-if="!isMobile">{{ user.display_name }}</span>
+                <el-tag v-if="!isMobile" size="small" type="info" disable-transitions>{{ user.role }}</el-tag>
+                <el-icon><icon-arrow-down></icon-arrow-down></el-icon>
+              </span>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-if="isMobile" disabled>{{ user.display_name }}（{{ user.role }}）</el-dropdown-item>
+                  <el-dropdown-item command="password"><el-icon><icon-key></icon-key></el-icon>修改密碼</el-dropdown-item>
+                  <el-dropdown-item command="logout" divided :disabled="loggingOut">
+                    <el-icon><icon-loading v-if="loggingOut" class="is-loading"></icon-loading><icon-switch-button v-else></icon-switch-button></el-icon>
+                    {{ loggingOut ? '登出中…' : '登出' }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </header>
+          <el-alert v-if="wsStatus === 'reconnecting'" class="shell__banner" type="warning" :closable="false" show-icon
+                    title="即時連線中斷，畫面每 15 秒自動更新"></el-alert>
+          <main class="shell__main"><slot></slot></main>
+        </div>
+
+        <template v-if="isMobile && drawerOpen">
+          <div class="shell__scrim" @click="drawerOpen = false"></div>
+          <aside class="shell__drawer" data-test="admin-sidebar">
+            <div class="shell__brand"><el-icon><icon-school></icon-school></el-icon><span>安親班管理系統</span></div>
+            <div class="shell__menu">
+              <div v-if="!groups.length" class="shell__empty">沒有可使用的功能，請聯絡管理員</div>
+              <el-menu v-else :default-active="activeItem" @select="go">
+                <el-menu-item-group v-for="g in groups" :key="g.key" :title="g.label">
+                  <el-menu-item v-for="it in g.items" :key="it.path" :index="it.path">
+                    <el-icon><component :is="it.icon"></component></el-icon><span>{{ it.label }}</span>
+                  </el-menu-item>
+                </el-menu-item-group>
+              </el-menu>
+            </div>
+          </aside>
+        </template>
+      </div>
+    </div>`,
+}
+/* ==================== ADMIN SHELL JS END ==================== */
+
+/* ==== 以下逐字複製自 component-common.html（已核可） ==== */
+/* ---------- PageHeader ---------- */
+const PageHeader = {
+  props: { title: { type: String, required: true }, subtitle: { type: String, default: '' } },
+  template: `
+    <div class="page-header">
+      <div class="page-header__body">
+        <h1 class="page-header__title">{{ title }}</h1>
+        <p v-if="subtitle" class="page-header__subtitle" data-test="page-subtitle">{{ subtitle }}</p>
+        <div v-if="$slots.default" class="page-header__extra"><slot></slot></div>
+      </div>
+      <div v-if="$slots.actions" class="page-header__actions"><slot name="actions"></slot></div>
+    </div>`,
+}
+
+/* ---------- AdminListToolbar ---------- */
+const ALL = '__all__'
+const AdminListToolbar = {
+  props: {
+    search: { type: String, default: '' },
+    searchPlaceholder: { type: String, default: '搜尋' },
+    filters: { type: Array, default: () => [] },
+    filterValues: { type: Object, default: () => ({}) },
+    total: { type: Number, default: undefined },
+  },
+  emits: ['update:search', 'update:filterValues'],
+  setup(props, { emit }) {
+    const text = ref(props.search)
+    watch(() => props.search, (v) => { if (v !== text.value.trim()) text.value = v })
+    let timer = null
+    const flush = () => { clearTimeout(timer); timer = null; emit('update:search', text.value.trim()) }
+    const onInput = (v) => { text.value = v; clearTimeout(timer); timer = setTimeout(flush, 300) }
+    onBeforeUnmount(() => clearTimeout(timer))
+    const clearable = (g) => g.clearable !== false
+    const current = (g) => {
+      const v = props.filterValues[g.key]
+      return v === undefined && clearable(g) ? ALL : v
+    }
+    const onSelect = (g, v) => {
+      emit('update:filterValues', { ...props.filterValues, [g.key]: v === ALL || v === '' ? undefined : v })
+    }
+    return { text, onInput, flush, clearable, current, onSelect, ALL }
+  },
+  template: `
+    <div class="list-toolbar">
+      <el-input class="list-toolbar__search" :model-value="text" :placeholder="searchPlaceholder"
+                :aria-label="searchPlaceholder" clearable
+                @update:model-value="onInput" @keyup.enter="flush" @clear="flush">
+        <template #prefix><el-icon><icon-search></icon-search></el-icon></template>
+      </el-input>
+      <div v-for="g in filters" :key="g.key" class="list-toolbar__filter">
+        <span class="list-toolbar__filter-label">{{ g.label }}</span>
+        <el-select :model-value="current(g)" :clearable="clearable(g) && current(g) !== ALL"
+                   style="width: 130px" @update:model-value="(v) => onSelect(g, v)">
+          <el-option v-if="clearable(g)" label="全部" :value="ALL"></el-option>
+          <el-option v-for="o in g.options" :key="String(o.value)" :label="o.label" :value="o.value"></el-option>
+        </el-select>
+      </div>
+      <slot name="extra-filters"></slot>
+      <span class="list-toolbar__spacer"></span>
+      <span v-if="total !== undefined" class="list-toolbar__count">共 {{ total }} 筆</span>
+      <div v-if="$slots.actions" class="list-toolbar__actions"><slot name="actions"></slot></div>
+    </div>`,
+}
+
+/* ---------- EmptyState ---------- */
+const EmptyState = {
+  props: {
+    title: { type: String, required: true },
+    description: { type: String, default: '' },
+    variant: { type: String, default: 'default' },
+    icon: { type: String, default: '' },
+  },
+  computed: {
+    iconName() { return this.icon || (this.variant === 'error' ? 'icon-warning-filled' : 'icon-folder-opened') },
+  },
+  template: `
+    <div class="empty-state" :class="{ 'is-error': variant === 'error', 'is-inline': variant === 'inline' }" role="status">
+      <el-icon v-if="variant !== 'inline'" class="empty-state__icon" data-test="empty-icon">
+        <component :is="iconName"></component>
+      </el-icon>
+      <p class="empty-state__title">{{ title }}</p>
+      <p v-if="description" class="empty-state__desc">{{ description }}</p>
+      <div v-if="$slots.action" class="empty-state__action"><slot name="action"></slot></div>
+    </div>`,
+}
+
+/* ==== 以下逐字複製自 component-common-extra.html（已核可） ==== */
+/** 與 apps/web/src/composables/useFormDirty.ts 的 confirmDiscardChanges 一致 */
+const confirmDiscardChanges = () => ElMessageBox.confirm('尚未儲存的變更將會遺失，確定要關閉嗎？', '未儲存的變更', {
+  confirmButtonText: '放棄變更', cancelButtonText: '繼續編輯',
+}).then(() => true).catch(() => false)
+
+/* ---------- FormDialog ----------
+   fullscreen prop 只用於稿裡模擬視窗寬 < 768；實作依視窗寬自動判斷。 */
+const WIDTH = { sm: '420px', md: '560px', lg: '800px' }
+const FormDialog = {
+  props: {
+    modelValue: Boolean, title: { type: String, required: true }, size: { type: String, default: 'md' },
+    loading: Boolean, submitText: { type: String, default: '儲存' }, cancelText: { type: String, default: '取消' },
+    submitDisabled: Boolean, dirty: Boolean, hideFooter: Boolean, autofocus: { type: Boolean, default: true },
+    fullscreen: Boolean,
+  },
+  emits: ['update:modelValue', 'submit', 'closed'],
+  setup(props, { emit }) {
+    const body = ref(null)
+    const canClose = async () => !props.loading && (!props.dirty || await confirmDiscardChanges())
+    const beforeClose = async (done) => { if (await canClose()) done() }
+    const cancel = async () => { if (await canClose()) emit('update:modelValue', false) }
+    const onOpened = () => {
+      if (!props.autofocus) return
+      const PICKERS = '.el-select, .el-date-editor, .el-time-picker, .el-cascader, .el-autocomplete'
+      const el = [...(body.value?.querySelectorAll('input:not([disabled]):not([readonly]):not([type=checkbox]):not([type=radio]), textarea:not([disabled]):not([readonly])') ?? [])]
+        .find((x) => !x.closest(PICKERS))
+      el?.focus()
+    }
+    return { body, width: computed(() => WIDTH[props.size]), beforeClose, cancel, onOpened }
+  },
+  template: `
+    <el-dialog :model-value="modelValue" :title="title" :width="width" :fullscreen="fullscreen"
+               :show-close="!loading" :before-close="beforeClose" append-to-body
+               @update:model-value="(v) => $emit('update:modelValue', v)" @opened="onOpened" @closed="$emit('closed')">
+      <div ref="body"><slot></slot></div>
+      <template v-if="!hideFooter" #footer>
+        <div class="form-dialog__footer">
+          <el-button :disabled="loading" @click="cancel">{{ cancelText }}</el-button>
+          <el-button type="primary" :loading="loading" :disabled="loading || submitDisabled" @click="$emit('submit')">{{ submitText }}</el-button>
+        </div>
+      </template>
+    </el-dialog>`,
+}
+
+
+/* ==================== 日期工具（對照 shared/utils/datetime.ts） ==================== */
+const TODAY = '2026-10-05'
+const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六']
+const weekdayOf = (iso) => WEEKDAY_LABELS[new Date(iso + 'T00:00:00Z').getUTCDay()]
+/** formatDateWithWeekday：'10/10（六）' */
+const formatDateWithWeekday = (iso) => `${iso.slice(5, 7)}/${iso.slice(8, 10)}（${weekdayOf(iso)}）`
+const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+
+/* ==================== 四種參考資料的設定 ==================== */
+const KINDS = [
+  { tab: 'subjects', tabLabel: '科目', noun: '科目', resource: 'subjects', nameMax: 20, hasSort: true,
+    hint: '成績與作業的科目下拉依排序顯示；停用的科目不會出現在新增資料的下拉選單',
+    rows: () => [
+      { id: 's2', name: '數學', sort_order: 2, is_active: true }, { id: 's1', name: '國語', sort_order: 1, is_active: true },
+      { id: 's3', name: '英語', sort_order: 3, is_active: true }, { id: 's4', name: '自然', sort_order: 4, is_active: true },
+      { id: 's5', name: '社會', sort_order: 5, is_active: true }, { id: 's9', name: '作文', sort_order: 9, is_active: false },
+    ] },
+  { tab: 'exam-types', tabLabel: '考試類型', noun: '考試類型', resource: 'exam-types', nameMax: 20, hasSort: true,
+    hint: '建立考試時的類型下拉依排序顯示；停用的類型不會出現在新增資料的下拉選單',
+    rows: () => [
+      { id: 't1', name: '段考', sort_order: 1, is_active: true }, { id: 't2', name: '小考', sort_order: 2, is_active: true },
+      { id: 't3', name: '複習考', sort_order: 3, is_active: true },
+    ] },
+  { tab: 'schools', tabLabel: '合作國小', noun: '合作國小', resource: 'schools', nameMax: 50, hasShort: true,
+    hint: '學生資料的就讀國小下拉；簡稱用於學生列表與家長端',
+    rows: () => [
+      { id: 'sc1', name: '某某國民小學', short_name: '某某國小', is_active: true },
+      { id: 'sc2', name: '光明國民小學', short_name: '光明', is_active: true },
+      { id: 'sc3', name: '和平實驗國民小學', short_name: '和平實小', is_active: true },
+      { id: 'sc4', name: '另一國民小學', short_name: '', is_active: false },
+    ] },
+  { tab: 'closed-days', tabLabel: '休息日', noun: '休息日', resource: 'closed-days', isDay: true,
+    hint: '休息日當天不會建立出勤名單',
+    rows: () => [
+      { id: 'd0', date: '2026-09-25', reason: '中秋節' }, { id: 'd1', date: '2026-10-10', reason: '國慶日' },
+      { id: 'd2', date: '2026-12-25', reason: '行憲紀念日' }, { id: 'd3', date: '2027-01-01', reason: '開國紀念日' },
+      { id: 'd4', date: '2027-02-05', reason: '農曆春節' }, { id: 'd5', date: '2027-02-08', reason: '' },
+    ] },
+]
+/** 排序：科目 / 考試類型依 sort_order、名稱；國小依名稱；休息日依日期由近到遠（後端回 date desc，前端反轉） */
+const sortRows = (kind, rows) => [...rows].sort((a, b) => {
+  if (kind.isDay) return a.date.localeCompare(b.date)
+  if (kind.hasSort && a.sort_order !== b.sort_order) return a.sort_order - b.sort_order
+  return a.name.localeCompare(b.name, 'zh-Hant')
+})
+
+/* ==================== RefTable（FRONTEND-059 / 060 / 061 / 062 的共同版面） ==================== */
+const RefTable = {
+  props: { kind: Object, canWrite: Boolean, listState: String, deleteResult: String, saveResult: String },
+  emits: ['request'],
+  setup(props, { emit }) {
+    const all = ref(props.kind.rows())
+    const showPast = ref(false)
+    const range = computed(() => ({ date_from: showPast.value ? addDays(TODAY, -365) : TODAY, date_to: addDays(TODAY, 365) }))
+    const rows = computed(() => {
+      if (props.listState !== 'data') return []
+      const list = props.kind.isDay ? all.value.filter((r) => r.date >= range.value.date_from && r.date <= range.value.date_to) : all.value
+      return sortRows(props.kind, list)
+    })
+    watch(showPast, () => emit('request', `GET /admin/closed-days ${JSON.stringify(range.value)}`))
+
+    const open = ref(false)
+    const editing = ref(null)
+    const loading = ref(false)
+    const empty = () => ({ name: '', sort_order: nextSort(), short_name: '', is_active: true, date: '', reason: '' })
+    const nextSort = () => (props.kind.hasSort ? Math.max(0, ...all.value.map((r) => r.sort_order)) + 1 : 0)
+    const form = reactive(empty())
+    const baseline = ref('')
+    const errors = reactive({ name: '', date: '', short_name: '', reason: '' })
+    const dirty = computed(() => JSON.stringify(form) !== baseline.value)
+    const openCreate = () => { editing.value = null; Object.assign(form, empty()); reset(); open.value = true }
+    const openEdit = (row) => { editing.value = row; Object.assign(form, empty(), row, { short_name: row.short_name ?? '', reason: row.reason ?? '' }); reset(); open.value = true }
+    const reset = () => { baseline.value = JSON.stringify(form); Object.keys(errors).forEach((k) => { errors[k] = '' }) }
+    const title = computed(() => (editing.value ? '編輯' : '新增') + props.kind.noun)
+
+    const bodyOf = () => {
+      if (props.kind.isDay) return editing.value ? { reason: form.reason } : { date: form.date, reason: form.reason }
+      const b = { name: form.name.trim() }
+      if (props.kind.hasSort) b.sort_order = form.sort_order
+      if (props.kind.hasShort) b.short_name = form.short_name.trim()
+      b.is_active = form.is_active
+      return b
+    }
+    const submit = () => {
+      if (props.kind.isDay) errors.date = editing.value || form.date ? '' : '請選擇日期'
+      else errors.name = form.name.trim() ? '' : `請輸入${props.kind.isDay ? '' : '名稱'}`
+      if (errors.date || errors.name) return
+      const path = `/admin/${props.kind.resource}` + (editing.value ? `/${editing.value.id}` : '')
+      emit('request', `${editing.value ? 'PATCH' : 'POST'} ${path} ${JSON.stringify(bodyOf())}`)
+      loading.value = true
+      setTimeout(() => {
+        loading.value = false
+        if (props.saveResult === '422') {
+          if (props.kind.isDay) errors.reason = '原因最多 50 字'; else errors.name = '名稱不可空白'
+          return
+        }
+        if (props.saveResult === '409') {
+          if (props.kind.isDay) errors.date = '該日期已設定為休息日'
+          else errors.name = `${props.kind.noun}名稱已存在`
+          return
+        }
+        if (editing.value) all.value = all.value.map((r) => (r.id === editing.value.id ? { ...r, ...bodyOf() } : r))
+        else all.value = [...all.value, { id: 'n' + Date.now(), ...bodyOf() }]
+        ElMessage.success(editing.value ? '已更新' : '已新增')
+        open.value = false
+      }, 700)
+    }
+    const labelOf = (row) => (props.kind.isDay ? `${formatDateWithWeekday(row.date)}${row.reason ? ' ' + row.reason : ''}` : row.name)
+    const remove = (row) => {
+      ElMessageBox.confirm(`確定要刪除${props.kind.noun}「${labelOf(row)}」嗎？`, '確認刪除', {
+        type: 'warning', confirmButtonText: '刪除', cancelButtonText: '取消',
+      }).then(() => {
+        emit('request', `DELETE /admin/${props.kind.resource}/${row.id}`)
+        setTimeout(() => {
+          if (!props.kind.isDay && props.deleteResult === 'deactivated') {
+            all.value = all.value.map((r) => (r.id === row.id ? { ...r, is_active: false } : r))
+            ElMessage.warning(`「${row.name}」已有資料引用，已改為停用`)
+            return
+          }
+          all.value = all.value.filter((r) => r.id !== row.id)
+          ElMessage.success('已刪除')
+        }, 500)
+      }).catch(() => {})
+    }
+    const rowClass = ({ row }) => (props.kind.isDay ? (row.date < TODAY ? 'ref-row-past' : '') : (row.is_active ? '' : 'ref-row-inactive'))
+    return { all, showPast, range, rows, open, editing, loading, form, errors, dirty, title, openCreate, openEdit, submit, remove,
+      rowClass, formatDateWithWeekday, TODAY }
+  },
+  template: `
+    <div>
+      <div class="ref-toolbar">
+        <el-checkbox v-if="kind.isDay" v-model="showPast">顯示過去日期</el-checkbox>
+        <span class="ref-toolbar__hint">{{ kind.isDay ? (showPast ? '顯示 2025/10/05 ～ 2027/10/05' : '顯示今天起 12 個月內') + '・' + kind.hint : kind.hint }}</span>
+        <span class="ref-toolbar__spacer"></span>
+        <el-button v-if="canWrite" type="primary" :disabled="listState !== 'data' && listState !== 'empty'" @click="openCreate">
+          <el-icon><icon-plus></icon-plus></el-icon>新增{{ kind.noun }}
+        </el-button>
+      </div>
+
+      <empty-state v-if="listState === 'error'" variant="error" :title="'無法載入' + kind.noun" description="網路連線中斷，請確認網路後再試一次">
+        <template #action><el-button>重試</el-button></template>
+      </empty-state>
+      <el-table v-else v-loading="listState === 'loading'" :data="rows" :row-class-name="rowClass" style="width: 100%">
+        <template v-if="kind.isDay">
+          <el-table-column label="日期" width="220">
+            <template #default="{ row }">
+              <span class="ref-date"><span class="ref-date__year">{{ row.date.slice(0, 4) }}</span><span>{{ formatDateWithWeekday(row.date) }}</span>
+                <el-tag v-if="row.date < TODAY" size="small" type="info" effect="plain" disable-transitions>已過</el-tag></span>
+            </template>
+          </el-table-column>
+          <el-table-column label="原因" min-width="200" show-overflow-tooltip>
+            <template #default="{ row }"><span v-if="row.reason">{{ row.reason }}</span><span v-else class="text-secondary">—</span></template>
+          </el-table-column>
+        </template>
+        <template v-else>
+          <el-table-column prop="name" label="名稱" min-width="200" show-overflow-tooltip></el-table-column>
+          <el-table-column v-if="kind.hasShort" label="簡稱" width="160">
+            <template #default="{ row }"><span v-if="row.short_name">{{ row.short_name }}</span><span v-else class="text-secondary">—</span></template>
+          </el-table-column>
+          <el-table-column v-if="kind.hasSort" prop="sort_order" label="排序" width="90" align="right"></el-table-column>
+          <el-table-column label="狀態" width="100">
+            <template #default="{ row }">
+              <el-tag v-if="row.is_active" size="small" type="success" disable-transitions>啟用</el-tag>
+              <el-tag v-else size="small" type="info" effect="plain" disable-transitions>停用</el-tag>
+            </template>
+          </el-table-column>
+        </template>
+        <el-table-column v-if="canWrite" label="操作" width="120" fixed="right">
+          <template #default="{ row }">
+            <span class="ref-ops">
+              <el-button link type="primary" @click="openEdit(row)">編輯</el-button>
+              <el-button link type="danger" @click="remove(row)">刪除</el-button>
+            </span>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <empty-state v-if="listState === 'empty' && !(kind.isDay && showPast)" :title="'尚未建立' + kind.noun"
+                       :description="kind.isDay ? '今天起 12 個月內沒有設定休息日' : ''">
+            <template v-if="canWrite" #action>
+              <el-button type="primary" @click="openCreate"><el-icon><icon-plus></icon-plus></el-icon>新增{{ kind.noun }}</el-button>
+            </template>
+          </empty-state>
+          <empty-state v-else-if="listState === 'empty'" title="尚未建立休息日" description="過去一年到未來 12 個月內都沒有設定休息日"></empty-state>
+          <span v-else></span>
+        </template>
+      </el-table>
+
+      <form-dialog v-model="open" :title="title" size="sm" :loading="loading" :dirty="dirty" @submit="submit">
+        <el-form label-position="top" @submit.prevent>
+          <template v-if="kind.isDay">
+            <el-alert v-if="!editing" class="ref-dialog-alert" type="info" :closable="false" show-icon
+                      title="設定為休息日後，當天不會建立出勤名單"></el-alert>
+            <el-form-item label="日期" :required="!editing" :error="errors.date">
+              <el-date-picker v-model="form.date" type="date" value-format="YYYY-MM-DD" format="YYYY/MM/DD" placeholder="選擇日期"
+                              :disabled="!!editing || loading" style="width: 100%" @change="errors.date = ''"></el-date-picker>
+              <div v-if="editing" class="form-hint">日期不可修改；要改日期請刪除後重新新增</div>
+            </el-form-item>
+            <el-form-item label="原因" :error="errors.reason">
+              <el-input v-model="form.reason" maxlength="50" show-word-limit placeholder="例如 國慶日、員工旅遊" :disabled="loading" @input="errors.reason = ''"></el-input>
+            </el-form-item>
+          </template>
+          <template v-else>
+            <el-form-item label="名稱" required :error="errors.name">
+              <el-input v-model="form.name" :maxlength="kind.nameMax" show-word-limit :disabled="loading"
+                        :placeholder="kind.hasShort ? '例如 某某國民小學' : ''" @input="errors.name = ''"></el-input>
+            </el-form-item>
+            <el-form-item v-if="kind.hasShort" label="簡稱" :error="errors.short_name">
+              <el-input v-model="form.short_name" maxlength="10" show-word-limit placeholder="例如 某某國小" :disabled="loading"></el-input>
+              <div class="form-hint">學生列表與家長端顯示用；空白時顯示完整名稱</div>
+            </el-form-item>
+            <el-form-item v-if="kind.hasSort" label="排序">
+              <el-input-number v-model="form.sort_order" :min="0" :step="1" step-strictly controls-position="right" :disabled="loading" style="width: 140px"></el-input-number>
+              <div class="form-hint" style="width: 100%">數字小的排前面</div>
+            </el-form-item>
+            <el-form-item label="啟用">
+              <el-switch v-model="form.is_active" :disabled="loading"></el-switch>
+              <span class="text-secondary" style="margin-left: 8px">{{ form.is_active ? '會出現在下拉選單' : '不會出現在新增資料的下拉選單' }}</span>
+            </el-form-item>
+          </template>
+        </el-form>
+      </form-dialog>
+    </div>`,
+}
+
+const ROLES = {
+  director: { label: '主任（settings:write）', permissions: DIRECTOR },
+  clerk: { label: '行政（只有 settings:read，唯讀）', permissions: CLERK },
+  tutor: { label: '課輔老師（沒有 settings:read）', permissions: TUTOR },
+}
+
+const app = createApp({
+  components: { AdminShell, PageHeader, RefTable },
+  setup() {
+    const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
+    const meta = {
+      status: readMeta('preview-status'), tasks: readMeta('preview-tasks'),
+      route: readMeta('preview-route'), updated: readMeta('preview-updated'),
+    }
+    const viewAs = ref('director')
+    const perms = computed(() => ROLES[viewAs.value].permissions)
+    const can = (code) => perms.value.includes(code)
+    const user = computed(() => SHELL_USERS[viewAs.value])
+    const device = ref('desktop')
+    const onNavigate = (p) => { if (p !== '/settings/reference') ElMessage.info(`（稿）導頁至 ${p}`) }
+
+    const listState = ref('data')
+    const deleteResult = ref('deactivated')
+    const saveResult = ref('ok')
+    const lastRequest = ref('')
+    const tab = ref('subjects')
+    const requested = ref(['/admin/subjects'])
+    const onTab = (name) => {
+      const url = `/admin/${name}`
+      if (!requested.value.includes(url)) requested.value = [...requested.value, url]
+    }
+
+    const decisions = [
+      '版面：PageHeader「參考資料」+ 副標「科目、考試類型、合作國小與休息日」（本頁沒有 header 按鈕）。下方白底面板內是 el-tabs：科目 / 考試類型 / 合作國小 / 休息日；目前分頁存在 ?tab=（subjects / exam-types / schools / closed-days），沒帶時是科目。未切到的分頁不載入（控制列「已發出的 GET」可看）。',
+      '每個分頁上方一列：左邊灰字說明這份資料用在哪裡（例：「成績與作業的科目下拉依排序顯示；停用的科目不會出現在新增資料的下拉選單」），右邊「新增科目 / 新增考試類型 / 新增合作國小 / 新增休息日」（只有 settings:write 才出現）。新增按鈕放在分頁內而不是 PageHeader，因為按鈕名稱跟著分頁變。',
+      '科目、考試類型表格：名稱、排序（靠右數字）、狀態（綠「啟用」/ 灰線框「停用」）、操作「編輯」「刪除」（紅字）。依排序、再依名稱排列，不提供欄位排序。停用的列文字變灰。',
+      '合作國小表格：名稱、簡稱（空白顯示「—」）、狀態、操作；依名稱排序。',
+      '休息日表格：日期（灰色小字年份 + formatDateWithWeekday，例「2026 10/10（六）」，範圍跨年所以補年份）、原因（空白顯示「—」）、操作。預設只顯示今天起 12 個月內，依日期由近到遠排（後端回 date desc，前端反轉）；左上「顯示過去日期」勾選後往前多載入一年，過去的列文字變灰並加「已過」小 tag。',
+      '只有 settings:read（行政）：沒有新增按鈕、沒有操作欄（整欄移除），其他照常。沒有 settings:read（課輔老師）：側欄沒有此頁，網址直接進會導向 /forbidden。',
+      '新增 / 編輯 dialog（FormDialog sm 420px，標題「新增科目」「編輯科目」等，送出「儲存」）：科目 / 考試類型 = 名稱（必填，≤20 字計數）、排序（數字輸入框，≥0 整數，新增時預設為目前最大值 + 1，下方灰字「數字小的排前面」）、啟用（switch，旁邊灰字說明是否出現在下拉選單）。合作國小 = 名稱（必填，≤50）、簡稱（≤10，下方灰字「學生列表與家長端顯示用；空白時顯示完整名稱」）、啟用。',
+      '休息日 dialog：新增時頂端 info alert「設定為休息日後，當天不會建立出勤名單」；日期（date picker，顯示 2026/12/25，必填「請選擇日期」；編輯時 disabled 並在下方灰字「日期不可修改；要改日期請刪除後重新新增」）、原因（≤50 字計數，選填）。',
+      '錯誤：422 欄位錯誤以 validationFieldErrors 顯示在對應欄位下方；409（名稱重複 / closed_day_exists「該日期已設定為休息日」）也顯示在衝突的欄位下方（名稱或日期），dialog 不關閉。',
+      '刪除：useConfirmDelete 確認框「確定要刪除科目「國語」嗎？」（休息日為「確定要刪除休息日「10/10（六） 國慶日」嗎？」），按鈕「刪除」/「取消」。回 deleted → ElMessage.success「已刪除」並重新載入；回 deactivated（已被引用）→ ElMessage.warning「「國語」已有資料引用，已改為停用」並重新載入（該列變成停用）。休息日沒有改停用的情況。',
+      '空清單：EmptyState「尚未建立科目 / 考試類型 / 合作國小 / 休息日」（休息日附說明「今天起 12 個月內沒有設定休息日」），有 settings:write 時附「新增…」按鈕。載入中：表格 v-loading；載入失敗：EmptyState error「無法載入科目」+「重試」取代表格。',
+      '任一表格寫入成功後呼叫 useLookupsStore().invalidate（科目 subjects、考試類型 examTypes、國小 schools；休息日不需要），畫面上沒有額外提示。',
+    ]
+    const openQuestions = []
+
+    return {
+      meta, decisions, openQuestions, roles: ROLES, viewAs, perms, can, user, device, onNavigate, notesOpen: ref(false),
+      listState, deleteResult, saveResult, lastRequest, tab, requested, onTab, KINDS,
+    }
+  },
+})
+
+app.use(ElementPlus, { locale: ElementPlusLocaleZhTw })
+app.component('EmptyState', EmptyState)
+app.component('FormDialog', FormDialog)
+const toKebab = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+for (const [name, component] of Object.entries(ElementPlusIconsVue)) {
+  app.component(`icon-${toKebab(name)}`, component)
+}
+app.mount('#app')
+</script>
+</body>
+</html>

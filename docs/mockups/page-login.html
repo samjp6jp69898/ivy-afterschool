@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+
+<meta name="preview-status" content="draft">
+<meta name="preview-tasks" content="FRONTEND-047">
+<meta name="preview-route" content="/login">
+<meta name="preview-updated" content="2026-10-05">
+
+<title>設計稿：員工登入</title>
+
+<!-- 版號對齊 apps/web/pnpm-lock.yaml 的實際安裝版本 -->
+<link rel="stylesheet" href="https://unpkg.com/element-plus@2.14.7/dist/index.css">
+<script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/locale/zh-tw.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue@2.3.2/dist/index.iife.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+#app { display: flex; flex-direction: column; height: 100%; }
+body { font-family: var(--el-font-family); background: var(--el-fill-color); color: var(--el-text-color-primary); }
+
+.preview-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 6px 16px; font-size: 12px;
+  color: var(--el-color-info-dark-2);
+  background: var(--el-color-info-light-9);
+  border-bottom: 1px dashed var(--el-border-color);
+}
+.preview-bar__spacer { flex: 1; }
+.preview-bar code { font-size: 12px; }
+.text-secondary { color: var(--el-text-color-secondary); font-size: 13px; }
+.el-button > span > .el-icon { margin-right: 4px; }
+.stage { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+.control-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; font-size: 12px; color: var(--el-text-color-secondary); background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-lighter); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.last-request { font-size: 12px; color: var(--el-text-color-secondary); }
+
+/* ==================== ADMIN SHELL CSS START（各頁稿逐字複製這一段） ==================== */
+/* 裝置框：只存在於設計稿，模擬桌機 / 平板 1024×768 / 手機 390×844 */
+.device-frame { position: relative; margin: 0 auto; overflow: hidden; background: var(--el-bg-color-page); border: 1px solid var(--el-border-color); border-radius: 10px; box-shadow: var(--el-box-shadow-light); }
+.device-frame.is-desktop { width: 1200px; height: 760px; }
+.device-frame.is-tablet { width: 1024px; height: 768px; }
+.device-frame.is-mobile { width: 390px; height: 844px; border-radius: 24px; }
+
+.shell { display: flex; height: 100%; }
+.shell__aside { display: flex; flex-direction: column; flex-shrink: 0; width: 220px; background: var(--el-bg-color); border-right: 1px solid var(--el-border-color-light); transition: width 0.2s ease; }
+.shell__aside.is-collapsed { width: 64px; }
+.shell__brand { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 22px; flex-shrink: 0; white-space: nowrap; overflow: hidden; font-weight: 600; color: var(--el-text-color-primary); border-bottom: 1px solid var(--el-border-color-lighter); }
+.shell__brand .el-icon { font-size: 20px; color: var(--el-color-primary); flex-shrink: 0; }
+.shell__menu { flex: 1; min-height: 0; overflow: hidden auto; }
+.shell__menu .el-menu { border-right: none; }
+.shell__menu .el-menu-item-group__title { padding-top: 14px; font-size: 12px; }
+.shell__menu .el-menu--collapse .el-menu-item-group__title { height: 1px; padding: 0; margin: 8px 12px; background: var(--el-border-color-lighter); overflow: hidden; }
+.shell__menu .el-menu-item { height: 44px; line-height: 44px; }
+.shell__empty { padding: 24px 16px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.shell__collapse { flex-shrink: 0; height: 44px; border-top: 1px solid var(--el-border-color-lighter); display: flex; align-items: center; justify-content: center; }
+.shell__body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.shell__header { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 12px 0 8px; flex-shrink: 0; background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-light); }
+.shell__toggle { width: 44px; height: 44px; }
+.shell__title { margin: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shell__spacer { flex: 1; }
+.ws-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-info-light-3); margin: 0 6px; }
+.ws-dot.is-open { background: var(--el-color-success); }
+.ws-dot.is-reconnecting { background: var(--el-color-warning); }
+.shell__bell { width: 44px; height: 44px; font-size: 18px; }
+.shell__bell .el-badge__content { top: 10px; right: 12px; }
+.shell__user { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 8px; cursor: pointer; border-radius: 6px; color: var(--el-text-color-regular); font-size: 14px; }
+.shell__user:hover { background: var(--el-fill-color-light); }
+.shell__banner { flex-shrink: 0; border-radius: 0; }
+.shell__main { flex: 1; min-height: 0; overflow: auto; padding: 20px; }
+.device-frame.is-tablet .shell__main { padding: 16px; }
+.device-frame.is-mobile .shell__main { padding: 12px; }
+/* 手機：側欄改抽屜（實作用 el-drawer，稿裡在裝置框內模擬） */
+.shell__scrim { position: absolute; inset: 0; z-index: 20; background: var(--el-overlay-color-lighter); }
+.shell__drawer { position: absolute; top: 0; bottom: 0; left: 0; z-index: 21; width: 240px; display: flex; flex-direction: column; background: var(--el-bg-color); box-shadow: var(--el-box-shadow-dark); }
+
+/* 通知面板（FRONTEND-036） */
+.notif { width: 360px; margin: -12px; }
+.notif__head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 10px 16px; border-bottom: 1px solid var(--el-border-color-lighter); }
+.notif__title { font-size: 15px; font-weight: 600; }
+.notif__list { max-height: 420px; overflow: auto; }
+.notif__row { position: relative; display: block; width: 100%; padding: 12px 16px 12px 28px; text-align: left; cursor: pointer; border: none; border-bottom: 1px solid var(--el-border-color-extra-light); background: var(--el-bg-color); font-family: inherit; color: inherit; }
+.notif__row:hover, .notif__row:focus-visible { background: var(--el-fill-color-light); outline: none; }
+.notif__row.is-unread { background: var(--el-color-primary-light-9); }
+.notif__row.is-unread:hover { background: var(--el-color-primary-light-8); }
+.notif__dot { position: absolute; left: 12px; top: 18px; width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-primary); }
+.notif__row-title { font-size: 14px; font-weight: 600; color: var(--el-text-color-primary); }
+.notif__row-body { margin-top: 2px; font-size: 13px; line-height: 1.5; color: var(--el-text-color-regular); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+.notif__row-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--el-text-color-secondary); }
+.notif__empty { padding: 40px 16px; text-align: center; font-size: 13px; color: var(--el-text-color-secondary); }
+.notif__skeleton { padding: 12px 16px; }
+/* ==================== ADMIN SHELL CSS END ==================== */
+
+/* blank layout（/login 路由 meta.layout = 'blank'）：沒有側欄與 header，整頁置中；與 page-error.html 的 .blank-page 相同 */
+.blank-page { height: 100%; display: flex; align-items: center; justify-content: center; padding: 24px 16px; background: var(--el-bg-color-page); overflow: auto; }
+
+/* ==================== LoginView（FRONTEND-047） ==================== */
+.login { width: 100%; max-width: 400px; }
+.login__brand { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 24px; text-align: center; }
+.login__logo { width: 64px; height: 64px; border-radius: 16px; flex-shrink: 0; object-fit: contain; background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter); }
+/* 稿裡以色塊代表 logo_url 圖片（實作是 <img>） */
+.login__logo.is-sample { display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; letter-spacing: 1px; color: var(--el-color-success-dark-2); background: var(--el-color-success-light-8); border-color: var(--el-color-success-light-5); }
+.login__logo.is-fallback { display: flex; align-items: center; justify-content: center; font-size: 32px; color: var(--el-color-primary); background: var(--el-color-primary-light-9); border-color: var(--el-color-primary-light-8); }
+.login__org { margin: 0; min-height: 30px; font-size: 22px; line-height: 30px; font-weight: 600; color: var(--el-text-color-primary); word-break: break-word; }
+.login__org-skeleton { width: 160px; height: 30px; }
+.login__sub { margin: -4px 0 0; font-size: 13px; color: var(--el-text-color-secondary); }
+.login__card { padding: 28px 28px 24px; background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter); border-radius: 12px; box-shadow: var(--el-box-shadow-lighter); }
+.login__alert { margin-bottom: 18px; }
+.login__card .el-form-item { margin-bottom: 22px; }
+.login__submit { width: 100%; height: 44px; font-size: 15px; }
+.login__help { margin: 16px 0 0; text-align: center; font-size: 12px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.device-frame.is-mobile .login__card { padding: 24px 20px 20px; }
+.device-frame.is-mobile .login__org { font-size: 20px; }
+</style>
+</head>
+
+<body>
+<div id="app">
+  <div class="preview-bar">
+    <el-tag :type="meta.status === 'approved' ? 'success' : 'warning'" size="small" effect="dark" disable-transitions>
+      {{ meta.status === 'approved' ? '已核可' : '待核可' }}
+    </el-tag>
+    <span>{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span>裝置</span>
+    <el-radio-group v-model="device" size="small">
+      <el-radio-button value="desktop">桌機 1200</el-radio-button>
+      <el-radio-button value="tablet">平板 1024</el-radio-button>
+      <el-radio-button value="mobile">手機 390</el-radio-button>
+    </el-radio-group>
+    <span class="preview-bar__spacer"></span>
+    <span>更新 {{ meta.updated }}</span>
+    <el-button size="small" text type="primary" @click="notesOpen = true">
+      設計說明 / 待裁定（{{ openQuestions.length }}）
+    </el-button>
+  </div>
+  <div class="control-bar">
+    <span>稿件控制：</span>
+    <span>公開設定 GET /parent/config</span>
+    <el-select v-model="configState" size="small" style="width: 210px" @change="reloadPage">
+      <el-option label="有 Logo（快樂安親班）" value="logo"></el-option>
+      <el-option label="無 Logo（logo_url null）" value="no-logo"></el-option>
+      <el-option label="Logo 圖片載入失敗" value="logo-broken"></el-option>
+      <el-option label="讀取失敗（500 / 斷線）" value="error"></el-option>
+      <el-option label="讀取中" value="loading"></el-option>
+    </el-select>
+    <span>送出結果</span>
+    <el-select v-model="loginResult" size="small" style="width: 250px">
+      <el-option label="成功（一般帳號）" value="ok"></el-option>
+      <el-option label="成功（must_change_password）" value="must-change"></el-option>
+      <el-option label="成功（沒有任何可用頁面）" value="no-page"></el-option>
+      <el-option label="401 invalid_credentials" value="invalid_credentials"></el-option>
+      <el-option label="429 too_many_attempts" value="too_many_attempts"></el-option>
+      <el-option label="網路錯誤 / 逾時" value="network"></el-option>
+    </el-select>
+    <span>網址</span>
+    <el-select v-model="redirectQuery" size="small" style="width: 210px">
+      <el-option label="/login" value="none"></el-option>
+      <el-option label="/login?redirect=/leaves" value="/leaves"></el-option>
+      <el-option label="/login?redirect=/settings/audit（無權限）" value="/settings/audit"></el-option>
+    </el-select>
+    <el-checkbox v-model="restoreError" size="small" @change="reloadPage">啟動還原失敗（auth.restoreError）</el-checkbox>
+    <span v-if="lastRequest" class="last-request">最後送出：<span class="mono">{{ lastRequest }}</span></span>
+  </div>
+
+  <div class="stage">
+    <div class="device-frame" :class="'is-' + device">
+      <div class="blank-page">
+        <login-view :key="pageKey" :config-state="configState" :login-result="loginResult" :redirect-query="redirectQuery"
+                    :restore-error="restoreError" @request="(r) => lastRequest = r"></login-view>
+      </div>
+    </div>
+  </div>
+
+  <el-drawer v-model="notesOpen" title="設計說明 / 待裁定" size="500px">
+    <el-alert v-if="openQuestions.length" title="以下項目需要你裁定，未回覆前這張稿不會進入實作"
+              type="warning" :closable="false" show-icon style="margin-bottom: 16px"></el-alert>
+    <h4>設計決策</h4>
+    <ol>
+      <li v-for="(d, i) in decisions" :key="i" style="margin-bottom: 6px">{{ d }}</li>
+    </ol>
+    <h4 v-if="openQuestions.length">待裁定</h4>
+    <ol>
+      <li v-for="(q, i) in openQuestions" :key="i" style="margin-bottom: 8px">
+        <div>{{ q.question }}</div>
+        <div style="color: var(--el-text-color-secondary); font-size: 13px">
+          A. {{ q.optionA }}<br>B. {{ q.optionB }}
+        </div>
+      </li>
+    </ol>
+  </el-drawer>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch, nextTick, onMounted } = Vue
+const { ElMessage } = ElementPlus
+
+const DEFAULT_ORG_NAME = '安親班管理系統'
+const NETWORK_MESSAGE = '無法連線伺服器，請稍後再試'
+
+/* ==================== LoginView（FRONTEND-047） ==================== */
+const LoginView = {
+  props: { configState: String, loginResult: String, redirectQuery: String, restoreError: Boolean },
+  emits: ['request'],
+  setup(props, { emit }) {
+    // fetchPublicConfig()：失敗或空值 → 「安親班管理系統」+ 預設圖示
+    const configLoading = ref(true)
+    const orgName = ref('')
+    const logoUrl = ref(null)
+    const logoBroken = ref(false)
+    onMounted(() => {
+      if (props.configState === 'loading') return
+      setTimeout(() => {
+        configLoading.value = false
+        if (props.configState === 'error') { orgName.value = DEFAULT_ORG_NAME; return }
+        orgName.value = '快樂安親班'
+        logoUrl.value = props.configState === 'no-logo' ? null : 'https://files.example.com/org/logo.png'
+        logoBroken.value = props.configState === 'logo-broken'
+      }, 300)
+    })
+
+    const form = reactive({ username: '', password: '' })
+    const errors = reactive({ username: '', password: '' })
+    const alertMsg = ref(props.restoreError ? NETWORK_MESSAGE : '')
+    const alertType = ref(props.restoreError ? 'warning' : 'error')
+    const loading = ref(false)
+    const usernameRef = ref(null)
+    const passwordRef = ref(null)
+    onMounted(() => nextTick(() => usernameRef.value?.focus()))
+
+    const submit = () => {
+      errors.username = form.username.trim() ? '' : '請輸入帳號'
+      errors.password = form.password ? '' : '請輸入密碼'
+      if (errors.username) { usernameRef.value?.focus(); return }
+      if (errors.password) { passwordRef.value?.focus(); return }
+      alertMsg.value = ''
+      loading.value = true
+      emit('request', `POST /admin/auth/login ${JSON.stringify({ username: form.username.trim(), password: '•'.repeat(form.password.length) })}`)
+      setTimeout(() => {
+        loading.value = false
+        const r = props.loginResult
+        if (r === 'invalid_credentials') {
+          alertType.value = 'error'; alertMsg.value = '帳號或密碼錯誤'
+          form.password = ''; nextTick(() => passwordRef.value?.focus()); return
+        }
+        if (r === 'too_many_attempts') { alertType.value = 'error'; alertMsg.value = '嘗試次數過多，請 15 分鐘後再試'; return }
+        if (r === 'network') { alertType.value = 'warning'; alertMsg.value = NETWORK_MESSAGE; return }
+        let target
+        if (r === 'must-change') target = '/change-password'
+        else if (r === 'no-page') target = '/forbidden'
+        else if (props.redirectQuery === '/leaves') target = '/leaves'
+        else target = '/attendance'
+        const why = r === 'must-change' ? 'must_change_password'
+          : r === 'no-page' ? 'firstAllowedPath 為 null'
+          : props.redirectQuery === '/leaves' ? 'safeRedirect(redirect) 且有 leaves:read'
+          : props.redirectQuery !== 'none' ? 'redirect 頁沒有權限 → firstAllowedPath' : 'firstAllowedPath'
+        ElMessage.info(`（稿）router.replace('${target}')：${why}`)
+      }, 900)
+    }
+    const onInput = (field) => { errors[field] = '' }
+    return { configLoading, orgName, logoUrl, logoBroken, form, errors, alertMsg, alertType, loading, usernameRef, passwordRef, submit, onInput }
+  },
+  template: `
+    <main class="login" aria-labelledby="login-title">
+      <header class="login__brand">
+        <div v-if="configLoading" class="login__logo" aria-hidden="true"></div>
+        <div v-else-if="logoUrl && !logoBroken" class="login__logo is-sample" role="img" :aria-label="orgName + ' Logo'">LOGO</div>
+        <div v-else class="login__logo is-fallback" aria-hidden="true"><el-icon><icon-school></icon-school></el-icon></div>
+        <el-skeleton v-if="configLoading" animated class="login__org-skeleton">
+          <template #template><el-skeleton-item variant="h3" style="width: 160px; height: 26px"></el-skeleton-item></template>
+        </el-skeleton>
+        <h1 v-else id="login-title" class="login__org">{{ orgName }}</h1>
+        <p class="login__sub">員工登入</p>
+      </header>
+
+      <section class="login__card">
+        <el-alert v-if="alertMsg" class="login__alert" :type="alertType" :title="alertMsg" :closable="false" show-icon role="alert"></el-alert>
+        <el-form label-position="top" size="large" @submit.prevent="submit">
+          <el-form-item label="帳號" :error="errors.username">
+            <el-input ref="usernameRef" v-model="form.username" autocomplete="username" placeholder="請輸入帳號"
+                      :disabled="loading" @input="onInput('username')">
+              <template #prefix><el-icon><icon-user></icon-user></el-icon></template>
+            </el-input>
+          </el-form-item>
+          <el-form-item label="密碼" :error="errors.password">
+            <el-input ref="passwordRef" v-model="form.password" type="password" show-password autocomplete="current-password"
+                      placeholder="請輸入密碼" :disabled="loading" @input="onInput('password')">
+              <template #prefix><el-icon><icon-lock></icon-lock></el-icon></template>
+            </el-input>
+          </el-form-item>
+          <el-button class="login__submit" type="primary" native-type="submit" :loading="loading">
+            {{ loading ? '登入中…' : '登入' }}
+          </el-button>
+        </el-form>
+        <p class="login__help">忘記密碼時，請聯絡主任或系統管理員重設</p>
+      </section>
+    </main>`,
+}
+
+const app = createApp({
+  components: { LoginView },
+  setup() {
+    const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
+    const meta = {
+      status: readMeta('preview-status'), tasks: readMeta('preview-tasks'),
+      route: readMeta('preview-route'), updated: readMeta('preview-updated'),
+    }
+    const device = ref('desktop')
+    const configState = ref('logo')
+    const loginResult = ref('ok')
+    const redirectQuery = ref('none')
+    const restoreError = ref(false)
+    const lastRequest = ref('')
+    const pageKey = ref(0)
+    const reloadPage = () => { pageKey.value += 1 }
+
+    const decisions = [
+      '版面：blank layout（沒有側欄與 header），灰底整頁置中；由上而下是品牌區（Logo 64×64 圓角、安親班名稱 22px / 600、灰字「員工登入」）與白色登入卡（最寬 400px、圓角 12、淡陰影）。手機 390 寬時卡片內距縮為 24 / 20，名稱 20px。',
+      '品牌區資料來自 fetchPublicConfig()：有 logo_url 顯示圖片（object-fit: contain，稿裡以綠色「LOGO」色塊代表）；logo_url 為 null、圖片載入失敗（img error）或設定讀取失敗 → 改顯示淺藍底的學校圖示。名稱為空或讀取失敗 → 「安親班管理系統」。',
+      '設定讀取中：Logo 位置留白框、名稱位置顯示一行骨架（保留高度），不先閃出「安親班管理系統」再換成真名稱。設定讀取失敗不顯示任何錯誤提示（登入仍可進行）。',
+      '欄位：帳號（label 在上、人像前綴 icon、autocomplete=username）、密碼（鎖頭前綴 icon、show-password、autocomplete=current-password），大尺寸 input。頁面載入後游標自動在帳號欄。按 Enter 等同按「登入」（form submit）。',
+      '必填驗證只在送出時做：「請輸入帳號」「請輸入密碼」顯示在欄位下方，游標移到第一個錯誤欄位；使用者在該欄輸入後立即清掉該欄錯誤（不在 blur 時跳錯，避免剛進頁面 Tab 一下就滿版紅字）。帳號送出前 trim，密碼不 trim。',
+      '送出中：按鈕 loading 並改字「登入中…」，兩個 input disabled，防止重送。',
+      '錯誤一律顯示在卡片頂端的 el-alert（不可關閉，下次送出時清掉）：401 invalid_credentials → 紅色「帳號或密碼錯誤」，同時清空密碼並把游標移到密碼欄；429 too_many_attempts → 紅色顯示後端 message（例：「嘗試次數過多，請 15 分鐘後再試」），不做倒數、按鈕不停用；網路錯誤 / 逾時 → 橘色 warning「無法連線伺服器，請稍後再試」。',
+      'auth.restoreError 有值（啟動時還原登入狀態失敗）：一進頁面就顯示同一個橘色「無法連線伺服器，請稍後再試」alert。',
+      '登入成功不顯示「歡迎回來」toast，直接 router.replace：must_change_password → /change-password；否則 safeRedirect(route.query.redirect) 且有該頁權限 → 該頁；否則 firstAllowedPath；都沒有 → /forbidden。（稿裡以 ElMessage 說明導向結果，控制列「網址」可切 redirect。）',
+      '卡片底部 12px 灰字「忘記密碼時，請聯絡主任或系統管理員重設」：本系統沒有自助重設密碼，臨時密碼由有 staff:write 的人在「員工帳號」頁產生；只是說明文字，不是連結。',
+      '移植 ivy 時去掉：品牌左欄插圖、「教職員入口」連結、閒置登出提示、版權 footer。',
+    ]
+    const openQuestions = []
+
+    return {
+      meta, decisions, openQuestions, notesOpen: ref(false), device,
+      configState, loginResult, redirectQuery, restoreError, lastRequest, pageKey, reloadPage,
+    }
+  },
+})
+
+app.use(ElementPlus, { locale: ElementPlusLocaleZhTw })
+const toKebab = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+for (const [name, component] of Object.entries(ElementPlusIconsVue)) {
+  app.component(`icon-${toKebab(name)}`, component)
+}
+app.mount('#app')
+</script>
+</body>
+</html>
