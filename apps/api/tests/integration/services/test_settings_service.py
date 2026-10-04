@@ -223,9 +223,15 @@ def test_get_setting_mutation_does_not_pollute_cache(db_session: Session) -> Non
     # RootModel 的 frozen 擋不住內層 dict 的就地修改；回傳值必須是呼叫端自己的副本
     first.root["pickup.requested"] = False
 
+    # 第二次命中快取：命中路徑回傳的也必須是副本
     second = get_setting(db_session, NOTIFICATION_TOGGLES)
     assert second.root["pickup.requested"] is True
     assert set(second.root.values()) == {True}
+    second.root["exam.published"] = False
+
+    third = get_setting(db_session, NOTIFICATION_TOGGLES)
+    assert third.root["exam.published"] is True
+    assert set(third.root.values()) == {True}
 
 
 def test_get_setting_mutation_does_not_pollute_registry_default(db_session: Session) -> None:
