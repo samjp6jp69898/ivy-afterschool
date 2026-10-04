@@ -153,7 +153,7 @@
 
 | task | method | path | 權限 | request → response |
 |---|---|---|---|---|
-| B385 | GET | `/homework/board?date&class_id` | homework:read | → `{date, summary: {total, done, in_progress, not_started}, students: [{student_id, student_no, name, class_id, class_name, attendance_status, items: HomeworkItem[], progress: Progress}]}` |
+| B385 | GET | `/homework/board?date&class_id` | homework:read | → `{date, window: {past_days, future_days}, summary: {total, done, in_progress, not_started}, students: [{student_id, student_no, name, class_id, class_name, attendance_status, items: HomeworkItem[], progress: Progress}]}` |
 | B386 | POST | `/homework/items` | homework:write | `{student_id, service_date?, subject_id?, title, status?, sort_order?}` → 201 `{item: HomeworkItem, progress: Progress}` |
 | B387 | POST | `/homework/items/batch` | homework:write | `{class_id, service_date?, subject_id?, title, student_ids?}` → 201 `{created, items: HomeworkItem[]}`；422 `student_not_in_class` / `no_students` |
 | B388 | PATCH | `/homework/items/{id}` | homework:write | `{title?, subject_id?, status?, sort_order?}` → `{item, progress}` |

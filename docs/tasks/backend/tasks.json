@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 82,
-  "last_updated": "2026-10-04T01:29:58Z",
+  "version": 83,
+  "last_updated": "2026-10-04T01:31:17Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -9188,7 +9188,7 @@
     {
       "id": "BACKEND-371",
       "title": "建立作業進度模組 Pydantic schemas",
-      "description": "建立 `apps/api/app/schemas/homework.py`（request `extra='forbid'`、strip）。時間 `TimeHM = Annotated[str, StringConstraints(pattern=r'^([01]\\d|2[0-3]):[0-5]\\d$')]`（與 BACKEND-106 相同），輸出 ready_eta 亦為 `HH:MM` 字串。\n\n- `HomeworkItemStatus = Literal['todo','doing','correcting','done']`；`OverallStatus = Literal['not_started','in_progress','done']`。\n- `HomeworkItemCreateIn`：student_id、service_date（date | None，service 以今天補）、subject_id（可空）、title（1~100）、status（預設 todo）、sort_order（≥0，預設 0）。\n- `HomeworkBatchCreateIn`：class_id、service_date（可空）、subject_id（可空）、title（1~100）、student_ids（可空；給值時 1~100 個、不可重複，必須屬於該班）。\n- `HomeworkItemUpdateIn`：title、subject_id（可給 null 清除）、status、sort_order；至少一個欄位（空 → 422）。\n- `ProgressPutIn`：service_date（可空）、overall（`Literal['done','auto']` | 未給：done = 員工直接標整體完成；auto = 改回由項目推導）、ready_eta（TimeHM | null：null 代表清除）、note（≤200 | null）；除 service_date 外至少一個欄位（以 `model_fields_set` 判斷）。\n- `HomeworkItemOut`：id、student_id、service_date、subject_id、subject_name、title、status、sort_order、updated_at。\n- `ProgressOut`：student_id、service_date、overall_status、ready_eta（HH:MM | None）、note、eta_updated_at、eta_updated_by_name。\n- `HomeworkMutationOut`：item（HomeworkItemOut | None：刪除時 null）、progress（ProgressOut）。\n- `HomeworkBatchOut`：created（int）、items（list[HomeworkItemOut]）。\n- `BoardQuery`：date（可空）、class_id（可空）。\n- `BoardStudentOut`：student_id、student_no、name、class_id、class_name、attendance_status（AttendanceStatus | None）、items（list[HomeworkItemOut]）、progress（ProgressOut）。\n- `BoardSummaryOut`：total、done、in_progress、not_started；`BoardOut`：date、summary、students。\n- `ParentHomeworkItemOut`：title、subject_name、status；`ParentHomeworkOut`：student_id、date、items、overall_status、ready_eta、note、updated_at（items 與 progress 中最晚的 updated_at，無資料時 null）。\n\n**驗收標準**\n- TimeHM 格式驗證（'17:30' 通過、'7:30' / '24:00' 被拒）。\n- ProgressPutIn 只給 service_date → 422；能區分 ready_eta 未給與給 null。\n- HomeworkItemUpdateIn 空 body 422；HomeworkBatchCreateIn 重複 student_ids 422。",
+      "description": "建立 `apps/api/app/schemas/homework.py`（request `extra='forbid'`、strip）。時間 `TimeHM = Annotated[str, StringConstraints(pattern=r'^([01]\\d|2[0-3]):[0-5]\\d$')]`（與 BACKEND-106 相同），輸出 ready_eta 亦為 `HH:MM` 字串。\n\n- `HomeworkItemStatus = Literal['todo','doing','correcting','done']`；`OverallStatus = Literal['not_started','in_progress','done']`。\n- `HomeworkItemCreateIn`：student_id、service_date（date | None，service 以今天補）、subject_id（可空）、title（1~100）、status（預設 todo）、sort_order（≥0，預設 0）。\n- `HomeworkBatchCreateIn`：class_id、service_date（可空）、subject_id（可空）、title（1~100）、student_ids（可空；給值時 1~100 個、不可重複，必須屬於該班）。\n- `HomeworkItemUpdateIn`：title、subject_id（可給 null 清除）、status、sort_order；至少一個欄位（空 → 422）。\n- `ProgressPutIn`：service_date（可空）、overall（`Literal['done','auto']` | 未給：done = 員工直接標整體完成；auto = 改回由項目推導）、ready_eta（TimeHM | null：null 代表清除）、note（≤200 | null）；除 service_date 外至少一個欄位（以 `model_fields_set` 判斷）。\n- `HomeworkItemOut`：id、student_id、service_date、subject_id、subject_name、title、status、sort_order、updated_at。\n- `ProgressOut`：student_id、service_date、overall_status、ready_eta（HH:MM | None）、note、eta_updated_at、eta_updated_by_name。\n- `HomeworkMutationOut`：item（HomeworkItemOut | None：刪除時 null）、progress（ProgressOut）。\n- `HomeworkBatchOut`：created（int）、items（list[HomeworkItemOut]）。\n- `BoardQuery`：date（可空）、class_id（可空）。\n- `BoardStudentOut`：student_id、student_no、name、class_id、class_name、attendance_status（AttendanceStatus | None）、items（list[HomeworkItemOut]）、progress（ProgressOut）。\n- `BoardSummaryOut`：total、done、in_progress、not_started；`BoardWindowOut`：past_days、future_days（int）；`BoardOut`：date、window（BoardWindowOut）、summary、students。\n- `ParentHomeworkItemOut`：title、subject_name、status；`ParentHomeworkOut`：student_id、date、items、overall_status、ready_eta、note、updated_at（items 與 progress 中最晚的 updated_at，無資料時 null）。\n\n**驗收標準**\n- TimeHM 格式驗證（'17:30' 通過、'7:30' / '24:00' 被拒）。\n- ProgressPutIn 只給 service_date → 422；能區分 ready_eta 未給與給 null。\n- HomeworkItemUpdateIn 空 body 422；HomeworkBatchCreateIn 重複 student_ids 422。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/homework.py",
       "source_ref": null,
@@ -9631,7 +9631,7 @@
     {
       "id": "BACKEND-383",
       "title": "實作 HomeworkService.get_board：作業進度看板（逐生卡片）",
-      "description": "在 `apps/api/app/services/homework_service.py` 實作（domain_spec §4 `/homework` 作業進度看板，平板友善逐生卡片）：\n```python\ndef get_board(session: Session, query: BoardQuery, *, clock: Clock) -> BoardOut: ...\n```\n- d = query.date or today；學生 = active 未封存學生（class_id 篩選），依班級 sort_order、班名、student_no。\n- 每位學生：當日 attendance_status（無列 → None）、items（sort_order、created_at）、progress（無列 → 預設 not_started、ready_eta None）。\n- summary：只計 attendance_status 不是 leave / absent 的學生；依 overall_status 分類計數。\n- 一次查詢 items、一次查詢 progress、一次查詢出勤（不 N+1）。\n\n**驗收標準**\n- 卡片內容正確，沒有 progress 列的學生顯示 not_started。\n- 請假 / 缺席學生出現在 students 但不計入 summary。\n- class_id 篩選；查詢次數固定（≤ 5）。",
+      "description": "在 `apps/api/app/services/homework_service.py` 實作（domain_spec §4 `/homework` 作業進度看板，平板友善逐生卡片）：\n```python\ndef get_board(session: Session, query: BoardQuery, *, clock: Clock) -> BoardOut: ...\n```\n- d = query.date or today；學生 = active 未封存學生（class_id 篩選），依班級 sort_order、班名、student_no。\n- 每位學生：當日 attendance_status（無列 → None）、items（sort_order、created_at）、progress（無列 → 預設 not_started、ready_eta None）。\n- summary：只計 attendance_status 不是 leave / absent 的學生；依 overall_status 分類計數。\n- 一次查詢 items、一次查詢 progress、一次查詢出勤（不 N+1）。\n- 回應帶 `window`：取自 system_settings `homework.window`（BACKEND-106，預設 past_days 30 / future_days 7），讓前端日期選擇器的可選範圍與後端寫入驗證（BACKEND-377）一致；課輔老師不需 `settings:read` 也能取得。\n\n**驗收標準**\n- 卡片內容正確，沒有 progress 列的學生顯示 not_started。\n- 請假 / 缺席學生出現在 students 但不計入 summary。\n- class_id 篩選；查詢次數固定（≤ 5）。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
@@ -9654,7 +9654,8 @@
         "red_cases": [
           "test_homework_board_cards：班 A 王小明（2 項、in_progress、ETA 17:30、present）、陳小華（無資料、expected）→ students 長度 2，王小明 progress.ready_eta == '17:30'、陳小華 progress.overall_status == 'not_started'、items == []",
           "test_homework_board_summary_excludes_leave：林小安 attendance leave → 出現在 students，但 summary.total == 2",
-          "test_homework_board_filter_and_queries：class_id=班B 只回班 B；30 位學生時 SQL 次數 ≤ 5"
+          "test_homework_board_filter_and_queries：class_id=班B 只回班 B；30 位學生時 SQL 次數 ≤ 5",
+          "test_homework_board_includes_window：system_settings homework.window 設為 {past_days:10, future_days:3} → BoardOut.window == {past_days:10, future_days:3}；未設定時為預設 {past_days:30, future_days:7}"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_homework_service.py -k \"test_homework_board_\"",
         "notes": ""
