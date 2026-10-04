@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 231,
-  "last_updated": "2026-10-04T17:00:40Z",
+  "version": 232,
+  "last_updated": "2026-10-04T17:00:48Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10711,7 +10711,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/persons.py",
       "source_ref": "BE:api/parent_portal/pickup.py::create_pickup_person",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7c",
       "depends_on": [
         "BACKEND-401",
@@ -10722,7 +10722,7 @@
         "BACKEND-108"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "未封存人數上限檢查沒有鎖學生列：同一學生兩個並發請求可能同時通過而略超過上限（軟限制，家長端操作頻率極低，接受）。\nreview-r7-b 打回：驗收標準「過大 413」沒有對應測試。create_pickup_person 以 read_validated_upload(max_bytes=PHOTO_MAX_BYTES) 限制 5 MiB，但 test_pickup_persons.py 沒有任何超過大小的案例；突變把 max_bytes 改成 PHOTO_MAX_BYTES * 10 後 tdd.run 仍全綠，表示 service 傳錯上限也測不出來（testing_conventions §1：對應不到測試的驗收標準視為未驗收）。修正方向：補一條 red case（照片大小 PHOTO_MAX_BYTES + 1 的 JPEG → 413 對應錯誤碼，pickup_persons 筆數不變、fake_storage.objects 為空），並確認剛好 PHOTO_MAX_BYTES 可以建立（或以 monkeypatch 縮小上限避免測試產生 5 MiB 資料）。",
+      "risk_notes": "未封存人數上限檢查沒有鎖學生列：同一學生兩個並發請求可能同時通過而略超過上限（軟限制，家長端操作頻率極低，接受）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/pickup/test_pickup_persons.py",
@@ -10739,9 +10739,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r7-b",
-        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試先於實作，實作前的測試修正 commit 皆為補強或修測資（4a4a184 補 withdrawn_on 以符合 ck_students_withdrawn_status、331b736 補查詢數固定、14151e6 改比對實際 FK 名稱、5c655f8 補今天 active / 昨天 expired 斷言），沒有放寬；動到的檔案 just lint / just typecheck 乾淨。家長端 IDOR：description 明載呼叫端以 get_owned_student_for_write 驗證，對應 endpoint BACKEND-445 為 Depends(get_owned_student_for_write) 且 red_cases 含 IDOR 與退班 409，符合規格。其餘驗收（有 / 無照片建立、照片路徑以 person id 為前綴、上限 409 與 details、封存者不計入、415、502 且無資料列、寫入失敗刪照片）皆有測試，突變（封存者也計入、拿掉寫入失敗清照片）會轉紅。打回原因見 risk_notes「review-r7-b 打回」。risk_notes 的軟限制判斷：description 與 domain_spec 只寫「上限」，未要求併發下的硬保證；超出的後果只是多一位常用接送人，不影響授權或核驗，接受為殘留（不打回）。若要硬限制，可在計數前以 get_student_or_404(session, student_id, for_update=True) 鎖學生列。"
+        "notes": "tdd.run 實跑 7 綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試先於實作（複審補測試 97270a5，實作未改）；動到的檔案 just lint / just typecheck 乾淨。家長端 IDOR：description 明載呼叫端以 get_owned_student_for_write 驗證，對應 endpoint BACKEND-445 為 Depends(get_owned_student_for_write) 且 red_cases 含 IDOR 與退班 409，符合規格。複審：test_create_pickup_person_photo_too_large 驗證 PHOTO_MAX_BYTES + 1 → 413 file_too_large 且無資料列、無物件，剛好 PHOTO_MAX_BYTES 可建立；突變把 max_bytes 放大 10 倍或縮成一半，新測試都轉紅。其餘驗收（有 / 無照片建立、照片路徑以 person id 為前綴、上限 409 與 details、封存者不計入、415、502 且無資料列、寫入失敗刪照片）皆有測試，突變（封存者也計入、拿掉寫入失敗清照片）會轉紅。殘留（不打回）：未封存人數上限檢查沒有鎖學生列，併發可能略超過上限（見 risk_notes）；description 與 domain_spec 只寫「上限」未要求併發硬保證，超出只多一位常用接送人、不影響授權或核驗。若要硬限制，可在計數前以 get_student_or_404(session, student_id, for_update=True) 鎖學生列。"
       }
     },
     {
