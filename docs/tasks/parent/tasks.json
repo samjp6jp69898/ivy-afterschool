@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 56,
-  "last_updated": "2026-10-04T06:34:34Z",
+  "version": 57,
+  "last_updated": "2026-10-04T06:38:19Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -751,11 +751,11 @@
     {
       "id": "PARENT-021",
       "title": "移植 M3TopAppBar 元件（標題、返回鍵、動作區）",
-      "description": "建立 `apps/web/src/parent/components/m3/M3TopAppBar.vue`（移植 ivy `FE:src/parent/components/m3/M3TopAppBar.vue`）。\n\n**介面**：\n```ts\nprops: { title: string; showBack?: boolean }\nemits: { back: [] }\nslots: leading（showBack 為 false 時顯示，例如 Logo）、actions\n```\n保留：small 版面、sticky 置頂、捲動時加 surface tint。\n去掉：medium / large variant 與 `onBack` function prop（改為 emit `back`，由 PARENT-024 決定返回行為）。\n樣式只用 PARENT-001 的 `--m3-*` 變數；觸控目標 ≥ 44×44px；有 `:focus-visible` 外框。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-m3-kit.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：有返回鍵 / 無返回鍵 + Logo / 有 actions、捲動前後。可與其他 M3 元件 task 共用同一張稿 `docs/mockups/parent-component-m3-kit.html`（`preview-tasks` 列出 PARENT-014~PARENT-023、PARENT-098、PARENT-175）。\n\n**驗收標準**：每一條對應 red_case（vitest + @vue/test-utils 真實 DOM）。",
+      "description": "建立 `apps/web/src/parent/components/m3/M3TopAppBar.vue`（移植 ivy `FE:src/parent/components/m3/M3TopAppBar.vue`）。\n\n**介面**：\n```ts\nprops: { title: string; showBack?: boolean; scrolled?: boolean /* 外部強制 scrolled 外觀；預設由元件監聽 window 捲動（scrollY > 0） */ }\nemits: { back: [] }\nslots: leading（showBack 為 false 時顯示，例如 Logo）、actions\n```\n保留：small 版面（64px、標題靠左單行省略）、sticky 置頂、捲動 > 0 時底色由 surface 換成 surface-container（150ms 過渡、不加陰影）。返回鍵 icon `arrow_back`、aria-label「返回」；showBack 為 true 時 leading slot 不渲染。\n去掉：medium / large variant 與 `onBack` function prop（改為 emit `back`，由 PARENT-024 決定返回行為）。\n樣式只用 PARENT-001 的 `--m3-*` 變數；觸控目標 ≥ 44×44px；有 `:focus-visible` 外框。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-m3-kit.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：有返回鍵 / 無返回鍵 + Logo / 有 actions、捲動前後。可與其他 M3 元件 task 共用同一張稿 `docs/mockups/parent-component-m3-kit.html`（`preview-tasks` 列出 PARENT-014~PARENT-023、PARENT-098、PARENT-175）。\n\n**驗收標準**：每一條對應 red_case（vitest + @vue/test-utils 真實 DOM）。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3TopAppBar.vue",
       "source_ref": "FE:src/parent/components/m3/M3TopAppBar.vue::props",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-001",
@@ -908,11 +908,11 @@
     {
       "id": "PARENT-025",
       "title": "移植 ParentBottomSheet 元件（v-model 開關、拖曳關閉、焦點鎖定）",
-      "description": "建立 `apps/web/src/parent/components/ParentBottomSheet.vue`：\n```ts\nprops: { modelValue: boolean; title?: string; dismissible?: boolean /* 預設 true */; fullHeight?: boolean }\nemits: { 'update:modelValue': [boolean] }\nslots: default、footer\n```\n- Teleport 到 body；scrim 點擊、Esc、標題列關閉鈕、從把手或標題列向下拖曳超過 80px（dismissible 時）→ emit `update:modelValue(false)`；dismissible=false 時都不關閉（用於接送碼只顯示一次的確認流程）。\n- 關閉鈕：dismissible 時標題列右側渲染 PARENT-016 M3IconButton（icon `close`、label「關閉」）；dismissible=false 時不渲染。在關閉鈕上按下不會開始拖曳。\n- 拖曳：只有把手與標題列可拖曳（Pointer Events），內容區不攔截拖曳手勢；下移未超過 80px 放開時回彈；往上拖不移動。dismissible=false 時拖曳只回彈、不關閉。\n- 開啟時 `role=\"dialog\"`、`aria-modal=\"true\"`、`aria-labelledby` 指向標題，焦點移入 sheet 並鎖在其中，關閉後還原到開啟前的元素；開啟期間鎖 body 捲動。\n- footer slot 固定在底部並加 `env(safe-area-inset-bottom)`。\n\n移植 ivy `FE:src/parent/components/ParentBottomSheet.vue`；**去掉** snapPoints 多段高度（改為內容自適應 + fullHeight 一個選項）、showHandle prop（固定顯示把手）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-bottom-sheet.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：一般內容 / 長內容可捲動 / fullHeight / 含 footer 按鈕 / 不可關閉模式。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/ParentBottomSheet.vue`：\n```ts\nprops: { modelValue: boolean; title?: string; dismissible?: boolean /* 預設 true */; fullHeight?: boolean }\nemits: { 'update:modelValue': [boolean] }\nslots: default、footer\n```\n- Teleport 到 body；scrim 點擊、Esc、標題列關閉鈕、從把手或標題列向下拖曳超過 80px（dismissible 時）→ emit `update:modelValue(false)`；dismissible=false 時都不關閉（用於接送碼只顯示一次的確認流程）。\n- 關閉鈕：dismissible 時標題列右側渲染 PARENT-016 M3IconButton（icon `close`、label「關閉」）；dismissible=false 時不渲染。在關閉鈕上按下不會開始拖曳。\n- 拖曳：只有把手與標題列可拖曳（Pointer Events），內容區不攔截拖曳手勢；下移未超過 80px 放開時回彈；往上拖不移動。dismissible=false 時拖曳只回彈、不關閉。\n- 開啟時 `role=\"dialog\"`、`aria-modal=\"true\"`、`aria-labelledby` 指向標題，焦點移入 sheet 並鎖在其中，關閉後還原到開啟前的元素；開啟期間鎖 body 捲動。\n- footer slot 固定在底部並加 `env(safe-area-inset-bottom)`。\n- 層級：`.sheet-layer` z-index 10（高於 M3TopAppBar 的 5、低於 M3Snackbar 的 20），接送碼 sheet 上的 snackbar 回饋才看得到。\n\n移植 ivy `FE:src/parent/components/ParentBottomSheet.vue`；**去掉** snapPoints 多段高度（改為內容自適應 + fullHeight 一個選項）、showHandle prop（固定顯示把手）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-bottom-sheet.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：一般內容 / 長內容可捲動 / fullHeight / 含 footer 按鈕 / 不可關閉模式。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/ParentBottomSheet.vue",
       "source_ref": "FE:src/parent/components/ParentBottomSheet.vue::props",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-001",
