@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 166,
-  "last_updated": "2026-10-04T16:18:40Z",
+  "version": 167,
+  "last_updated": "2026-10-04T16:18:53Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -912,7 +912,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/test_schema_drift.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "INFRA-020",
@@ -6612,7 +6612,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/recipients.py",
       "source_ref": "BE:services/notification/parent_recipients.py::gather_guardian_user_ids",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-132",
@@ -7164,7 +7164,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/preference_service.py",
       "source_ref": "BE:api/parent_portal/notifications.py::get_preferences",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-200",
@@ -8007,13 +8007,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_export.py",
       "source_ref": "BE:api/student_attendance.py::_write_class_sheet",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-301"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：公式注入前綴採 description 列的 = + - @ Tab CR（ivy SafeWorksheet 另含 | 與 %，且會先 lstrip Tab / CR / LF；本實作不 lstrip，而是對以 Tab / CR 開頭者同樣補 '）。是否要比照 ivy 加上 | 與 % 待確認。非營業日的「-」與簡碼、表頭為程式常數，不經防護。xlsx 的 XML 會把 CR 正規化為 LF，回讀時為 LF，前綴仍在。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/services/test_attendance_export.py",
@@ -9216,14 +9216,14 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/homework.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "INFRA-004",
         "BACKEND-301"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "協調者待使用者確認：ProgressPutIn.overall 不可給 null（只接受 done / auto 或不給）；HomeworkBatchCreateIn.student_ids 給空陣列 → 422（min_length=1，不給才代表整班）；ready_eta / note 給 null 代表清除。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_homework_schemas.py",
