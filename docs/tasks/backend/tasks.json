@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 205,
-  "last_updated": "2026-10-04T16:47:59Z",
+  "version": 206,
+  "last_updated": "2026-10-04T16:49:07Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5401,7 +5401,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/grade_promotion_service.py",
       "source_ref": "BE:api/students.py::bulk_graduate_students",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-133",
