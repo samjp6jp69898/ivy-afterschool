@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 135,
-  "last_updated": "2026-10-04T11:37:24Z",
+  "version": 136,
+  "last_updated": "2026-10-04T11:42:00Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1180,7 +1180,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/refresh_tokens.py",
       "source_ref": "BE:services/staff_refresh.py::issue_refresh_token",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-030",
@@ -1204,9 +1204,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。408c11a、6f07200（紅）→ 7dab27a（綠）。tdd.run 3/3 綠，三條 red_case 皆選到。raw = token_urlsafe(48)（384 bit），DB 只存 sha256 hex，測試以原生 SQL select * 確認沒有任何欄位等於 raw；staff 14 天 / parent 30 天取自 BACKEND-035 的 REFRESH_TTL；family 未給新建、給定沿用；只 flush 不 commit。created_at 取注入時鐘的偏離合理：DB CHECK expires_at > created_at，FakeClock 與 DB now() 混用會讓 CHECK 依真實時間成敗，description 已寫回。整合測試走 app_backend。"
       }
     },
     {
@@ -2405,7 +2405,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/test_permission_seed_consistency.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-070",
@@ -2430,9 +2430,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過（純測試 task）。f190209 一個 commit。tdd.run 4/4 綠，四條 red_case 皆選到；以 app_backend 讀 roles。CLERK_SPEC（18 碼）/ TUTOR_SPEC（12 碼）逐碼對照 domain_spec §3 預設授予欄一致；director = ALL − {staff:write, roles:write, students:purge}（25 碼）。突變自證（在 scratch 副本，db_session 交易內改 seed）：admin 多一碼、clerk 混入拼錯碼 'students:raed'、director 少 audit:read / 多 staff:write、clerk 少 exams:publish、tutor 多 leaves:write、tutor 重複 homework:read，7 種全部轉紅，非恆真；失敗訊息以 (seed 缺, seed 多) tuple 列出差異。"
       }
     },
     {
@@ -3711,7 +3711,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/tests/integration/test_settings_seed_consistency.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-106",
@@ -3737,9 +3737,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過（純測試 task）。feee38e 一個 commit。tdd.run 5/5 綠，五條 red_case 皆選到；以 app_backend 的 db_session 直接查表（description 已改正 owner 連線的寫法）。突變自證（scratch 副本，交易內改 seed）：刪 homework.window、多一個未註冊 key、pickup.persons 值改 11、line.liff 少 add_friend_url、line.liff is_secret 改 true、line.messaging is_secret 改 false、service_hours 週六改 open / 多 sun、pickup.window auto_expire 改 90，9 種全部轉紅，非恆真；不一致時以 {key: {db, registry}} 列出差異的 key。"
       }
     },
     {
@@ -3749,7 +3749,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/settings_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-106",
@@ -3776,9 +3776,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。e17516f、624c785（紅）→ 509ac34（綠）。tdd.run 6/6 綠，六條 red_case 皆選到。快取競態：讀快取與取世代在同一把鎖內，_load 在鎖外，回寫前再比對世代，任何 invalidate / clear 都遞增世代，所以「查詢期間被失效」的結果一律不回寫（全域世代只會讓其他 key 的同時查詢少寫一次快取，偏保守、無正確性問題）；多執行緒 （含 scheduler 執行緒）下 _cache 與 _generation 的讀寫都在鎖內。secret：先解密再 schema 驗證，解密失敗只把該欄位設 None 並記 key + 欄位名；schema 失敗只記 err['loc']，測試斷言 'garbage' / 明文 / 'bad' 都不進 log。TTL 以 monotonic 位移測 59 / 61 秒邊界。殘留（不擋，留給寫入路徑 BACKEND-109 等）：(1) invalidate_setting 必須在 commit 之後呼叫（run_after_commit），在 commit 前呼叫時其他執行緒仍可能讀到舊值並以新世代回寫 60 秒；(2) 寫入交易內若以同一 session 呼叫 get_setting，會把未 commit 的值寫進快取，交易回滾後快取仍是新值至 TTL；(3) NotificationToggles 是 RootModel[dict]，frozen 擋不住 get_setting(...).root[k] = v 這種就地修改，會污染快取與 registry default（共用實例），呼叫端只讀即可，需要時可改回傳 MappingProxyType 或深拷貝。"
       }
     },
     {
@@ -4437,7 +4437,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/students.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-007",
@@ -4463,9 +4463,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。0754101（紅）→ 9da520f（綠）。tdd.run 3/3 綠，三條 red_case 皆選到。2b57de4 的規格修正合理：school_class 已是就讀國小班級的文字欄位，安親班班級關係改名 class_；guardians 移交 BACKEND-132 四件齊全（description 指名 132 並說明原因與驗收去向、132 的 description 與驗收標準寫入、132 新增 red_case test_parent_models_student_guardians_raise、132 的 tdd.run -k test_parent_models_ 實際選到）。bytea 讀回 bytes、ck_students_id_number_pair 以 diag.constraint_name 斷言、school / class_ 以 inspect().unloaded 驗 joined。students 無 drift；model 不提供解密 property。"
       }
     },
     {
@@ -4475,7 +4475,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/parents.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-007",
@@ -4504,9 +4504,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。00c0373（紅）→ b33f86d（綠）。tdd.run 4/4 綠，四條 red_case（含自 131 移交的 student_guardians_raise）皆選到。Student.guardians lazy='raise' 未載入時拋 InvalidRequestError、selectinload 後可讀且 back_populates 指回同一個 Student 實例；同學生兩位主要聯絡人以 uq_guardians_one_primary（23505）擋下；ParentBindingCode 的 expires_at 取 DB now() 以符合 CHECK。parent_accounts / guardians / parent_binding_codes 無 drift。"
       }
     },
     {
@@ -5053,7 +5053,7 @@
       "review": {
         "status": "pass",
         "reviewer": "review-r5-backend",
-        "notes": "複審通過。打回項（\\d 接受 Unicode 數字造成 HMAC 查重繞過）已修：7eab8f2（紅）→ abd2e36（綠），依協調者裁定 normalize 先 NFKC、驗證 regex 改 [0-9] 並要求 isascii。tdd.run 15/15 綠，新增 test_id_number_normalize_nfkc_fullwidth / test_id_number_rejects_non_ascii_digits 皆選到。實測：'A12345678９'、'A１23456789'、'Ａ123456789'、'ａ123456789'、上標 'A12345678⁹'、尾端 NBSP / U+2028 皆正規化成 'A123456789' 且 HMAC 相同；'A123456٧89'、'A1234567①9'（NFKC 成 '1' 後檢查碼錯）、含零寬空白、'ı123456789'（upper 成 'I' 但檢查碼錯）皆 422。NFKC 不會引入新的繞過：被接受的值必為 ASCII 且 normalize 冪等，所以同一號碼不會有兩種 HMAC；相容字元映射成 ASCII 後代表的就是使用者宣稱的那個號碼，不會讓兩個不同的真實號碼相撞。lint / typecheck 乾淨。殘留：description 介面註解與 module docstring 的格式仍寫 \\d{8}（下方條列與程式已是 [0-9]），屬文件用詞。"
+        "notes": "複審通過。打回項（\\d 接受 Unicode 數字造成 HMAC 查重繞過）已修：7eab8f2（紅）→ abd2e36（綠），依協調者裁定 normalize 先 NFKC、驗證 regex 改 [0-9] 並要求 isascii。tdd.run 15/15 綠，新增 test_id_number_normalize_nfkc_fullwidth / test_id_number_rejects_non_ascii_digits 皆選到。實測：'A12345678９'、'A１23456789'、'Ａ123456789'、'ａ123456789'、上標 'A12345678⁹'、尾端 NBSP / U+2028 皆正規化成 'A123456789' 且 HMAC 相同；'A123456٧89'、'A1234567①9'（NFKC 成 '1' 後檢查碼錯）、含零寬空白、'ı123456789'（upper 成 'I' 但檢查碼錯）皆 422。NFKC 不會引入新的繞過：被接受的值必為 ASCII 且 normalize 冪等，所以同一號碼不會有兩種 HMAC；相容字元映射成 ASCII 後代表的就是使用者宣稱的那個號碼，不會讓兩個不同的真實號碼相撞。lint / typecheck 乾淨。殘留：description 介面註解與 module docstring 的格式仍寫 \\d{8}（下方條列與程式已是 [0-9]），屬文件用詞。 複審補記（85762e2）：description 介面註解與 module docstring 的格式已改為 [0-9]{8}，只動文件，與程式一致；上述文件用詞殘留已解除。"
       }
     },
     {
@@ -6463,7 +6463,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/notifications.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r5b",
       "depends_on": [
         "BACKEND-007",
@@ -6490,9 +6490,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-backend",
+        "notes": "通過。7ced044（紅）→ 1c2efc7（綠）。tdd.run 4/4 綠，三條 red_case 皆選到（另有 payload round-trip）。event CHECK 以 ck_notifications_event、偏好 unique 以 uq_notification_preferences_parent_event 斷言；非 naming convention 的 unique 名稱明確指定，outbox.notification joined 以 unloaded 驗證。depends_on 補 BACKEND-132 正確（FK 指向 parent_accounts）。notifications / notification_outbox / notification_preferences 無 drift。殘留：model 端 payload 的 server_default 拿掉不會轉紅（DB 預設生效），屬觀測不到的重複宣告。"
       }
     },
     {
