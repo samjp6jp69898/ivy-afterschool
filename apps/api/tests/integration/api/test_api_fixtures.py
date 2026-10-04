@@ -63,7 +63,9 @@ def test_api_fixtures_clock_and_storage_overrides(
     assert app.dependency_overrides[get_storage]() is fake_storage
 
 
-def test_api_fixtures_assert_error_helper(api_client: TestClient, assert_error: AssertError) -> None:
+def test_api_fixtures_assert_error_helper(
+    api_client: TestClient, assert_error: AssertError
+) -> None:
     response = api_client.get("/__probe/staff")
 
     assert_error(response, 401, "unauthenticated")
