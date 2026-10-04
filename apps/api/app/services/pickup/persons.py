@@ -33,7 +33,7 @@ PHOTO_BUCKET: Final[Bucket] = "pickup-person-photos"
 PHOTO_URL_SECONDS: Final = 300
 
 
-def _photo_url(storage: Storage, person: PickupPerson) -> str | None:
+def signed_photo_url(storage: Storage, person: PickupPerson) -> str | None:
     if person.photo_path is None:
         return None
     try:
@@ -50,7 +50,7 @@ def _to_out(person: PickupPerson, storage: Storage) -> PickupPersonOut:
         name=person.name,
         relation=person.relation,
         phone=person.phone,
-        photo_url=_photo_url(storage, person),
+        photo_url=signed_photo_url(storage, person),
         created_at=person.created_at,
     )
 
