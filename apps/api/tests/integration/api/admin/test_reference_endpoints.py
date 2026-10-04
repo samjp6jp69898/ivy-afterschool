@@ -123,3 +123,98 @@ def test_admin_reference_list_guard_registered(app: FastAPI) -> None:
     paths = app.openapi()["paths"]
     for resource in RESOURCES:
         assert f"/api/admin/{resource}" in paths
+
+
+_CREATE_PAYLOADS: dict[str, dict[str, object]] = {
+    "subjects": {"name": "書法"},
+    "exam-types": {"name": "月考"},
+    "schools": {"name": "仁愛國小", "short_name": "仁愛"},
+    "closed-days": {"date": "2026-10-10", "reason": "國慶日"},
+}
+
+
+@pytest.mark.parametrize("resource", RESOURCES)
+def test_admin_reference_create_success(staff_client: StaffClientFactory, resource: str) -> None:
+    client, _ = staff_client(permissions=["settings:write"])
+    payload = _CREATE_PAYLOADS[resource]
+
+    resp = client.post(f"/api/admin/{resource}", json=payload)
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert "id" in body
+    for key, value in payload.items():
+        assert body[key] == value
+    if resource == "subjects":
+        assert body["is_active"] is True
+        assert body["sort_order"] == 0
+    # 寫入後 GET 看得到
+    reader, _ = staff_client(permissions=["settings:read"])
+    listed = reader.get(f"/api/admin/{resource}").json()
+    assert body["id"] in [item["id"] for item in listed]
+
+
+@pytest.mark.parametrize("resource", RESOURCES)
+def test_admin_reference_create_422(
+    staff_client: StaffClientFactory, assert_error: AssertError, resource: str
+) -> None:
+    client, _ = staff_client(permissions=["settings:write"])
+    url = f"/api/admin/{resource}"
+    bad = {"date": "2026-13-01"} if resource == "closed-days" else {"name": ""}
+
+    assert_error(client.post(url, json=bad), 422, "validation_error")
+    extra = {**_CREATE_PAYLOADS[resource], "foo": 1}
+    assert_error(client.post(url, json=extra), 422, "validation_error")
+    assert_error(client.post(url, json={}), 422, "validation_error")
+
+
+@pytest.mark.parametrize("resource", RESOURCES)
+def test_admin_reference_create_401(
+    api_client: TestClient, assert_error: AssertError, resource: str
+) -> None:
+    resp = api_client.post(f"/api/admin/{resource}", json=_CREATE_PAYLOADS[resource])
+
+    assert_error(resp, 401, "unauthenticated")
+
+
+@pytest.mark.parametrize("resource", RESOURCES)
+@pytest.mark.parametrize("permission", ["settings:read", "students:read", "exams:read"])
+def test_admin_reference_create_403(
+    staff_client: StaffClientFactory,
+    assert_error: AssertError,
+    resource: str,
+    permission: str,
+) -> None:
+    client, _ = staff_client(permissions=[permission])
+
+    resp = client.post(f"/api/admin/{resource}", json=_CREATE_PAYLOADS[resource])
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["settings:write"]}
+
+
+def test_admin_reference_create_409(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=["settings:write"])
+
+    exam_type = client.post("/api/admin/exam-types", json={"name": "段考"})
+    subject = client.post("/api/admin/subjects", json={"name": " 數學 "})
+    first_day = client.post("/api/admin/closed-days", json={"date": "2026-10-10"})
+    second_day = client.post("/api/admin/closed-days", json={"date": "2026-10-10"})
+    school = client.post("/api/admin/schools", json={"name": "ABC國小"})
+    school_dup = client.post("/api/admin/schools", json={"name": "abc國小"})
+
+    assert_error(exam_type, 409, "exam_type_name_taken")
+    assert_error(subject, 409, "subject_name_taken")
+    assert first_day.status_code == 201
+    assert_error(second_day, 409, "closed_day_exists")
+    assert school.status_code == 201
+    assert_error(school_dup, 409, "school_name_taken")
+
+
+def test_admin_reference_create_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    paths = app.openapi()["paths"]
+    for resource in RESOURCES:
+        assert "post" in paths[f"/api/admin/{resource}"]
