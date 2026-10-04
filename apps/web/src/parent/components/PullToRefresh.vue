@@ -20,12 +20,15 @@ defineSlots<{ default?: () => unknown }>()
 const DAMPING = 0.5
 const HOLD_HEIGHT = 56
 const RING_LENGTH = 2 * Math.PI * 12
+// 超過這段距離才判定手勢方向（在瀏覽器開始捲動之前）
+const DIRECTION_SLOP = 8
 
 const rootRef = ref<HTMLElement | null>(null)
 const pullDistance = ref(0)
 const refreshing = ref(false)
 const tracking = ref(false)
 let pulling = false
+let startX = 0
 let startY = 0
 
 const armed = computed(() => !refreshing.value && pullDistance.value >= props.threshold)
@@ -49,23 +52,38 @@ function pageScrollTop(): number {
   return window.scrollY || document.scrollingElement?.scrollTop || 0
 }
 
-function reset(): void {
+function cancelGesture(): void {
   tracking.value = false
   pulling = false
-  pullDistance.value = 0
+  // 重新整理中的 56px 由 runRefresh 收回，手勢中斷不影響
+  if (!refreshing.value) pullDistance.value = 0
 }
 
 function onTouchStart(event: TouchEvent): void {
-  if (props.disabled || refreshing.value || event.touches.length !== 1) return
-  if (pageScrollTop() > 0) return
+  // 第二指按下（多指縮放等）：取消這次下拉
+  if (event.touches.length !== 1) {
+    if (tracking.value) cancelGesture()
+    return
+  }
+  if (props.disabled || refreshing.value || pageScrollTop() > 0) return
   tracking.value = true
   pulling = false
+  startX = event.touches[0]!.clientX
   startY = event.touches[0]!.clientY
 }
 
 function onTouchMove(event: TouchEvent): void {
   if (!tracking.value || event.touches.length !== 1) return
+  const dx = event.touches[0]!.clientX - startX
   const dy = event.touches[0]!.clientY - startY
+  if (!pulling) {
+    if (Math.abs(dx) < DIRECTION_SLOP && Math.abs(dy) < DIRECTION_SLOP) return
+    // 水平滑動：整個手勢交還給瀏覽器（chip 列等水平捲動）
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      cancelGesture()
+      return
+    }
+  }
   if (dy <= 0) {
     if (pulling) {
       pulling = false
@@ -75,7 +93,7 @@ function onTouchMove(event: TouchEvent): void {
   }
   // 下拉途中頁面被捲走：取消
   if (pageScrollTop() > 0) {
-    reset()
+    cancelGesture()
     return
   }
   pulling = true
@@ -83,8 +101,9 @@ function onTouchMove(event: TouchEvent): void {
   pullDistance.value = Math.min(props.threshold * 2, dy * DAMPING)
 }
 
-function onTouchEnd(): void {
-  if (!tracking.value) return
+function onTouchEnd(event: TouchEvent): void {
+  // 還有手指按著（多指）不算放開
+  if (!tracking.value || event.touches.length > 0) return
   const shouldRefresh = pulling && pullDistance.value >= props.threshold
   tracking.value = false
   pulling = false
@@ -112,7 +131,7 @@ onMounted(() => {
   el.addEventListener('touchstart', onTouchStart, { passive: true })
   el.addEventListener('touchmove', onTouchMove, { passive: false })
   el.addEventListener('touchend', onTouchEnd, { passive: true })
-  el.addEventListener('touchcancel', reset, { passive: true })
+  el.addEventListener('touchcancel', cancelGesture, { passive: true })
 })
 
 onBeforeUnmount(() => {
@@ -121,7 +140,7 @@ onBeforeUnmount(() => {
   el.removeEventListener('touchstart', onTouchStart)
   el.removeEventListener('touchmove', onTouchMove)
   el.removeEventListener('touchend', onTouchEnd)
-  el.removeEventListener('touchcancel', reset)
+  el.removeEventListener('touchcancel', cancelGesture)
 })
 </script>
 
