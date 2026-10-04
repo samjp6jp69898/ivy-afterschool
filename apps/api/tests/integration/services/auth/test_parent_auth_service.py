@@ -177,7 +177,9 @@ def test_liff_login_unknown_needs_binding(
     assert _parent_count(db_session) == count_before
     assert (
         db_session.execute(
-            select(func.count()).select_from(RefreshToken).where(RefreshToken.subject_type == "parent")
+            select(func.count())
+            .select_from(RefreshToken)
+            .where(RefreshToken.subject_type == "parent")
         ).scalar_one()
         == 0
     )
@@ -191,7 +193,9 @@ def test_liff_login_no_active_binding_needs_binding(
     make_guardian(db_session, make_student(db_session), parent=p, archived=True)
     count_before = _parent_count(db_session)
 
-    result = _login(db_session, _verifier(LineProfile(_LINE_A, "王媽媽", None)), throttles, fake_clock)
+    result = _login(
+        db_session, _verifier(LineProfile(_LINE_A, "王媽媽", None)), throttles, fake_clock
+    )
 
     assert isinstance(result, NeedsBinding)
     assert result.name_hint == "王媽媽"
