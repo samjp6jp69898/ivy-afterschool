@@ -6,11 +6,13 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.models.parents import Guardian, ParentBindingCode
-from app.services.guardian_service import list_for_student, to_guardian_out
+from app.schemas.guardians import GuardianCreateIn
+from app.services.guardian_service import create_guardian, list_for_student, to_guardian_out
 from tests.support.factories import make_guardian, make_parent, make_staff, make_student
 from tests.support.fake_clock import FakeClock
 
@@ -129,3 +131,86 @@ def test_list_guardians_to_guardian_out(db_session: Session) -> None:
     assert issued.binding.status == "code_issued"
     assert issued.binding.code_expires_at == expires
     assert (issued.id, issued.name, issued.relation) == (guardian.id, "爸爸", "father")
+
+
+def test_create_guardian_success(db_session: Session) -> None:
+    student = make_student(db_session)
+
+    out = create_guardian(
+        db_session,
+        student.id,
+        GuardianCreateIn(name="王爸爸", relation="father", phone="0912-000-123"),
+        clock=_clock(),
+    )
+
+    assert out.binding.status == "unbound"
+    assert out.is_primary is False
+    assert (out.name, out.relation, out.phone) == ("王爸爸", "father", "0912-000-123")
+    assert (out.can_pickup, out.receives_notifications) == (True, True)
+    assert out.student_id == student.id
+    stored = db_session.execute(select(Guardian).where(Guardian.id == out.id)).scalar_one()
+    assert stored.parent_account_id is None
+    assert stored.archived_at is None
+
+
+def test_create_guardian_primary_switch(db_session: Session) -> None:
+    student = make_student(db_session)
+    g1 = make_guardian(db_session, student, name="王媽媽", is_primary=True)
+    archived_primary = make_guardian(
+        db_session, student, name="已封存", relation="other", archived=True
+    )
+
+    out = create_guardian(
+        db_session,
+        student.id,
+        GuardianCreateIn(name="王爸爸", relation="father", is_primary=True),
+        clock=_clock(),
+    )
+
+    db_session.refresh(g1)
+    db_session.refresh(archived_primary)
+    assert g1.is_primary is False
+    assert out.is_primary is True
+    primaries = db_session.execute(
+        select(func.count())
+        .select_from(Guardian)
+        .where(
+            Guardian.student_id == student.id, Guardian.is_primary, Guardian.archived_at.is_(None)
+        )
+    ).scalar_one()
+    assert primaries == 1
+
+
+def test_create_guardian_non_primary_keeps_existing_primary(db_session: Session) -> None:
+    student = make_student(db_session)
+    g1 = make_guardian(db_session, student, name="王媽媽", is_primary=True)
+
+    create_guardian(
+        db_session, student.id, GuardianCreateIn(name="王爸爸", relation="father"), clock=_clock()
+    )
+
+    db_session.refresh(g1)
+    assert g1.is_primary is True
+
+
+def test_create_guardian_archived_student(db_session: Session) -> None:
+    student = make_student(db_session, archived=True)
+
+    with pytest.raises(AppError) as exc:
+        create_guardian(
+            db_session,
+            student.id,
+            GuardianCreateIn(name="王爸爸", relation="father"),
+            clock=_clock(),
+        )
+
+    assert (exc.value.status, exc.value.code) == (409, "student_archived")
+
+
+def test_create_guardian_student_not_found(db_session: Session) -> None:
+    with pytest.raises(AppError) as exc:
+        create_guardian(
+            db_session, uuid4(), GuardianCreateIn(name="王爸爸", relation="father"), clock=_clock()
+        )
+
+    assert (exc.value.status, exc.value.code) == (404, "student_not_found")
