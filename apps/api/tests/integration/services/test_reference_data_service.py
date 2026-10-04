@@ -2,11 +2,21 @@
 
 from datetime import date
 
+import pytest
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.errors import AppError
 from app.models.reference import ClosedDay, School, Subject
-from app.schemas.reference import ClosedDayOut, ReferenceListQuery
-from app.services.reference_data_service import list_items
+from app.schemas.reference import (
+    ClosedDayCreateIn,
+    ClosedDayOut,
+    NamedItemCreateIn,
+    NamedItemOut,
+    ReferenceListQuery,
+    SchoolCreateIn,
+)
+from app.services.reference_data_service import create_item, list_items
 from app.services.reference_specs import SPECS
 
 
@@ -77,3 +87,56 @@ def test_reference_list_schools_by_name(db_session: Session) -> None:
     assert names.index("仁愛國小") < names.index("新生國小")
     assert "停用國小" not in names
     assert names == sorted(names)
+
+
+def test_reference_create_subject(db_session: Session) -> None:
+    out = create_item(db_session, SPECS["subjects"], NamedItemCreateIn(name="書法"))
+
+    assert isinstance(out, NamedItemOut)
+    assert out.name == "書法"
+    assert out.is_active is True
+    assert out.sort_order == 0
+    stored = db_session.execute(select(Subject).where(Subject.id == out.id)).scalar_one()
+    assert stored.name == "書法"
+
+
+def test_reference_create_conflict(db_session: Session) -> None:
+    with pytest.raises(AppError) as subject:
+        create_item(db_session, SPECS["subjects"], NamedItemCreateIn(name="數學"))
+    assert (subject.value.status, subject.value.code) == (409, "subject_name_taken")
+
+    create_item(db_session, SPECS["schools"], SchoolCreateIn(name="ABC國小"))
+    with pytest.raises(AppError) as school:
+        create_item(db_session, SPECS["schools"], SchoolCreateIn(name=" abc國小 "))
+    assert (school.value.status, school.value.code) == (409, "school_name_taken")
+
+    # savepoint 已 rollback：session 仍可用，只有第一筆
+    count = db_session.execute(
+        select(func.count()).select_from(School).where(func.lower(School.name) == "abc國小")
+    ).scalar_one()
+    assert count == 1
+
+
+def test_reference_create_exam_type_conflict(db_session: Session) -> None:
+    create_item(db_session, SPECS["exam-types"], NamedItemCreateIn(name="隨堂小考X"))
+
+    with pytest.raises(AppError) as exc:
+        create_item(db_session, SPECS["exam-types"], NamedItemCreateIn(name="隨堂小考x"))
+
+    assert exc.value.code == "exam_type_name_taken"
+
+
+def test_reference_create_closed_day_conflict(db_session: Session) -> None:
+    out = create_item(
+        db_session,
+        SPECS["closed-days"],
+        ClosedDayCreateIn(date=date(2026, 10, 10), reason="國慶日"),
+    )
+    assert isinstance(out, ClosedDayOut)
+    assert out.date == date(2026, 10, 10)
+    assert out.reason == "國慶日"
+
+    with pytest.raises(AppError) as exc:
+        create_item(db_session, SPECS["closed-days"], ClosedDayCreateIn(date=date(2026, 10, 10)))
+
+    assert (exc.value.status, exc.value.code) == (409, "closed_day_exists")
