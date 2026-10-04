@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 109,
-  "last_updated": "2026-10-04T07:48:41Z",
+  "version": 110,
+  "last_updated": "2026-10-04T07:49:45Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1926,7 +1926,7 @@
       "granularity_unit": "script",
       "target_path": "apps/web/scripts/check_parent_bundle.spec.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r5",
       "depends_on": [
         "INFRA-050"
@@ -1947,9 +1947,9 @@
         "notes": "另跑：just web-lint 指定 vite.config.ts 與 spec；vite build 輸出檢查無缺副檔名警告。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-infra",
+        "notes": "通過。2 條 red_case 都有同名測試，`just web-test scripts/check_parent_bundle.spec.ts -t \"parent module graph\"` 12 passed。TDD 順序：80ff2bd（測試）→ 44ca2a5（實作）。在舊 fixture 下，後台沒有引入 element-plus，上一輪已實測 element-plus 被併進 parent entry chunk，所以兩條新斷言在測試 commit 時確實是紅燈。shared 案例現在逐筆斷言：違規所在 chunk 的 isEntry 為 false、不是 parent entry、chain 從 parent entry 開始，而且迴圈前有 length > 0 的檢查，不是恆真。vite.config.ts 改成引入 `./build/parentModuleGraph.ts`，tsconfig.node.json 已開 allowImportingTsExtensions + noEmit，`vue-tsc -p tsconfig.node.json` 乾淨。對 apps/web 實際 vite build：沒有任何警告，dist/index.html 與 dist/parent/index.html 都有產生，.vite 底下只剩 parent-module-graph.json，腳本 exit 0（2 個 chunk、6 個模組）。移除 build.manifest 前已確認沒有讀取者：git grep 全 repo，Dockerfile、nginx、e2e、ci.yml、e2e.yml、scripts、apps/api 都沒有程式讀 dist/.vite/manifest.json，只剩註解與文件提到。INFRA-005 的 description 與 tdd.notes 只記錄最終狀態（不開 build.manifest），它的 tdd.run 是空的，驗收指令在 notes：改動相關的 vite build 產物檢查與 `just web-lint src/main.ts src/parent/main.ts` 都通過。eslint（vite.config.ts、spec）乾淨。殘留（文字層面，觀測不到行為差異）：apps/web/Dockerfile 與 scripts/tests/test_deploy_configs.py 的註解，以及 INFRA-050 description 的「與 manifest 同層」「manifest 與模組圖不對外提供」，仍提到 .vite 底下的 manifest，但現在 .vite 只有模組圖；下次動到這些檔案時順手改掉即可。"
       }
     }
   ]
