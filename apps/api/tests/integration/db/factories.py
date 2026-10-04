@@ -227,3 +227,17 @@ def make_parent_binding_codes(conn: psycopg.Connection[Any], **overrides: Any) -
         "created_by": overrides.get("created_by") or make_staff_users(conn)["id"],
     }
     return insert_row(conn, "public.parent_binding_codes", **{**defaults, **overrides})
+
+
+def make_student_leave_attachments(
+    conn: psycopg.Connection[Any], **overrides: Any
+) -> dict[str, Any]:
+    """未指定 leave_id 時另建一筆請假；storage_path 為 `<leave_id>/<uuid4 hex>.pdf`。"""
+    leave_id = overrides.get("leave_id") or make_student_leaves(conn)["id"]
+    defaults = {
+        "leave_id": leave_id,
+        "storage_path": f"{leave_id}/{uuid4().hex}.pdf",
+        "mime_type": "application/pdf",
+        "size_bytes": 204800,
+    }
+    return insert_row(conn, "public.student_leave_attachments", **{**defaults, **overrides})
