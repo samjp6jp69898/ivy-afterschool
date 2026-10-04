@@ -62,22 +62,28 @@ describe('parent module graph', () => {
     expect(findViolations(graph)).toEqual([])
   }, BUILD_TIMEOUT)
 
+  it('shared fixture admin imports element-plus', () => {
+    const admin = readFileSync(join(FIXTURES, 'shared-element-plus/src/main.ts'), 'utf8')
+
+    expect(admin).toMatch(/from 'element-plus'|import 'element-plus'/)
+  })
+
   it('flags element-plus in shared chunk', async () => {
     const graph = await graphOf('shared-element-plus')
 
     const violations = findViolations(graph)
     const elementPlus = violations.filter((v) => v.module.includes('node_modules/element-plus/'))
     expect(elementPlus.length).toBeGreaterThan(0)
-    // 共用 chunk 與 parent entry chunk 是不同檔案，chunk 鏈至少含 entry 與違規所在 chunk
-    const shared = graph.find((c) => c.moduleIds.includes('src/stores/auth.ts'))
-    expect(shared).toBeDefined()
-    expect(violations.some((v) => v.module === 'src/stores/auth.ts')).toBe(true)
+    const parentEntry = graph.find((c) => c.facadeModuleId === 'parent/index.html')
     for (const v of elementPlus) {
-      expect(v.chain[0]).toBe(
-        graph.find((c) => c.facadeModuleId === 'parent/index.html')?.fileName,
-      )
+      // 後台與家長都引入 → 落在共用 chunk，不是 parent entry chunk，也不是任何 entry
+      const owner = graph.find((c) => c.fileName === v.chunk)
+      expect(owner?.isEntry).toBe(false)
+      expect(v.chunk).not.toBe(parentEntry?.fileName)
+      expect(v.chain[0]).toBe(parentEntry?.fileName)
       expect(v.chain.at(-1)).toBe(v.chunk)
     }
+    expect(violations.some((v) => v.module === 'src/stores/auth.ts')).toBe(true)
   }, BUILD_TIMEOUT)
 
   it('flags admin view as shared chunk', async () => {
