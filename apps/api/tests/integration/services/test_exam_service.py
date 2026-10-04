@@ -5,7 +5,7 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
@@ -225,3 +225,33 @@ def test_child_exam_detail_hidden(db_session: Session) -> None:
 
     assert errors[0] == (404, "exam_not_found", errors[0][2])
     assert errors[0] == errors[1] == errors[2]
+
+
+def test_student_exam_history_query_count_is_constant(db_session: Session) -> None:
+    chinese = _subject(db_session, "國語")
+    ming = make_student(db_session, name="王小明")
+
+    def add_exam() -> None:
+        exam = _exam_with_subjects(db_session, "國語", "數學")
+        make_exam_score(db_session, exam, ming, chinese)
+        db_session.expire_all()
+
+    def count_queries() -> int:
+        statements: list[str] = []
+
+        def record(_conn: object, _cur: object, statement: str, *_args: object) -> None:
+            statements.append(statement)
+
+        engine = db_session.get_bind()
+        event.listen(engine, "before_cursor_execute", record)
+        try:
+            get_student_exam_history(db_session, ming.id)
+        finally:
+            event.remove(engine, "before_cursor_execute", record)
+        return len(statements)
+
+    add_exam()
+    one_exam = count_queries()
+    for _ in range(4):
+        add_exam()
+    assert count_queries() == one_exam
