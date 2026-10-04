@@ -12,6 +12,7 @@ import signal
 import socket
 import subprocess
 import sys
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
@@ -155,3 +156,67 @@ def test_dev_down_rejects_unknown_flag(dev_down: Script) -> None:
 
     assert result.returncode == 1
     assert "用法" in result.stderr
+
+
+def _port_open(port: int) -> bool:
+    try:
+        socket.create_connection(("127.0.0.1", port), timeout=1).close()
+    except OSError:
+        return False
+    return True
+
+
+def _wait_gone(pid: int, seconds: float = 5) -> bool:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if not _alive(pid):
+            return True
+        time.sleep(0.1)
+    return not _alive(pid)
+
+
+def test_dev_down_stops_child_behind_non_exec_wrapper(
+    dev_up: Script, dev_down: Script, env: dict[str, str | None], tmp_path: Path
+) -> None:
+    # 與 just api（bash → uv → uvicorn）同型：記錄的 pid 是包裝 shell，監聽 port 的是它的子行程
+    port = int(env["DEV_UP_API_PORT"] or 0)
+    child_pid_file = tmp_path / "child.pid"
+    wrapper = tmp_path / "wrapper.sh"
+    wrapper.write_text(
+        f"#!/bin/sh\n{shlex.quote(sys.executable)} -m http.server $1 --bind 127.0.0.1 &\n"
+        "echo $! > $2\nwait\n",
+        encoding="utf-8",
+    )
+    env["DEV_UP_API_CMD"] = f"sh {wrapper} {port} {child_pid_file}"
+    up = dev_up()
+    assert up.returncode == 0, up.stderr
+    child_pid = int(child_pid_file.read_text(encoding="utf-8").strip())
+    assert _alive(child_pid)
+    assert _port_open(port)
+
+    result = dev_down()
+
+    assert result.returncode == 0, result.stderr
+    assert _wait_gone(child_pid)
+    assert not _port_open(port)
+
+
+def test_dev_down_reused_pid_leaves_process_group_alone(dev_down: Script, root: Path) -> None:
+    leader = subprocess.Popen(["sleep", "60"], process_group=0)  # noqa: S607
+    member = subprocess.Popen(["sleep", "60"], process_group=leader.pid)  # noqa: S607
+    try:
+        run_dir = root / "var" / "run"
+        run_dir.mkdir(parents=True)
+        (run_dir / "api.pid").write_text(f"{leader.pid}\n", encoding="utf-8")
+        (run_dir / "api.cmd").write_text("just api", encoding="utf-8")
+
+        result = dev_down()
+
+        assert result.returncode == 0, result.stderr
+        time.sleep(0.5)
+        assert leader.poll() is None
+        assert member.poll() is None
+    finally:
+        for proc in (leader, member):
+            proc.kill()
+            proc.wait()
