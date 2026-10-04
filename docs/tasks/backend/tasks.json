@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 167,
-  "last_updated": "2026-10-04T16:18:53Z",
+  "version": 168,
+  "last_updated": "2026-10-04T16:20:02Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -6247,7 +6247,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_scope.py",
       "source_ref": "BE:api/parent_portal/_shared.py::_assert_student_owned",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-179",
