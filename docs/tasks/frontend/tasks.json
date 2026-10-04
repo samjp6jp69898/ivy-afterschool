@@ -1,6 +1,6 @@
 {
   "area": "frontend",
-  "version": 78,
+  "version": 79,
   "last_updated": "2026-10-05",
   "tasks": [
     {
@@ -1615,7 +1615,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/auditLogs.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r7",
       "depends_on": [
         "FRONTEND-020",
@@ -1637,9 +1637,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-fe",
+        "notes": "2 條 red_case 皆有對應測試且斷言具體（params 原樣傳遞、items[0].after 深等於、422 reject ApiError code=validation_error）；just web-test 實跑 2/2 綠；lint 無問題；commit 1b0ce02(test) 先於 f8374f5(impl)；型別與 BACKEND-105 AuditLogOut/AuditLogQuery 一致（actor_id/actor_name/entity_*/before/after/ip/user_agent 皆 nullable，ActorType 四值相符）。殘留：actor_id 後端為 UUID、前端以 string 表示（符合慣例）；測試 mock 回應未含完整 AuditLog 欄位（風格）。"
       }
     },
     {
