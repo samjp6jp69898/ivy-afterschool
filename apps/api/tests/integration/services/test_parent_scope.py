@@ -4,6 +4,7 @@ domain_spec M3：``guardians.parent_account_id = 自己`` 且 guardian / student
 仍可見；每次呼叫都查 DB。這是家長端 IDOR 防護（BACKEND-180）的根基。
 """
 
+from datetime import date
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -28,8 +29,12 @@ def test_parent_student_ids_basic(db_session: Session) -> None:
 
 def test_parent_student_ids_withdrawn_visible(db_session: Session) -> None:
     p = make_parent(db_session)
-    ming = make_student(db_session, name="王小明", status="withdrawn")
+    ming = make_student(db_session, name="王小明")
     make_guardian(db_session, ming, parent=p)
+    # DB CHECK：withdrawn 必須有 withdrawn_on
+    ming.status = "withdrawn"
+    ming.withdrawn_on = date(2026, 7, 31)
+    db_session.flush()
 
     assert get_parent_student_ids(db_session, p.id) == [ming.id]
 
@@ -48,12 +53,15 @@ def test_parent_student_ids_isolation(db_session: Session) -> None:
 
 
 def test_parent_student_ids_ordered_and_distinct(db_session: Session) -> None:
-    """同一學生兩位監護人都綁同一家長時只回一次；依姓名、student_no 排序。"""
+    """同一學生有舊的（已封存）與現行的綁定時只回一次；依姓名、student_no 排序。
+
+    同一家長對同一學生的未封存綁定由 DB partial unique index 擋，重複只可能來自封存列。
+    """
     p = make_parent(db_session)
     b1 = make_student(db_session, name="李小兵", student_no="S-ORD-002")
     b0 = make_student(db_session, name="李小兵", student_no="S-ORD-001")
     a = make_student(db_session, name="丁小安", student_no="S-ORD-009")
-    make_guardian(db_session, b1, parent=p, name="李爸爸", relation="father")
+    make_guardian(db_session, b1, parent=p, name="李爸爸", relation="father", archived=True)
     make_guardian(db_session, b1, parent=p, name="李媽媽", relation="mother")
     make_guardian(db_session, b0, parent=p)
     make_guardian(db_session, a, parent=p)
