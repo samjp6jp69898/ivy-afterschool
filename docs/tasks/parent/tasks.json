@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 63,
-  "last_updated": "2026-10-04T11:09:04Z",
+  "version": 64,
+  "last_updated": "2026-10-04T11:27:37Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -951,7 +951,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/ConfirmDialog.vue",
       "source_ref": "FE:src/parent/components/ConfirmDialog.vue::defineEmits",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-001",
@@ -959,7 +959,7 @@
         "INFRA-012"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "[review-r5-parent 打回] (1) 對話框疊在 sheet 上、同一 tick 一起關閉時焦點遺失：頁面按鈕開 sheet → sheet 內開 ConfirmDialog → 呼叫端同一 tick 設 sheet=false、dialog=false。ConfirmDialog 宣告在 sheet 之後（或放在 sheet 的 slot 內，兩者都是常見寫法）時，sheet 的 watcher 先跑：sheet 移出堆疊並把焦點還原到頁面按鈕 → 仍在堆疊頂端的 dialog 以 focusin 把焦點拉回自己的取消鈕 → dialog 再把焦點還原到 sheet 內的按鈕 → 兩者移除後焦點落到 body（vitest 實測；ConfirmDialog 宣告在 sheet 之前時正確回到頁面按鈕）。違反「關閉後焦點回到開啟前的元素」，而稿中正是以「接送碼 sheet 上的確認對話框」為疊加情境。要求：修正後兩種宣告順序都回到頁面按鈕，並補「sheet + dialog 同 tick 關閉、dialog 宣告在後」的測試；修正若動到 ParentBottomSheet / overlayStack，PARENT-025 與 overlayStack 的 spec 須維持全綠。 (2) ConfirmDialog 自身的 isTopOverlay 檢查沒有測試守住（拿掉不會紅）。sheet + dialog 的實際情境中 dialog 永遠在頂端，構造不出錯誤行為，但兩個 ConfirmDialog 疊開（或 sheet 開在 dialog 之上）時拿掉檢查會讓 Esc 一次取消兩層；請補「兩個 ConfirmDialog 疊開，Esc 只對上層 emit cancel」的測試。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/components/ConfirmDialog.spec.ts",
@@ -978,9 +978,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r5-parent",
+        "notes": "tdd.run 15/15 綠，六條 red_case 皆選到。web-lint 對元件、spec 與 overlayStack 皆 exit 0；測試 commit 先於實作 commit。稿 decisions 其餘各條一致（surface-container-high、28px、寬 −48 / 280–400、headline-small 不截斷、pre-line、text / filled 按鈕、destructive error 底、wrap-reverse 堆疊、loading 鎖取消 / Esc / scrim、z-index 15、200 / 150ms 動畫、不自行關閉）。overlayStack 重構（274aa24）未造成 PARENT-025 回歸：sheet spec 24/24 綠，交錯開關 overflow 還原、焦點鎖、多層 Esc 皆仍成立；sheet + dialog 疊加時 Esc 只取消 dialog、dialog 關閉後 body 仍鎖、焦點回 sheet。打回兩項見 risk_notes。殘留（不擋）：open 當下若 loading 已為 true，取消鈕原生 disabled 無法聚焦，初始焦點留在背景元素（之後 Tab / focusin 會拉回）。"
       }
     },
     {
@@ -1075,7 +1075,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/ParentEmptyState.vue",
       "source_ref": "FE:src/components/common/EmptyState.vue::props",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-001",
@@ -1099,9 +1099,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-parent",
+        "notes": "tdd.run 6/6 綠，兩條 red_case 皆選到。web-lint 對元件、spec 與 overlayStack 皆 exit 0；測試 commit 先於實作 commit。稿 decisions 一致：48px 純圖示、empty outline 色 / error 色只用在圖示、error role=alert、標題用 <p>、tonal 按鈕（error 帶 refresh）、無 loading。殘留：標題 max-width 320px 稿中未定（只定說明 280px），不影響行為。"
       }
     },
     {
@@ -1207,7 +1207,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/bind/BindCodeErrorNotice.vue",
       "source_ref": "FE:src/parent/views/BindView.vue::needsNewCode",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-001",
@@ -1236,9 +1236,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-parent",
+        "notes": "tdd.run 16/16 綠，七條 red_case 皆選到。web-lint 對元件、spec 與 overlayStack 皆 exit 0；測試 commit 先於實作 commit。對照表、色調、icon、按鈕不在 alert 內、聯絡條件與主號撥號（#／轉／分機／ext／x 之前、只留數字與開頭 +）都與 description、稿一致。<a> 自套 tonal 外觀合理（description 已寫 tonal 按鈕且為 <a href=\"tel:\">，不需另寫回）。殘留：TABLE 以一般物件查表，code 為 \"constructor\" / \"toString\" 這類原型屬性名時會被當成已知碼渲染空的「下一步」（後端不會回這種 code）；orgPhone 只有分機（例如 \"#12\"）時 href 為 \"tel:\"。"
       }
     },
     {
@@ -1335,7 +1335,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/AddFriendCard.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-001",
@@ -1359,9 +1359,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-parent",
+        "notes": "tdd.run 9/9 綠，兩條 red_case 皆選到（另驗 http://、前置空白、大小寫錯誤的 https）。web-lint 對元件、spec 與 overlayStack 皆 exit 0；測試 commit 先於實作 commit。稿 decisions 一致：M3Card outlined、primary-container 圓底 chat 圖示 aria-hidden、<a target=_blank rel=\"noopener noreferrer\">、48px tonal 外觀、:focus-visible 2px primary、不呼叫 getFriendship。<a> 自套 tonal 外觀合理（description 已寫 tonal 樣式 <a>，不需寫回）。"
       }
     },
     {
@@ -1983,7 +1983,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/ArrivalTimePicker.vue",
       "source_ref": "FE:src/parent/views/PickupNoticeView.vue::selectPreset",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r5",
       "depends_on": [
         "FRONTEND-003",
@@ -2013,9 +2013,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-parent",
+        "notes": "tdd.run 13/13 綠，八條 red_case 皆選到。web-lint 對元件、spec 與 overlayStack 皆 exit 0；測試 commit 先於實作 commit。換算（秒數進位）、跨午夜停用與回到不指定、自選預填 / 早於現在錯誤 / 清空 emit null、注入 now 不計時、未注入每 60 秒重算且 unmount 清除（getTimerCount 0）皆有測試。初值非 null 時初始化為「自選時間」合理（PARENT-097 重開表單帶回值時需要），但屬可觀測行為，建議寫回 description。殘留：計時器從 mount 起每 60 秒觸發、未對齊整分，換算時刻最多落後約 1 分鐘；進位只看秒數不看毫秒；初值為已過去的時間時畫面顯示錯誤但不會主動 emit null（父層仍持舊值，送出後由後端判斷）。"
       }
     },
     {
@@ -2117,7 +2117,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/PickupPersonForm.vue",
       "source_ref": "FE:src/parent/components/pickup/PickupPersonForm.vue::onFileChange",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-015",
@@ -2144,9 +2144,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-parent",
+        "notes": "tdd.run 14/14 綠，六條 red_case 皆選到。web-lint 對元件、spec 與 overlayStack 皆 exit 0；測試 commit 先於實作 commit。電話正規化與驗證、5 MB 上限保留舊照片、預覽 URL 在更換 / 移除 / unmount 時 revoke（測試以 stub URL 斷言）、無法解碼時顯示「無法預覽」仍送出、submitting 時全欄位停用與儲存 aria-disabled 皆與稿一致。file input 選後清空 value 已在 description（「file input 清空技巧」）與稿中，不需寫回。殘留：關係 radiogroup 沒有方向鍵移動與 roving tabindex（九顆 chip 都在 Tab 序列中），ARIA radio 慣例不完整。"
       }
     },
     {
@@ -2191,7 +2191,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/PickupCodeCard.vue",
       "source_ref": "FE:src/parent/components/pickup/PickupCodeCard.vue::copyCode",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r5",
       "depends_on": [
         "FRONTEND-003",
@@ -2217,9 +2217,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r5-parent",
+        "notes": "tdd.run 8/8 綠，四條 red_case 皆選到。web-lint 對元件、spec 與 overlayStack 皆 exit 0；測試 commit 先於實作 commit。接送碼只存在 props：元件內無 storage / console / Pinia 寫入（grep 與測試 spy setItem、console.log 皆確認）；snackbar 只帶固定文案不含碼；done 只 emit，清空由父層（PARENT-104）負責。複製成功 2 秒回復且連按重計時、失敗為一般 tone、unmount 清計時器、每位一個 span 且第 3 位後加距皆與稿一致。殘留：writeText 尚未 resolve 時元件已卸載，resolve 後仍會設 2 秒計時器並顯示「已複製接送碼」（無害）。"
       }
     },
     {
