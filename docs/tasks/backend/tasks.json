@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 101,
-  "last_updated": "2026-10-04T04:57:52Z",
+  "version": 102,
+  "last_updated": "2026-10-04T04:59:23Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -127,13 +127,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/logging.py",
       "source_ref": "BE:utils/request_logging.py::RequestLoggingMiddleware",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-001"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "exc_info 的 traceback 文字未經遮罩（review-r4-be 殘留，不擋）；未處理例外的 500 回應由 ServerErrorMiddleware 產生、不帶 X-Request-ID，由 BACKEND-020 處理。",
+      "risk_notes": "exc_info 的 traceback 文字未經遮罩（review-r4-be 殘留，不擋）；未處理例外的 500 回應由 ServerErrorMiddleware 產生、不帶 X-Request-ID，由 BACKEND-020 處理。\nmsg 不是字串時（例如直接 logger.info(dict)）RedactingFilter 不遮罩，dict 內的秘密會原樣輸出（review-r4-be 殘留，不擋）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/core/test_logging.py",
@@ -156,9 +156,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r4-be",
-        "notes": "打回。tdd.run 9 passed（collect-only 帶 / 不帶 -k 皆 9 條，6 條 red_case 全選到），測試 commit bcd3ac6 先於實作 55b7d5e，lint / typecheck 乾淨；request id、access log 不含 query string、/api/health 不記、production JSON 皆正確。偏離判定：停用 uvicorn.access 成立（否則 production 會記含 query string 的完整 URL）；測試排除 httpx 測試客戶端自己的 URL log 成立（那是 client 端 logger，不是被測對象）；websocket 只設 request id 不記 access log 行為合理，但 description 寫法未明示，修正時順手把這句寫進 description。打回原因：RedactingFilter 對 description 列出的敏感 key 可構造出明文外洩的反例（見 risk_notes 新增項，探針實測）。殘留（不擋）：未處理例外的 500 回應由 Starlette ServerErrorMiddleware 產生、位於所有 user middleware 外層，不會帶 X-Request-ID（實測 BACKEND-003 的 500 回應無此 header），單靠本 middleware 無法修，建議 BACKEND-020 或 BACKEND-003 的 500 handler 從 request.state.request_id 補 header；exc_info 的 traceback 文字未遮罩；入站 X-Request-ID 用 re.match + '$'（尾端換行可過，但 HTTP 解析層不會送進來），可改 fullmatch。"
+        "notes": "複審通過（只核對第一次打回的三項）。紅燈測試 c3c23ad 先於修正 7e931c0；tdd.run 13 passed，collect-only 帶 / 不帶 -k 皆 13 條，新增 4 條 red_case 全選到；logging.py 與測試檔 lint / typecheck 乾淨。以原反例探針重驗：(1) namedtuple 與 password dict 並列 → PW4 已遮，例外退路改為 args=None 加上 ' args=***'（'bad %d' 配 'x' 實測輸出 'bad %d args=***'），fail-closed 成立；(2) 'authorization=Bearer T5'、'Authorization: Bearer T6' 整段遮成 ***，'GET /cb?code=ABC123&state=s status=302' 只遮 code 的值、保留 status=302；(3) [('authorization','Bearer T3')]、ASGI 的 [(b'cookie', b'sid=T7')]、[(b'authorization', ...)] 第二元素都遮成 ***，非敏感 pair（accept、content-type）原樣保留。過度遮罩檢查：status_code=200、error_code、barcode、unicode、zipcode、'12:30:00'、中文姓名清單都不遮；20000 個空白的長行 regex 在 10ms 內完成，沒有回溯爆炸。第一輪通過的案例（dict、JSON、巢狀 list）仍正確。X-Request-ID 已改 fullmatch，description 已補 websocket 行為。殘留（不擋）：key=value / key: value 的值取到行尾，'token=abc 之後的文字' 會把後面的一般文字一起遮掉，'http status code: 500' 這類敘述句也會被遮（只損失資訊，不洩漏）；args 本身剛好是 ('token', 'abc') 這種二元組時會被當成 header pair 遮掉（偏安全）；msg 不是字串時（例如直接 logger.info({'password': ...})）filter 不處理（第一輪漏列，已寫入 risk_notes）；traceback 未遮罩；500 回應不帶 X-Request-ID 已移交 BACKEND-020。"
       }
     },
     {
