@@ -7,7 +7,8 @@
 - 列不存在 / value 不通過 schema → 記 log 後回 registry default，一筆壞資料不讓功能全掛。
 - secret 欄位在 DB 存 ``encrypt_token`` 字串，讀取時解密成明文放進回傳的 model（只給後端內部
   使用）；解密失敗該欄位視為 None。log 只記 key 與欄位名，不記值。
-- 回傳的 model 為 frozen 實例（registry 的 schema 皆 frozen），呼叫端不可修改。
+- 回傳的 model 為 frozen 實例（registry 的 schema 皆 frozen），且一律是 deep copy：RootModel
+  （NotificationToggles）的內層 dict 擋不住就地修改，回傳副本讓呼叫端改不到快取與 registry 預設值。
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ def get_setting[M: BaseModel](session: Session, key: SettingKey[M]) -> M:
     with _lock:
         cached = _cache.get(key.key)
         if cached is not None and cached[1] > now:
-            return cached[0]  # type: ignore[return-value]
+            return cached[0].model_copy(deep=True)  # type: ignore[return-value]
         generation = _generation
 
     value = _load(session, key)
@@ -48,7 +49,7 @@ def get_setting[M: BaseModel](session: Session, key: SettingKey[M]) -> M:
     with _lock:
         if generation == _generation:
             _cache[key.key] = (value, time.monotonic() + SETTINGS_CACHE_TTL_SECONDS)
-    return value
+    return value.model_copy(deep=True)
 
 
 def invalidate_setting(key: str) -> None:
