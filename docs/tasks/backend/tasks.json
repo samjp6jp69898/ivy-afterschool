@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 197,
-  "last_updated": "2026-10-04T16:43:54Z",
+  "version": 198,
+  "last_updated": "2026-10-04T16:44:48Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -6765,7 +6765,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/dispatcher.py",
       "source_ref": "BE:services/notification/retry_scheduler.py::tick_line_retry",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-200",
@@ -6792,9 +6792,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。5 條 red_case 對應（另加測重試後成功、錯誤截 2000 字與無錯誤訊息補 unknown_error、limit），tdd.run 7 passed；lint / typecheck 乾淨；commit 44eac2e（測試 + FakeLineMessagingClient）先於 740b258。撿取 for update skip locked（notification 為 lazy='joined'，以 of=NotificationOutbox 只鎖 outbox 列）、ids=[] 不處理、next_attempt_at 未到不處理；退避 30s / 2m / 10m / 30m、第 5 次失敗 dead；不可重試 dead；家長不存在 / 停用 / 收件者非家長 dead parent_inactive 且不呼叫 LINE；line_client None dead line_not_configured 且 attempts 不加；sent 清 last_error；retry_key = outbox id。並發：測試以 committing session + 兩條 app_backend 連線 + Barrier，持鎖者卡在 push 期間另一條已 skip 完成，FakeLineMessagingClient 合計 1 次，列 attempts == 1。log 只記 outbox id / attempts / retryable，LINE client 的 log 只記 status / retry_key，不含 token 與訊息內容。只 flush 不 commit。殘留（不擋）：(1) 推送在持有 row lock 的交易內進行（description 的設計，risk_notes 已記最壞 250 秒）；(2) notification.event 不是合法 Event 時 _text_for 的 Event(...) 會拋 ValueError 讓整批回滾，不會只 dead 該列（event 由 BACKEND-203 寫入、有 DB CHECK，實務到不了）；(3) BACKOFF 第 5 項（2h）依 description 的 MAX_ATTEMPTS=5 永遠用不到；(4) BACKEND-209 risk_notes 的 client 無 close 是呼叫端（209）的事，208 只接收傳入的 client。"
       }
     },
     {
@@ -7385,7 +7385,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/api/ws/common.py",
       "source_ref": "BE:utils/ws_hub.py::run_ws_connection",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-047",
@@ -7412,9 +7412,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-a",
+        "notes": "pass。5 條 red_case 對應（另加測 client 斷線後 run_ws_loop 正常結束且重驗計時器停止、家長 cookie 上員工 WS / 員工 cookie 上家長 WS 皆 4401、revalidate 拋例外視為失敗 4401、合法訊息重設連續錯誤計數），tdd.run 6 passed；lint / typecheck 乾淨；commit 2fc65f5 先於 737e40d（實作 commit 把「client 斷線」測試從 TestClient 改成替身 WebSocket 並加強斷言：TestClient 離開 context 會直接取消 app task，觀察不到正常結束，改法合理且斷言更強）。ws_load_* 以 with open_session() 開短 session、用完即關、path=None 讓 must_change_password 走 403 → 4403；close_code_for 401 → 4401、403 → 4403（與 BACKEND-019 的 WS_CLOSE_ORIGIN_FORBIDDEN 同值）；Origin 檢查由 BACKEND-019 middleware 在握手前完成。run_ws_loop：reviewer 另以替身 WS 驗證重驗失敗先 close 4401 再取消收訊 scope、迴圈不拋例外；receive_scope 只包收訊迴圈、子任務取消它而非 task group 的 scope，CancelledError 不外漏。對「協調者待使用者確認」的判斷：run_in_thread（anyio.to_thread.run_sync 包裝）、close_code_for、open_session（測試 monkeypatch 的接縫）三個描述外的公開 API 合理且必要——description 要求 DB 存取不阻塞 event loop 但 ws_load_* 簽章是同步的，只能由 endpoint 在 thread 內呼叫；建議使用者核可後把三者的簽章寫進 225 description，226 / 227 以 `await run_in_thread(ws_load_staff, ws, clock=clock)` 與 close_code_for 為準。殘留（不擋，226 / 227 實作時要知道）：(1) on_message 內拋出的例外會以 ExceptionGroup（anyio task group）往外拋，endpoint 若要以 close code 回應業務錯誤，須在 on_message 內自行 try / except 或用 except*；(2) run_ws_loop 不做 server 端 ping，閒置連線的存活偵測交給 60 秒重驗；(3) close_code_for 對非 401 / 403 的 AppError 回 4400。"
       }
     },
     {
