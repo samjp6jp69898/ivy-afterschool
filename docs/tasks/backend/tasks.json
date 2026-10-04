@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 189,
-  "last_updated": "2026-10-04T16:37:58Z",
+  "version": 190,
+  "last_updated": "2026-10-04T16:38:24Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -786,8 +786,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/health.py",
       "source_ref": "BE:api/health.py::readiness",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-020",
         "BACKEND-005",
@@ -1408,8 +1408,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/auth.py",
       "source_ref": "BE:api/auth.py::login",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-041",
         "BACKEND-039",
@@ -2256,8 +2256,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/me.py",
       "source_ref": "BE:api/parent_portal/profile.py::get_me",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-063",
         "BACKEND-062",
@@ -2554,8 +2554,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/rbac_guards.py",
       "source_ref": "BE:api/permissions_admin.py::_assert_roles_manage_retained",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-074",
         "BACKEND-030",
@@ -2660,8 +2660,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/role_service.py",
       "source_ref": "BE:api/permissions_admin.py::create_role",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-077",
         "BACKEND-074",
@@ -2772,8 +2772,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/roles.py",
       "source_ref": "BE:api/permissions_admin.py::_role_query",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-077",
         "BACKEND-073",
@@ -3630,8 +3630,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/audit_logs.py",
       "source_ref": "BE:api/audit.py::get_audit_logs",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-103",
         "BACKEND-073",
@@ -3895,8 +3895,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/settings.py",
       "source_ref": "BE:api/system_config.py::list_configs",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-109",
         "BACKEND-073",
@@ -4142,8 +4142,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/reference.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-115",
         "BACKEND-073",
@@ -4362,8 +4362,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/config.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-124",
         "BACKEND-023"
@@ -5135,8 +5135,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": "BE:api/students.py::get_student_medical",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-149",
         "BACKEND-009",
@@ -5401,8 +5401,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/grade_promotion_service.py",
       "source_ref": "BE:api/students.py::bulk_graduate_students",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-133",
         "BACKEND-101"
@@ -5473,8 +5473,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::get_students",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-149",
         "BACKEND-073",
@@ -6388,8 +6388,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/children.py",
       "source_ref": "BE:api/parent_portal/profile.py::get_my_children",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-182",
         "BACKEND-062",
@@ -7344,8 +7344,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/realtime/publish.py",
       "source_ref": "BE:services/ws/dismissal.py::schedule_broadcast_threadsafe",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-223",
         "BACKEND-006",
@@ -14525,8 +14525,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/rbac_guards.py",
       "source_ref": "BE:api/auth.py::_assert_can_manage_user",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-074",
         "BACKEND-072",
