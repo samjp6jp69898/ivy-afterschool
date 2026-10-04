@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+
+<!-- ============================================================
+     設計稿中繼資料（gate 用，四個都必填，值不可猜）
+     preview-status : draft | approved | superseded
+     preview-tasks  : 這張稿涵蓋的 PARENT task id，逗號分隔
+     preview-route  : 對應的家長端路由 path；元件稿寫 component:<相對路徑>
+     preview-updated: 最後更新日期 YYYY-MM-DD
+     ============================================================ -->
+<meta name="preview-status" content="draft">
+<meta name="preview-tasks" content="PARENT-094">
+<meta name="preview-route" content="component:parent/components/pickup/PickupReplyMessage.vue">
+<meta name="preview-updated" content="2026-10-04">
+
+<title>設計稿：家長端 PickupReplyMessage 接送回覆</title>
+
+<script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&display=block">
+
+<style>
+/* ===== 以下 token、框架、M3 元件與 ParentBottomSheet 樣式複製自 parent-component-bottom-sheet.html（改那兩張稿時一起同步） ===== */
+/* ============================================================
+   色票：複本，權威為 apps/web/src/parent/styles/m3-tokens.css（含 dark）。
+   --preview-* 只給稿件框架用。手機框內一律用 --m3-*。
+   ============================================================ */
+:root {
+  --m3-primary: #006d3d;
+  --m3-on-primary: #ffffff;
+  --m3-primary-container: #89f9b1;
+  --m3-on-primary-container: #00210f;
+  --m3-secondary: #4f6353;
+  --m3-on-secondary: #ffffff;
+  --m3-secondary-container: #d2e8d4;
+  --m3-on-secondary-container: #0d1f13;
+  --m3-tertiary: #3a646f;
+  --m3-on-tertiary: #ffffff;
+  --m3-tertiary-container: #beeaf7;
+  --m3-on-tertiary-container: #001f26;
+  --m3-error: #ba1a1a;
+  --m3-on-error: #ffffff;
+  --m3-error-container: #ffdad6;
+  --m3-on-error-container: #410002;
+  --m3-background: #fbfdf8;
+  --m3-on-background: #191c19;
+  --m3-surface: #fbfdf8;
+  --m3-on-surface: #191c19;
+  --m3-surface-variant: #dce5db;
+  --m3-on-surface-variant: #414942;
+  --m3-outline: #717971;
+  --m3-outline-variant: #c0c9bf;
+  --m3-shadow: #000000;
+  --m3-scrim: #000000;
+  --m3-inverse-surface: #2e312e;
+  --m3-inverse-on-surface: #f0f1ec;
+  --m3-inverse-primary: #6ddc97;
+  --m3-surface-container-lowest: #ffffff;
+  --m3-surface-container-low: #f3f4ef;
+  --m3-surface-container: #edeee9;
+  --m3-surface-container-high: #e7e9e4;
+  --m3-surface-container-highest: #e1e3de;
+}
+:root[data-theme='dark'] {
+  --m3-primary: #6ddc97;
+  --m3-on-primary: #00391d;
+  --m3-primary-container: #00522c;
+  --m3-on-primary-container: #89f9b1;
+  --m3-secondary: #b6ccb9;
+  --m3-on-secondary: #223527;
+  --m3-secondary-container: #384b3d;
+  --m3-on-secondary-container: #d2e8d4;
+  --m3-tertiary: #a2cdda;
+  --m3-on-tertiary: #023640;
+  --m3-tertiary-container: #214c57;
+  --m3-on-tertiary-container: #beeaf7;
+  --m3-error: #ffb4ab;
+  --m3-on-error: #690005;
+  --m3-error-container: #93000a;
+  --m3-on-error-container: #ffb4ab;
+  --m3-background: #191c19;
+  --m3-on-background: #e1e3de;
+  --m3-surface: #191c19;
+  --m3-on-surface: #e1e3de;
+  --m3-surface-variant: #414942;
+  --m3-on-surface-variant: #c0c9bf;
+  --m3-outline: #8b938a;
+  --m3-outline-variant: #414942;
+  --m3-shadow: #000000;
+  --m3-scrim: #000000;
+  --m3-inverse-surface: #e1e3de;
+  --m3-inverse-on-surface: #2e312e;
+  --m3-inverse-primary: #006d3d;
+  --m3-surface-container-lowest: #0c0f0c;
+  --m3-surface-container-low: #191c19;
+  --m3-surface-container: #1d201d;
+  --m3-surface-container-high: #282b28;
+  --m3-surface-container-highest: #333532;
+}
+:root {
+  --m3-state-hover: 0.08;
+  --m3-state-focus: 0.12;
+  --m3-state-pressed: 0.12;
+  --m3-state-dragged: 0.16;
+  --m3-shape-extra-small: 4px;
+  --m3-shape-small: 8px;
+  --m3-shape-medium: 12px;
+  --m3-shape-large: 16px;
+  --m3-shape-extra-large: 28px;
+  --m3-shape-full: 9999px;
+  --m3-elev-1: 0px 1px 2px 0px rgba(0, 0, 0, 0.3), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --m3-elev-2: 0px 1px 2px 0px rgba(0, 0, 0, 0.3), 0px 2px 6px 2px rgba(0, 0, 0, 0.15);
+  --m3-elev-3: 0px 1px 3px 0px rgba(0, 0, 0, 0.3), 0px 4px 8px 3px rgba(0, 0, 0, 0.15);
+  --m3-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --m3-easing-standard-accel: cubic-bezier(0.3, 0, 1, 1);
+  --m3-easing-standard-decel: cubic-bezier(0, 0, 0, 1);
+  --m3-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --m3-easing-emphasized-accel: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --m3-easing-emphasized-decel: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --m3-dur-short-1: 50ms;
+  --m3-dur-short-2: 100ms;
+  --m3-dur-short-3: 150ms;
+  --m3-dur-short-4: 200ms;
+  --m3-dur-medium-1: 250ms;
+  --m3-dur-medium-2: 300ms;
+  --m3-dur-medium-3: 350ms;
+  --m3-dur-medium-4: 400ms;
+  --m3-font: 'Roboto', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Helvetica Neue', sans-serif;
+
+  /* 稿件框架專用 */
+  --preview-page-bg: #f2f3f5;
+  --preview-panel-bg: #ffffff;
+  --preview-bar-bg: #f4f4f5;
+  --preview-bar-text: #73767a;
+  --preview-border: #dcdfe6;
+  --preview-text: #303133;
+  --preview-text-secondary: #909399;
+  --preview-primary: #409eff;
+  --preview-on-primary: #ffffff;
+  --preview-warning: #e6a23c;
+  --preview-warning-bg: #fdf6ec;
+  --preview-warning-border: #f3d19e;
+  --preview-success: #67c23a;
+  --preview-device: #1f1f1f;
+  --preview-hit: #f56c6c;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { font-family: var(--m3-font); background: var(--preview-page-bg); color: var(--preview-text); }
+#app { display: flex; flex-direction: column; min-height: 100%; }
+button { font: inherit; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+/* ---- 稿件框架 ---- */
+.preview-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 6px 16px; font-size: 12px; color: var(--preview-bar-text); background: var(--preview-bar-bg); border-bottom: 1px dashed var(--preview-border); }
+.preview-bar__spacer { flex: 1; }
+.preview-tag { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 4px; font-size: 12px; color: var(--preview-on-primary); background: var(--preview-warning); }
+.preview-tag.is-approved { background: var(--preview-success); }
+.stage { flex: 1; display: flex; align-items: flex-start; justify-content: center; gap: 32px; flex-wrap: wrap; padding: 32px 16px; }
+.device { flex: none; width: 390px; height: 844px; border-radius: 44px; overflow: hidden; outline: 10px solid var(--preview-device); box-shadow: var(--m3-elev-3); margin: 10px; }
+.screen { position: relative; display: flex; flex-direction: column; height: 100%; overflow: hidden; background: var(--m3-surface); color: var(--m3-on-surface); }
+.screen__content { flex: 1; overflow-y: auto; padding: 0 16px 24px; }
+.notes { flex: 0 1 420px; min-width: 300px; max-width: 100%; padding: 20px; border-radius: 8px; background: var(--preview-panel-bg); border: 1px solid var(--preview-border); font-size: 14px; line-height: 1.6; }
+.notes h3 { margin: 0 0 12px; font-size: 16px; }
+.notes h4 { margin: 20px 0 8px; font-size: 14px; }
+.notes ol { margin: 0; padding-left: 20px; }
+.notes__alert { padding: 8px 12px; margin-bottom: 16px; border-radius: 4px; font-size: 13px; color: var(--preview-warning); background: var(--preview-warning-bg); border: 1px solid var(--preview-warning-border); }
+.notes__option { color: var(--preview-text-secondary); font-size: 13px; }
+.notes__group { margin: 12px 0 4px; font-weight: 600; font-size: 13px; }
+.notes__row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; font-size: 13px; }
+.state-switch { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--preview-border); border-radius: 4px; overflow: hidden; }
+.state-switch button { padding: 4px 10px; font-size: 12px; border: none; cursor: pointer; background: var(--preview-panel-bg); color: var(--preview-text); border-right: 1px solid var(--preview-border); }
+.state-switch button:last-child { border-right: none; }
+.state-switch button.is-active { background: var(--preview-primary); color: var(--preview-on-primary); }
+.state-switch--wrap { display: flex; border: none; gap: 4px; }
+.state-switch--wrap button { border: 1px solid var(--preview-border); border-radius: 4px; }
+.state-switch--wrap button:last-child { border-right: 1px solid var(--preview-border); }
+
+/* ---- 稿內示範排版（只存在於稿，不是元件） ---- */
+.kit-head { padding: 8px 0 4px; }
+.kit-head__task { color: var(--m3-on-surface-variant); }
+.demo__caption { margin: 20px 0 8px; color: var(--m3-on-surface-variant); }
+.demo-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.demo-col { display: flex; flex-direction: column; gap: 12px; }
+.demo-code { margin-top: 6px; padding: 6px 8px; border-radius: var(--m3-shape-extra-small); background: var(--m3-surface-container); color: var(--m3-on-surface-variant); font: 11px/16px ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+.demo-legend { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 64px; color: var(--m3-on-surface-variant); }
+.bleed { margin-left: -16px; margin-right: -16px; }
+.bleed + .bleed { margin-top: 8px; }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.show-hit .hit-target::after,
+.show-hit .m3-chip::after,
+.show-hit .m3-icon-button,
+.show-hit .m3-switch,
+.show-hit .m3-snackbar__action { outline: 1px dashed var(--preview-hit); }
+
+/* ============================================================
+   M3 元件樣式
+   ============================================================ */
+/* Typography（同 m3-tokens.css） */
+.m3-title-large { font-size: 22px; line-height: 28px; font-weight: 400; }
+.m3-title-medium { font-size: 16px; line-height: 24px; font-weight: 500; letter-spacing: 0.15px; }
+.m3-title-small { font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: 0.1px; }
+.m3-body-large { font-size: 16px; line-height: 24px; letter-spacing: 0.5px; }
+.m3-body-medium { font-size: 14px; line-height: 20px; letter-spacing: 0.25px; }
+.m3-body-small { font-size: 12px; line-height: 16px; letter-spacing: 0.4px; }
+.m3-label-large { font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: 0.1px; }
+.m3-label-medium { font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: 0.5px; }
+.m3-label-small { font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: 0.5px; }
+
+/* M3Icon（PARENT-014）：1em 夾盒，字型未就緒時 ligature 原文被裁在盒內 */
+.material-symbols-rounded {
+  font-family: 'Material Symbols Rounded'; font-weight: normal; font-style: normal;
+  line-height: 1; letter-spacing: normal; text-transform: none; white-space: nowrap;
+  direction: ltr; font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1em; height: 1em; overflow: hidden; flex-shrink: 0; vertical-align: middle; user-select: none;
+}
+.icon-fallback-demo { font-family: 'NoSuchFont-preview', sans-serif !important; }
+.icon-fallback-demo--unclamped { width: auto !important; overflow: visible !important; }
+.icon-frame { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border: 1px dashed var(--m3-outline-variant); border-radius: var(--m3-shape-extra-small); }
+
+/* State layer：hover 0.08 / focus 0.12 / pressed 0.12，顏色取 currentColor */
+.m3-state { position: relative; }
+.m3-state::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; background: currentColor;
+  opacity: 0; pointer-events: none; transition: opacity var(--m3-dur-short-2) var(--m3-easing-standard);
+}
+.m3-state:hover::before, .m3-state.force-hover::before { opacity: var(--m3-state-hover); }
+.m3-state:focus-visible::before, .m3-state.force-focus::before { opacity: var(--m3-state-focus); }
+.m3-state:active::before, .m3-state.force-pressed::before { opacity: var(--m3-state-pressed); }
+.m3-state:disabled::before, .m3-state[aria-disabled='true']::before { opacity: 0 !important; }
+
+/* 轉圈（Button loading / Switch busy 共用） */
+.m3-spinner { width: 18px; height: 18px; flex: none; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: m3-spin 0.8s linear infinite; }
+@keyframes m3-spin { to { transform: rotate(360deg); } }
+
+/* M3Button（PARENT-015） */
+.m3-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 48px; min-width: 48px; padding: 0 24px; border: none; border-radius: var(--m3-shape-full);
+  cursor: pointer; white-space: nowrap; -webkit-tap-highlight-color: transparent;
+}
+.m3-button.has-icon { padding-left: 16px; }
+.m3-button--filled { background: var(--m3-primary); color: var(--m3-on-primary); }
+.m3-button--tonal { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.m3-button--outlined { background: transparent; color: var(--m3-primary); box-shadow: inset 0 0 0 1px var(--m3-outline); }
+.m3-button--text { background: transparent; color: var(--m3-primary); padding: 0 12px; }
+.m3-button--text.has-icon { padding-left: 12px; }
+.m3-button.is-block { display: flex; width: 100%; }
+.m3-button:disabled { opacity: 0.38; cursor: not-allowed; }
+.m3-button.is-loading { cursor: progress; }
+.m3-button:focus-visible, .m3-button.force-focus { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+
+/* M3IconButton（PARENT-016）：48 點擊區、40 視覺 */
+.m3-icon-button {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 48px; height: 48px; padding: 0; border: none; border-radius: var(--m3-shape-full);
+  background: transparent; color: var(--m3-on-surface-variant); cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.m3-icon-button__container { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: var(--m3-shape-full); }
+.m3-icon-button__container::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: currentColor; opacity: 0; pointer-events: none; transition: opacity var(--m3-dur-short-2) var(--m3-easing-standard); }
+.m3-icon-button:hover .m3-icon-button__container::before, .m3-icon-button.force-hover .m3-icon-button__container::before { opacity: var(--m3-state-hover); }
+.m3-icon-button:focus-visible .m3-icon-button__container::before, .m3-icon-button.force-focus .m3-icon-button__container::before { opacity: var(--m3-state-focus); }
+.m3-icon-button:active .m3-icon-button__container::before, .m3-icon-button.force-pressed .m3-icon-button__container::before { opacity: var(--m3-state-pressed); }
+.m3-icon-button--filled .m3-icon-button__container { background: var(--m3-primary); color: var(--m3-on-primary); }
+.m3-icon-button--tonal .m3-icon-button__container { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.m3-icon-button:focus-visible, .m3-icon-button.force-focus { outline: 2px solid var(--m3-primary); outline-offset: -2px; }
+.m3-icon-button:disabled { opacity: 0.38; cursor: not-allowed; }
+.m3-icon-button:disabled .m3-icon-button__container::before { opacity: 0; }
+
+/* M3Card（PARENT-017）：底色照 M3 / ivy */
+.m3-card { position: relative; display: block; border-radius: var(--m3-shape-medium); color: var(--m3-on-surface); }
+.m3-card--pad-none { padding: 0; }
+.m3-card--pad-sm { padding: 12px; }
+.m3-card--pad-md { padding: 16px; }
+.m3-card--filled { background: var(--m3-surface-container-highest); }
+.m3-card--elevated { background: var(--m3-surface-container-low); box-shadow: var(--m3-elev-1); }
+.m3-card--outlined { background: var(--m3-surface); border: 1px solid var(--m3-outline-variant); }
+.m3-card.is-clickable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.m3-card.is-clickable::before { background: var(--m3-on-surface); }
+.m3-card.is-clickable:focus-visible, .m3-card.force-focus { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+.m3-card__header { margin-bottom: 8px; }
+.m3-card__actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.m3-card p { margin: 0; }
+
+/* M3TextField（PARENT-018）：outlined、fieldset/legend 挖缺口 */
+.m3-tf { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+.m3-tf__control { position: relative; display: flex; align-items: center; min-height: 56px; }
+.m3-tf__input {
+  position: relative; z-index: 1; width: 100%; height: 56px; margin: 0; padding: 0 16px;
+  border: none; outline: none; background: transparent; color: var(--m3-on-surface);
+  font: 400 16px/24px var(--m3-font); letter-spacing: 0.5px; caret-color: var(--m3-primary);
+  -webkit-appearance: none; appearance: none;
+}
+.m3-tf.has-trailing .m3-tf__input { padding-right: 48px; }
+.m3-tf.is-textarea .m3-tf__control { align-items: stretch; }
+textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: none; }
+.m3-tf__input::placeholder { color: var(--m3-on-surface-variant); opacity: 0; }
+.m3-tf.is-focused .m3-tf__input::placeholder { opacity: 1; }
+.m3-tf.is-error .m3-tf__input { caret-color: var(--m3-error); }
+.m3-tf__label {
+  position: absolute; z-index: 2; left: 16px; top: 28px; transform: translateY(-50%);
+  max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--m3-on-surface-variant); font: 400 16px/24px var(--m3-font); pointer-events: none;
+  transition: top var(--m3-dur-short-3) var(--m3-easing-standard), font-size var(--m3-dur-short-3) var(--m3-easing-standard), line-height var(--m3-dur-short-3) var(--m3-easing-standard);
+}
+.m3-tf.is-floating .m3-tf__label { top: 0; font-size: 12px; line-height: 16px; }
+.m3-tf.is-focused .m3-tf__label { color: var(--m3-primary); }
+.m3-tf.is-error .m3-tf__label { color: var(--m3-error); }
+.m3-tf__outline {
+  position: absolute; inset: -5px 0 0; z-index: 0; margin: 0; padding: 0 12px; min-width: 0;
+  border: 1px solid var(--m3-outline); border-radius: var(--m3-shape-extra-small); pointer-events: none; text-align: left;
+}
+.m3-tf__outline legend { display: block; float: none; width: auto; max-width: 0.01px; height: 11px; padding: 0; font-size: 12px; visibility: hidden; white-space: nowrap; overflow: hidden; }
+.m3-tf__outline legend span { display: inline-block; padding: 0 4px; opacity: 0; }
+.m3-tf.is-floating .m3-tf__outline legend { max-width: 100%; }
+.m3-tf__control:hover .m3-tf__outline { border-color: var(--m3-on-surface); }
+.m3-tf.is-focused .m3-tf__outline { border-width: 2px; border-color: var(--m3-primary); padding: 0 11px; }
+.m3-tf.is-error .m3-tf__outline { border-color: var(--m3-error); }
+.m3-tf__trailing { position: absolute; z-index: 1; right: 12px; top: 16px; color: var(--m3-error); }
+.m3-tf__supporting { display: flex; gap: 16px; padding: 0 16px; color: var(--m3-on-surface-variant); }
+.m3-tf__supporting-text { flex: 1; }
+.m3-tf.is-error .m3-tf__supporting-text { color: var(--m3-error); }
+.m3-tf__counter { margin-left: auto; flex: none; }
+.m3-tf.is-disabled { opacity: 0.38; }
+.m3-tf.is-disabled .m3-tf__control { pointer-events: none; }
+
+/* M3Chip（PARENT-019）：32 視覺、透明延伸到 48 點擊高 */
+.m3-chip {
+  display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 16px;
+  border: 1px solid var(--m3-outline); border-radius: var(--m3-shape-small);
+  background: transparent; color: var(--m3-on-surface-variant); cursor: pointer; white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+.m3-chip--assist { color: var(--m3-on-surface); }
+.m3-chip--assist .m3-chip__icon { color: var(--m3-primary); }
+.m3-chip.has-icon { padding-left: 8px; }
+.m3-chip.is-selected { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); border-color: transparent; }
+.m3-chip::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 48px; transform: translateY(-50%); }
+.m3-chip:focus-visible, .m3-chip.force-focus { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+.m3-chip:disabled { opacity: 0.38; cursor: not-allowed; }
+
+/* M3ListItem（PARENT-020） */
+.m3-list { list-style: none; margin: 0; padding: 0; }
+.m3-list-item { list-style: none; }
+.m3-list-item__inner {
+  position: relative; display: flex; align-items: center; gap: 16px; min-height: 56px; padding: 8px 16px;
+  color: inherit; text-decoration: none; outline: none; -webkit-tap-highlight-color: transparent;
+}
+.m3-list-item.is-two-line .m3-list-item__inner { min-height: 72px; }
+.m3-list-item__inner.is-interactive { cursor: pointer; }
+.m3-list-item__inner.is-interactive::before { background: var(--m3-on-surface); }
+.m3-list-item__inner.is-interactive:focus-visible, .force-focus > .m3-list-item__inner { outline: 2px solid var(--m3-primary); outline-offset: -2px; }
+.force-hover > .m3-list-item__inner::before { opacity: var(--m3-state-hover); }
+.force-pressed > .m3-list-item__inner::before { opacity: var(--m3-state-pressed); }
+.force-focus > .m3-list-item__inner::before { opacity: var(--m3-state-focus); }
+.m3-list-item__leading { display: inline-flex; align-items: center; justify-content: center; flex: none; color: var(--m3-on-surface-variant); }
+.m3-list-item__leading.is-icon { width: 40px; height: 40px; border-radius: var(--m3-shape-full); background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.m3-list-item__content { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.m3-list-item__headline { color: var(--m3-on-surface); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m3-list-item__supporting { color: var(--m3-on-surface-variant); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.m3-list-item__trailing { display: inline-flex; align-items: center; flex: none; color: var(--m3-on-surface-variant); }
+.m3-list-item.is-disabled { opacity: 0.38; }
+.m3-list-item.is-disabled .m3-list-item__inner { cursor: not-allowed; }
+.m3-list-item.is-disabled .m3-list-item__inner::before { opacity: 0 !important; }
+
+/* M3TopAppBar（PARENT-021）：small，標題靠左 */
+.m3-top-app-bar {
+  position: sticky; top: 0; z-index: 5; flex: none;
+  display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 4px;
+  min-height: 64px; padding: 0 4px; background: var(--m3-surface); color: var(--m3-on-surface);
+  transition: background-color var(--m3-dur-short-3) var(--m3-easing-standard);
+}
+.m3-top-app-bar.is-scrolled { background: var(--m3-surface-container); }
+.m3-top-app-bar__leading { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; }
+.m3-top-app-bar__title { margin: 0; padding-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m3-top-app-bar__actions { display: inline-flex; align-items: center; }
+.logo-mark { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: var(--m3-shape-full); background: var(--m3-primary-container); color: var(--m3-on-primary-container); }
+
+/* M3NavigationBar（PARENT-022） */
+.m3-navigation-bar { display: flex; flex: none; height: 80px; background: var(--m3-surface-container); color: var(--m3-on-surface-variant); }
+.m3-nav-tab {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  padding: 12px 0 16px; border: none; background: transparent; color: inherit; cursor: pointer; outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.m3-nav-tab__icon { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 32px; border-radius: var(--m3-shape-full); transition: background-color var(--m3-dur-short-3) var(--m3-easing-standard); }
+.m3-nav-tab__icon::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: currentColor; opacity: 0; pointer-events: none; }
+.m3-nav-tab:hover .m3-nav-tab__icon::before { opacity: var(--m3-state-hover); }
+.m3-nav-tab:active .m3-nav-tab__icon::before { opacity: var(--m3-state-pressed); }
+.m3-nav-tab:focus-visible .m3-nav-tab__icon { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+.m3-nav-tab.is-active .m3-nav-tab__icon { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.m3-nav-tab.is-active .m3-nav-tab__label { color: var(--m3-on-surface); font-weight: 700; }
+.m3-nav-tab__badge {
+  position: absolute; top: -2px; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px;
+  display: inline-flex; align-items: center; justify-content: center; border-radius: var(--m3-shape-full);
+  font-size: 11px; line-height: 16px; font-weight: 500; background: var(--m3-error); color: var(--m3-on-error);
+}
+
+/* M3Snackbar（PARENT-023） */
+.m3-snackbar {
+  position: absolute; z-index: 20; left: 16px; right: 16px; bottom: 96px;
+  display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 4px 8px 4px 16px;
+  border-radius: var(--m3-shape-extra-small); background: var(--m3-inverse-surface); color: var(--m3-inverse-on-surface);
+  box-shadow: var(--m3-elev-3);
+}
+.m3-snackbar.is-inline { position: relative; left: auto; right: auto; bottom: auto; z-index: auto; }
+.m3-snackbar__icon { color: var(--m3-error-container); }
+.m3-snackbar__message { flex: 1; min-width: 0; padding: 10px 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.m3-snackbar__action { flex: none; min-height: 44px; padding: 0 12px; border: none; border-radius: var(--m3-shape-full); background: transparent; color: var(--m3-inverse-primary); cursor: pointer; }
+.m3-snackbar__action:focus-visible { outline: 2px solid var(--m3-inverse-primary); outline-offset: 0; }
+.m3-snackbar-enter-active { transition: opacity var(--m3-dur-medium-1) var(--m3-easing-emphasized-decel), transform var(--m3-dur-medium-1) var(--m3-easing-emphasized-decel); }
+.m3-snackbar-leave-active { transition: opacity var(--m3-dur-short-3) var(--m3-easing-emphasized-accel); }
+.m3-snackbar-enter-from { opacity: 0; transform: translateY(16px); }
+.m3-snackbar-leave-to { opacity: 0; }
+
+/* M3SegmentedButton（PARENT-098） */
+.m3-segmented { display: grid; width: 100%; height: 48px; border: 1px solid var(--m3-outline); border-radius: var(--m3-shape-full); overflow: hidden; }
+.m3-segment {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; padding: 0 12px;
+  border: none; border-left: 1px solid var(--m3-outline); background: transparent; color: var(--m3-on-surface);
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.m3-segment:first-child { border-left: none; }
+.m3-segment.is-checked { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.m3-segment__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m3-segment:focus-visible { outline: 2px solid var(--m3-primary); outline-offset: -4px; border-radius: var(--m3-shape-full); }
+.m3-segment:disabled { cursor: not-allowed; }
+.m3-segment:disabled > * { opacity: 0.38; }
+
+/* M3Switch（PARENT-175）：52×32 軌道、52×48 點擊區 */
+.m3-switch { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; width: 52px; height: 48px; padding: 0; border: none; background: transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.m3-switch__track { position: relative; width: 52px; height: 32px; border-radius: var(--m3-shape-full); border: 2px solid var(--m3-outline); background: var(--m3-surface-container-highest); transition: background-color var(--m3-dur-short-3) var(--m3-easing-standard), border-color var(--m3-dur-short-3) var(--m3-easing-standard); }
+.m3-switch__thumb {
+  position: absolute; left: 14px; top: 14px; width: 16px; height: 16px; transform: translate(-50%, -50%);
+  display: inline-flex; align-items: center; justify-content: center; border-radius: 50%;
+  background: var(--m3-outline); color: var(--m3-on-primary-container);
+  transition: left var(--m3-dur-medium-1) var(--m3-easing-standard), width var(--m3-dur-short-2) var(--m3-easing-standard), height var(--m3-dur-short-2) var(--m3-easing-standard);
+}
+.m3-switch__thumb::before { content: ''; position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: var(--m3-on-surface); opacity: 0; pointer-events: none; }
+.m3-switch:hover .m3-switch__thumb::before { opacity: var(--m3-state-hover); }
+.m3-switch:active .m3-switch__thumb::before { opacity: var(--m3-state-pressed); }
+.m3-switch.is-on .m3-switch__track { background: var(--m3-primary); border-color: var(--m3-primary); }
+.m3-switch.is-on .m3-switch__thumb { left: 34px; width: 24px; height: 24px; background: var(--m3-on-primary); }
+.m3-switch.is-on .m3-switch__thumb::before { background: var(--m3-primary); }
+.m3-switch:active:not(:disabled):not(.is-busy) .m3-switch__thumb { width: 28px; height: 28px; }
+.m3-switch.is-busy { cursor: progress; }
+.m3-switch.is-busy .m3-switch__thumb { width: 24px; height: 24px; }
+.m3-switch.is-busy .m3-switch__thumb::before { opacity: 0; }
+.m3-switch__spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--m3-surface-container-highest); border-right-color: transparent; animation: m3-spin 0.8s linear infinite; }
+.m3-switch.is-on .m3-switch__spinner { border-color: var(--m3-primary); border-right-color: transparent; }
+.m3-switch:focus-visible { outline: none; }
+.m3-switch:focus-visible .m3-switch__track { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+.m3-switch:disabled { opacity: 0.38; cursor: not-allowed; }
+.m3-switch:disabled .m3-switch__thumb::before { opacity: 0; }
+.pref-row { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 0 0 16px; }
+.pref-row__label { flex: 1; min-width: 0; }
+
+/* ============================================================
+   ParentBottomSheet（PARENT-025）
+   稿內畫在手機框 .screen 裡（absolute）；實作 Teleport 到 body（fixed，高度以 100dvh 計）。
+   ============================================================ */
+.sheet-layer { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; justify-content: flex-end; }
+.sheet-scrim { position: absolute; inset: 0; background: var(--m3-scrim); opacity: 0.32; }
+.sheet {
+  position: relative; display: flex; flex-direction: column; width: 100%; max-height: calc(100% - 56px);
+  border-radius: var(--m3-shape-extra-large) var(--m3-shape-extra-large) 0 0;
+  background: var(--m3-surface-container-low); color: var(--m3-on-surface); box-shadow: var(--m3-elev-1); outline: none;
+  transition: transform var(--m3-dur-short-4) var(--m3-easing-standard);
+}
+.sheet.is-full { height: calc(100% - 56px); }
+.sheet.is-dragging { transition: none; }
+.sheet__drag { flex: none; touch-action: none; cursor: grab; user-select: none; }
+.sheet.is-dragging .sheet__drag { cursor: grabbing; }
+.sheet__handle { width: 32px; height: 4px; margin: 16px auto 8px; border-radius: var(--m3-shape-full); background: var(--m3-on-surface-variant); opacity: 0.4; }
+.sheet__header { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 24px 8px; }
+.sheet__header.has-close { padding-right: 12px; }
+.sheet__title { flex: 1; min-width: 0; margin: 0; }
+.sheet__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 24px 24px; }
+.sheet__footer { flex: none; display: flex; gap: 8px; padding: 16px 24px calc(16px + env(safe-area-inset-bottom)); border-top: 1px solid var(--m3-outline-variant); }
+.sheet__footer > * { flex: 1 1 0; }
+.sheet-enter-active .sheet { transition: transform var(--m3-dur-medium-4) var(--m3-easing-emphasized-decel); }
+.sheet-enter-active .sheet-scrim { transition: opacity var(--m3-dur-medium-4) linear; }
+.sheet-leave-active .sheet { transition: transform var(--m3-dur-short-4) var(--m3-easing-emphasized-accel) !important; }
+.sheet-leave-active .sheet-scrim { transition: opacity var(--m3-dur-short-4) linear; }
+.sheet-enter-from .sheet, .sheet-leave-to .sheet { transform: translateY(100%) !important; }
+.sheet-enter-from .sheet-scrim, .sheet-leave-to .sheet-scrim { opacity: 0; }
+/* warning token（PARENT-051 寫入 m3-tokens.css） */
+:root { --m3-warning-container: #ffddb0; --m3-on-warning-container: #2b1700; }
+:root[data-theme='dark'] { --m3-warning-container: #5b3a00; --m3-on-warning-container: #ffddb0; }
+
+/* ---- 稿件框架補充 ---- */
+.notes__rec { color: var(--preview-success); font-weight: 600; }
+.notes__q { margin-bottom: 12px; }
+.notes__hint { margin: 4px 0 0; color: var(--preview-text-secondary); font-size: 12px; }
+.muted { color: var(--m3-on-surface-variant); }
+.screen__content.is-locked { overflow: hidden; }
+.m3-snackbar:not(.is-inline) { z-index: 60; }
+/* ===== StatusPill 樣式複製自 parent-component-status-pill.html ===== */
+/* StatusPill（PARENT-051）：28px 高資訊膠囊，不可互動、不拿焦點 */
+.status-pill {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 100%; height: 28px; padding: 0 12px;
+  border-radius: var(--m3-shape-full); white-space: nowrap; vertical-align: middle;
+}
+.status-pill.has-icon { padding-left: 8px; }
+.status-pill__label { overflow: hidden; text-overflow: ellipsis; }
+.status-pill--success { background: var(--m3-primary-container); color: var(--m3-on-primary-container); }
+.status-pill--warning { background: var(--m3-warning-container); color: var(--m3-on-warning-container); }
+.status-pill--danger { background: var(--m3-error-container); color: var(--m3-on-error-container); }
+.status-pill--info { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.status-pill--neutral { background: var(--m3-surface-container-high); color: var(--m3-on-surface); }
+
+/* ---- 稿件框架補充（design-parent-r6 共用） ---- */
+.notes__h5 { margin: 12px 0 4px; font-size: 13px; font-weight: 600; }
+.cap { display: flex; align-items: baseline; gap: 8px; margin: 20px 0 8px; color: var(--m3-on-surface-variant); }
+.cap:first-child { margin-top: 8px; }
+.cap__tag { flex: none; padding: 0 6px; border-radius: var(--m3-shape-extra-small); border: 1px dashed var(--m3-outline); font: 11px/16px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.not-rendered { padding: 16px; border: 1px dashed var(--m3-outline-variant); border-radius: var(--m3-shape-medium); color: var(--m3-on-surface-variant); text-align: center; }
+.m3-headline-small { font-size: 24px; line-height: 32px; font-weight: 400; }
+/* ============================================================
+   本稿元件
+   ============================================================ */
+/* PickupReplyMessage（PARENT-094） */
+.prm p { margin: 0; }
+.prm-source { display: flex; align-items: center; gap: 4px; color: var(--m3-on-surface-variant); }
+.prm-eta { margin-top: 4px !important; color: var(--m3-on-surface); }
+.prm-eta__time { color: var(--m3-primary); font-weight: 500; font-variant-numeric: tabular-nums; }
+.prm-bubble {
+  margin-top: 8px !important; padding: 12px 16px; max-width: 100%;
+  border-radius: var(--m3-shape-extra-small) var(--m3-shape-large) var(--m3-shape-large) var(--m3-shape-large);
+  background: var(--m3-secondary-container); color: var(--m3-on-secondary-container);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.prm-time { margin-top: 4px !important; color: var(--m3-on-surface-variant); font-variant-numeric: tabular-nums; }
+.prm-wait { display: flex; align-items: center; gap: 8px; color: var(--m3-on-surface); }
+.prm-wait__icon { color: var(--m3-on-surface-variant); }
+.prm-wait__text { flex: 1; min-width: 0; }
+.prm-progress { position: relative; height: 4px; margin-top: 12px; border-radius: var(--m3-shape-full); background: var(--m3-surface-container-highest); overflow: hidden; }
+.prm-progress__bar { position: absolute; top: 0; bottom: 0; left: -40%; width: 40%; border-radius: inherit; background: var(--m3-primary); animation: prm-indeterminate 1.6s var(--m3-easing-standard) infinite; }
+@keyframes prm-indeterminate { from { left: -40%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .prm-progress__bar { animation: none; left: 0; width: 100%; opacity: 0.38; } }
+/* compact（首頁 TodayStatusCard） */
+.prm.is-compact .prm-source { margin-top: 2px; }
+.prm-compact__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--m3-on-surface); }
+.prm.is-compact .prm-wait__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prm.is-compact .m3-spinner { width: 16px; height: 16px; color: var(--m3-primary); }
+
+/* 宿主（示意） */
+.host-row { display: flex; align-items: center; gap: 12px; }
+.host-row > .prm { flex: 1; min-width: 0; }
+</style>
+</head>
+
+<body>
+<div id="app">
+
+  <div class="preview-bar">
+    <span class="preview-tag" :class="{ 'is-approved': meta.status === 'approved' }">
+      {{ meta.status === 'approved' ? '已核可' : '待核可' }}
+    </span>
+    <span>{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span class="preview-bar__spacer"></span>
+    <span>更新 {{ meta.updated }}</span>
+    <span>設計說明 / 待裁定（{{ openQuestions.length }}）在手機框右側</span>
+  </div>
+
+  <div class="stage">
+    <div class="device">
+      <div class="screen">
+        <m3-top-app-bar title="接送"></m3-top-app-bar>
+        <main class="screen__content">
+          <div class="cap m3-label-large">即時更新示範（右側按鈕模擬 ws 推送；外層 aria-live="polite"）</div>
+          <m3-card variant="outlined"><pickup-reply-message :request="live"></pickup-reply-message></m3-card>
+
+          <template v-for="s in scenarios" :key="s.key">
+            <div class="cap m3-label-large"><span v-if="s.q" class="cap__tag">待裁定 {{ s.q }}</span><span>{{ s.label }}</span></div>
+            <m3-card variant="outlined"><pickup-reply-message :request="s.request"></pickup-reply-message></m3-card>
+          </template>
+
+          <div class="cap m3-label-large">compact（首頁今日狀態卡；只一行 + 來源，不顯示時間）</div>
+          <m3-card variant="outlined">
+            <div v-for="(c, i) in compacts" :key="i" :style="{ marginTop: i ? '16px' : '0' }">
+              <div class="m3-label-small muted" style="margin-bottom: 4px">{{ c.label }}</div>
+              <div class="host-row">
+                <status-pill :label="c.pill.label" :tone="c.pill.tone"></status-pill>
+                <pickup-reply-message :request="c.request" :compact="true"></pickup-reply-message>
+              </div>
+            </div>
+          </m3-card>
+        </main>
+        <m3-snackbar :item="snack.items[0] || null" @dismiss="snack.dismiss"></m3-snackbar>
+        <m3-navigation-bar :items="navItems" current-key="pickup"></m3-navigation-bar>
+      </div>
+    </div>
+
+    <aside class="notes">
+      <h3>設計說明 / 待裁定</h3>
+      <div class="notes__alert" v-if="openQuestions.length">以下項目需要你裁定，未回覆前這張稿不會進入實作（稿已照推薦選項畫）</div>
+      <h4>即時更新示範</h4>
+      <div class="state-switch" role="group" aria-label="即時更新">
+        <button v-for="s in liveSteps" :key="s.key" type="button" :class="{ 'is-active': liveKey === s.key }" @click="setLive(s.key)">{{ s.label }}</button>
+      </div>
+      <p class="notes__hint">手機框第一張卡會原地換成新的回覆內容；aria-live="polite" 讓螢幕閱讀器在不打斷的情況下念出新內容。</p>
+
+      <h4>預覽選項</h4>
+      <div class="notes__row">主題
+        <span class="state-switch"><button type="button" :class="{ 'is-active': theme === 'light' }" @click="theme = 'light'">淺色</button><button type="button" :class="{ 'is-active': theme === 'dark' }" @click="theme = 'dark'">深色</button></span>
+      </div>
+
+      <h4>設計決策</h4>
+      <ol><li v-for="(d, i) in decisions" :key="i">{{ d }}</li></ol>
+
+      <h4 v-if="openQuestions.length">待裁定</h4>
+      <ol>
+        <li v-for="(q, i) in openQuestions" :key="i" class="notes__q">
+          <div>{{ q.question }}</div>
+          <div class="notes__option" v-for="(o, j) in q.options" :key="j">{{ 'ABCD'[j] }}. {{ o.text }}<span v-if="o.recommended" class="notes__rec">（推薦，稿已照此畫）</span></div>
+        </li>
+      </ol>
+    </aside>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch, nextTick, onBeforeUnmount } = Vue
+
+/* ===== 以下元件複製自 parent-component-m3-kit.html / parent-component-bottom-sheet.html ===== */
+/** PARENT-014 M3Icon：label 有值 → role=img + aria-label；無 → aria-hidden */
+const M3Icon = {
+  props: {
+    name: { type: String, required: true },
+    size: { type: [Number, String], default: 24 },
+    filled: { type: Boolean, default: false },
+    label: { type: String, default: '' },
+  },
+  computed: {
+    iconStyle() {
+      const fontSize = typeof this.size === 'number' ? `${this.size}px` : this.size
+      return { fontSize, fontVariationSettings: `'FILL' ${this.filled ? 1 : 0}, 'wght' 400, 'GRAD' 0, 'opsz' 24` }
+    },
+  },
+  template: `<span class="material-symbols-rounded m3-icon" :style="iconStyle" :role="label ? 'img' : null" :aria-label="label || null" :aria-hidden="label ? null : 'true'">{{ name }}</span>`,
+}
+
+/** PARENT-015 M3Button：loading 用 aria-disabled 擋點擊並保留焦點；disabled 用原生屬性 */
+const M3Button = {
+  props: {
+    variant: { type: String, default: 'filled' },
+    type: { type: String, default: 'button' },
+    disabled: { type: Boolean, default: false },
+    loading: { type: Boolean, default: false },
+    block: { type: Boolean, default: false },
+    icon: { type: String, default: '' },
+  },
+  emits: ['click'],
+  methods: {
+    onClick(e) { if (this.disabled || this.loading) return; this.$emit('click', e) },
+  },
+  template: `<button :type="type" class="m3-button m3-state m3-label-large"
+    :class="['m3-button--' + variant, { 'is-block': block, 'has-icon': !!icon || loading, 'is-loading': loading }]"
+    :disabled="disabled" :aria-disabled="loading ? 'true' : null" :aria-busy="loading ? 'true' : null" @click="onClick">
+    <span v-if="loading" class="m3-spinner" aria-hidden="true"></span>
+    <m3-icon v-else-if="icon" :name="icon" :size="18"></m3-icon>
+    <span><slot></slot></span>
+  </button>`,
+}
+
+/** PARENT-016 M3IconButton：label 必填 */
+const M3IconButton = {
+  props: {
+    icon: { type: String, required: true },
+    label: { type: String, required: true },
+    variant: { type: String, default: 'standard' },
+    disabled: { type: Boolean, default: false },
+  },
+  emits: ['click'],
+  template: `<button type="button" class="m3-icon-button" :class="'m3-icon-button--' + variant" :aria-label="label" :disabled="disabled"
+    @click="!disabled && $emit('click', $event)"><span class="m3-icon-button__container"><m3-icon :name="icon"></m3-icon></span></button>`,
+}
+
+/** PARENT-017 M3Card */
+const M3Card = {
+  props: {
+    variant: { type: String, default: 'filled' },
+    clickable: { type: Boolean, default: false },
+    padding: { type: String, default: 'md' },
+  },
+  emits: ['click'],
+  methods: {
+    onClick(e) { if (this.clickable) this.$emit('click', e) },
+    onKeydown(e) {
+      if (!this.clickable || (e.key !== 'Enter' && e.key !== ' ')) return
+      e.preventDefault()
+      this.$emit('click', e)
+    },
+  },
+  template: `<div class="m3-card" :class="['m3-card--' + variant, 'm3-card--pad-' + padding, { 'is-clickable m3-state': clickable }]"
+    :role="clickable ? 'button' : null" :tabindex="clickable ? 0 : null" @click="onClick" @keydown="onKeydown">
+    <div v-if="$slots.header" class="m3-card__header"><slot name="header"></slot></div>
+    <slot></slot>
+    <div v-if="$slots.actions" class="m3-card__actions"><slot name="actions"></slot></div>
+  </div>`,
+}
+
+/** PARENT-018 M3TextField（forceFocus 只為稿件示範，實作沒有這個 prop） */
+let tfUid = 0
+const M3TextField = {
+  props: {
+    modelValue: { type: String, default: '' },
+    label: { type: String, required: true },
+    type: { type: String, default: 'text' },
+    placeholder: { type: String, default: '' },
+    supportingText: { type: String, default: '' },
+    errorText: { type: String, default: '' },
+    disabled: { type: Boolean, default: false },
+    maxlength: { type: Number, default: undefined },
+    inputmode: { type: String, default: undefined },
+    autocomplete: { type: String, default: undefined },
+    id: { type: String, default: undefined },
+    forceFocus: { type: Boolean, default: false },
+  },
+  emits: ['update:modelValue', 'enter'],
+  data() { return { focused: false, uid: ++tfUid } },
+  computed: {
+    inputId() { return this.id || `m3-tf-${this.uid}` },
+    descId() { return `${this.inputId}-desc` },
+    hasError() { return !!this.errorText },
+    isFocused() { return this.focused || this.forceFocus },
+    floating() { return this.isFocused || !!this.modelValue || this.type === 'date' || this.type === 'time' },
+    supportText() { return this.errorText || this.supportingText },
+  },
+  methods: {
+    onInput(e) { this.$emit('update:modelValue', e.target.value) },
+    onKeydown(e) {
+      if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return
+      this.$emit('enter')
+    },
+  },
+  template: `<div class="m3-tf" :class="{ 'is-focused': isFocused, 'is-floating': floating, 'is-error': hasError, 'is-disabled': disabled, 'is-textarea': type === 'textarea', 'has-trailing': hasError }">
+    <div class="m3-tf__control">
+      <textarea v-if="type === 'textarea'" :id="inputId" class="m3-tf__input" rows="4" :value="modelValue" :placeholder="placeholder"
+        :disabled="disabled" :maxlength="maxlength" :aria-invalid="hasError ? 'true' : 'false'" :aria-describedby="supportText ? descId : null"
+        @input="onInput" @focus="focused = true" @blur="focused = false"></textarea>
+      <input v-else :id="inputId" class="m3-tf__input" :type="type" :value="modelValue" :placeholder="placeholder" :disabled="disabled"
+        :maxlength="maxlength" :inputmode="inputmode" :autocomplete="autocomplete" :aria-invalid="hasError ? 'true' : 'false'"
+        :aria-describedby="supportText ? descId : null" @input="onInput" @keydown="onKeydown" @focus="focused = true" @blur="focused = false">
+      <label class="m3-tf__label" :for="inputId">{{ label }}</label>
+      <fieldset class="m3-tf__outline" aria-hidden="true"><legend><span>{{ label }}</span></legend></fieldset>
+      <m3-icon v-if="hasError" class="m3-tf__trailing" name="error" :filled="true"></m3-icon>
+    </div>
+    <div v-if="supportText || maxlength" class="m3-tf__supporting m3-body-small">
+      <span v-if="supportText" :id="descId" class="m3-tf__supporting-text">{{ supportText }}</span>
+      <span v-if="maxlength" class="m3-tf__counter">{{ (modelValue || '').length }}/{{ maxlength }}</span>
+    </div>
+  </div>`,
+}
+
+/** PARENT-019 M3Chip */
+const M3Chip = {
+  props: {
+    label: { type: String, required: true },
+    variant: { type: String, default: 'assist' },
+    selected: { type: Boolean, default: false },
+    icon: { type: String, default: '' },
+    disabled: { type: Boolean, default: false },
+  },
+  emits: ['click'],
+  computed: {
+    isSelected() { return this.variant === 'filter' && this.selected },
+    leading() { return this.isSelected ? 'check' : this.icon },
+  },
+  template: `<button type="button" class="m3-chip m3-state" :class="['m3-chip--' + variant, { 'is-selected': isSelected, 'has-icon': !!leading }]"
+    :aria-pressed="variant === 'filter' ? String(selected) : null" :disabled="disabled" @click="!disabled && $emit('click', $event)">
+    <m3-icon v-if="leading" class="m3-chip__icon" :name="leading" :size="18"></m3-icon><span class="m3-label-large">{{ label }}</span>
+  </button>`,
+}
+
+/** PARENT-020 M3ListItem：li 保持 listitem 語意，互動元素是 li 內的 a（to）或 div[role=button]（clickable） */
+const M3ListItem = {
+  props: {
+    headline: { type: String, required: true },
+    supportingText: { type: String, default: '' },
+    leadingIcon: { type: String, default: '' },
+    trailingIcon: { type: String, default: '' },
+    clickable: { type: Boolean, default: false },
+    disabled: { type: Boolean, default: false },
+    to: { type: String, default: '' },
+  },
+  emits: ['click'],
+  computed: {
+    interactive() { return this.clickable || !!this.to },
+    tag() { return this.to ? 'a' : 'div' },
+  },
+  methods: {
+    onClick(e) {
+      if (this.to) e.preventDefault() // 稿內沒有 router；實作用 RouterLink
+      if (this.disabled || !this.interactive) return
+      this.$emit('click', e)
+    },
+    onKeydown(e) {
+      if (this.to || !this.clickable || (e.key !== 'Enter' && e.key !== ' ')) return
+      e.preventDefault()
+      this.onClick(e)
+    },
+  },
+  template: `<li class="m3-list-item" :class="{ 'is-two-line': !!supportingText, 'is-disabled': disabled }">
+    <component :is="tag" class="m3-list-item__inner" :class="{ 'is-interactive m3-state': interactive }"
+      :href="to ? '#' + to : null" :role="interactive && !to ? 'button' : null"
+      :tabindex="interactive && !to ? (disabled ? -1 : 0) : null" :aria-disabled="interactive && disabled ? 'true' : null"
+      @click="onClick" @keydown="onKeydown">
+      <span v-if="$slots.leading || leadingIcon" class="m3-list-item__leading" :class="{ 'is-icon': !$slots.leading }"><slot name="leading"><m3-icon v-if="leadingIcon" :name="leadingIcon"></m3-icon></slot></span>
+      <span class="m3-list-item__content">
+        <span class="m3-list-item__headline m3-body-large">{{ headline }}</span>
+        <span v-if="supportingText" class="m3-list-item__supporting m3-body-medium">{{ supportingText }}</span>
+      </span>
+      <span v-if="$slots.trailing || trailingIcon" class="m3-list-item__trailing"><slot name="trailing"><m3-icon v-if="trailingIcon" :name="trailingIcon"></m3-icon></slot></span>
+    </component>
+  </li>`,
+}
+
+/** PARENT-021 M3TopAppBar（scrolled 只為稿件示範；實作自行偵測捲動） */
+const M3TopAppBar = {
+  props: {
+    title: { type: String, required: true },
+    showBack: { type: Boolean, default: false },
+    scrolled: { type: Boolean, default: false },
+  },
+  emits: ['back'],
+  template: `<header class="m3-top-app-bar" :class="{ 'is-scrolled': scrolled }">
+    <div class="m3-top-app-bar__leading">
+      <m3-icon-button v-if="showBack" icon="arrow_back" label="返回" @click="$emit('back')"></m3-icon-button>
+      <slot v-else name="leading"></slot>
+    </div>
+    <h1 class="m3-top-app-bar__title m3-title-large">{{ title }}</h1>
+    <div class="m3-top-app-bar__actions"><slot name="actions"></slot></div>
+  </header>`,
+}
+
+/** PARENT-022 M3NavigationBar */
+const M3NavigationBar = {
+  props: {
+    items: { type: Array, required: true },
+    currentKey: { type: String, required: true },
+  },
+  emits: ['select'],
+  methods: {
+    badgeText(b) { if (!b || b < 1) return null; return b > 99 ? '99+' : String(b) },
+  },
+  template: `<nav class="m3-navigation-bar" aria-label="主要功能">
+    <button v-for="item in items" :key="item.key" type="button" class="m3-nav-tab" :class="{ 'is-active': item.key === currentKey }"
+      :aria-current="item.key === currentKey ? 'page' : null" @click="$emit('select', item.key, item)">
+      <span class="m3-nav-tab__icon">
+        <m3-icon :name="item.icon" :filled="item.key === currentKey"></m3-icon>
+        <span v-if="badgeText(item.badge)" class="m3-nav-tab__badge" aria-hidden="true">{{ badgeText(item.badge) }}</span>
+      </span>
+      <span class="m3-nav-tab__label m3-label-medium">{{ item.label }}</span>
+      <span v-if="badgeText(item.badge)" class="visually-hidden">，{{ item.badge }} 則未讀</span>
+    </button>
+  </nav>`,
+}
+
+/** PARENT-023 M3Snackbar（inline 只為稿件靜態示範） */
+const M3Snackbar = {
+  props: {
+    item: { type: Object, default: null },
+    inline: { type: Boolean, default: false },
+  },
+  emits: ['dismiss'],
+  methods: {
+    onAction() { this.item.action.onClick(); this.$emit('dismiss', this.item.id) },
+  },
+  template: `<transition name="m3-snackbar" mode="out-in">
+    <div v-if="item" :key="item.id" class="m3-snackbar" :class="['m3-snackbar--' + item.tone, { 'is-inline': inline }]"
+      :role="item.tone === 'error' ? 'alert' : 'status'" :aria-live="item.tone === 'error' ? null : 'polite'">
+      <m3-icon v-if="item.tone === 'error'" class="m3-snackbar__icon" name="error" :filled="true"></m3-icon>
+      <span class="m3-snackbar__message m3-body-medium">{{ item.message }}</span>
+      <button v-if="item.action" type="button" class="m3-snackbar__action m3-state m3-label-large" @click="onAction">{{ item.action.label }}</button>
+    </div>
+  </transition>`,
+}
+
+/** PARENT-098 M3SegmentedButton：radiogroup、roving tabindex、方向鍵略過 disabled 並循環 */
+const M3SegmentedButton = {
+  props: {
+    modelValue: { type: String, required: true },
+    items: { type: Array, required: true },
+    ariaLabel: { type: String, required: true },
+  },
+  emits: ['update:modelValue'],
+  computed: {
+    focusIndex() {
+      const i = this.items.findIndex((x) => x.value === this.modelValue)
+      return i >= 0 ? i : this.items.findIndex((x) => !x.disabled)
+    },
+  },
+  methods: {
+    select(item) { if (!item.disabled) this.$emit('update:modelValue', item.value) },
+    onKeydown(e, idx) {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+      e.preventDefault()
+      const dir = e.key === 'ArrowRight' ? 1 : -1
+      const n = this.items.length
+      let i = idx
+      for (let k = 0; k < n; k++) {
+        i = (i + dir + n) % n
+        if (!this.items[i].disabled) break
+      }
+      if (i === idx || this.items[i].disabled) return
+      this.$emit('update:modelValue', this.items[i].value)
+      nextTick(() => this.$refs.seg[i].focus())
+    },
+  },
+  template: `<div class="m3-segmented" role="radiogroup" :aria-label="ariaLabel" :style="{ gridTemplateColumns: 'repeat(' + items.length + ', minmax(0, 1fr))' }">
+    <button v-for="(item, idx) in items" :key="item.value" ref="seg" type="button" role="radio" class="m3-segment m3-state m3-label-large"
+      :class="{ 'is-checked': item.value === modelValue }" :aria-checked="String(item.value === modelValue)" :disabled="item.disabled"
+      :tabindex="idx === focusIndex ? 0 : -1" @click="select(item)" @keydown="onKeydown($event, idx)">
+      <m3-icon v-if="item.value === modelValue" name="check" :size="18"></m3-icon>
+      <m3-icon v-else-if="item.icon" :name="item.icon" :size="18"></m3-icon>
+      <span class="m3-segment__label">{{ item.label }}</span>
+    </button>
+  </div>`,
+}
+
+/** PARENT-175 M3Switch：disabled 或 busy 時不 emit */
+const M3Switch = {
+  props: {
+    modelValue: { type: Boolean, required: true },
+    disabled: { type: Boolean, default: false },
+    label: { type: String, required: true },
+    busy: { type: Boolean, default: false },
+  },
+  emits: ['update:modelValue'],
+  methods: {
+    toggle() { if (this.disabled || this.busy) return; this.$emit('update:modelValue', !this.modelValue) },
+  },
+  template: `<button type="button" role="switch" class="m3-switch" :class="{ 'is-on': modelValue, 'is-busy': busy }"
+    :aria-checked="String(modelValue)" :aria-label="label" :aria-busy="busy ? 'true' : null" :disabled="disabled" @click="toggle">
+    <span class="m3-switch__track"><span class="m3-switch__thumb">
+      <span v-if="busy" class="m3-switch__spinner" aria-hidden="true"></span>
+      <m3-icon v-else-if="modelValue" name="check" :size="16"></m3-icon>
+    </span></span>
+  </button>`,
+}
+
+/* ============================================================
+   PARENT-025 ParentBottomSheet
+   ============================================================ */
+const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+const DISMISS_DISTANCE = 80
+const LOCKED_MAX_OFFSET = 24
+let sheetUid = 0
+
+const ParentBottomSheet = {
+  props: {
+    modelValue: { type: Boolean, required: true },
+    title: { type: String, default: '' },
+    dismissible: { type: Boolean, default: true },
+    fullHeight: { type: Boolean, default: false },
+  },
+  emits: ['update:modelValue'],
+  data() {
+    return { titleId: `sheet-title-${++sheetUid}`, offset: 0, dragging: false, startY: 0, prevFocus: null }
+  },
+  computed: {
+    sheetStyle() { return this.offset ? { transform: `translateY(${this.offset}px)` } : null },
+  },
+  watch: {
+    modelValue: {
+      handler(open) {
+        if (open) {
+          this.prevFocus = document.activeElement
+          document.addEventListener('keydown', this.onDocKeydown)
+          nextTick(() => {
+            const dialog = this.$refs.dialog
+            if (!dialog) return
+            const first = dialog.querySelector(FOCUSABLE)
+            ;(first || dialog).focus({ preventScroll: true })
+          })
+        } else {
+          document.removeEventListener('keydown', this.onDocKeydown)
+          this.offset = 0
+          this.dragging = false
+          if (this.prevFocus && typeof this.prevFocus.focus === 'function') this.prevFocus.focus({ preventScroll: true })
+        }
+      },
+    },
+  },
+  beforeUnmount() { document.removeEventListener('keydown', this.onDocKeydown) },
+  methods: {
+    requestClose() { if (this.dismissible) this.$emit('update:modelValue', false) },
+    onDocKeydown(e) { if (e.key === 'Escape') { e.stopPropagation(); this.requestClose() } },
+    onKeydown(e) {
+      if (e.key !== 'Tab') return
+      const list = Array.from(this.$refs.dialog.querySelectorAll(FOCUSABLE))
+      if (!list.length) { e.preventDefault(); return }
+      const first = list[0]
+      const last = list[list.length - 1]
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === this.$refs.dialog)) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    },
+    startDrag(e) {
+      this.dragging = true
+      this.startY = e.clientY
+      window.addEventListener('pointermove', this.onPointerMove)
+      window.addEventListener('pointerup', this.onPointerUp)
+      window.addEventListener('pointercancel', this.onPointerUp)
+    },
+    onHandleDown(e) { if (e.button === 0 || e.pointerType !== 'mouse') this.startDrag(e) },
+    onPointerMove(e) {
+      if (!this.dragging) return
+      const dy = Math.max(0, e.clientY - this.startY)
+      this.offset = this.dismissible ? dy : Math.min(LOCKED_MAX_OFFSET, dy / 4)
+    },
+    onPointerUp() {
+      window.removeEventListener('pointermove', this.onPointerMove)
+      window.removeEventListener('pointerup', this.onPointerUp)
+      window.removeEventListener('pointercancel', this.onPointerUp)
+      if (!this.dragging) return
+      this.dragging = false
+      if (this.dismissible && this.offset > DISMISS_DISTANCE) {
+        this.$emit('update:modelValue', false)
+      } else {
+        this.offset = 0
+      }
+    },
+  },
+  template: `<transition name="sheet" :duration="{ enter: 400, leave: 200 }">
+    <div v-if="modelValue" class="sheet-layer">
+      <div class="sheet-scrim" @click="requestClose"></div>
+      <div ref="dialog" class="sheet" :class="{ 'is-full': fullHeight, 'is-dragging': dragging }" :style="sheetStyle"
+        role="dialog" aria-modal="true" :aria-labelledby="titleId" tabindex="-1" @keydown="onKeydown">
+        <div class="sheet__drag" @pointerdown="onHandleDown">
+          <div class="sheet__handle" aria-hidden="true"></div>
+          <div class="sheet__header" :class="{ 'has-close': dismissible }">
+            <h2 :id="titleId" class="sheet__title m3-title-large">{{ title }}</h2>
+            <m3-icon-button v-if="dismissible" icon="close" label="關閉" @pointerdown.stop @click="requestClose"></m3-icon-button>
+          </div>
+        </div>
+        <div class="sheet__body"><slot></slot></div>
+        <div v-if="$slots.footer" class="sheet__footer"><slot name="footer"></slot></div>
+      </div>
+    </div>
+  </transition>`,
+}
+/* ===== 稿件共用：snackbar 佇列（照 PARENT-011）與底部導覽 ===== */
+function createSnack() {
+  let nextId = 1
+  let headTimer = null
+  const snack = reactive({
+    items: [],
+    show(message, opts = {}) {
+      const item = { id: nextId++, message, tone: opts.tone || 'info', duration: opts.duration ?? 4000, action: opts.action }
+      snack.items.push(item)
+      if (snack.items.length > 3) snack.items.splice(1, 1)
+      if (snack.items.length === 1) startHeadTimer()
+      return item.id
+    },
+    dismiss(id) {
+      const i = snack.items.findIndex((x) => x.id === id)
+      if (i < 0) return
+      snack.items.splice(i, 1)
+      if (i === 0) startHeadTimer()
+    },
+    clear() { snack.items.splice(0); clearTimeout(headTimer) },
+  })
+  function startHeadTimer() {
+    clearTimeout(headTimer)
+    const head = snack.items[0]
+    if (head && head.duration > 0) headTimer = setTimeout(() => snack.dismiss(head.id), head.duration)
+  }
+  return snack
+}
+
+const NAV_ITEMS = [
+  { key: 'home', label: '首頁', icon: 'home', path: '/' },
+  { key: 'homework', label: '作業', icon: 'assignment', path: '/homework' },
+  { key: 'pickup', label: '接送', icon: 'directions_walk', path: '/pickup' },
+  { key: 'exams', label: '成績', icon: 'grading', path: '/exams' },
+  { key: 'more', label: '更多', icon: 'menu', path: '/more' },
+]
+
+/* ===== 以下元件複製自 parent-component-status-pill.html ===== */
+/** PARENT-051 StatusPill：純展示，不可互動、不拿焦點；tone 預設 neutral */
+const StatusPill = {
+  props: {
+    label: { type: String, required: true },
+    tone: { type: String, default: 'neutral' },
+    icon: { type: String, default: '' },
+  },
+  template: `<span class="status-pill m3-label-large" :class="['status-pill--' + tone, { 'has-icon': !!icon }]">
+    <m3-icon v-if="icon" :name="icon" :size="18"></m3-icon><span class="status-pill__label">{{ label }}</span>
+  </span>`,
+}
+/* ============================================================
+   本稿元件與稿件資料
+   ============================================================ */
+/** FRONTEND-003 formatTime 的稿件版：UTC ISO → 台北 HH:MM */
+const fmtTime = (iso) => {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false }).format(d)
+}
+const SOURCE_META = {
+  auto: { icon: 'smart_toy', label: '系統自動回覆' },
+  staff: { icon: 'person', label: '老師回覆' },
+}
+const WAITING_TEXT = '已通知老師，稍後回覆預計時間'
+
+/** PARENT-094 PickupReplyMessage */
+const PickupReplyMessage = {
+  props: {
+    request: { type: Object, required: true },
+    compact: { type: Boolean, default: false },
+  },
+  computed: {
+    eta() { return this.request.reply_ready_eta || null },
+    etaText() { return this.eta ? `預計 ${this.eta} 可接送` : '' },
+    waiting() { return !this.eta && !this.request.reply_message },
+    source() { return SOURCE_META[this.request.reply_source] || null },
+    /** 待裁定 2（推薦 A）：訊息第一行與 ETA 大字完全相同時（系統自動回覆的固定格式）省略該行 */
+    bubbleText() {
+      const m = this.request.reply_message
+      if (!m) return ''
+      if (!this.eta) return m
+      const [first, ...rest] = m.split('\n')
+      return first.trim() === this.etaText ? rest.join('\n').trim() : m
+    },
+    compactText() { return this.etaText || (this.request.reply_message || '').split('\n')[0] },
+    repliedAt() { return this.request.replied_at ? fmtTime(this.request.replied_at) : '' },
+  },
+  setup() { return { WAITING_TEXT } },
+  template: `<div class="prm" :class="{ 'is-compact': compact }" aria-live="polite">
+    <template v-if="waiting">
+      <div class="prm-wait">
+        <m3-icon class="prm-wait__icon" name="hourglass_top" :size="compact ? 18 : 24"></m3-icon>
+        <span class="prm-wait__text" :class="compact ? 'm3-body-medium' : 'm3-body-large'">{{ WAITING_TEXT }}</span>
+        <span v-if="compact" class="m3-spinner" aria-hidden="true"></span>
+      </div>
+      <div v-if="!compact" class="prm-progress" role="progressbar" aria-label="等待老師回覆"><span class="prm-progress__bar"></span></div>
+    </template>
+    <template v-else-if="compact">
+      <p class="prm-compact__text m3-title-medium">{{ compactText }}</p>
+      <p v-if="source" class="prm-source m3-label-small"><m3-icon :name="source.icon" :size="14"></m3-icon>{{ source.label }}</p>
+    </template>
+    <template v-else>
+      <p v-if="source" class="prm-source m3-label-medium"><m3-icon :name="source.icon" :size="16"></m3-icon>{{ source.label }}</p>
+      <p v-if="eta" class="prm-eta m3-headline-small">預計 <span class="prm-eta__time">{{ eta }}</span> 可接送</p>
+      <p v-if="bubbleText" class="prm-bubble m3-body-large">{{ bubbleText }}</p>
+      <p v-if="repliedAt" class="prm-time m3-body-small">{{ repliedAt }} 回覆</p>
+    </template>
+  </div>`,
+}
+const PAGE_COMPONENTS = { PickupReplyMessage, StatusPill }
+
+function pageSetup() {
+  const R = (o) => ({ reply_ready_eta: null, reply_message: null, reply_source: null, replied_at: null, ...o })
+  const LONG = '王小明今天數學習作第 12、13 頁還在訂正，國語生字也剩一行。\n老師會陪他做完再下課，預計 17:50 左右可以接送。\n\n提醒：今天下午有雨，請記得幫小明帶雨衣；側門 17:30 後關閉，請由正門進入並在櫃台簽名。若需要提早接送請直接按「我到了」，老師會先讓他把作業帶回家完成。謝謝您！'.slice(0, 200)
+  const scenarios = [
+    { key: 'staff-full', label: '老師回覆：ETA + 訊息 + 回覆時間', request: R({ reply_ready_eta: '17:30', reply_message: '數學還在訂正，預計 17:30 可接送', reply_source: 'staff', replied_at: '2026-10-02T09:01:00Z' }) },
+    { key: 'auto-done', label: '系統自動回覆：作業已完成（只有訊息）', request: R({ reply_message: '作業已完成，可以接送', reply_source: 'auto', replied_at: '2026-10-02T08:55:00Z' }) },
+    { key: 'auto-eta', q: 2, label: '系統自動回覆：ETA + 員工說明（訊息第一行與大字重複 → 省略）', request: R({ reply_ready_eta: '17:30', reply_message: '預計 17:30 可接送\n剩數學訂正', reply_source: 'auto', replied_at: '2026-10-02T08:55:00Z' }) },
+    { key: 'auto-eta-only', q: 2, label: '系統自動回覆：ETA、無說明（訊息只剩重複行 → 不畫泡泡）', request: R({ reply_ready_eta: '17:30', reply_message: '預計 17:30 可接送', reply_source: 'auto', replied_at: '2026-10-02T08:55:00Z' }) },
+    { key: 'staff-eta', label: '只有 ETA（老師只改時間）', request: R({ reply_ready_eta: '18:00', reply_source: 'staff', replied_at: '2026-10-02T09:12:00Z' }) },
+    { key: 'staff-msg', label: '只有訊息（老師回覆，無 ETA）', request: R({ reply_message: '小明在洗手，馬上下來', reply_source: 'staff', replied_at: '2026-10-02T09:20:00Z' }) },
+    { key: 'auto-noeta', q: 3, label: '未完成且無 ETA（預設設定：系統自動回覆固定文案）', request: R({ reply_message: WAITING_TEXT, reply_source: 'auto', replied_at: '2026-10-02T08:55:00Z' }) },
+    { key: 'waiting', label: '等待回覆（後台關閉自動回覆，eta 與 message 皆 null）', request: R({}) },
+    { key: 'long', label: '長訊息（200 字上限）：保留換行、完整顯示', request: R({ reply_ready_eta: '17:50', reply_message: LONG, reply_source: 'staff', replied_at: '2026-10-02T09:05:00Z' }) },
+    { key: 'html', label: '純文字渲染：訊息含 HTML 也只顯示字面', request: R({ reply_message: '<b>x</b> 請由<a href="#">側門</a>進入', reply_source: 'staff', replied_at: '2026-10-02T09:05:00Z' }) },
+  ]
+  const compacts = [
+    { label: 'pending · 系統自動回覆（有 ETA → 顯示 ETA）', pill: { label: '待回覆', tone: 'warning' }, request: R({ reply_ready_eta: '17:30', reply_message: '預計 17:30 可接送\n剩數學訂正', reply_source: 'auto' }) },
+    { label: 'acknowledged · 老師回覆（無 ETA → 訊息首行截斷）', pill: { label: '已確認', tone: 'info' }, request: R({ reply_message: '作業已完成，可以接送\n請由側門進入', reply_source: 'staff', replied_at: '2026-10-02T09:01:00Z' }) },
+    { label: 'pending · 等待回覆', pill: { label: '待回覆', tone: 'warning' }, request: R({}) },
+    { label: '長訊息首行', pill: { label: '已確認', tone: 'info' }, request: R({ reply_message: LONG, reply_source: 'staff' }) },
+  ]
+
+  const liveSteps = [
+    { key: 'waiting', label: '1. 等待回覆', request: R({}) },
+    { key: 'staff', label: '2. ws：老師回覆', request: R({ reply_ready_eta: '17:40', reply_message: '國語訂正中，預計 17:40 可接送', reply_source: 'staff', replied_at: '2026-10-02T09:10:00Z' }) },
+    { key: 'staff2', label: '3. ws：老師改時間', request: R({ reply_ready_eta: '17:20', reply_message: '提早寫完了，17:20 就可以來接', reply_source: 'staff', replied_at: '2026-10-02T09:15:00Z' }) },
+  ]
+  const liveKey = ref('waiting')
+  const live = computed(() => liveSteps.find((s) => s.key === liveKey.value).request)
+  const setLive = (k) => { liveKey.value = k }
+
+  const decisions = [
+    '版面（完整模式）由上而下：來源小標 → ETA 大字 → 訊息泡泡 → 「HH:MM 回覆」。四塊各自有值才渲染，所以「只有 ETA」「只有訊息」都不會留空白。',
+    '來源小標：label-medium、on-surface-variant；auto → smart_toy 圖示 +「系統自動回覆」，staff → person 圖示 +「老師回覆」，null → 不渲染。放在最上方，像聊天訊息的發話者名稱。',
+    'ETA 大字：headline-small（24px）「預計 17:30 可接送」，時間以 primary 色 + 500 字重 + tabular-nums 強調；整行文字節點保持「預計 17:30 可接送」連續（時間包 span，前後空白保留），red case 以 textContent 比對。',
+    '訊息泡泡：secondary-container 底 / on-secondary-container 字、圓角左上 4px 其餘 16px（左側發話的對話泡泡）、padding 12px 16px、body-large；white-space: pre-wrap 保留換行、overflow-wrap: anywhere；以文字插值純文字渲染，不用 v-html（HTML 標籤只顯示字面）。長訊息完整顯示不截斷（後端上限 200 字）。泡泡底色用 secondary-container，放在 surface / surface-container-low 卡片上都分辨得出來。',
+    '回覆時間：replied_at 有值且非等待態時，最下方 body-small「HH:MM 回覆」（FRONTEND-003 formatTime 轉台北）；只有 ETA 沒有泡泡時同樣顯示在 ETA 下方。',
+    '等待樣式（ETA 與訊息皆 null）：hourglass_top 圖示 +「已通知老師，稍後回覆預計時間」（body-large）+ 下方 4px indeterminate 線性進度條（role="progressbar"、aria-label「等待老師回覆」）；reduced-motion 時改為靜止的淡色長條。不顯示來源與時間。',
+    'compact（首頁卡片）：一行 title-medium 單行省略——優先「預計 HH:MM 可接送」，否則 reply_message 第一行；下一行來源小標（label-small、14px 圖示）；不顯示泡泡與回覆時間。等待態為一行 body-medium 文案 + 16px 轉圈（m3-spinner）。',
+    '外層 aria-live="polite"（compact 亦同），ws 更新時原地替換內容，螢幕閱讀器念出新回覆；元件本身不可互動。',
+  ]
+  const openQuestions = [
+    {
+      question: '2. 系統自動回覆有 ETA 時，後端 reply_message 固定為「預計 HH:MM 可接送\\n{員工說明}」（BACKEND-403，已 done），與 ETA 大字重複。怎麼處理？',
+      options: [
+        { text: '前端去重：reply_message 第一行與「預計 {reply_ready_eta} 可接送」完全相同時，泡泡省略該行；剩下空字串就不畫泡泡（後端與 LINE 推播文字不動）；description 與 red case 補一條', recommended: true },
+        { text: '照現行 description 原樣顯示：大字與泡泡第一行重複' },
+      ],
+    },
+    {
+      question: '3. 預設設定（homework.defaults.auto_reply_without_eta = true）下，作業未完成且沒有 ETA 時，後端會寫入 auto 回覆「已通知老師，稍後回覆預計時間」，元件因此畫成「系統自動回覆」泡泡，不會出現等待樣式（等待樣式只在後台關閉自動回覆時出現）。要不要改？',
+      options: [
+        { text: '照現行規格：顯示為系統自動回覆泡泡（文案本身已說明在等老師），不改 API', recommended: true },
+        { text: 'ParentPickupRequest 新增 awaiting_staff_reply 布林（後端已有 needs_reply 可推導），為 true 時在泡泡下方加等待進行中指示；需改 BACKEND schema、api_index 與 PARENT-090 型別' },
+      ],
+    },
+  ]
+
+  return { scenarios, compacts, liveSteps, liveKey, live, setLive, decisions, openQuestions }
+}
+
+const app = createApp({
+  setup() {
+    const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
+    const meta = { status: readMeta('preview-status'), tasks: readMeta('preview-tasks'), route: readMeta('preview-route'), updated: readMeta('preview-updated') }
+    const snack = createSnack()
+    const theme = ref('light')
+    watch(theme, (v) => {
+      if (v === 'dark') document.documentElement.setAttribute('data-theme', 'dark')
+      else document.documentElement.removeAttribute('data-theme')
+    })
+    return { meta, snack, theme, navItems: NAV_ITEMS, ...pageSetup({ snack }) }
+  },
+})
+
+app.component('M3Icon', M3Icon)
+app.component('M3Button', M3Button)
+app.component('M3IconButton', M3IconButton)
+app.component('M3Card', M3Card)
+app.component('M3TextField', M3TextField)
+app.component('M3Chip', M3Chip)
+app.component('M3ListItem', M3ListItem)
+app.component('M3TopAppBar', M3TopAppBar)
+app.component('M3NavigationBar', M3NavigationBar)
+app.component('M3Snackbar', M3Snackbar)
+app.component('M3SegmentedButton', M3SegmentedButton)
+app.component('M3Switch', M3Switch)
+app.component('ParentBottomSheet', ParentBottomSheet)
+Object.entries(PAGE_COMPONENTS).forEach(([name, def]) => app.component(name, def))
+app.mount('#app')
+</script>
+</body>
+</html>
