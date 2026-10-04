@@ -7,10 +7,12 @@ import json
 from collections.abc import Awaitable, Callable, Iterator
 from typing import Any
 
+import anyio
 import pytest
 from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+from starlette.requests import HTTPConnection
 from starlette.websockets import WebSocketDisconnect
 
 from app.api.ws import common as ws_common
@@ -171,17 +173,10 @@ def test_ws_common_load_staff(db_session: Session, fake_clock: FakeClock) -> Non
         assert ws.receive_json() == {"id": str(parent.id)}
     # 直接呼叫（不經 WS）：失敗拋 AppError 供 endpoint 轉關閉碼
     with pytest.raises(AppError) as excinfo:
-        ws_load_staff(_FakeConn({}), clock=fake_clock)
+        ws_load_staff(HTTPConnection({"type": "websocket", "headers": []}), clock=fake_clock)
     assert excinfo.value.status == 401
     assert close_code_for(excinfo.value) == WS_CLOSE_UNAUTHENTICATED
     assert close_code_for(AppError("x", "y", status=409)) == WS_CLOSE_BAD_MESSAGE
-
-
-class _FakeConn:
-    """只提供 cookies 的最小 HTTPConnection 替身（直接呼叫 ws_load_* 用）。"""
-
-    def __init__(self, cookies: dict[str, str]) -> None:
-        self.cookies = cookies
 
 
 @pytest.mark.usefixtures("_session_on_test_connection")
@@ -273,26 +268,55 @@ def test_ws_common_revalidate_close(fake_clock: FakeClock) -> None:
         assert excinfo.value.code == WS_CLOSE_UNAUTHENTICATED
 
 
-def test_ws_common_client_disconnect_ends_loop(fake_clock: FakeClock) -> None:
-    """client 斷線 → run_ws_loop 正常結束（不拋例外、不留重驗計時器）。"""
-    finished: list[bool] = []
-    app = FastAPI()
+class _FakeWebSocket:
+    """只實作 run_ws_loop 用到的介面：訊息送完後 receive_text 拋 WebSocketDisconnect。
 
-    async def never() -> bool:
+    starlette TestClient 在 client 端離開 context 時會直接取消 app task，觀察不到「正常結束」，
+    故以替身驅動。"""
+
+    def __init__(self, incoming: list[str]) -> None:
+        self._incoming = list(incoming)
+        self.sent: list[dict[str, Any]] = []
+        self.closed_with: list[int] = []
+
+    async def receive_text(self) -> str:
+        if not self._incoming:
+            raise WebSocketDisconnect(code=1001)
+        return self._incoming.pop(0)
+
+    async def send_json(self, data: dict[str, Any]) -> None:
+        self.sent.append(data)
+
+    async def close(self, code: int = 1000) -> None:
+        self.closed_with.append(code)
+
+
+@pytest.mark.anyio
+async def test_ws_common_client_disconnect_ends_loop() -> None:
+    """client 斷線 → run_ws_loop 正常結束（不拋例外、不主動 close、重驗計時器一併結束）。"""
+    revalidations: list[int] = []
+    received: list[dict[str, Any]] = []
+
+    async def revalidate() -> bool:
+        revalidations.append(1)
         return True
 
-    @app.websocket("/ws/loop")
-    async def loop_ws(ws: WebSocket) -> None:
-        await ws.accept()
+    async def on_message(message: dict[str, Any]) -> None:
+        received.append(message)
 
-        async def on_message(message: dict[str, Any]) -> None:
-            pass
+    ws = _FakeWebSocket([json.dumps({"action": "ping"}), json.dumps({"action": "subscribe"})])
 
-        await run_ws_loop(ws, on_message=on_message, revalidate=never, interval=0.05)
-        finished.append(True)
+    await run_ws_loop(
+        ws,  # type: ignore[arg-type]
+        on_message=on_message,
+        revalidate=revalidate,
+        interval=0.05,
+    )
 
-    client = TestClient(app)
-    with client.websocket_connect("/ws/loop") as ws:
-        ws.send_json({"action": "ping"})
-        assert ws.receive_json() == {"type": "pong"}
-    assert finished == [True]
+    assert ws.sent == [{"type": "pong"}]
+    assert received == [{"action": "subscribe"}]
+    assert ws.closed_with == []
+    # 迴圈結束後重驗計時器不再執行
+    count = len(revalidations)
+    await anyio.sleep(0.2)
+    assert len(revalidations) == count
