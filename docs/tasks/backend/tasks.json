@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 229,
-  "last_updated": "2026-10-04T16:59:33Z",
+  "version": 230,
+  "last_updated": "2026-10-04T16:59:59Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -9286,7 +9286,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7c",
       "depends_on": [
         "BACKEND-370",
@@ -9308,9 +9308,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試 fa18d67 → 測試修正 fb80797（併發測試在 commit 前取 id、lock_timeout 改 SET LOCAL，屬修正測試本身的連線污染，非放寬）→ 實作 c7ac589；動到的檔案 just lint / just typecheck 乾淨。ON CONFLICT 的 constraint 名稱 uq_homework_daily_progress_student_date 與 db022 一致。突變驗證：拿掉 with_for_update → test_lock_progress_row_blocks_existing_row 轉紅；改成「先查無列再 add + flush」→ 併發建立測試轉紅（第二條交易 UniqueViolation），兩條 app_backend 連線 + 兩 thread 的併發測試確實能抓到非冪等實作。清理：committing 測試以 cleanup_tables 清進度表、owner 連線刪學生（fixture 排在 committing_db_session 之前、owner 連線設 lock_timeout），含突變失敗在內跑完後本機 DB students / homework_daily_progress 筆數與執行前相同，無殘留。lock_timeout 以 SET LOCAL 設在 pooled 連線的交易內，不會隨連線回 pool 污染其他測試；其他既有測試的 session 級 SET lock_timeout 都在 connect_owner / connect_backend 的獨立 psycopg 連線（非 pool），不受影響。殘留（不打回）：populate_existing 不在 description 內（description 只要求 SELECT FOR UPDATE），拿掉它 tdd.run 仍全綠；行為正確（BACKEND-133 同樣問題的修法），日後呼叫端若先載入進度列再鎖定才需要，建議 recompute task 補一條「先載入、他人改值、再 lock 取得新值」的測試。"
       }
     },
     {
@@ -9698,7 +9698,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7c",
       "depends_on": [
         "BACKEND-370",
@@ -9720,9 +9720,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試 fa18d67 → 測試修正 fb80797（併發測試在 commit 前取 id、lock_timeout 改 SET LOCAL，屬修正測試本身的連線污染，非放寬）→ 實作 c7ac589；動到的檔案 just lint / just typecheck 乾淨。家長端 IDOR：description 明載「呼叫端已驗證所有權（BACKEND-391）」，BACKEND-391 為 Depends(get_owned_student) 且 red_cases 含 IDOR（他人小孩與 uuid4() 相同 404），service 不收 parent 符合規格。突變驗證：ready_eta 改輸出 HH:MM:SS → test_child_homework_detail 轉紅（TimeHM 也會擋）；updated_at 不納入 progress → test_child_homework_progress_only 轉紅。items 只含 title / subject_name / status（以 model_dump 鍵集合斷言），無 progress 列時 not_started、ready_eta None、note None，無資料 updated_at None，他人與隔天資料不混入。殘留（不打回）：「items 與 progress 取最晚」的跨列比較沒有測試（把 max 改 min 測不出來）。risk_notes 說「無法驗證」不精確：db022 的 set_updated_at trigger 只在 BEFORE UPDATE，INSERT 時明確給 updated_at 會被保留，可以造出不同時間的列來驗證；實作是單純的 max()，風險低，建議日後補測試並更正 risk_notes 說法。"
       }
     },
     {
