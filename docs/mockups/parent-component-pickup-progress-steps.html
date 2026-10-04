@@ -12,7 +12,7 @@
      preview-route  : 對應的家長端路由 path；元件稿寫 component:<相對路徑>
      preview-updated: 最後更新日期 YYYY-MM-DD
      ============================================================ -->
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-095">
 <meta name="preview-route" content="component:parent/components/pickup/PickupProgressSteps.vue">
 <meta name="preview-updated" content="2026-10-04">
@@ -580,7 +580,7 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
           <m3-card variant="outlined"><pickup-progress-steps :request="live"></pickup-progress-steps></m3-card>
 
           <template v-for="s in scenarios" :key="s.key">
-            <div class="cap m3-label-large"><span v-if="s.q" class="cap__tag">待裁定 {{ s.q }}</span><span>{{ s.label }}</span></div>
+            <div class="cap m3-label-large"><span>{{ s.label }}</span></div>
             <m3-card variant="outlined"><pickup-progress-steps :request="s.request"></pickup-progress-steps></m3-card>
           </template>
         </main>
@@ -1098,7 +1098,7 @@ const fmtTime = (iso) => {
   return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false }).format(d)
 }
 const OPEN_STATUSES = ['pending', 'acknowledged', 'arrived']
-/** 待裁定 4（推薦 A）：目前步驟的提示文字 */
+/** 目前步驟的提示文字 */
 const CURRENT_HINTS = {
   ack: '等待老師確認',
   arrived: '抵達安親班門口後請按「我到了」',
@@ -1113,7 +1113,7 @@ const PickupProgressSteps = {
     steps() {
       const r = this.request
       const ackDone = ['acknowledged', 'arrived', 'completed'].includes(r.status) || !!r.arrived_at
-      // 待裁定 5（推薦 A）：completed 但 arrived_at 為 null → 第 3 步視為完成、不顯示時間
+      // completed 但 arrived_at 為 null → 第 3 步視為完成、不顯示時間
       const arrivedDone = !!r.arrived_at || r.status === 'completed'
       const doneAll = r.status === 'completed'
       const list = [
@@ -1164,7 +1164,7 @@ function pageSetup() {
     { key: 'arrived-skip', label: 'arrived：跳過確認（pending 直接按「我到了」）', request: R({ status: 'arrived', arrived_at: '2026-10-02T09:05:00Z' }) },
     { key: 'arrive-now', label: 'arrived：「我已經到了」捷徑（送出與到達同時）', request: R({ status: 'arrived', created_at: '2026-10-02T09:25:00Z', arrived_at: '2026-10-02T09:25:00Z' }) },
     { key: 'completed', label: 'completed：已接走（含接走人）', request: R({ status: 'completed', arrived_at: '2026-10-02T09:32:00Z', completed_at: '2026-10-02T09:40:00Z', picked_up_by_name: '王媽媽' }) },
-    { key: 'completed-noarrive', q: 5, label: 'completed：家長沒按「我到了」老師就交付（arrived_at = null）', request: R({ status: 'completed', completed_at: '2026-10-02T09:40:00Z', picked_up_by_name: '陳叔叔' }) },
+    { key: 'completed-noarrive', label: 'completed：家長沒按「我到了」老師就交付（arrived_at = null）', request: R({ status: 'completed', completed_at: '2026-10-02T09:40:00Z', picked_up_by_name: '陳叔叔' }) },
     { key: 'cancelled', label: 'cancelled：已取消', request: R({ status: 'cancelled', cancelled_at: '2026-10-02T09:10:00Z' }) },
     { key: 'cancelled-arrived', label: 'cancelled：到達後才取消', request: R({ status: 'cancelled', arrived_at: '2026-10-02T09:32:00Z', cancelled_at: '2026-10-02T09:36:00Z' }) },
     { key: 'expired', label: 'expired：逾時自動結束', request: R({ status: 'expired' }) },
@@ -1182,28 +1182,14 @@ function pageSetup() {
   const decisions = [
     '垂直步驟條（ol，aria-label「接送進度」），四步固定順序：已送出 → 老師已確認 → 我已到達 → 已接走。每步一列：左 24px 圓形標記、中間步驟名稱（body-large）與下方說明（body-medium）、右側時間（body-medium、tabular-nums）。垂直版可以放接走人姓名與提示文字，比水平四格在 390px 寬下好讀。',
     '標記：完成 = primary 實心圓 + check 圖示；目前步驟 = primary 外框 + 中心 10px 實心點，名稱 500 字重，aria-current="step"；未到 = outline-variant 空心圓。標記之間 2px 連接線，下一步已完成時該段為 primary，否則 outline-variant。每步名稱後有視覺隱藏的「（已完成 / 進行中 / 未完成）」，狀態不只靠顏色。',
-    '完成判定：已送出恆完成（時間 = created_at）；老師已確認 = status 為 acknowledged / arrived / completed，或 arrived_at 有值（後端允許 pending 直接 arrived；API 沒有 acknowledged_at，所以此步不顯示時間）；我已到達 = arrived_at 有值（時間 = arrived_at）；已接走 = status completed（時間 = completed_at，說明「由 {picked_up_by_name} 接走」，姓名為 null 時不顯示說明）。',
+    '完成判定：已送出恆完成（時間 = created_at）；老師已確認 = status 為 acknowledged / arrived / completed，或 arrived_at 有值（後端允許 pending 直接 arrived；API 沒有 acknowledged_at，所以此步不顯示時間）；我已到達 = arrived_at 有值或 status completed（時間 = arrived_at，completed 而 arrived_at 為 null 時不顯示時間，避免出現第 4 步完成、第 3 步未完成的斷層）；已接走 = status completed（時間 = completed_at，說明「由 {picked_up_by_name} 接走」，姓名為 null 時不顯示說明）。',
     '目前步驟 = 非終態（pending / acknowledged / arrived）時第一個未完成的步驟；completed、cancelled、expired 沒有目前步驟。',
     '終態：cancelled / expired 時未完成步驟（標記與文字）降為 38% 透明度，已完成的保持原色；步驟條下方一塊 surface-container-high 圓角 12px 的結束列：cancelled → cancel 圖示 +「已取消（HH:MM）」（cancelled_at），expired → timer_off 圖示 +「接送請求已逾時自動結束」。不用 error 色（取消是家長自己的正常操作）。',
     '時間全部經 FRONTEND-003 formatTime 轉台北 HH:MM（例：created_at 09:00Z → 17:00）。元件不可互動；「我到了」「取消」等按鈕屬於 PickupView（PARENT-097）。',
     '移植 ivy PickupNoticeView 的四步驟清單（點 + 名稱 + 右側時間）；步驟名稱與判定改為本專案狀態，去掉 ivy 的 acknowledged_at 時間（本專案 API 沒有）。',
+    '目前步驟在名稱下方加一行 primary 色提示（body-medium）：老師已確認 →「等待老師確認」、我已到達 →「抵達安親班門口後請按「我到了」」、已接走 →「老師正在帶小孩出來」。非目前步驟不顯示提示。',
   ]
-  const openQuestions = [
-    {
-      question: '4. 目前步驟要不要加一行提示（primary 色）：老師已確認 →「等待老師確認」、我已到達 →「抵達安親班門口後請按「我到了」」、已接走 →「老師正在帶小孩出來」？',
-      options: [
-        { text: '加：家長一眼知道現在在等什麼、下一步要做什麼；description 補文案、red case 補一條', recommended: true },
-        { text: '不加：照現行 description，目前步驟只靠標記與粗體表示' },
-      ],
-    },
-    {
-      question: '5. completed 但 arrived_at 為 null（家長沒按「我到了」老師就交付、或代理人到場直接核驗）時，第 3 步「我已到達」怎麼畫？（現行 description 依 arrived_at 判定，會出現第 4 步完成、第 3 步未完成的斷層）',
-      options: [
-        { text: '視為完成、不顯示時間（判定改為 arrived_at 有值或 status completed）；description 與 red case 補一條', recommended: true },
-        { text: '照 arrived_at 判定，第 3 步保持未完成樣式並加說明「未按「我到了」」' },
-      ],
-    },
-  ]
+  const openQuestions = []
 
   return { scenarios, liveSteps, liveKey, live, decisions, openQuestions }
 }

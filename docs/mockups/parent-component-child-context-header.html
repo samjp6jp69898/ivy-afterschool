@@ -12,7 +12,7 @@
      preview-route  : 對應的家長端路由 path；元件稿寫 component:<相對路徑>
      preview-updated: 最後更新日期 YYYY-MM-DD
      ============================================================ -->
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-050">
 <meta name="preview-route" content="component:parent/components/ChildContextHeader.vue">
 <meta name="preview-updated" content="2026-10-04">
@@ -639,7 +639,7 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
           <div class="cap m3-label-large">長姓名 / 長校名：單行省略</div>
           <child-context-header :children="[kids.long, kids.ming]" selected-id="s7"></child-context-header>
 
-          <div class="cap m3-label-large"><span class="cap__tag">待裁定 1</span><span>status = suspended：姓名旁「暫停」</span></div>
+          <div class="cap m3-label-large"><span>status = suspended：姓名旁「暫停」</span></div>
           <child-context-header :children="[kids.suspended, kids.ming]" selected-id="s8"></child-context-header>
 
           <div class="cap m3-label-large">children = []：不渲染（頁面改顯示「尚未綁定小孩」）</div>
@@ -1345,7 +1345,7 @@ function pageSetup() {
 
   const decisions = [
     '外觀是一張「小孩身分卡」：surface-container-low 底、圓角 16px、最小高 80px、左右 padding 16px；左側 48px 圓形頭像，右側三行：姓名（title-medium）、「{grade_level} 年級 · {class_name}」（body-medium）、school_name（body-small），文字色 on-surface-variant，每行單行省略。',
-    '頭像：photo_url 有值 → img（object-fit: cover，alt=""，頭像整體 aria-hidden，因為姓名就在旁邊）；無照片或 img 觸發 error → 姓名首字（tertiary-container / on-tertiary-container）。載入失敗退回首字是本稿新增行為（photo_url 是短效網址，過期即失敗），核可後補進 PARENT-050 description 與 red case。',
+    '頭像：photo_url 有值 → img（object-fit: cover，alt=""，頭像整體 aria-hidden，因為姓名就在旁邊）；無照片或 img 觸發 error → 姓名首字（tertiary-container / on-tertiary-container）。photo_url 是短效網址，過期即載入失敗，因此失敗時退回首字（身分卡與 sheet 清單皆同）。',
     'null 欄位：class_name 為 null 時第二行只剩「3 年級」（不出現「·」）；school_name 為 null 時不渲染第三行。不顯示「null」字樣。',
     'children.length > 1：根元素為 button（aria-haspopup="dialog"），整張卡有 state layer 與 2px focus 外框，右側 expand_more；無障礙名稱 = 卡片文字 + 視覺隱藏「，切換小孩」。children.length === 1：根元素為 div，不可點、無圖示、無 state layer。children.length === 0：不渲染（v-if，輸出註解節點）。',
     'selectedId 找不到對應小孩（例如剛解除綁定）時以第一位小孩顯示，與 ivy 一致；store 會在下次 load 修正 selectedId。',
@@ -1353,16 +1353,9 @@ function pageSetup() {
     '切換後由各 view 依 children.selectedId 重新載入（本元件不打 API）；手機框最上方示意 view 先顯示 SkeletonBlock 再換成新小孩資料。',
     '小孩清單載入中由頁面以 SkeletonBlock variant="row" 佔位（同樣圓角 16px 的身分卡外框）；清單為空由頁面顯示 ParentEmptyState「尚未綁定小孩」（PARENT-054），本元件不負責。',
     '移植 ivy ChildContextHeader 的 page variant（單孩純顯示、多孩點開 sheet、選中打勾）；去掉 hero variant、listbox/option 角色（改為一般按鈕清單 + aria-current，鍵盤 Tab / Enter 即可操作）。',
+    'status 為 suspended 的小孩：身分卡與「選擇小孩」清單的姓名旁顯示 PARENT-051 StatusPill「暫停」（tone 取 FRONTEND-005 STUDENT_STATUS_META.suspended = warning），讓家長先知道接送 / 請假為何會被擋（後端 student_not_active）；active 不顯示。',
   ]
-  const openQuestions = [
-    {
-      question: '1. ChildSummary.status 為 suspended（暫停）的小孩，身分卡與「選擇小孩」清單要不要標示？（暫停中的小孩發起接送 / 請假會被後端擋 student_not_active）',
-      options: [
-        { text: '姓名旁顯示 StatusPill「暫停」（tone 取 FRONTEND-005 STUDENT_STATUS_META.suspended = warning），讓家長先知道為什麼操作會失敗；需在 description 與 red case 補一條', recommended: true },
-        { text: '不標示，照現行 description；操作失敗時由各頁顯示後端錯誤訊息' },
-      ],
-    },
-  ]
+  const openQuestions = []
 
   return { kids, family, selectedId, openSignal, onSelect, ctxLoading, ctxChild, decisions, openQuestions }
 }

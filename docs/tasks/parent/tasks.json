@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 71,
-  "last_updated": "2026-10-04T11:41:54Z",
+  "version": 72,
+  "last_updated": "2026-10-04T13:53:01Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -1367,7 +1367,7 @@
     {
       "id": "PARENT-050",
       "title": "移植 ChildContextHeader 元件：目前小孩資訊與切換",
-      "description": "建立 `apps/web/src/parent/components/ChildContextHeader.vue`：\n```ts\nprops: { children: ChildSummary[]; selectedId: string | null }\nemits: { select: [id: string] }\n```\n- 顯示目前小孩的照片（`photo_url`，無則姓名首字圓形）、姓名、「{grade_level} 年級 · {class_name}」、`school_name`（null 的欄位省略，不顯示「null」）。\n- `children.length > 1`：整列可點（`aria-haspopup=\"dialog\"`，右側 `expand_more` 圖示），開 PARENT-025 ParentBottomSheet「選擇小孩」，列出全部小孩（目前選中者打勾），點選 emit `select(id)` 並關閉。`children.length === 1`：不可點、無圖示。`children.length === 0`：不渲染。\n- 用於首頁、作業、接送、代理接送、出勤、請假、成績頁頂部；切換後各頁依 `children.selectedId` 重新載入（由各 view 負責）。\n\n移植 ivy `FE:src/parent/components/ChildContextHeader.vue`（variant page/hero 只保留 page）；切換方式改為 bottom sheet（ivy PickupNoticeView 的 tab 列在小孩多時會擠）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-child-context-header.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：單一小孩 / 多位小孩（可切換）/ 無照片首字 / 選擇小孩 bottom sheet 開啟狀態 / 國小欄位缺漏。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/ChildContextHeader.vue`：\n```ts\nprops: { children: ChildSummary[]; selectedId: string | null }\nemits: { select: [id: string] }\n```\n- 顯示目前小孩的照片（`photo_url`，無照片或 img 觸發 error 時改顯示姓名首字圓形；photo_url 為短效網址，過期即載入失敗）、姓名、「{grade_level} 年級 · {class_name}」、`school_name`（null 的欄位省略，不顯示「null」）。\n- `children.length > 1`：整列可點（`aria-haspopup=\"dialog\"`，右側 `expand_more` 圖示），開 PARENT-025 ParentBottomSheet「選擇小孩」，列出全部小孩（目前選中者打勾），點選 emit `select(id)` 並關閉。`children.length === 1`：不可點、無圖示。`children.length === 0`：不渲染。\n- `status === 'suspended'` 的小孩：身分卡與「選擇小孩」清單的姓名旁顯示 PARENT-051 StatusPill「暫停」（label / tone 取 FRONTEND-005 `STUDENT_STATUS_META.suspended`），讓家長先知道接送 / 請假為何被擋（後端 `student_not_active`）；`active` 不顯示。清單列的頭像同樣在照片載入失敗時退回首字。\n- 用於首頁、作業、接送、代理接送、出勤、請假、成績頁頂部；切換後各頁依 `children.selectedId` 重新載入（由各 view 負責）。\n\n移植 ivy `FE:src/parent/components/ChildContextHeader.vue`（variant page/hero 只保留 page）；切換方式改為 bottom sheet（ivy PickupNoticeView 的 tab 列在小孩多時會擠）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-child-context-header.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：單一小孩 / 多位小孩（可切換）/ 無照片首字 / 選擇小孩 bottom sheet 開啟狀態 / 國小欄位缺漏。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/ChildContextHeader.vue",
       "source_ref": "FE:src/parent/components/ChildContextHeader.vue::variant",
@@ -1377,7 +1377,9 @@
         "PARENT-006",
         "PARENT-014",
         "PARENT-025",
-        "INFRA-012"
+        "INFRA-012",
+        "PARENT-051",
+        "FRONTEND-005"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -1391,7 +1393,9 @@
           "ChildContextHeader shows selected child info：children=[{id:'s1',name:'王小明',grade_level:3,class_name:'中年級 A 班',school_name:'某某國小',photo_url:null}]、selectedId='s1' → 文字含 '王小明'、'3 年級 · 中年級 A 班'、'某某國小'，頭像文字 '王'，無 expand_more 圖示",
           "ChildContextHeader switches via sheet：children 兩位、selectedId='s1' → 點擊標頭 → body 出現「選擇小孩」dialog；點「王小華」→ emitted('select')[0] 深等於 ['s2'] 且 dialog 關閉",
           "ChildContextHeader omits null fields：class_name=null、school_name=null → 文字含 '3 年級'，不含 'null' 與 '·'",
-          "ChildContextHeader renders nothing without children：children=[] → wrapper.html() 為註解節點（無可見元素）"
+          "ChildContextHeader renders nothing without children：children=[] → wrapper.html() 為註解節點（無可見元素）",
+          "ChildContextHeader photo falls back to initial：children=[{id:'s1',name:'王小明',grade_level:3,class_name:'中年級 A 班',school_name:'某某國小',photo_url:'https://acct.r2.cloudflarestorage.com/afterschool/student-photos/s1.jpg',status:'active'}] → img.src 為該網址；img 觸發 error 事件 → img 消失，頭像文字 '王'",
+          "ChildContextHeader marks suspended child：children=[{id:'s1',name:'王小明',...,status:'suspended'},{id:'s2',name:'王小華',...,status:'active'}]、selectedId='s1' → 身分卡文字含 '暫停'；點擊開啟 sheet → '暫停' 只出現在王小明那一列；selectedId='s2' 時身分卡不含 '暫停'"
         ],
         "run": "just web-test src/parent/components/ChildContextHeader.spec.ts -t \"ChildContextHeader\"",
         "notes": ""
@@ -1902,7 +1906,7 @@
     {
       "id": "PARENT-094",
       "title": "建立 PickupReplyMessage 元件：呈現接送請求的回覆（預計可接送時間與訊息）",
-      "description": "建立 `apps/web/src/parent/components/pickup/PickupReplyMessage.vue`：\n```ts\nprops: { request: Pick<ParentPickupRequest, 'reply_ready_eta' | 'reply_message' | 'reply_source'> & { replied_at?: string | null }; compact?: boolean }\n// 首頁傳 PARENT-052 的 TodayPickup，接送頁傳完整 ParentPickupRequest\n```\n- `reply_ready_eta` 有值 → 醒目大字「預計 HH:MM 可接送」。\n- `reply_message` 有值 → 對話泡泡顯示全文（保留換行、純文字渲染，不用 v-html）；`replied_at` 有值 → 泡泡下方「HH:MM 回覆」（FRONTEND-003 轉台北時間）。\n- 回覆來源標示（`reply_source`）：`auto` → 小標「系統自動回覆」（圖示 smart_toy）；`staff` → 小標「老師回覆」（圖示 person）；null（尚未回覆）→ 不顯示標示。\n- 兩者皆無 → 等待樣式「已通知老師，稍後回覆預計時間」+ 進行中指示。\n- `compact`（首頁卡片用）：只顯示一行（優先 ETA 文字，否則 reply_message 首行截斷）+ 來源小標，不顯示時間。\n- 外層 `aria-live=\"polite\"`，回覆被 ws 更新時螢幕閱讀器會念出。\n\n新寫元件（ivy 預告接送無回覆機制）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-pickup-reply-message.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：系統自動回覆、老師回覆、只有 ETA、只有訊息、ETA + 訊息 + 回覆時間、等待回覆、compact 模式、長訊息換行。可併入 `parent-page-pickup.html`。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/pickup/PickupReplyMessage.vue`：\n```ts\nprops: { request: Pick<ParentPickupRequest, 'reply_ready_eta' | 'reply_message' | 'reply_source'> & { replied_at?: string | null }; compact?: boolean }\n// 首頁傳 PARENT-052 的 TodayPickup，接送頁傳完整 ParentPickupRequest\n```\n- `reply_ready_eta` 有值 → 醒目大字「預計 HH:MM 可接送」。\n- `reply_message` 有值 → 對話泡泡顯示全文（保留換行、純文字渲染，不用 v-html）；但 `reply_ready_eta` 有值且訊息第一行（trim 後）等於「預計 {reply_ready_eta} 可接送」（系統自動回覆的固定格式「預計 HH:MM 可接送\\n{員工說明}」，BACKEND-403）時，泡泡省略該行，剩餘內容 trim 後為空字串則不畫泡泡（後端與 LINE 推播文字不變）；`replied_at` 有值 → 泡泡下方「HH:MM 回覆」（FRONTEND-003 轉台北時間）。\n- 回覆來源標示（`reply_source`）：`auto` → 小標「系統自動回覆」（圖示 smart_toy）；`staff` → 小標「老師回覆」（圖示 person）；null（尚未回覆）→ 不顯示標示。\n- 兩者皆無 → 等待樣式「已通知老師，稍後回覆預計時間」+ 進行中指示。\n- `compact`（首頁卡片用）：只顯示一行（優先 ETA 文字，否則 reply_message 首行截斷）+ 來源小標，不顯示時間。\n- 外層 `aria-live=\"polite\"`，回覆被 ws 更新時螢幕閱讀器會念出。\n\n新寫元件（ivy 預告接送無回覆機制）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-pickup-reply-message.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：系統自動回覆、老師回覆、只有 ETA、只有訊息、ETA + 訊息 + 回覆時間、等待回覆、compact 模式、長訊息換行。可併入 `parent-page-pickup.html`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/PickupReplyMessage.vue",
       "source_ref": null,
@@ -1927,7 +1931,8 @@
           "PickupReplyMessage waiting state：reply_ready_eta=null、reply_message=null → 含「已通知老師，稍後回覆預計時間」",
           "PickupReplyMessage escapes html：reply_message='<b>x</b>' → 畫面文字含 '<b>x</b>' 字面，DOM 中不存在 b 元素",
           "PickupReplyMessage compact one line：compact=true、reply_ready_eta=null、reply_message='作業已完成，可以接送\\n請由側門進入' → 文字含 '作業已完成，可以接送'，不含 '請由側門進入'，不含 '回覆' 時間",
-          "PickupReplyMessage labels auto reply：reply_source 'auto'、reply_message '作業已完成，可以接送' → 含 '系統自動回覆'；reply_source null 且無訊息 → 不含 '系統自動回覆' 也不含 '老師回覆'"
+          "PickupReplyMessage labels auto reply：reply_source 'auto'、reply_message '作業已完成，可以接送' → 含 '系統自動回覆'；reply_source null 且無訊息 → 不含 '系統自動回覆' 也不含 '老師回覆'",
+          "PickupReplyMessage drops duplicated eta line：reply_ready_eta '17:30'、reply_message '預計 17:30 可接送\\n剩數學訂正'、reply_source 'auto' → '預計 17:30 可接送' 在文字中只出現一次、含 '剩數學訂正'；reply_message '預計 17:30 可接送'（無說明）→ 不渲染訊息泡泡（data-testid=\"reply-bubble\" 查無元素）"
         ],
         "run": "just web-test src/parent/components/pickup/PickupReplyMessage.spec.ts -t \"PickupReplyMessage\"",
         "notes": ""
@@ -1941,7 +1946,7 @@
     {
       "id": "PARENT-095",
       "title": "建立 PickupProgressSteps 元件：接送進度步驟（送出 → 老師確認 → 已到達 → 已接走）",
-      "description": "建立 `apps/web/src/parent/components/pickup/PickupProgressSteps.vue`：\n```ts\nprops: { request: ParentPickupRequest }\n```\n- `<ol>` 四步：「已送出」（created_at HH:MM）、「老師已確認」、「我已到達」（arrived_at HH:MM）、「已接走」（completed_at HH:MM + picked_up_by_name）。\n- 完成判定：已送出恆完成；老師已確認 = status 為 acknowledged，或已進入後續步驟（arrived / completed，後端允許 pending 直接到 arrived）；我已到達 = arrived_at 有值；已接走 = status completed。目前步驟 `aria-current=\"step\"`。\n- 終態：cancelled → 步驟下方顯示「已取消（HH:MM）」並把未完成步驟灰階；expired →「接送請求已逾時自動結束」。\n\n移植 ivy `FE:src/parent/views/PickupNoticeView.vue::steps` 的四步驟概念，步驟名稱與判定改為本專案狀態。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-pickup-progress-steps.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：pending / acknowledged / arrived（含跳過確認）/ completed / cancelled / expired。可併入 `parent-page-pickup.html`。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/pickup/PickupProgressSteps.vue`：\n```ts\nprops: { request: ParentPickupRequest }\n```\n- `<ol>` 四步：「已送出」（created_at HH:MM）、「老師已確認」、「我已到達」（arrived_at HH:MM）、「已接走」（completed_at HH:MM + picked_up_by_name）。\n- 完成判定：已送出恆完成；老師已確認 = status 為 acknowledged，或已進入後續步驟（arrived / completed，後端允許 pending 直接到 arrived）；我已到達 = arrived_at 有值，或 status 為 completed（家長沒按「我到了」老師就交付、或代理人到場直接核驗；此時不顯示時間）；已接走 = status completed。目前步驟 `aria-current=\"step\"`，名稱下方顯示提示：老師已確認 →「等待老師確認」、我已到達 →「抵達安親班門口後請按「我到了」」、已接走 →「老師正在帶小孩出來」；非目前步驟不顯示提示。\n- 終態：cancelled → 步驟下方顯示「已取消（HH:MM）」並把未完成步驟灰階；expired →「接送請求已逾時自動結束」。\n\n移植 ivy `FE:src/parent/views/PickupNoticeView.vue::steps` 的四步驟概念，步驟名稱與判定改為本專案狀態。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-pickup-progress-steps.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：pending / acknowledged / arrived（含跳過確認）/ completed / cancelled / expired。可併入 `parent-page-pickup.html`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/PickupProgressSteps.vue",
       "source_ref": "FE:src/parent/views/PickupNoticeView.vue::steps",
@@ -1965,7 +1970,9 @@
           "PickupProgressSteps pending current step：status 'pending'、created_at '2026-10-02T09:00:00Z' → 第 1 步含 '17:00' 且 done，第 2 步「老師已確認」aria-current === 'step'",
           "PickupProgressSteps arrived skips ack：status 'arrived'、arrived_at 有值 → 第 2 與第 3 步皆標示 done，第 4 步 aria-current === 'step'",
           "PickupProgressSteps completed shows picker：status 'completed'、completed_at '2026-10-02T09:40:00Z'、picked_up_by_name '王媽媽' → 第 4 步含 '17:40' 與 '王媽媽'，無 aria-current",
-          "PickupProgressSteps cancelled and expired：status 'cancelled'、cancelled_at '..T09:10:00Z' → 含 '已取消（17:10）'；status 'expired' → 含 '接送請求已逾時自動結束'"
+          "PickupProgressSteps cancelled and expired：status 'cancelled'、cancelled_at '..T09:10:00Z' → 含 '已取消（17:10）'；status 'expired' → 含 '接送請求已逾時自動結束'",
+          "PickupProgressSteps current step hint：status 'pending' → 第 2 步含 '等待老師確認'；status 'acknowledged' → 第 3 步含 '抵達安親班門口後請按「我到了」'，且全文不含 '等待老師確認'",
+          "PickupProgressSteps completed without arrival：status 'completed'、arrived_at null、completed_at '2026-10-02T09:40:00Z' → 第 3 步標示 done 且文字不含 HH:MM 時間，第 4 步含 '17:40'"
         ],
         "run": "just web-test src/parent/components/pickup/PickupProgressSteps.spec.ts -t \"PickupProgressSteps\"",
         "notes": ""

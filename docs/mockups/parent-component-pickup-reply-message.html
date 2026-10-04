@@ -12,7 +12,7 @@
      preview-route  : 對應的家長端路由 path；元件稿寫 component:<相對路徑>
      preview-updated: 最後更新日期 YYYY-MM-DD
      ============================================================ -->
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-094">
 <meta name="preview-route" content="component:parent/components/pickup/PickupReplyMessage.vue">
 <meta name="preview-updated" content="2026-10-04">
@@ -583,7 +583,7 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
           <m3-card variant="outlined"><pickup-reply-message :request="live"></pickup-reply-message></m3-card>
 
           <template v-for="s in scenarios" :key="s.key">
-            <div class="cap m3-label-large"><span v-if="s.q" class="cap__tag">待裁定 {{ s.q }}</span><span>{{ s.label }}</span></div>
+            <div class="cap m3-label-large"><span>{{ s.label }}</span></div>
             <m3-card variant="outlined"><pickup-reply-message :request="s.request"></pickup-reply-message></m3-card>
           </template>
 
@@ -1128,7 +1128,7 @@ const PickupReplyMessage = {
     etaText() { return this.eta ? `預計 ${this.eta} 可接送` : '' },
     waiting() { return !this.eta && !this.request.reply_message },
     source() { return SOURCE_META[this.request.reply_source] || null },
-    /** 待裁定 2（推薦 A）：訊息第一行與 ETA 大字完全相同時（系統自動回覆的固定格式）省略該行 */
+    /** 訊息第一行與 ETA 大字完全相同時（系統自動回覆的固定格式）省略該行 */
     bubbleText() {
       const m = this.request.reply_message
       if (!m) return ''
@@ -1169,11 +1169,11 @@ function pageSetup() {
   const scenarios = [
     { key: 'staff-full', label: '老師回覆：ETA + 訊息 + 回覆時間', request: R({ reply_ready_eta: '17:30', reply_message: '數學還在訂正，預計 17:30 可接送', reply_source: 'staff', replied_at: '2026-10-02T09:01:00Z' }) },
     { key: 'auto-done', label: '系統自動回覆：作業已完成（只有訊息）', request: R({ reply_message: '作業已完成，可以接送', reply_source: 'auto', replied_at: '2026-10-02T08:55:00Z' }) },
-    { key: 'auto-eta', q: 2, label: '系統自動回覆：ETA + 員工說明（訊息第一行與大字重複 → 省略）', request: R({ reply_ready_eta: '17:30', reply_message: '預計 17:30 可接送\n剩數學訂正', reply_source: 'auto', replied_at: '2026-10-02T08:55:00Z' }) },
-    { key: 'auto-eta-only', q: 2, label: '系統自動回覆：ETA、無說明（訊息只剩重複行 → 不畫泡泡）', request: R({ reply_ready_eta: '17:30', reply_message: '預計 17:30 可接送', reply_source: 'auto', replied_at: '2026-10-02T08:55:00Z' }) },
+    { key: 'auto-eta', label: '系統自動回覆：ETA + 員工說明（訊息第一行與大字重複 → 省略）', request: R({ reply_ready_eta: '17:30', reply_message: '預計 17:30 可接送\n剩數學訂正', reply_source: 'auto', replied_at: '2026-10-02T08:55:00Z' }) },
+    { key: 'auto-eta-only', label: '系統自動回覆：ETA、無說明（訊息只剩重複行 → 不畫泡泡）', request: R({ reply_ready_eta: '17:30', reply_message: '預計 17:30 可接送', reply_source: 'auto', replied_at: '2026-10-02T08:55:00Z' }) },
     { key: 'staff-eta', label: '只有 ETA（老師只改時間）', request: R({ reply_ready_eta: '18:00', reply_source: 'staff', replied_at: '2026-10-02T09:12:00Z' }) },
     { key: 'staff-msg', label: '只有訊息（老師回覆，無 ETA）', request: R({ reply_message: '小明在洗手，馬上下來', reply_source: 'staff', replied_at: '2026-10-02T09:20:00Z' }) },
-    { key: 'auto-noeta', q: 3, label: '未完成且無 ETA（預設設定：系統自動回覆固定文案）', request: R({ reply_message: WAITING_TEXT, reply_source: 'auto', replied_at: '2026-10-02T08:55:00Z' }) },
+    { key: 'auto-noeta', label: '未完成且無 ETA（預設設定：系統自動回覆固定文案）', request: R({ reply_message: WAITING_TEXT, reply_source: 'auto', replied_at: '2026-10-02T08:55:00Z' }) },
     { key: 'waiting', label: '等待回覆（後台關閉自動回覆，eta 與 message 皆 null）', request: R({}) },
     { key: 'long', label: '長訊息（200 字上限）：保留換行、完整顯示', request: R({ reply_ready_eta: '17:50', reply_message: LONG, reply_source: 'staff', replied_at: '2026-10-02T09:05:00Z' }) },
     { key: 'html', label: '純文字渲染：訊息含 HTML 也只顯示字面', request: R({ reply_message: '<b>x</b> 請由<a href="#">側門</a>進入', reply_source: 'staff', replied_at: '2026-10-02T09:05:00Z' }) },
@@ -1203,23 +1203,10 @@ function pageSetup() {
     '等待樣式（ETA 與訊息皆 null）：hourglass_top 圖示 +「已通知老師，稍後回覆預計時間」（body-large）+ 下方 4px indeterminate 線性進度條（role="progressbar"、aria-label「等待老師回覆」）；reduced-motion 時改為靜止的淡色長條。不顯示來源與時間。',
     'compact（首頁卡片）：一行 title-medium 單行省略——優先「預計 HH:MM 可接送」，否則 reply_message 第一行；下一行來源小標（label-small、14px 圖示）；不顯示泡泡與回覆時間。等待態為一行 body-medium 文案 + 16px 轉圈（m3-spinner）。',
     '外層 aria-live="polite"（compact 亦同），ws 更新時原地替換內容，螢幕閱讀器念出新回覆；元件本身不可互動。',
+    '與 ETA 重複的行：系統自動回覆有 ETA 時後端 reply_message 固定為「預計 HH:MM 可接送\\n{員工說明}」（BACKEND-403）。reply_ready_eta 有值且 reply_message 第一行（trim 後）等於「預計 {reply_ready_eta} 可接送」時，泡泡省略該行；剩餘內容 trim 後為空字串就不畫泡泡。後端與 LINE 推播文字不變；compact 模式本來就優先顯示 ETA 文字，不受影響。',
+    '預設設定（homework.defaults.auto_reply_without_eta = true）下，作業未完成且無 ETA 的請求會帶 auto 回覆「已通知老師，稍後回覆預計時間」，元件照一般規則畫成「系統自動回覆」泡泡（文案本身已說明在等老師）；等待樣式只在 reply_ready_eta 與 reply_message 皆 null（後台關閉自動回覆）時出現。API 不另加欄位。',
   ]
-  const openQuestions = [
-    {
-      question: '2. 系統自動回覆有 ETA 時，後端 reply_message 固定為「預計 HH:MM 可接送\\n{員工說明}」（BACKEND-403，已 done），與 ETA 大字重複。怎麼處理？',
-      options: [
-        { text: '前端去重：reply_message 第一行與「預計 {reply_ready_eta} 可接送」完全相同時，泡泡省略該行；剩下空字串就不畫泡泡（後端與 LINE 推播文字不動）；description 與 red case 補一條', recommended: true },
-        { text: '照現行 description 原樣顯示：大字與泡泡第一行重複' },
-      ],
-    },
-    {
-      question: '3. 預設設定（homework.defaults.auto_reply_without_eta = true）下，作業未完成且沒有 ETA 時，後端會寫入 auto 回覆「已通知老師，稍後回覆預計時間」，元件因此畫成「系統自動回覆」泡泡，不會出現等待樣式（等待樣式只在後台關閉自動回覆時出現）。要不要改？',
-      options: [
-        { text: '照現行規格：顯示為系統自動回覆泡泡（文案本身已說明在等老師），不改 API', recommended: true },
-        { text: 'ParentPickupRequest 新增 awaiting_staff_reply 布林（後端已有 needs_reply 可推導），為 true 時在泡泡下方加等待進行中指示；需改 BACKEND schema、api_index 與 PARENT-090 型別' },
-      ],
-    },
-  ]
+  const openQuestions = []
 
   return { scenarios, compacts, liveSteps, liveKey, live, setLive, decisions, openQuestions }
 }

@@ -12,7 +12,7 @@
      preview-route  : 對應的家長端路由 path；元件稿寫 component:<相對路徑>
      preview-updated: 最後更新日期 YYYY-MM-DD
      ============================================================ -->
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-103">
 <meta name="preview-route" content="component:parent/components/pickup/AuthorizationListItem.vue">
 <meta name="preview-updated" content="2026-10-04">
@@ -1269,16 +1269,9 @@ function pageSetup({ snack }) {
     '不顯示完整接送碼（API 只給 code_last4；完整碼只在建立 / 重新產生當下由 PickupCodeCard 顯示一次）。',
     '「過去的授權」可展開區、空清單（「目前沒有代理接送授權」）與載入中屬於 PARENT-104，右側切換只示意。',
     '參考 ivy PickupView 授權列（姓名、日期、狀態 chip、重發 / 取消連結按鈕）；去掉 batch_key 多孩合併、ivy 的完整取件碼顯示。',
+    '已完成的授權只顯示「HH:MM 已完成交接」，不顯示核驗方式（verification_method）：家長關心的是何時交接，「強制完成」等字眼容易引起不必要的疑慮。',
   ]
-  const openQuestions = [
-    {
-      question: '6. 已完成的授權要不要顯示核驗方式（API 有 verification_method：code / visual_match / override）？',
-      options: [
-        { text: '不顯示，照現行 description 只寫「HH:MM 已完成交接」；家長關心的是何時交接，「強制完成」這類字眼容易引起不必要的疑慮', recommended: true },
-        { text: '顯示「17:35 已完成交接 · 接送碼核驗 / 目視核對 / 老師確認交付」（家長端措辭另訂，override 不用「強制完成」）；description 與 red case 補一條' },
-      ],
-    },
-  ]
+  const openQuestions = []
 
   return { activeList, fourStates, longOne, hostState, hostStates, onCancel, onRegenerate, decisions, openQuestions }
 }
