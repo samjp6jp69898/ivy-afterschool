@@ -12,10 +12,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentParent, CurrentStaff
+from app.core.pagination import PageParams
 from app.core.request_meta import RequestMeta
 from app.models.audit import AuditLog
-from app.services.audit_service import Actor, record
-from tests.support.factories import make_staff
+from app.schemas.audit import AuditLogQuery
+from app.services.audit_service import Actor, list_audit_logs, record
+from tests.support.factories import make_parent, make_staff
 
 
 def _count(db: Session, action: str, entity_id: str) -> int:
@@ -165,3 +167,162 @@ def test_audit_record_actor_constructors() -> None:
     assert Actor.staff(staff) == Actor(type="staff", id=sid)
     assert Actor.parent(parent) == Actor(type="parent", id=pid)
     assert Actor.system() == Actor(type="system", id=None)
+
+
+_PAGE = PageParams(page=1, page_size=50)
+
+
+def _log(
+    db: Session,
+    *,
+    action: str,
+    scope: str,
+    actor: Actor | None = None,
+    entity_id: str | None = None,
+    created_at: datetime | None = None,
+) -> AuditLog:
+    """scope 為本測試專屬的 entity_type，避免與 DB 內既有資料互相干擾。"""
+    # audit_logs append-only（app_backend 無 update 權限），指定 created_at 只能在 insert 時給
+    who = actor or Actor.system()
+    row = AuditLog(
+        actor_type=who.type,
+        actor_id=who.id,
+        action=action,
+        entity_type=scope,
+        entity_id=entity_id,
+    )
+    if created_at is not None:
+        row.created_at = created_at
+    db.add(row)
+    db.flush()
+    return row
+
+
+def test_list_audit_logs_filters(db_session: Session) -> None:
+    staff = make_staff(db_session)
+    scope = f"scope_{uuid4().hex[:8]}"
+    first = _log(db_session, action="role.update", scope=scope, entity_id="r1")
+    _log(db_session, action="role.create", scope=scope, entity_id="r2")
+    _log(db_session, action="settings.update", scope=scope, actor=Actor("staff", staff.id))
+
+    def run(**kw: object) -> list[str]:
+        page = list_audit_logs(db_session, AuditLogQuery(entity_type=scope, **kw), _PAGE)
+        return [i.action for i in page.items]
+
+    assert run(action="settings.update") == ["settings.update"]
+    assert sorted(run(action_prefix="role.")) == ["role.create", "role.update"]
+    assert run(entity_id="r1") == ["role.update"]
+    assert run(actor_type="staff") == ["settings.update"]
+    assert run(actor_id=staff.id) == ["settings.update"]
+    assert run(actor_type="parent") == []
+    page = list_audit_logs(
+        db_session, AuditLogQuery(entity_type=scope, action_prefix="role."), _PAGE
+    )
+    assert page.total == 2
+    assert first.id in {i.id for i in page.items}
+
+
+def test_list_audit_logs_prefix_is_literal(db_session: Session) -> None:
+    scope = f"scope_{uuid4().hex[:8]}"
+    _log(db_session, action="staff_user.create", scope=scope)
+    _log(db_session, action="staffxuser.create", scope=scope)
+
+    page = list_audit_logs(
+        db_session, AuditLogQuery(entity_type=scope, action_prefix="staff_user."), _PAGE
+    )
+
+    assert [i.action for i in page.items] == ["staff_user.create"]
+
+
+def test_list_audit_logs_taipei_date_range(db_session: Session) -> None:
+    scope = f"scope_{uuid4().hex[:8]}"
+    _log(
+        db_session,
+        action="role.update",
+        scope=scope,
+        entity_id="before_midnight",
+        created_at=datetime(2026, 9, 1, 15, 59, tzinfo=UTC),
+    )
+    _log(
+        db_session,
+        action="role.update",
+        scope=scope,
+        entity_id="after_midnight",
+        created_at=datetime(2026, 9, 1, 16, 1, tzinfo=UTC),
+    )
+    _log(
+        db_session,
+        action="role.update",
+        scope=scope,
+        entity_id="next_day_edge",
+        created_at=datetime(2026, 9, 2, 16, 0, tzinfo=UTC),
+    )
+
+    def ids(**kw: date) -> list[str]:
+        page = list_audit_logs(db_session, AuditLogQuery(entity_type=scope, **kw), _PAGE)
+        return sorted(i.entity_id or "" for i in page.items)
+
+    only = date(2026, 9, 2)
+    assert ids(date_from=only, date_to=only) == ["after_midnight"]
+    assert ids(date_from=only) == ["after_midnight", "next_day_edge"]
+    assert ids(date_to=only) == ["after_midnight", "before_midnight"]
+    assert ids(date_from=date(2026, 9, 1), date_to=date(2026, 9, 2)) == [
+        "after_midnight",
+        "before_midnight",
+    ]
+
+
+def test_list_audit_logs_actor_name(db_session: Session) -> None:
+    scope = f"scope_{uuid4().hex[:8]}"
+    staff = make_staff(db_session, display_name="林老師")
+    parent = make_parent(db_session, display_name="王媽媽")
+    _log(db_session, action="a.staff", scope=scope, actor=Actor("staff", staff.id))
+    _log(db_session, action="a.parent", scope=scope, actor=Actor("parent", parent.id))
+    _log(db_session, action="a.system", scope=scope)
+    _log(db_session, action="a.gone", scope=scope, actor=Actor("staff", uuid4()))
+
+    page = list_audit_logs(db_session, AuditLogQuery(entity_type=scope), _PAGE)
+
+    names = {i.action: i.actor_name for i in page.items}
+    assert names == {
+        "a.staff": "林老師",
+        "a.parent": "王媽媽",
+        "a.system": "系統",
+        "a.gone": None,
+    }
+    assert {i.action: i.actor_type for i in page.items}["a.parent"] == "parent"
+
+
+def test_list_audit_logs_order(db_session: Session) -> None:
+    scope = f"scope_{uuid4().hex[:8]}"
+    for hour, tag in ((9, "mid"), (8, "old"), (10, "new")):
+        _log(
+            db_session,
+            action="a.x",
+            scope=scope,
+            entity_id=tag,
+            created_at=datetime(2026, 9, 1, hour, tzinfo=UTC),
+        )
+
+    page = list_audit_logs(db_session, AuditLogQuery(entity_type=scope), _PAGE)
+
+    assert [i.entity_id for i in page.items] == ["new", "mid", "old"]
+
+
+def test_list_audit_logs_pagination(db_session: Session) -> None:
+    scope = f"scope_{uuid4().hex[:8]}"
+    for hour in range(5):
+        _log(
+            db_session,
+            action="a.x",
+            scope=scope,
+            entity_id=str(hour),
+            created_at=datetime(2026, 9, 1, hour, tzinfo=UTC),
+        )
+
+    page2 = list_audit_logs(
+        db_session, AuditLogQuery(entity_type=scope), PageParams(page=2, page_size=2)
+    )
+
+    assert page2.total == 5
+    assert [i.entity_id for i in page2.items] == ["2", "1"]
