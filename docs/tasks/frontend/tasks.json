@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 76,
-  "last_updated": "2026-10-04T16:27:37Z",
+  "version": 77,
+  "last_updated": "2026-10-04T16:55:44Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1615,8 +1615,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/auditLogs.ts",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r7",
       "depends_on": [
         "FRONTEND-020",
         "BACKEND-105"
