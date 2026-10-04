@@ -14,6 +14,20 @@
 - 稽核 ``guardian.binding_code_issue``：after 只有 ``expires_at``，不含明碼與 hash。
 - 正規化（去空白、去連字號、轉大寫）集中在 ``normalize_code``，bind 端（BACKEND-055）必須用同一個
   函式再 ``hash_code``。只 flush 不 commit。
+
+BACKEND-055：``claim``（移植 ivy ``api/parent_portal/auth.py::_claim_binding_code_atomic`` /
+``_claim_guardian_for_user`` / ``_diagnose_binding_failure``）。
+
+1. 正規化後長度不是 8 或含字母表外字元 → 400 ``binding_code_invalid``。
+2. 原子更新 ``used_at = now where code_hash and used_at is null and expires_at > now``；0 列 →
+   診斷：查無 → 400 ``binding_code_invalid``；過期 → 400 ``binding_code_expired``（過期優先）；
+   否則 400 ``binding_code_used``。
+3. guardian 或學生已封存 → 400 ``binding_code_invalid``（不洩漏原因）。
+4. 條件式更新 guardian：``parent_account_id is null or = 自己`` 才綁；0 列 → 409
+   ``guardian_already_bound``（兩人搶同一 guardian 時後到者失敗）。
+5. 在 savepoint 內執行；撞到 ``uq_guardians_student_parent``（同一家長已由另一筆 guardian 綁此
+   學生）→ 409 ``already_bound_to_student``。
+- 任何錯誤由呼叫端 rollback（碼的 used_at 一併還原）；失敗計數由 BACKEND-056 處理。
 """
 
 from __future__ import annotations
@@ -21,11 +35,11 @@ from __future__ import annotations
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final, cast
 from uuid import UUID
 
 from psycopg.errors import UniqueViolation
-from sqlalchemy import delete, select
+from sqlalchemy import CursorResult, delete, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -44,6 +58,8 @@ CODE_LENGTH: Final = 8
 CODE_TTL: Final = timedelta(days=7)
 _MAX_COLLISION_RETRIES: Final = 3
 _CODE_HASH_UNIQUE: Final = "uq_parent_binding_codes_code_hash"
+_GUARDIAN_STUDENT_PARENT_UNIQUE: Final = "uq_guardians_student_parent"
+_ALPHABET_SET: Final = frozenset(CODE_ALPHABET)
 _STRIP_CHARS: Final = str.maketrans("", "", " -\t\r\n")
 
 
@@ -148,3 +164,86 @@ def generate(
         meta=meta,
     )
     return IssuedBindingCode(guardian_id=guardian.id, code=code, expires_at=expires_at)
+
+
+def _invalid_code() -> AppError:
+    return AppError("binding_code_invalid", "綁定碼無效", status=400)
+
+
+def _is_well_formed(code: str) -> bool:
+    return len(code) == CODE_LENGTH and set(code) <= _ALPHABET_SET
+
+
+def _diagnose_failure(session: Session, code_hash: str, now: datetime) -> AppError:
+    row = session.execute(
+        select(ParentBindingCode.expires_at, ParentBindingCode.used_at).where(
+            ParentBindingCode.code_hash == code_hash
+        )
+    ).one_or_none()
+    if row is None:
+        return _invalid_code()
+    if row.expires_at <= now:
+        return AppError(
+            "binding_code_expired", "綁定碼已過期，請向安親班索取新的綁定碼", status=400
+        )
+    return AppError("binding_code_used", "綁定碼已被使用", status=400)
+
+
+def _is_student_parent_collision(exc: IntegrityError) -> bool:
+    return getattr(exc.orig, "sqlstate", None) == UniqueViolation.sqlstate and (
+        _GUARDIAN_STUDENT_PARENT_UNIQUE in str(exc.orig)
+    )
+
+
+def claim(session: Session, *, raw_code: str, parent_account_id: UUID, clock: Clock) -> Guardian:
+    code = normalize_code(raw_code)
+    if not _is_well_formed(code):
+        raise _invalid_code()
+    now = clock.now()
+    code_hash = hash_code(code)
+
+    guardian_id = session.execute(
+        update(ParentBindingCode)
+        .where(
+            ParentBindingCode.code_hash == code_hash,
+            ParentBindingCode.used_at.is_(None),
+            ParentBindingCode.expires_at > now,
+        )
+        .values(used_at=now)
+        .returning(ParentBindingCode.guardian_id)
+    ).scalar_one_or_none()
+    if guardian_id is None:
+        raise _diagnose_failure(session, code_hash, now)
+
+    # Guardian.student 為 lazy='joined'，一次帶出
+    guardian = session.execute(
+        select(Guardian).where(Guardian.id == guardian_id)
+    ).scalar_one_or_none()
+    if guardian is None or guardian.archived_at is not None or guardian.student.archived_at:
+        raise _invalid_code()
+
+    try:
+        with session.begin_nested():
+            result = session.execute(
+                update(Guardian)
+                .where(
+                    Guardian.id == guardian.id,
+                    Guardian.archived_at.is_(None),
+                    or_(
+                        Guardian.parent_account_id.is_(None),
+                        Guardian.parent_account_id == parent_account_id,
+                    ),
+                )
+                .values(parent_account_id=parent_account_id)
+            )
+    except IntegrityError as exc:
+        if _is_student_parent_collision(exc):
+            raise ConflictError(
+                "already_bound_to_student", "您已綁定此學生，不需重複綁定"
+            ) from None
+        raise
+    if int(cast(CursorResult[Any], result).rowcount or 0) == 0:
+        raise ConflictError("guardian_already_bound", "此監護人已由其他家長帳號綁定")
+    # bulk update 不經 ORM：重新載入該列（含 parent_account relationship）
+    session.refresh(guardian)
+    return guardian
