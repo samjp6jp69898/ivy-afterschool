@@ -79,15 +79,15 @@ def test_homework_models_progress_unique(db_session: Session) -> None:
 def test_homework_models_eta_audit_check(db_session: Session) -> None:
     student = make_student(db_session)
 
+    bad = HomeworkDailyProgress(
+        student_id=student.id,
+        service_date=date(2026, 9, 1),
+        ready_eta=time(17, 0),
+        eta_updated_at=None,
+    )
+    db_session.add(bad)
+
     with pytest.raises(IntegrityError) as excinfo, db_session.begin_nested():
-        db_session.add(
-            HomeworkDailyProgress(
-                student_id=student.id,
-                service_date=date(2026, 9, 1),
-                ready_eta=time(17, 0),
-                eta_updated_at=None,
-            )
-        )
         db_session.flush()
 
     diag = getattr(excinfo.value.orig, "diag", None)
