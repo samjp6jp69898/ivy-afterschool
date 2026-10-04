@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 72,
-  "last_updated": "2026-10-04T13:53:01Z",
+  "version": 73,
+  "last_updated": "2026-10-04T16:30:16Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -2569,7 +2569,7 @@
     {
       "id": "PARENT-134",
       "title": "移植 LeaveForm 元件：請假申請表單（假別、日期、事由、附件）",
-      "description": "建立 `apps/web/src/parent/components/leaves/LeaveForm.vue`：\n```ts\nprops: { today: string /* YYYY-MM-DD 台北 */; limits: ParentLimits /* PARENT-005，由 LeavesView 傳入 */; submitting?: boolean }\nemits: { submit: [input: { leave_type: LeaveType; start_date: string; end_date: string; reason: string; files: File[] }]; cancel: [] }\n```\n- 假別：PARENT-098 M3SegmentedButton（病假 sick / 事假 personal / 其他 other），預設 sick。\n- 開始 / 結束日期：`type=\"date\"`，min = today − `limits.leave_past_days` 天、max = today + `limits.leave_future_days` 天（FRONTEND-003 日期加減），預設皆為 today；改開始日晚於結束日時結束日自動跟著設為開始日；送出時再檢查：超出範圍 →「請假日期需在今天前 {leave_past_days} 天到後 {leave_future_days} 天內」、結束早於開始 →「結束日期不可早於開始日期」。\n- 事由：PARENT-018 textarea，選填，最多 200 字（計數）。\n- 附件：選填，最多 `limits.leave_max_attachments` 個；`accept=\"image/jpeg,image/png,image/webp,image/heic,application/pdf\"`；單檔 > `limits.leave_max_attachment_mb` MB →「{檔名} 超過 {leave_max_attachment_mb} MB」；格式不符 →「{檔名} 格式不支援」；已選檔案列出檔名、大小（KB / MB）與移除鈕；達上限時隱藏新增。數值一律來自 `limits` prop，元件內不寫死。\n- 送出鈕在 submitting 時 loading。\n\n移植 ivy `FE:src/parent/components/leaves/LeaveForm.vue` 的 pastLimit / futureLimit 日期限制概念；**改為** 元件內部狀態、單一小孩（由頁面的選中小孩決定，不在表單選小孩）、附件併入表單（建立後由頁面依序上傳）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-leave-form.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：預設狀態、三種假別、日期錯誤、事由字數、已選 1~3 個附件、檔案過大 / 格式錯誤、送出中。可併入 `parent-page-leaves.html`。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/leaves/LeaveForm.vue`：\n```ts\nprops: { today: string /* YYYY-MM-DD 台北 */; limits: ParentLimits /* PARENT-005，由 LeavesView 傳入 */; submitting?: boolean }\nemits: { submit: [input: { leave_type: LeaveType; start_date: string; end_date: string; reason: string; files: File[] }]; cancel: [] }\n```\n- 假別：PARENT-098 M3SegmentedButton（病假 sick / 事假 personal / 其他 other），預設 sick。\n- 開始 / 結束日期：以 PARENT-018 `M3TextField`（`type=\"date\"`）呈現。M3TextField 目前沒有 `min` / `max`，本 task 一併擴充 `apps/web/src/parent/components/m3/M3TextField.vue`：新增選填 `min?: string`、`max?: string` props，原樣綁到原生 input（未給時不輸出屬性），並在 `M3TextField.spec.ts` 補測試；min = today − `limits.leave_past_days` 天、max = today + `limits.leave_future_days` 天（FRONTEND-003 日期加減），預設皆為 today；改開始日晚於結束日時結束日自動跟著設為開始日；送出時再檢查：超出範圍 →「請假日期需在今天前 {leave_past_days} 天到後 {leave_future_days} 天內」、結束早於開始 →「結束日期不可早於開始日期」。\n- 事由：PARENT-018 textarea，選填，最多 200 字（計數）。\n- 附件：選填，最多 `limits.leave_max_attachments` 個；`accept=\"image/jpeg,image/png,image/webp,image/heic,application/pdf\"`；單檔 > `limits.leave_max_attachment_mb` MB →「{檔名} 超過 {leave_max_attachment_mb} MB」；格式不符 →「{檔名} 格式不支援」；已選檔案列出檔名、大小（KB / MB）與移除鈕；達上限時隱藏新增。數值一律來自 `limits` prop，元件內不寫死。\n- 送出鈕在 submitting 時 loading。\n\n移植 ivy `FE:src/parent/components/leaves/LeaveForm.vue` 的 pastLimit / futureLimit 日期限制概念；**改為** 元件內部狀態、單一小孩（由頁面的選中小孩決定，不在表單選小孩）、附件併入表單（建立後由頁面依序上傳）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-leave-form.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：預設狀態、三種假別、日期錯誤、事由字數、已選 1~3 個附件、檔案過大 / 格式錯誤、送出中。可併入 `parent-page-leaves.html`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/leaves/LeaveForm.vue",
       "source_ref": "FE:src/parent/components/leaves/LeaveForm.vue::update",
@@ -2598,9 +2598,10 @@
           "LeaveForm end follows start：結束 '2026-10-03' 時把開始改為 '2026-10-08' → 結束欄位值變為 '2026-10-08'",
           "LeaveForm attachment validation：加入 11 MB 的 photo.jpg → 含「photo.jpg 超過 10 MB」且列表不含該檔；加入 text/plain 檔 → 含「格式不支援」；加滿 3 個後新增附件的 input 不存在",
           "LeaveForm defaults：初始假別病假 aria-checked true，開始與結束皆為 '2026-10-02'，直接送出 → payload.reason === '' 且 files 為 []",
-          "LeaveForm follows configured limits：limits {leave_past_days:7, leave_future_days:90, leave_max_attachments:1, leave_max_attachment_mb:5} → min === '2026-09-25'、max === '2026-12-31'；加入 6 MB 圖片 → 含「超過 5 MB」；加入 1 個合格檔後新增附件 input 不存在；輸入開始 '2026-09-20' 送出 → 含「請假日期需在今天前 7 天到後 90 天內」"
+          "LeaveForm follows configured limits：limits {leave_past_days:7, leave_future_days:90, leave_max_attachments:1, leave_max_attachment_mb:5} → min === '2026-09-25'、max === '2026-12-31'；加入 6 MB 圖片 → 含「超過 5 MB」；加入 1 個合格檔後新增附件 input 不存在；輸入開始 '2026-09-20' 送出 → 含「請假日期需在今天前 7 天到後 90 天內」",
+          "M3TextField forwards min and max（寫在 apps/web/src/parent/components/m3/M3TextField.spec.ts）：type 'date'、min '2026-09-02'、max '2026-12-01' → input 的 min / max 屬性分別等於該值；未給 min / max → input 沒有 min / max 屬性"
         ],
-        "run": "just web-test src/parent/components/leaves/LeaveForm.spec.ts -t \"LeaveForm\"",
+        "run": "just web-test src/parent/components/leaves/LeaveForm.spec.ts src/parent/components/m3/M3TextField.spec.ts -t \"LeaveForm|forwards min and max\"",
         "notes": ""
       },
       "review": {
