@@ -16,6 +16,7 @@ import itertools
 import secrets
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, time
+from decimal import Decimal
 from typing import Final
 from uuid import UUID, uuid4
 
@@ -25,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.core.security.passwords import hash_password
 from app.models.account import Role, StaffUser
 from app.models.classes import ClassStaff, ClassStaffRole, SchoolClass
+from app.models.exams import Exam, ExamScore, ExamStatus, ExamSubject
 from app.models.homework import (
     HomeworkDailyProgress,
     HomeworkItem,
@@ -48,7 +50,7 @@ from app.models.pickup import (
     RequestSource,
     RequestStatus,
 )
-from app.models.reference import School, Subject
+from app.models.reference import ExamType, School, Subject
 from app.models.students import Student, StudentStatus
 from app.services.pickup.codes import hash_pickup_code, pickup_code_last4
 
@@ -422,3 +424,64 @@ def make_pickup_request(
         request.replied_by = make_staff(session).id
     _add(session, request)
     return request
+
+
+def make_exam(
+    session: Session,
+    *,
+    name: str = "第一次段考",
+    exam_type: ExamType | None = None,
+    exam_date: date = date(2026, 10, 15),
+    grade_level: int | None = 3,
+    class_: SchoolClass | None = None,
+    status: ExamStatus = "draft",
+) -> Exam:
+    """exam_type 預設取 seed「段考」；status='published' 時補 published_at。"""
+    if exam_type is None:
+        exam_type = session.execute(select(ExamType).where(ExamType.name == "段考")).scalar_one()
+    exam = Exam(
+        name=name,
+        exam_type_id=exam_type.id,
+        exam_date=exam_date,
+        grade_level=grade_level,
+        class_id=class_.id if class_ is not None else None,
+        status=status,
+        published_at=ARCHIVED_AT if status == "published" else None,
+    )
+    _add(session, exam)
+    return exam
+
+
+def make_exam_subject(
+    session: Session,
+    exam: Exam,
+    subject: Subject,
+    *,
+    full_score: Decimal = Decimal("100"),
+    sort_order: int = 0,
+) -> ExamSubject:
+    exam_subject = ExamSubject(
+        exam_id=exam.id, subject_id=subject.id, full_score=full_score, sort_order=sort_order
+    )
+    _add(session, exam_subject)
+    return exam_subject
+
+
+def make_exam_score(
+    session: Session,
+    exam: Exam,
+    student: Student,
+    subject: Subject,
+    *,
+    score: Decimal | None = Decimal("95"),
+    is_absent: bool = False,
+) -> ExamScore:
+    exam_score = ExamScore(
+        exam_id=exam.id,
+        student_id=student.id,
+        subject_id=subject.id,
+        score=score,
+        is_absent=is_absent,
+    )
+    _add(session, exam_score)
+    return exam_score
