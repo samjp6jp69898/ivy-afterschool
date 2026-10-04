@@ -12,6 +12,7 @@ from app.models import (
     leaves,
     notifications,
     parents,
+    pickup,
     reference,
     students,
 )
@@ -26,6 +27,7 @@ __all__ = [
     "leaves",
     "notifications",
     "parents",
+    "pickup",
     "reference",
     "students",
 ]

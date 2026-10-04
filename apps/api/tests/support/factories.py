@@ -39,8 +39,18 @@ from app.models.leaves import (
     StudentLeaveAttachment,
 )
 from app.models.parents import Guardian, GuardianRelation, ParentAccount, ParentStatus
+from app.models.pickup import (
+    AuthorizationStatus,
+    PickupAuthorization,
+    PickupPerson,
+    PickupRequest,
+    ReplySource,
+    RequestSource,
+    RequestStatus,
+)
 from app.models.reference import School, Subject
 from app.models.students import Student, StudentStatus
+from app.services.pickup.codes import hash_pickup_code, pickup_code_last4
 
 SYSTEM_ROLE_CODES: Final = frozenset({"admin", "director", "clerk", "tutor"})
 # 封存時間固定（ruff 禁 datetime.now；測試不依賴真實時間）
@@ -319,3 +329,96 @@ def make_homework_progress(
     )
     _add(session, progress)
     return progress
+
+
+def make_pickup_person(
+    session: Session,
+    student: Student,
+    *,
+    name: str = "李阿姨",
+    relation: str = "阿姨",
+    phone: str = "0912-000-101",
+    photo_path: str | None = None,
+) -> PickupPerson:
+    person = PickupPerson(
+        student_id=student.id, name=name, relation=relation, phone=phone, photo_path=photo_path
+    )
+    _add(session, person)
+    return person
+
+
+def make_pickup_authorization(
+    session: Session,
+    student: Student,
+    *,
+    service_date: date,
+    code: str = "123456",
+    person: PickupPerson | None = None,
+    proxy_name: str = "李阿姨",
+    proxy_phone: str = "0912-000-101",
+    status: AuthorizationStatus = "active",
+    code_attempts: int = 0,
+) -> PickupAuthorization:
+    """code_hash 以 HMAC 計算，呼叫端的測試需要有 APP_SECRET_KEY 環境（見各測試的 env fixture）。
+
+    code_attempts=5 時補 code_locked_at；status='completed' 時補 verified_at / verification_method。
+    """
+    auth = PickupAuthorization(
+        student_id=student.id,
+        service_date=service_date,
+        pickup_person_id=person.id if person is not None else None,
+        proxy_name=proxy_name,
+        proxy_phone=proxy_phone,
+        code_hash=hash_pickup_code(code),
+        code_last4=pickup_code_last4(code),
+        code_attempts=code_attempts,
+        code_locked_at=ARCHIVED_AT if code_attempts == 5 else None,
+        status=status,
+    )
+    if status == "completed":
+        auth.verified_at = ARCHIVED_AT
+        auth.verification_method = "code"
+    _add(session, auth)
+    return auth
+
+
+def make_pickup_request(
+    session: Session,
+    student: Student,
+    *,
+    service_date: date,
+    status: RequestStatus = "pending",
+    source: RequestSource = "parent",
+    requested_by: UUID | None = None,
+    expected_arrival_at: datetime | None = None,
+    reply_source: ReplySource | None = None,
+    reply_message: str | None = None,
+    reply_ready_eta: time | None = None,
+) -> PickupRequest:
+    """依 status 補 arrived_at / completed_at + completion_method='override' / cancelled_at；
+    reply_source='staff' 時補 replied_by（另建一位員工）與 replied_at，'auto' 只補 replied_at。"""
+    request = PickupRequest(
+        student_id=student.id,
+        service_date=service_date,
+        source=source,
+        requested_by_type="staff" if source == "staff" else "parent",
+        requested_by_id=requested_by or uuid4(),
+        expected_arrival_at=expected_arrival_at,
+        status=status,
+        reply_source=reply_source,
+        reply_message=reply_message,
+        reply_ready_eta=reply_ready_eta,
+    )
+    if status == "arrived":
+        request.arrived_at = ARCHIVED_AT
+    elif status == "completed":
+        request.completed_at = ARCHIVED_AT
+        request.completion_method = "override"
+    elif status == "cancelled":
+        request.cancelled_at = ARCHIVED_AT
+    if reply_source is not None:
+        request.replied_at = ARCHIVED_AT
+    if reply_source == "staff":
+        request.replied_by = make_staff(session).id
+    _add(session, request)
+    return request
