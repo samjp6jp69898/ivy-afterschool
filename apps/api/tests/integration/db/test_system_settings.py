@@ -1,4 +1,4 @@
-"""DB-007：system_settings 表（key 唯一且格式受限、value 必為物件、updated_by set null、updated_at）。"""
+"""DB-007：system_settings 表（key 唯一且格式受限、value 必為物件、updated_by set null）。"""
 
 from psycopg.types.json import Jsonb
 

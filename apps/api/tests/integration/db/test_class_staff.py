@@ -13,7 +13,7 @@ from tests.integration.db.conftest import (
     assert_updated_at_trigger,
     pg_error,
 )
-from tests.integration.db.factories import make_class_staff, make_classes, make_staff_users
+from tests.integration.db.factories import make_class_staff, make_classes
 
 
 def _count(conn: Conn, row_id: object) -> int:

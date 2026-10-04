@@ -1,4 +1,4 @@
-"""DB-016：guardians 表（每生一位 primary、家長綁定唯一、relation 值域、FK、預設值、updated_at）。"""
+"""DB-016：guardians 表（每生一位 primary、家長綁定唯一、值域、FK、預設值）。"""
 
 from tests.integration.db.conftest import (
     CHECK_VIOLATION,

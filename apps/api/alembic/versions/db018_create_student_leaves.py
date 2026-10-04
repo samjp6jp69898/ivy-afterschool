@@ -1,8 +1,9 @@
 """create_student_leaves：student_leaves（學生請假，domain_spec M5；DB-018）。
 
 參考 ivy StudentLeaveRequest：保留 student_id restrict、日期區間索引、status CHECK；去掉審核流程
-（家長送出即生效，只有 active / cancelled）、applicant_user_id 改為多型 created_by_type / created_by_id
-（不建 FK）、單一 attachment_path 改為 DB-019 附件表、去掉 tenant_id。
+（家長送出即生效，只有 active / cancelled）、applicant_user_id 改為多型
+created_by_type / created_by_id（不建 FK）、
+單一 attachment_path 改為 DB-019 附件表、去掉 tenant_id。
 
 同一學生 active 請假的日期區間（含頭尾）以 btree_gist exclusion constraint 禁止重疊，違反時拋
 exclusion_violation（23P01），BACKEND 轉成 409 leave_overlap。btree_gist 裝在 extensions schema，
@@ -64,7 +65,10 @@ STATEMENTS = (
     )
     """,
     # 請假期間與出勤套用查詢
-    "create index ix_student_leaves_student_range on public.student_leaves (student_id, start_date, end_date)",
+    """
+    create index ix_student_leaves_student_range
+    on public.student_leaves (student_id, start_date, end_date)
+    """,
     # 每日出勤初始化找當日請假
     """
     create index ix_student_leaves_active_range on public.student_leaves (start_date, end_date)

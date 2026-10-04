@@ -1,4 +1,4 @@
-"""DB-022：homework_daily_progress 表（每生每日唯一與 upsert、值域、ETA 稽核、note 長度、updated_at）。"""
+"""DB-022：homework_daily_progress 表（每生每日唯一與 upsert、值域、ETA 稽核、note 長度）。"""
 
 from datetime import UTC, datetime, time
 
@@ -33,7 +33,8 @@ def test_homework_daily_progress_upsert_on_conflict(backend_conn: Conn) -> None:
         insert into public.homework_daily_progress
             (student_id, service_date, ready_eta, eta_updated_at)
         values (%s, %s, '17:30', now())
-        on conflict (student_id, service_date) do update set ready_eta = '17:30', eta_updated_at = now()
+        on conflict (student_id, service_date)
+        do update set ready_eta = '17:30', eta_updated_at = now()
         """,
         (first["student_id"], first["service_date"]),
     )

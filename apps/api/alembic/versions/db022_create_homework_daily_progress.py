@@ -1,7 +1,7 @@
-"""create_homework_daily_progress：homework_daily_progress（每日作業整體進度與預計可接送時間，domain_spec M6；DB-022）。
+"""create_homework_daily_progress：homework_daily_progress（每日作業進度與預計接送時間；DB-022）。
 
-新功能，ivy 無對應。ready_eta 是 Asia/Taipei 當地時間（不含日期，日期即 service_date）；BACKEND 以
-`on conflict (student_id, service_date) do update` upsert。
+domain_spec M6，新功能，ivy 無對應。ready_eta 是 Asia/Taipei 當地時間（不含日期，日期即
+service_date）；BACKEND 以 `on conflict (student_id, service_date) do update` upsert。
 
 Revision ID: db022
 Revises: db021

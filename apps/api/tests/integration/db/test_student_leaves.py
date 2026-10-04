@@ -1,6 +1,6 @@
 """DB-018：student_leaves 表（值域、日期區間、取消一致性、active 區間禁止重疊、FK、updated_at）。
 
-禁止重疊的 exclusion constraint 依賴 btree_gist（安裝在 extensions schema），一律以 app_backend 寫入驗證。
+禁止重疊的 exclusion constraint 依賴 btree_gist（extensions schema），一律以 app_backend 寫入驗證。
 """
 
 from datetime import date, datetime

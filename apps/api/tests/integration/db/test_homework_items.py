@@ -1,4 +1,4 @@
-"""DB-021：homework_items 表（status 值域、title 長度、subject set null、student restrict、預設值）。"""
+"""DB-021：homework_items 表（status 值域、title 長度、subject set null、student restrict）。"""
 
 from tests.integration.db.conftest import (
     CHECK_VIOLATION,

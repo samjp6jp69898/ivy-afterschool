@@ -1,7 +1,8 @@
 """create_class_staff：class_staff（班級負責員工，domain_spec M3；DB-013）。
 
-取代 ivy Classroom.head_teacher_id / assistant_teacher_id 的固定欄位，改為多對多；僅作為後台「我的班」
-篩選與請假通知收件人，不是教師端。同一員工在同一班只有一個角色；一班可有多位 lead，DB 不限制。
+取代 ivy Classroom.head_teacher_id / assistant_teacher_id 的固定欄位，改為多對多；
+僅作為後台「我的班」篩選與請假通知收件人，不是教師端。
+同一員工在同一班只有一個角色；一班可有多位 lead，DB 不限制。
 
 Revision ID: db013
 Revises: db007

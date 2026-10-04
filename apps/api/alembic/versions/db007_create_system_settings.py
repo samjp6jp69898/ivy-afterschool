@@ -1,8 +1,9 @@
 """create_system_settings：system_settings（營運參數 key / value，domain_spec M2；DB-007）。
 
 移植 ivy SystemConfig：config_value text 改為 value jsonb（每個 key 的 value 都是物件，schema 由
-BACKEND settings_registry 驗證），加 is_secret、updated_by，去掉 tenant_id、config_type。is_secret 列
-的敏感欄位由後端以應用層對稱加密後存成 base64 字串，DB 不做加解密。預設資料由 DB-038 seed。
+BACKEND settings_registry 驗證），加 is_secret、updated_by，去掉 tenant_id、config_type。
+is_secret 列的敏感欄位由後端以應用層對稱加密後存成 base64 字串，
+DB 不做加解密。預設資料由 DB-038 seed。
 
 Revision ID: db007
 Revises: db037
