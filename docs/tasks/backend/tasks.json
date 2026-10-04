@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 103,
-  "last_updated": "2026-10-04T05:00:05Z",
+  "version": 104,
+  "last_updated": "2026-10-04T06:34:34Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -359,8 +359,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/crypto.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-009"
       ],
@@ -394,8 +394,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/request_meta.py",
       "source_ref": "BE:utils/request_ip.py::get_client_ip",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-004"
       ],
@@ -659,8 +659,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/scheduler.py",
       "source_ref": "BE:utils/advisory_lock.py::try_scheduler_lock",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-017",
         "BACKEND-002",
@@ -951,8 +951,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/account.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-007",
         "DB-003",
@@ -1064,8 +1064,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/security/tokens.py",
       "source_ref": "BE:utils/auth.py::create_access_token",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-009",
         "BACKEND-002",
@@ -3480,8 +3480,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/models/audit.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-007",
         "DB-006",
@@ -14713,8 +14713,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/logging.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r5",
       "depends_on": [
         "BACKEND-004"
       ],

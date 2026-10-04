@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 55,
-  "last_updated": "2026-10-04T04:55:06Z",
+  "version": 56,
+  "last_updated": "2026-10-04T06:34:34Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -755,8 +755,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3TopAppBar.vue",
       "source_ref": "FE:src/parent/components/m3/M3TopAppBar.vue::props",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-001",
         "PARENT-016",
@@ -912,8 +912,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/ParentBottomSheet.vue",
       "source_ref": "FE:src/parent/components/ParentBottomSheet.vue::props",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r5",
       "depends_on": [
         "PARENT-001",
         "INFRA-012",

@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 34,
-  "last_updated": "2026-10-04T04:53:24Z",
+  "version": 35,
+  "last_updated": "2026-10-04T06:34:34Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -254,8 +254,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db007_create_system_settings.py",
       "source_ref": "BE:models/config.py::SystemConfig",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-004"
       ],
@@ -480,8 +480,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db013_create_class_staff.py",
       "source_ref": "BE:models/classroom.py::Classroom",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-012",
         "DB-004"
@@ -598,8 +598,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db016_create_guardians.py",
       "source_ref": "BE:models/guardian.py::Guardian",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-014",
         "DB-015"
@@ -676,8 +676,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db018_create_student_leaves.py",
       "source_ref": "BE:models/student_leave.py::StudentLeaveRequest",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-014"
       ],
@@ -794,8 +794,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db021_create_homework_items.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-014",
         "DB-008",
@@ -834,8 +834,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db022_create_homework_daily_progress.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-014",
         "DB-004"
@@ -873,8 +873,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db023_create_pickup_persons.py",
       "source_ref": "BE:models/pickup.py::StudentPickupPerson",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-014",
         "DB-015"
@@ -993,8 +993,8 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db026_create_exams.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-db-r5",
       "depends_on": [
         "DB-009",
         "DB-012",
