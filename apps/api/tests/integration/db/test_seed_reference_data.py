@@ -9,6 +9,7 @@ from psycopg import sql
 from tests.integration.db.conftest import Conn, load_seed_sql
 
 SUBJECTS = ["國語", "數學", "英語", "自然", "社會"]
+EXAM_TYPES = ["段考", "小考", "複習考"]
 
 
 def _seeded(conn: Conn, table: str, names: list[str]) -> list[tuple[str, int, bool]]:
@@ -44,3 +45,20 @@ def test_seed_subjects_idempotent(owner_conn: Conn) -> None:
 
     assert _count(owner_conn, "subjects") == before
     assert [name for name, _, _ in _seeded(owner_conn, "subjects", SUBJECTS)] == SUBJECTS
+
+
+def test_seed_exam_types_present_in_order(backend_conn: Conn) -> None:
+    assert _seeded(backend_conn, "exam_types", EXAM_TYPES) == [
+        ("段考", 10, True),
+        ("小考", 20, True),
+        ("複習考", 30, True),
+    ]
+
+
+def test_seed_exam_types_idempotent(owner_conn: Conn) -> None:
+    before = _count(owner_conn, "exam_types")
+
+    owner_conn.execute(load_seed_sql("db037_seed_exam_types.py"))
+
+    assert _count(owner_conn, "exam_types") == before
+    assert [name for name, _, _ in _seeded(owner_conn, "exam_types", EXAM_TYPES)] == EXAM_TYPES
