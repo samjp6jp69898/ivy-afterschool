@@ -3,13 +3,15 @@
 欄位與 migration 完全一致（BACKEND-024 drift 把關）；CHECK 與 partial index 只在 migration。
 ``school_class`` 是就讀國小的班級文字（例如「三年二班」），安親班班級的關係屬性為 ``class_``。
 敏感欄位（id_number_enc、health_note_enc）只存密文，不提供自動解密的 property：解密只在有
-``students:sensitive`` 的路徑由 service 呼叫 BACKEND-009。``guardians`` 關係由 BACKEND-132 加入。
+``students:sensitive`` 的路徑由 service 呼叫 BACKEND-009。
+``guardians``（BACKEND-132）為 lazy='raise'，需要時明確 ``selectinload(Student.guardians)``，
+避免 N+1。
 """
 
 from __future__ import annotations
 
 from datetime import date
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
 from sqlalchemy import ForeignKey, Index, LargeBinary, Text, text
@@ -18,6 +20,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import ArchivableMixin, Base, TimestampMixin, UUIDPkMixin
 from app.models.classes import SchoolClass
 from app.models.reference import School
+
+if TYPE_CHECKING:
+    from app.models.parents import Guardian
 
 Gender = Literal["male", "female", "other"]
 StudentStatus = Literal["active", "suspended", "withdrawn"]
@@ -54,3 +59,4 @@ class Student(UUIDPkMixin, TimestampMixin, ArchivableMixin, Base):
 
     school: Mapped[School | None] = relationship(lazy="joined")
     class_: Mapped[SchoolClass | None] = relationship(lazy="joined")
+    guardians: Mapped[list[Guardian]] = relationship(back_populates="student", lazy="raise")
