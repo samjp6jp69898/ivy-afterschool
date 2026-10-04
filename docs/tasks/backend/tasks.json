@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 172,
-  "last_updated": "2026-10-04T16:22:26Z",
+  "version": 173,
+  "last_updated": "2026-10-04T16:22:57Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -4516,7 +4516,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/repositories/students.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-131",
@@ -4525,7 +4525,7 @@
         "BACKEND-022"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：get_student_or_404(for_update=True) 實作為 FOR UPDATE OF students（Student 的 school / class_ 為 lazy=\"joined\"，Postgres 不允許鎖 outer join 可空側）；list_active_student_ids 依 student_no、id 排序以求結果穩定（description 未規定順序）。\nreview-r7-b 打回：get_student_or_404(for_update=True) 在學生已載入同一 session 時回傳過期資料。SELECT ... FOR UPDATE 讀到的是最新已 commit 的列，但 SQLAlchemy identity map 內已存在的 Student 物件不會被覆寫，回傳物件的屬性仍是第一次載入時的值，鎖住後依舊拿舊值做判斷（read-modify-write 失效）。反例（已在本機 DB 以 db_session 實測）：make_student(name='王小明') → get_student_or_404(sid) → text('update students set name=...') 改成 '陳小華' → get_student_or_404(sid, for_update=True).name 仍是 '王小明'，DB 實際是 '陳小華'。實際會撞到的路徑：BACKEND-180 的 get_owned_student dependency 先把 Student 載入 session，之後 service 再以 for_update 鎖同一位學生。修正方向：for_update 時加 execution_options(populate_existing=True)（SQLAlchemy 文件對 with_for_update 的建議），並補一條 red case（先一般載入 → 以 core update 或另一連線改值 → for_update 取回的屬性等於 DB 新值）。",
+      "risk_notes": "協調者待使用者確認：get_student_or_404(for_update=True) 實作為 FOR UPDATE OF students（Student 的 school / class_ 為 lazy=\"joined\"，Postgres 不允許鎖 outer join 可空側）；list_active_student_ids 依 student_no、id 排序以求結果穩定（description 未規定順序）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/repositories/test_student_repository.py",
@@ -4542,9 +4542,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r7-b",
-        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試先於實作；動到的檔案 just lint / just typecheck 乾淨。其餘驗收（封存 404 / include_archived、FOR UPDATE OF students、list_active 排除 suspended / withdrawn / archived 與篩選、brief map 單一 SQL）皆有測試且突變（拿掉 archived 過濾、拿掉 status 過濾）會轉紅。打回原因見 risk_notes「review-r7-b 打回」。risk_notes 的保守決定判斷：FOR UPDATE OF students（Postgres 不允許鎖 outer join 可空側）合理；list_active_student_ids 依 student_no、id 排序合理，皆不與 description / domain_spec 衝突。"
+        "notes": "tdd.run 實跑 9 綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試先於實作（含複審修正：d35c8af 測試先於 5d5739e 實作）；動到的檔案 just lint / just typecheck 乾淨。複審：for_update 加 populate_existing 後，已載入的學生以上鎖後的 DB 值刷新；以突變還原成原實作，test_student_repo_for_update_refreshes_loaded_instance 轉紅（grade_level 3 != 4），新實作全綠。populate_existing 不會吃掉呼叫端未 flush 的修改（SessionLocal autoflush=True，查詢前先 flush）。get_class_or_404 沒有 for_update 參數，不受影響。其餘驗收（封存 404 / include_archived、FOR UPDATE OF students、list_active 排除 suspended / withdrawn / archived 與篩選、brief map 單一 SQL）皆有測試，突變（拿掉 archived 過濾、拿掉 status 過濾）會轉紅。risk_notes 的保守決定判斷：FOR UPDATE OF students（Postgres 不允許鎖 outer join 可空側）合理；list_active_student_ids 依 student_no、id 排序合理，皆不與 description / domain_spec 衝突。"
       }
     },
     {
