@@ -169,7 +169,12 @@ def test_pickup_schemas_authorization_modes() -> None:
 
 
 def test_pickup_schemas_phone_format() -> None:
-    for bad in ("1234567", "x" * 8, "0912-000-101-000-0000", "\uff10\uff19\uff11\uff12\uff10\uff10\uff10\uff11\uff10\uff11"):
+    for bad in (
+        "1234567",
+        "x" * 8,
+        "0912-000-101-000-0000",
+        "\uff10\uff19\uff11\uff12\uff10\uff10\uff10\uff11\uff10\uff11",
+    ):
         with pytest.raises(ValidationError):
             PickupPersonCreateIn(name="李阿姨", relation="阿姨", phone=bad)
     ok = PickupPersonCreateIn(name="李阿姨", relation="阿姨", phone="+886 (2) 1234-5678")
