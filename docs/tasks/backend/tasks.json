@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 149,
-  "last_updated": "2026-10-04T14:12:20Z",
+  "version": 150,
+  "last_updated": "2026-10-04T14:54:09Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3831,7 +3831,7 @@
         "BACKEND-006"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "committing 測試會真的改到 seed 表 system_settings，teardown 必須以 owner 連線還原；audit_logs 為 append-only，清理只能走 INFRA-010 的 owner truncate。\nBACKEND-108 的 TTL cache（review-r5-backend）：invalidate_setting 只能在 commit 之後呼叫（本 task 第 6 步的 run_after_commit），在 commit 前呼叫會讓其他執行緒讀到舊值並以新世代回寫快取 60 秒；put_setting 的寫入交易內不得以同一個 session 呼叫 get_setting（會把尚未 commit 的值寫進快取，交易回滾後快取仍保留該值直到 TTL），需要讀現值時直接查 system_settings 列。",
+      "risk_notes": "committing 測試會真的改到 seed 表 system_settings，teardown 必須以 owner 連線還原；audit_logs 為 append-only，清理只能走 INFRA-010 的 owner truncate。\nBACKEND-108 的 TTL cache（review-r5-backend）：invalidate_setting 只能在 commit 之後呼叫（本 task 第 6 步的 run_after_commit），在 commit 前呼叫會讓其他執行緒讀到舊值並以新世代回寫快取 60 秒；put_setting 的寫入交易內不得以同一個 session 呼叫 get_setting（會把尚未 commit 的值寫進快取，交易回滾後快取仍保留該值直到 TTL），需要讀現值時直接查 system_settings 列。\nSettingPutIn.value（BACKEND-111）內層字串若含 \\u0000，寫入 jsonb 會 DataError → 500：put_setting 在 registry schema 驗證之外要拒絕含 \\u0000 的字串並回 422。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_settings_service.py",
@@ -7897,7 +7897,7 @@
         "BACKEND-002"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "",
+      "risk_notes": "AttendanceAmendIn（BACKEND-301）在 status=null 與其他欄位一起送時，status 仍在 model_fields_set 內且值為 None：service 必須把 status is None 視為未提供，不可把 null 寫進 not null 欄位。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_attendance_service.py",
@@ -7978,7 +7978,7 @@
         "BACKEND-133"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "BACKEND-301 的 month 參數 pattern 以 \\d 比對，會接受全形數字與年份 0000（例如 '0000-01'）：service 解析月份時要以 int() 後檢查年份範圍，或捕捉 ValueError 回 422，不可讓 date(0, 1, 1) 之類的 ValueError 變成 500。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_attendance_service.py",
@@ -13160,7 +13160,7 @@
         "BACKEND-002"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "DashboardTodayOut（BACKEND-490）的 completion_rate 只對 int / float 做四捨五入，傳 Decimal 會原樣輸出（例如 33.333）：service 以 float 計算完成率再交給 schema。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_dashboard_service.py",
