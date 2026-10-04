@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 235,
-  "last_updated": "2026-10-04T17:02:07Z",
+  "version": 236,
+  "last_updated": "2026-10-04T17:02:25Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1417,7 +1417,7 @@
         "BACKEND-023"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "回傳 StaffAuthOut / StaffMeOut 時 permissions 要先排序再傳入（BACKEND-039 的 StaffMeOut 不自行排序）。\n協調者待使用者確認：login 回應組裝抽成 app/api/admin/auth.py 的 staff_auth_out（permissions 先排序），後續 refresh / change-password endpoint 重用。測試每個案例以 autouse fixture 換成獨立的 AuthThrottles（module 單例在 fake clock 固定時間下會跨測試累計）。",
+      "risk_notes": "回傳 StaffAuthOut / StaffMeOut 時 permissions 要先排序再傳入（BACKEND-039 的 StaffMeOut 不自行排序）。\nlogin 回應組裝抽成 app/api/admin/auth.py 的 staff_auth_out（permissions 先排序），後續 refresh / change-password endpoint 重用。測試每個案例以 autouse fixture 換成獨立的 AuthThrottles（module 單例在 fake clock 固定時間下會跨測試累計）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_auth_endpoints.py",
@@ -1563,7 +1563,7 @@
         "BACKEND-042"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：BACKEND-044（refresh endpoint）尚未存在，「logout 後舊 refresh 打 refresh → 401 refresh_revoked」與「其他裝置 refresh 仍成功」改在 service 層驗證（直接呼叫 refresh_tokens.rotate）。044 完成後，請在 test_auth_endpoints.py 補一條經 endpoint 的 logout → refresh 401 案例。",
+      "risk_notes": "BACKEND-044（refresh endpoint）尚未存在，「logout 後舊 refresh 打 refresh → 401 refresh_revoked」與「其他裝置 refresh 仍成功」改在 service 層驗證（直接呼叫 refresh_tokens.rotate）。044 完成後，請在 test_auth_endpoints.py 補一條經 endpoint 的 logout → refresh 401 案例。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_auth_endpoints.py",
@@ -2229,7 +2229,7 @@
         "BACKEND-062"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：token 有效但家長帳號已不存在 → 401 UnauthenticatedError；clock 參數依 description 簽名保留，目前未使用。",
+      "risk_notes": "token 有效但家長帳號已不存在 → 401 UnauthenticatedError；clock 參數依 description 簽名保留，目前未使用。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_parent_account_service.py",
@@ -2306,7 +2306,7 @@
         "BACKEND-535"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：規格內 red_case 的 username 'x2' 只有 2 字元，不符 description 與 DB CHECK 的 ^[a-z0-9][a-z0-9._-]{2,31}$（至少 3 字元），已把 red_cases 的 'x2' 改為 'owner2'。create_admin 函式本身也檢查「已有啟用中的 admin」（拒絕 → ConflictError admin_exists，main 轉 exit 1）；username 重複 → exit 1；輸入不合格（密碼強度、username 格式）→ exit 2；密碼不一致 → exit 2；其他例外 → exit 1，錯誤訊息只印例外類別。",
+      "risk_notes": "規格內 red_case 的 username 'x2' 只有 2 字元，不符 description 與 DB CHECK 的 ^[a-z0-9][a-z0-9._-]{2,31}$（至少 3 字元），已把 red_cases 的 'x2' 改為 'owner2'。create_admin 函式本身也檢查「已有啟用中的 admin」（拒絕 → ConflictError admin_exists，main 轉 exit 1）；username 重複 → exit 1；輸入不合格（密碼強度、username 格式）→ exit 2；密碼不一致 → exit 2；其他例外 → exit 1，錯誤訊息只印例外類別。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/test_cli_create_admin.py",
@@ -2562,7 +2562,7 @@
         "BACKEND-022"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "assert_admin_capabilities_retained 本身不加鎖：兩筆併發異動（例如各自停用一位 admin）在 READ COMMITTED 下各自看到對方仍啟用而都通過（review-r7-a 兩連線實跑確認），系統可能一度沒有啟用 admin。呼叫端（BACKEND-079 / 080 / 090 / 092 / 521）若要杜絕，須在呼叫前對相關 staff_users / roles 列 FOR UPDATE 或以 advisory lock 序列化帳號 / 角色異動。",
+      "risk_notes": "assert_admin_capabilities_retained 本身不加鎖：兩筆併發異動（例如各自停用一位 admin）在 READ COMMITTED 下各自看到對方仍啟用而都通過（review-r7-a 兩連線實跑確認），系統可能一度沒有啟用 admin。呼叫端（BACKEND-079 / 090 / 092）在呼叫前先取 advisory_xact_lock(session, 'rbac:admin_retained', 'global') 序列化（已寫進三者 description，092 有併發 red_case）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_rbac_retained.py",
@@ -2743,7 +2743,7 @@
         "BACKEND-102"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：刪除前以 FOR UPDATE 鎖角色列，避免與同時指派員工到該角色競爭；其他 IntegrityError 交全域 handler。",
+      "risk_notes": "刪除前以 FOR UPDATE 鎖角色列，避免與同時指派員工到該角色競爭；其他 IntegrityError 交全域 handler。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_role_service.py",
@@ -2929,7 +2929,7 @@
         "BACKEND-081"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：red_case 預期 students:sensitive 的 label 為「查看身分證、健康備註」，但 PERMISSION_LABELS（BACKEND-070）實際為「查看與寫入身分證、健康備註」，測試與 red_case 以實際值為準（目錄 label 取自 PERMISSION_LABELS，不另寫一份）。",
+      "risk_notes": "red_case 預期 students:sensitive 的 label 為「查看身分證、健康備註」，但 PERMISSION_LABELS（BACKEND-070）實際為「查看與寫入身分證、健康備註」，測試與 red_case 以實際值為準（目錄 label 取自 PERMISSION_LABELS，不另寫一份）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_roles_endpoints.py",
@@ -2965,7 +2965,7 @@
         "BACKEND-039"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：專案沒有 email-validator 相依，email 不用 EmailStr，改以 DB-004 CHECK 的 ^[^@\\s]+@[^@\\s]+$ 加 max_length=254 驗證（與 DB 一致）；StaffUserUpdateIn 的 nullable_fields 為 phone、email（給 null 清除），display_name / role_id / 權限清單不可為 null；建立請求不接受 password 欄位（臨時密碼由系統產生）。",
+      "risk_notes": "專案沒有 email-validator 相依，email 不用 EmailStr，改以 DB-004 CHECK 的 ^[^@\\s]+@[^@\\s]+$ 加 max_length=254 驗證（與 DB 一致）；StaffUserUpdateIn 的 nullable_fields 為 phone、email（給 null 清除），display_name / role_id / 權限清單不可為 null；建立請求不接受 password 欄位（臨時密碼由系統產生）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_staff_user_schemas.py",
@@ -3556,7 +3556,7 @@
     {
       "id": "BACKEND-103",
       "title": "實作 AuditService.list_audit_logs：篩選與分頁（附操作者名稱）",
-      "description": "在 `apps/api/app/services/audit_service.py` 實作：\n```python\ndef list_audit_logs(session: Session, query: AuditLogQuery, page: PageParams) -> Page[AuditLogOut]: ...\n```\n- 篩選：action（完全相符）、action_prefix（例如 `staff_user.`）、entity_type、entity_id、actor_type、actor_id、date_from / date_to（台北日期，以 BACKEND-002 `taipei_day_bounds` 轉換，含頭含尾）。\n- 排序 `created_at desc, id desc`。\n- `actor_name`：staff → staff_users.display_name；parent → parent_accounts.display_name；system → '系統'；以 outer join 一次查出，不 N+1。\n- 移植 ivy `api/audit.py::get_audit_logs` / `_apply_filters` 的篩選項；去掉 tenant 範圍、ack、高風險標記、CSV 匯出。\n\n**驗收標準**\n- 各篩選條件正確，日期區間以台北時區判斷（UTC 16:00 邊界）。\n- actor_name 對應正確。\n- 依時間新到舊。",
+      "description": "在 `apps/api/app/services/audit_service.py` 實作：\n```python\ndef list_audit_logs(session: Session, query: AuditLogQuery, page: PageParams) -> Page[AuditLogOut]: ...\n```\n- 篩選：action（完全相符）、action_prefix（例如 `staff_user.`）、entity_type、entity_id、actor_type、actor_id、date_from / date_to（台北日期，以 BACKEND-002 `taipei_day_bounds` 轉換，含頭含尾）。\n- 排序 `created_at desc, id desc`。\n- `actor_name`：staff → staff_users.display_name；parent → parent_accounts.display_name；system → '系統'；先取本頁 audit_logs，再對本頁出現的 staff / parent actor 各以一次 IN 查詢取名稱（查詢數與頁面大小無關，不 N+1）；actor 已不存在時為 None。\n- 移植 ivy `api/audit.py::get_audit_logs` / `_apply_filters` 的篩選項；去掉 tenant 範圍、ack、高風險標記、CSV 匯出。\n\n**驗收標準**\n- 各篩選條件正確，日期區間以台北時區判斷（UTC 16:00 邊界）。\n- actor_name 對應正確。\n- 依時間新到舊。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/audit_service.py",
       "source_ref": "BE:api/audit.py::get_audit_logs",
@@ -3569,7 +3569,7 @@
         "BACKEND-002"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：actor_name 不是單一 outer join，而是先以 paginate 取本頁 audit_logs，再對本頁出現的 staff / parent actor 各做一次 IN 查詢取名稱（paginate 只回單一 entity；總查詢數與頁面大小無關，沒有 N+1）。staff / parent 已不存在時 actor_name 為 None。action_prefix 以 autoescape 比對（prefix 內的 _ % 視為字面字元）。",
+      "risk_notes": "actor_name 不是單一 outer join，而是先以 paginate 取本頁 audit_logs，再對本頁出現的 staff / parent actor 各做一次 IN 查詢取名稱（paginate 只回單一 entity；總查詢數與頁面大小無關，沒有 N+1）。staff / parent 已不存在時 actor_name 為 None。action_prefix 以 autoescape 比對（prefix 內的 _ % 視為字面字元）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_audit_service.py",
@@ -3639,7 +3639,7 @@
         "BACKEND-023"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：AuditLogQuery 拒絕未知參數，FastAPI 的 Annotated[Model, Query()] 會把 page / page_size 也當成未知參數 422，所以新增 app/api/admin/_query.py 的 query_model(model)：排除 page / page_size 後驗證並轉成一般 422 validation_error（loc 前綴 query）；後續帶分頁的列表 endpoint（例如 159）共用。",
+      "risk_notes": "AuditLogQuery 拒絕未知參數，FastAPI 的 Annotated[Model, Query()] 會把 page / page_size 也當成未知參數 422，所以新增 app/api/admin/_query.py 的 query_model(model)：排除 page / page_size 後驗證並轉成一般 422 validation_error（loc 前綴 query）；後續帶分頁的列表 endpoint（例如 159）共用。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_audit_logs_endpoint.py",
@@ -4045,7 +4045,7 @@
         "BACKEND-115"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：只有 SQLSTATE 23505（unique violation）轉 409 spec.conflict_code；其他 IntegrityError 原樣拋出交全域 handler。訊息為「名稱已存在」/「日期已存在」（closed-days）。",
+      "risk_notes": "只有 SQLSTATE 23505（unique violation）轉 409 spec.conflict_code；其他 IntegrityError 原樣拋出交全域 handler。訊息為「名稱已存在」/「日期已存在」（closed-days）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_reference_data_service.py",
@@ -4151,7 +4151,7 @@
         "BACKEND-023"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：四個資源由 build_reference_router(spec) 以同一組權限（settings:read、students:read、exams:read、homework:read 任一）建立 GET；BACKEND-120~122 的 POST / PATCH / DELETE 日後在同一個 builder 內加 handler。",
+      "risk_notes": "四個資源由 build_reference_router(spec) 以同一組權限（settings:read、students:read、exams:read、homework:read 任一）建立 GET；BACKEND-120~122 的 POST / PATCH / DELETE 日後在同一個 builder 內加 handler。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_reference_endpoints.py",
@@ -4188,7 +4188,7 @@
         "BACKEND-119"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "寫入 handler 加在 BACKEND-119 的 build_reference_router(spec) 內時，必須掛本 task 指定的寫入權限，不可沿用 119 的 READ_PERMISSIONS（任一讀取權限）；測試要含「只有讀取權限 → 403」與 route audit == []。\n協調者待使用者確認：POST handler 的 body 型別依資源在執行期決定，以 handler.__annotations__[\"body\"] = Annotated[spec.create_schema, Body()] 設定後經 add_api_route 註冊（reference.py 有 from __future__ import annotations，無法在簽名直接引用閉包變數）。寫入只認 SETTINGS_WRITE，測試含只有 settings:read / students:read / exams:read 皆 403。BACKEND-121、122 的 PATCH / DELETE 日後比照在同一 builder 加。",
+      "risk_notes": "寫入 handler 加在 BACKEND-119 的 build_reference_router(spec) 內時，必須掛本 task 指定的寫入權限，不可沿用 119 的 READ_PERMISSIONS（任一讀取權限）；測試要含「只有讀取權限 → 403」與 route audit == []。\nPOST handler 的 body 型別依資源在執行期決定，以 handler.__annotations__[\"body\"] = Annotated[spec.create_schema, Body()] 設定後經 add_api_route 註冊（reference.py 有 from __future__ import annotations，無法在簽名直接引用閉包變數）。寫入只認 SETTINGS_WRITE，測試含只有 settings:read / students:read / exams:read 皆 403。BACKEND-121、122 的 PATCH / DELETE 日後比照在同一 builder 加。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_reference_endpoints.py",
@@ -4370,7 +4370,7 @@
         "BACKEND-023"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：BACKEND-019 的 SecurityMiddleware 會剝掉 handler 的 Cache-Control 並一律補 no-store，與本 task 要求的 public, max-age=60 衝突。已改 security_middleware.py：新增 PUBLIC_CACHEABLE_PATHS = {/api/parent/config}，這些路徑不加 no-store、保留 handler 的 Cache-Control（其餘 /api/ 路徑不變，單元測試 test_security_mw_public_cacheable_path_keeps_handler_cache_control 涵蓋），並同步更新 BACKEND-019 的 description。",
+      "risk_notes": "BACKEND-019 的 SecurityMiddleware 會剝掉 handler 的 Cache-Control 並一律補 no-store，與本 task 要求的 public, max-age=60 衝突。已改 security_middleware.py：新增 PUBLIC_CACHEABLE_PATHS = {/api/parent/config}，這些路徑不加 no-store、保留 handler 的 Cache-Control（其餘 /api/ 路徑不變，單元測試 test_security_mw_public_cacheable_path_keeps_handler_cache_control 涵蓋），並同步更新 BACKEND-019 的 description。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/parent/test_parent_config_endpoint.py",
@@ -4526,7 +4526,7 @@
         "BACKEND-022"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：get_student_or_404(for_update=True) 實作為 FOR UPDATE OF students（Student 的 school / class_ 為 lazy=\"joined\"，Postgres 不允許鎖 outer join 可空側）；list_active_student_ids 依 student_no、id 排序以求結果穩定（description 未規定順序）。",
+      "risk_notes": "get_student_or_404(for_update=True) 實作為 FOR UPDATE OF students（Student 的 school / class_ 為 lazy=\"joined\"，Postgres 不允許鎖 outer join 可空側）；list_active_student_ids 依 student_no、id 排序以求結果穩定（description 未規定順序）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/repositories/test_student_repository.py",
@@ -4633,7 +4633,7 @@
         "BACKEND-135"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：get_class / create_class 以新增的 _class_out helper 組 ClassOut；為不動複審中的 list_classes，未把 list_classes 改用同一 helper（ClassOut 組裝有兩處）。get_class 的 404 沿用 repositories/students.get_class_or_404。",
+      "risk_notes": "get_class / create_class 以新增的 _class_out helper 組 ClassOut；list_classes 尚未改用同一 helper（ClassOut 組裝有兩處，輸出已實測一致；下次動 class_service 的 task 順手合併）。get_class 的 404 沿用 repositories/students.get_class_or_404。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_class_service.py",
@@ -5070,7 +5070,7 @@
         "BACKEND-167"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：ClassBrief 直接重用 BACKEND-134 的 ClassBriefOut（schemas/students.py 內 ClassBrief = ClassBriefOut，避免重複定義）；StudentUpdateIn 可給 null 的欄位為 gender、birthday、school_id、school_class、class_id、enrolled_on、withdrawn_on、note、id_number、health_note，student_no / name / grade_level / status 不可為 null。withdrawn 需 withdrawn_on、withdrawn_on 不得早於 enrolled_on 等跨欄位規則由學生 service 以明確錯誤碼處理（schema 不重複 DB CHECK）。",
+      "risk_notes": "ClassBrief 直接重用 BACKEND-134 的 ClassBriefOut（schemas/students.py 內 ClassBrief = ClassBriefOut，避免重複定義）；StudentUpdateIn 可給 null 的欄位為 gender、birthday、school_id、school_class、class_id、enrolled_on、withdrawn_on、note、id_number、health_note，student_no / name / grade_level / status 不可為 null。withdrawn 需 withdrawn_on、withdrawn_on 不得早於 enrolled_on 等跨欄位規則由學生 service 以明確錯誤碼處理（schema 不重複 DB CHECK）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_student_schemas.py",
@@ -5107,7 +5107,7 @@
         "BACKEND-008"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：q 是否為身分證以 normalize_id_number + validate_id_number（含檢查碼）判斷，不合法的格式不做 HMAC 比對。q 的 student_no 前綴與 name 模糊比對以 autoescape 處理 % 與 _。",
+      "risk_notes": "q 是否為身分證以 normalize_id_number + validate_id_number（含檢查碼）判斷，不合法的格式不做 HMAC 比對。q 的 student_no 前綴與 name 模糊比對以 autoescape 處理 % 與 _。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_student_service.py",
@@ -5145,7 +5145,7 @@
         "BACKEND-168"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "協調者待使用者確認：get_student 簽章比 description 原版多收 `clock: Clock`（BACKEND-168 的 list_for_student 需要 now 判斷綁定碼是否過期；不在 service 內自建 SystemClock）。description 已同步改；BACKEND-161 endpoint 要以 Depends(get_clock) 傳入。",
+      "risk_notes": "get_student 簽章比 description 原版多收 `clock: Clock`（BACKEND-168 的 list_for_student 需要 now 判斷綁定碼是否過期；不在 service 內自建 SystemClock）。description 已同步改；BACKEND-161 endpoint 要以 Depends(get_clock) 傳入。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_student_service.py",
@@ -5183,7 +5183,7 @@
         "BACKEND-102"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "",
+      "risk_notes": "BACKEND-148 schemas 不做跨欄位規則：status=withdrawn 必須有 withdrawn_on、withdrawn_on 不得早於 enrolled_on 等由本 service 以明確錯誤碼檢查（否則 DB CHECK 會落成通用 409 conflict）；id_number、health_note、school_class 只填空白時 schema strip 成空字串，本 service 寫入前轉成 null。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_student_service.py",
@@ -5221,7 +5221,7 @@
         "BACKEND-529"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "",
+      "risk_notes": "BACKEND-148 schemas 不做跨欄位規則：status=withdrawn 必須有 withdrawn_on、withdrawn_on 不得早於 enrolled_on 等由本 service 以明確錯誤碼檢查（否則 DB CHECK 會落成通用 409 conflict）；id_number、health_note、school_class 只填空白時 schema strip 成空字串，本 service 寫入前轉成 null。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_student_service.py",
@@ -5848,7 +5848,7 @@
         "BACKEND-168"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：signature 的 clock 參數依 description 保留，目前未使用。",
+      "risk_notes": "signature 的 clock 參數依 description 保留，目前未使用。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_guardian_service.py",
@@ -6328,7 +6328,7 @@
         "BACKEND-014"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：照片簽名 URL 使用 Storage 預設有效期（300 秒，architecture_decisions §10）；StorageError 時只讓該筆 photo_url 為 None 並 logger.warning（不含路徑），不讓整份清單失敗。",
+      "risk_notes": "照片簽名 URL 使用 Storage 預設有效期（300 秒，architecture_decisions §10）；StorageError 時只讓該筆 photo_url 為 None 並 logger.warning（不含路徑），不讓整份清單失敗。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_parent_children_service.py",
@@ -6362,7 +6362,7 @@
         "BACKEND-180"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：get_child 重用 list_children 取得摘要欄位再補詳情欄位（多查一次其他小孩的摘要，家長小孩數少，不另寫單筆查詢）。",
+      "risk_notes": "get_child 重用 list_children 取得摘要欄位再補詳情欄位（多查一次其他小孩的摘要，家長小孩數少，不另寫單筆查詢）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_parent_children_service.py",
@@ -6657,7 +6657,7 @@
         "BACKEND-070"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：有效權限在 Python 端以 resolve_effective_permissions 逐一計算（載入全部啟用員工，role 為 joined 載入、一次查詢）；員工數少，不另做 SQL 端權限預篩。",
+      "risk_notes": "有效權限在 Python 端以 resolve_effective_permissions 逐一計算（載入全部啟用員工，role 為 joined 載入、一次查詢）；員工數少，不另做 SQL 端權限預篩。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/notifications/test_recipients.py",
@@ -6884,7 +6884,7 @@
         "BACKEND-204"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：deep_link 對未知 event（DB CHECK 之外的值）退回 \"/\"，不拋例外；排序以 created_at desc、id desc 保持穩定。",
+      "risk_notes": "deep_link 對未知 event（DB CHECK 之外的值）退回 \"/\"，不拋例外；排序以 created_at desc、id desc 保持穩定。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/notifications/test_inbox_service.py",
@@ -6918,7 +6918,7 @@
         "BACKEND-211"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：mark_read 以 FOR UPDATE 讀取後只在 read_at 為 null 時寫入；他人通知、不同 recipient_type、不存在的 id 皆回同一個 404 notification_not_found（訊息「找不到通知」）。",
+      "risk_notes": "mark_read 以 FOR UPDATE 讀取後只在 read_at 為 null 時寫入；他人通知、不同 recipient_type、不存在的 id 皆回同一個 404 notification_not_found（訊息「找不到通知」）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/notifications/test_inbox_service.py",
@@ -6986,7 +6986,7 @@
         "BACKEND-023"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：列表 query 驗證共用 app/api/admin/_query.py 的 query_model（排除 page / page_size 後驗證 forbid 的 query model）。",
+      "risk_notes": "列表 query 驗證共用 app/api/admin/_query.py 的 query_model（排除 page / page_size 後驗證 forbid 的 query model）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_notifications_endpoints.py",
@@ -7098,7 +7098,7 @@
         "BACKEND-023"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：家長端列表直接 import app/api/admin/_query.py 的 query_model（目前放在 admin 套件底下；日後可搬到 app/api/ 共用位置）。",
+      "risk_notes": "家長端列表直接 import app/api/admin/_query.py 的 query_model（目前放在 admin 套件底下；日後可搬到 app/api/ 共用位置）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/parent/test_notifications_endpoints.py",
@@ -7206,7 +7206,7 @@
         "BACKEND-219"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：details 格式為 {\"events\": [不可設定的事件…]}；任一事件不可設定時整批拒絕、不寫入合法的那幾筆。",
+      "risk_notes": "details 格式為 {\"events\": [不可設定的事件…]}；任一事件不可設定時整批拒絕、不寫入合法的那幾筆。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/notifications/test_preference_service.py",
@@ -9224,7 +9224,7 @@
         "BACKEND-301"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：ProgressPutIn.overall 不可給 null（只接受 done / auto 或不給）；HomeworkBatchCreateIn.student_ids 給空陣列 → 422（min_length=1，不給才代表整班）；ready_eta / note 給 null 代表清除。",
+      "risk_notes": "ProgressPutIn.overall 不可給 null（只接受 done / auto 或不給）；HomeworkBatchCreateIn.student_ids 給空陣列 → 422（min_length=1，不給才代表整班）；ready_eta / note 給 null 代表清除。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_homework_schemas.py",
@@ -9705,7 +9705,7 @@
         "BACKEND-371"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "家長端 IDOR 由 endpoint 層（BACKEND-391 get_owned_student）負責，本 service 不收 parent。updated_at 由 DB trigger 維護，同一交易內 now() 相同，測試只能驗證資料來源（items / progress）而無法驗證 max 的跨列比較。",
+      "risk_notes": "家長端 IDOR 由 endpoint 層（BACKEND-391 get_owned_student）負責，本 service 不收 parent。updated_at 跨列取 max 尚無測試：set_updated_at trigger 只在 BEFORE UPDATE 觸發，INSERT 時明確給 updated_at 會保留，可造出不同時間的列補測。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_homework_service.py",
@@ -10058,7 +10058,7 @@
         "INFRA-010"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：make_pickup_authorization 以 HMAC 計算 code_hash（BACKEND-400），呼叫它的測試必須自行提供 APP_SECRET_KEY 環境（test_pickup_models.py 有 autouse fixture 可參照）；make_pickup_request 的 requested_by_type 依 source 決定（staff → staff，其餘 → parent）。PENDING_MODEL_TABLES 目前剩 student_attendances、devices、nfc_cards。",
+      "risk_notes": "make_pickup_authorization 以 HMAC 計算 code_hash（BACKEND-400），呼叫它的測試必須自行提供 APP_SECRET_KEY 環境（test_pickup_models.py 有 autouse fixture 可參照）；make_pickup_request 的 requested_by_type 依 source 決定（staff → staff，其餘 → parent）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/models/test_pickup_models.py",
@@ -10095,7 +10095,7 @@
         "BACKEND-301"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：PickupRequestOut 與 ParentPickupRequestOut 的 expected_arrival_at 一律以 TimeHM（HH:MM，台北當地時間）輸出，與 request 端一致（description 對家長端欄位未標型別）；PickupReplyIn 的「至少一個」以非 null 判斷（兩者皆 null 視為未給）；PickupCompleteIn 在 method=guardian 時不禁止多給 note、override 時不禁止多給 guardian_id（只檢查必填）。",
+      "risk_notes": "PickupRequestOut 與 ParentPickupRequestOut 的 expected_arrival_at 一律以 TimeHM（HH:MM，台北當地時間）輸出，與 request 端一致（description 對家長端欄位未標型別）；PickupReplyIn 的「至少一個」以非 null 判斷（兩者皆 null 視為未給）；PickupCompleteIn 在 method=guardian 時不禁止多給 note、override 時不禁止多給 guardian_id（只檢查必填）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_pickup_schemas.py",

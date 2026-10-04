@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 82,
-  "last_updated": "2026-10-05",
+  "version": 83,
+  "last_updated": "2026-10-04T17:02:25Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -2331,7 +2331,7 @@
         "FRONTEND-024"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "FRONTEND-073 AuditDiffDrawer 內含 ENTITY_LABELS（entity_type 中文對照）與操作者類型 tag 對照；本頁也需要，實作時抽成共用常數（例如 src/shared/constants/audit.ts）並讓 073 改引用同一份。AuditDiffDrawer 以 :before-close emit update:modelValue=false，父層關閉時不要在離場動畫期間把 log 設為 null（內容會提前消失）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/views/settings/AuditLogView.spec.ts",
