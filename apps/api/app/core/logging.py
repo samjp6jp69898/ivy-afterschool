@@ -60,8 +60,9 @@ _SENSITIVE_SUBSTRINGS = (
     "binding_code",
 )
 # 字串層遮罩只針對敏感 key（非敏感 key 的值可能含空白，不能用通用 key=value 掃描）：
-# key=value 與 header 樣式 key: value，值取到行尾 / 分隔符（, ; & 全形逗號）或下一個 key= / key:
+# key=value 與 header 樣式 key: value，值取到行尾 / 分隔符（, ; 全形逗號）或下一個 key= / key:
 # 之前，因此 'authorization=Bearer T5' 整段遮掉、'token=x status_code=200' 不吞掉後面的 pair。
+# & 不是終止符：'password=Abc&123' 要整段遮掉，query string 的後續參數一起遮屬 fail-safe。
 # lookbehind 只排除識別字字元（status_code 的 code 不算），引號內的字面值（traceback 原始碼行的
 # "password=x"）照樣遮。
 _SENSITIVE_KEY_PATTERN = (
@@ -69,7 +70,7 @@ _SENSITIVE_KEY_PATTERN = (
 )
 _KEY_VALUE_RE = re.compile(
     r"(?<![A-Za-z0-9_-])(?P<key>" + _SENSITIVE_KEY_PATTERN + r")\s*[=:]\s*"
-    r"(?P<value>(?:(?!\s+[A-Za-z_][A-Za-z0-9_-]*\s*[=:])[^,，;&\n])+)",
+    r"(?P<value>(?:(?!\s+[A-Za-z_][A-Za-z0-9_-]*\s*[=:])[^,，;\n])+)",
     re.IGNORECASE,
 )
 # 'key': 'value' / "key": "value"（dict repr），值為帶引號字串或裸 token
