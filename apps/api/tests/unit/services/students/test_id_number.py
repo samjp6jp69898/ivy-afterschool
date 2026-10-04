@@ -51,7 +51,7 @@ def test_id_number_valid_citizen() -> None:
     # 檢查碼正確的公開範例
     validate_id_number("A123456789")
     validate_id_number("F131104093")
-    validate_id_number("B220000006")
+    validate_id_number("B220000000")
 
 
 def test_id_number_bad_checksum() -> None:
