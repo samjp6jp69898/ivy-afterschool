@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 54,
-  "last_updated": "2026-10-04T04:52:22Z",
+  "version": 55,
+  "last_updated": "2026-10-04T04:55:06Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -527,7 +527,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3Button.vue",
       "source_ref": "FE:src/parent/components/m3/M3Button.vue::props",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r4",
       "depends_on": [
         "PARENT-001",
@@ -535,7 +535,7 @@
         "INFRA-012"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "【review-r4-ui 打回】loading 時 type=\"submit\" 的按鈕仍會送出表單：onClick 在 loading 時只 return，沒有 event.preventDefault()，按鈕也不是原生 disabled，因此 <form @submit.prevent=\"save\"> 內的 <M3Button type=\"submit\" :loading=\"saving\"> 在 loading 中被點擊或在欄位按 Enter（隱式送出會對預設按鈕派發 click）時 save 會再被呼叫，與 description「loading 視同 disabled，防止連點重複送出」不符（PARENT-134 請假表單等會用 type=submit）。驗收：補一條 red_case / 測試「form 內 type=submit + loading 點擊 → form submit 0 次；loading=false 對照 → 1 次」，並維持 loading 時保留焦點（不改原生 disabled）與既有 aria-disabled / aria-busy 行為。",
+      "risk_notes": "loading 刻意不設原生 disabled（保留焦點），送出 / 重設的預設行為完全靠 onClick 在 loading 時 preventDefault 擋下；之後改寫 onClick 或改用其他事件時須保留這個 preventDefault，否則 type=submit 會在 loading 中重複送出表單。happy-dom 不實作欄位內 Enter 的隱式送出，測試以 element.click() 模擬（Chromium 已實測等價）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/components/m3/M3Button.spec.ts",
@@ -545,15 +545,16 @@
         "red_cases": [
           "M3Button emits click when enabled：slot '我要來接'，trigger('click') → emitted('click').length === 1，文字含 '我要來接'",
           "M3Button blocks click when disabled or loading：disabled=true 點擊 → 無 click emit 且 button 有 disabled 屬性；loading=true 點擊 → 無 emit、aria-busy === 'true'",
-          "M3Button applies variant and type：variant='outlined'、type='submit' → button.classes() 含 'm3-button--outlined'，attributes('type') === 'submit'"
+          "M3Button applies variant and type：variant='outlined'、type='submit' → button.classes() 含 'm3-button--outlined'，attributes('type') === 'submit'",
+          "M3Button loading submit button does not submit its form：<form @submit> 內 type='submit'、loading=true → trigger('click') 與 element.click()（模擬欄位 Enter 隱式送出）後 submit 0 次，且 button 無 disabled 屬性；loading=false 對照 trigger('click') → submit 1 次"
         ],
         "run": "just web-test src/parent/components/m3/M3Button.spec.ts -t \"M3Button\"",
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r4-ui",
-        "notes": "concern。3 條 red_case 有對應測試且 tdd.run 實跑 6/6 綠、測試 a981ea0 先於實作 1d9d82f、web-lint 乾淨，版面與稿一致；但 loading 未達成 description「視同 disabled，防止連點重複送出」：type=\"submit\" + loading 時 onClick 只是不 emit，沒有 preventDefault，按鈕又不是原生 disabled，所以在 <form> 內點擊（或在欄位按 Enter 觸發隱式送出）仍會送出表單。reviewer 以暫時探針實測：<form @submit.prevent> 內放 <M3Button type=\"submit\" loading> 點一下，form submit 觸發 1 次（對照組 loading=false 也是 1 次），應為 0。其餘偏離不擋：拿掉 disabled guard 不影響（原生 disabled 已擋）。"
+        "notes": "pass（複審）。打回項已修：onClick 在 disabled 或 loading 時先 preventDefault 再 return（d65d8c6），測試 612ee13 先於修正。新測試「M3Button loading submit button does not submit its form」：form 內 type=submit + loading 點擊與 element.click() 皆 0 次、loading=false 對照 1 次、loading 時無原生 disabled。reviewer 以探針重驗：trigger click / element.click() / 手動 dispatch 可取消的 click 皆 0 次，且不 emit click；aria-disabled 與 aria-busy 為 true；idle 對照送出 1 次並 emit、無 aria 屬性。happy-dom 沒有實作欄位內 Enter 的隱式送出（idle 對照也是 0 次），因此另以 Chromium（Playwright）實測：click 時 preventDefault 的送出鈕，在欄位按 Enter 送出 0 次、對照表單 1 次，證實「隱式送出 = 對預設送出鈕派發 click，取消後不送出」，測試以 element.click() 模擬此路徑有效。tdd.run 實跑 7/7 綠；web-lint 乾淨。reviewer 把此行為補進 tdd.red_cases 第 4 條，對應既有測試名稱。"
       }
     },
     {
@@ -1404,7 +1405,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/StatusPill.vue",
       "source_ref": "FE:src/parent/components/StatusPill.vue::tone",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r4",
       "depends_on": [
         "PARENT-001",
@@ -1429,9 +1430,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4-ui",
+        "notes": "pass。3 條 red_case 有對應測試：label 已到班 + tone success → 文字與 status-pill--success（另逐一驗其他四種 tone class）；預設 neutral、無 m3-icon，icon=schedule → 圖示文字 schedule 且 aria-hidden；元件原始碼的 .status-pill--warning 區塊含 var(--m3-warning-container) / var(--m3-on-warning-container)、整份不含 tertiary，m3-tokens.css 的 :root 與 :root[data-theme=dark] 區塊分別定義 #ffddb0 / #2b1700 與 #5b3a00 / #ffddb0。另補其他 tone 對應的容器 token、span 無 role / tabindex。tdd.run 實跑 5/5 綠；web-lint 乾淨。提交順序：測試 2a31588 → 測試修正 ba85d5f → 實作 855a3a3。ba85d5f 只把 tokens 來源由 css ?raw 改為 readFileSync，斷言一字未改、沒有放寬。reviewer 以探針確認 vitest 對 m3-tokens.css?raw 回傳長度 0（原寫法在任何實作下都只會紅），readFileSync 依 testing_conventions 的 resolve(dirname(fileURLToPath(import.meta.url))) 寫法讀真實檔案，且 block() 找不到選擇器時會失敗、值為精確字串比對，斷言有效。m3-tokens.css 只有 :root 與 :root[data-theme=dark] 兩種主題區塊（無 prefers-color-scheme），新 token 與既有 container 色放在一起。與 parent-component-status-pill 稿（approved）一致：28px 高、圓角 full、padding 12 / 有 icon 時左 8、gap 4、label-large、18px 圖示、單行省略、各 tone token 對應與 decisions 全部相符。"
       }
     },
     {
