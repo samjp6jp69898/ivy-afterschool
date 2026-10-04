@@ -4,7 +4,7 @@ import AutoImport from 'unplugin-auto-import/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import Components from 'unplugin-vue-components/vite'
 import { defineConfig } from 'vite'
-import { parentModuleGraph } from './build/parentModuleGraph'
+import { parentModuleGraph } from './build/parentModuleGraph.ts'
 
 // 單一 Vite 專案、兩個 HTML 入口：index.html（後台）與 parent/index.html（家長端）
 export default defineConfig({
@@ -29,8 +29,6 @@ export default defineConfig({
     },
   },
   build: {
-    // manifest 供家長端 bundle 檢查（INFRA-029）
-    manifest: true,
     rollupOptions: {
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
