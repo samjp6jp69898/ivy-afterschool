@@ -27,30 +27,44 @@ grace fallback 與 absolute lifetime）。
 BACKEND-045：``logout``（移植 ivy ``api/auth.py::logout`` 的「清 cookie 優先」：登出永遠成功）。
 無 cookie 或 raw 不存在 / 已撤銷 → 0；否則撤銷整個 family（``revoke_family_by_raw``）回撤銷筆數。
 不檢查 access token（過期的 access 也能登出），其他裝置的 family 不受影響；只 flush。
+
+BACKEND-049：``change_password``（移植 ivy ``api/auth.py::change_password``：撤銷全部 refresh family
+後為當前裝置重新簽發，避免改完密碼自己被踢出）。
+
+- 順序：帳號鎖定檢查（``throttles.password_change``，key = staff id）→ 舊密碼錯 → 記失敗、400
+  ``current_password_incorrect`` → 強度（BACKEND-032，帶 username）422 ``weak_password`` → 新舊相同
+  422 ``password_unchanged``。
+- 成功：更新 hash、``must_change_password = false``、``token_version += 1``（既有 access 全部
+  失效）、``revoke_all_for_subject`` 撤銷全部 family、為當前裝置 ``issue`` 新 family、以新 tv 簽
+  access、清除失敗計數。不寫 audit（自己改自己的密碼）；只 flush。
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.clock import Clock
-from app.core.errors import UnauthenticatedError
+from app.core.errors import AppError, UnauthenticatedError
 from app.core.permissions import resolve_effective_permissions
 from app.core.request_meta import RequestMeta
 from app.core.security.passwords import (
     dummy_verify,
     hash_password,
     needs_rehash,
+    validate_password_strength,
     verify_password,
 )
 from app.core.security.tokens import create_access_token
 from app.models.account import StaffUser
 from app.services.auth import refresh_tokens
 from app.services.auth.throttle import AuthThrottles, login_keys
+
+if TYPE_CHECKING:
+    from app.api.deps import CurrentStaff
 
 INVALID_CREDENTIALS_MESSAGE: Final = "帳號或密碼錯誤"
 _UNKNOWN_IP: Final = "-"
@@ -159,3 +173,43 @@ def logout(session: Session, *, raw_refresh: str | None, clock: Clock) -> int:
     if not raw_refresh:
         return 0
     return refresh_tokens.revoke_family_by_raw(session, raw_refresh, clock=clock)
+
+
+def change_password(
+    session: Session,
+    *,
+    staff: CurrentStaff,
+    current_password: str,
+    new_password: str,
+    throttles: AuthThrottles,
+    clock: Clock,
+) -> StaffSession:
+    now = clock.now()
+    lockout_key = str(staff.id)
+    throttles.password_change.check(lockout_key, now)
+
+    # role 是 lazy='joined'（LEFT OUTER JOIN）：FOR UPDATE 只鎖 staff_users 列
+    user = session.execute(
+        select(StaffUser).where(StaffUser.id == staff.id).with_for_update(of=StaffUser)
+    ).scalar_one_or_none()
+    if user is None or not user.is_active:
+        # 守衛通過後帳號才被刪除 / 停用：視同未登入
+        raise UnauthenticatedError
+    if not verify_password(current_password, user.password_hash):
+        throttles.password_change.record_failure(lockout_key, now)
+        raise AppError("current_password_incorrect", "目前密碼不正確", status=400)
+    validate_password_strength(new_password, username=user.username)
+    if new_password == current_password:
+        raise AppError("password_unchanged", "新密碼不可與目前密碼相同", status=422)
+
+    user.password_hash = hash_password(new_password)
+    user.must_change_password = False
+    user.token_version += 1
+    refresh_tokens.revoke_all_for_subject(
+        session, subject_type="staff", subject_id=user.id, clock=clock
+    )
+    issued = refresh_tokens.issue(session, subject_type="staff", subject_id=user.id, clock=clock)
+    throttles.password_change.clear(lockout_key)
+    result = _staff_session(user, refresh_token=issued.raw, clock=clock)
+    session.flush()
+    return result
