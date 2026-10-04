@@ -21,10 +21,12 @@ from app.core.clock import Clock
 from app.core.locks import try_advisory_xact_lock
 from app.core.scheduler import (
     JobSpec,
+    daily_run_key,
     run_job_once,
     scheduled_job,
     shutdown_scheduler,
     start_scheduler,
+    tick_run_key,
 )
 from tests.support import db_urls
 from tests.support.fake_clock import FakeClock
@@ -210,6 +212,20 @@ def test_scheduler_daily_run_key_uses_taipei_date(
 
     # UTC 16:30 已是台北的次日
     assert captured == [(f"job:{JOB_ID}", "2026-09-02")]
+
+
+def test_scheduler_run_key_helpers() -> None:
+    """tick_run_key 固定 'tick'；daily_run_key 為台北日期（UTC 16:00 後已是次日）。"""
+    before_midnight = FakeClock(datetime(2026, 9, 1, 15, 59, tzinfo=UTC))
+    after_midnight = FakeClock(datetime(2026, 9, 1, 16, 0, tzinfo=UTC))
+
+    assert tick_run_key(before_midnight) == "tick"
+    assert tick_run_key(after_midnight) == "tick"
+    assert daily_run_key(before_midnight) == "2026-09-01"
+    assert daily_run_key(after_midnight) == "2026-09-02"
+    assert JobSpec(job_id=JOB_ID, trigger=IntervalTrigger(minutes=1), func=_insert).run_key is (
+        tick_run_key
+    )
 
 
 # --- start / shutdown -------------------------------------------------------------------
