@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 168,
-  "last_updated": "2026-10-04T16:20:02Z",
+  "version": 169,
+  "last_updated": "2026-10-04T16:20:54Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2624,7 +2624,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/role_service.py",
       "source_ref": "BE:api/permissions_admin.py::_role_query",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-076",
@@ -2648,9 +2648,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試先於實作；動到的檔案 just lint / just typecheck 乾淨。突變驗證：staff_count 改計全部帳號 → order_and_counts 轉紅。單一 group by 查詢（Role.staff_users 為 lazy=raise，不會額外載入），排序 is_system desc, code，admin 有效權限 28 碼。"
       }
     },
     {
@@ -3520,7 +3520,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/audit_service.py",
       "source_ref": "BE:utils/audit.py::write_audit_in_session",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-101",
@@ -3547,9 +3547,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試先於實作；動到的檔案 just lint / just typecheck 乾淨。突變驗證：flush 改 commit → same_transaction 轉紅；巢狀不遞迴遮罩 → redacts_and_serializes 轉紅。action 以 fullmatch 驗證、非 system actor 無 id → ValueError、Actor 建構子對應正確。殘留（不打回）：敏感 key 以子字串比對，token_version、has_id_number 這類非敏感 key 也會被遮成 '***'（偏保守，可接受）；before / after 內的 float NaN / Infinity 會讓 jsonb 寫入失敗，目前呼叫端都是內部資料，未處理。"
       }
     },
     {
@@ -3788,7 +3788,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/settings_service.py",
       "source_ref": "BE:api/system_config.py::list_configs",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-108",
@@ -3811,9 +3811,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試先於實作；動到的檔案 just lint / just typecheck 乾淨。突變驗證：拿掉 secret 遮罩 → test_list_settings_masked 轉紅。直接查 DB 不走 cache（有 reads_latest_without_cache 測試）、無列以 default 呈現且 updated_at / updated_by_name 為 null、依 REGISTRY 順序。secret 明文與密文都不出現在 dump 結果中。殘留（不打回）：secret 欄位存空字串時會遮成 '********'，前端會誤以為已設定（目前寫入端尚未實作，由設定更新 task 決定是否把空字串正規化成 null）。"
       }
     },
     {
@@ -4004,7 +4004,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/reference_data_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-114"
@@ -4026,9 +4026,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試先於實作；動到的檔案 just lint / just typecheck 乾淨。實作者自述未先看紅燈，以突變補驗：忽略 active_only → subjects_order 與 schools_by_name 轉紅；date_from 改不含頭 → bounds_inclusive 轉紅；拿掉 order_by → closed_days_range、bounds_inclusive、schools_by_name 轉紅。測試對錯誤實作確實會紅。closed-days 忽略 active_only、日期含頭尾、不分頁，符合 description。"
       }
     },
     {
@@ -4516,7 +4516,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/repositories/students.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-131",
@@ -4525,7 +4525,7 @@
         "BACKEND-022"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "協調者待使用者確認：get_student_or_404(for_update=True) 實作為 FOR UPDATE OF students（Student 的 school / class_ 為 lazy=\"joined\"，Postgres 不允許鎖 outer join 可空側）；list_active_student_ids 依 student_no、id 排序以求結果穩定（description 未規定順序）。",
+      "risk_notes": "協調者待使用者確認：get_student_or_404(for_update=True) 實作為 FOR UPDATE OF students（Student 的 school / class_ 為 lazy=\"joined\"，Postgres 不允許鎖 outer join 可空側）；list_active_student_ids 依 student_no、id 排序以求結果穩定（description 未規定順序）。\nreview-r7-b 打回：get_student_or_404(for_update=True) 在學生已載入同一 session 時回傳過期資料。SELECT ... FOR UPDATE 讀到的是最新已 commit 的列，但 SQLAlchemy identity map 內已存在的 Student 物件不會被覆寫，回傳物件的屬性仍是第一次載入時的值，鎖住後依舊拿舊值做判斷（read-modify-write 失效）。反例（已在本機 DB 以 db_session 實測）：make_student(name='王小明') → get_student_or_404(sid) → text('update students set name=...') 改成 '陳小華' → get_student_or_404(sid, for_update=True).name 仍是 '王小明'，DB 實際是 '陳小華'。實際會撞到的路徑：BACKEND-180 的 get_owned_student dependency 先把 Student 載入 session，之後 service 再以 for_update 鎖同一位學生。修正方向：for_update 時加 execution_options(populate_existing=True)（SQLAlchemy 文件對 with_for_update 的建議），並補一條 red case（先一般載入 → 以 core update 或另一連線改值 → for_update 取回的屬性等於 DB 新值）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/repositories/test_student_repository.py",
@@ -4542,9 +4542,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r7-b",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試先於實作；動到的檔案 just lint / just typecheck 乾淨。其餘驗收（封存 404 / include_archived、FOR UPDATE OF students、list_active 排除 suspended / withdrawn / archived 與篩選、brief map 單一 SQL）皆有測試且突變（拿掉 archived 過濾、拿掉 status 過濾）會轉紅。打回原因見 risk_notes「review-r7-b 打回」。risk_notes 的保守決定判斷：FOR UPDATE OF students（Postgres 不允許鎖 outer join 可空側）合理；list_active_student_ids 依 student_no、id 排序合理，皆不與 description / domain_spec 衝突。"
       }
     },
     {
@@ -5063,7 +5063,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/students.py",
       "source_ref": "BE:api/students.py::StudentCreate",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-167"
@@ -5085,9 +5085,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試先於實作；動到的檔案 just lint / just typecheck 乾淨。class 別名：model_dump(by_alias=True) 輸出 'class'，輸入端 'class' 與 ORM from_attributes 的 class_ 都能解析（另以 SimpleNamespace 實測）。UpdateModel 以 model_fields_set 區分未給 / null，必填欄位給 null → 422。risk_notes 的保守決定判斷：ClassBrief 重用 ClassBriefOut（欄位同為 id、name）合理；可為 null 的欄位清單與 DB-014 的 NOT NULL 欄位（student_no、name、grade_level、status）一致，合理；跨欄位規則（withdrawn 需 withdrawn_on、withdrawn_on ≥ enrolled_on）交給學生 service 以明確錯誤碼處理合理，與 description / domain_spec 不衝突，學生 service task 實作時要記得處理，否則會落到 IntegrityError 的通用 409 conflict。殘留（不打回）：id_number、health_note、school_class 只給空白時 strip 成空字串可通過 schema，學生 service 應把空字串正規化成 null（否則 has_id_number 會是 True）。"
       }
     },
     {
@@ -6319,7 +6319,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_children_service.py",
       "source_ref": "BE:api/parent_portal/profile.py::get_my_children",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-179",
@@ -6342,9 +6342,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試先於實作；動到的檔案 just lint / just typecheck 乾淨。突變驗證：school_name 忽略 short_name → fields 轉紅；不攔 StorageError → photo_sign_failure 轉紅。範圍完全沿用 get_parent_student_ids（封存 guardian、封存學生、他人小孩不出現皆有測試），順序與其相同，parent_id 由呼叫端傳入、service 不接受 student_id，無 IDOR 面（endpoint 的 IDOR 測試屬 endpoint task）。risk_notes 的保守決定判斷：簽名 URL 用 Storage 預設 300 秒與 architecture_decisions §10「預設 300 秒」一致，合理；StorageError 只讓該筆 photo_url 為 None 並記 warning（只帶 student_id、不帶路徑）與 description「StorageError → None」一致，合理。殘留（不打回）：photo_path 沒有 DB CHECK，若被手動寫入不符 storage 路徑格式的值，object_key 拋 ValueError（非 StorageError）會讓整份清單 500；正常寫入路徑由後端產生，不會發生。"
       }
     },
     {
@@ -14829,7 +14829,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/errors.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r7b",
       "depends_on": [
         "BACKEND-003"
@@ -14851,9 +14851,9 @@
         "notes": "tdd.run 沿用 BACKEND-003 的指令；新測試名稱以 test_errors_ 開頭，確認 -k 選得到。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r7-b",
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試先於實作；動到的檔案 just lint / just typecheck 乾淨。突變驗證：handler 加 exc_info → test_errors_data_error_logged_without_params 轉紅。回應不含 SQL / 參數 / 原文，log 只帶 method、path、request id、類別名、SQLSTATE，不帶 exc_info。殘留（不打回）：測試未斷言 log 含 request id 與 SQLSTATE（實作有帶）；把 handler 改掛 DBAPIError 時因 handler 內 assert isinstance(DataError) 讓 OperationalError 仍落 500，觀測行為等價，故 shadow 測試無法區分此突變。"
       }
     }
   ]
