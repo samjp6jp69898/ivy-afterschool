@@ -26,11 +26,11 @@ def _settings(app_env: str) -> Settings:
     cloud = app_env == "production"
     return Settings(
         _env_file=None,
-        app_env=app_env,  # type: ignore[arg-type]
+        app_env=app_env,
         database_url="postgresql+psycopg://u:p@127.0.0.1:54342/postgres",
         app_secret_key=_SECRET,
-        public_base_url="http://127.0.0.1:5341",  # type: ignore[arg-type]
-        r2_endpoint_url=(  # type: ignore[arg-type]
+        public_base_url="http://127.0.0.1:5341",
+        r2_endpoint_url=(
             "https://acct.r2.cloudflarestorage.com" if cloud else "http://127.0.0.1:54344"
         ),
         r2_access_key_id="afterschool",
@@ -117,8 +117,10 @@ def test_logging_access_log_no_query(client: TestClient, caplog: pytest.LogCaptu
     assert "GET" in message
     assert "/ping" in message
     assert "200" in message
-    assert "SECRET88" not in caplog.text
-    assert "code=" not in caplog.text
+    # httpx2 測試客戶端自己會記完整 URL，不是被測對象；其餘 log 文字不得含 query string
+    own_logs = "\n".join(r.getMessage() for r in caplog.records if not r.name.startswith("httpx"))
+    assert "SECRET88" not in own_logs
+    assert "code=" not in own_logs
 
 
 def test_logging_health_not_logged(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:

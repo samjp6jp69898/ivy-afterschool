@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 92,
-  "last_updated": "2026-10-04T04:33:59Z",
+  "version": 93,
+  "last_updated": "2026-10-04T04:38:08Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -127,7 +127,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/logging.py",
       "source_ref": "BE:utils/request_logging.py::RequestLoggingMiddleware",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r4",
       "depends_on": [
         "BACKEND-001"
