@@ -172,6 +172,11 @@ def test_db_session_scope_commit_and_rollback() -> None:
 def test_db_timezone_utc(backend_engine: Engine) -> None:
     with Session(backend_engine) as session:
         assert session.execute(text("show timezone")).scalar() == "UTC"
+        # 由連線參數設定（source == client），不依賴伺服器的預設時區剛好是 UTC
+        source = session.execute(
+            text("select source from pg_settings where name = 'TimeZone'")
+        ).scalar()
+        assert source == "client"
         assert session.execute(text("select current_user")).scalar() == "app_backend"
 
 
