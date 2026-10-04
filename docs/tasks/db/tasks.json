@@ -1,7 +1,7 @@
 {
   "area": "db",
-  "version": 30,
-  "last_updated": "2026-10-03T15:28:16Z",
+  "version": 31,
+  "last_updated": "2026-10-04T01:31:04Z",
   "tasks": [
     {
       "id": "DB-001",
@@ -99,14 +99,14 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db003_create_roles.py",
       "source_ref": "BE:models/permission_models.py::Role",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-041",
         "DB-042"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "現有實作依 Supabase 版完成，需依目前 description 改寫。 改寫範圍：把既有 `supabase/migrations/20261002000300_create_roles.sql` 的 SQL 本體搬進 revision（`call app_private.secure_table` 改為 `grant_backend`），並刪除該 .sql 檔；測試的 `_secured` 案例改為 DB-042 的 `assert_backend_grants`（`_grants`）。DB-041 / DB-042 / INFRA-046 完成後才能重跑 tdd.run。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/db/test_roles.py",
@@ -127,9 +127,9 @@
         "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。DB-035 會以 data migration seed admin / director / clerk / tutor，非 admin 案例避開這些 code，admin 案例用 on conflict upsert，seed 落地後測試仍成立；grants 測試不假設表為空。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-infra",
+        "notes": "Alembic 重做通過。規格 21fbd54、紅燈 d218909 先於實作 862ab95。revision db003（down_revision=db001）；鏈為 db001 → db003 → db008 → db009 → db010 → db011 → db012，`alembic heads` 只有 db012。以刪除前的 .sql（862ab95^）與 revision 的 STATEMENTS 去註解、正規化空白後逐條比對：3 條語句完全相同，只有 secure_table 換成 grant_backend（未帶權限參數，即預設四種）；約束、索引、trigger、grant 無遺漏；downgrade raise NotImplementedError。flock db lock 內 `just db-reset --yes` 從空 DB 跑到 db012 成功；public.roles 的 ACL 只有 postgres 與 app_backend（SELECT / INSERT / UPDATE / DELETE），relrowsecurity / relforcerowsecurity 皆 false，pg_policies 0 筆。tdd.run 8 passed，--collect-only 對照 red_case 全選到（六表合計 37 passed）；test_fixtures + test_base 41 passed 不受影響；revision lint 乾淨。原 risk_notes 的改寫指示已完成而移除，無其他仍成立的風險。殘留（不擋）：`just schema-drift` 目前回報六張表 table_missing_in_model，因為 SQLAlchemy model 尚未建立（BACKEND 各 model task 完成後消失）。"
       }
     },
     {
@@ -291,14 +291,14 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db008_create_subjects.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-041",
         "DB-042"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "現有實作依 Supabase 版完成，需依目前 description 改寫。 改寫範圍：把既有 `supabase/migrations/20261002000800_create_subjects.sql` 的 SQL 本體搬進 revision（`call app_private.secure_table` 改為 `grant_backend`），並刪除該 .sql 檔；測試的 `_secured` 案例改為 DB-042 的 `assert_backend_grants`（`_grants`）。DB-041 / DB-042 / INFRA-046 完成後才能重跑 tdd.run。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/db/test_subjects.py",
@@ -316,9 +316,9 @@
         "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。DB-036 會 seed 國語 / 數學 / 英語 / 自然 / 社會，測試名稱避開這些值；grants 測試不假設表為空。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-infra",
+        "notes": "Alembic 重做通過。規格 21fbd54、紅燈 d218909 先於實作 862ab95。revision db008（down_revision=db003）；鏈為 db001 → db003 → db008 → db009 → db010 → db011 → db012，`alembic heads` 只有 db012。以刪除前的 .sql（862ab95^）與 revision 的 STATEMENTS 去註解、正規化空白後逐條比對：5 條語句完全相同，只有 secure_table 換成 grant_backend（未帶權限參數，即預設四種）；約束、索引、trigger、grant 無遺漏；downgrade raise NotImplementedError。flock db lock 內 `just db-reset --yes` 從空 DB 跑到 db012 成功；public.subjects 的 ACL 只有 postgres 與 app_backend（SELECT / INSERT / UPDATE / DELETE），relrowsecurity / relforcerowsecurity 皆 false，pg_policies 0 筆。tdd.run 5 passed，--collect-only 對照 red_case 全選到（六表合計 37 passed）；test_fixtures + test_base 41 passed 不受影響；revision lint 乾淨。原 risk_notes 的改寫指示已完成而移除，無其他仍成立的風險。殘留（不擋）：`just schema-drift` 目前回報六張表 table_missing_in_model，因為 SQLAlchemy model 尚未建立（BACKEND 各 model task 完成後消失）。"
       }
     },
     {
@@ -328,14 +328,14 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db009_create_exam_types.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-041",
         "DB-042"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "現有實作依 Supabase 版完成，需依目前 description 改寫。 改寫範圍：把既有 `supabase/migrations/20261002000900_create_exam_types.sql` 的 SQL 本體搬進 revision（`call app_private.secure_table` 改為 `grant_backend`），並刪除該 .sql 檔；測試的 `_secured` 案例改為 DB-042 的 `assert_backend_grants`（`_grants`）。DB-041 / DB-042 / INFRA-046 完成後才能重跑 tdd.run。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/db/test_exam_types.py",
@@ -353,9 +353,9 @@
         "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。DB-037 會 seed 段考 / 小考 / 複習考，測試名稱避開這些值；grants 測試不假設表為空。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-infra",
+        "notes": "Alembic 重做通過。規格 21fbd54、紅燈 d218909 先於實作 862ab95。revision db009（down_revision=db008）；鏈為 db001 → db003 → db008 → db009 → db010 → db011 → db012，`alembic heads` 只有 db012。以刪除前的 .sql（862ab95^）與 revision 的 STATEMENTS 去註解、正規化空白後逐條比對：5 條語句完全相同，只有 secure_table 換成 grant_backend（未帶權限參數，即預設四種）；約束、索引、trigger、grant 無遺漏；downgrade raise NotImplementedError。flock db lock 內 `just db-reset --yes` 從空 DB 跑到 db012 成功；public.exam_types 的 ACL 只有 postgres 與 app_backend（SELECT / INSERT / UPDATE / DELETE），relrowsecurity / relforcerowsecurity 皆 false，pg_policies 0 筆。tdd.run 5 passed，--collect-only 對照 red_case 全選到（六表合計 37 passed）；test_fixtures + test_base 41 passed 不受影響；revision lint 乾淨。原 risk_notes 的改寫指示已完成而移除，無其他仍成立的風險。殘留（不擋）：`just schema-drift` 目前回報六張表 table_missing_in_model，因為 SQLAlchemy model 尚未建立（BACKEND 各 model task 完成後消失）。"
       }
     },
     {
@@ -365,14 +365,14 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db010_create_schools.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-041",
         "DB-042"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "現有實作依 Supabase 版完成，需依目前 description 改寫。 改寫範圍：把既有 `supabase/migrations/20261002001000_create_schools.sql` 的 SQL 本體搬進 revision（`call app_private.secure_table` 改為 `grant_backend`），並刪除該 .sql 檔；測試的 `_secured` 案例改為 DB-042 的 `assert_backend_grants`（`_grants`）。DB-041 / DB-042 / INFRA-046 完成後才能重跑 tdd.run。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/db/test_schools.py",
@@ -391,9 +391,9 @@
         "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。grants 測試不假設表為空。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-infra",
+        "notes": "Alembic 重做通過。規格 21fbd54、紅燈 d218909 先於實作 862ab95。revision db010（down_revision=db009）；鏈為 db001 → db003 → db008 → db009 → db010 → db011 → db012，`alembic heads` 只有 db012。以刪除前的 .sql（862ab95^）與 revision 的 STATEMENTS 去註解、正規化空白後逐條比對：4 條語句完全相同，只有 secure_table 換成 grant_backend（未帶權限參數，即預設四種）；約束、索引、trigger、grant 無遺漏；downgrade raise NotImplementedError。flock db lock 內 `just db-reset --yes` 從空 DB 跑到 db012 成功；public.schools 的 ACL 只有 postgres 與 app_backend（SELECT / INSERT / UPDATE / DELETE），relrowsecurity / relforcerowsecurity 皆 false，pg_policies 0 筆。tdd.run 6 passed，--collect-only 對照 red_case 全選到（六表合計 37 passed）；test_fixtures + test_base 41 passed 不受影響；revision lint 乾淨。原 risk_notes 的改寫指示已完成而移除，無其他仍成立的風險。殘留（不擋）：`just schema-drift` 目前回報六張表 table_missing_in_model，因為 SQLAlchemy model 尚未建立（BACKEND 各 model task 完成後消失）。"
       }
     },
     {
@@ -403,14 +403,14 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db011_create_closed_days.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-041",
         "DB-042"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "現有實作依 Supabase 版完成，需依目前 description 改寫。 改寫範圍：把既有 `supabase/migrations/20261002001100_create_closed_days.sql` 的 SQL 本體搬進 revision（`call app_private.secure_table` 改為 `grant_backend`），並刪除該 .sql 檔；測試的 `_secured` 案例改為 DB-042 的 `assert_backend_grants`（`_grants`）。DB-041 / DB-042 / INFRA-046 完成後才能重跑 tdd.run。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/db/test_closed_days.py",
@@ -428,9 +428,9 @@
         "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。grants 測試不假設表為空。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-infra",
+        "notes": "Alembic 重做通過。規格 21fbd54、紅燈 d218909 先於實作 862ab95。revision db011（down_revision=db010）；鏈為 db001 → db003 → db008 → db009 → db010 → db011 → db012，`alembic heads` 只有 db012。以刪除前的 .sql（862ab95^）與 revision 的 STATEMENTS 去註解、正規化空白後逐條比對：3 條語句完全相同，只有 secure_table 換成 grant_backend（未帶權限參數，即預設四種）；約束、索引、trigger、grant 無遺漏；downgrade raise NotImplementedError。flock db lock 內 `just db-reset --yes` 從空 DB 跑到 db012 成功；public.closed_days 的 ACL 只有 postgres 與 app_backend（SELECT / INSERT / UPDATE / DELETE），relrowsecurity / relforcerowsecurity 皆 false，pg_policies 0 筆。tdd.run 5 passed，--collect-only 對照 red_case 全選到（六表合計 37 passed）；test_fixtures + test_base 41 passed 不受影響；revision lint 乾淨。原 risk_notes 的改寫指示已完成而移除，無其他仍成立的風險。殘留（不擋）：`just schema-drift` 目前回報六張表 table_missing_in_model，因為 SQLAlchemy model 尚未建立（BACKEND 各 model task 完成後消失）。"
       }
     },
     {
@@ -440,14 +440,14 @@
       "granularity_unit": "migration",
       "target_path": "apps/api/alembic/versions/db012_create_classes.py",
       "source_ref": "BE:models/classroom.py::Classroom",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-db-r3",
       "depends_on": [
         "DB-041",
         "DB-042"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "現有實作依 Supabase 版完成，需依目前 description 改寫。 改寫範圍：把既有 `supabase/migrations/20261002001200_create_classes.sql` 的 SQL 本體搬進 revision（`call app_private.secure_table` 改為 `grant_backend`），並刪除該 .sql 檔；測試的 `_secured` 案例改為 DB-042 的 `assert_backend_grants`（`_grants`）。DB-041 / DB-042 / INFRA-046 完成後才能重跑 tdd.run。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/db/test_classes.py",
@@ -468,9 +468,9 @@
         "notes": "測資一律經 backend_conn 寫入；違反約束以 pg_error 斷言 SQLSTATE 與 err.constraint_name。grants 測試不假設表為空。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r3-infra",
+        "notes": "Alembic 重做通過。規格 21fbd54、紅燈 d218909 先於實作 862ab95。revision db012（down_revision=db011）；鏈為 db001 → db003 → db008 → db009 → db010 → db011 → db012，`alembic heads` 只有 db012。以刪除前的 .sql（862ab95^）與 revision 的 STATEMENTS 去註解、正規化空白後逐條比對：6 條語句完全相同，只有 secure_table 換成 grant_backend（未帶權限參數，即預設四種）；約束、索引、trigger、grant 無遺漏；downgrade raise NotImplementedError。flock db lock 內 `just db-reset --yes` 從空 DB 跑到 db012 成功；public.classes 的 ACL 只有 postgres 與 app_backend（SELECT / INSERT / UPDATE / DELETE），relrowsecurity / relforcerowsecurity 皆 false，pg_policies 0 筆。tdd.run 8 passed，--collect-only 對照 red_case 全選到（六表合計 37 passed）；test_fixtures + test_base 41 passed 不受影響；revision lint 乾淨。原 risk_notes 的改寫指示已完成而移除，無其他仍成立的風險。殘留（不擋）：`just schema-drift` 目前回報六張表 table_missing_in_model，因為 SQLAlchemy model 尚未建立（BACKEND 各 model task 完成後消失）。"
       }
     },
     {
