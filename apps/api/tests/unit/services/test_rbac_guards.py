@@ -59,9 +59,10 @@ def test_rbac_valid_codes() -> None:
 def test_rbac_can_grant_subset() -> None:
     actor = _actor(frozenset({"students:read", "students:write", "roles:write"}))
 
-    assert assert_can_grant(actor, ["students:read"]) is None
-    assert assert_can_grant(actor, ["students:read", "students:write", "roles:write"]) is None
-    assert assert_can_grant(actor, []) is None
+    # 不拋例外即通過
+    assert_can_grant(actor, ["students:read"])
+    assert_can_grant(actor, ["students:read", "students:write", "roles:write"])
+    assert_can_grant(actor, [])
 
 
 def test_rbac_cannot_grant_beyond() -> None:
@@ -83,8 +84,8 @@ def test_rbac_can_grant_admin_all() -> None:
     """admin 角色（有效權限 == ALL_PERMISSIONS）授出任何合法碼都通過。"""
     admin = _actor(ALL_PERMISSIONS)
 
-    assert assert_can_grant(admin, sorted(ALL_PERMISSIONS)) is None
-    assert assert_can_grant(_actor(frozenset()), []) is None
+    assert_can_grant(admin, sorted(ALL_PERMISSIONS))
+    assert_can_grant(_actor(frozenset()), [])
     with pytest.raises(AppError) as exc:
         assert_can_grant(_actor(frozenset()), ["students:read"])
     assert exc.value.code == "cannot_grant_permissions"
