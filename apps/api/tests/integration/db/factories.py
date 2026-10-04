@@ -273,3 +273,11 @@ def make_exam_subjects(conn: psycopg.Connection[Any], **overrides: Any) -> dict[
         or make_subjects(conn, name=f"科目{uuid4().hex[:8]}")["id"],
     }
     return insert_row(conn, "public.exam_subjects", **{**defaults, **overrides})
+
+
+def make_notification_outbox(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    """未指定 notification_id 時另建一筆 notification。"""
+    defaults = {
+        "notification_id": overrides.get("notification_id") or make_notifications(conn)["id"]
+    }
+    return insert_row(conn, "public.notification_outbox", **{**defaults, **overrides})
