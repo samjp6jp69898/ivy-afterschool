@@ -582,5 +582,5 @@ def test_web_dockerignore_excludes_node_modules() -> None:
 def test_web_dockerfile_removes_build_metadata_from_runtime_image() -> None:
     text = (WEB_DIR / "Dockerfile").read_text(encoding="utf-8")
 
-    # .vite/ 內有 manifest 與模組圖（含所有原始碼與依賴路徑），不該由 nginx 對外提供
+    # .vite/ 只有模組圖 parent-module-graph.json（含所有原始碼與依賴路徑），不該由 nginx 對外提供
     assert "rm -rf /usr/share/nginx/html/.vite" in text

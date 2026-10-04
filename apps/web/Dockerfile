@@ -19,7 +19,7 @@ COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY nginx/security-headers.conf /etc/nginx/security-headers.conf
 COPY --chmod=755 nginx/40-real-ip.sh /docker-entrypoint.d/40-real-ip.sh
 COPY --from=build /app/dist /usr/share/nginx/html
-# .vite/ 內的 manifest 與模組圖列出所有原始碼與依賴路徑，不對外提供
+# .vite/ 內的模組圖（parent-module-graph.json）列出所有原始碼與依賴路徑，不對外提供
 RUN find /usr/share/nginx/html -name '*.map' -delete \
     && rm -rf /usr/share/nginx/html/.vite
 
