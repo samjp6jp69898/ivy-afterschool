@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 153,
-  "last_updated": "2026-10-04T14:59:34Z",
+  "version": 154,
+  "last_updated": "2026-10-04T15:01:12Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2590,13 +2590,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/schemas/roles.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r6c",
       "depends_on": [
         "INFRA-004"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "[review-r6-schemas 打回] app/schemas/common.py 的 RequestModel 接受含 NUL（\\x00）的字串：例如 RoleCreateIn(code='front_desk', name='櫃\\x00台', permissions=[]) 通過驗證，寫入 roles.name 時 psycopg 拋 DataError，errors.py 只轉譯 IntegrityError，結果是 500 而不是 422（本機以 app_backend 實測 subjects.name='a\\x00b' 得到 DataError）。要求：RequestModel 拒絕所有 str 輸入（含 list[str] 元素，例如 RoleCreateIn.permissions）中的 \\x00 → ValidationError；test_common_schemas.py 補對應測試（str 欄位與 list[str] 元素各一），並確認既有 schemas 測試仍全綠。\n[review-r6-schemas 複審打回] common.py 的 _contains_nul 以遞迴走訪 list / dict，使用者送出巢狀約 500 層以上的 JSON（例如在任一 body 多帶一個深層巢狀的欄位，或 SettingPutIn.value 深層巢狀）時拋 RecursionError，全域 handler 轉成 500（實測 600 層 → 500，修正前同輸入為 422）。要求：改成不依賴 Python 遞迴的走訪（例如明確的 stack），任何深度都不得拋 RecursionError；test_common_schemas.py 補測試：(1) 巢狀 1000 層的合法輸入不拋 RecursionError（多帶欄位時仍是 extra_forbidden 的 ValidationError）；(2) 巢狀 1000 層最底端含 \\x00 → ValidationError；(3) 巢狀 dict 的值與 key 含 \\x00 → ValidationError（目前只實測過、沒有測試保護，BACKEND-110 的 risk_notes 依賴這個行為）。",
+      "risk_notes": "RequestModel 的 NUL 檢查只走訪 str、bytes、bytearray、list、tuple、dict；JSON 輸入只會產生這些型別，若日後以 Python 直接建構並傳入 set 等其他容器，不在檢查範圍內。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_role_schemas.py",
@@ -2612,9 +2612,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r6-schemas",
-        "notes": "複審（accad06 紅燈 → be7983a 實作，測試先於實作）：tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 數量相同；ruff / mypy 只對 9 個異動檔執行，乾淨；其餘 8 個 schemas 測試檔與 test_common_schemas 一併重跑全綠。原打回項（NUL）已修：str 欄位、list[str] 元素、巢狀 dict 的值與 key 都會拒絕，回 ValidationError；UpdateModel 規則與 Out schema（from_attributes）不受影響。再次打回：修正引入新的 500 路徑。_contains_nul 以遞迴實作，每層約用兩個 Python frame，輸入巢狀約 500 層以上就拋 RecursionError（不是 ValidationError），errors.py 會轉成 500。修正前 pydantic-core 對同樣輸入回 422。實測：以 register_exception_handlers 掛上的 FastAPI app，POST NamedItemCreateIn body {'name':'數學','junk':[[[…600 層…]]]} → 500 internal_error（修正前為 422 extra_forbidden；450 層仍為 422）。所有繼承 RequestModel 的 endpoint 都受影響，含家長端。"
+        "notes": "第二次複審通過（9694dec 紅燈 → 8bdd77b 實作，測試先於實作；只改 common.py 與 test_common_schemas.py）。tdd.run 實跑 13 passed，--collect-only 帶 / 不帶 -k 皆 13；本批 12 個 schemas 測試檔加 test_common_schemas 一併重跑 78 passed；ruff / mypy 只對兩個異動檔執行，乾淨。驗收清單：str 欄位、list[str] 元素、巢狀 dict 的值與 key、bytes / bytearray 含 NUL 都回 ValidationError，皆有測試；_contains_nul 改為明確 stack 走訪，以 FastAPI + register_exception_handlers 實測 5000 層巢狀陣列、3000 層巢狀物件都回 422（extra_forbidden），body 內 \\u0000 回 422；循環參照會終止；以 id 去重只套用在容器，走訪期間所有物件都被輸入樹引用而存活，不會 id 重用，共用容器第一次走訪就會檢出 NUL，str 不去重。寬度測試沒有時間門檻（本機 0.12 秒），不會 flaky。UpdateModel 的「至少一欄」與 nullable_fields 規則、Out schema 的 from_attributes 行為不受影響。殘留（不屬本 task）：SettingPutIn.value 為 dict[str, Any]，JSON 的 NaN / Infinity 與孤立 surrogate（\\ud800）能通過 RequestModel，需由 BACKEND-110 的 registry schema 驗證擋下；AttendanceAmendIn 接受 9999-12-31T23:00:00-08:00 這類 aware datetime，轉台北時間會 OverflowError，屬 BACKEND-310 的處理範圍。"
       }
     },
     {
@@ -3976,7 +3976,7 @@
         "BACKEND-100"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "RequestModel 的 NUL 檢查（BACKEND-076）目前以遞迴實作，深層巢狀輸入會 RecursionError → 500，修正追蹤於 BACKEND-076；本 task 不需改動。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_reference_schemas.py",
@@ -4560,7 +4560,7 @@
         "INFRA-004"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "RequestModel 的 NUL 檢查（BACKEND-076）目前以遞迴實作，深層巢狀輸入會 RecursionError → 500，修正追蹤於 BACKEND-076；本 task 不需改動。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_class_schemas.py",
@@ -12009,7 +12009,7 @@
         "INFRA-004"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "RequestModel 的 NUL 檢查（BACKEND-076）目前以遞迴實作，深層巢狀輸入會 RecursionError → 500，修正追蹤於 BACKEND-076；本 task 不需改動。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/unit/schemas/test_exam_schemas.py",
