@@ -9,6 +9,7 @@ service 層只拋 ``AppError``（或其子類），不得拋 ``HTTPException``�
 | RequestValidationError | 422 | validation_error（details 去掉 input / ctx，不回顯輸入） |
 | HTTPException 404 / 405 / 其他 | 原 status | not_found / method_not_allowed / http_<status> |
 | sqlalchemy IntegrityError | 409 | conflict（不回 SQL 原文） |
+| sqlalchemy DataError | 422 | invalid_value（schema 漏擋時的第二道防線，不回 SQL 原文） |
 | 其他 Exception | 500 | internal_error（固定文案，server 端 logger.exception 帶 request id） |
 
 未處理例外的 500 由 Starlette 最外層的 ``ServerErrorMiddleware`` 送出，不經過
@@ -26,7 +27,7 @@ from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DataError, IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.logging import REQUEST_ID_HEADER
@@ -34,6 +35,7 @@ from app.core.security_middleware import security_headers_for
 
 logger = logging.getLogger(__name__)
 
+INVALID_VALUE_MESSAGE = "輸入的資料超出允許範圍或含有不支援的字元"
 INTERNAL_ERROR_MESSAGE = "系統發生錯誤，請稍後再試"
 VALIDATION_ERROR_MESSAGE = "輸入資料格式有誤"
 _HTTP_STATUS_CODES: dict[int, tuple[str, str]] = {
@@ -162,6 +164,21 @@ async def _integrity_error_handler(request: Request, exc: Exception) -> JSONResp
     return _envelope(409, "conflict", "資料與既有紀錄衝突")
 
 
+async def _data_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, DataError)  # noqa: S101
+    # 不帶 exc_info：例外字串含 SQL 參數（可能是個資），只記類別名稱與 SQLSTATE
+    sqlstate = getattr(exc.orig, "sqlstate", None)
+    logger.warning(
+        "schema 未擋下的 DataError %s %s request_id=%s exc=%s sqlstate=%s",
+        request.method,
+        request.url.path,
+        _request_id(request),
+        type(exc).__name__,
+        sqlstate,
+    )
+    return _envelope(422, "invalid_value", INVALID_VALUE_MESSAGE)
+
+
 async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     request_id = _request_id(request)
     logger.exception(
@@ -185,4 +202,5 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(RequestValidationError, _validation_error_handler)
     app.add_exception_handler(StarletteHTTPException, _http_exception_handler)
     app.add_exception_handler(IntegrityError, _integrity_error_handler)
+    app.add_exception_handler(DataError, _data_error_handler)
     app.add_exception_handler(Exception, _unhandled_exception_handler)
