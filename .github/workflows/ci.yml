@@ -112,3 +112,31 @@ jobs:
       - name: 關閉服務並清除 volume
         if: always()
         run: docker compose -f compose.yaml down -v
+
+  db-checks:
+    name: DB 檢查（乾淨套用、單一 head、schema drift）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+        with:
+          node: false
+
+      - name: 啟動 Postgres
+        run: docker compose -f compose.yaml up -d --wait db
+
+      - name: 乾淨 DB 套用全部 revision
+        run: just db-reset --yes
+
+      - name: Alembic 歷史只有一個 head
+        working-directory: apps/api
+        run: test "$(uv run --frozen alembic heads | wc -l)" -eq 1
+
+      - name: Schema drift
+        run: just schema-drift
+
+      - name: 關閉服務並清除 volume
+        if: always()
+        run: docker compose -f compose.yaml down -v
