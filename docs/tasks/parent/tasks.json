@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 52,
-  "last_updated": "2026-10-04T04:50:35Z",
+  "version": 53,
+  "last_updated": "2026-10-04T04:51:16Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -527,7 +527,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3Button.vue",
       "source_ref": "FE:src/parent/components/m3/M3Button.vue::props",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r4",
       "depends_on": [
         "PARENT-001",
@@ -1404,8 +1404,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/StatusPill.vue",
       "source_ref": "FE:src/parent/components/StatusPill.vue::tone",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r4",
       "depends_on": [
         "PARENT-001",
         "PARENT-014",
