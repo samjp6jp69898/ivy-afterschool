@@ -214,7 +214,10 @@ def test_rotate_refresh_race_window(db_session: Session, fake_clock: FakeClock) 
 
 @pytest.fixture
 def owner_cleanup() -> Iterator[list[tuple[str, UUID]]]:
-    """(table, id) 清單；teardown 以 owner 連線逐筆刪除（roles 是 seed 表，不可 truncate）。
+    """(table, id) 清單；teardown 以 owner 連線逐筆刪除。
+
+    committing 測試只建 staff_users / parent_accounts 列（角色一律用 seed 系統角色），不往 seed 表
+    寫入；行程被中斷時殘留的也只會是這兩張表的列，不影響別區對 seed 表的計數斷言。
 
     測試參數必須把本 fixture 排在 committing_db_session **之前**：pytest 依參數順序建立、反序
     拆除，session 先 close（釋放未 commit 的列鎖）owner 才刪列；反過來會等鎖。lock_timeout 當保險。
@@ -270,9 +273,9 @@ def test_rotate_refresh_reuse_revokes_family(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     session = committing_db_session
-    staff = make_staff(session)
+    # 用 seed 系統角色：committing 測試不往 seed 表（roles）寫任何列
+    staff = make_staff(session, role_code="tutor")
     owner_cleanup.append(("staff_users", staff.id))
-    owner_cleanup.append(("roles", staff.role_id))
     session.commit()
 
     r1 = issue(session, subject_type="staff", subject_id=staff.id, clock=fake_clock)
@@ -309,10 +312,9 @@ def test_rotate_refresh_reuse_parent_bumps_parent_version(
     session = committing_db_session
     parent = make_parent(session)
     owner_cleanup.append(("parent_accounts", parent.id))
-    # 同 uuid 的員工列：撤銷家長 token 不可誤 bump 員工
-    staff = make_staff(session)
+    # 同 uuid 的員工列：撤銷家長 token 不可誤 bump 員工；用 seed 系統角色，不寫 roles
+    staff = make_staff(session, role_code="tutor")
     owner_cleanup.append(("staff_users", staff.id))
-    owner_cleanup.append(("roles", staff.role_id))
     session.commit()
 
     r1 = issue(session, subject_type="parent", subject_id=parent.id, clock=fake_clock)
