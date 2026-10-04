@@ -155,7 +155,12 @@ def test_outbox_sweep_does_not_commit(
     commits: list[bool] = []
     monkeypatch.setattr(outbox_jobs, "build_line_client", lambda session: None)
     original_commit = db_session.commit
-    monkeypatch.setattr(db_session, "commit", lambda: commits.append(True) or original_commit())
+
+    def spying_commit() -> None:
+        commits.append(True)
+        original_commit()
+
+    monkeypatch.setattr(db_session, "commit", spying_commit)
 
     sweep_outbox(db_session, fake_clock)
 
