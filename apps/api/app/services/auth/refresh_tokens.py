@@ -115,8 +115,9 @@ def rotate(session: Session, raw: str, *, clock: Clock) -> RotatedRefresh:
       ``expires_at <= now`` → 401 ``refresh_expired``。
     - 已被用過（``replaced_by`` 非 null）：後繼 token 建立於 5 秒內 → 409 ``refresh_in_progress``
       （併發的重複請求，前端重打即可，不撤銷）；超過 5 秒 → 重用：撤銷同 family 全部 token、
-      帳號 token_version +1，**在 raise 前 commit**（本專案 service 不 commit 原則的唯一例外：
-      否則 get_db 的 rollback 會把撤銷一起回滾），再 raise 401 ``refresh_reused``。
+      帳號 token_version +1，**在 raise 前 commit**（service 不 commit 原則的例外只有兩處：
+      BACKEND-037 rotate 重用分支、BACKEND-043 / 058 refresh 的 401 撤銷路徑；否則 get_db 的
+      rollback 會把撤銷一起回滾），再 raise 401 ``refresh_reused``。
     - 正常：建立新 token、舊列 ``replaced_by`` 指向新列，只 flush。
     """
     now = clock.now()
