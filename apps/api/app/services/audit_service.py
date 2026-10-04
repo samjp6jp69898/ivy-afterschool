@@ -14,9 +14,15 @@ from datetime import date, datetime, time
 from typing import TYPE_CHECKING, Any, Final, Literal, Self
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.clock import taipei_day_bounds
+from app.core.pagination import Page, PageParams, paginate
+from app.models.account import StaffUser
 from app.models.audit import AuditLog
+from app.models.parents import ParentAccount
+from app.schemas.audit import AuditLogOut, AuditLogQuery
 
 if TYPE_CHECKING:
     from app.api.deps import CurrentParent, CurrentStaff
@@ -102,3 +108,80 @@ def record(
     session.add(row)
     session.flush()
     return row
+
+
+SYSTEM_ACTOR_NAME: Final = "系統"
+
+
+def list_audit_logs(session: Session, query: AuditLogQuery, page: PageParams) -> Page[AuditLogOut]:
+    """篩選 + 分頁，依 created_at、id 新到舊。date_from / date_to 為台北日期，含頭含尾。"""
+    stmt = select(AuditLog)
+    if query.action is not None:
+        stmt = stmt.where(AuditLog.action == query.action)
+    if query.action_prefix is not None:
+        # autoescape：prefix 內的 _ 與 % 當字面字元（action 本身就含底線）
+        stmt = stmt.where(AuditLog.action.startswith(query.action_prefix, autoescape=True))
+    if query.entity_type is not None:
+        stmt = stmt.where(AuditLog.entity_type == query.entity_type)
+    if query.entity_id is not None:
+        stmt = stmt.where(AuditLog.entity_id == query.entity_id)
+    if query.actor_type is not None:
+        stmt = stmt.where(AuditLog.actor_type == query.actor_type)
+    if query.actor_id is not None:
+        stmt = stmt.where(AuditLog.actor_id == query.actor_id)
+    if query.date_from is not None:
+        stmt = stmt.where(AuditLog.created_at >= taipei_day_bounds(query.date_from)[0])
+    if query.date_to is not None:
+        stmt = stmt.where(AuditLog.created_at < taipei_day_bounds(query.date_to)[1])
+
+    rows, total = paginate(
+        session, stmt.order_by(AuditLog.created_at.desc(), AuditLog.id.desc()), page
+    )
+    names = _actor_names(session, rows)
+    items = []
+    for row in rows:
+        items.append(
+            AuditLogOut(
+                id=row.id,
+                created_at=row.created_at,
+                actor_type=row.actor_type,
+                actor_id=row.actor_id,
+                actor_name=_actor_name(row, names),
+                action=row.action,
+                entity_type=row.entity_type,
+                entity_id=row.entity_id,
+                before=row.before,
+                after=row.after,
+                ip=row.ip,
+                user_agent=row.user_agent,
+            )
+        )
+    return Page(items=items, total=total)
+
+
+def _actor_names(session: Session, rows: list[AuditLog]) -> dict[tuple[str, UUID], str | None]:
+    """本頁出現的 actor 各以一次 IN 查詢取名稱（不 N+1）。"""
+    names: dict[tuple[str, UUID], str | None] = {}
+    staff_ids = {r.actor_id for r in rows if r.actor_type == "staff" and r.actor_id}
+    parent_ids = {r.actor_id for r in rows if r.actor_type == "parent" and r.actor_id}
+    if staff_ids:
+        for sid, staff_name in session.execute(
+            select(StaffUser.id, StaffUser.display_name).where(StaffUser.id.in_(staff_ids))
+        ):
+            names[("staff", sid)] = staff_name
+    if parent_ids:
+        for pid, parent_name in session.execute(
+            select(ParentAccount.id, ParentAccount.display_name).where(
+                ParentAccount.id.in_(parent_ids)
+            )
+        ):
+            names[("parent", pid)] = parent_name
+    return names
+
+
+def _actor_name(row: AuditLog, names: dict[tuple[str, UUID], str | None]) -> str | None:
+    if row.actor_type == "system":
+        return SYSTEM_ACTOR_NAME
+    if row.actor_id is None:
+        return None
+    return names.get((row.actor_type, row.actor_id))
