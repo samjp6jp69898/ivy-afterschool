@@ -1,6 +1,6 @@
 import { DOMWrapper, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
-import { nextTick } from 'vue'
+import { defineComponent, h, nextTick } from 'vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import ParentBottomSheet from './ParentBottomSheet.vue'
 import source from './ConfirmDialog.vue?raw'
@@ -185,6 +185,57 @@ describe('ConfirmDialog', () => {
     expect(document.body.style.overflow).toBe('hidden')
     escape()
     expect(sheet.emitted('update:modelValue')?.[0]).toEqual([false])
+  })
+
+  it('ConfirmDialog Escape only cancels the topmost of two stacked dialogs', async () => {
+    const lower = mountDialog({ title: '下層' })
+    const upper = mountDialog({ title: '上層' })
+    await nextTick()
+    escape()
+    expect(upper.emitted('cancel')).toHaveLength(1)
+    expect(lower.emitted('cancel')).toBeUndefined()
+    await upper.setProps({ open: false })
+    escape()
+    expect(lower.emitted('cancel')).toHaveLength(1)
+  })
+
+  describe.each([
+    ['dialog declared after sheet', false],
+    ['dialog inside sheet slot', true],
+    ['dialog declared before sheet', 'before'],
+  ] as const)('closing sheet and dialog in the same tick (%s)', (_name, layout) => {
+    it('ConfirmDialog returns focus to the page button', async () => {
+      const Host = defineComponent({
+        props: { sheetOpen: Boolean, dialogOpen: Boolean },
+        setup(props) {
+          const sheetSlot = () => h('button', { type: 'button', id: 'in-sheet' }, '我已記下')
+          const dialog = () => h(ConfirmDialog, { open: props.dialogOpen, title: '確定已記下接送碼？' })
+          const sheet = (slot: () => unknown) =>
+            h(ParentBottomSheet, { modelValue: props.sheetOpen, title: '接送碼' }, { default: slot })
+          return () => {
+            if (layout === true) return sheet(() => [sheetSlot(), dialog()])
+            if (layout === 'before') return [dialog(), sheet(sheetSlot)]
+            return [sheet(sheetSlot), dialog()]
+          }
+        },
+      })
+      const page = document.createElement('button')
+      page.textContent = '開啟'
+      document.body.appendChild(page)
+      page.focus()
+      const host = mount(Host, { attachTo: document.body, props: { sheetOpen: false, dialogOpen: false } })
+      mounted.push(host)
+      await host.setProps({ sheetOpen: true })
+      await nextTick()
+      ;(document.getElementById('in-sheet') as HTMLElement).focus()
+      await host.setProps({ dialogOpen: true })
+      await nextTick()
+      expect(alertdialog()?.contains(document.activeElement)).toBe(true)
+      await host.setProps({ sheetOpen: false, dialogOpen: false })
+      await nextTick()
+      expect(document.activeElement).toBe(page)
+      expect(document.body.style.overflow).toBe('')
+    })
   })
 
   it('ConfirmDialog style follows design decisions', () => {
