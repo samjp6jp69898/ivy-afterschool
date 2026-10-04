@@ -1,6 +1,8 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
+import { defineComponent } from 'vue'
 import M3Card from './M3Card.vue'
+import M3Switch from './M3Switch.vue'
 
 describe('M3Card', () => {
   it('M3Card renders slots', () => {
@@ -31,6 +33,9 @@ describe('M3Card', () => {
     expect(wrapper.attributes('tabindex')).toBe('0')
     await wrapper.trigger('keydown', { key: 'Enter' })
     expect(wrapper.emitted('click')).toHaveLength(1)
+    const keyPayload = wrapper.emitted('click')?.[0]?.[0]
+    expect(keyPayload).toBeInstanceOf(KeyboardEvent)
+    expect((keyPayload as KeyboardEvent).key).toBe('Enter')
     await wrapper.trigger('keydown', { key: ' ' })
     expect(wrapper.emitted('click')).toHaveLength(2)
     await wrapper.trigger('keydown', { key: 'a' })
@@ -56,6 +61,57 @@ describe('M3Card', () => {
     wrapper.get('.inner').element.dispatchEvent(event)
     expect(event.defaultPrevented).toBe(false)
     expect(wrapper.emitted('click')).toBeUndefined()
+  })
+
+  it('M3Card ignores key repeat', () => {
+    const wrapper = mount(M3Card, { props: { clickable: true } })
+    const first = new KeyboardEvent('keydown', { key: ' ', cancelable: true, bubbles: true })
+    wrapper.element.dispatchEvent(first)
+    const repeats = Array.from({ length: 8 }, () => {
+      const event = new KeyboardEvent('keydown', { key: ' ', repeat: true, cancelable: true, bubbles: true })
+      wrapper.element.dispatchEvent(event)
+      return event
+    })
+    expect(wrapper.emitted('click')).toHaveLength(1)
+    // repeat 仍要擋掉 Space 的預設捲動
+    expect(repeats.every((e) => e.defaultPrevented)).toBe(true)
+    wrapper.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', repeat: true, bubbles: true }))
+    expect(wrapper.emitted('click')).toHaveLength(1)
+  })
+
+  it('M3Card ignores clicks from nested controls', async () => {
+    const wrapper = mount(
+      defineComponent({
+        components: { M3Card, M3Switch },
+        data: () => ({ on: false, clicks: 0 }),
+        template: `<M3Card clickable @click="clicks++">
+          <p class="body">病假 10/06</p>
+          <input class="field" />
+          <a class="link" href="#detail">詳情</a>
+          <M3Switch v-model="on" label="到班通知" />
+          <template #actions><button type="button" class="pickup">我要來接</button></template>
+        </M3Card>`,
+      }),
+    )
+    const card = wrapper.findComponent(M3Card)
+    await wrapper.get('.pickup').trigger('click')
+    await wrapper.get('.field').trigger('click')
+    await wrapper.get('.link').trigger('click')
+    await wrapper.get('[role="switch"]').trigger('click')
+    expect(card.emitted('click')).toBeUndefined()
+    // Switch 自己照常切換
+    expect(wrapper.get('[role="switch"]').attributes('aria-checked')).toBe('true')
+
+    for (const key of ['Enter', ' ']) {
+      const event = new KeyboardEvent('keydown', { key, cancelable: true, bubbles: true })
+      wrapper.get('.pickup').element.dispatchEvent(event)
+      expect(event.defaultPrevented).toBe(false)
+    }
+    expect(card.emitted('click')).toBeUndefined()
+
+    // 點卡片本身的文字仍會觸發
+    await wrapper.get('.body').trigger('click')
+    expect(card.emitted('click')).toHaveLength(1)
   })
 
   it('M3Card non clickable ignores click', async () => {

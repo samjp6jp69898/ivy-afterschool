@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 42,
-  "last_updated": "2026-10-04T01:35:40Z",
+  "version": 43,
+  "last_updated": "2026-10-04T01:38:25Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -594,7 +594,7 @@
     {
       "id": "PARENT-017",
       "title": "移植 M3Card 元件（elevated / filled / outlined、可點擊）",
-      "description": "建立 `apps/web/src/parent/components/m3/M3Card.vue`（移植 ivy `FE:src/parent/components/m3/M3Card.vue`）。\n\n**介面**：\n```ts\nprops: { variant?: 'elevated' | 'filled' | 'outlined' /* 預設 filled */; clickable?: boolean; padding?: 'none' | 'sm' | 'md' /* 預設 md */ }\nemits: { click: [MouseEvent | KeyboardEvent] }\nslots: default、header、actions\n```\n保留：三種 variant、clickable 時 state layer。底色照 M3 / ivy：filled（預設）為 `--m3-surface-container-highest`；elevated 為 `--m3-surface-container-low` + `--m3-elev-1`；outlined 為 `--m3-surface` + 1px `--m3-outline-variant` 邊框；圓角 `--m3-shape-medium`。根元素帶 `m3-card--{variant}` 與 `m3-card--pad-{padding}` class（none 0 / sm 12px / md 16px）。header / actions slot 有內容才渲染外框（`.m3-card__header` 下方 8px；`.m3-card__actions` 靠右、上方 16px、間距 8px、可換行）。\n去掉：padding 改為列舉值，不接受任意 CSS 字串。**新增** clickable 時渲染為 `role=\"button\"`、`tabindex=\"0\"`，Enter / Space 觸發 click（payload 為該 KeyboardEvent；Space 會 preventDefault 避免捲動頁面；只處理卡片本身的按鍵，卡片內的輸入框 / 按鈕按鍵不攔截），並有 on-surface 色 state layer；不可點的卡片完全沒有 role / tabindex，也不 emit。\n樣式只用 PARENT-001 的 `--m3-*` 變數；觸控目標 ≥ 44×44px；有 `:focus-visible` 外框。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-m3-kit.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：三種 variant、含 header / actions slot、clickable hover / pressed。可與其他 M3 元件 task 共用同一張稿 `docs/mockups/parent-component-m3-kit.html`（`preview-tasks` 列出 PARENT-014~PARENT-023、PARENT-098、PARENT-175）。\n\n**驗收標準**：每一條對應 red_case（vitest + @vue/test-utils 真實 DOM）。",
+      "description": "建立 `apps/web/src/parent/components/m3/M3Card.vue`（移植 ivy `FE:src/parent/components/m3/M3Card.vue`）。\n\n**介面**：\n```ts\nprops: { variant?: 'elevated' | 'filled' | 'outlined' /* 預設 filled */; clickable?: boolean; padding?: 'none' | 'sm' | 'md' /* 預設 md */ }\nemits: { click: [MouseEvent | KeyboardEvent] }\nslots: default、header、actions\n```\n保留：三種 variant、clickable 時 state layer。底色照 M3 / ivy：filled（預設）為 `--m3-surface-container-highest`；elevated 為 `--m3-surface-container-low` + `--m3-elev-1`；outlined 為 `--m3-surface` + 1px `--m3-outline-variant` 邊框；圓角 `--m3-shape-medium`。根元素帶 `m3-card--{variant}` 與 `m3-card--pad-{padding}` class（none 0 / sm 12px / md 16px）。header / actions slot 有內容才渲染外框（`.m3-card__header` 下方 8px；`.m3-card__actions` 靠右、上方 16px、間距 8px、可換行）。\n去掉：padding 改為列舉值，不接受任意 CSS 字串。**新增** clickable 時渲染為 `role=\"button\"`、`tabindex=\"0\"`，Enter / Space 觸發 click（payload 為該 KeyboardEvent；Space 會 preventDefault 避免捲動頁面；按住不放的 repeat keydown 不重複觸發，但 Space 的 repeat 仍 preventDefault），並有 on-surface 色 state layer；不可點的卡片完全沒有 role / tabindex，也不 emit。\n- 可點卡片內可以放控制項：來自內部可互動元素（`button`、`a[href]`、`input`、`select`、`textarea`、`label`、`[role=button]`、`[role=switch]`、`[role=link]`、`[role=checkbox]`、`[contenteditable=true]`，以 `event.target.closest(...)` 找到的元素不是卡片本身）的 click 冒泡與 Enter / Space 按鍵，卡片一律忽略（不 emit、不 preventDefault），控制項照常運作。\n樣式只用 PARENT-001 的 `--m3-*` 變數；觸控目標 ≥ 44×44px；有 `:focus-visible` 外框。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-m3-kit.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：三種 variant、含 header / actions slot、clickable hover / pressed。可與其他 M3 元件 task 共用同一張稿 `docs/mockups/parent-component-m3-kit.html`（`preview-tasks` 列出 PARENT-014~PARENT-023、PARENT-098、PARENT-175）。\n\n**驗收標準**：每一條對應 red_case（vitest + @vue/test-utils 真實 DOM）。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3Card.vue",
       "source_ref": "FE:src/parent/components/m3/M3Card.vue::props",
@@ -606,9 +606,7 @@
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "【review-r3 打回】(1) clickable 卡片內控制項（button / input / Switch）的 click 會冒泡觸發卡片 click（Chromium 實測：卡片內 button 按 Enter / Space 或滑鼠點擊時卡片 click 也 +1）；處理方式待使用者裁定（見 open_design_questions），裁定後補 red_case 與實作。(2) 按住 Space 時 keydown repeat 會讓卡片 click 重複 emit（實測 9 次）；比照 M3Switch 忽略 repeat，並補 red_case。",
-      "open_design_questions": [
-        "PARENT-017：clickable 卡片內含可互動控制項（button / input / Switch）時，控制項的 click 會冒泡觸發卡片 click（Chromium 實測）。A：卡片忽略來自內部可互動元素的 click 與按鍵（以 event.target.closest('button, a, input, select, textarea, [role=button], [role=switch]') 判斷），卡片內可以放控制項；B：規格改為 clickable 卡片不得含可互動子元素（actions 的按鈕改放在不可點的卡片，或整張卡改成不可點），並移除「卡片內控制項的按鍵不攔截」這條規格與測試。"
-      ],
+      "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/components/m3/M3Card.spec.ts",
         "markers": [
@@ -616,13 +614,15 @@
         ],
         "red_cases": [
           "M3Card renders slots：slots {header:'<h3>今日狀態</h3>', default:'<p>已到班</p>', actions:'<button>接送</button>'} → text 依序含 '今日狀態'、'已到班'、'接送'",
-          "M3Card clickable keyboard activation：clickable=true → attributes('role') === 'button'、tabindex === '0'；trigger('keydown', {key:'Enter'}) → emitted('click').length === 1；keydown ' ' → 2；keydown 'a' 仍為 2；trigger('click') → 3 且 payload 為 MouseEvent",
+          "M3Card clickable keyboard activation：clickable=true → attributes('role') === 'button'、tabindex === '0'；trigger('keydown', {key:'Enter'}) → emitted('click').length === 1 且 payload 為 key === 'Enter' 的 KeyboardEvent；keydown ' ' → 2；keydown 'a' 仍為 2；trigger('click') → 3 且 payload 為 MouseEvent",
           "M3Card non clickable ignores click：clickable 預設 false → trigger('click') 與 keydown Enter 後 emitted('click') 為 undefined，且無 role、無 tabindex 屬性",
           "M3Card variant class：variant 未傳 → classes() 含 'm3-card--filled'；variant='elevated' → 含 'm3-card--elevated' 且不含 'm3-card--filled'",
           "M3Card omits empty header and actions wrappers：只給 default slot → 無 '.m3-card__header'、無 '.m3-card__actions'",
           "M3Card space key prevents page scroll：clickable=true，dispatch cancelable keydown ' ' → event.defaultPrevented === true",
           "M3Card padding class：預設含 'm3-card--pad-md'；padding='sm' → 'm3-card--pad-sm'；padding='none' → 'm3-card--pad-none' 且不含 'm3-card--pad-md'",
-          "M3Card ignores keys from nested controls：clickable=true、default slot 含 input，從 input dispatch cancelable keydown ' ' → defaultPrevented === false 且 emitted('click') 為 undefined"
+          "M3Card ignores keys from nested controls：clickable=true、default slot 含 input，從 input dispatch cancelable keydown ' ' → defaultPrevented === false 且 emitted('click') 為 undefined",
+          "M3Card ignores key repeat：clickable=true，keydown ' ' 一次再 8 次 repeat:true → emitted('click').length === 1，8 次 repeat 皆 defaultPrevented；Enter 的 repeat 也不 emit",
+          "M3Card ignores clicks from nested controls：clickable 卡片內含 p、input、a[href]、M3Switch、actions 的 button，點 button / input / a / switch → 卡片 emitted('click') 為 undefined、Switch 照常切到 aria-checked 'true'；在 button 上 dispatch keydown Enter / Space → 未 preventDefault、卡片不 emit；點 p → 卡片 emit 1 次"
         ],
         "run": "just web-test src/parent/components/m3/M3Card.spec.ts -t \"M3Card\"",
         "notes": ""
