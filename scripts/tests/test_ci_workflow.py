@@ -343,3 +343,54 @@ def test_e2e_workflow_no_supabase() -> None:
     text = (WORKFLOWS / E2E_YML).read_text(encoding="utf-8")
 
     assert "supabase" not in text.lower()
+
+
+def steps_using(name: str, prefix: str) -> list[dict[str, Any]]:
+    return [s for s in steps_of(name) if str(s.get("uses", "")).startswith(prefix)]
+
+
+def docker_build_contexts() -> list[str]:
+    """docker-build job 建置的 context（`docker build ... <ctx>` 的最後一個參數或 action 的 context）。"""
+    contexts: list[str] = []
+    for line in run_lines("docker-build"):
+        if "docker build" in line:
+            contexts.append(line.split()[-1])
+    for step in steps_using("docker-build", "docker/build-push-action"):
+        contexts.append(str(step["with"]["context"]))
+    return [c.removeprefix("./") for c in contexts]
+
+
+def test_ci_docker_build_job_builds_both_images() -> None:
+    assert sorted(docker_build_contexts()) == ["apps/api", "apps/web"]
+    assert job("docker-build")["timeout-minutes"] == 20
+
+
+def test_ci_docker_build_job_uses_buildx_gha_cache() -> None:
+    assert steps_using("docker-build", "docker/setup-buildx-action")
+    builds = steps_using("docker-build", "docker/build-push-action")
+
+    assert len(builds) == 2
+    for build in builds:
+        assert build["with"]["cache-from"] == "type=gha"
+        assert build["with"]["load"] is True
+
+
+def test_ci_docker_build_job_smoke_checks() -> None:
+    text = "\n".join(run_lines("docker-build")).lower()
+
+    for needle in ("/healthz", "/parent/", "content-security-policy", "import app", "backend_url="):
+        assert needle in text, needle
+    assert "18080:8080" in text
+
+
+def test_ci_docker_build_job_removes_containers_always() -> None:
+    last = steps_of("docker-build")[-1]
+
+    assert last["if"] == "always()"
+    assert "docker rm" in last["run"]
+
+
+def test_ci_docker_build_job_never_pushes() -> None:
+    assert not [line for line in run_lines("docker-build") if "docker push" in line]
+    for step in steps_using("docker-build", "docker/build-push-action"):
+        assert step["with"].get("push") in (None, False)
