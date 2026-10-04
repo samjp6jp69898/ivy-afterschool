@@ -262,3 +262,21 @@ def test_ci_web_test_job_skips_python() -> None:
 
     assert len(setup) == 1
     assert setup[0]["with"]["python"] is False
+
+
+def test_ci_web_build_job_checks_after_build() -> None:
+    lines = run_lines("web-build")
+
+    build = line_index(lines, "vite build")
+    check = line_index(lines, "check_parent_bundle.mjs")
+    assert build < check
+    assert job("web-build")["timeout-minutes"] == 10
+    for needle in ("vite build", "check_parent_bundle.mjs"):
+        assert step_with_run("web-build", needle)["working-directory"] == "apps/web"
+
+
+def test_ci_web_build_job_skips_python() -> None:
+    setup = [s for s in steps_of("web-build") if s.get("uses") == "./.github/actions/setup"]
+
+    assert len(setup) == 1
+    assert setup[0]["with"]["python"] is False
