@@ -1,6 +1,7 @@
 """BACKEND-041：app/services/auth/staff_auth.py（StaffAuthService.login）。
 BACKEND-043：refresh（輪替 refresh 並以目前 token_version 重簽 access；停用帳號 / 家長 token 撤銷
 family）。
+BACKEND-045：logout（撤銷目前 refresh family，冪等；其他裝置的 family 不受影響）。
 
 帳密驗證、(帳號, IP) 鎖定、不存在帳號仍跑一次 argon2（防帳號列舉）、停用帳號同一個 401、
 成功後更新 last_login_at / 簽發 access + refresh token / needs_rehash 透明升級。
@@ -22,7 +23,7 @@ from app.core.security.tokens import decode_access_token
 from app.models.account import RefreshToken, StaffUser
 from app.services.auth import staff_auth
 from app.services.auth.refresh_tokens import hash_refresh, issue, revoke_family_by_raw
-from app.services.auth.staff_auth import StaffSession, login, refresh
+from app.services.auth.staff_auth import StaffSession, login, logout, refresh
 from app.services.auth.throttle import AuthThrottles
 from tests.support.factories import make_parent, make_staff
 from tests.support.fake_clock import FakeClock
@@ -401,3 +402,53 @@ def test_refresh_propagates_revoked_and_invalid(
         refresh(db_session, raw_refresh="no-such-token", clock=fake_clock)
     assert invalid.value.status == 401
     assert invalid.value.code == "refresh_invalid"
+
+
+# --- BACKEND-045：logout -----------------------------------------------------------------------
+
+
+def test_logout_revokes_current_family(
+    db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock
+) -> None:
+    staff = make_staff(db_session)
+    s1 = _login(db_session, throttles, fake_clock, username=staff.username, password=_PASSWORD)
+    s2 = _login(db_session, throttles, fake_clock, username=staff.username, password=_PASSWORD)
+
+    assert logout(db_session, raw_refresh=s1.refresh_token, clock=fake_clock) == 1
+
+    _assert_family_revoked(db_session, s1.refresh_token, revoked=True)
+    _assert_family_revoked(db_session, s2.refresh_token, revoked=False)
+    assert _family_rows(db_session, s1.refresh_token)[0].revoked_at == fake_clock.now()
+    # 另一裝置的 refresh 仍可用；已登出的再 refresh → 401 refresh_revoked
+    assert refresh(db_session, raw_refresh=s2.refresh_token, clock=fake_clock).staff.id == staff.id
+    with pytest.raises(AppError) as excinfo:
+        refresh(db_session, raw_refresh=s1.refresh_token, clock=fake_clock)
+    assert excinfo.value.code == "refresh_revoked"
+
+
+def test_logout_revokes_whole_family_after_rotation(
+    db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock
+) -> None:
+    """輪替過的 family 以任一代 raw 登出都撤銷整族（含最新一代）。"""
+    staff = make_staff(db_session)
+    s1 = _login(db_session, throttles, fake_clock, username=staff.username, password=_PASSWORD)
+    s2 = refresh(db_session, raw_refresh=s1.refresh_token, clock=fake_clock)
+
+    assert logout(db_session, raw_refresh=s2.refresh_token, clock=fake_clock) == 2
+    _assert_family_revoked(db_session, s1.refresh_token, revoked=True)
+
+
+def test_logout_idempotent(
+    db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock
+) -> None:
+    staff = make_staff(db_session)
+    s1 = _login(db_session, throttles, fake_clock, username=staff.username, password=_PASSWORD)
+
+    assert logout(db_session, raw_refresh=None, clock=fake_clock) == 0
+    assert logout(db_session, raw_refresh="", clock=fake_clock) == 0
+    assert logout(db_session, raw_refresh="nope", clock=fake_clock) == 0
+    _assert_family_revoked(db_session, s1.refresh_token, revoked=False)
+
+    assert logout(db_session, raw_refresh=s1.refresh_token, clock=fake_clock) == 1
+    # 再登出同一個 raw：已撤銷，回 0 不拋例外
+    assert logout(db_session, raw_refresh=s1.refresh_token, clock=fake_clock) == 0
