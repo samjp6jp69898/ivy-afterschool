@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 164,
-  "last_updated": "2026-10-04T16:16:12Z",
+  "version": 165,
+  "last_updated": "2026-10-04T16:17:47Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2482,7 +2482,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/api/deps.py",
       "source_ref": "BE:utils/auth.py::require_permission",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-047",
