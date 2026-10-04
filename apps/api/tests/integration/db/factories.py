@@ -109,3 +109,9 @@ def make_audit_logs(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str
         "entity_id": "org.profile",
     }
     return insert_row(conn, "public.audit_logs", **{**defaults, **overrides})
+
+
+def make_students(conn: psycopg.Connection[Any], **overrides: Any) -> dict[str, Any]:
+    """student_no 預設帶亂數，同一測試可多次呼叫。"""
+    defaults = {"student_no": f"S{uuid4().hex[:10]}", "name": "王小明", "grade_level": 3}
+    return insert_row(conn, "public.students", **{**defaults, **overrides})
