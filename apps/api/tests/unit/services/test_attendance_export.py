@@ -157,5 +157,5 @@ def test_attendance_xlsx_strip_before_formula_check() -> None:
     ws = _sheet(_report(name='\x07=HYPERLINK("x")', student_no="\x0b+1"))
 
     # 先移除控制字元再判斷前綴，否則移除後會變成未防護的 '='
-    assert ws["B3"].value == "'=HYPERLINK(\"x\")"
+    assert ws["B3"].value == '\'=HYPERLINK("x")'
     assert ws["A3"].value == "'+1"
