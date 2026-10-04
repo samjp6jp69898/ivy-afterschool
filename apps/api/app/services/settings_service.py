@@ -9,6 +9,20 @@
   使用）；解密失敗該欄位視為 None。log 只記 key 與欄位名，不記值。
 - 回傳的 model 為 frozen 實例（registry 的 schema 皆 frozen），且一律是 deep copy：RootModel
   （NotificationToggles）的內層 dict 擋不住就地修改，回傳副本讓呼叫端改不到快取與 registry 預設值。
+
+BACKEND-110：``put_setting``（移植 ivy ``api/system_config.py::upsert_config`` 的 upsert 流程；去掉
+finance 權限分支）。
+
+- key 未註冊 → 404 ``setting_not_found``。
+- secret 欄位：送來的值以 ``****`` 開頭或等於 ``********``（前端回傳的遮罩值）→ 沿用 DB 現有密文
+  （以明文狀態參與驗證）；``null`` → 清除；其他字串 → 新明文。
+- 以 registry schema 驗證（明文狀態）→ 422 ``invalid_setting_value``，details 為 Pydantic 錯誤清單
+  （只留 loc / msg / type，不回顯輸入）。寫入的是驗證後 ``model_dump(mode="json")``（不寫原始
+  value，NaN / 孤立 surrogate 等壞值不會進 jsonb），secret 欄位再以 ``encrypt_token`` 加密。
+- upsert 列（``is_secret`` 依 registry、``updated_by = actor.id``）、稽核 ``settings.update``
+  （entity_type ``system_setting``、entity_id = key，before / after 為遮罩後的值）、
+  ``run_after_commit`` 失效快取（commit 前不呼叫 invalidate，也不以同一 session 呼叫
+  ``get_setting``，避免未 commit 的值進快取）。只 flush 不 commit。
 """
 
 from __future__ import annotations
@@ -16,22 +30,31 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.crypto import DecryptionError, decrypt_token
+from app.core.crypto import DecryptionError, decrypt_token, encrypt_token
+from app.core.errors import AppError, NotFoundError
 from app.core.settings_registry import REGISTRY, SettingDef, SettingKey
+from app.core.tx_hooks import run_after_commit
 from app.models.account import StaffUser
 from app.models.reference import SystemSetting
 from app.schemas.settings import SettingOut
+from app.services import audit_service
+
+if TYPE_CHECKING:
+    from app.api.deps import CurrentStaff
+    from app.core.request_meta import RequestMeta
 
 logger = logging.getLogger(__name__)
 
 SETTINGS_CACHE_TTL_SECONDS: Final = 60
 _MASK_FULL_MAX_LEN: Final = 8
+_MASK_PREFIX: Final = "****"
+_MASK_FULL: Final = "*" * _MASK_FULL_MAX_LEN
 
 _cache: dict[str, tuple[BaseModel, float]] = {}
 _lock = threading.Lock()
@@ -155,3 +178,126 @@ def list_settings_for_admin(session: Session) -> list[SettingOut]:
             )
         )
     return items
+
+
+def _masked_dump(definition: SettingDef[Any], model: BaseModel) -> dict[str, Any]:
+    value = model.model_dump(mode="json")
+    for field in definition.secret_fields:
+        if field in value:
+            value[field] = mask_secret(value[field])
+    return value
+
+
+def _is_masked_value(value: Any) -> bool:
+    return isinstance(value, str) and (value.startswith(_MASK_PREFIX) or value == _MASK_FULL)
+
+
+def _merge_secret_fields(
+    definition: SettingDef[Any], value: dict[str, Any], current: BaseModel
+) -> tuple[dict[str, Any], frozenset[str]]:
+    """前端回傳的遮罩值代表「不修改」：以 DB 現有明文參與驗證（解密失敗視為未設定），
+    並回傳要沿用原密文的欄位集合。"""
+    merged = dict(value)
+    kept: set[str] = set()
+    for field in definition.secret_fields:
+        if _is_masked_value(merged.get(field)):
+            merged[field] = getattr(current, field, None)
+            kept.add(field)
+    return merged, frozenset(kept)
+
+
+def _validate(definition: SettingDef[Any], value: dict[str, Any]) -> BaseModel:
+    try:
+        model: BaseModel = definition.schema.model_validate(value)
+    except ValidationError as exc:
+        details = [
+            {
+                "loc": list(err.get("loc", ())),
+                "msg": err.get("msg", ""),
+                "type": err.get("type", ""),
+            }
+            for err in exc.errors()
+        ]
+        raise AppError(
+            "invalid_setting_value", "設定值不符合格式", status=422, details=details
+        ) from None
+    return model
+
+
+def _encrypt_secret_fields(
+    definition: SettingDef[Any],
+    stored: dict[str, Any],
+    *,
+    kept: frozenset[str],
+    raw: dict[str, Any] | None,
+) -> None:
+    """新明文加密存入；遮罩保留的欄位沿用 DB 現有密文（不重新加密）。"""
+    for field in definition.secret_fields:
+        if field in kept:
+            existing = raw.get(field) if raw is not None else None
+            stored[field] = existing if isinstance(existing, str) else None
+            continue
+        plain = stored.get(field)
+        if plain is not None:
+            stored[field] = encrypt_token(str(plain))
+
+
+def put_setting(
+    session: Session,
+    key: str,
+    value: dict[str, Any],
+    *,
+    actor: CurrentStaff,
+    meta: RequestMeta,
+) -> SettingOut:
+    definition = REGISTRY.get(key)
+    if definition is None:
+        raise NotFoundError("setting_not_found", "找不到此設定")
+
+    row = session.execute(
+        select(SystemSetting).where(SystemSetting.key == key).with_for_update()
+    ).scalar_one_or_none()
+    # 直接讀列，不走 get_setting（避免把交易內的值寫進快取）
+    raw = row.value if row is not None else None
+    current = _model_from_raw(key, definition, raw)
+
+    merged, kept = _merge_secret_fields(definition, value, current)
+    model = _validate(definition, merged)
+    stored = model.model_dump(mode="json")
+    _encrypt_secret_fields(definition, stored, kept=kept, raw=raw)
+
+    if row is None:
+        row = SystemSetting(
+            key=key, value=stored, is_secret=definition.is_secret, updated_by=actor.id
+        )
+        session.add(row)
+    else:
+        row.value = stored
+        row.is_secret = definition.is_secret
+        row.updated_by = actor.id
+    session.flush()
+    # updated_at 由 DB trigger 設定，重新讀回
+    session.refresh(row, attribute_names=["updated_at"])
+
+    audit_service.record(
+        session,
+        actor=audit_service.Actor.staff(actor),
+        action="settings.update",
+        entity_type="system_setting",
+        entity_id=key,
+        before=_masked_dump(definition, current),
+        after=_masked_dump(definition, model),
+        meta=meta,
+    )
+    run_after_commit(session, lambda: invalidate_setting(key))
+
+    return SettingOut(
+        key=key,
+        group=definition.group,
+        label=definition.label,
+        is_secret=definition.is_secret,
+        value=_masked_dump(definition, model),
+        json_schema=definition.schema.model_json_schema(),
+        updated_at=row.updated_at,
+        updated_by_name=actor.display_name,
+    )

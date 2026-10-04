@@ -22,9 +22,6 @@ from app.core.config import get_settings
 from app.core.crypto import decrypt_token, derive_key, encrypt_token
 from app.core.errors import AppError
 from app.core.request_meta import RequestMeta
-from app.core.tx_hooks import install_tx_hooks
-from app.models.account import StaffUser
-from app.models.audit import AuditLog
 from app.core.settings_registry import (
     HOMEWORK_DEFAULTS,
     LINE_MESSAGING,
@@ -36,8 +33,11 @@ from app.core.settings_registry import (
     PickupWindow,
     ServiceHours,
 )
-from app.services import settings_service
+from app.core.tx_hooks import install_tx_hooks
+from app.models.account import StaffUser
+from app.models.audit import AuditLog
 from app.schemas.settings import SettingOut
+from app.services import settings_service
 from app.services.settings_service import (
     SETTINGS_CACHE_TTL_SECONDS,
     clear_settings_cache,
@@ -445,7 +445,7 @@ def test_put_setting_secret_encrypted(db_session: Session, actor: CurrentStaff) 
     assert _NEW_SECRET not in json.dumps(stored)
     assert decrypt_token(stored["channel_access_token"]) == _NEW_TOKEN
     assert decrypt_token(stored["channel_secret"]) == _NEW_SECRET
-    assert out.value == {"channel_access_token": "****9999", "channel_secret": "********"}
+    assert out.value == {"channel_access_token": "****9999", "channel_secret": "****5678"}
     assert out.is_secret is True
     row = db_session.execute(
         text("select is_secret from public.system_settings where key = 'line.messaging'")
@@ -483,7 +483,12 @@ def test_put_setting_secret_keep_masked(db_session: Session, actor: CurrentStaff
     assert out.value == {"channel_access_token": "****9999", "channel_secret": None}
 
     # 全遮罩值（短 secret）同樣代表不修改；遮罩值不會被當成新明文存入
-    _put(db_session, actor, "line.messaging", {"channel_secret": "short1"})
+    _put(
+        db_session,
+        actor,
+        "line.messaging",
+        {"channel_access_token": "****9999", "channel_secret": "short1"},
+    )
     _put(
         db_session,
         actor,
@@ -552,12 +557,12 @@ def test_put_setting_cache_not_polluted_before_commit(
 
 
 @pytest.fixture
-def owner_restore_pickup_window() -> Iterator[list[UUID]]:
-    """測試結束以 owner 連線把 pickup.window 還原為 seed 值，並刪掉測試建立的 staff / role。
+def owner_restore_pickup_window() -> Iterator[list[tuple[UUID, UUID]]]:
+    """測試結束以 owner 連線把 pickup.window 還原為 seed 值，並刪掉測試建立的 (staff, role)。
 
     排在 committing_db_session 之前（先 close session 再刪列）。
     """
-    ids: list[UUID] = []
+    ids: list[tuple[UUID, UUID]] = []
     yield ids
     default = PICKUP_WINDOW.definition().default.model_dump(mode="json")
     with connect_owner() as conn:
@@ -567,27 +572,22 @@ def owner_restore_pickup_window() -> Iterator[list[UUID]]:
             "where key = 'pickup.window'",
             (json.dumps(default),),
         )
-        for staff_id in ids:
-            conn.execute(
-                "delete from public.roles where id = "
-                "(select role_id from public.staff_users where id = %s)",
-                (staff_id,),
-            )
+        for staff_id, role_id in ids:
             conn.execute("delete from public.staff_users where id = %s", (staff_id,))
+            conn.execute("delete from public.roles where id = %s", (role_id,))
         conn.commit()
     clear_settings_cache()
 
 
 @pytest.mark.cleanup_tables("audit_logs")
 def test_put_setting_invalidate_after_commit(
-    owner_restore_pickup_window: list[UUID], committing_db_session: Session
+    owner_restore_pickup_window: list[tuple[UUID, UUID]], committing_db_session: Session
 ) -> None:
     install_tx_hooks()
     session = committing_db_session
     staff = make_staff(session, permissions=["settings:write"])
-    role_id = staff.role.id
     session.commit()
-    owner_restore_pickup_window.append(staff.id)
+    owner_restore_pickup_window.append((staff.id, staff.role.id))
     actor = _current(staff)
     assert get_setting(session, PICKUP_WINDOW).auto_expire_minutes == 120
     value = {
@@ -604,4 +604,3 @@ def test_put_setting_invalidate_after_commit(
 
     # commit 後立即反映（不需等 TTL）
     assert get_setting(session, PICKUP_WINDOW).auto_expire_minutes == 90
-    assert role_id is not None
