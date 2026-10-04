@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 201,
-  "last_updated": "2026-10-04T16:45:40Z",
+  "version": 202,
+  "last_updated": "2026-10-04T16:46:17Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2554,7 +2554,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/rbac_guards.py",
       "source_ref": "BE:api/permissions_admin.py::_assert_roles_manage_retained",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r7a",
       "depends_on": [
         "BACKEND-074",
