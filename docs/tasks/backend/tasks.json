@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 224,
-  "last_updated": "2026-10-04T16:58:01Z",
+  "version": 225,
+  "last_updated": "2026-10-04T16:58:02Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2693,7 +2693,7 @@
     {
       "id": "BACKEND-079",
       "title": "實作 RoleService.update_role：修改角色（admin 不可改、防提權、保留管理者、稽核）",
-      "description": "在 `apps/api/app/services/role_service.py` 實作：\n```python\ndef update_role(session: Session, role_id: UUID, data: RoleUpdateIn, *, actor: CurrentStaff, meta: RequestMeta) -> RoleOut: ...\n```\n- 角色不存在 → 404 `role_not_found`。\n- `code == 'admin'` → 409 `system_role_protected`（admin 角色任何欄位都不可改，domain_spec M1）。其他系統角色（director / clerk / tutor）可改 name / description / permissions。\n- permissions 有給：驗證碼；**新增的碼**（new − old）必須 ⊆ actor.permissions（移除不受限）→ 否則 403 `cannot_grant_permissions`。\n- 寫入後 `assert_admin_capabilities_retained`（BACKEND-075）。\n- 稽核 `role.update`，before / after 只含有變動的欄位。\n- 權限每請求即時計算（BACKEND-047），不需要 bump token_version。\n\n**驗收標準**\n- 修改名稱與權限成功，audit 記錄 before/after。\n- admin 角色 409；不存在 404。\n- 新增超出自身的碼 403；移除自己沒有的碼允許。\n- 造成無人持有 roles:write → 409 last_role_manager，且變更未套用（交易回滾）。",
+      "description": "在 `apps/api/app/services/role_service.py` 實作：\n```python\ndef update_role(session: Session, role_id: UUID, data: RoleUpdateIn, *, actor: CurrentStaff, meta: RequestMeta) -> RoleOut: ...\n```\n- 角色不存在 → 404 `role_not_found`。\n- `code == 'admin'` → 409 `system_role_protected`（admin 角色任何欄位都不可改，domain_spec M1）。其他系統角色（director / clerk / tutor）可改 name / description / permissions。\n- permissions 有給：驗證碼；**新增的碼**（new − old）必須 ⊆ actor.permissions（移除不受限）→ 否則 403 `cannot_grant_permissions`。\n- 寫入後 `assert_admin_capabilities_retained`（BACKEND-075）（呼叫前先 `advisory_xact_lock(session, 'rbac:admin_retained', 'global')`（BACKEND-017 `app/core/locks.py`），讓所有可能減少管理者的異動序列化；否則兩筆交易各停用 / 降權一位管理者時都看得到對方仍有效而同時通過，commit 後系統沒有任何可管理角色與帳號的啟用員工）。\n- 稽核 `role.update`，before / after 只含有變動的欄位。\n- 權限每請求即時計算（BACKEND-047），不需要 bump token_version。\n\n**驗收標準**\n- 修改名稱與權限成功，audit 記錄 before/after。\n- admin 角色 409；不存在 404。\n- 新增超出自身的碼 403；移除自己沒有的碼允許。\n- 造成無人持有 roles:write → 409 last_role_manager，且變更未套用（交易回滾）。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/role_service.py",
       "source_ref": "BE:api/permissions_admin.py::update_role",
@@ -3098,7 +3098,7 @@
     {
       "id": "BACKEND-090",
       "title": "實作 StaffUserService.update_staff_user：修改基本資料、角色與個別權限",
-      "description": "在 `apps/api/app/services/staff_user_service.py` 實作：\n```python\ndef update_staff_user(session: Session, staff_id: UUID, data: StaffUserUpdateIn, *, actor: CurrentStaff, meta: RequestMeta) -> StaffUserOut: ...\n```\n- 不存在 → 404。\n- `assert_can_manage_staff(actor, 目標目前有效權限)`（BACKEND-534）→ 403 `cannot_manage_staff`。\n- 修改自己的 role_id / extra / revoked → 409 `cannot_modify_self_permissions`（自己的基本資料可改）。\n- role_id 不存在 → 422 `invalid_role`；權限碼驗證 422。\n- 新有效權限中「原本沒有的碼」必須 ⊆ actor.permissions → 403 `cannot_grant_permissions`。\n- 變更後 `assert_admin_capabilities_retained`（BACKEND-075）。\n- 稽核 `staff_user.update`，before / after 只含有變動的欄位。\n\n**驗收標準**\n- 改姓名、電話、角色、個別權限成功並寫 audit。\n- 管理比自己權限大的帳號 403；改自己的權限 409。\n- 授出自己沒有的碼 403。\n- 導致無人可管理角色 / 帳號 → 409。",
+      "description": "在 `apps/api/app/services/staff_user_service.py` 實作：\n```python\ndef update_staff_user(session: Session, staff_id: UUID, data: StaffUserUpdateIn, *, actor: CurrentStaff, meta: RequestMeta) -> StaffUserOut: ...\n```\n- 不存在 → 404。\n- `assert_can_manage_staff(actor, 目標目前有效權限)`（BACKEND-534）→ 403 `cannot_manage_staff`。\n- 修改自己的 role_id / extra / revoked → 409 `cannot_modify_self_permissions`（自己的基本資料可改）。\n- role_id 不存在 → 422 `invalid_role`；權限碼驗證 422。\n- 新有效權限中「原本沒有的碼」必須 ⊆ actor.permissions → 403 `cannot_grant_permissions`。\n- 變更後 `assert_admin_capabilities_retained`（BACKEND-075）（呼叫前先 `advisory_xact_lock(session, 'rbac:admin_retained', 'global')`（BACKEND-017 `app/core/locks.py`），讓所有可能減少管理者的異動序列化；否則兩筆交易各停用 / 降權一位管理者時都看得到對方仍有效而同時通過，commit 後系統沒有任何可管理角色與帳號的啟用員工）。\n- 稽核 `staff_user.update`，before / after 只含有變動的欄位。\n\n**驗收標準**\n- 改姓名、電話、角色、個別權限成功並寫 audit。\n- 管理比自己權限大的帳號 403；改自己的權限 409。\n- 授出自己沒有的碼 403。\n- 導致無人可管理角色 / 帳號 → 409。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": "BE:api/auth.py::update_user",
@@ -3178,7 +3178,7 @@
     {
       "id": "BACKEND-092",
       "title": "實作 StaffUserService.deactivate：停用員工帳號並使既有登入失效",
-      "description": "在 `apps/api/app/services/staff_user_service.py` 實作：\n```python\ndef deactivate(session: Session, staff_id: UUID, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> StaffUserOut: ...\n```\n- 不存在 404；停用自己 → 409 `cannot_deactivate_self`；`assert_can_manage_staff` → 403。\n- 已停用 → 直接回傳（冪等，不重複寫 audit）。\n- `is_active = false`、`token_version += 1`、撤銷全部 refresh；刪除其 `class_staff` 列？**不刪**（保留歷史，通知收件人解析時過濾 is_active）。\n- `assert_admin_capabilities_retained` → 409。\n- 稽核 `staff_user.deactivate`。\n- 停用可逆：重新啟用由 BACKEND-521 `activate` 處理（產生臨時密碼、強制改密碼）。\n\n**驗收標準**\n- 停用後 is_active=false、token_version +1、refresh 全撤；用舊 access token 呼叫任何後台 API → 401。\n- 自己 409；權限較大者 403；最後一位管理者 409；重複停用冪等。",
+      "description": "在 `apps/api/app/services/staff_user_service.py` 實作：\n```python\ndef deactivate(session: Session, staff_id: UUID, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> StaffUserOut: ...\n```\n- 不存在 404；停用自己 → 409 `cannot_deactivate_self`；`assert_can_manage_staff` → 403。\n- 已停用 → 直接回傳（冪等，不重複寫 audit）。\n- `is_active = false`、`token_version += 1`、撤銷全部 refresh；刪除其 `class_staff` 列？**不刪**（保留歷史，通知收件人解析時過濾 is_active）。\n- `assert_admin_capabilities_retained` → 409（呼叫前先 `advisory_xact_lock(session, 'rbac:admin_retained', 'global')`（BACKEND-017 `app/core/locks.py`），讓所有可能減少管理者的異動序列化；否則兩筆交易各停用 / 降權一位管理者時都看得到對方仍有效而同時通過，commit 後系統沒有任何可管理角色與帳號的啟用員工）。\n- 稽核 `staff_user.deactivate`。\n- 停用可逆：重新啟用由 BACKEND-521 `activate` 處理（產生臨時密碼、強制改密碼）。\n\n**驗收標準**\n- 停用後 is_active=false、token_version +1、refresh 全撤；用舊 access token 呼叫任何後台 API → 401。\n- 自己 409；權限較大者 403；最後一位管理者 409；重複停用冪等。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": "BE:api/auth.py::delete_user",
@@ -3204,7 +3204,8 @@
           "test_deactivate_success：deactivate(tutor 帳號) → is_active is False、token_version == 1、refresh 全部 revoked；audit 'staff_user.deactivate' 1 筆",
           "test_deactivate_self：409 'cannot_deactivate_self'",
           "test_deactivate_idempotent：已停用再呼叫 → 回傳 is_active False，audit 筆數仍為 1",
-          "test_deactivate_last_manager：把 db 中其他啟用帳號全部停用；建立 mgr（roles:write、staff:write）；actor 為以 ALL_PERMISSIONS 建構、DB 帳號已停用的 CurrentStaff → 停用 mgr → 409 'last_role_manager'；另以 director 權限 ∪ {'staff:write'} 的 actor 停用 admin 帳號 → 403 'cannot_manage_staff'"
+          "test_deactivate_last_manager：把 db 中其他啟用帳號全部停用；建立 mgr（roles:write、staff:write）；actor 為以 ALL_PERMISSIONS 建構、DB 帳號已停用的 CurrentStaff → 停用 mgr → 409 'last_role_manager'；另以 director 權限 ∪ {'staff:write'} 的 actor 停用 admin 帳號 → 403 'cannot_manage_staff'",
+          "test_deactivate_concurrent_last_admins：兩位啟用中的 admin A、B；以兩條 app_backend Session + thread 同時各停用其中一位（committing session，清理照 kickoff 實作慣例）→ 恰一筆成功、另一筆 409（last_role_manager / last_account_manager），commit 後仍至少一位啟用中的 admin"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_staff_user_service.py -k \"test_deactivate_\"",
         "notes": ""
