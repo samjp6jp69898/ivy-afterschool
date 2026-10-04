@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 75,
-  "last_updated": "2026-10-04T14:00:54Z",
+  "version": 76,
+  "last_updated": "2026-10-04T16:27:37Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1382,7 +1382,7 @@
     {
       "id": "FRONTEND-048",
       "title": "實作 views/ChangePasswordView.vue：修改密碼（含首次登入強制修改）",
-      "description": "建立 `apps/web/src/views/ChangePasswordView.vue`。移植 ivy `FE:src/views/ChangePasswordView.vue` 的表單與 `FE:src/utils/passwordRules.ts::PASSWORD_RULES` 前端檢查；規則改為本專案（BACKEND-049：≥10 碼且含英文與數字）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-change-password.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。 稿需呈現：強制修改模式、一般模式、各種錯誤。\n\n**內容**\n- 欄位：目前密碼、新密碼、確認新密碼。前端規則：新密碼 ≥ 10 碼、含英文字母、含數字（逐條即時顯示 ✓/✗ 清單）；確認需一致（「兩次輸入的新密碼不一致」）；新舊不可相同（「新密碼不可與目前密碼相同」）。\n- `auth.mustChangePassword` 為 true：頂部 el-alert「首次登入或密碼已被重設，請先修改密碼」，不顯示「返回」按鈕；否則顯示「返回」（router.back，無歷史時回 firstAllowedPath）。\n- 送出 `auth.changePassword`（FRONTEND-022）→ `ElMessage.success('密碼已更新')` → `firstAllowedPath`（無則 `/forbidden`）。\n- 錯誤：`current_password_incorrect` → 目前密碼欄位錯誤「目前密碼不正確」；`password_unchanged` → 新密碼欄位「新密碼不可與目前密碼相同」；`weak_password` → 新密碼欄位顯示 `details.reasons` 對應文字（too_short「至少 10 碼」、missing_letter「需包含英文字母」、missing_digit「需包含數字」，未知 reason 直接顯示原文）；其他 → ElMessage.error。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/ChangePasswordView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/views/ChangePasswordView.vue`。移植 ivy `FE:src/views/ChangePasswordView.vue` 的表單與 `FE:src/utils/passwordRules.ts::PASSWORD_RULES` 前端檢查；規則改為本專案（BACKEND-049：≥10 碼且含英文與數字）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-change-password.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。 稿需呈現：強制修改模式、一般模式、各種錯誤。\n\n**內容**\n- 欄位：目前密碼、新密碼、確認新密碼。前端規則：新密碼 ≥ 10 碼、含英文字母、含數字（逐條即時顯示 ✓/✗ 清單）；確認需一致（「兩次輸入的新密碼不一致」）；新舊不可相同（「新密碼不可與目前密碼相同」）。\n- `auth.mustChangePassword` 為 true：頂部 el-alert「首次登入或密碼已被重設，請先修改密碼」，不顯示「返回」按鈕；否則顯示「返回」（router.back，無歷史時回 firstAllowedPath）。\n- 送出 `auth.changePassword`（FRONTEND-022）→ `ElMessage.success('密碼已更新')` → `firstAllowedPath`（無則 `/forbidden`）。\n- 錯誤：`current_password_incorrect` → 目前密碼欄位錯誤「目前密碼不正確」；`password_unchanged` → 新密碼欄位「新密碼不可與目前密碼相同」；`weak_password` → 新密碼欄位顯示 `details.reasons`（BACKEND-032 回傳的繁中條列原文，以「、」串接；reasons 缺漏時顯示後端 message）；其他 → ElMessage.error。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/ChangePasswordView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/ChangePasswordView.vue",
       "source_ref": "FE:src/views/ChangePasswordView.vue::default",
@@ -1404,7 +1404,7 @@
         "red_cases": [
           "ChangePasswordView validates rules client side：新密碼 'abc123' → 規則清單顯示 '至少 10 碼' 為未通過；確認輸入不同 → 文字含 '兩次輸入的新密碼不一致'；點送出 → mock.history.post.length === 0",
           "ChangePasswordView submits and redirects：目前 'Old0000000a'、新 'New0000000a'、確認相同；POST /admin/auth/change-password 回 user（attendance:read、must_change_password false）→ body 深等於 {current_password:'Old0000000a',new_password:'New0000000a'}，router path === '/attendance'，body 含 '密碼已更新'",
-          "ChangePasswordView maps backend errors to fields：回 400 current_password_incorrect → 目前密碼欄位錯誤文字 '目前密碼不正確'；回 422 weak_password details {reasons:['missing_digit']} → 新密碼欄位文字 '需包含數字'",
+          "ChangePasswordView maps backend errors to fields：回 400 current_password_incorrect → 目前密碼欄位錯誤文字 '目前密碼不正確'；回 422 weak_password details {reasons:['至少一個數字','不可與帳號相同']} → 新密碼欄位文字 '至少一個數字、不可與帳號相同'",
           "ChangePasswordView forced mode hides back button：auth.user.must_change_password true → 文字含 '首次登入或密碼已被重設，請先修改密碼'，且沒有 '返回' 按鈕；false 時有 '返回'"
         ],
         "run": "just web-test src/views/ChangePasswordView.spec.ts -t \"ChangePasswordView\"",
@@ -1814,7 +1814,7 @@
     {
       "id": "FRONTEND-059",
       "title": "實作 components/settings/reference/SubjectTable.vue：科目管理表格",
-      "description": "建立 `apps/web/src/components/settings/reference/SubjectTable.vue`，參考資料頁（FRONTEND-063）的「科目」分頁。資料來源 FRONTEND-051 `subjectsApi`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-reference.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現四個分頁的表格、新增 / 編輯 dialog、刪除被引用時改為停用的提示、只有 settings:read 時的唯讀樣式、空清單。\n\n**內容**\n- 表格欄位：名稱、排序（sort_order）、狀態（啟用 / 停用 tag）；依 sort_order 排序。表單：名稱（必填，≤20）、排序（整數 ≥0）、啟用（switch）。\n- 有 `settings:write`：右上「新增科目」、每列「編輯」「刪除」；新增 / 編輯用 `FormDialog`（FRONTEND-040）。無 `settings:write`：不顯示這些按鈕。\n- 刪除：`useConfirmDelete`（FRONTEND-044）；回傳 `deactivated: true` → `ElMessage.warning('「{name}」已有資料引用，已改為停用')` 並重新載入；`deleted: true` →「已刪除」。\n- 422 欄位錯誤以 `validationFieldErrors` 顯示在對應欄位；409 顯示後端 message。\n- 空清單：`EmptyState`「尚未建立科目」（有寫入權限時附新增按鈕）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/settings/reference/SubjectTable.vue`，參考資料頁（FRONTEND-063）的「科目」分頁。資料來源 FRONTEND-051 `subjectsApi`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-reference.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現四個分頁的表格、新增 / 編輯 dialog、刪除被引用時改為停用的提示、只有 settings:read 時的唯讀樣式、空清單。\n\n**內容**\n- 表格欄位：名稱、排序（sort_order）、狀態（啟用 / 停用 tag）；依 sort_order 排序。表單：名稱（必填，≤20）、排序（整數 ≥0）、啟用（switch）。\n- 有 `settings:write`：右上「新增科目」、每列「編輯」「刪除」；新增 / 編輯用 `FormDialog`（FRONTEND-040）。無 `settings:write`：不顯示這些按鈕。\n- 刪除：`useConfirmDelete`（FRONTEND-044）；以 `successMessage` 函式依回傳值決定訊息：`deactivated: true` →「「{name}」已有資料引用，已改為停用」，`deleted: true` →「已刪除」（useConfirmDelete 一律以 ElMessage.success 顯示）；完成後重新載入。\n- 422 欄位錯誤以 `validationFieldErrors` 顯示在對應欄位；409 顯示後端 message。\n- 空清單：`EmptyState`「尚未建立科目」（有寫入權限時附新增按鈕）。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/reference/SubjectTable.vue",
       "source_ref": null,
@@ -1854,7 +1854,7 @@
     {
       "id": "FRONTEND-060",
       "title": "實作 components/settings/reference/ExamTypeTable.vue：考試類型管理表格",
-      "description": "建立 `apps/web/src/components/settings/reference/ExamTypeTable.vue`，參考資料頁（FRONTEND-063）的「考試類型」分頁。資料來源 FRONTEND-051 `examTypesApi`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-reference.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現四個分頁的表格、新增 / 編輯 dialog、刪除被引用時改為停用的提示、只有 settings:read 時的唯讀樣式、空清單。\n\n**內容**\n- 表格欄位：名稱、排序、狀態；依 sort_order 排序。表單：名稱（必填，≤20）、排序、啟用。\n- 有 `settings:write`：右上「新增考試類型」、每列「編輯」「刪除」；新增 / 編輯用 `FormDialog`（FRONTEND-040）。無 `settings:write`：不顯示這些按鈕。\n- 刪除：`useConfirmDelete`（FRONTEND-044）；回傳 `deactivated: true` → `ElMessage.warning('「{name}」已有資料引用，已改為停用')` 並重新載入；`deleted: true` →「已刪除」。\n- 422 欄位錯誤以 `validationFieldErrors` 顯示在對應欄位；409 顯示後端 message。\n- 空清單：`EmptyState`「尚未建立考試類型」（有寫入權限時附新增按鈕）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/settings/reference/ExamTypeTable.vue`，參考資料頁（FRONTEND-063）的「考試類型」分頁。資料來源 FRONTEND-051 `examTypesApi`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-reference.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現四個分頁的表格、新增 / 編輯 dialog、刪除被引用時改為停用的提示、只有 settings:read 時的唯讀樣式、空清單。\n\n**內容**\n- 表格欄位：名稱、排序、狀態；依 sort_order 排序。表單：名稱（必填，≤20）、排序、啟用。\n- 有 `settings:write`：右上「新增考試類型」、每列「編輯」「刪除」；新增 / 編輯用 `FormDialog`（FRONTEND-040）。無 `settings:write`：不顯示這些按鈕。\n- 刪除：`useConfirmDelete`（FRONTEND-044）；以 `successMessage` 函式依回傳值決定訊息：`deactivated: true` →「「{name}」已有資料引用，已改為停用」，`deleted: true` →「已刪除」（useConfirmDelete 一律以 ElMessage.success 顯示）；完成後重新載入。\n- 422 欄位錯誤以 `validationFieldErrors` 顯示在對應欄位；409 顯示後端 message。\n- 空清單：`EmptyState`「尚未建立考試類型」（有寫入權限時附新增按鈕）。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/reference/ExamTypeTable.vue",
       "source_ref": null,
@@ -1893,7 +1893,7 @@
     {
       "id": "FRONTEND-061",
       "title": "實作 components/settings/reference/SchoolTable.vue：合作國小管理表格",
-      "description": "建立 `apps/web/src/components/settings/reference/SchoolTable.vue`，參考資料頁（FRONTEND-063）的「合作國小」分頁。資料來源 FRONTEND-051 `schoolsApi`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-reference.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現四個分頁的表格、新增 / 編輯 dialog、刪除被引用時改為停用的提示、只有 settings:read 時的唯讀樣式、空清單。\n\n**內容**\n- 表格欄位：名稱、簡稱、狀態；依名稱排序。表單：名稱（必填，≤50）、簡稱（≤10，學生列表與家長端顯示用）、啟用。\n- 有 `settings:write`：右上「新增合作國小」、每列「編輯」「刪除」；新增 / 編輯用 `FormDialog`（FRONTEND-040）。無 `settings:write`：不顯示這些按鈕。\n- 刪除：`useConfirmDelete`（FRONTEND-044）；回傳 `deactivated: true` → `ElMessage.warning('「{name}」已有資料引用，已改為停用')` 並重新載入；`deleted: true` →「已刪除」。\n- 422 欄位錯誤以 `validationFieldErrors` 顯示在對應欄位；409 顯示後端 message。\n- 空清單：`EmptyState`「尚未建立合作國小」（有寫入權限時附新增按鈕）。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/settings/reference/SchoolTable.vue`，參考資料頁（FRONTEND-063）的「合作國小」分頁。資料來源 FRONTEND-051 `schoolsApi`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-reference.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現四個分頁的表格、新增 / 編輯 dialog、刪除被引用時改為停用的提示、只有 settings:read 時的唯讀樣式、空清單。\n\n**內容**\n- 表格欄位：名稱、簡稱、狀態；依名稱排序。表單：名稱（必填，≤50）、簡稱（≤20，學生列表與家長端顯示用）、啟用。\n- 有 `settings:write`：右上「新增合作國小」、每列「編輯」「刪除」；新增 / 編輯用 `FormDialog`（FRONTEND-040）。無 `settings:write`：不顯示這些按鈕。\n- 刪除：`useConfirmDelete`（FRONTEND-044）；以 `successMessage` 函式依回傳值決定訊息：`deactivated: true` →「「{name}」已有資料引用，已改為停用」，`deleted: true` →「已刪除」（useConfirmDelete 一律以 ElMessage.success 顯示）；完成後重新載入。\n- 422 欄位錯誤以 `validationFieldErrors` 顯示在對應欄位；409 顯示後端 message。\n- 空清單：`EmptyState`「尚未建立合作國小」（有寫入權限時附新增按鈕）。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/reference/SchoolTable.vue",
       "source_ref": null,
@@ -1932,7 +1932,7 @@
     {
       "id": "FRONTEND-062",
       "title": "實作 components/settings/reference/ClosedDayTable.vue：休息日管理表格",
-      "description": "建立 `apps/web/src/components/settings/reference/ClosedDayTable.vue`，參考資料頁（FRONTEND-063）的「休息日」分頁。資料來源 FRONTEND-051 `closedDaysApi`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-reference.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現四個分頁的表格、新增 / 編輯 dialog、刪除被引用時改為停用的提示、只有 settings:read 時的唯讀樣式、空清單。\n\n**內容**\n- 表格欄位：日期（`formatDateWithWeekday`）、原因；預設顯示今天起 12 個月內（`date_from = todayTaipei()`、`date_to = addDays(+365)`），可切換「顯示過去日期」（date_from 往前 1 年）。表單：日期（新增時必填，編輯時唯讀）、原因（≤50）。\n- 有 `settings:write`：右上「新增休息日」、每列「編輯」「刪除」；新增 / 編輯用 `FormDialog`（FRONTEND-040）。無 `settings:write`：不顯示這些按鈕。\n- 刪除：`useConfirmDelete`（FRONTEND-044）；回傳 `deactivated: true` → `ElMessage.warning('「{name}」已有資料引用，已改為停用')` 並重新載入；`deleted: true` →「已刪除」。\n- 422 欄位錯誤以 `validationFieldErrors` 顯示在對應欄位；409 顯示後端 message。\n- 空清單：`EmptyState`「尚未建立休息日」（有寫入權限時附新增按鈕）。\n- 休息日影響每日出勤初始化（後端跳過這些日期），新增時在 dialog 內提示「設定為休息日後，當天不會建立出勤名單」。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/settings/reference/ClosedDayTable.vue`，參考資料頁（FRONTEND-063）的「休息日」分頁。資料來源 FRONTEND-051 `closedDaysApi`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-reference.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現四個分頁的表格、新增 / 編輯 dialog、刪除被引用時改為停用的提示、只有 settings:read 時的唯讀樣式、空清單。\n\n**內容**\n- 表格欄位：日期（`formatDateWithWeekday`）、原因；預設顯示今天起 12 個月內（`date_from = todayTaipei()`、`date_to = addDays(+365)`），可切換「顯示過去日期」（date_from 往前 1 年）。表單：日期（新增時必填，編輯時唯讀）、原因（≤100）。\n- 有 `settings:write`：右上「新增休息日」、每列「編輯」「刪除」；新增 / 編輯用 `FormDialog`（FRONTEND-040）。無 `settings:write`：不顯示這些按鈕。\n- 刪除：`useConfirmDelete`（FRONTEND-044）；成功 →「已刪除」並重新載入（休息日不會因被引用而改為停用，BACKEND-114 `deactivate_when_referenced=False`）。\n- 422 欄位錯誤以 `validationFieldErrors` 顯示在對應欄位；409 顯示後端 message。\n- 空清單：`EmptyState`「尚未建立休息日」（有寫入權限時附新增按鈕）。\n- 休息日影響每日出勤初始化（後端跳過這些日期），新增時在 dialog 內提示「設定為休息日後，當天不會建立出勤名單」。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/reference/ClosedDayTable.vue",
       "source_ref": null,
