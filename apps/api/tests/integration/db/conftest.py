@@ -13,10 +13,12 @@ app_backend 讀不到的 pg_catalog 資訊（其他角色的權限、ACL）。
 rollback。
 """
 
+import importlib.util
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 import psycopg
@@ -44,6 +46,7 @@ SEEDED_UPDATED_AT = datetime(2026, 1, 1, tzinfo=timezone(timedelta(hours=8)))
 _SWITCHABLE_ROLES = frozenset({"app_backend"})
 _BACKEND_PRIVILEGES = frozenset({"SELECT", "INSERT", "UPDATE", "DELETE"})
 _EXIT_CODE = 2
+_VERSIONS_DIR = Path(__file__).resolve().parents[3] / "alembic" / "versions"
 
 
 def _connect(url_getter: Callable[[], str], on_login_failure: str) -> Conn:
@@ -224,3 +227,16 @@ def assert_backend_read_write(conn: Conn, table: str, row: dict[str, Any], **cha
         cur.execute(sql.SQL("delete from {} where id = %s").format(target), (row["id"],))
         assert cur.rowcount == 1, f"{table} delete 影響 {cur.rowcount} 列"
         assert cur.execute(by_id, (row["id"],)).fetchone() is None
+
+
+def load_seed_sql(revision_file: str) -> str:
+    """載入 `alembic/versions/<revision_file>` 的 SEED_SQL（檔名不是合法模組名，不能 import）。"""
+    path = _VERSIONS_DIR / revision_file
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    assert spec is not None, f"載入不了 {path}"
+    assert spec.loader is not None, f"載入不了 {path}"
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    seed_sql: Any = module.SEED_SQL
+    assert isinstance(seed_sql, str), f"{path} 的 SEED_SQL 應為字串"
+    return seed_sql

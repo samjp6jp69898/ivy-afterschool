@@ -4,16 +4,8 @@
 update 以 `as_role(owner_conn, 'app_backend')` 寫入，SEED_SQL 本身以 owner 執行。
 """
 
-import importlib.util
-from pathlib import Path
-from typing import Any
-
 from app.core.permissions import Permission
-from tests.integration.db.conftest import Conn, as_role
-
-_REVISION_PATH = (
-    Path(__file__).resolve().parents[3] / "alembic" / "versions" / "db035_seed_system_roles.py"
-)
+from tests.integration.db.conftest import Conn, as_role, load_seed_sql
 
 DIRECTOR = {
     "dashboard:read",
@@ -76,17 +68,6 @@ TUTOR = {
     "exams:read",
     "exams:write",
 }
-
-
-def _seed_sql() -> str:
-    spec = importlib.util.spec_from_file_location("db035_seed_system_roles", _REVISION_PATH)
-    assert spec is not None, f"載入不了 {_REVISION_PATH}"
-    assert spec.loader is not None, f"載入不了 {_REVISION_PATH}"
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    seed_sql: Any = module.SEED_SQL
-    assert isinstance(seed_sql, str)
-    return seed_sql
 
 
 def _permissions(conn: Conn, code: str) -> list[str]:
@@ -185,7 +166,7 @@ def test_seed_system_roles_idempotent(owner_conn: Conn) -> None:
         )
     before = owner_conn.execute("select count(*) from public.roles").fetchone()
 
-    owner_conn.execute(_seed_sql())
+    owner_conn.execute(load_seed_sql("db035_seed_system_roles.py"))
 
     assert _permissions(owner_conn, "tutor") == ["dashboard:read"]
     assert owner_conn.execute("select count(*) from public.roles").fetchone() == before
