@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 39,
-  "last_updated": "2026-10-04T01:29:47Z",
+  "version": 40,
+  "last_updated": "2026-10-04T01:30:15Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -640,7 +640,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/m3/M3TextField.vue",
       "source_ref": "FE:src/parent/components/m3/M3TextField.vue::props",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r3",
       "depends_on": [
         "PARENT-001",

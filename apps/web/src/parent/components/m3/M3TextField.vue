@@ -3,7 +3,7 @@
  * M3 outlined 文字欄位。浮動 label 以 fieldset / legend 在邊框挖缺口，放在任何底色上都不用補底色。
  * errorText 非空即為錯誤態（取代 supportingText）；有 maxlength 就顯示字數。
  */
-import { computed, ref, useId } from 'vue'
+import { computed, ref, useId, type HTMLAttributes } from 'vue'
 import M3Icon from './M3Icon.vue'
 
 const props = withDefaults(
@@ -16,7 +16,7 @@ const props = withDefaults(
     errorText?: string
     disabled?: boolean
     maxlength?: number
-    inputmode?: string
+    inputmode?: HTMLAttributes['inputmode']
     autocomplete?: string
     id?: string
   }>(),
@@ -58,7 +58,7 @@ const fieldAttrs = computed(() => ({
   placeholder: shownPlaceholder.value,
   disabled: props.disabled,
   maxlength: props.maxlength,
-  'aria-invalid': hasError.value ? 'true' : 'false',
+  'aria-invalid': hasError.value ? ('true' as const) : ('false' as const),
   'aria-describedby': supportText.value ? descId.value : undefined,
 }))
 
@@ -171,6 +171,7 @@ function onKeydown(event: KeyboardEvent): void {
   font: 400 16px/24px var(--m3-font);
   letter-spacing: 0.5px;
   caret-color: var(--m3-primary);
+  -webkit-appearance: none;
   appearance: none;
 }
 
