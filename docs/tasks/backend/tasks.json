@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 193,
-  "last_updated": "2026-10-04T16:41:51Z",
+  "version": 194,
+  "last_updated": "2026-10-04T16:42:17Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10419,7 +10419,7 @@
         "BACKEND-047"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "",
+      "risk_notes": "method=override 時忽略 data.guardian_id（picked_up_by_guardian_id 寫 None），監護人驗證只在 method=guardian 時進行；DB 的 ck_pickup_requests_completion_target 不禁止 override 帶 guardian，PickupCompleteIn（BACKEND-402）也不擋多給欄位，service 不忽略就會寫入未經驗證的監護人。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/pickup/test_pickup_requests.py",
