@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 98,
-  "last_updated": "2026-10-04T04:51:47Z",
+  "version": 99,
+  "last_updated": "2026-10-04T04:55:19Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -581,14 +581,14 @@
       "granularity_unit": "script",
       "target_path": "scripts/dev_down.sh",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r4",
       "depends_on": [
         "INFRA-016",
         "INFRA-044"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "review-r4 打回：預設服務指令（just api / just web）下 just down 停不掉真正的服務。反例（已實測）：DEV_UP_API_CMD 設為 'just --justfile <tmp>/justfile srv'，srv 是 shebang recipe（#!/usr/bin/env bash，內容 python3 -m http.server <port>，與 just api 的 bash → uv → uvicorn 同型）；dev_up 就緒後 dev_down 印「api 已停止」、exit 0，但 http.server 子行程仍存活（PPID 變成 1）且 port 仍可連線。SIGKILL 退路同樣只殺到 just。修正需讓 SIGTERM / SIGKILL 送達整個服務行程樹（例如 dev_up 讓服務自成 process group、dev_down 驗證命令列後對 process group 送訊號，或其他等效作法；若需改 scripts/dev_up.sh 或 justfile 的 api / web recipe，同步更新 INFRA-016 / 本 task 的 description），並新增 red_case：假服務經一層不 exec 的包裝（shebang recipe 或 sh -c）啟動、由子行程監聽 port，執行 dev_down 後子行程已結束（os.kill(child_pid, 0) 拋 ProcessLookupError）且 port 連不上；pid 重用保護仍不得對無關行程（含其 process group）送訊號。",
+      "risk_notes": "dev_down 只在 pid 存活且命令列相符時送訊號：若 group leader（記錄的 pid）已經結束、group 內仍有孤兒（例如 just 被單獨 kill 掉），dev_down 會視為「未在執行」並刪掉 pid 檔，孤兒仍占住 port，需要手動結束（下一次 just up 會報「port 已被其他程式占用」）。process group 由 dev_up.sh 以 python3 os.setsid() 建立，服務指令若自己再 setsid / 另開 group 的子行程不在訊號範圍內。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "scripts/tests/test_dev_down.py",
@@ -608,9 +608,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r4",
+        "notes": "複審通過（只核對打回項）。9b88da1 新增 test_dev_down_stops_child_behind_non_exec_wrapper 與 test_dev_down_reused_pid_leaves_process_group_alone，早於實作 3db0f42；-k dev_down 選到 7 個且全綠，test_dev_up.py 8 個全綠，lint / mypy 乾淨。以先前的反例實測（DEV_UP_API_CMD 為 shebang just recipe，bash 子行程跑 python3 -m http.server）：dev_up 後 just、bash、http.server 同屬 pgid == 記錄 pid 的 group；dev_down 後三者都結束、port 連不上，pid 與 cmd 檔已刪除。命令列不符時沿用原本的提早 return，對 pid 與 group 都不送訊號，新測試以帶成員的無關 process group 驗證。實作者自述的殘留可接受：leader 已死但 group 內留有孤兒時 dev_down 視為「未在執行」。沒有命令列可驗證時不對 group 送訊號是安全側的選擇；孤兒占住 port 時下一次 just up 會明確報「port 已被其他程式占用」，不會誤判成就緒。殘留：SIGKILL 退路（group 模式）沒有測試覆蓋，只有程式碼檢視。"
       }
     },
     {
