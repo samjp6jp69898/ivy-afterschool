@@ -225,6 +225,10 @@ db-new-migration *ARGS:
 up:
     @bash "{{ root }}/scripts/dev_up.sh"
 
+# 停止 just up 啟動的 API / Web（只送訊號給確認是自己啟動的行程）；--all 一併停止本機 DB / SeaweedFS（保留 volume）
+down *ARGS:
+    @bash "{{ root }}/scripts/dev_down.sh" "$@"
+
 # 啟動 FastAPI（http://127.0.0.1:8341，--reload）
 api:
     #!/usr/bin/env bash
