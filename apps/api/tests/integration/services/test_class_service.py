@@ -99,9 +99,9 @@ def test_list_classes_counts_and_staff(db_session: Session) -> None:
 
 
 def test_list_classes_order(db_session: Session) -> None:
-    old = make_class(db_session, name="乙班", academic_year=114)
-    second = make_class(db_session, name="乙班", academic_year=115)
-    first_by_name = make_class(db_session, name="甲班", academic_year=115)
+    old = make_class(db_session, name="B班", academic_year=114)
+    second = make_class(db_session, name="B班", academic_year=115)
+    first_by_name = make_class(db_session, name="A班", academic_year=115)
     actor = _actor(make_staff(db_session).id)
     ids = {old.id, second.id, first_by_name.id}
 
