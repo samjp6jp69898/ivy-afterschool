@@ -11,6 +11,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DOC = REPO_ROOT / "docs" / "deployment.md"
 API_ENV = REPO_ROOT / "apps" / "api" / ".env.example"
+API_DOCKERFILE = REPO_ROOT / "apps" / "api" / "Dockerfile"
 API_RAILWAY = REPO_ROOT / "apps" / "api" / "railway.json"
 WEB_RAILWAY = REPO_ROOT / "apps" / "web" / "railway.json"
 
@@ -91,6 +92,33 @@ def test_deployment_doc_single_replica_note() -> None:
     doc = _doc()
     assert "numReplicas" in doc
     assert re.search(r"numReplicas[^\n]{0,20}\b1\b", doc), "numReplicas 後應明寫值 1"
+
+
+def dockerfile_port(text: str) -> str:
+    match = re.search(r"^\s*(?:ENV\s+)?PORT=(\d+)", text, flags=re.MULTILINE)
+    assert match, "Dockerfile 缺少 ENV PORT"
+    return match.group(1)
+
+
+def doc_api_port(doc: str) -> str:
+    """文件 api 環境變數表中 `PORT` 列寫的值（`PORT=<n>`）。"""
+    match = re.search(r"`PORT=(\d+)`", env_section(doc))
+    assert match, "deployment.md 環境變數章節缺少 api 的 `PORT=<n>`"
+    return match.group(1)
+
+
+def test_deployment_doc_api_port_matches_dockerfile() -> None:
+    doc = _doc()
+    assert doc_api_port(doc) == dockerfile_port(API_DOCKERFILE.read_text(encoding="utf-8"))
+    assert "${{api.PORT}}" in doc
+    assert doc_api_port("## 2. 環境變數\n| `PORT` | `PORT=9999` |\n") == "9999"
+
+
+def test_deployment_doc_btree_gist_check() -> None:
+    doc = _doc()
+    assert "extnamespace::regnamespace" in doc
+    assert "gist_uuid_ops" in doc
+    assert "search_path" not in doc
 
 
 def test_deployment_doc_database_setup() -> None:
