@@ -1,5 +1,6 @@
 """BACKEND-074：app/services/rbac_guards.py（assert_valid_permission_codes、assert_can_grant，
-自我提權防護）。"""
+自我提權防護）。
+BACKEND-534：assert_can_manage_staff（不可管理權限比自己大的帳號）。"""
 
 from __future__ import annotations
 
@@ -10,7 +11,11 @@ import pytest
 from app.api.deps import CurrentStaff
 from app.core.errors import AppError
 from app.core.permissions import ALL_PERMISSIONS
-from app.services.rbac_guards import assert_can_grant, assert_valid_permission_codes
+from app.services.rbac_guards import (
+    assert_can_grant,
+    assert_can_manage_staff,
+    assert_valid_permission_codes,
+)
 
 
 def _actor(permissions: frozenset[str]) -> CurrentStaff:
@@ -89,3 +94,58 @@ def test_rbac_can_grant_admin_all() -> None:
     with pytest.raises(AppError) as exc:
         assert_can_grant(_actor(frozenset()), ["students:read"])
     assert exc.value.code == "cannot_grant_permissions"
+
+
+# --- BACKEND-534：assert_can_manage_staff ---------------------------------------------------
+
+_DIRECTOR = ALL_PERMISSIONS - {"staff:write", "roles:write", "students:purge"}
+_TUTOR = frozenset(
+    {
+        "dashboard:read",
+        "classes:read",
+        "students:read",
+        "attendance:read",
+        "attendance:operate",
+        "leaves:read",
+        "homework:read",
+        "homework:write",
+        "pickup:read",
+        "pickup:operate",
+        "exams:read",
+        "exams:write",
+    }
+)
+
+
+def test_rbac_cannot_manage_stronger_staff() -> None:
+    assert len(_DIRECTOR) == 25
+    actor = _actor(_DIRECTOR)
+
+    with pytest.raises(AppError) as excinfo:
+        assert_can_manage_staff(actor, ALL_PERMISSIONS)
+
+    assert excinfo.value.status == 403
+    assert excinfo.value.code == "cannot_manage_staff"
+    assert excinfo.value.message == "無法管理權限比您大的帳號"
+    # 只多一碼也不行
+    with pytest.raises(AppError) as one_more:
+        assert_can_manage_staff(actor, _TUTOR | {"students:purge"})
+    assert one_more.value.code == "cannot_manage_staff"
+
+
+def test_rbac_can_manage_weaker_staff() -> None:
+    assert len(_TUTOR) == 12
+    actor = _actor(_DIRECTOR)
+
+    # 不拋例外即通過
+    assert_can_manage_staff(actor, _TUTOR)
+    assert_can_manage_staff(actor, frozenset())
+    assert_can_manage_staff(actor, _DIRECTOR)
+
+
+def test_rbac_admin_manages_all() -> None:
+    admin = _actor(ALL_PERMISSIONS)
+
+    assert_can_manage_staff(admin, ALL_PERMISSIONS)
+    assert_can_manage_staff(admin, _DIRECTOR)
+    assert_can_manage_staff(admin, frozenset())
