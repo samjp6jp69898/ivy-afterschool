@@ -16,6 +16,7 @@ import re
 import threading
 from collections.abc import Iterator
 from datetime import date, timedelta
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -41,6 +42,8 @@ from app.models.parents import Guardian, ParentAccount, ParentBindingCode
 from app.models.pickup import PickupAuthorization, PickupPerson, PickupRequest
 from app.models.reference import Subject
 from app.models.students import Student
+from app.realtime import publish as publish_module
+from app.realtime.publish import admin_topic_channel, student_channel
 from app.schemas.students import (
     StudentCreateIn,
     StudentDetailOut,
@@ -1302,6 +1305,24 @@ def test_purge_student_audit_and_idempotent(db_session: Session, fake_clock: Fak
 # --- BACKEND-529：close_out_inactive_student ------------------------------------------------------
 
 _D = date(2026, 9, 9)  # @pytest.mark.clock 設定的台北今天
+_Call = tuple[list[str], dict[str, Any]]
+
+
+@pytest.fixture
+def published(monkeypatch: pytest.MonkeyPatch) -> list[_Call]:
+    """記錄 commit 後實際送出的 ws 訊息（參照 BACKEND-374 測試）。"""
+    install_tx_hooks()
+    calls: list[_Call] = []
+
+    def record(channels: list[str], message: dict[str, Any]) -> None:
+        calls.append((list(channels), dict(message)))
+
+    monkeypatch.setattr(publish_module, "publish_threadsafe", record)
+    return calls
+
+
+def _on(calls: list[_Call], channel: str, type_: str) -> list[dict[str, Any]]:
+    return [m for channels, m in calls if channels == [channel] and m["type"] == type_]
 
 
 def _withdrawn_student(db: Session, name: str = "王小明") -> Student:
@@ -1317,7 +1338,9 @@ def _close_out(db: Session, student: Student, clock: FakeClock) -> CloseOutResul
 
 
 @pytest.mark.clock("2026-09-09T10:00:00+08:00")
-def test_close_out_pickup_requests(db_session: Session, fake_clock: FakeClock) -> None:
+def test_close_out_pickup_requests(
+    db_session: Session, fake_clock: FakeClock, published: list[_Call]
+) -> None:
     ming = _withdrawn_student(db_session)
     pending = make_pickup_request(db_session, ming, service_date=_D)
     done = make_pickup_request(
@@ -1329,6 +1352,15 @@ def test_close_out_pickup_requests(db_session: Session, fake_clock: FakeClock) -
 
     result = _close_out(db_session, ming, fake_clock)
 
+    assert published == []  # commit 前不推
+    db_session.commit()
+    admin_msgs = _on(published, admin_topic_channel("pickup"), "pickup.request_updated")
+    assert [(m["data"]["id"], m["data"]["status"]) for m in admin_msgs] == [
+        (str(pending.id), "cancelled")
+    ]
+    assert admin_msgs[0]["data"]["cancel_reason"] == "學生已退班"
+    parent_msgs = _on(published, student_channel(ming.id), "pickup.request_updated")
+    assert [m["data"]["status"] for m in parent_msgs] == ["cancelled"]
     db_session.expire_all()
     assert pending.status == "cancelled"
     assert pending.cancel_reason == "學生已退班"
@@ -1346,7 +1378,9 @@ def test_close_out_pickup_requests(db_session: Session, fake_clock: FakeClock) -
 
 
 @pytest.mark.clock("2026-09-09T10:00:00+08:00")
-def test_close_out_authorizations(db_session: Session, fake_clock: FakeClock) -> None:
+def test_close_out_authorizations(
+    db_session: Session, fake_clock: FakeClock, published: list[_Call]
+) -> None:
     ming = _withdrawn_student(db_session)
     today = make_pickup_authorization(db_session, ming, service_date=_D, code="111111")
     tomorrow = make_pickup_authorization(
@@ -1361,6 +1395,13 @@ def test_close_out_authorizations(db_session: Session, fake_clock: FakeClock) ->
 
     result = _close_out(db_session, ming, fake_clock)
 
+    assert published == []
+    db_session.commit()
+    msgs = _on(published, admin_topic_channel("pickup"), "pickup.authorization_updated")
+    assert {m["data"]["id"] for m in msgs} == {str(today.id), str(tomorrow.id)}
+    assert all(m["data"]["status"] == "cancelled" for m in msgs)
+    assert all(m["data"]["effective_status"] == "cancelled" for m in msgs)
+    assert all("code_hash" not in m["data"] for m in msgs)
     db_session.expire_all()
     assert (today.status, tomorrow.status) == ("cancelled", "cancelled")
     assert yesterday.status == "active"
@@ -1369,7 +1410,9 @@ def test_close_out_authorizations(db_session: Session, fake_clock: FakeClock) ->
 
 
 @pytest.mark.clock("2026-09-09T10:00:00+08:00")
-def test_close_out_attendance(db_session: Session, fake_clock: FakeClock) -> None:
+def test_close_out_attendance(
+    db_session: Session, fake_clock: FakeClock, published: list[_Call]
+) -> None:
     ming = _withdrawn_student(db_session)
     other = make_student(db_session, name="陳小華")
     present = make_attendance(
@@ -1382,6 +1425,16 @@ def test_close_out_attendance(db_session: Session, fake_clock: FakeClock) -> Non
     result = _close_out(db_session, ming, fake_clock)
 
     assert result.deleted_attendance_dates == [_D, _D + timedelta(days=1)]
+    assert published == []
+    db_session.commit()
+    msgs = _on(published, admin_topic_channel("attendance"), "attendance.bulk_updated")
+    assert [m["data"] for m in msgs] == [
+        {
+            "student_id": str(ming.id),
+            "dates": [_D.isoformat(), (_D + timedelta(days=1)).isoformat()],
+        }
+    ]
+    assert _on(published, student_channel(ming.id), "attendance.bulk_updated") == []
     rows = db_session.execute(
         select(StudentAttendance.service_date, StudentAttendance.status).where(
             StudentAttendance.student_id == ming.id
@@ -1493,7 +1546,9 @@ def test_close_out_keeps_history_and_audit(db_session: Session, fake_clock: Fake
 
 
 @pytest.mark.clock("2026-09-09T10:00:00+08:00")
-def test_close_out_rollback_with_caller(db_session: Session, fake_clock: FakeClock) -> None:
+def test_close_out_rollback_with_caller(
+    db_session: Session, fake_clock: FakeClock, published: list[_Call]
+) -> None:
     ming = _withdrawn_student(db_session)
     request = make_pickup_request(db_session, ming, service_date=_D)
     auth = make_pickup_authorization(db_session, ming, service_date=_D)
@@ -1506,6 +1561,9 @@ def test_close_out_rollback_with_caller(db_session: Session, fake_clock: FakeClo
     assert result.cancelled_pickup_requests == 1
     db_session.rollback()
 
+    assert published == []  # rollback 後不推任何訊息
+    db_session.commit()
+    assert published == []
     request_id, auth_id, attendance_id, leave_id, _ = ids
     assert db_session.get(PickupRequest, request_id).status == "pending"  # type: ignore[union-attr]
     assert db_session.get(PickupAuthorization, auth_id).status == "active"  # type: ignore[union-attr]
