@@ -230,6 +230,7 @@ def test_admin_staff_create_409(
     make_staff(db_session, username="wang.tutor", role_code="tutor")
     client, _ = staff_client(permissions=["staff:write", "homework:read"])
     body = _create_body(db_session, role_id=str(_role_id(db_session, "homework:read")))
+    db_session.commit()  # 自訂角色要先 commit 才看得到
 
     resp = client.post(_URL, json=body)
 
