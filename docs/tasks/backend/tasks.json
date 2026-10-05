@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 260,
-  "last_updated": "2026-10-05T02:54:40Z",
+  "version": 261,
+  "last_updated": "2026-10-05T02:55:17Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5549,7 +5549,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::get_student",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-150",
