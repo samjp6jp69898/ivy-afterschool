@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 263,
-  "last_updated": "2026-10-05T02:56:25Z",
+  "version": 264,
+  "last_updated": "2026-10-05T02:56:26Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -7588,7 +7588,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-300",
@@ -7614,9 +7614,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 commit 先於實作；just lint / typecheck 對 8 個動到的檔案乾淨；測試以 app_backend 連線（owner 只用於清理）。 insert ... on_conflict_do_nothing + select FOR UPDATE（populate_existing），並發測試以兩條 app_backend 連線驗證 s2 被擋、s1 commit 後拿到同一列且不拋 IntegrityError。殘留：已有列時仍多查一次 active 請假（無害的額外 SELECT）。"
       }
     },
     {
@@ -7888,7 +7888,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-300",
@@ -7918,9 +7918,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 commit 先於實作；just lint / typecheck 對 8 個動到的檔案乾淨；測試以 app_backend 連線（owner 只用於清理）。 FOR UPDATE 鎖列、leave 409 / 404 / check_in_required / check_out_required / invalid_times / time_not_on_service_date / no_changes 皆有測；risk_notes 兩條已處理並有測試（status=null 視為未給、9999 / 0001 極端 datetime 的 OverflowError 轉 422）；audit 與改判同交易（rollback 測試）；家長 ws 資料為 ParentAttendanceEventOut 裁切，測試斷言不含 note。殘留：若既有列的時間本身不在 service_date（正常流程不會產生），只改 note 也會被 time_not_on_service_date 擋下。"
       }
     },
     {
@@ -7930,7 +7930,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:services/student_attendance_report.py::build_daily_classroom_overview",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-300",
@@ -7958,9 +7958,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 commit 先於實作；just lint / typecheck 對 8 個動到的檔案乾淨；測試以 app_backend 連線（owner 只用於清理）。 實際列一次 join 學生 / 班級 / 請假、虛擬列另一條查詢，30 人 ≤ 4 條 SQL；status 篩選在 summary 之後；非營業日保留實際列不產生虛擬列。殘留：查過去日期時，enrolled_on 晚於該日的 active 學生仍以虛擬列出現（description 未要求依 enrolled_on 過濾）。"
       }
     },
     {
@@ -7970,7 +7970,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:services/student_attendance_report.py::_compute_student_monthly_stats",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-300",
@@ -7996,9 +7996,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 commit 先於實作；just lint / typecheck 對 8 個動到的檔案乾淨；測試以 app_backend 連線（owner 只用於清理）。 risk_notes 已處理：_parse_month 以 int() 解析全形數字、年份 0000 轉 422 invalid_month，均有測試；整月出勤一次 between 查詢；入班前與未來日期不計。殘留：class_id 指定但該班沒有學生時另查一次班名（查詢次數仍為常數上限 5）。"
       }
     },
     {
@@ -8507,7 +8507,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_attendance.py",
       "source_ref": "BE:services/student_leave_service.py::apply_attendance_for_leave",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-300",
@@ -8535,9 +8535,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 commit 先於實作；just lint / typecheck 對 8 個動到的檔案乾淨；測試以 app_backend 連線（owner 只用於清理）。 單一 upsert（ON CONFLICT DO UPDATE ... WHERE status IN ('expected','absent') RETURNING），寫入 SQL 計數 == 1；present / left 保留並列入 skipped_checked_in；休息日 / 週末 / 未來日不建列；applied 非空才於 commit 後推 attendance.bulk_updated。殘留：同一請假重複套用時，已是 leave 的日子會被歸入 skipped_checked_in（依 description 第 3 點字面行為，呼叫端不應重複套用）。"
       }
     },
     {
@@ -8744,7 +8744,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_service.py",
       "source_ref": "BE:api/parent_portal/leaves.py::list_leaves",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-347",
@@ -8766,9 +8766,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 commit 先於實作；just lint / typecheck 對 8 個動到的檔案乾淨；測試以 app_backend 連線（owner 只用於清理）。 start_date desc、created_at desc（id 決勝）；含 cancelled；can_cancel = active 且 end_date >= today（含今天最後一天）；附件以 leave-attachments / 300 秒簽名，StorageError 時 url=None 並 warning，ParentLeaveOut 不含員工姓名與 storage_path；附件為 selectin 載入不 N+1。red_case 改 8/28 的修正（7893ed2）合理（ex_student_leaves_no_overlap）。"
       }
     },
     {
@@ -9320,7 +9320,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-370",
@@ -9344,9 +9344,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 commit 先於實作；just lint / typecheck 對 8 個動到的檔案乾淨；測試以 app_backend 連線（owner 只用於清理）。 以 session.info['homework_broadcast_keys'] 去重，before_commit（跳過 savepoint）才讀取最終狀態並交給 broadcast_after_commit，after_soft_rollback 清除登記；session autoflush=True，快照讀得到未 flush 的修改。家長 parent_data 只有 student_id / date / items(title, subject_name, status) / overall_status / ready_eta / note，測試斷言不含 eta_updated_by_name 與 item id。殘留：快照查詢在 before_commit 執行，若該查詢 DB 失敗會讓整筆 commit 失敗；red_case 寫 committing session，測試改用 db_session（tx_hooks 文件已實測 savepoint session 的 commit 會觸發，等價）。"
       }
     },
     {
@@ -9660,7 +9660,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-370",
@@ -9686,9 +9686,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 commit 先於實作；just lint / typecheck 對 8 個動到的檔案乾淨；測試以 app_backend 連線（owner 只用於清理）。 學生 / 出勤 / items（subject 為 joined 載入）/ progress（outer join 員工姓名）/ 設定共 ≤ 5 條 SQL；沒有 progress 列顯示 not_started；leave / absent 出現在 students 但不計入 summary；window 取自 homework.window（get_setting，不經 settings:read），預設與覆寫皆有測試。"
       }
     },
     {
