@@ -57,7 +57,7 @@ def _parse_topics(message: dict[str, Any]) -> list[Topic] | None:
     unique = list(dict.fromkeys(topics))
     if any(t not in TOPIC_PERMISSIONS for t in unique):
         return None
-    return [t for t in unique if t in TOPIC_PERMISSIONS]  # type: ignore[misc]
+    return [t for t in unique if t in TOPIC_PERMISSIONS]
 
 
 class _AdminConnection:
