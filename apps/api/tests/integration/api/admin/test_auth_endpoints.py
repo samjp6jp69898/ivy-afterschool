@@ -1,5 +1,6 @@
 """BACKEND-042 / 046 / 048：POST /api/admin/auth/login、POST /logout、GET /me。
-BACKEND-044：POST /api/admin/auth/refresh。"""
+BACKEND-044：POST /api/admin/auth/refresh。
+BACKEND-050：POST /api/admin/auth/change-password。"""
 
 from __future__ import annotations
 
@@ -458,3 +459,99 @@ def test_admin_refresh_after_logout_401_other_device_kept(
 
         # 其他裝置的 family 不受影響
         assert other.post(_REFRESH).status_code == 200
+
+
+# --- BACKEND-050：POST /api/admin/auth/change-password ------------------------------------------
+
+_CHANGE = "/api/admin/auth/change-password"
+_NEW_PASSWORD = "Afterschool2026"  # noqa: S105  測試假值
+
+
+def _change_body(current: str = _PASSWORD, new: str = _NEW_PASSWORD) -> dict[str, str]:
+    return {"current_password": current, "new_password": new}
+
+
+def test_admin_change_password_success(
+    api_client: TestClient, db_session: Session, fake_clock: FakeClock
+) -> None:
+    make_staff(db_session, username="lin.teacher", role_code="tutor", must_change_password=True)
+    db_session.commit()
+    old_refresh = _login(api_client)
+    old_access = api_client.cookies.get("staff_access")
+    assert old_access
+    assert api_client.get(_ME).json()["must_change_password"] is True
+
+    resp = api_client.post(_CHANGE, json=_change_body())
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {"user"}
+    assert body["user"]["username"] == "lin.teacher"
+    assert body["user"]["must_change_password"] is False
+    assert body["user"]["permissions"] == sorted(body["user"]["permissions"])
+    new_access = resp.cookies.get("staff_access")
+    new_refresh = resp.cookies.get("staff_refresh")
+    assert new_access
+    assert new_refresh
+    assert new_access != old_access
+    assert new_refresh != old_refresh
+    assert new_access not in resp.text
+    # 舊 access（token_version 已 +1）→ 401；新 cookie → 200 且不再要求改密碼
+    api_client.cookies.set("staff_access", old_access)
+    assert api_client.get(_ME).status_code == 401
+    api_client.cookies.set("staff_access", new_access)
+    me = api_client.get(_ME)
+    assert me.status_code == 200
+    assert me.json()["must_change_password"] is False
+    # 舊 refresh family 已撤銷、新 refresh 可用；新密碼可登入
+    with pytest.raises(AppError) as exc:
+        refresh_tokens.rotate(db_session, old_refresh, clock=fake_clock)
+    assert exc.value.code == "refresh_revoked"
+    assert api_client.post(_REFRESH).status_code == 200
+    assert api_client.post(_URL, json=_body(password=_NEW_PASSWORD)).status_code == 200
+
+
+def test_admin_change_password_422(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=["students:read"])
+
+    missing = client.post(_CHANGE, json={"current_password": _PASSWORD})
+    extra = client.post(_CHANGE, json={**_change_body(), "confirm": _NEW_PASSWORD})
+    weak = client.post(_CHANGE, json=_change_body(new="abc"))
+
+    assert_error(missing, 422, "validation_error")
+    assert_error(extra, 422, "validation_error")
+    assert_error(weak, 422, "weak_password")
+    assert len(weak.json()["error"]["details"]["reasons"]) >= 1
+    # 密碼不回顯
+    assert _PASSWORD not in missing.text
+    assert "abc" not in weak.text
+
+
+def test_admin_change_password_401(api_client: TestClient, assert_error: AssertError) -> None:
+    assert_error(api_client.post(_CHANGE, json=_change_body()), 401, "unauthenticated")
+
+
+def test_admin_change_password_403_foreign_origin(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=["students:read"])
+
+    resp = client.post(_CHANGE, json=_change_body(), headers={"Origin": "https://evil.test"})
+
+    assert_error(resp, 403, "origin_forbidden")
+    # 密碼未被改掉：原 access 仍有效（token_version 不變）
+    assert client.get(_ME).status_code == 200
+
+
+def test_admin_change_password_400_wrong_current(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=["students:read"])
+
+    resp = client.post(_CHANGE, json=_change_body(current="bad-Passw0rd"))
+
+    assert_error(resp, 400, "current_password_incorrect")
+    assert resp.headers.get_list("set-cookie") == []
+    assert client.get(_ME).status_code == 200
