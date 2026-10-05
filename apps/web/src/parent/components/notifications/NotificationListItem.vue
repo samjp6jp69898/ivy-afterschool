@@ -7,6 +7,7 @@
 import { computed } from 'vue'
 import type { Notification } from '@/shared/types/api'
 import { addDays, formatTime, toTaipeiDate, todayTaipei } from '@/shared/utils/datetime'
+import { notificationEventIcon } from '../../utils/notificationEventIcon'
 import M3Icon from '../m3/M3Icon.vue'
 
 const props = defineProps<{
@@ -17,19 +18,9 @@ const props = defineProps<{
 
 defineEmits<{ open: [n: Notification] }>()
 
-const EVENT_ICONS: [prefix: string, icon: string][] = [
-  ['attendance.', 'how_to_reg'],
-  ['homework.', 'assignment'],
-  ['pickup.', 'directions_walk'],
-  ['exam.', 'grading'],
-  ['binding.', 'link'],
-]
-
 const unread = computed(() => !props.notification.read_at)
 
-const icon = computed(
-  () => EVENT_ICONS.find(([prefix]) => props.notification.event.startsWith(prefix))?.[1] ?? 'notifications',
-)
+const icon = computed(() => notificationEventIcon(props.notification.event))
 
 const time = computed(() => {
   const created = props.notification.created_at
