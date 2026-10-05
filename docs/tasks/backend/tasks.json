@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 326,
-  "last_updated": "2026-10-05T04:18:59Z",
+  "version": 327,
+  "last_updated": "2026-10-05T04:19:30Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -6434,7 +6434,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/children.py",
       "source_ref": "BE:api/parent_portal/profile.py::get_child_profile",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-183",
@@ -7277,7 +7277,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/notifications.py",
       "source_ref": "BE:api/parent_portal/notifications.py::update_preferences",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-220",
@@ -9022,7 +9022,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/leaves.py",
       "source_ref": "BE:api/parent_portal/leaves.py::list_leaves",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-348",
@@ -9977,7 +9977,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/homework.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-384",
@@ -11607,7 +11607,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/dismissal_calls.py::list_dismissal_notices",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-416",
@@ -11727,7 +11727,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/pickup.py::list_pickup_persons",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-417",
@@ -11768,7 +11768,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/pickup.py::create_pickup_person",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-418",
@@ -11809,7 +11809,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/pickup.py::delete_pickup_person",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-419",
@@ -11849,7 +11849,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/pickup.py::list_authorizations",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-421",
@@ -11889,7 +11889,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/pickup.py::create_authorizations",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-420",
@@ -13049,7 +13049,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/exams.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-465",
@@ -13974,7 +13974,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/notifications.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-213",
