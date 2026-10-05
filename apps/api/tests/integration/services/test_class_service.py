@@ -3,7 +3,8 @@ BACKEND-138：update_class（部分更新、封存班 409、同年同名 409）�
 BACKEND-139：archive_class（有在學學生 409、withdrawn 不阻擋、冪等）。
 BACKEND-140：set_class_staff（整批取代以差異更新、無效員工 422、空清單）。"""
 
-from collections.abc import Iterator
+import threading
+from collections.abc import Callable, Iterator
 from datetime import date
 from uuid import UUID, uuid4
 
@@ -489,12 +490,16 @@ def test_update_class_blocked_by_concurrent_archive(
     s1 = Session(bind=db_engine)
     s2 = Session(bind=db_engine)
     try:
-        assert get_class(s2, class_a).archived_at is None  # s2 的 identity map 先有舊狀態
+        # 持有 ORM 物件的參照（identity map 是弱參照，沒人持有會被回收、下次重新載入）
+        loaded = s2.get(SchoolClass, class_a)
+        assert loaded is not None
+        assert loaded.archived_at is None
         archive_class(s1, class_a, clock=fake_clock)
         s1.commit()
         with pytest.raises(AppError) as stale:
             update_class(s2, class_a, ClassUpdateIn(name="封存後改名"))
         assert (stale.value.status, stale.value.code) == (409, "class_archived")
+        assert loaded.archived_at is not None  # populate_existing 把上鎖後的值寫回同一物件
         s2.rollback()
 
         archive_class(s1, class_b, clock=fake_clock)
@@ -550,6 +555,57 @@ def test_archive_class_blocked_by_concurrent_student_insert(
         s2.close()
 
 
+def _run_blocked_pair(
+    hold: Callable[[Session], None],
+    blocked: Callable[[Session], None],
+    db_engine: Engine,
+) -> list[BaseException]:
+    """A 在 s1 執行 ``hold``（持鎖未 commit）→ B 在 s2 執行 ``blocked``（必須被擋住）→ 確認 B 在
+    0.5 秒內沒結束 → A commit → B 完成並 commit。回傳兩邊的例外清單（空 = 都成功）。"""
+    a_locked = threading.Event()
+    release_a = threading.Event()
+    b_done = threading.Event()
+    errors: list[BaseException] = []
+
+    def worker_a() -> None:
+        sa = Session(bind=db_engine)
+        try:
+            hold(sa)
+            a_locked.set()
+            release_a.wait(timeout=10)
+            sa.commit()
+        except BaseException as exc:
+            errors.append(exc)
+            a_locked.set()
+        finally:
+            sa.close()
+
+    def worker_b() -> None:
+        sb = Session(bind=db_engine)
+        try:
+            a_locked.wait(timeout=10)
+            blocked(sb)
+            sb.commit()
+        except BaseException as exc:
+            errors.append(exc)
+        finally:
+            sb.close()
+            b_done.set()
+
+    threads = [threading.Thread(target=worker_a), threading.Thread(target=worker_b)]
+    for t in threads:
+        t.start()
+    try:
+        assert a_locked.wait(timeout=10)
+        assert not b_done.wait(timeout=0.5), errors  # A 尚未 commit：B 必須被擋住
+    finally:
+        release_a.set()
+        for t in threads:
+            t.join(timeout=10)
+    assert b_done.is_set()
+    return errors
+
+
 @pytest.mark.cleanup_tables("class_staff")
 def test_set_class_staff_serialized(
     owner_cleanup: list[tuple[str, UUID]],
@@ -557,49 +613,47 @@ def test_set_class_staff_serialized(
     db_engine: Engine,
     fake_clock: FakeClock,
 ) -> None:
-    """兩個 PUT 同時指派同一位員工：s2 等 s1 的鎖（55P03）；s1 commit 後 s2 以「整批取代」覆蓋成
-    自己的清單（一列、role 為 s2 給的），不會撞 uq_class_staff_class_staff。
-    另外 s1 封存未 commit 時 s2 set_class_staff 也要等鎖，commit 後 409 class_archived。"""
+    """兩個 PUT 同時指派同一位員工：B 等 A 的班級列鎖；A commit 後 B 以「整批取代」覆蓋成自己的
+    清單（一列、role 為 B 給的），不會撞 uq_class_staff_class_staff 落成通用 409 conflict。
+    另外 s1 封存未 commit 時 s2 set_class_staff 要等鎖（55P03），commit 後 409 class_archived。"""
     class_id = _committed_class(committing_db_session, owner_cleanup)
     staff_id = _committed_staff(committing_db_session, owner_cleanup)
-    s1 = Session(bind=db_engine)
-    s2 = Session(bind=db_engine)
-    try:
+    results: dict[str, list[tuple[UUID, str]]] = {}
+
+    def hold(sa: Session) -> None:
         set_class_staff(
-            s1,
+            sa,
             class_id,
             ClassStaffPutIn(items=[ClassStaffItemIn(staff_user_id=staff_id, role="lead")]),
         )
-        _short_lock_timeout(s2)
-        with pytest.raises(OperationalError) as blocked:
-            set_class_staff(
-                s2,
-                class_id,
-                ClassStaffPutIn(items=[ClassStaffItemIn(staff_user_id=staff_id, role="assistant")]),
-            )
-        assert getattr(blocked.value.orig, "sqlstate", None) == _LOCK_NOT_AVAILABLE
-        s2.rollback()
 
-        s1.commit()
+    def blocked(sb: Session) -> None:
         out = set_class_staff(
-            s2,
+            sb,
             class_id,
             ClassStaffPutIn(items=[ClassStaffItemIn(staff_user_id=staff_id, role="assistant")]),
         )
-        s2.commit()
-        assert [(st.staff_user_id, st.role) for st in out.staff] == [(staff_id, "assistant")]
+        results["b"] = [(st.staff_user_id, st.role) for st in out.staff]
+
+    assert _run_blocked_pair(hold, blocked, db_engine) == []
+    assert results["b"] == [(staff_id, "assistant")]
+    with Session(bind=db_engine) as check:
         rows = (
-            s1.execute(select(ClassStaff.role).where(ClassStaff.class_id == class_id))
+            check.execute(select(ClassStaff.role).where(ClassStaff.class_id == class_id))
             .scalars()
             .all()
         )
-        assert rows == ["assistant"]
+    assert rows == ["assistant"]
 
-        # 封存進行中不可改負責員工
+    # 封存進行中不可改負責員工
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    try:
         archive_class(s1, class_id, clock=fake_clock)
         _short_lock_timeout(s2)
-        with pytest.raises(OperationalError):
+        with pytest.raises(OperationalError) as locked:
             set_class_staff(s2, class_id, ClassStaffPutIn(items=[]))
+        assert getattr(locked.value.orig, "sqlstate", None) == _LOCK_NOT_AVAILABLE
         s2.rollback()
         s1.commit()
         with pytest.raises(AppError) as exc:

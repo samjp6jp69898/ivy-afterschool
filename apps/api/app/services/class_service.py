@@ -137,8 +137,9 @@ def create_class(session: Session, data: ClassCreateIn) -> ClassOut:
 
 
 def _get_writable_class(session: Session, class_id: UUID) -> SchoolClass:
-    """寫入用：不存在 404、已封存 409 ``class_archived``。"""
-    klass = get_class_or_404(session, class_id, include_archived=True)
+    """寫入用：先 FOR UPDATE 鎖班級列（與並發封存序列化、重讀上鎖後的 archived_at），
+    不存在 404、已封存 409 ``class_archived``。"""
+    klass = get_class_or_404(session, class_id, include_archived=True, for_update=True)
     if klass.archived_at is not None:
         raise ConflictError("class_archived", "班級已封存，無法修改")
     return klass
@@ -160,8 +161,12 @@ def update_class(session: Session, class_id: UUID, data: ClassUpdateIn) -> Class
 
 
 def archive_class(session: Session, class_id: UUID, *, clock: Clock) -> ClassOut:
-    """封存班級：已封存直接回傳（冪等）；仍有在學學生 → 409 ``class_has_students``。"""
-    klass = get_class_or_404(session, class_id, include_archived=True)
+    """封存班級：已封存直接回傳（冪等）；仍有在學學生 → 409 ``class_has_students``。
+
+    先 FOR UPDATE 鎖班級列再計數：學生 INSERT / 改 class_id 的 FK 檢查對班級列持 KEY SHARE，
+    未 commit 的新學生會讓這裡等到它 commit 後才計數（READ COMMITTED 下看得到）。
+    """
+    klass = get_class_or_404(session, class_id, include_archived=True, for_update=True)
     if klass.archived_at is not None:
         return _single_class_out(session, klass)
     enrolled = _student_count(session, klass.id, _ENROLLED_STATUSES)

@@ -245,9 +245,16 @@ def _check_school(session: Session, school_id: UUID | None) -> None:
 
 
 def _check_class(session: Session, class_id: UUID | None) -> None:
+    """班級必須存在且未封存。先對班級列取 FOR SHARE：封存（FOR UPDATE）進行中時在此等待，
+    commit 後重讀到 archived_at 才判斷，學生不會被放進剛封存的班。"""
     if class_id is None:
         return
-    klass = session.get(SchoolClass, class_id)
+    klass = session.execute(
+        select(SchoolClass)
+        .where(SchoolClass.id == class_id)
+        .with_for_update(read=True, of=SchoolClass)
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
     if klass is None or klass.archived_at is not None:
         raise AppError("invalid_class", "班級不存在或已封存", status=422)
 
