@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 297,
-  "last_updated": "2026-10-05T03:27:00Z",
+  "version": 298,
+  "last_updated": "2026-10-05T03:27:44Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10494,7 +10494,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/jobs/pickup_jobs.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-401",
@@ -10520,9 +10520,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠（7 passed）且 --collect-only 對照選到每條 red_case；測試 3880209 先於實作 ff6f8e1（實作 commit 把 arrived 案例拆成 test_pickup_expire_arrived、overdue 回到 red_case 的 == 2，未放寬）；just lint / typecheck 乾淨。單一條件式 UPDATE ... WHERE id IN (SELECT ... ORDER BY created_at LIMIT 200 FOR UPDATE SKIP LOCKED) AND status IN open RETURNING；created_at < now − auto_expire_minutes（恰好 120 分不過期，有邊界測試）或 service_date < 台北今天；設定變更後依新值；batch 上限 200 + 3 分兩輪處理（有測試）；只 flush 由 runner commit；過期請求逐筆 publish_request_change（commit 時一次批次組資料，無 N+1），不發通知；jobs/__init__.py 已 import、JOB_REGISTRY 間隔 5 分鐘。共用檔 scheduler.py（4655e09）JobFunc 回傳型別放寬為 object：run_job_once 不使用回傳值，core/test_scheduler、jobs、outbox_jobs 整合測試與 unit test_main / test_project_setup 皆綠。突變驗證（scratchpad 複本）：拿掉 skip_locked → skip_locked 測試逾時轉紅；拿掉「前一天」條件 → 2 條紅。殘留：計數類測試涵蓋全庫 pickup_requests，依賴共用 DB 沒有其他已 commit 的非終態請求。"
       }
     },
     {
@@ -10532,7 +10532,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-401",
@@ -10559,9 +10559,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 bf7e95f 先於實作 8bed986（實作 commit 只追加 test_sync_reply_locks_request_row）；test_pickup_requests.py 20 passed，services/pickup 與 jobs / scheduler / outbox 整合測試 88 passed；just lint / typecheck 乾淨；測試以 app_backend 連線。 非終態請求 FOR UPDATE + populate_existing；done 一律覆寫為 DONE_REPLY_TEXT / auto / replied_by None 並推播（符合 description 第 3 點「一律」與第 5 點「有更新才推播」：done 分支每次都更新 replied_at）；未完成時 staff 回覆不動、auto 以 compute_auto_reply 重算且相同不更新不推播、source 為 None 時 replied_at 一併清空；不產生 pickup.replied（有測試）。突變驗證（scratchpad 複本）：拿掉 with_for_update → test_sync_reply_locks_request_row 紅；拿掉 staff 保護 → 2 條紅。殘留：作業已是 done 時重複呼叫會刷新 replied_at 並多推一次 ws（無通知，冪等性可再收斂）。"
       }
     },
     {
@@ -10571,7 +10571,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": "BE:api/dismissal_calls.py::list_dismissal_calls",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-404",
@@ -10594,9 +10594,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 bf7e95f 先於實作 8bed986（實作 commit 只追加 test_sync_reply_locks_request_row）；test_pickup_requests.py 20 passed，services/pickup 與 jobs / scheduler / outbox 整合測試 88 passed；just lint / typecheck 乾淨；測試以 app_backend 連線。 open 依 arrived → pending → acknowledged、同狀態 expected_arrival_at（null 最後）、created_at；closed 依 coalesce(completed_at, cancelled_at, updated_at) 新到舊（expired 用 updated_at，有測試）；counts 只計 open，needs_reply 取自 views；以 build_request_views 組裝。"
       }
     },
     {
@@ -10606,7 +10606,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": "BE:services/dismissal_pos.py::get_pos_status",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-404",
@@ -10633,9 +10633,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 bf7e95f 先於實作 8bed986（實作 commit 只追加 test_sync_reply_locks_request_row）；test_pickup_requests.py 20 passed，services/pickup 與 jobs / scheduler / outbox 整合測試 88 passed；just lint / typecheck 乾淨；測試以 app_backend 連線。 學生 active 未封存、依班級 sort_order / 班名分組、未分班「未分班」最後、組內學號；出勤（join 請假帶 leave_type，只在 status=leave 時回）、作業、非終態請求、active 授權數各一條，30 位學生 ≤ 7 條 SQL；突變驗證：leave_type 一律 None → 2 條紅。"
       }
     },
     {
@@ -10645,7 +10645,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": "BE:api/parent_portal/dismissal_calls.py::list_dismissal_notices",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-404",
@@ -10667,9 +10667,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 bf7e95f 先於實作 8bed986（實作 commit 只追加 test_sync_reply_locks_request_row）；test_pickup_requests.py 20 passed，services/pickup 與 jobs / scheduler / outbox 整合測試 88 passed；just lint / typecheck 乾淨；測試以 app_backend 連線。 範圍 get_parent_student_ids × 台北今天（跨午夜有測試），含終態、新到舊；他人小孩與昨天不出現；以 build_parent_request_views 組裝，model_dump 不含 replied_by_name / completed_by_name（有測試）；無小孩回 []。殘留：requests.py 與 views.py 各有一份 _hm / _taipei_hm（HH:MM 台北時間）helper，重複。"
       }
     },
     {
@@ -12149,7 +12149,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-454",
@@ -12172,9 +12172,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 0ac1c13 先於實作 a54ed7d（實作 commit 內測試只改 _count 寫法與 expunge_all，未放寬斷言）；test_exam_service.py 整檔 39 passed；just lint / typecheck 乾淨；測試以 app_backend 連線。 停用 / 不存在的考試類型 → 422 invalid_exam_type；封存 / 不存在班級 → 422 invalid_class；班級 grade_levels 不含年級 → 422 grade_not_in_class，含該年級可建立；建立為 draft、subjects == []。殘留：actor 參數目前未使用（description 未要求 audit / created_by）。"
       }
     },
     {
@@ -12218,7 +12218,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-454"
@@ -12239,9 +12239,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 0ac1c13 先於實作 a54ed7d（實作 commit 內測試只改 _count 寫法與 expunge_all，未放寬斷言）；test_exam_service.py 整檔 39 passed；just lint / typecheck 乾淨；測試以 app_backend 連線。 get_exam_or_404(for_update=True)；published 409 exam_published、不存在 404；以 DELETE 交給 DB on delete cascade，以 SQL 計數驗 exams / exam_subjects / exam_scores 皆 0。殘留：刪除後 session 內先前 selectin 載入的 ExamSubject 物件仍留在 identity map（同請求內不再使用，無影響）。"
       }
     },
     {
@@ -12251,7 +12251,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-454",
@@ -12275,9 +12275,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 0ac1c13 先於實作 a54ed7d（實作 commit 內測試只改 _count 寫法與 expunge_all，未放寬斷言）；test_exam_service.py 整檔 39 passed；just lint / typecheck 乾淨；測試以 app_backend 連線。 先 for_update 鎖考試、published 409、停用 / 不存在科目 422（details 列出 id）；以 begin_nested savepoint 捕捉 trigger 23514（diag.constraint_name == ck_exam_subjects_full_score_floor），查最高分回 409 full_score_below_existing details {subject_id, max_score}；失敗後資料不變且同一 session 可再成功設定（有測試）。突變驗證：拿掉 savepoint 測試轉紅。移除科目的成績由複合 FK cascade 刪除、保留科目的成績不受影響。殘留：trigger 擋下但重查時已無超標科目（並發改分）會原樣拋出 IntegrityError。"
       }
     },
     {
@@ -12287,7 +12287,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-452",
@@ -12310,9 +12310,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 0ac1c13 先於實作 a54ed7d（實作 commit 內測試只改 _count 寫法與 expunge_all，未放寬斷言）；test_exam_service.py 整檔 39 passed；just lint / typecheck 乾淨；測試以 app_backend 連線。 學生 = 名單（條件與 resolve_exam_roster 一致）∪ 有成績列者，in_roster 標記正確（含考後退班者 False），依班名、學號排序（未分班最後）；cells 只回既有成績列。query count 測試改用 expunge_all 合理：以 expire_all 重跑實測共 8 條 SQL，多出的 3 條（exams、exam_subjects、class_staff）來自測試自己存取已 expired 的 exam.id 觸發 refresh，service 本身仍為 5 條（考試、科目、學生、成績、發布者姓名），未藏 N+1。"
       }
     },
     {
@@ -12400,7 +12400,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-454",
@@ -12422,9 +12422,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 0ac1c13 先於實作 a54ed7d（實作 commit 內測試只改 _count 寫法與 expunge_all，未放寬斷言）；test_exam_service.py 整檔 39 passed；just lint / typecheck 乾淨；測試以 app_backend 連線。 條件式 UPDATE ... WHERE status='published' RETURNING，0 列 → 409 exam_not_published；published_at / published_by 清空；audit exam.unpublish before {status, published_at} / after {status: draft} 有測試；之後 refresh 物件。"
       }
     },
     {
@@ -12434,7 +12434,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-454",
@@ -12456,9 +12456,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 0ac1c13 先於實作 a54ed7d（實作 commit 內測試只改 _count 寫法與 expunge_all，未放寬斷言）；test_exam_service.py 整檔 39 passed；just lint / typecheck 乾淨；測試以 app_backend 連線。 單一 GROUP BY 計算 scored / absent / 有成績列數、round(avg, 2)、max、min；missing = 名單人數 − 有成績列數（不小於 0）；無分數科目 average / max / min 為 None；83.67 四捨五入有測試。殘留：依 description 字面，名單外（考後退班）學生的成績列也會抵扣 missing_count。"
       }
     },
     {
