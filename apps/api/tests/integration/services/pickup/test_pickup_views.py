@@ -225,7 +225,6 @@ def test_pickup_views_query_count(db_session: Session) -> None:
             auth = make_pickup_authorization(db_session, student, service_date=_DAY)
             _complete(db_session, request, method="code", authorization_id=auth.id)
         requests.append(request)
-    db_session.expire_all()
     statements: list[str] = []
 
     def record(conn: Any, cursor: Any, statement: str, *args: Any) -> None:
@@ -246,12 +245,13 @@ def test_pickup_views_query_count(db_session: Session) -> None:
 def test_pickup_views_publish_split(db_session: Session, published: list[Call]) -> None:
     clock = FakeClock(combine_taipei(_DAY, time(16, 0)))
     ming = make_student(db_session, name="王小明")
+    teacher = make_staff(db_session, display_name="林老師")
     request = make_pickup_request(db_session, ming, service_date=_DAY)
 
     publish_request_change(db_session, request, clock=clock)
     request.status = "acknowledged"
     request.reply_source = "staff"
-    request.replied_by = make_staff(db_session, display_name="林老師").id
+    request.replied_by = teacher.id
     request.replied_at = ARCHIVED_AT
     db_session.flush()
     publish_request_change(db_session, request, clock=clock)
