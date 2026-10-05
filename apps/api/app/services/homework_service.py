@@ -7,13 +7,19 @@
 - BACKEND-383：``get_board``（作業進度看板，逐生卡片）。
 - BACKEND-376：``handle_homework_done``（整體轉為 done 的副作用：通知家長、同步接送回覆）。
 - BACKEND-382：``set_ready_eta_and_note``（設定預計可接送時間與說明，通知 homework.eta_updated）。
+- BACKEND-375：``recompute_progress``（項目異動後重算整體進度；轉 done 觸發 handle_homework_done）。
+- BACKEND-381：``set_overall_status``（員工手動標整體完成 / 改回由項目推導）。
+
+鎖序一律「進度列 → 請求列」：寫入方法先 ``lock_progress_row``，之後才可能由 sync_open_request_reply
+鎖接送請求（與 BACKEND-407 / 413 一致）。
 """
 
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, Literal
 from uuid import UUID
 
 from sqlalchemy import event, select
@@ -44,6 +50,7 @@ from app.schemas.homework import (
     ParentHomeworkOut,
     ProgressOut,
 )
+from app.services.homework_rules import derive_overall_status
 from app.services.pickup.requests import sync_open_request_reply
 from app.services.settings_service import get_setting
 
@@ -432,3 +439,68 @@ def set_ready_eta_and_note(
             select(StaffUser.display_name).where(StaffUser.id == progress.eta_updated_by)
         ).scalar_one_or_none()
     return _progress_out(student_id, service_date, progress, eta_by)
+
+
+@dataclass(frozen=True)
+class ProgressChange:
+    progress: HomeworkDailyProgress
+    old_status: str
+    new_status: str
+
+
+def _apply_overall(
+    session: Session,
+    progress: HomeworkDailyProgress,
+    new_status: str,
+    *,
+    clock: Clock,
+) -> ProgressChange:
+    """寫回整體狀態；今天的「非 done → done」才觸發 handle_homework_done；最後推作業快照。"""
+    old_status = progress.overall_status
+    progress.overall_status = new_status  # type: ignore[assignment]
+    session.flush()
+    if old_status != "done" and new_status == "done" and progress.service_date == clock.today():
+        handle_homework_done(session, progress.student_id, progress.service_date, clock=clock)
+    broadcast_homework_snapshot(session, progress.student_id, progress.service_date, clock=clock)
+    return ProgressChange(progress=progress, old_status=old_status, new_status=new_status)
+
+
+def _derived_status(session: Session, student_id: UUID, service_date: date) -> str:
+    # 在進度列鎖之後才查：READ COMMITTED 下看得到先前已 commit 的其他交易寫入
+    statuses = session.execute(
+        select(HomeworkItem.status).where(
+            HomeworkItem.student_id == student_id, HomeworkItem.service_date == service_date
+        )
+    ).scalars()
+    return derive_overall_status(list(statuses))
+
+
+def recompute_progress(
+    session: Session, student_id: UUID, service_date: date, *, clock: Clock
+) -> ProgressChange:
+    """項目異動後依全部項目重算整體進度（覆蓋先前的手動 done）。
+
+    兩位員工同時完成同一學生最後兩個項目時，兩個交易在進度列上排隊，後者看到前者已 commit 的項目，
+    只有真正觀察到「非 done → done」的那一個交易發 homework.done。
+    """
+    progress = lock_progress_row(session, student_id, service_date)
+    return _apply_overall(
+        session, progress, _derived_status(session, student_id, service_date), clock=clock
+    )
+
+
+def set_overall_status(
+    session: Session,
+    student_id: UUID,
+    service_date: date,
+    mode: Literal["done", "auto"],
+    *,
+    actor: CurrentStaff,
+    clock: Clock,
+) -> ProgressChange:
+    """mode='done' 不論項目直接標整體完成（例如當天無作業）；'auto' 改回由項目推導。"""
+    get_student_or_404(session, student_id)
+    check_service_date(session, service_date, clock=clock)
+    progress = lock_progress_row(session, student_id, service_date)
+    new_status = "done" if mode == "done" else _derived_status(session, student_id, service_date)
+    return _apply_overall(session, progress, new_status, clock=clock)
