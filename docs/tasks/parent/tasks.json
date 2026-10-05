@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 78,
-  "last_updated": "2026-10-05T05:34:42Z",
+  "version": 79,
+  "last_updated": "2026-10-05T05:36:35Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -105,7 +105,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/http.ts",
       "source_ref": "FE:src/parent/api/index.ts::buildParentRefreshUrl",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r8",
       "depends_on": [
         "FRONTEND-001",
@@ -133,9 +133,9 @@
         "notes": "其他 PARENT task 的測試若需模擬 refresh 失敗，對 parentRefreshHttp 另建 createApiMock 註冊 POST /parent/auth/refresh。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "6 條 red_case 皆有對應測試且斷言具體（重送後 data 深等於與 refresh 恰 1 次、refresh 401 → reject status 401 且 handler 恰 1 次、liff-login / bind 不 refresh 且 handler 未呼叫、業務錯誤 code 與 details.request_id、refresh 409 refresh_in_progress → 重送成功且 history.get 2 筆、handler 未呼叫）；實跑 tdd.run 6/6 綠、web-lint 乾淨；c26cfc2（規格修正，只新增 toApiError 條文與 red_case，未刪改既有條件）→ 8909d06(test) → 285be30(impl)。規格修正合理：parentRefreshHttp 不經 FRONTEND-001 正規化，原規格下 409 會以 AxiosError reject，createHttpClient 的 isApiError 判斷不成立而登出；與 apps/api/app/api/parent/auth.py「409 refresh_in_progress 不清 cookie」一致。突變驗證：把 refresh 的 toApiError 拿掉改原樣 throw，恰好「parentHttp treats refresh 409 as rotated」轉紅（1 failed / 5 passed），其餘不變。toApiError 對無 response 或非 envelope 原樣回傳；refresh 去重、並發共用同一輪由 FRONTEND-001 的 startRefresh 負責，本檔只做設定；noRefreshPaths 五條與 description 逐字一致；handler 只存於模組內，http.ts 只 import axios、@/shared/http/createHttpClient、@/shared/types/api，無後台依賴、無 router / store。殘留：(1) refresh 遇網路錯誤（無 response）時 FRONTEND-001 會視為 refresh 失敗而呼叫 handler 登出，弱網路下家長可能被登出，屬 FRONTEND-001 既定語意；(2) parentRefreshHttp 未設 timeout（axios 預設不逾時），refresh 卡住時等待中的請求會一直掛著；(3) 並發 401 共用一次 refresh 沒有家長端層級的測試（由 FRONTEND-001 的測試涵蓋）。"
       }
     },
     {
