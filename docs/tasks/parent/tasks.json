@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 89,
-  "last_updated": "2026-10-05T06:08:18Z",
+  "version": 90,
+  "last_updated": "2026-10-05T06:08:28Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -3291,7 +3291,7 @@
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/NotificationPrefsView.vue",
       "source_ref": "FE:src/parent/views/NotificationPrefsView.vue::toggle",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r8",
       "depends_on": [
         "PARENT-011",
