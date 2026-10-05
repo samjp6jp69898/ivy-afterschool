@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 379,
-  "last_updated": "2026-10-05T05:58:56Z",
+  "version": 380,
+  "last_updated": "2026-10-05T06:00:49Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -8166,7 +8166,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-306",
@@ -8193,9 +8193,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；c02e0e0 / 1ed8522（測試）先於 3c4fe6f。attendance:operate（突變改 attendance:read → 4 條轉紅）、拿掉 commit → 轉紅；422 note 超長、409 not_checked_in。1ed8522 的測試修正皆非放寬：present 測資 check_in_at 改早於 fake_clock（factory 預設 15:00 晚於「現在」09:00，屬測資錯誤）；pickup create 的 client 加 pickup:read 只為了請求後以 GET queue 重讀；exams PATCH 兩範圍清空由 validation_error 改為 service 的 422 exam_scope_required（red_case 只要求 422）。lint / typecheck 乾淨；四個測試檔 146 條全綠；跑前後殘列筆數不變。"
       }
     },
     {
@@ -8905,7 +8905,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/leaves.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-345",
@@ -8914,7 +8914,7 @@
         "BACKEND-023"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "【review-r8-a 打回 1】_leave_out 以 list_leaves(LeaveListQuery(student_id=...), page_size=MAX_PAGE_SIZE=200) 的第一頁找剛建立的請假；list_leaves 依 start_date desc 排序且不限狀態，該生若已有 ≥ 200 筆 start_date 較晚的請假（含已取消者，取消的請假不參與重疊檢查），新建的那筆不在第一頁 → 拋 500 internal_error「剛建立的請假讀不到」，請求 rollback、合法的代登記失敗。scratch 實測：王小明有 200 筆 2027 年起的 cancelled 請假，POST 2026-09-01 的病假 → 500。要求：回應改為直接以新建的那筆組 LeaveOut（例如抽出 list_leaves 內的組裝成共用 leave_out，或至少把查詢限縮到該筆 id），並補一條上述情境回 201 的測試。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_leaves_endpoints.py",
@@ -8932,9 +8932,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r8-a",
+        "notes": "打回。tdd.run 5 條全綠、collect-only 全選到、9bece0c 先於 45c3874；leaves:write（改 leaves:read → 3 條轉紅）、拿掉 commit → 轉紅；lint / typecheck 乾淨。但回應組裝以 list_leaves(student_id=...) 第一頁（page_size = MAX_PAGE_SIZE 200、依 start_date desc）找剛建立的那筆，可構造出合法請求回 500（見 risk_notes）。"
       }
     },
     {
@@ -11175,7 +11175,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/dismissal_calls.py::create_dismissal_call",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-406",
@@ -11202,9 +11202,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；5c76806 / 1ed8522 先於 49d6e23。pickup:operate（改 pickup:read → 轉紅）、拿掉 commit → 轉紅；回應以 build_request_views 組（requested_by_name、student）；201 後重讀 DB 並以 GET queue 確認；409 pickup_request_exists / student_not_available。1ed8522 的測試修正皆非放寬：present 測資 check_in_at 改早於 fake_clock（factory 預設 15:00 晚於「現在」09:00，屬測資錯誤）；pickup create 的 client 加 pickup:read 只為了請求後以 GET queue 重讀；exams PATCH 兩範圍清空由 validation_error 改為 service 的 422 exam_scope_required（red_case 只要求 422）。lint / typecheck 乾淨；四個測試檔 146 條全綠；跑前後殘列筆數不變。"
       }
     },
     {
@@ -11253,7 +11253,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/portal/dismissal_calls.py::portal_acknowledge",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-408",
@@ -11280,9 +11280,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；5c76806 / 1ed8522 先於 49d6e23。pickup:operate（改 pickup:read → 4 條轉紅）、拿掉 commit → 轉紅；409 invalid_pickup_status。lint / typecheck 乾淨；四個測試檔 146 條全綠；跑前後殘列筆數不變。"
       }
     },
     {
@@ -11332,7 +11332,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/dismissal_calls.py::cancel_dismissal_call",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-411",
@@ -11359,9 +11359,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；5c76806 / 1ed8522 先於 49d6e23。pickup:operate（改 pickup:read → 4 條轉紅）、拿掉 commit → 轉紅；發起家長收到 1 則 pickup.cancelled（payload.request_id 正確）；reason 超長 422；終態 409。lint / typecheck 乾淨；四個測試檔 146 條全綠；跑前後殘列筆數不變。"
       }
     },
     {
@@ -12699,7 +12699,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-456",
@@ -12726,9 +12726,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；d5127c4 / 1ed8522 先於 fcc1c60。exams:write（改 exams:read → 4 條轉紅）、拿掉 commit → 轉紅；published 改 class_id 409 exam_published。1ed8522 的測試修正皆非放寬：present 測資 check_in_at 改早於 fake_clock（factory 預設 15:00 晚於「現在」09:00，屬測資錯誤）；pickup create 的 client 加 pickup:read 只為了請求後以 GET queue 重讀；exams PATCH 兩範圍清空由 validation_error 改為 service 的 422 exam_scope_required（red_case 只要求 422）。lint / typecheck 乾淨；四個測試檔 146 條全綠；跑前後殘列筆數不變。"
       }
     },
     {
@@ -12855,7 +12855,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-460",
@@ -12883,9 +12883,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；d5127c4 / 1ed8522 先於 fcc1c60。exams:write（改 exams:read → 3 條轉紅）、注入 request meta、拿掉 commit → 2 條轉紅；422 invalid_score_cells 且 details[0].code score_out_of_range；發布後修改 changed == 1 且寫 exam_score.update audit。lint / typecheck 乾淨；四個測試檔 146 條全綠；跑前後殘列筆數不變。"
       }
     },
     {
@@ -12895,7 +12895,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-461",
@@ -12922,9 +12922,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；d5127c4 / 1ed8522 先於 fcc1c60。exams:publish（改 exams:write → 4 條轉紅）、拿掉 commit → 轉紅；published_by_name 與 DB published_by 正確、exam.published 通知 1 則；422 exam_has_no_subjects、409 exam_already_published。lint / typecheck 乾淨；四個測試檔 146 條全綠；跑前後殘列筆數不變。"
       }
     },
     {
