@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 357,
-  "last_updated": "2026-10-05T05:41:00Z",
+  "version": 358,
+  "last_updated": "2026-10-05T05:41:08Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14014,7 +14014,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-092",
@@ -14043,9 +14043,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 4 條全綠、collect-only 對照全選到；8be3985（測試）先於 f99afcf（實作），60186ad 修正 821bfc3 送審時仍紅的稽核斷言（實作者自曝）。select ... with_for_update(of=StaffUser) + populate_existing 先鎖列，再走 _get_managed_staff（與 090~092 同一個 404 staff_user_not_found / 403 cannot_manage_staff 判斷）；已啟用 409 staff_already_active 且不寫稽核；is_active / must_change_password = true、新臨時密碼可 verify、舊密碼失效、token_version 維持 1；稽核 before / after 不含臨時密碼與新舊雜湊。after.must_change_password 依協調者裁定暫接受 '***'（audit_service 子字串遮罩），由 BACKEND-547 加白名單後改回 True。scratch 突變：拿掉 409 判斷、不設 must_change_password、略過 cannot_manage 檢查、token_version +1 各有 1 條轉紅。test_staff_user_service.py 30 條全綠；lint / typecheck 乾淨；跑前後 staff_users / roles 筆數不變。殘留（不擋）：拿掉 FOR UPDATE 那段 4 條仍全綠，鎖沒有測試覆蓋（驗收標準未列並發；無鎖時兩筆同時啟用都會成功，先回應的臨時密碼被後者覆蓋而失效）。"
       }
     },
     {
