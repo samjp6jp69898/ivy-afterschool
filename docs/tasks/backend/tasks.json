@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 388,
-  "last_updated": "2026-10-05T06:11:47Z",
+  "version": 389,
+  "last_updated": "2026-10-05T06:18:59Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5331,11 +5331,11 @@
     {
       "id": "BACKEND-155",
       "title": "實作 StudentImportService.preview：解析 Excel 並逐列驗證（不寫入）",
-      "description": "建立 `apps/api/app/services/student_import_service.py`（domain_spec §2 `POST /students/import`：Excel 匯入，預覽 + 執行兩段）。移植 ivy `utils/excel_io.py::parse_excel` 與 `assert_xlsx_not_zip_bomb` 的防護（解壓縮大小與 sheet 格數上限）；欄位改為本專案學生欄位。\n\n```python\nIMPORT_COLUMNS = [\"學號*\", \"姓名*\", \"性別\", \"生日\", \"年級*\", \"就讀國小\", \"學校班級\", \"安親班班級\", \"狀態\", \"入學日\", \"備註\", \"身分證字號\", \"健康備註\"]\nMAX_IMPORT_ROWS = 500\n\n@dataclass(frozen=True)\nclass ImportRowResult:\n    row_number: int                     # Excel 列號（標題為第 1 列）\n    data: StudentCreateIn | None        # 驗證通過時的正規化資料\n    display: dict[str, str]             # 原始儲存格字串（敏感欄位遮罩），供前端呈現\n    errors: list[str]                   # 繁中錯誤訊息\n\n@dataclass(frozen=True)\nclass ImportPreview:\n    rows: list[ImportRowResult]\n    total: int\n    valid: int\n    invalid: int\n\ndef preview(session: Session, upload: ValidatedUpload, *, academic_year: int, actor: CurrentStaff) -> ImportPreview: ...\n```\n**規則**\n- 第一個工作表；標題列檢查：缺少必填欄（帶 `*`）或出現不在 IMPORT_COLUMNS 的欄名（非空白標題，比對時去頭尾空白）→ 422 `import_invalid_header`，details 固定為 `{\"missing\": [缺少的必填欄名...], \"unexpected\": [無法辨識的欄名...]}`（兩個 key 都一定存在，依標題列順序；選填欄缺少不算錯）。資料列 > 500 → 422 `import_too_many_rows`；0 列 → 422 `import_empty`。\n- 標題檢查抽成純函式 `check_header(header_cells: Sequence[str | None]) -> tuple[list[str], list[str]]`（回 missing、unexpected），供 preview 與 BACKEND-532 範本測試共用。\n- 性別：男 / 女 / 其他 → male / female / other；狀態：在學 / 暫停 / 退班（預設在學）→ active / suspended / withdrawn。\n- 日期接受 Excel 日期儲存格或 `YYYY-MM-DD` / `YYYY/MM/DD` 字串。\n- 就讀國小：以 name 或 short_name 比對啟用中的 schools（不分大小寫）；找不到 → 錯誤「找不到國小：X」。\n- 安親班班級：以名稱比對 `academic_year` 學年度未封存的班；找不到 → 錯誤。\n- 身分證：正規化 + 檢查（BACKEND-147）；actor 無 `students:sensitive` 而該列有身分證或健康備註 → 錯誤「沒有權限匯入敏感欄位」。\n- 重複：學號已存在於 DB、學號在檔案中重複、身分證 HMAC 已存在於 DB（含封存）、身分證在檔案中重複 → 各自錯誤訊息（檔內重複時兩列都標）。\n- 每列以 `StudentCreateIn` 驗證，Pydantic 錯誤轉成繁中訊息。\n- 不寫入 DB、不 flush。\n\n**驗收標準**\n- 合法檔案全數 valid，資料正規化正確。\n- 標題缺必填欄或有無法辨識的欄名 → 422，details 為 `{missing, unexpected}`；超過 500 列、空檔各回 422。\n- 各類列錯誤（國小 / 班級找不到、學號 / 身分證重複含檔內重複、格式錯、無敏感權限）正確標示且不影響其他列。\n- display 中的身分證被遮罩。",
+      "description": "建立 `apps/api/app/services/student_import_service.py`（domain_spec §2 `POST /students/import`：Excel 匯入，預覽 + 執行兩段）。移植 ivy `utils/excel_io.py::parse_excel` 與 `assert_xlsx_not_zip_bomb` 的防護（解壓縮大小與 sheet 格數上限）；欄位改為本專案學生欄位。\n\n```python\nIMPORT_COLUMNS = [\"學號*\", \"姓名*\", \"性別\", \"生日\", \"年級*\", \"就讀國小\", \"學校班級\", \"安親班班級\", \"狀態\", \"入學日\", \"備註\", \"身分證字號\", \"健康備註\"]\nMAX_IMPORT_ROWS = 500\n\n@dataclass(frozen=True)\nclass ImportRowResult:\n    row_number: int                     # Excel 列號（標題為第 1 列）\n    data: StudentCreateIn | None        # 驗證通過時的正規化資料\n    display: dict[str, str]             # 原始儲存格字串（敏感欄位遮罩），供前端呈現\n    errors: list[str]                   # 繁中錯誤訊息\n\n@dataclass(frozen=True)\nclass ImportPreview:\n    rows: list[ImportRowResult]\n    total: int\n    valid: int\n    invalid: int\n\ndef preview(session: Session, upload: ValidatedUpload, *, academic_year: int, actor: CurrentStaff) -> ImportPreview: ...\n```\n**規則**\n- 第一個工作表；標題列檢查：缺少必填欄（帶 `*`）或出現不在 IMPORT_COLUMNS 的欄名（非空白標題，比對時去頭尾空白）→ 422 `import_invalid_header`，details 固定為 `{\"missing\": [缺少的必填欄名...], \"unexpected\": [無法辨識的欄名...]}`（兩個 key 都一定存在，依標題列順序；選填欄缺少不算錯）。資料列 > 500 → 422 `import_too_many_rows`；0 列 → 422 `import_empty`。\n- 標題檢查抽成純函式 `check_header(header_cells: Sequence[str | None]) -> tuple[list[str], list[str]]`（回 missing、unexpected），供 preview 與 BACKEND-532 範本測試共用。\n- 性別：男 / 女 / 其他 → male / female / other；狀態：在學 / 暫停 / 退班（預設在學）→ active / suspended / withdrawn。\n- 日期接受 Excel 日期儲存格或 `YYYY-MM-DD` / `YYYY/MM/DD` 字串。\n- 就讀國小：以 name 或 short_name 比對啟用中的 schools（不分大小寫）；找不到 → 錯誤「找不到國小：X」。\n- 安親班班級：以名稱比對 `academic_year` 學年度未封存的班；找不到 → 錯誤。\n- 身分證：正規化 + 檢查（BACKEND-147）；actor 無 `students:sensitive` 而該列有身分證或健康備註 → 錯誤「沒有權限匯入敏感欄位」。\n- 重複：學號已存在於 DB、學號在檔案中重複、身分證 HMAC 已存在於 DB（含封存）、身分證在檔案中重複 → 各自錯誤訊息（檔內重複時兩列都標）。\n- 每列以 `StudentCreateIn` 驗證，Pydantic 錯誤轉成繁中訊息。\n- 不寫入 DB、不 flush。\n- **不受信任 xlsx 的防護**（在交給 openpyxl 之前，`assert_xlsx_within_limits`；安全硬上限為模組常數，不是業務參數、不放 system_settings）：zip entry 數 ≤ `MAX_ZIP_ENTRIES`=64、同名 entry 拒收、只接受 stored / deflate、加密 entry 拒收、單一 entry 解壓 ≤ `MAX_ZIP_ENTRY_BYTES`=16 MiB、總解壓 ≤ `MAX_XLSX_UNCOMPRESSED_BYTES`=32 MiB（先看宣告值再串流讀）；zip 內**每一個**以 `<` 開頭的 entry（不依檔名 / 副檔名過濾，工作表放到 worksheets/ 以外也算）以 `xml.parsers.expat` 串流掃描、只計數不建樹：元素總數 ≤ `MAX_XML_ELEMENTS`=250000、巢狀深度 ≤ `MAX_XML_DEPTH`=32、單一屬性值 / 連續文字節點 ≤ `MAX_XML_VALUE_CHARS`=32 KiB，並依 local name 計 row / c（列 ≤ 500 + 寬容值、單列 ≤ `MAX_IMPORT_COLS`=64、總儲存格 ≤ 列數乘欄數）；任一超標、宣告大小 / CRC 不符、截斷、不支援的壓縮法、外部實體 → 422 `import_invalid_file`（列數超標 → 422 `import_too_many_rows`）。全程在記憶體內處理，不解壓到磁碟。openpyxl 以 `read_only`、`data_only`、`keep_links=False` 載入，載入與迭代階段的任何例外（sharedStrings 索引越界、壞日期等）一律 422 `import_invalid_file`。\n- 工作表取**第一張可見**（`sheet_state == 'visible'`）的；沒有任何可見工作表 → 422 `import_invalid_file`。\n- OOXML `_xHHHH_` 跳脫由 openpyxl 維持字面字串（不會還原成 NUL），不另處理；display 字串以 `= + - @` 開頭只是顯示，不擋（公式只取快取值）。\n\n**驗收標準**\n- 合法檔案全數 valid，資料正規化正確。\n- 標題缺必填欄或有無法辨識的欄名 → 422，details 為 `{missing, unexpected}`；超過 500 列、空檔各回 422。\n- 各類列錯誤（國小 / 班級找不到、學號 / 身分證重複含檔內重複、格式錯、無敏感權限）正確標示且不影響其他列。\n- display 中的身分證被遮罩。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_import_service.py",
       "source_ref": "BE:utils/excel_io.py::parse_excel",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-151",
@@ -5357,7 +5357,12 @@
           "test_import_preview_lookup_errors：國小 '不存在國小' → 該列 errors 含 '找不到國小：不存在國小'；班名不存在 → 含 '找不到安親班班級'；其他列仍 valid",
           "test_import_preview_duplicates：學號與 DB 重複 → errors 含 '學號已存在'；檔內兩列同學號 → 兩列都含 '學號在檔案中重複'；身分證與封存學生相同 → 含 '身分證字號已存在'",
           "test_import_preview_sensitive_permission：actor 無 students:sensitive、某列有身分證 → 該列 errors 含 '沒有權限匯入敏感欄位'；display['身分證字號'] == 'A12****789'",
-          "test_import_preview_no_writes：preview 後 students 筆數不變"
+          "test_import_preview_no_writes：preview 後 students 筆數不變",
+          "test_import_preview_rejects_before_openpyxl（參數化）：wide_ws、ns_prefix、many_other_elems、many_other_elems_root、deep、long_attr、long_text、styles_bomb、sst_many、path_bypass、many_entries、big_other_part、lying_size、encrypted、duplicate_entry、bzip2、truncated → 皆 AppError 422 'import_invalid_file'，monkeypatch 的 load_workbook 未被呼叫，tracemalloc 峰值 < 50 MB",
+          "test_import_preview_rejects_too_many_rows_before_openpyxl：工作表 520 個 <row> → 422 'import_too_many_rows'，load_workbook 未被呼叫",
+          "test_import_preview_openpyxl_errors_become_422：sharedStrings 索引 10^9、t=\"d\" 壞日期 → 422 'import_invalid_file'（不是 500）",
+          "test_import_preview_uses_first_visible_sheet：第一張 veryHidden、第二張可見 → 讀第二張；全部隱藏 → 422 'import_invalid_file'",
+          "test_import_preview_accepts_normal_shared_strings_and_styles：2000 個 <si> 的 sharedStrings 正常通過；_x0000_ 維持字面、不 500"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_student_import_service.py -k \"test_import_preview_\"",
         "notes": ""
