@@ -1,6 +1,6 @@
-"""BACKEND-452 / 464 / 465 / 466 / 453 / 454：exam_service。
+"""BACKEND-452 / 464 / 465 / 466 / 453 / 454 / 455 / 457 / 458 / 459 / 462 / 463：exam_service。
 
-應考名單、歷次成績、家長端成績、考試列表與詳情。
+應考名單、歷次成績、家長端成績、考試列表與詳情、新增 / 刪除、科目設定、成績格、取消發布、各科統計。
 """
 
 from datetime import UTC, date, datetime
@@ -8,24 +8,41 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import event, select
+from sqlalchemy import event, func, select
 from sqlalchemy.orm import Session
 
+from app.api.deps import CurrentStaff
 from app.core.errors import AppError
 from app.core.pagination import PageParams
-from app.models.exams import Exam
+from app.core.request_meta import RequestMeta
+from app.models.account import StaffUser
+from app.models.audit import AuditLog
+from app.models.exams import Exam, ExamScore, ExamSubject
 from app.models.reference import ExamType, Subject
-from app.schemas.exams import ExamListQuery, ExamOut
+from app.schemas.exams import (
+    ExamCreateIn,
+    ExamListQuery,
+    ExamOut,
+    ExamSubjectIn,
+    ExamSubjectsPutIn,
+)
 from app.services.exam_service import (
+    create_exam,
+    delete_exam,
     get_child_exam_detail,
     get_exam,
     get_exam_or_404,
+    get_exam_summary,
+    get_score_grid,
     get_student_exam_history,
     list_child_exams,
     list_exams,
     resolve_exam_roster,
+    set_exam_subjects,
+    unpublish_exam,
 )
 from tests.support.factories import (
+    ARCHIVED_AT,
     make_class,
     make_exam,
     make_exam_score,
@@ -33,6 +50,7 @@ from tests.support.factories import (
     make_staff,
     make_student,
 )
+from tests.support.fake_clock import FakeClock
 
 _FIRST_PAGE = PageParams(page=1, page_size=20)
 
@@ -493,3 +511,412 @@ def test_get_exam_or_404_rejects_both_locks(db_session: Session) -> None:
     exam = make_exam(db_session)
     with pytest.raises(ValueError, match="for_update"):
         get_exam_or_404(db_session, exam.id, for_update=True, for_share=True)
+
+
+# --- 寫入方法共用 ---
+
+_META = RequestMeta(ip="203.0.113.5", user_agent="pytest", request_id=None)
+
+
+def _current(staff: StaffUser) -> CurrentStaff:
+    return CurrentStaff(
+        id=staff.id,
+        username=staff.username,
+        display_name=staff.display_name,
+        role_id=staff.role.id,
+        role_code=staff.role.code,
+        role_name=staff.role.name,
+        permissions=frozenset(staff.role.permissions),
+        must_change_password=staff.must_change_password,
+        token_version=staff.token_version,
+    )
+
+
+@pytest.fixture
+def actor(db_session: Session) -> CurrentStaff:
+    return _current(make_staff(db_session, permissions=["exams:write"], display_name="陳主任"))
+
+
+def _count(
+    db: Session, model: type[Exam] | type[ExamSubject] | type[ExamScore], exam_id: UUID
+) -> int:
+    column = model.id if model is Exam else model.exam_id
+    return db.execute(select(func.count()).select_from(model).where(column == exam_id)).scalar_one()
+
+
+def _error(exc: pytest.ExceptionInfo[AppError]) -> tuple[int, str]:
+    return exc.value.status, exc.value.code
+
+
+# --- BACKEND-455 create_exam ---
+
+
+def test_create_exam_success(db_session: Session, actor: CurrentStaff) -> None:
+    class_a = make_class(db_session, name="A班", grade_levels=(3, 4))
+    data = ExamCreateIn(
+        name="第一次段考",
+        exam_type_id=_exam_type(db_session, "段考").id,
+        exam_date=date(2026, 10, 15),
+        grade_level=3,
+        class_id=class_a.id,
+        note="範圍第一到三課",
+    )
+
+    out = create_exam(db_session, data, actor=actor)
+
+    assert (out.name, out.status, out.subjects) == ("第一次段考", "draft", [])
+    assert (out.exam_type.name, out.exam_date, out.grade_level) == ("段考", date(2026, 10, 15), 3)
+    assert out.class_ is not None
+    assert out.class_.id == class_a.id
+    assert (out.published_at, out.published_by_name, out.note) == (None, None, "範圍第一到三課")
+    row = db_session.get(Exam, out.id)
+    assert row is not None
+    assert row.status == "draft"
+
+
+def test_create_exam_validation(db_session: Session, actor: CurrentStaff) -> None:
+    inactive_type = ExamType(name=f"停用類型-{uuid4().hex[:6]}", is_active=False)
+    db_session.add(inactive_type)
+    db_session.flush()
+    archived = make_class(db_session, archived=True)
+    class_a = make_class(db_session, name="A班", grade_levels=(1, 2))
+    exam_type_id = _exam_type(db_session, "段考").id
+
+    def create(**fields: object) -> None:
+        base: dict[str, object] = {
+            "name": "第一次段考",
+            "exam_type_id": exam_type_id,
+            "exam_date": date(2026, 10, 15),
+        }
+        create_exam(db_session, ExamCreateIn.model_validate({**base, **fields}), actor=actor)
+
+    cases = [
+        ({"exam_type_id": inactive_type.id, "grade_level": 3}, "invalid_exam_type"),
+        ({"exam_type_id": uuid4(), "grade_level": 3}, "invalid_exam_type"),
+        ({"class_id": archived.id}, "invalid_class"),
+        ({"class_id": uuid4()}, "invalid_class"),
+        ({"class_id": class_a.id, "grade_level": 3}, "grade_not_in_class"),
+    ]
+    for fields, code in cases:
+        with pytest.raises(AppError) as exc:
+            create(**fields)
+        assert _error(exc) == (422, code), fields
+    # 班級含該年級 → 可建立
+    create(class_id=class_a.id, grade_level=2)
+
+
+# --- BACKEND-457 delete_exam ---
+
+
+def test_delete_exam_draft_cascade(db_session: Session, actor: CurrentStaff) -> None:
+    exam = _exam_with_subjects(db_session, "國語")
+    chinese = _subject(db_session, "國語")
+    make_exam_score(db_session, exam, make_student(db_session), chinese)
+    make_exam_score(db_session, exam, make_student(db_session, name="陳小華"), chinese)
+    exam_id = exam.id
+
+    delete_exam(db_session, exam_id, actor=actor)
+
+    assert (_count(db_session, Exam, exam_id), _count(db_session, ExamSubject, exam_id)) == (0, 0)
+    assert _count(db_session, ExamScore, exam_id) == 0
+
+
+def test_delete_exam_published(db_session: Session, actor: CurrentStaff) -> None:
+    exam = make_exam(db_session, status="published")
+
+    with pytest.raises(AppError) as published:
+        delete_exam(db_session, exam.id, actor=actor)
+    with pytest.raises(AppError) as missing:
+        delete_exam(db_session, uuid4(), actor=actor)
+
+    assert _error(published) == (409, "exam_published")
+    assert _error(missing) == (404, "exam_not_found")
+    assert _count(db_session, Exam, exam.id) == 1
+
+
+# --- BACKEND-458 set_exam_subjects ---
+
+
+def _put(*items: tuple[Subject, str, int]) -> ExamSubjectsPutIn:
+    return ExamSubjectsPutIn(
+        items=[
+            ExamSubjectIn(subject_id=subject.id, full_score=Decimal(full), sort_order=order)
+            for subject, full, order in items
+        ]
+    )
+
+
+def test_set_exam_subjects_replace(db_session: Session, actor: CurrentStaff) -> None:
+    chinese, math, english = (_subject(db_session, n) for n in ("國語", "數學", "英語"))
+    exam = _exam_with_subjects(db_session, "國語", "數學")
+    make_exam_score(db_session, exam, make_student(db_session), math, score=Decimal("88"))
+    make_exam_score(db_session, exam, make_student(db_session, name="陳小華"), math)
+    chinese_score = make_exam_score(db_session, exam, make_student(db_session), chinese)
+
+    out = set_exam_subjects(
+        db_session, exam.id, _put((english, "50", 1), (chinese, "100", 0)), actor=actor
+    )
+
+    assert [(s.subject_name, s.full_score, s.sort_order) for s in out.subjects] == [
+        ("國語", Decimal("100"), 0),
+        ("英語", Decimal("50"), 1),
+    ]
+    math_scores = db_session.execute(
+        select(func.count())
+        .select_from(ExamScore)
+        .where(ExamScore.exam_id == exam.id, ExamScore.subject_id == math.id)
+    ).scalar_one()
+    assert math_scores == 0
+    # 保留的科目成績不受影響
+    assert db_session.get(ExamScore, chinese_score.id) is not None
+    assert _count(db_session, ExamSubject, exam.id) == 2
+
+
+def test_set_exam_subjects_full_score_guard(db_session: Session, actor: CurrentStaff) -> None:
+    chinese, math = _subject(db_session, "國語"), _subject(db_session, "數學")
+    exam = _exam_with_subjects(db_session, "國語", "數學")
+    make_exam_score(db_session, exam, make_student(db_session), math, score=Decimal("92"))
+    make_exam_score(db_session, exam, make_student(db_session), math, score=Decimal("70"))
+    make_exam_score(db_session, exam, make_student(db_session), chinese, score=Decimal("60"))
+
+    with pytest.raises(AppError) as exc:
+        # 國語下修到 80 仍高於最高分 60；數學 90 低於最高分 92
+        set_exam_subjects(
+            db_session, exam.id, _put((chinese, "80", 10), (math, "90", 20)), actor=actor
+        )
+
+    assert _error(exc) == (409, "full_score_below_existing")
+    assert exc.value.details == {"subject_id": math.id, "max_score": 92.0}
+    out = get_exam(db_session, exam.id)
+    assert [(s.subject_name, s.full_score) for s in out.subjects] == [
+        ("國語", Decimal("100")),
+        ("數學", Decimal("100")),
+    ]
+    # 失敗後 session 仍可用，且可改成合法的滿分
+    ok = set_exam_subjects(db_session, exam.id, _put((math, "92", 0)), actor=actor)
+    assert [(s.subject_name, s.full_score) for s in ok.subjects] == [("數學", Decimal("92"))]
+
+
+def test_set_exam_subjects_published(db_session: Session, actor: CurrentStaff) -> None:
+    exam = make_exam(db_session, status="published")
+
+    with pytest.raises(AppError) as exc:
+        set_exam_subjects(
+            db_session, exam.id, _put((_subject(db_session, "國語"), "100", 0)), actor=actor
+        )
+
+    assert _error(exc) == (409, "exam_published")
+
+
+def test_set_exam_subjects_invalid(db_session: Session, actor: CurrentStaff) -> None:
+    inactive = Subject(name=f"停用科目-{uuid4().hex[:6]}", is_active=False)
+    db_session.add(inactive)
+    db_session.flush()
+    exam = _exam_with_subjects(db_session, "國語")
+    missing_id = uuid4()
+
+    with pytest.raises(AppError) as exc:
+        set_exam_subjects(
+            db_session,
+            exam.id,
+            ExamSubjectsPutIn(
+                items=[
+                    ExamSubjectIn(subject_id=_subject(db_session, "國語").id),
+                    ExamSubjectIn(subject_id=inactive.id),
+                    ExamSubjectIn(subject_id=missing_id),
+                ]
+            ),
+            actor=actor,
+        )
+
+    assert _error(exc) == (422, "invalid_subject")
+    assert exc.value.details == {"subject_ids": sorted([str(inactive.id), str(missing_id)])}
+    assert _count(db_session, ExamSubject, exam.id) == 1
+
+
+# --- BACKEND-459 get_score_grid ---
+
+
+def test_score_grid_students(db_session: Session) -> None:
+    class_a = make_class(db_session, name="A班", grade_levels=(3,))
+    exam = _exam_with_subjects(db_session, "國語", grade_level=None, class_=class_a)
+    ming = make_student(db_session, name="王小明", student_no="G-002", class_=class_a)
+    an = make_student(db_session, name="林小安", student_no="G-001", class_=class_a)
+    mei = make_student(db_session, name="張小美", student_no="G-003", class_=class_a)
+    make_exam_score(db_session, exam, mei, _subject(db_session, "國語"), score=Decimal("70"))
+    mei.status = "withdrawn"
+    mei.withdrawn_on = date(2026, 10, 1)
+    db_session.flush()
+
+    grid = get_score_grid(db_session, exam.id)
+
+    assert [(s.name, s.in_roster) for s in grid.students] == [
+        ("林小安", True),
+        ("王小明", True),
+        ("張小美", False),
+    ]
+    assert {s.id for s in grid.students} == {ming.id, an.id, mei.id}
+    assert grid.students[0].class_name == "A班"
+    assert grid.exam.id == exam.id
+    assert grid.exam.roster_count == 2
+    assert [s.subject_name for s in grid.subjects] == ["國語"]
+
+
+def test_score_grid_sorted_by_class_then_student_no(db_session: Session) -> None:
+    class_b = make_class(db_session, name="乙班", grade_levels=(5,))
+    class_a = make_class(db_session, name="甲班", grade_levels=(5,))
+    exam = make_exam(db_session, grade_level=5)
+    make_student(db_session, name="王小明", student_no="Q-001", grade_level=5, class_=class_b)
+    make_student(db_session, name="陳小華", student_no="Q-002", grade_level=5, class_=class_a)
+    make_student(db_session, name="林小安", student_no="Q-000", grade_level=5)  # 未分班排最後
+
+    grid = get_score_grid(db_session, exam.id)
+
+    mine = [s.name for s in grid.students if s.name in {"王小明", "陳小華", "林小安"}]
+    assert mine == ["王小明", "陳小華", "林小安"]
+
+
+def test_score_grid_cells(db_session: Session) -> None:
+    class_a = make_class(db_session, grade_levels=(3,))
+    exam = _exam_with_subjects(db_session, "國語", "數學", grade_level=None, class_=class_a)
+    chinese, math = _subject(db_session, "國語"), _subject(db_session, "數學")
+    ming = make_student(db_session, name="王小明", class_=class_a)
+    make_student(db_session, name="陳小華", class_=class_a)  # 未登分：沒有 cell
+    make_exam_score(db_session, exam, ming, chinese, score=Decimal("95"))
+    make_exam_score(db_session, exam, ming, math, score=None, is_absent=True)
+
+    grid = get_score_grid(db_session, exam.id)
+
+    cells = {(c.student_id, c.subject_id): (c.score, c.is_absent, c.note) for c in grid.cells}
+    assert cells == {
+        (ming.id, chinese.id): (Decimal("95"), False, None),
+        (ming.id, math.id): (None, True, None),
+    }
+    assert grid.model_dump(mode="json")["cells"][0]["score"] in (95.0, None)
+
+
+def test_score_grid_not_found(db_session: Session) -> None:
+    with pytest.raises(AppError) as exc:
+        get_score_grid(db_session, uuid4())
+    assert _error(exc) == (404, "exam_not_found")
+
+
+def test_score_grid_query_count(db_session: Session) -> None:
+    class_a = make_class(db_session, grade_levels=(3,))
+    director = make_staff(db_session, display_name="陳主任")
+    exam = _exam_with_subjects(
+        db_session, "國語", "數學", "英語", grade_level=None, class_=class_a, status="published"
+    )
+    exam.published_by = director.id
+    subjects = [_subject(db_session, n) for n in ("國語", "數學", "英語")]
+    for index in range(40):
+        student = make_student(db_session, class_=class_a)
+        for subject in subjects:
+            make_exam_score(db_session, exam, student, subject, score=Decimal(60 + index % 40))
+    db_session.flush()
+    db_session.expire_all()
+    statements: list[str] = []
+
+    def record(_conn: object, _cur: object, statement: str, *_args: object) -> None:
+        statements.append(statement)
+
+    engine = db_session.get_bind()
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        grid = get_score_grid(db_session, exam.id)
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+
+    assert (len(grid.students), len(grid.cells)) == (40, 120)
+    assert grid.exam.published_by_name == "陳主任"
+    assert len(statements) <= 5
+
+
+# --- BACKEND-462 unpublish_exam ---
+
+
+def test_unpublish_exam_success(db_session: Session, actor: CurrentStaff) -> None:
+    director = make_staff(db_session, display_name="陳主任")
+    exam = make_exam(db_session, status="published")
+    exam.published_by = director.id
+    db_session.flush()
+    clock = FakeClock(datetime(2026, 10, 20, 2, 0, tzinfo=UTC))
+
+    out = unpublish_exam(db_session, exam.id, actor=actor, meta=_META, clock=clock)
+
+    assert (out.status, out.published_at, out.published_by_name) == ("draft", None, None)
+    row = db_session.get(Exam, exam.id)
+    assert row is not None
+    assert (row.status, row.published_at, row.published_by) == ("draft", None, None)
+    [log] = db_session.execute(
+        select(AuditLog).where(
+            AuditLog.action == "exam.unpublish", AuditLog.entity_id == str(exam.id)
+        )
+    ).scalars()
+    assert (log.actor_id, log.entity_type) == (actor.id, "exam")
+    assert log.before == {"status": "published", "published_at": ARCHIVED_AT.isoformat()}
+    assert log.after == {"status": "draft"}
+
+
+def test_unpublish_exam_draft(db_session: Session, actor: CurrentStaff) -> None:
+    exam = make_exam(db_session)
+    clock = FakeClock(datetime(2026, 10, 20, 2, 0, tzinfo=UTC))
+
+    with pytest.raises(AppError) as draft:
+        unpublish_exam(db_session, exam.id, actor=actor, meta=_META, clock=clock)
+    with pytest.raises(AppError) as missing:
+        unpublish_exam(db_session, uuid4(), actor=actor, meta=_META, clock=clock)
+
+    assert _error(draft) == (409, "exam_not_published")
+    assert _error(missing) == (404, "exam_not_found")
+
+
+# --- BACKEND-463 get_exam_summary ---
+
+
+def test_exam_summary_stats(db_session: Session) -> None:
+    class_a = make_class(db_session, grade_levels=(3,))
+    exam = _exam_with_subjects(db_session, "數學", "英語", grade_level=None, class_=class_a)
+    math = _subject(db_session, "數學")
+    students = [make_student(db_session, class_=class_a) for _ in range(4)]
+    make_exam_score(db_session, exam, students[0], math, score=Decimal("90"))
+    make_exam_score(db_session, exam, students[1], math, score=Decimal("80"))
+    make_exam_score(db_session, exam, students[2], math, score=None, is_absent=True)
+    # students[3] 未登分
+
+    summary = get_exam_summary(db_session, exam.id)
+
+    assert (summary.exam_id, summary.roster_count) == (exam.id, 4)
+    math_row, english_row = summary.subjects
+    assert (math_row.subject_name, math_row.full_score) == ("數學", Decimal("100"))
+    assert (math_row.scored_count, math_row.absent_count, math_row.missing_count) == (2, 1, 1)
+    assert math_row.average == Decimal("85.00")
+    assert (math_row.max, math_row.min) == (Decimal("90"), Decimal("80"))
+    assert english_row.subject_name == "英語"
+
+
+def test_exam_summary_rounding(db_session: Session) -> None:
+    class_a = make_class(db_session, grade_levels=(3,))
+    exam = _exam_with_subjects(db_session, "數學", grade_level=None, class_=class_a)
+    math = _subject(db_session, "數學")
+    for score in ("90", "80", "81"):
+        make_exam_score(
+            db_session, exam, make_student(db_session, class_=class_a), math, score=Decimal(score)
+        )
+
+    [row] = get_exam_summary(db_session, exam.id).subjects
+
+    assert row.average == Decimal("83.67")
+    assert row.missing_count == 0
+
+
+def test_exam_summary_empty_subject(db_session: Session) -> None:
+    class_a = make_class(db_session, grade_levels=(3,))
+    exam = _exam_with_subjects(db_session, "英語", grade_level=None, class_=class_a)
+    make_student(db_session, class_=class_a)
+    make_student(db_session, class_=class_a)
+
+    [row] = get_exam_summary(db_session, exam.id).subjects
+
+    assert (row.scored_count, row.absent_count, row.missing_count) == (0, 0, 2)
+    assert (row.average, row.max, row.min) == (None, None, None)
