@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 320,
-  "last_updated": "2026-10-05T04:14:51Z",
+  "version": 321,
+  "last_updated": "2026-10-05T04:14:54Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -7634,7 +7634,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:services/student_attendance_report.py::_student_active_on",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-302",
@@ -7661,9 +7661,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；紅測 7116986 先於實作 1904eb6（實作 commit 未改測試）；test_attendance_service / test_leave_attendance / test_leave_service / test_parent_today_service 整檔 95 passed；just lint / typecheck 乾淨；測試以 app_backend 連線；跑完後以 owner 查 staff_users / students / parent_accounts / guardians / 自訂 roles / 出勤 / 通知 / 接送等表皆 0 列，committing 測試無殘列。突變在 scratchpad 複本執行。 單一 INSERT ... VALUES 多列 ON CONFLICT DO NOTHING RETURNING status 計數；非營業日（休息日、週六、週日）skipped 且 0 列；suspended / withdrawn / 封存不建列；enrolled_on > d 排除、入班當天建列；重跑不動已到班列；兩 session 並發 s2 等 s1 commit 後 do nothing、加總 == 學生數。突變：拿掉 enrolled_on 排除 → 1 紅；拿掉 on_conflict_do_nothing → 2 紅。"
       }
     },
     {
@@ -7708,7 +7708,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:api/student_attendance.py::batch_save_attendance",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-302",
@@ -7741,9 +7741,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；紅測 7116986 先於實作 1904eb6（實作 commit 未改測試）；test_attendance_service / test_leave_attendance / test_leave_service / test_parent_today_service 整檔 95 passed；just lint / typecheck 乾淨；測試以 app_backend 連線；跑完後以 owner 查 staff_users / students / parent_accounts / guardians / 自訂 roles / 出勤 / 通知 / 接送等表皆 0 列，committing 測試無殘列。突變在 scratchpad 複本執行。 先 ensure_attendance_row（FOR UPDATE）再條件式 UPDATE WHERE status IN (expected, absent)；present / left / leave → 409 各 code 且無通知；有請假無出勤列 → ensure 建 leave 列 → 409 student_on_leave（有測試）；非營業日 / 非在學 409、不存在與封存 404；通知 payload.time 為台北 15:05、recipient 為綁定家長；兩 session 並發一個 present 一個 409 already_checked_in、notifications 1 筆；enqueue 不在 savepoint 內（BACKEND-545 規則不影響）；commit 後才推播，家長 data 只有 5 個裁切欄位。突變：拿掉 status 條件 → 3 紅。"
       }
     },
     {
@@ -7858,7 +7858,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-302",
@@ -7884,9 +7884,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；紅測 7116986 先於實作 1904eb6（實作 commit 未改測試）；test_attendance_service / test_leave_attendance / test_leave_service / test_parent_today_service 整檔 95 passed；just lint / typecheck 乾淨；測試以 app_backend 連線；跑完後以 owner 查 staff_users / students / parent_accounts / guardians / 自訂 roles / 出勤 / 通知 / 接送等表皆 0 列，committing 測試無殘列。突變在 scratchpad 複本執行。 條件式 UPDATE WHERE status='expected'；已 absent 原樣回傳（冪等，note 保留）；present / left → 409 already_checked_in、leave → 409 student_on_leave、非營業日 / 非在學 / 不存在皆有測試；無通知列；commit 後推播家長裁切資料。"
       }
     },
     {
@@ -8052,7 +8052,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:api/parent_portal/attendance.py::get_monthly_attendance",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-312"
@@ -8074,9 +8074,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；紅測 7116986 先於實作 1904eb6（實作 commit 未改測試）；test_attendance_service / test_leave_attendance / test_leave_service / test_parent_today_service 整檔 95 passed；just lint / typecheck 乾淨；測試以 app_backend 連線；跑完後以 owner 查 staff_users / students / parent_accounts / guardians / 自訂 roles / 出勤 / 通知 / 接送等表皆 0 列，committing 測試無殘列。突變在 scratchpad 複本執行。 days 為整月每天（is_service_day、status、到離班時間、leave_type 只在 status=leave 時帶出），stats 沿用 312 的 _monthly_stats（只計營業日、入班後、不晚於今天）；回應不含 note / updated_by（model_dump 與 JSON 皆不含內部備註）；month 以 YYYY-MM 檢查，'2026/09'、'2026-13'、'0000-01'、'26-09'、'' 皆 422 invalid_month。實作者自述的「非營業日若有出勤列仍顯示該列 status」：314 description 只要求 days 含 status，未如 312 規定非營業日回 None，且 stats 仍只計營業日，判斷符合規格（家長看到的是實際紀錄）。"
       }
     },
     {
@@ -8557,7 +8557,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_attendance.py",
       "source_ref": "BE:services/student_leave_service.py::revert_attendance_for_leave",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-342"
@@ -8579,9 +8579,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；紅測 7116986 先於實作 1904eb6（實作 commit 未改測試）；test_attendance_service / test_leave_attendance / test_leave_service / test_parent_today_service 整檔 95 passed；just lint / typecheck 乾淨；測試以 app_backend 連線；跑完後以 owner 查 staff_users / students / parent_accounts / guardians / 自訂 roles / 出勤 / 通知 / 接送等表皆 0 列，committing 測試無殘列。突變在 scratchpad 複本執行。 單一 UPDATE ... WHERE leave_id = :id [AND service_date >= from_date] SET status expected, leave_id NULL RETURNING，回傳升冪；其他請假、其他學生、present 列不動；from_date 部分還原；有更新才於 commit 後推 attendance.bulk_updated。突變：WHERE 改成任一 leave_id → 紅。"
       }
     },
     {
@@ -8591,7 +8591,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_service.py",
       "source_ref": "BE:services/student_leave_notify.py::notify_student_leave",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-340",
@@ -8617,9 +8617,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；紅測 7116986 先於實作 1904eb6（實作 commit 未改測試）；test_attendance_service / test_leave_attendance / test_leave_service / test_parent_today_service 整檔 95 passed；just lint / typecheck 乾淨；測試以 app_backend 連線；跑完後以 owner 查 staff_users / students / parent_accounts / guardians / 自訂 roles / 出勤 / 通知 / 接送等表皆 0 列，committing 測試無殘列。突變在 scratchpad 複本執行。 staff_recipients(permission=leaves:read, class_ids=[student.class_id])：班級負責員工（無 leaves:read）與 leaves:read 員工收到，無權限 / 他班 / 停用員工不收；未分班學生只發 leaves:read；payload 六欄位與 created / cancelled title 正確；date_range 部分取消區間；收件人為空不呼叫 enqueue。"
       }
     },
     {
@@ -14172,7 +14172,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_today_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-181",
@@ -14204,9 +14204,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；紅測 7116986 先於實作 1904eb6（實作 commit 未改測試）；test_attendance_service / test_leave_attendance / test_leave_service / test_parent_today_service 整檔 95 passed；just lint / typecheck 乾淨；測試以 app_backend 連線；跑完後以 owner 查 staff_users / students / parent_accounts / guardians / 自訂 roles / 出勤 / 通知 / 接送等表皆 0 列，committing 測試無殘列。突變在 scratchpad 複本執行。 出勤（無列：營業日 expected、非營業日 None）、請假（不依賴出勤列，取消的不算）、作業（項目計數與進度合併一條）、接送（非終態優先，否則今日最新；接走人 guardian / proxy / override「老師確認交付」與 404 家長版一致）共 ≤ 6 條 SQL；回應不含員工姓名與出勤 note。給協調者的規格確認（不擋）：有請假但當日尚無出勤列時（例如每日初始化尚未執行），attendance.status 依 description 字面回 'expected'，同時 on_leave=True；前端需以 on_leave 優先顯示「請假」。殘留：test_child_today_pickup_pick 的資料（pending 比 completed 晚建）分不出「非終態優先」與「最新優先」——突變拿掉非終態優先仍綠；因同生同日至多一筆非終態且狀態只前進，非終態那筆必為最新，兩者在可達狀態等價。parent_today_service.py 另有一份 _hm / _taipei_hm helper（與 views.py / requests.py 重複）。"
       }
     },
     {
@@ -14980,7 +14980,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-413"
@@ -15001,9 +15001,9 @@
         "notes": "殘列筆數檢查可用測試外的手動比對（前後各查一次）記錄在回報；若改寫成自動檢查，放在同一測試的 teardown 斷言。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。紅測 bd6a1d0（no_people_residue fixture：teardown 斷言 staff_users 與非系統 roles 筆數與跑前相同，置於參數第一個、最後拆除）先於修正 3df43ae；修正改用 make_staff(role_code='tutor') 並手動設 replied_by / reply 欄位，員工登記進 owner 清理，鎖列斷言不變。突變（scratchpad 複本）：拿掉 sync_open_request_reply 的 with_for_update → test_sync_reply_locks_request_row 仍轉紅。test_pickup_requests.py 整檔 20 passed；跑完後 owner 查 staff_users 與非系統 roles 皆 0 列（同檔其他測試無同類殘留）；lint / typecheck 乾淨。"
       }
     }
   ]
