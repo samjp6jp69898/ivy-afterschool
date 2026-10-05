@@ -200,8 +200,8 @@ class _ElementBudget:
 class _XmlLimitScanner:
     """expat 串流掃描單一 XML part：只計數、不建樹；任一上限超過即拋 AppError（422）。
 
-    通用上限：共用元素總額、巢狀深度、單一屬性值 / 連續文字節點長度。工作表上限：row / c 的 local name
-    計數（命名空間前綴與元素名後的空白都算得到）。expat 的 UseForeignDTD / 外部實體預設不載入；
+    通用上限：共用元素總額、巢狀深度、單一屬性值 / 連續文字節點長度。工作表上限：row / c 的
+    local name 計數（命名空間前綴與元素名後的空白都算得到）。expat 的 UseForeignDTD / 外部實體預設不載入；
     內建 expat 2.4.1+ 預設拒絕實體膨脹攻擊。
     """
 
