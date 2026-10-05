@@ -1,4 +1,5 @@
-"""BACKEND-373 / 384 / 374：homework_service（進度列鎖定、家長端當日作業明細、ws 快照推播）。
+"""BACKEND-373 / 384 / 374 / 383：homework_service（進度列鎖定、家長端當日作業明細、ws 快照推播、
+作業進度看板）。
 
 推播測試以 monkeypatch 記錄 publish_threadsafe；commit 走 db_session（savepoint 模式的 commit
 同樣觸發 before_commit / after_commit，見 BACKEND-006）。
@@ -11,7 +12,7 @@ from typing import Any
 from uuid import UUID
 
 import pytest
-from sqlalchemy import Engine, func, select, text
+from sqlalchemy import Engine, event, func, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
@@ -20,15 +21,21 @@ from app.models.homework import HomeworkDailyProgress
 from app.models.reference import Subject
 from app.realtime import publish as publish_module
 from app.realtime.publish import admin_topic_channel, student_channel
+from app.schemas.homework import BoardOut, BoardQuery, BoardStudentOut
 from app.services.homework_service import (
     broadcast_homework_snapshot,
+    get_board,
     get_child_homework,
     lock_progress_row,
 )
+from app.services.settings_service import clear_settings_cache
 from tests.integration.db.conftest import connect_owner
 from tests.support.factories import (
+    make_attendance,
+    make_class,
     make_homework_item,
     make_homework_progress,
+    make_leave,
     make_staff,
     make_student,
 )
@@ -459,3 +466,164 @@ def test_broadcast_homework_snapshot_rollback(
     # rollback 清掉的推播不會在下一次 commit 時補送
     db_session.commit()
     assert published == []
+
+
+# --- BACKEND-383 get_board ---
+
+
+@pytest.fixture
+def fresh_settings() -> Iterator[None]:
+    clear_settings_cache()
+    yield
+    clear_settings_cache()
+
+
+def _card(board: BoardOut, student_id: UUID) -> BoardStudentOut:
+    [card] = [c for c in board.students if c.student_id == student_id]
+    return card
+
+
+def test_homework_board_cards(
+    db_session: Session, fake_clock: FakeClock, fresh_settings: None
+) -> None:
+    class_a = make_class(db_session, name="A班")
+    ming = make_student(db_session, name="王小明", student_no="H-001", class_=class_a)
+    hua = make_student(db_session, name="陳小華", student_no="H-002", class_=class_a)
+    teacher = make_staff(db_session, display_name="林老師")
+    make_homework_item(
+        db_session, ming, service_date=_DAY, title="數學習作", status="done", sort_order=20
+    )
+    make_homework_item(db_session, ming, service_date=_DAY, title="國語生字", sort_order=10)
+    make_homework_item(db_session, ming, service_date=date(2026, 9, 2), title="隔天的作業")
+    progress = make_homework_progress(
+        db_session, ming, service_date=_DAY, overall_status="in_progress", ready_eta=time(17, 30)
+    )
+    progress.eta_updated_by = teacher.id
+    make_attendance(db_session, ming, service_date=_DAY, status="present")
+    make_attendance(db_session, hua, service_date=_DAY)
+    db_session.flush()
+
+    board = get_board(db_session, BoardQuery(date=_DAY, class_id=class_a.id), clock=fake_clock)
+
+    assert board.date == _DAY
+    assert [c.name for c in board.students] == ["王小明", "陳小華"]
+    ming_card, hua_card = board.students
+    assert (ming_card.student_no, ming_card.class_id, ming_card.class_name) == (
+        "H-001",
+        class_a.id,
+        "A班",
+    )
+    assert ming_card.attendance_status == "present"
+    assert [i.title for i in ming_card.items] == ["國語生字", "數學習作"]
+    assert ming_card.progress.overall_status == "in_progress"
+    assert ming_card.progress.ready_eta == "17:30"
+    assert ming_card.progress.eta_updated_by_name == "林老師"
+    assert hua_card.attendance_status == "expected"
+    assert hua_card.items == []
+    assert hua_card.progress.overall_status == "not_started"
+    assert (hua_card.progress.ready_eta, hua_card.progress.student_id) == (None, hua.id)
+    assert board.summary.model_dump() == {
+        "total": 2,
+        "done": 0,
+        "in_progress": 1,
+        "not_started": 1,
+    }
+
+
+def test_homework_board_defaults_to_today(
+    db_session: Session, fake_clock: FakeClock, fresh_settings: None
+) -> None:
+    """跨午夜：UTC 9/1 16:30 已是台北 9/2。"""
+    class_a = make_class(db_session)
+    ming = make_student(db_session, class_=class_a)
+    make_homework_item(db_session, ming, service_date=date(2026, 9, 2), title="隔天的作業")
+    fake_clock.set(datetime(2026, 9, 1, 16, 30, tzinfo=UTC))
+
+    board = get_board(db_session, BoardQuery(class_id=class_a.id), clock=fake_clock)
+
+    assert board.date == date(2026, 9, 2)
+    assert [i.title for i in _card(board, ming.id).items] == ["隔天的作業"]
+    assert _card(board, ming.id).attendance_status is None
+
+
+def test_homework_board_summary_excludes_leave(
+    db_session: Session, fake_clock: FakeClock, fresh_settings: None
+) -> None:
+    class_a = make_class(db_session)
+    ming = make_student(db_session, name="王小明", class_=class_a)
+    make_student(db_session, name="陳小華", class_=class_a)
+    an = make_student(db_session, name="林小安", class_=class_a)
+    mei = make_student(db_session, name="張小美", class_=class_a)
+    leave = make_leave(db_session, an, start_date=_DAY)
+    make_attendance(db_session, an, service_date=_DAY, status="leave", leave=leave)
+    make_homework_progress(db_session, an, service_date=_DAY, overall_status="done")
+    make_attendance(db_session, mei, service_date=_DAY, status="absent")
+    make_homework_progress(db_session, ming, service_date=_DAY, overall_status="done")
+    # 退班 / 封存學生不出現
+    gone = make_student(db_session, name="李小東", class_=class_a)
+    gone.status = "withdrawn"
+    gone.withdrawn_on = _DAY
+    make_student(db_session, name="周小西", class_=class_a, archived=True)
+    db_session.flush()
+
+    board = get_board(db_session, BoardQuery(date=_DAY, class_id=class_a.id), clock=fake_clock)
+
+    assert {c.name for c in board.students} == {"王小明", "陳小華", "林小安", "張小美"}
+    assert _card(board, an.id).attendance_status == "leave"
+    assert board.summary.model_dump() == {
+        "total": 2,
+        "done": 1,
+        "in_progress": 0,
+        "not_started": 1,
+    }
+
+
+def test_homework_board_filter_and_queries(
+    db_session: Session, fake_clock: FakeClock, fresh_settings: None
+) -> None:
+    class_a = make_class(db_session)
+    class_b = make_class(db_session)
+    other = make_student(db_session, name="陳小華", class_=class_a)
+    ids = set()
+    for index in range(30):
+        student = make_student(db_session, name=f"學生{index}", class_=class_b)
+        ids.add(student.id)
+        make_homework_item(db_session, student, service_date=_DAY, title=f"作業{index}")
+        make_homework_progress(db_session, student, service_date=_DAY, overall_status="in_progress")
+        make_attendance(db_session, student, service_date=_DAY, status="present")
+    statements: list[str] = []
+
+    def record(conn: Any, cursor: Any, statement: str, *args: Any) -> None:
+        statements.append(statement)
+
+    engine = db_session.get_bind()
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        board = get_board(db_session, BoardQuery(date=_DAY, class_id=class_b.id), clock=fake_clock)
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+
+    assert {c.student_id for c in board.students} == ids
+    assert other.id not in {c.student_id for c in board.students}
+    assert all(len(c.items) == 1 for c in board.students)
+    assert board.summary.in_progress == 30
+    assert len(statements) <= 5
+
+
+def test_homework_board_includes_window(
+    db_session: Session, fake_clock: FakeClock, fresh_settings: None
+) -> None:
+    default = get_board(db_session, BoardQuery(date=_DAY), clock=fake_clock)
+    assert default.window.model_dump() == {"past_days": 30, "future_days": 7}
+
+    db_session.execute(
+        text(
+            "update public.system_settings set value = cast(:value as jsonb) "
+            "where key = 'homework.window'"
+        ),
+        {"value": '{"past_days": 10, "future_days": 3}'},
+    )
+    clear_settings_cache()
+    changed = get_board(db_session, BoardQuery(date=_DAY), clock=fake_clock)
+
+    assert changed.window.model_dump() == {"past_days": 10, "future_days": 3}
