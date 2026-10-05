@@ -3,12 +3,26 @@
 ``assert_xlsx_not_zip_bomb`` 的防護，欄位改為本專案學生欄位。
 
 - 呼叫端先以 BACKEND-016 ``read_validated_upload``（XLSX 檔頭 + 5 MB 上限）取得
-  ``ValidatedUpload``；本模組在交給 openpyxl 之前再做 zip 層檢查：解壓後總位元組上限、每個工作表
-  XML 以 ``ElementTree.iterparse`` 串流掃描、依 local name 計 row / c（命名空間前綴、元素名後的
-  換行 / tab 都算得到），列數 / 單列欄數 / 總儲存格數任一超標即中止（最多只讀到第 65 個儲存格，
-  記憶體有界）；zip 宣告大小被竄改、截斷、不支援的壓縮法等解壓錯誤一律 422
-  ``import_invalid_file``。載入 openpyxl 時丟棄可偽造的 dimension、以 max_row / max_col 硬上限限制
-  迭代量。``data_only=True``：公式儲存格只取快取值，儲存格內容一律當純文字，不評估任何公式。
+  ``ValidatedUpload``；本模組在交給 openpyxl 之前再做 zip / XML 層防護
+  （``assert_xlsx_within_limits``，不受信任的 xlsx 可以只有幾十 KB 卻讓解析器吃掉上 GB
+  記憶體）。安全硬上限集中為模組常數
+  （不是業務參數，不放 system_settings）：
+  - zip：entry 數 ≤ ``MAX_ZIP_ENTRIES``、同名 entry 拒收、只接受 stored / deflate、加密 entry 拒收、
+    單一 entry 解壓 ≤ ``MAX_ZIP_ENTRY_BYTES``、總解壓 ≤ ``MAX_XLSX_UNCOMPRESSED_BYTES``（先看
+    宣告值再串流讀，不先配置記憶體）；宣告大小 / CRC 不符、截斷、不支援的壓縮法等一律 422
+    ``import_invalid_file``。全程在記憶體內處理，不解壓到磁碟（路徑穿越檔名不適用）。
+  - XML：zip 內**每一個**內容以 ``<`` 開頭的 entry（不依檔名 / 副檔名過濾，工作表、styles、
+    sharedStrings、workbook、rels、Content_Types、docProps、externalLinks 都算；把工作表改放到
+    worksheets/ 以外的路徑也逃不掉）都以 ``xml.parsers.expat`` 串流掃描、只計數不建樹：元素總數 ≤
+    ``MAX_XML_ELEMENTS``、巢狀深度 ≤ ``MAX_XML_DEPTH``、單一屬性值 / 文字節點長度 ≤
+    ``MAX_XML_VALUE_CHARS``；另依 local name 計 row / c（命名空間前綴、換行 / tab 都算）：列數 ≤
+    ``MAX_IMPORT_ROWS`` + 寬容值、單列 ≤ ``MAX_IMPORT_COLS``、總儲存格 ≤ 列數乘欄數。任一超標即
+    中止，記憶體有界。expat 不載入外部實體、拒絕實體膨脹（billion laughs）。
+  - openpyxl：``read_only`` + ``data_only``（公式只取快取值，儲存格內容一律當純文字）+
+    ``keep_links=False``（不處理外部連結）；丟棄可偽造的 dimension、以 max_row / max_col 硬上限限制
+    迭代量；載入與迭代階段的任何例外（sharedStrings 索引越界、壞日期等）一律 422
+    ``import_invalid_file``。取**第一張可見**（``sheet_state == "visible"``）的工作表，沒有可見
+    工作表 → 422 ``import_invalid_file``。
 - 標題列：``check_header`` 回 ``(missing, unexpected)``（必填欄缺少依 IMPORT_COLUMNS 順序、無法辨識
   的欄名依標題列順序；選填欄缺少不算錯）→ 422 ``import_invalid_header``。資料列 > 500 → 422
   ``import_too_many_rows``；沒有資料列（整列空白不算）→ 422 ``import_empty``。
@@ -33,7 +47,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import IO, Any, Final
 from uuid import UUID
-from xml.etree import ElementTree as ET
+from xml.parsers import expat
 
 from openpyxl import load_workbook
 from pydantic import ValidationError
@@ -72,9 +86,19 @@ IMPORT_COLUMNS: Final[list[str]] = [
 ]
 MAX_IMPORT_ROWS: Final = 500
 MAX_IMPORT_COLS: Final = 64
-MAX_XLSX_UNCOMPRESSED_BYTES: Final = 32 * 1024 * 1024
 # 標題列 + 少量空白列的寬容值；超過就不再往下讀
 _GRID_ROW_SLACK: Final = 16
+
+# --- 不受信任 xlsx 的安全硬上限（模組常數；合理的匯入檔遠低於這些值）---
+MAX_ZIP_ENTRIES: Final = 64  # openpyxl 產生的 xlsx 約 10 個 entry
+MAX_ZIP_ENTRY_BYTES: Final = 16 * 1024 * 1024  # 單一 entry 解壓後
+MAX_XLSX_UNCOMPRESSED_BYTES: Final = 32 * 1024 * 1024  # 全部 entry 解壓後總和
+# 單一 XML part 的元素總數：517 列乘 64 欄、每格 2~3 個元素，再留餘裕
+MAX_XML_ELEMENTS: Final = 250_000
+MAX_XML_DEPTH: Final = 32  # 單一 XML part 的巢狀深度（正常工作表約 6 層）
+MAX_XML_VALUE_CHARS: Final = 32 * 1024  # 單一屬性值 / 連續文字節點的字元數
+_ALLOWED_COMPRESSION: Final = frozenset({zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED})
+_ZIP_ENCRYPTED_FLAG: Final = 0x1
 
 _REQUIRED_COLUMNS: Final = [c for c in IMPORT_COLUMNS if c.endswith("*")]
 _COLUMN_FIELDS: Final[dict[str, str]] = {
@@ -108,7 +132,7 @@ _ZIP_ERRORS: Final = (
     NotImplementedError,
     OSError,
     ValueError,
-    ET.ParseError,
+    expat.ExpatError,
 )
 
 
@@ -136,7 +160,8 @@ def _invalid_file(message: str) -> AppError:
 
 
 def _local_name(tag: str) -> str:
-    return tag.rsplit("}", 1)[-1].rsplit(":", 1)[-1]
+    # expat 不開 namespace 處理時 tag 為原字串，可能帶 ``x:`` 前綴
+    return tag.rsplit(":", 1)[-1]
 
 
 def _too_many_rows() -> AppError:
@@ -148,50 +173,126 @@ def _too_many_rows() -> AppError:
     )
 
 
-def _scan_sheet_grid(stream: IO[bytes]) -> None:
-    """串流掃描工作表 XML：列數 / 單列欄數 / 總儲存格數任一超標即中止。
+class _XmlLimitScanner:
+    """expat 串流掃描單一 XML part：只計數、不建樹；任一上限超過即拋 AppError（422）。
 
-    依 local name 比對（``<x:c/>``、``<c\n/>`` 都算），每個元素結束即 clear；超標在第 65 個儲存格
-    或第 517 列就拋出，不會把整張表讀進記憶體。
+    通用上限：元素總數、巢狀深度、單一屬性值 / 連續文字節點長度。工作表上限：row / c 的 local name
+    計數（命名空間前綴與元素名後的空白都算得到）。expat 的 UseForeignDTD / 外部實體預設不載入；
+    內建 expat 2.4.1+ 預設拒絕實體膨脹攻擊。
     """
-    rows = cells = row_cells = 0
-    max_cells = MAX_IMPORT_ROWS * MAX_IMPORT_COLS
-    # 只計元素數量、不展開任何內容；Python 3.11+ 內建 expat 預設拒絕實體膨脹（billion laughs）
-    for event, elem in ET.iterparse(stream, events=("start", "end")):  # noqa: S314
-        if event == "start":
-            name = _local_name(elem.tag)
-            if name == "row":
-                rows += 1
-                row_cells = 0
-                if rows > MAX_IMPORT_ROWS + _GRID_ROW_SLACK:
-                    raise _too_many_rows()
-            elif name == "c":
-                cells += 1
-                row_cells += 1
-                if row_cells > MAX_IMPORT_COLS:
-                    raise _invalid_file(
-                        f"Excel 欄位數超過上限 {MAX_IMPORT_COLS}，請確認檔案未含異常寬列"
-                    )
-                if cells > max_cells:
-                    raise _invalid_file("Excel 儲存格數量超過上限，請確認檔案內容")
-        else:
-            elem.clear()
+
+    def __init__(self) -> None:
+        self.elements = 0
+        self.depth = 0
+        self.rows = 0
+        self.cells = 0
+        self.row_cells = 0
+        self._text_len = 0
+        parser = expat.ParserCreate()
+        parser.buffer_text = False
+        parser.StartElementHandler = self._start
+        parser.EndElementHandler = self._end
+        parser.CharacterDataHandler = self._text
+        parser.ExternalEntityRefHandler = self._reject_external_entity
+        self._parser = parser
+
+    def feed_head(self, head: bytes) -> None:
+        self._parser.Parse(head, False)
+
+    def feed(self, stream: IO[bytes]) -> None:
+        while chunk := stream.read(64 * 1024):
+            self._parser.Parse(chunk, False)
+        self._parser.Parse(b"", True)
+
+    # --- handlers ---
+    def _reject_external_entity(self, *_: object) -> int:
+        raise _invalid_file("Excel 內含外部實體參照，請確認檔案內容")
+
+    def _start(self, name: str, attrs: dict[str, str]) -> None:
+        self._text_len = 0
+        self.elements += 1
+        if self.elements > MAX_XML_ELEMENTS:
+            raise _invalid_file("Excel 內容元素數量超過上限，請確認檔案內容")
+        self.depth += 1
+        if self.depth > MAX_XML_DEPTH:
+            raise _invalid_file("Excel 內容巢狀層數超過上限，請確認檔案內容")
+        for value in attrs.values():
+            if len(value) > MAX_XML_VALUE_CHARS:
+                raise _invalid_file("Excel 內含過長的屬性值，請確認檔案內容")
+        local = _local_name(name)
+        if local == "row":
+            self.rows += 1
+            self.row_cells = 0
+            if self.rows > MAX_IMPORT_ROWS + _GRID_ROW_SLACK:
+                raise _too_many_rows()
+        elif local == "c":
+            self.cells += 1
+            self.row_cells += 1
+            if self.row_cells > MAX_IMPORT_COLS:
+                raise _invalid_file(
+                    f"Excel 欄位數超過上限 {MAX_IMPORT_COLS}，請確認檔案未含異常寬列"
+                )
+            if self.cells > MAX_IMPORT_ROWS * MAX_IMPORT_COLS:
+                raise _invalid_file("Excel 儲存格數量超過上限，請確認檔案內容")
+
+    def _end(self, _name: str) -> None:
+        self._text_len = 0
+        self.depth -= 1
+
+    def _text(self, data: str) -> None:
+        # 同一文字節點 expat 可能分多次回呼：累計到遇到下一個元素邊界為止
+        self._text_len += len(data)
+        if self._text_len > MAX_XML_VALUE_CHARS:
+            raise _invalid_file("Excel 內含過長的文字內容，請確認檔案內容")
+
+
+def _looks_like_xml(head: bytes) -> bool:
+    """內容以 ``<`` 開頭（允許 UTF-8 BOM 與前置空白）就當 XML 掃；其餘（圖片等二進位）只受大小限制，
+    openpyxl 也不會把它們當 XML 解析。"""
+    return head.removeprefix(b"\xef\xbb\xbf").lstrip().startswith(b"<")
+
+
+def _check_zip_directory(infos: list[zipfile.ZipInfo]) -> None:
+    if len(infos) > MAX_ZIP_ENTRIES:
+        raise _invalid_file(f"Excel 內含過多檔案（上限 {MAX_ZIP_ENTRIES}），請確認檔案內容")
+    seen: set[str] = set()
+    total = 0
+    for info in infos:
+        # 不解壓到磁碟，檔名只用來偵測同名 entry（openpyxl 以名稱取 part，同名會取到哪一份不確定）
+        name = info.filename.replace("\\", "/")
+        if name in seen:
+            raise _invalid_file("Excel 內含重複的檔案項目，請確認檔案內容")
+        seen.add(name)
+        if info.flag_bits & _ZIP_ENCRYPTED_FLAG:
+            raise _invalid_file("Excel 內含加密內容，無法讀取")
+        if info.compress_type not in _ALLOWED_COMPRESSION:
+            raise _invalid_file("Excel 使用不支援的壓縮方式，無法讀取")
+        if info.file_size > MAX_ZIP_ENTRY_BYTES:
+            raise _invalid_file("Excel 內含過大的檔案項目（疑似壓縮炸彈），請確認檔案內容")
+        total += info.file_size
+        if total > MAX_XLSX_UNCOMPRESSED_BYTES:
+            raise _invalid_file("Excel 解壓後大小超過上限（疑似壓縮炸彈），請確認檔案內容")
 
 
 def assert_xlsx_within_limits(content: bytes) -> None:
-    """交給 openpyxl 之前：解壓後總大小與工作表格數上限（解壓炸彈 / 超寬表）；壞檔 422。"""
+    """交給 openpyxl 之前的 zip / XML 層防護；任何壞檔或超標一律 422（見模組 docstring）。"""
     try:
         with zipfile.ZipFile(io.BytesIO(content)) as zf:
-            total = 0
-            for info in zf.infolist():
-                total += info.file_size
-                if total > MAX_XLSX_UNCOMPRESSED_BYTES:
-                    raise _invalid_file("Excel 解壓後大小超過上限（疑似壓縮炸彈），請確認檔案內容")
-            for info in zf.infolist():
-                name = info.filename.replace("\\", "/").lower()
-                if "worksheets/" in name and name.endswith(".xml"):
-                    with zf.open(info) as stream:
-                        _scan_sheet_grid(stream)
+            infos = zf.infolist()
+            _check_zip_directory(infos)
+            for info in infos:
+                if info.file_size == 0:
+                    continue
+                with zf.open(info) as stream:
+                    head = stream.read(64)
+                    if not _looks_like_xml(head):
+                        # 非 XML：只需確認實際解壓大小與宣告一致（讀完由 zipfile 驗 CRC）
+                        while stream.read(64 * 1024):
+                            pass
+                        continue
+                    scanner = _XmlLimitScanner()
+                    scanner.feed_head(head)
+                    scanner.feed(stream)
     except AppError:
         raise
     except _ZIP_ERRORS:
@@ -218,12 +319,14 @@ def _read_rows(content: bytes) -> tuple[list[str], list[tuple[int, tuple[Any, ..
     """第一個工作表 → (標題, [(Excel 列號, 儲存格值...)])；整列空白略過。"""
     assert_xlsx_within_limits(content)
     try:
-        wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True, keep_links=False)
     except Exception:  # openpyxl 對壞檔會拋各種解析例外，一律視為無法讀取
         raise _invalid_file("無法讀取 Excel 檔案") from None
     try:
         header, rows = _iterate_rows(wb)
-    except _ZIP_ERRORS:
+    except AppError:
+        raise
+    except Exception:  # sharedStrings 索引越界、壞日期等解析期例外一律 422，不讓 500 外洩
         raise _invalid_file("無法讀取 Excel 檔案") from None
     finally:
         wb.close()
@@ -233,10 +336,10 @@ def _read_rows(content: bytes) -> tuple[list[str], list[tuple[int, tuple[Any, ..
 
 
 def _iterate_rows(wb: Any) -> tuple[list[str], list[tuple[int, tuple[Any, ...]]]]:
-    """第一個工作表 → (標題, [(Excel 列號, 儲存格值...)])；整列空白略過。"""
-    ws = wb.worksheets[0] if wb.worksheets else None
+    """第一張可見工作表 → (標題, [(Excel 列號, 儲存格值...)])；整列空白略過。"""
+    ws = next((w for w in wb.worksheets if w.sheet_state == "visible"), None)
     if ws is None:
-        raise AppError("import_empty", "Excel 沒有資料列", status=422)
+        raise _invalid_file("Excel 沒有可見的工作表")
     # 丟棄可偽造的 dimension（否則 read_only 會依宣告的末列補出大量空白列），並以硬上限限制
     # 迭代量
     ws.reset_dimensions()

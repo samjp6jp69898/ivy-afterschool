@@ -6,6 +6,7 @@ from __future__ import annotations
 import io
 import re
 import tracemalloc
+import warnings
 import zipfile
 from collections.abc import Callable, Iterator, Sequence
 from datetime import date
@@ -538,7 +539,9 @@ def _duplicate_entry(upload: ValidatedUpload) -> ValidatedUpload:
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as dst:
         for name, data in parts.items():
             dst.writestr(name, data)
-        dst.writestr(_SHEET1, parts[_SHEET1])  # 同名第二份
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)  # zipfile 對同名 entry 的提醒是刻意的
+            dst.writestr(_SHEET1, parts[_SHEET1])  # 同名第二份
     content = out.getvalue()
     return ValidatedUpload(
         content=content, mime_type=upload.mime_type, ext="xlsx", size=len(content)
@@ -672,20 +675,27 @@ def test_import_preview_uses_first_visible_sheet(
     assert result.rows[0].data is not None
     assert result.rows[0].data.student_no == "S115301"
 
-    visible.sheet_state = "hidden"
-    buf = io.BytesIO()
-    wb.save(buf)
+    # openpyxl 不允許存出全部隱藏的活頁簿：直接改 workbook.xml 把可見的那張也標 hidden
+    all_hidden = _rewrite_parts(
+        upload,
+        lambda p: {
+            **p,
+            "xl/workbook.xml": p["xl/workbook.xml"].replace(
+                "學生資料".encode(), "學生資料".encode() + b'" state="hidden', 1
+            ),
+        },
+    )
+    assert b'state="hidden' in _parts(all_hidden)["xl/workbook.xml"]
     with pytest.raises(AppError) as exc:
-        _preview(
-            db_session, ValidatedUpload(content=buf.getvalue(), mime_type="x", ext="xlsx", size=1)
-        )
+        _preview(db_session, all_hidden)
     assert (exc.value.status, exc.value.code) == _INVALID
 
 
 def test_import_preview_accepts_normal_shared_strings_and_styles(
     db_session: Session, lookups: dict[str, object]
 ) -> None:
-    """合理大小的 sharedStrings / styles / docProps 不受上限影響；OOXML _x0000_ 跳脫成為該列錯誤。"""
+    """合理大小的 sharedStrings / styles / docProps 不受上限影響；OOXML _x0000_ 跳脫維持字面、
+    不會 500。"""
     base = _xlsx([_row(), _row(student_no="S115302", name="陳小華")], header=IMPORT_COLUMNS)
     sst = (
         b'<?xml version="1.0"?>'
@@ -711,6 +721,8 @@ def test_import_preview_accepts_normal_shared_strings_and_styles(
         ),
     )
     escaped_result = _preview(db_session, escaped)
+    # openpyxl 不還原 _xHHHH_ 跳脫：維持字面字串（不會變成 NUL 讓 DB 寫入失敗），也不會 500
     assert escaped_result.total == 3
-    assert escaped_result.rows[2].data is None
-    assert any("姓名*" in e for e in escaped_result.rows[2].errors)
+    assert escaped_result.rows[2].data is not None
+    assert escaped_result.rows[2].data.name == "王_x0000_明"
+    assert "\x00" not in escaped_result.rows[2].data.name
