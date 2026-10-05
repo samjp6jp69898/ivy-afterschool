@@ -58,7 +58,8 @@ export const useAdminWsStore = defineStore('adminWs', () => {
   }
 
   function dispatch(data: unknown, env: WsEnvelope): void {
-    for (const handler of handlers.get(env.type) ?? []) {
+    const targets = [...(handlers.get(env.type) ?? []), ...(handlers.get('*') ?? [])]
+    for (const handler of targets) {
       try {
         handler(data, env)
       } catch (err) {
