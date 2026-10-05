@@ -5,10 +5,11 @@
 
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import event, func, select
+from sqlalchemy import event, func, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentStaff
@@ -17,7 +18,7 @@ from app.core.pagination import PageParams
 from app.core.request_meta import RequestMeta
 from app.models.account import StaffUser
 from app.models.audit import AuditLog
-from app.models.exams import Exam, ExamScore, ExamSubject
+from app.models.exams import Exam, ExamScore
 from app.models.reference import ExamType, Subject
 from app.schemas.exams import (
     ExamCreateIn,
@@ -537,11 +538,13 @@ def actor(db_session: Session) -> CurrentStaff:
     return _current(make_staff(db_session, permissions=["exams:write"], display_name="陳主任"))
 
 
-def _count(
-    db: Session, model: type[Exam] | type[ExamSubject] | type[ExamScore], exam_id: UUID
-) -> int:
-    column = model.id if model is Exam else model.exam_id
-    return db.execute(select(func.count()).select_from(model).where(column == exam_id)).scalar_one()
+def _count(db: Session, table: str, exam_id: UUID) -> int:
+    column = "id" if table == "exams" else "exam_id"
+    count: int = db.execute(
+        text(f"select count(*) from public.{table} where {column} = :id"),  # noqa: S608  測試固定表名
+        {"id": exam_id},
+    ).scalar_one()
+    return count
 
 
 def _error(exc: pytest.ExceptionInfo[AppError]) -> tuple[int, str]:
@@ -582,7 +585,7 @@ def test_create_exam_validation(db_session: Session, actor: CurrentStaff) -> Non
     class_a = make_class(db_session, name="A班", grade_levels=(1, 2))
     exam_type_id = _exam_type(db_session, "段考").id
 
-    def create(**fields: object) -> None:
+    def create(**fields: Any) -> None:
         base: dict[str, object] = {
             "name": "第一次段考",
             "exam_type_id": exam_type_id,
@@ -590,7 +593,7 @@ def test_create_exam_validation(db_session: Session, actor: CurrentStaff) -> Non
         }
         create_exam(db_session, ExamCreateIn.model_validate({**base, **fields}), actor=actor)
 
-    cases = [
+    cases: list[tuple[dict[str, Any], str]] = [
         ({"exam_type_id": inactive_type.id, "grade_level": 3}, "invalid_exam_type"),
         ({"exam_type_id": uuid4(), "grade_level": 3}, "invalid_exam_type"),
         ({"class_id": archived.id}, "invalid_class"),
@@ -617,8 +620,11 @@ def test_delete_exam_draft_cascade(db_session: Session, actor: CurrentStaff) -> 
 
     delete_exam(db_session, exam_id, actor=actor)
 
-    assert (_count(db_session, Exam, exam_id), _count(db_session, ExamSubject, exam_id)) == (0, 0)
-    assert _count(db_session, ExamScore, exam_id) == 0
+    assert (_count(db_session, "exams", exam_id), _count(db_session, "exam_subjects", exam_id)) == (
+        0,
+        0,
+    )
+    assert _count(db_session, "exam_scores", exam_id) == 0
 
 
 def test_delete_exam_published(db_session: Session, actor: CurrentStaff) -> None:
@@ -631,7 +637,7 @@ def test_delete_exam_published(db_session: Session, actor: CurrentStaff) -> None
 
     assert _error(published) == (409, "exam_published")
     assert _error(missing) == (404, "exam_not_found")
-    assert _count(db_session, Exam, exam.id) == 1
+    assert _count(db_session, "exams", exam.id) == 1
 
 
 # --- BACKEND-458 set_exam_subjects ---
@@ -669,7 +675,7 @@ def test_set_exam_subjects_replace(db_session: Session, actor: CurrentStaff) -> 
     assert math_scores == 0
     # 保留的科目成績不受影響
     assert db_session.get(ExamScore, chinese_score.id) is not None
-    assert _count(db_session, ExamSubject, exam.id) == 2
+    assert _count(db_session, "exam_subjects", exam.id) == 2
 
 
 def test_set_exam_subjects_full_score_guard(db_session: Session, actor: CurrentStaff) -> None:
@@ -731,7 +737,7 @@ def test_set_exam_subjects_invalid(db_session: Session, actor: CurrentStaff) -> 
 
     assert _error(exc) == (422, "invalid_subject")
     assert exc.value.details == {"subject_ids": sorted([str(inactive.id), str(missing_id)])}
-    assert _count(db_session, ExamSubject, exam.id) == 1
+    assert _count(db_session, "exam_subjects", exam.id) == 1
 
 
 # --- BACKEND-459 get_score_grid ---
@@ -814,7 +820,8 @@ def test_score_grid_query_count(db_session: Session) -> None:
         for subject in subjects:
             make_exam_score(db_session, exam, student, subject, score=Decimal(60 + index % 40))
     db_session.flush()
-    db_session.expire_all()
+    # 模擬新的請求：identity map 清空，所有資料都要重新查詢
+    db_session.expunge_all()
     statements: list[str] = []
 
     def record(_conn: object, _cur: object, statement: str, *_args: object) -> None:
