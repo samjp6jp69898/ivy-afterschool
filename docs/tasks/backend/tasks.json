@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 363,
-  "last_updated": "2026-10-05T05:42:46Z",
+  "version": 364,
+  "last_updated": "2026-10-05T05:42:53Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10301,7 +10301,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-405",
@@ -10312,7 +10312,7 @@
         "BACKEND-374"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "review-r8-c 打回：reply_request 的鎖序與作業模組相反，會死結。reply_request 先以 transition_request 的條件式 UPDATE 鎖住請求列，再 lock_progress_row 鎖進度列；set_ready_eta_and_note（BACKEND-382）與 handle_homework_done（376，由 recompute 在已鎖進度列時呼叫）則是先鎖進度列、再由 sync_open_request_reply 以 FOR UPDATE 鎖請求列。反例（已在 scratchpad 以真實函式重現）：同一學生今日有 pending 請求與進度列；交易 B 執行 set_ready_eta_and_note 的 lock_progress_row 後，交易 A 執行 reply_request(reply_ready_eta=18:00) 鎖住請求列並等待進度列，B 接著 sync_open_request_reply 等待請求列 → Postgres 回 40P01 deadlock detected，其中一位員工的操作失敗（500）。修正方向：給 ETA 時先以不上鎖的查詢取得請求的 student_id / service_date，先 lock_progress_row 再 transition_request（與作業模組同為「進度列 → 請求列」）；補兩 session 測試（一方持有進度列鎖時 reply_request 被擋、對方完成後成功，不出現 40P01），並在 description 寫明鎖序。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/pickup/test_pickup_requests.py",
@@ -10332,9 +10332,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r8-c",
-        "notes": "打回：與作業模組鎖序相反可死結（詳見 risk_notes）。其餘已審項目通過：紅測 537d4d9 先於實作 eed95dc；6 條 red_case 全綠；只給 ETA 自動組「預計 HH:MM 可接送」、reply_source staff、狀態不變；ETA 同交易寫回進度（值相同不改）並推作業看板、不發 homework.eta_updated；只給訊息不動進度；家長發起才通知（突變驗證）；終態 409、不存在 404；rollback 原子性。"
+        "notes": "複審（範圍只限鎖序打回項，其餘項目沿用前次審查結論）：通過。紅測 f565a21（test_reply_pickup_request_lock_order_no_deadlock：s2 先 lock_progress_row、s1 reply_request 須等待且未碰請求列，s2 再 sync_open_request_reply 鎖請求列）先於修正 06cad3d；給 ETA 時先以不上鎖查詢取得 student_id / service_date、lock_progress_row 後才 transition_request，鎖序與 376 / 382 / 413 同為「進度列 → 請求列」，description 已寫明；請求不存在時不鎖進度、由 transition_request 回 404。突變（scratchpad 複本）：還原為先 transition 後鎖進度 → 新測試 40P01 deadlock 轉紅。只給 reply_message 時不查不鎖進度、流程不變（message_only 測試綠）。test_reply_pickup_request_ 7 passed、test_pickup_requests + test_homework_service 77 passed；跑前跑後各表 0 列無殘列；lint / typecheck 乾淨。"
       }
     },
     {
