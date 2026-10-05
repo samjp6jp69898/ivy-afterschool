@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 259,
-  "last_updated": "2026-10-05T02:54:21Z",
+  "version": 260,
+  "last_updated": "2026-10-05T02:54:40Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -4107,7 +4107,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/reference_data_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-117",
@@ -4131,9 +4131,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 4 passed（-k 選到 4 條 red_case）；測試 2b03234 先於實作 28dfd32。savepoint 內 delete + flush，只攔 23503，deactivate_when_referenced 改停用，否則 409 in_use；引用表清單未寫死。reference 三表無反向 relationship，ORM 不會先把引用列設 NULL（被引用學校測試證實列仍在、is_active False）。lint / typecheck 乾淨。殘留：409 in_use 分支目前沒有 spec 走得到（closed_days 不被引用），未測。"
       }
     },
     {
@@ -4218,7 +4218,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/reference.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-117",
@@ -4243,9 +4243,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 20 passed（success / 422 / 401×4 / 403×12 / 404_409 / guard）；測試 95955e4 先於實作 bf19e4a（實作 commit 只動測試檔行長）。PATCH 掛 require_permission(settings:write)，只有讀取權限 → 403 且 details.required == ['settings:write']，route audit == []；空 body、非 uuid、closed-days 送 date、多餘欄位皆 422，日期未被改。lint / typecheck 乾淨。"
       }
     },
     {
@@ -4694,13 +4694,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": "BE:api/classrooms.py::update_classroom",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-137"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "[review-r8-b] 並發：update_class 讀 class 未上鎖。反例（review 以兩個 app_backend session 實測）：session A archive_class 已 flush 未 commit，session B update_class(name='封存後改名') 讀到 archived_at IS NULL、UPDATE 等到 A commit 後照樣成功 → 已封存班被改名，違反「封存班不可改 409 class_archived」。修法：寫入前以 SELECT ... FOR UPDATE（of=SchoolClass、populate_existing）鎖 class 列再判斷 archived_at（_get_writable_class 與 archive_class 都要；可給 get_class_or_404 加 for_update 參數，比照 get_student_or_404），並補兩個 session 的並發測試（參照 test_homework_service.py 的 test_lock_progress_row_* 寫法）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_class_service.py",
@@ -4716,9 +4716,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r8-b",
+        "notes": "並發未鎖 class 列，詳見 risk_notes。tdd.run 全綠、測試先於實作、lint / typecheck 乾淨。"
       }
     },
     {
@@ -4728,13 +4728,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": "BE:api/classrooms.py::delete_classroom",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-136"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "[review-r8-b] 並發：archive_class 先計數再寫，未鎖 class 列。反例（review 實測）：session A 新增一位 active 學生到該班（未 commit），session B archive_class 計數 0 → 設 archived_at 並 commit 成功，A 隨後 commit → 封存班內有 1 位 active 學生，違反「有在學學生 409 class_has_students」。學生 INSERT / 改 class_id 的 FK 檢查會對 class 列取 KEY SHARE，archive 端改成先 FOR UPDATE 鎖 class 列再計數即可序列化（READ COMMITTED 下鎖到後的計數語句會看到已 commit 的學生）。修法：寫入前以 SELECT ... FOR UPDATE（of=SchoolClass、populate_existing）鎖 class 列再判斷 archived_at（_get_writable_class 與 archive_class 都要；可給 get_class_or_404 加 for_update 參數，比照 get_student_or_404），並補兩個 session 的並發測試（參照 test_homework_service.py 的 test_lock_progress_row_* 寫法）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_class_service.py",
@@ -4750,9 +4750,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r8-b",
+        "notes": "並發未鎖 class 列，詳見 risk_notes。tdd.run 全綠、測試先於實作、lint / typecheck 乾淨。"
       }
     },
     {
@@ -4762,13 +4762,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-136"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "[review-r8-b] 並發：set_class_staff 經 _get_writable_class 讀 class 未上鎖，與 138 同根因：與 archive_class 並發時可對已封存班改負責員工（違反 409 class_archived）；兩個 PUT 並發新增同一位員工會撞 uq_class_staff_class_staff，落到通用 IntegrityError handler 回 409 conflict 而非整批取代的結果。修法：寫入前以 SELECT ... FOR UPDATE（of=SchoolClass、populate_existing）鎖 class 列再判斷 archived_at（_get_writable_class 與 archive_class 都要；可給 get_class_or_404 加 for_update 參數，比照 get_student_or_404），並補兩個 session 的並發測試（參照 test_homework_service.py 的 test_lock_progress_row_* 寫法）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_class_service.py",
@@ -4785,9 +4785,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r8-b",
+        "notes": "並發未鎖 class 列，詳見 risk_notes。tdd.run 全綠、測試先於實作、lint / typecheck 乾淨。"
       }
     },
     {
@@ -4835,7 +4835,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/classes.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-137",
@@ -4861,9 +4861,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 6 passed（5 條 red_case + guard）；測試 1068b7a 先於實作 5ebc35b。POST 掛 classes:write，classes:read → 403 details.required == ['classes:write']；422 涵蓋 grade_levels [7] / [] / 多餘欄位 / 空名 / 學年 99 / 空 body；409 含大小寫 + 前後空白的同年同名，不同學年 201。route audit == []。lint / typecheck 乾淨。"
       }
     },
     {
@@ -4873,7 +4873,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/classes.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-136",
@@ -4899,9 +4899,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 6 passed（5 條 red_case + guard）；測試 1068b7a 先於實作 5ebc35b。GET /{class_id} 掛 classes:read，只有 classes:write → 403；非 uuid 422、uuid4 404 class_not_found；封存班可查。risk（list_classes 改用 _class_out）已在 c12b818 落地。lint / typecheck 乾淨。"
       }
     },
     {
