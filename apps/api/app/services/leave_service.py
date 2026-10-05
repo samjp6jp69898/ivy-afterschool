@@ -5,25 +5,30 @@
 - BACKEND-348：``list_child_leaves``（家長端小孩請假列表，附件短效 URL；呼叫端已驗證所有權）。
 - BACKEND-344：``notify_leave_event``（請假建立 / 取消通知班級負責員工與 leaves:read 員工）。
 - BACKEND-345：``create_leave``（家長 / 員工建立請假；重疊 409、套用出勤、通知）。
+- BACKEND-346：``cancel_leave``（未開始整筆取消、已開始取消剩餘日子；還原出勤、通知）。
+- BACKEND-349：``upload_leave_attachment``（家長上傳附件；型別 / 大小 / 數量限制）。
 """
 
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Any, Final, Literal
+from typing import TYPE_CHECKING, Any, Final, Literal
 from uuid import UUID
 
-from sqlalchemy import Select, literal, select
+from sqlalchemy import Select, func, literal, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from starlette.datastructures import UploadFile
 
 from app.core.clock import Clock
 from app.core.errors import AppError, ConflictError, NotFoundError
 from app.core.pagination import Page, PageParams, paginate
 from app.core.permissions import Permission
 from app.core.settings_registry import LEAVE_WINDOW
-from app.core.storage import Storage, StorageError
+from app.core.storage import Storage, StorageError, build_object_path
+from app.core.uploads import ATTACHMENT_TYPES, read_validated_upload
 from app.models.account import StaffUser
 from app.models.leaves import (
     EXCLUSION_LEAVE_OVERLAP,
@@ -48,11 +53,14 @@ from app.schemas.leaves import (
     ParentLeaveCreateIn,
     ParentLeaveOut,
 )
-from app.services.audit_service import Actor
-from app.services.leave_attendance import apply_attendance_for_leave
-from app.services.parent_scope import assert_parent_owns_student
+from app.services.audit_service import Actor, record
+from app.services.leave_attendance import apply_attendance_for_leave, revert_attendance_for_leave
+from app.services.parent_scope import assert_parent_owns_student, get_parent_student_ids
 from app.services.service_calendar import list_service_days
 from app.services.settings_service import get_setting
+
+if TYPE_CHECKING:
+    from app.api.deps import CurrentParent
 
 logger = logging.getLogger(__name__)
 
@@ -367,3 +375,167 @@ def create_leave(
     )
     notify_leave_event(session, leave, Event.LEAVE_CREATED, clock=clock)
     return leave
+
+
+@dataclass(frozen=True)
+class LeaveCancelResult:
+    leave: StudentLeave
+    mode: Literal["cancelled", "truncated"]  # cancelled = 整筆取消；truncated = end_date 縮短為昨天
+    cancelled_from: date
+    cancelled_to: date
+    reverted_dates: list[date]
+
+
+def _leave_for_update(session: Session, leave_id: UUID, *, parent_id: UUID | None) -> StudentLeave:
+    """FOR UPDATE 鎖請假列；不存在、或家長看不到該學生 → 同一個 404（不洩漏存在與否）。"""
+    leave = session.execute(
+        select(StudentLeave)
+        .where(StudentLeave.id == leave_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if leave is None or (
+        parent_id is not None and leave.student_id not in get_parent_student_ids(session, parent_id)
+    ):
+        raise NotFoundError("leave_not_found", "找不到請假紀錄")
+    return leave
+
+
+def cancel_leave(
+    session: Session,
+    leave_id: UUID,
+    *,
+    actor: Actor,
+    scope: Literal["remaining", "all"] = "remaining",
+    clock: Clock,
+) -> LeaveCancelResult:
+    """未開始（含今天開始）→ 整筆取消；已開始且未結束 → 取消今天起的日子（end_date 縮為昨天）。
+
+    已全部過去時 remaining 回 409；員工另可用 scope='all' 整筆取消已開始或已結束的請假。並發取消時
+    後到者因 FOR UPDATE 等待後看到最新狀態（409 leave_not_active）。移植 ivy
+    ``api/parent_portal/leaves.py::cancel_leave`` 的「取消時反向還原出勤」；「已開始即不可取消」改為
+    取消剩餘日子。
+    """
+    actor_id = _actor_id(actor)
+    is_parent = actor.type == "parent"
+    leave = _leave_for_update(session, leave_id, parent_id=actor_id if is_parent else None)
+    if leave.status != "active":
+        raise ConflictError("leave_not_active", "這筆請假已取消")
+    if is_parent and scope == "all":
+        raise ValueError("家長只能取消剩餘日子（scope='remaining'）")
+
+    today = clock.today()
+    mode: Literal["cancelled", "truncated"]
+    if scope == "all" or leave.start_date >= today:
+        mode = "cancelled"
+        leave.status = "cancelled"
+        leave.cancelled_at = clock.now()
+        leave.cancelled_by_type = actor.type  # type: ignore[assignment]
+        leave.cancelled_by_id = actor_id
+        session.flush()
+        cancelled_from, cancelled_to = leave.start_date, leave.end_date
+        reverted = revert_attendance_for_leave(session, leave, clock=clock)
+    elif leave.end_date < today:
+        raise ConflictError("leave_already_ended", "這筆請假的日子都已過去，沒有可取消的日子")
+    else:
+        mode = "truncated"
+        cancelled_from, cancelled_to = today, leave.end_date
+        # 縮短為昨天（≥ start_date，滿足 DB-018 CHECK 與 exclusion constraint）；status 維持 active
+        leave.end_date = today - timedelta(days=1)
+        session.flush()
+        reverted = revert_attendance_for_leave(session, leave, from_date=today, clock=clock)
+        # cancelled_* 欄位只記錄整筆取消：部分取消以稽核留紀錄
+        record(
+            session,
+            actor=actor,
+            action="leave.truncate",
+            entity_type="student_leave",
+            entity_id=leave.id,
+            before={"end_date": cancelled_to},
+            after={"end_date": leave.end_date},
+        )
+
+    notify_leave_event(
+        session,
+        leave,
+        Event.LEAVE_CANCELLED,
+        date_range=(cancelled_from, cancelled_to),
+        clock=clock,
+    )
+    return LeaveCancelResult(
+        leave=leave,
+        mode=mode,
+        cancelled_from=cancelled_from,
+        cancelled_to=cancelled_to,
+        reverted_dates=reverted,
+    )
+
+
+def upload_leave_attachment(
+    session: Session,
+    leave_id: UUID,
+    file: UploadFile,
+    *,
+    parent: CurrentParent,
+    storage: Storage,
+    clock: Clock,
+) -> ParentLeaveAttachmentOut:
+    """家長為自己小孩的請假上傳附件（私有 bucket ``leave-attachments``），回傳附件與短效 URL。
+
+    先鎖請假列再計數，並發上傳時數量上限仍成立。物件路徑不使用使用者檔名；寫入失敗時刪除剛上傳的
+    物件。移植 ivy ``api/parent_portal/leaves.py::upload_leave_attachment`` 的大小 / 類型檢查與
+    孤兒檔清除。
+    """
+    leave = _leave_for_update(session, leave_id, parent_id=parent.id)
+    if leave.status != "active":
+        raise ConflictError("leave_not_active", "這筆請假已取消")
+    window = get_setting(session, LEAVE_WINDOW)
+    count = session.execute(
+        select(func.count())
+        .select_from(StudentLeaveAttachment)
+        .where(StudentLeaveAttachment.leave_id == leave.id)
+    ).scalar_one()
+    if count >= window.max_attachments:
+        raise ConflictError(
+            "attachment_limit_reached",
+            f"每筆請假最多 {window.max_attachments} 個附件",
+            details={"max_attachments": window.max_attachments},
+        )
+    upload = read_validated_upload(
+        file, allowed=ATTACHMENT_TYPES, max_bytes=window.max_attachment_mb * 1024 * 1024
+    )
+    path = build_object_path(leave.id, upload.ext)
+    try:
+        storage.upload("leave-attachments", path, upload.content, upload.mime_type)
+    except StorageError as exc:
+        logger.warning("請假附件上傳失敗 leave_id=%s", leave.id)
+        raise AppError(
+            "storage_unavailable", "檔案儲存服務暫時無法使用，請稍後再試", status=502
+        ) from exc
+
+    attachment = StudentLeaveAttachment(
+        leave_id=leave.id,
+        storage_path=path,
+        mime_type=upload.mime_type,
+        size_bytes=upload.size,
+    )
+    try:
+        session.add(attachment)
+        session.flush()
+    except Exception:
+        _delete_quietly(storage, path)
+        raise
+    return ParentLeaveAttachmentOut(
+        id=attachment.id,
+        mime_type=attachment.mime_type,
+        size_bytes=attachment.size_bytes,
+        created_at=attachment.created_at,
+        url=_signed_url_or_none(storage, attachment),
+    )
+
+
+def _delete_quietly(storage: Storage, path: str) -> None:
+    try:
+        storage.delete("leave-attachments", [path])
+    except StorageError:
+        logger.warning("請假附件孤兒檔刪除失敗 path=%s", path)
