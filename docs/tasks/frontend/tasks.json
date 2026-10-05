@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 83,
-  "last_updated": "2026-10-04T17:02:25Z",
+  "version": 84,
+  "last_updated": "2026-10-05T02:37:13Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1458,8 +1458,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/settings.ts",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-020",
         "BACKEND-112",
@@ -2321,8 +2321,8 @@
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/settings/AuditLogView.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-054",
         "FRONTEND-045",

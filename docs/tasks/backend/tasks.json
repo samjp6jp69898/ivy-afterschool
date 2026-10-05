@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 239,
-  "last_updated": "2026-10-04T17:08:02Z",
+  "version": 242,
+  "last_updated": "2026-10-05T02:37:13Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1485,8 +1485,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/auth.py",
       "source_ref": "BE:api/auth.py::refresh_token",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-043",
         "BACKEND-042"
@@ -1712,8 +1712,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/auth.py",
       "source_ref": "BE:api/auth.py::change_password",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-049",
         "BACKEND-042"
@@ -2073,8 +2073,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/auth.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-058",
         "BACKEND-053",
@@ -2145,8 +2145,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/auth.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-060",
         "BACKEND-053"
@@ -2697,8 +2697,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/role_service.py",
       "source_ref": "BE:api/permissions_admin.py::update_role",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-077",
         "BACKEND-074",
@@ -2810,8 +2810,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/roles.py",
       "source_ref": "BE:api/permissions_admin.py::create_role",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-078",
         "BACKEND-081"
@@ -2993,8 +2993,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": "BE:api/auth.py::list_users",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-086",
         "BACKEND-008",
@@ -4107,8 +4107,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/reference_data_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-117",
         "BACKEND-131"
@@ -4218,8 +4218,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/reference.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-117",
         "BACKEND-119"
@@ -4694,8 +4694,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": "BE:api/classrooms.py::update_classroom",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-137"
       ],
@@ -4728,8 +4728,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": "BE:api/classrooms.py::delete_classroom",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-136"
       ],
@@ -4762,8 +4762,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-136"
       ],
@@ -4835,8 +4835,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/classes.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-137",
         "BACKEND-073",
@@ -4873,8 +4873,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/classes.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-136",
         "BACKEND-073",
@@ -5175,8 +5175,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": "BE:api/students.py::create_student",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-150",
         "BACKEND-147",
@@ -5252,8 +5252,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": "BE:api/students.py::delete_student",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-150",
         "BACKEND-179"
@@ -5287,8 +5287,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-150",
         "BACKEND-013",
@@ -5549,8 +5549,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::get_student",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-150",
         "BACKEND-159"
@@ -7588,8 +7588,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-300",
         "BACKEND-340",
@@ -7888,8 +7888,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-300",
         "BACKEND-301",
@@ -7930,8 +7930,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:services/student_attendance_report.py::build_daily_classroom_overview",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-300",
         "BACKEND-301",
@@ -7970,8 +7970,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:services/student_attendance_report.py::_compute_student_monthly_stats",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-300",
         "BACKEND-301",
@@ -8507,8 +8507,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_attendance.py",
       "source_ref": "BE:services/student_leave_service.py::apply_attendance_for_leave",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-300",
         "BACKEND-340",
@@ -8744,8 +8744,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_service.py",
       "source_ref": "BE:api/parent_portal/leaves.py::list_leaves",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-347",
         "BACKEND-014"
@@ -9320,8 +9320,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-370",
         "BACKEND-371",
@@ -9660,8 +9660,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-370",
         "BACKEND-371",
@@ -12074,8 +12074,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-450",
         "BACKEND-451",
@@ -12111,8 +12111,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-450",
         "BACKEND-451",
@@ -13148,8 +13148,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/dashboard_service.py",
       "source_ref": "BE:services/dashboard_query_service.py::DashboardQueryService._compute_student_attendance_summary",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-490",
         "BACKEND-300",
@@ -14245,8 +14245,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-086",
         "BACKEND-030",
@@ -14365,8 +14365,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-148",
         "BACKEND-131",
@@ -14864,8 +14864,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/channels/line.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-207",
         "BACKEND-209"
