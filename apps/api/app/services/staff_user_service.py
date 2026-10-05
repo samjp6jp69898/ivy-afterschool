@@ -375,3 +375,39 @@ def deactivate(
         meta=meta,
     )
     return staff_user_out(staff)
+
+
+def activate(
+    session: Session, staff_id: UUID, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock
+) -> StaffUserCreatedOut:
+    """重新啟用停用的帳號：產生新臨時密碼（只在此回傳一次）並要求下次登入改密碼。
+
+    不冪等：每次啟用都換新密碼，已啟用 → 409。token_version 不變（停用時已 +1、refresh 已全部
+    撤銷）。
+    啟用只增加可用帳號，不需 assert_admin_capabilities_retained。
+    """
+    # 先鎖列再檢查（role 為 joined 載入：只鎖 staff_users）
+    session.execute(
+        select(StaffUser)
+        .where(StaffUser.id == staff_id)
+        .with_for_update(of=StaffUser)
+        .execution_options(populate_existing=True)
+    )
+    staff = _get_managed_staff(session, staff_id, actor=actor, self_error=None)
+    if staff.is_active:
+        raise ConflictError("staff_already_active", "此帳號已是啟用狀態")
+    temp_password = generate_temp_password()
+    staff.is_active = True
+    staff.password_hash = hash_password(temp_password)
+    staff.must_change_password = True
+    session.flush()
+    _record(
+        session,
+        actor=actor,
+        action="staff_user.activate",
+        staff=staff,
+        before={"is_active": False},
+        after={"is_active": True, "must_change_password": True},
+        meta=meta,
+    )
+    return StaffUserCreatedOut(user=staff_user_out(staff), temp_password=temp_password)

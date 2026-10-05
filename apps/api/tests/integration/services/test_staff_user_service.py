@@ -7,7 +7,8 @@ BACKEND-090：update_staff_user（基本資料 / 角色 / 個別權限、cannot_
 BACKEND-091：reset_password（臨時密碼、token_version +1、撤銷 refresh、自己 409、稽核不含密碼）。
 BACKEND-092：deactivate（停用、token 失效、冪等、最後一位管理者 409、兩 session 並發各停一位
 admin）。
-BACKEND-521：activate（重新啟用、臨時密碼只回一次、強制改密碼、token_version 不變、稽核不含密碼）。"""
+BACKEND-521：activate（重新啟用、臨時密碼只回一次、強制改密碼、token_version 不變、稽核不含
+密碼）。"""
 
 import json
 import threading
