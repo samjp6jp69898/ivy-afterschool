@@ -9,7 +9,10 @@ WS handler 以 ``open_session``（獨立 SessionLocal）讀 DB，看不到 db_se
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+import time
+from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import Any
 from uuid import UUID
 
@@ -18,6 +21,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
+from starlette.testclient import WebSocketTestSession
 from starlette.websockets import WebSocketDisconnect
 
 from app.api.ws import admin as ws_admin
@@ -27,7 +31,7 @@ from app.core.security.cookies import PARENT_ACCESS, STAFF_ACCESS
 from app.core.security.tokens import create_access_token
 from app.models.account import StaffUser
 from app.models.parents import ParentAccount
-from app.realtime.broadcaster import publish_threadsafe
+from app.realtime.broadcaster import get_broadcaster, publish_threadsafe
 from app.realtime.publish import (
     admin_topic_channel,
     broadcast_after_commit,
@@ -48,6 +52,31 @@ from tests.support.fake_clock import FakeClock
 _ADMIN = "/api/ws/admin"
 _PARENT = "/api/ws/parent"
 _SENTINEL: dict[str, Any] = {"type": "test.sentinel", "data": {"n": 1}}
+_RECV_TIMEOUT = 5.0
+
+
+def _recv(ws: WebSocketTestSession, timeout: float = _RECV_TIMEOUT) -> Any:
+    """帶逾時的 receive_json：handler 退化成「不送某則訊息」時測試要失敗並照常跑 teardown，不可
+    無限等待（會一直持有共用的 DB flock、留下 committed 測資）。另開執行緒等待；逾時後該執行緒在
+    ws 關閉時結束。WebSocketDisconnect 等例外原樣往外拋。"""
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(ws.receive_json)
+    try:
+        return future.result(timeout=timeout)
+    except FutureTimeoutError:
+        executor.shutdown(wait=False, cancel_futures=True)
+        pytest.fail(f"{timeout} 秒內沒有收到 WebSocket 訊息")
+    finally:
+        executor.shutdown(wait=False)
+
+
+def _wait_until(predicate: Callable[[], bool], timeout: float = _RECV_TIMEOUT) -> None:
+    """等 handler 端的非同步收尾（取消訂閱）完成；逾時即失敗。"""
+    deadline = time.monotonic() + timeout
+    while not predicate():
+        if time.monotonic() > deadline:
+            pytest.fail(f"{timeout} 秒內條件未成立")
+        time.sleep(0.02)
 
 
 @pytest.fixture(autouse=True)
@@ -155,22 +184,22 @@ def test_ws_admin_ready_and_notification(
     staff = _committed_staff(committed, owner_cleanup)
 
     with api_client.websocket_connect(_ADMIN, headers=_staff_cookie(staff, fake_clock)) as ws:
-        assert ws.receive_json() == {"type": "ready", "topics": []}
+        assert _recv(ws) == {"type": "ready", "topics": []}
 
         message = {
             "type": "notification.created",
             "data": {"id": "n1", "title": "王小明 作業已完成"},
         }
         publish_threadsafe([staff_channel(staff.id)], message)
-        assert ws.receive_json() == message
+        assert _recv(ws) == message
 
         # 別人的個人頻道收不到
         publish_threadsafe([staff_channel(UUID(int=9))], {"type": "notification.created"})
         publish_threadsafe([staff_channel(staff.id)], _SENTINEL)
-        assert ws.receive_json() == _SENTINEL
+        assert _recv(ws) == _SENTINEL
         # ping / pong 仍可用
         ws.send_json({"action": "ping"})
-        assert ws.receive_json() == {"type": "pong"}
+        assert _recv(ws) == {"type": "pong"}
 
 
 def test_ws_admin_subscribe_with_permission(
@@ -182,28 +211,28 @@ def test_ws_admin_subscribe_with_permission(
     staff = _committed_staff(committed, owner_cleanup)  # tutor 有 pickup:read
 
     with api_client.websocket_connect(_ADMIN, headers=_staff_cookie(staff, fake_clock)) as ws:
-        assert ws.receive_json()["type"] == "ready"
+        assert _recv(ws)["type"] == "ready"
         ws.send_json({"action": "subscribe", "topics": ["pickup"]})
-        assert ws.receive_json() == {"type": "subscribed", "topics": ["pickup"]}
+        assert _recv(ws) == {"type": "subscribed", "topics": ["pickup"]}
 
         message = {"type": "pickup.request_updated", "data": {"id": "r1"}, "sent_at": "x"}
         publish_threadsafe([admin_topic_channel("pickup")], message)
-        assert ws.receive_json() == message
+        assert _recv(ws) == message
 
         # 再訂 attendance：回目前全部（排序）；重複訂閱不重複收
         ws.send_json({"action": "subscribe", "topics": ["attendance", "pickup"]})
-        assert ws.receive_json() == {"type": "subscribed", "topics": ["attendance", "pickup"]}
+        assert _recv(ws) == {"type": "subscribed", "topics": ["attendance", "pickup"]}
         publish_threadsafe([admin_topic_channel("pickup")], message)
-        assert ws.receive_json() == message
+        assert _recv(ws) == message
         publish_threadsafe([staff_channel(staff.id)], _SENTINEL)
-        assert ws.receive_json() == _SENTINEL
+        assert _recv(ws) == _SENTINEL
 
         # 取消後收不到
         ws.send_json({"action": "unsubscribe", "topics": ["pickup"]})
-        assert ws.receive_json() == {"type": "subscribed", "topics": ["attendance"]}
+        assert _recv(ws) == {"type": "subscribed", "topics": ["attendance"]}
         publish_threadsafe([admin_topic_channel("pickup")], message)
         publish_threadsafe([staff_channel(staff.id)], _SENTINEL)
-        assert ws.receive_json() == _SENTINEL
+        assert _recv(ws) == _SENTINEL
 
 
 def test_ws_admin_subscribe_forbidden(
@@ -215,9 +244,9 @@ def test_ws_admin_subscribe_forbidden(
     staff = _committed_staff(committed, owner_cleanup, revoked_permissions=["homework:read"])
 
     with api_client.websocket_connect(_ADMIN, headers=_staff_cookie(staff, fake_clock)) as ws:
-        assert ws.receive_json()["type"] == "ready"
+        assert _recv(ws)["type"] == "ready"
         ws.send_json({"action": "subscribe", "topics": ["homework"]})
-        assert ws.receive_json() == {
+        assert _recv(ws) == {
             "type": "error",
             "code": "permission_denied",
             "topics": ["homework"],
@@ -225,22 +254,22 @@ def test_ws_admin_subscribe_forbidden(
 
         publish_threadsafe([admin_topic_channel("homework")], {"type": "homework.progress_updated"})
         publish_threadsafe([staff_channel(staff.id)], _SENTINEL)
-        assert ws.receive_json() == _SENTINEL
+        assert _recv(ws) == _SENTINEL
 
         # 混合：有權限的訂上、沒權限的回 error；未知 topic / 格式錯 → bad_message
         ws.send_json({"action": "subscribe", "topics": ["homework", "pickup"]})
-        assert ws.receive_json() == {
+        assert _recv(ws) == {
             "type": "error",
             "code": "permission_denied",
             "topics": ["homework"],
         }
-        assert ws.receive_json() == {"type": "subscribed", "topics": ["pickup"]}
+        assert _recv(ws) == {"type": "subscribed", "topics": ["pickup"]}
         ws.send_json({"action": "subscribe", "topics": ["weather"]})
-        assert ws.receive_json() == {"type": "error", "code": "bad_message"}
+        assert _recv(ws) == {"type": "error", "code": "bad_message"}
         ws.send_json({"action": "subscribe", "topics": "pickup"})
-        assert ws.receive_json() == {"type": "error", "code": "bad_message"}
+        assert _recv(ws) == {"type": "error", "code": "bad_message"}
         ws.send_json({"action": "dance"})
-        assert ws.receive_json() == {"type": "error", "code": "bad_message"}
+        assert _recv(ws) == {"type": "error", "code": "bad_message"}
 
 
 def test_ws_admin_unauthenticated(
@@ -281,27 +310,27 @@ def test_ws_admin_revalidate_revoked(
     staff = _committed_staff(committed, owner_cleanup)
 
     with api_client.websocket_connect(_ADMIN, headers=_staff_cookie(staff, fake_clock)) as ws:
-        assert ws.receive_json()["type"] == "ready"
+        assert _recv(ws)["type"] == "ready"
         ws.send_json({"action": "subscribe", "topics": ["pickup", "attendance"]})
-        assert ws.receive_json() == {"type": "subscribed", "topics": ["attendance", "pickup"]}
+        assert _recv(ws) == {"type": "subscribed", "topics": ["attendance", "pickup"]}
 
         staff.revoked_permissions = ["pickup:read"]
         committed.commit()
 
-        assert ws.receive_json() == {
+        assert _recv(ws) == {
             "type": "unsubscribed",
             "topics": ["pickup"],
             "reason": "permission_revoked",
         }
         publish_threadsafe([admin_topic_channel("pickup")], {"type": "pickup.request_updated"})
         publish_threadsafe([staff_channel(staff.id)], _SENTINEL)
-        assert ws.receive_json() == _SENTINEL
+        assert _recv(ws) == _SENTINEL
 
         staff.is_active = False
         committed.commit()
 
         with pytest.raises(WebSocketDisconnect) as excinfo:
-            ws.receive_json()
+            _recv(ws)
         assert excinfo.value.code == 4401
 
 
@@ -317,9 +346,9 @@ def test_ws_parent_ready_children(
     parent, ming, _, _ = _committed_family(committed, owner_cleanup)
 
     with api_client.websocket_connect(_PARENT, headers=_parent_cookie(parent, fake_clock)) as ws:
-        assert ws.receive_json() == {"type": "ready", "children": [str(ming.id)]}
+        assert _recv(ws) == {"type": "ready", "children": [str(ming.id)]}
         ws.send_json({"action": "ping"})
-        assert ws.receive_json() == {"type": "pong"}
+        assert _recv(ws) == {"type": "pong"}
 
 
 def test_ws_parent_receives_own_child_only(
@@ -331,15 +360,15 @@ def test_ws_parent_receives_own_child_only(
     parent, ming, hua, _ = _committed_family(committed, owner_cleanup)
 
     with api_client.websocket_connect(_PARENT, headers=_parent_cookie(parent, fake_clock)) as ws:
-        assert ws.receive_json()["type"] == "ready"
+        assert _recv(ws)["type"] == "ready"
 
         own = {"type": "homework.progress_updated", "data": {"student_id": str(ming.id)}}
         publish_threadsafe([student_channel(ming.id)], own)
-        assert ws.receive_json() == own
+        assert _recv(ws) == own
 
         personal = {"type": "notification.created", "data": {"id": "n1"}}
         publish_threadsafe([parent_channel(parent.id)], personal)
-        assert ws.receive_json() == personal
+        assert _recv(ws) == personal
 
         # 別人小孩的 student channel 收不到（IDOR）
         publish_threadsafe(
@@ -347,7 +376,7 @@ def test_ws_parent_receives_own_child_only(
             {"type": "homework.progress_updated", "data": {"student_id": str(hua.id)}},
         )
         publish_threadsafe([parent_channel(parent.id)], _SENTINEL)
-        assert ws.receive_json() == _SENTINEL
+        assert _recv(ws) == _SENTINEL
 
 
 def test_ws_parent_cannot_subscribe(
@@ -359,15 +388,15 @@ def test_ws_parent_cannot_subscribe(
     parent, _, _, _ = _committed_family(committed, owner_cleanup)
 
     with api_client.websocket_connect(_PARENT, headers=_parent_cookie(parent, fake_clock)) as ws:
-        assert ws.receive_json()["type"] == "ready"
+        assert _recv(ws)["type"] == "ready"
         ws.send_json({"action": "subscribe", "topics": ["pickup"]})
-        assert ws.receive_json() == {"type": "error", "code": "not_allowed"}
+        assert _recv(ws) == {"type": "error", "code": "not_allowed"}
         ws.send_json({"action": "unsubscribe", "topics": ["pickup"]})
-        assert ws.receive_json() == {"type": "error", "code": "not_allowed"}
+        assert _recv(ws) == {"type": "error", "code": "not_allowed"}
 
         publish_threadsafe([admin_topic_channel("pickup")], {"type": "pickup.request_updated"})
         publish_threadsafe([parent_channel(parent.id)], _SENTINEL)
-        assert ws.receive_json() == _SENTINEL
+        assert _recv(ws) == _SENTINEL
 
 
 def test_ws_parent_unbind_revalidate(
@@ -381,24 +410,24 @@ def test_ws_parent_unbind_revalidate(
     parent, ming, hua, g_ming = _committed_family(committed, owner_cleanup)
 
     with api_client.websocket_connect(_PARENT, headers=_parent_cookie(parent, fake_clock)) as ws:
-        assert ws.receive_json() == {"type": "ready", "children": [str(ming.id)]}
+        assert _recv(ws) == {"type": "ready", "children": [str(ming.id)]}
 
         g_ming.archived_at = ARCHIVED_AT
         committed.commit()
 
-        assert ws.receive_json() == {"type": "children_changed", "children": []}
+        assert _recv(ws) == {"type": "children_changed", "children": []}
         publish_threadsafe([student_channel(ming.id)], {"type": "homework.progress_updated"})
         publish_threadsafe([parent_channel(parent.id)], _SENTINEL)
-        assert ws.receive_json() == _SENTINEL
+        assert _recv(ws) == _SENTINEL
 
         # 新綁定的學生加入訂閱
         g_hua = make_guardian(committed, hua, parent=parent, name="王媽媽")
         committed.commit()
         owner_cleanup.append(("guardians", g_hua.id))
-        assert ws.receive_json() == {"type": "children_changed", "children": [str(hua.id)]}
+        assert _recv(ws) == {"type": "children_changed", "children": [str(hua.id)]}
         message = {"type": "homework.progress_updated", "data": {"student_id": str(hua.id)}}
         publish_threadsafe([student_channel(hua.id)], message)
-        assert ws.receive_json() == message
+        assert _recv(ws) == message
 
 
 def test_ws_parent_unauthenticated(
@@ -434,7 +463,7 @@ def test_ws_parent_receives_attendance(
     }
 
     with api_client.websocket_connect(_PARENT, headers=_parent_cookie(parent, fake_clock)) as ws:
-        assert ws.receive_json()["type"] == "ready"
+        assert _recv(ws)["type"] == "ready"
 
         broadcast_after_commit(
             committed,
@@ -447,7 +476,7 @@ def test_ws_parent_receives_attendance(
         )
         committed.commit()
 
-        received = ws.receive_json()
+        received = _recv(ws)
         assert received["type"] == "attendance.updated"
         assert received["data"] == parent_data
         assert "林老師" not in str(received)
@@ -464,4 +493,44 @@ def test_ws_parent_receives_attendance(
         )
         committed.commit()
         publish_threadsafe([parent_channel(parent.id)], _SENTINEL)
-        assert ws.receive_json() == _SENTINEL
+        assert _recv(ws) == _SENTINEL
+
+
+def test_ws_parent_revalidate_disabled(
+    api_client: TestClient,
+    committed: Session,
+    owner_cleanup: list[tuple[str, UUID]],
+    fake_clock: FakeClock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """重驗時帳號狀態 / token 失效 → 4401，且 student channel 不再有這條連線。"""
+    monkeypatch.setattr(ws_parent, "REVALIDATE_SECONDS", 0.1)
+    parent, ming, _, _ = _committed_family(committed, owner_cleanup)
+    broadcaster = get_broadcaster()
+
+    # 停用帳號
+    with api_client.websocket_connect(_PARENT, headers=_parent_cookie(parent, fake_clock)) as ws:
+        assert _recv(ws)["type"] == "ready"
+        assert broadcaster.subscriber_count(student_channel(ming.id)) == 1
+        parent.status = "disabled"
+        committed.commit()
+
+        with pytest.raises(WebSocketDisconnect) as excinfo:
+            _recv(ws)
+        assert excinfo.value.code == 4401
+    _wait_until(lambda: broadcaster.subscriber_count(student_channel(ming.id)) == 0)
+    assert broadcaster.subscriber_count(parent_channel(parent.id)) == 0
+
+    # 恢復啟用但 token_version +1（全裝置登出）：舊 token 的連線同樣在重驗時被踢
+    parent.status = "active"
+    committed.commit()
+    cookie = _parent_cookie(parent, fake_clock)
+    with api_client.websocket_connect(_PARENT, headers=cookie) as ws:
+        assert _recv(ws)["type"] == "ready"
+        parent.token_version += 1
+        committed.commit()
+
+        with pytest.raises(WebSocketDisconnect) as excinfo:
+            _recv(ws)
+        assert excinfo.value.code == 4401
+    _wait_until(lambda: broadcaster.subscriber_count(student_channel(ming.id)) == 0)
