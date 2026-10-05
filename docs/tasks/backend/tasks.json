@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 309,
-  "last_updated": "2026-10-05T04:08:12Z",
+  "version": 310,
+  "last_updated": "2026-10-05T04:09:50Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3033,7 +3033,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-087"
@@ -3054,9 +3054,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 2 passed；測試 547d355 先於實作 c7640cc。session.get 取員工（停用也可查），不存在 404 staff_user_not_found，effective_permissions 排序。lint / typecheck 乾淨。"
       }
     },
     {
@@ -3066,7 +3066,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": "BE:api/auth.py::create_user",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-087",
@@ -3093,9 +3093,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed；測試 547d355 先於實作 c7640cc / 9b56100（後者改以 role_id 寫入，消除 backref SAWarning）。username 轉小寫、unique 以 savepoint 轉 409 username_taken；角色不存在 422 invalid_role；extra / revoked 經 assert_valid_permission_codes；防提權以新帳號的有效權限（resolve_effective_permissions(role, extra, revoked)）呼叫 assert_can_grant，測試涵蓋角色超出與 extra 超出兩種、撤銷後可建立；臨時密碼只存雜湊、只在回傳值出現一次，稽核 after 不含密碼。殘留：角色權限讀取未上鎖，與 admin 同時擴充該角色時新帳號可能超出建立者權限（擴充角色本身需 roles 權限，影響低）。lint / typecheck 乾淨。"
       }
     },
     {
@@ -5883,7 +5883,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/guardian_service.py",
       "source_ref": "BE:api/students.py::update_guardian",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-169"
@@ -5905,9 +5905,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 3 passed。部分更新（exclude_unset）、is_primary=True 先降級同學生其他 primary 再寫本列、封存 / 不存在 404。測試 547d355 先於實作 bbac05e（實作 commit 只移除對 None 回傳值的斷言以過 mypy，未放寬行為斷言）。三個寫入方法共用 _lock_guardian_for_write：先 get_student_or_404(for_update=True) 鎖學生列，再 FOR UPDATE(of=Guardian) + populate_existing 重讀並判斷封存。review 在 scratchpad 複本以兩個 session 實測：兩個 update_guardian(is_primary=True) 並發時 B 被擋到 A commit，最終只有 B 為 primary；拿掉學生列鎖則 B 撞 uq_guardians_one_primary（23505）。殘留：現有測試沒有並發案例，拿掉學生列鎖不會轉紅，建議補一條阻塞並發測試；unbind / archive（先鎖 guardian 再刪碼）與 binding_code claim（先 UPDATE 碼再 UPDATE guardian）取鎖順序相反，同時發生可能死結，由 Postgres 中止其中一方，不會留下錯誤狀態。lint / typecheck 乾淨。"
       }
     },
     {
@@ -5917,7 +5917,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/guardian_service.py",
       "source_ref": "BE:api/students.py::delete_guardian",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-169",
@@ -5941,9 +5941,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 3 passed。archived_at = now、is_primary = false、只刪本人未使用綁定碼（已使用與他人的保留）；已綁定時保留 parent_account_id、寫 guardian.unbind（before parent_account_id、after reason archived），未綁定不寫；家長可見範圍排除。測試 547d355 先於實作 bbac05e（實作 commit 只移除對 None 回傳值的斷言以過 mypy，未放寬行為斷言）。三個寫入方法共用 _lock_guardian_for_write：先 get_student_or_404(for_update=True) 鎖學生列，再 FOR UPDATE(of=Guardian) + populate_existing 重讀並判斷封存。review 在 scratchpad 複本以兩個 session 實測：兩個 update_guardian(is_primary=True) 並發時 B 被擋到 A commit，最終只有 B 為 primary；拿掉學生列鎖則 B 撞 uq_guardians_one_primary（23505）。殘留：現有測試沒有並發案例，拿掉學生列鎖不會轉紅，建議補一條阻塞並發測試；unbind / archive（先鎖 guardian 再刪碼）與 binding_code claim（先 UPDATE 碼再 UPDATE guardian）取鎖順序相反，同時發生可能死結，由 Postgres 中止其中一方，不會留下錯誤狀態。lint / typecheck 乾淨。"
       }
     },
     {
@@ -5953,7 +5953,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/guardian_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-169",
@@ -5977,9 +5977,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 3 passed。未綁定 409 guardian_not_bound、封存 / 不存在 404；parent_account_id 清空、未使用碼刪除、guardian.unbind 稽核 before 帶 parent_account_id；家長其他小孩的綁定不受影響。測試 547d355 先於實作 bbac05e（實作 commit 只移除對 None 回傳值的斷言以過 mypy，未放寬行為斷言）。三個寫入方法共用 _lock_guardian_for_write：先 get_student_or_404(for_update=True) 鎖學生列，再 FOR UPDATE(of=Guardian) + populate_existing 重讀並判斷封存。review 在 scratchpad 複本以兩個 session 實測：兩個 update_guardian(is_primary=True) 並發時 B 被擋到 A commit，最終只有 B 為 primary；拿掉學生列鎖則 B 撞 uq_guardians_one_primary（23505）。殘留：現有測試沒有並發案例，拿掉學生列鎖不會轉紅，建議補一條阻塞並發測試；unbind / archive（先鎖 guardian 再刪碼）與 binding_code claim（先 UPDATE 碼再 UPDATE guardian）取鎖順序相反，同時發生可能死結，由 Postgres 中止其中一方，不會留下錯誤狀態。lint / typecheck 乾淨。"
       }
     },
     {
