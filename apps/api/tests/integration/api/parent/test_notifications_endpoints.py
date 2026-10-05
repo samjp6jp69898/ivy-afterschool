@@ -1,6 +1,8 @@
 """BACKEND-217：GET /api/parent/notifications。
 BACKEND-218：POST /api/parent/notifications/{id}/read。
-BACKEND-221：GET /api/parent/notification-preferences。"""
+BACKEND-221：GET /api/parent/notification-preferences。
+BACKEND-222：PUT /api/parent/notification-preferences（之後該事件不再建立 outbox）。
+BACKEND-520：POST /api/parent/notifications/read-all（只標記自己的）。"""
 
 from __future__ import annotations
 
@@ -9,12 +11,17 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.account import StaffUser
 from app.models.notifications import Notification, NotificationPreference
 from app.models.parents import ParentAccount
 from app.notifications.events import EVENTS, PARENT_LINE_CONFIGURABLE, Event
+from app.notifications.recipients import Recipient
+from app.notifications.service import enqueue
+from tests.support.factories import make_staff
+from tests.support.fake_clock import FakeClock
 
 _URL = "/api/parent/notifications"
 ParentClientFactory = Callable[..., tuple[TestClient, ParentAccount]]
@@ -262,3 +269,203 @@ def test_parent_prefs_get_labels(parent_client: ParentClientFactory) -> None:
     homework = next(i for i in items if i["event"] == "homework.done")
     assert homework["label"] == EVENTS[Event.HOMEWORK_DONE].label == "作業完成"
     assert items[0]["label"] == "到班通知"
+
+
+# --- BACKEND-222：PUT /api/parent/notification-preferences ----------------------------------------
+
+
+def _prefs_of(client: TestClient) -> dict[str, bool]:
+    return {i["event"]: i["line_enabled"] for i in client.get(_PREFS).json()["items"]}
+
+
+def test_parent_prefs_put_success(
+    parent_client: ParentClientFactory, db_session: Session, fake_clock: FakeClock
+) -> None:
+    client, parent = parent_client()
+
+    resp = client.put(_PREFS, json={"items": [{"event": "homework.done", "line_enabled": False}]})
+
+    assert resp.status_code == 200
+    items = {i["event"]: i["line_enabled"] for i in resp.json()["items"]}
+    assert items["homework.done"] is False
+    assert items["exam.published"] is True
+    assert len(items) == 7
+    assert _prefs_of(client)["homework.done"] is False
+    # 之後該事件對這位家長不建立 outbox（站內通知仍建立）
+    result = enqueue(
+        db_session,
+        Event.HOMEWORK_DONE,
+        recipients=[Recipient("parent", parent.id)],
+        payload={"student_id": uuid4(), "student_name": "王小明"},
+        clock=fake_clock,
+    )
+    assert len(result.notification_ids) == 1
+    assert result.outbox_ids == []
+    # 改回 true 後恢復
+    client.put(_PREFS, json={"items": [{"event": "homework.done", "line_enabled": True}]})
+    again = enqueue(
+        db_session,
+        Event.HOMEWORK_DONE,
+        recipients=[Recipient("parent", parent.id)],
+        payload={"student_id": uuid4(), "student_name": "王小明"},
+        clock=fake_clock,
+    )
+    assert len(again.outbox_ids) == 1
+
+
+def test_parent_prefs_put_422(
+    parent_client: ParentClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = parent_client()
+
+    empty = client.put(_PREFS, json={"items": []})
+    not_configurable = client.put(
+        _PREFS, json={"items": [{"event": "binding.completed", "line_enabled": False}]}
+    )
+    duplicated = client.put(
+        _PREFS,
+        json={
+            "items": [
+                {"event": "homework.done", "line_enabled": False},
+                {"event": "homework.done", "line_enabled": True},
+            ]
+        },
+    )
+    extra = client.put(
+        _PREFS, json={"items": [{"event": "homework.done", "line_enabled": False, "x": 1}]}
+    )
+
+    assert_error(empty, 422, "validation_error")
+    assert_error(not_configurable, 422, "invalid_preference_event")
+    assert not_configurable.json()["error"]["details"] == {"events": ["binding.completed"]}
+    assert_error(duplicated, 422, "validation_error")
+    assert_error(extra, 422, "validation_error")
+    assert all(_prefs_of(client).values())
+
+
+def test_parent_prefs_put_401(
+    api_client: TestClient, staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    body = {"items": [{"event": "homework.done", "line_enabled": False}]}
+
+    assert_error(api_client.put(_PREFS, json=body), 401, "unauthenticated")
+    staff, _ = staff_client(permissions=["students:read"])
+    assert_error(staff.put(_PREFS, json=body), 401, "unauthenticated")
+
+
+def test_parent_prefs_put_isolation(parent_client: ParentClientFactory) -> None:
+    client_a, _ = parent_client()
+    client_b, _ = parent_client()
+
+    resp = client_a.put(_PREFS, json={"items": [{"event": "homework.done", "line_enabled": False}]})
+
+    assert resp.status_code == 200
+    assert _prefs_of(client_a)["homework.done"] is False
+    assert _prefs_of(client_b)["homework.done"] is True
+
+
+def test_parent_prefs_put_foreign_origin(
+    parent_client: ParentClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = parent_client()
+
+    resp = client.put(
+        _PREFS,
+        json={"items": [{"event": "homework.done", "line_enabled": False}]},
+        headers={"Origin": "https://evil.test"},
+    )
+
+    assert_error(resp, 403, "origin_forbidden")
+    assert _prefs_of(client)["homework.done"] is True
+
+
+# --- BACKEND-520：POST /api/parent/notifications/read-all -----------------------------------------
+
+_READ_ALL = f"{_URL}/read-all"
+
+
+def _unread_count(db: Session, recipient_type: str, recipient_id: UUID) -> int:
+    return db.execute(
+        select(func.count())
+        .select_from(Notification)
+        .where(
+            Notification.recipient_type == recipient_type,
+            Notification.recipient_id == recipient_id,
+            Notification.read_at.is_(None),
+        )
+    ).scalar_one()
+
+
+def test_parent_notifications_read_all_success(
+    parent_client: ParentClientFactory, db_session: Session, fake_clock: FakeClock
+) -> None:
+    client, parent = parent_client()
+    for hour in (7, 8, 9):
+        _note(db_session, parent.id, hour=hour)
+    already = _note(db_session, parent.id, read=True, hour=6)
+    db_session.commit()
+
+    resp = client.post(_READ_ALL)
+
+    assert resp.status_code == 200
+    assert resp.json() == {"updated": 3}
+    listed = client.get(_URL).json()
+    assert listed["unread_count"] == 0
+    assert listed["total"] == 4
+    db_session.expire_all()
+    assert already.read_at == datetime(2026, 9, 1, 12, tzinfo=UTC)  # 已讀的 read_at 不變
+    assert _unread_count(db_session, "parent", parent.id) == 0
+
+
+def test_parent_notifications_read_all_401(
+    api_client: TestClient, staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    assert_error(api_client.post(_READ_ALL), 401, "unauthenticated")
+    staff, _ = staff_client(permissions=["students:read"])
+    assert_error(staff.post(_READ_ALL), 401, "unauthenticated")
+
+
+def test_parent_notifications_read_all_idor(
+    parent_client: ParentClientFactory, db_session: Session
+) -> None:
+    client_a, parent_a = parent_client()
+    _, parent_b = parent_client()
+    staff = make_staff(db_session)
+    _note(db_session, parent_a.id)
+    _note(db_session, parent_b.id, title="B 1")
+    _note(db_session, parent_b.id, title="B 2", hour=9)
+    _note(db_session, staff.id, title="員工", recipient_type="staff")
+    # 與家長 A 同 id 的員工通知也不受影響
+    _note(db_session, parent_a.id, title="同 id 員工", recipient_type="staff", hour=10)
+    db_session.commit()
+
+    resp = client_a.post(_READ_ALL)
+
+    assert resp.json() == {"updated": 1}
+    db_session.expire_all()
+    assert _unread_count(db_session, "parent", parent_b.id) == 2
+    assert _unread_count(db_session, "staff", staff.id) == 1
+    assert _unread_count(db_session, "staff", parent_a.id) == 1
+
+
+def test_parent_notifications_read_all_none(parent_client: ParentClientFactory) -> None:
+    client, _ = parent_client()
+
+    resp = client.post(_READ_ALL)
+
+    assert resp.status_code == 200
+    assert resp.json() == {"updated": 0}
+
+
+def test_parent_notifications_read_all_foreign_origin(
+    parent_client: ParentClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client, parent = parent_client()
+    note = _note(db_session, parent.id)
+    db_session.commit()
+
+    resp = client.post(_READ_ALL, headers={"Origin": "https://evil.test"})
+
+    assert_error(resp, 403, "origin_forbidden")
+    db_session.expire_all()
+    assert note.read_at is None

@@ -1,8 +1,11 @@
-"""BACKEND-184：GET /api/parent/children。"""
+"""BACKEND-184：GET /api/parent/children。
+BACKEND-185：GET /api/parent/children/{student_id}（自己的小孩詳情；他人 / 不存在 / 封存皆同一
+404）。"""
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -106,3 +109,87 @@ def test_parent_children_list_empty(parent_client: ParentClientFactory) -> None:
 
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+# --- BACKEND-185：GET /api/parent/children/{student_id} -------------------------------------------
+
+
+def test_parent_child_get_success(parent_client: ParentClientFactory, db_session: Session) -> None:
+    client, parent = parent_client()
+    klass = make_class(db_session, name="低年級 A 班")
+    ming = make_student(db_session, name="王小明", grade_level=2, class_=klass)
+    ming.school_class = "二年三班"
+    make_guardian(db_session, ming, parent=parent, relation="mother", is_primary=True)
+    db_session.commit()
+
+    resp = client.get(f"{_URL}/{ming.id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == str(ming.id)
+    assert body["name"] == "王小明"
+    assert body["class_name"] == "低年級 A 班"
+    assert body["school_class"] == "二年三班"
+    assert body["my_guardian"]["relation"] == "mother"
+    assert body["my_guardian"]["is_primary"] is True
+    assert set(body) == {
+        "id",
+        "name",
+        "grade_level",
+        "class_name",
+        "school_name",
+        "photo_url",
+        "status",
+        "school_class",
+        "enrolled_on",
+        "my_guardian",
+    }
+
+
+def test_parent_child_get_idor(
+    parent_client: ParentClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client_a, _ = parent_client()
+    _, parent_b = parent_client()
+    hua = make_student(db_session, name="陳小華")
+    make_guardian(db_session, hua, parent=parent_b)
+    db_session.commit()
+
+    theirs = client_a.get(f"{_URL}/{hua.id}")
+    missing = client_a.get(f"{_URL}/{uuid4()}")
+
+    assert_error(theirs, 404, "student_not_found")
+    assert_error(missing, 404, "student_not_found")
+    assert theirs.json() == missing.json()
+    assert "陳小華" not in theirs.text
+
+
+def test_parent_child_get_422(
+    parent_client: ParentClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = parent_client()
+
+    assert_error(client.get(f"{_URL}/abc"), 422, "validation_error")
+
+
+def test_parent_child_get_401(
+    api_client: TestClient, staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    assert_error(api_client.get(f"{_URL}/{uuid4()}"), 401, "unauthenticated")
+    staff, _ = staff_client(permissions=["students:read"])
+    assert_error(staff.get(f"{_URL}/{uuid4()}"), 401, "unauthenticated")
+
+
+def test_parent_child_get_archived(
+    parent_client: ParentClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client, parent = parent_client()
+    ming = make_student(db_session, name="王小明")
+    make_guardian(db_session, ming, parent=parent)
+    db_session.commit()
+    assert client.get(f"{_URL}/{ming.id}").status_code == 200
+
+    ming.archived_at = datetime(2026, 9, 1, tzinfo=UTC)
+    db_session.commit()
+
+    assert_error(client.get(f"{_URL}/{ming.id}"), 404, "student_not_found")
