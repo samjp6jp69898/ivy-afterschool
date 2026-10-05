@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 264,
-  "last_updated": "2026-10-05T02:56:26Z",
+  "version": 265,
+  "last_updated": "2026-10-05T02:57:00Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -7926,7 +7926,7 @@
     {
       "id": "BACKEND-311",
       "title": "實作 AttendanceService.get_daily_attendance：每日出勤清單與統計",
-      "description": "在 `apps/api/app/services/attendance_service.py` 實作：\n```python\ndef get_daily_attendance(session: Session, query: DailyAttendanceQuery, *, clock: Clock) -> DailyAttendanceOut: ...\n```\n- d = query.date or clock.today()；`is_service_day` 結果放進回應。\n- 學生集合 = （active 且未封存的學生，依 class_id 篩選）∪（當天已有出勤列的學生，即使已轉為非 active，保留歷史）。\n- 營業日中尚未建立出勤列的 active 學生以虛擬列呈現：`id=None, status='expected'`（BACKEND-303 尚未執行或剛入班）；非營業日不產生虛擬列。\n- leave 列附 LeaveBriefOut（一次 join，不 N+1）。\n- status 篩選在組完虛擬列後套用；summary 以篩選前的全部列計算。\n- 排序：班級 sort_order、班名、student_no。\n- 移植 ivy `services/student_attendance_report.py::build_daily_classroom_overview` 的統計概念；去掉教師點名完成度。\n\n**驗收標準**\n- 回傳實際列 + 虛擬列，summary 計數正確。\n- class_id、status 篩選生效；status 篩選不影響 summary。\n- 非營業日沒有虛擬列且 is_service_day=False。\n- 查詢次數固定（≤ 4 條 SQL，不隨學生數成長）。",
+      "description": "在 `apps/api/app/services/attendance_service.py` 實作：\n```python\ndef get_daily_attendance(session: Session, query: DailyAttendanceQuery, *, clock: Clock) -> DailyAttendanceOut: ...\n```\n- d = query.date or clock.today()；`is_service_day` 結果放進回應。\n- 學生集合 = （active 且未封存的學生，依 class_id 篩選）∪（當天已有出勤列的學生，即使已轉為非 active，保留歷史）。\n- 營業日中尚未建立出勤列的 active 學生以虛擬列呈現：`id=None, status='expected'`（BACKEND-303 尚未執行或剛入班）；`enrolled_on > d`（尚未入班）的學生不產生虛擬列、不計入 summary，與 BACKEND-303 建列範圍一致；非營業日不產生虛擬列。\n- leave 列附 LeaveBriefOut（一次 join，不 N+1）。\n- status 篩選在組完虛擬列後套用；summary 以篩選前的全部列計算。\n- 排序：班級 sort_order、班名、student_no。\n- 移植 ivy `services/student_attendance_report.py::build_daily_classroom_overview` 的統計概念；去掉教師點名完成度。\n\n**驗收標準**\n- 回傳實際列 + 虛擬列，summary 計數正確。\n- class_id、status 篩選生效；status 篩選不影響 summary。\n- 非營業日沒有虛擬列且 is_service_day=False。\n- 查詢次數固定（≤ 4 條 SQL，不隨學生數成長）。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:services/student_attendance_report.py::build_daily_classroom_overview",
@@ -7952,7 +7952,8 @@
           "test_daily_attendance_filters：class_id=班B → 只回班 B 學生；status='present' → items 只有王小明但 summary.total 仍 3",
           "test_daily_attendance_non_service_day：週日查詢 → is_service_day False、items == []（無任何實際列時）",
           "test_daily_attendance_withdrawn_with_row：張小美已 withdrawn 但當天有 left 列 → 仍出現在 items",
-          "test_daily_attendance_query_count：30 位學生 → before_cursor_execute 計數 ≤ 4"
+          "test_daily_attendance_query_count：30 位學生 → before_cursor_execute 計數 ≤ 4",
+          "test_daily_attendance_excludes_not_yet_enrolled：營業日 d=2026-10-05，active 學生 A enrolled_on=2026-10-01、B enrolled_on=2026-10-06，兩人都沒有出勤列 → items 只有 A 的虛擬列（不含 B），summary 的 expected 計數為 1"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_attendance_service.py -k \"test_daily_attendance_\"",
         "notes": ""
@@ -13144,7 +13145,7 @@
     {
       "id": "BACKEND-491",
       "title": "實作 DashboardService.get_today_dashboard：今日儀表板聚合",
-      "description": "建立 `apps/api/app/services/dashboard_service.py`：\n```python\ndef get_today_dashboard(session: Session, *, clock: Clock) -> DashboardTodayOut: ...\n```\n- d = clock.today()；is_service_day（BACKEND-123）。\n- attendance：當日出勤以 `GROUP BY status` 一次計數；營業日中尚無出勤列的 active 學生併入 not_arrived 與 expected_total（與 BACKEND-311 虛擬列一致）；非營業日只算實際列。\n- pickup：當日 pickup_requests 依 status 計數；needs_reply = 非終態且（reply_source 為 null，或 reply_source='auto' 且 reply_ready_eta 為 null 且作業未完成）。\n- homework：今日 present / left 學生的 overall_status（無 progress 列視為 not_started）計數與完成率。\n- recent_leaves：active 且 `end_date >= d and start_date <= d + 7` 的請假，依 start_date、created_at，最多 10 筆，附學生與班級名稱。\n- 全部聚合 ≤ 6 條 SQL（不隨學生數成長）。\n- 參考 ivy `services/dashboard_query_service.py::DashboardQueryService._compute_student_attendance_summary` 的單次聚合計數；去掉幼稚園的審核、用藥、活動等區塊。\n\n**驗收標準**\n- 各區塊計數正確（含無出勤列學生、needs_reply、完成率）。\n- 近期請假範圍與上限正確。\n- 查詢次數 ≤ 6。",
+      "description": "建立 `apps/api/app/services/dashboard_service.py`：\n```python\ndef get_today_dashboard(session: Session, *, clock: Clock) -> DashboardTodayOut: ...\n```\n- d = clock.today()；is_service_day（BACKEND-123）。\n- attendance：當日出勤以 `GROUP BY status` 一次計數；營業日中尚無出勤列的 active 學生併入 not_arrived 與 expected_total（與 BACKEND-311 虛擬列一致，排除 `enrolled_on > d` 的尚未入班學生）；非營業日只算實際列。\n- pickup：當日 pickup_requests 依 status 計數；needs_reply = 非終態且（reply_source 為 null，或 reply_source='auto' 且 reply_ready_eta 為 null 且作業未完成）。\n- homework：今日 present / left 學生的 overall_status（無 progress 列視為 not_started）計數與完成率。\n- recent_leaves：active 且 `end_date >= d and start_date <= d + 7` 的請假，依 start_date、created_at，最多 10 筆，附學生與班級名稱。\n- 全部聚合 ≤ 6 條 SQL（不隨學生數成長）。\n- 參考 ivy `services/dashboard_query_service.py::DashboardQueryService._compute_student_attendance_summary` 的單次聚合計數；去掉幼稚園的審核、用藥、活動等區塊。\n\n**驗收標準**\n- 各區塊計數正確（含無出勤列學生、needs_reply、完成率）。\n- 近期請假範圍與上限正確。\n- 查詢次數 ≤ 6。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/dashboard_service.py",
       "source_ref": "BE:services/dashboard_query_service.py::DashboardQueryService._compute_student_attendance_summary",
@@ -13173,7 +13174,8 @@
           "test_dashboard_pickup_counts：今日 pending（reply_source None）、acknowledged（staff 回覆）、arrived、completed → pickup == {'open':3,'needs_reply':1,'arrived':1,'completed':1}",
           "test_dashboard_homework_rate：present/left 3 人，done 1、in_progress 1、無 progress 1 → homework.total 3、not_started 1、completion_rate 33.3",
           "test_dashboard_recent_leaves：請假 9/1~9/2（已結束）、今天~明天、今天+7、今天+8、已取消 → recent_leaves 只含第 2、3 筆且依 start_date 排序",
-          "test_dashboard_query_count：50 位學生 → SQL 次數 ≤ 6"
+          "test_dashboard_query_count：50 位學生 → SQL 次數 ≤ 6",
+          "test_dashboard_excludes_not_yet_enrolled：營業日 today=2026-10-05，active 學生 A enrolled_on=2026-10-01、B enrolled_on=2026-10-06，兩人都沒有出勤列 → attendance.expected_total == 1、not_arrived == 1"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_dashboard_service.py -k \"test_dashboard_\"",
         "notes": ""
