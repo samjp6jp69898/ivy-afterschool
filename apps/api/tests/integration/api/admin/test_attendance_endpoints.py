@@ -524,3 +524,77 @@ def test_admin_attendance_export_404(
     )
 
     assert_error(resp, 404, "class_not_found")
+
+
+# --- BACKEND-317：POST /{student_id}/check-out ----------------------------------------------------
+
+
+def _check_out_url(student_id: object) -> str:
+    return f"{_URL}/{student_id}/check-out"
+
+
+def test_admin_check_out_success(staff_client: StaffClientFactory, db_session: Session) -> None:
+    ming = make_student(db_session, name="王小明")
+    make_attendance(db_session, ming, service_date=_DAY, status="present")
+    client, staff = staff_client(permissions=["attendance:operate"])
+
+    resp = client.post(_check_out_url(ming.id), json={"note": "爸爸來接"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "left"
+    assert body["check_out_source"] == "manual"
+    assert body["check_out_at"] is not None
+    assert body["note"] == "爸爸來接"
+    db_session.expire_all()
+    row = db_session.execute(
+        select(StudentAttendance).where(StudentAttendance.student_id == ming.id)
+    ).scalar_one()
+    assert (row.status, row.updated_by) == ("left", staff.id)
+    assert row.check_out_at is not None
+
+
+def test_admin_check_out_422(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming = make_student(db_session)
+    make_attendance(db_session, ming, service_date=_DAY, status="present")
+    client, _ = staff_client(permissions=["attendance:operate"])
+
+    assert_error(
+        client.post(_check_out_url(ming.id), json={"note": "x" * 201}), 422, "validation_error"
+    )
+    assert_error(client.post(_check_out_url("abc")), 422, "validation_error")
+    assert_error(
+        client.post(_check_out_url(ming.id), json={"time": "18:00"}), 422, "validation_error"
+    )
+
+
+def test_admin_check_out_401(api_client: TestClient, assert_error: AssertError) -> None:
+    assert_error(api_client.post(_check_out_url(uuid4())), 401, "unauthenticated")
+
+
+def test_admin_check_out_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming = make_student(db_session)
+    make_attendance(db_session, ming, service_date=_DAY, status="present")
+    client, _ = staff_client(permissions=["attendance:read"])
+
+    resp = client.post(_check_out_url(ming.id))
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["attendance:operate"]}
+
+
+def test_admin_check_out_409(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    expected = make_student(db_session, name="尚未到班")
+    make_attendance(db_session, expected, service_date=_DAY)
+    no_row = make_student(db_session, name="沒有出勤列")
+    client, _ = staff_client(permissions=["attendance:operate"])
+
+    assert_error(client.post(_check_out_url(expected.id)), 409, "not_checked_in")
+    assert_error(client.post(_check_out_url(no_row.id)), 409, "not_checked_in")
+    assert_error(client.post(_check_out_url(uuid4())), 404, "student_not_found")
