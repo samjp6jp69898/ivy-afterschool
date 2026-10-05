@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 362,
-  "last_updated": "2026-10-05T05:41:21Z",
+  "version": 363,
+  "last_updated": "2026-10-05T05:42:46Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3338,7 +3338,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": "BE:api/auth.py::update_user",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-090",
@@ -3375,7 +3375,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": "BE:api/auth.py::reset_password",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-091",
@@ -3412,7 +3412,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": "BE:api/auth.py::delete_user",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-092",
