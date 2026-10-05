@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 313,
-  "last_updated": "2026-10-05T04:10:31Z",
+  "version": 314,
+  "last_updated": "2026-10-05T04:10:55Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14994,9 +14994,10 @@
           "integration"
         ],
         "red_cases": [
-          "test_sync_reply_locks_request_row 不留殘列：以 owner 連線記錄跑前 staff_users 與 roles（is_system=false）筆數 → 跑該測試（含失敗路徑以外的正常結束）→ 兩者筆數與跑前相同；原 413 的鎖列斷言不變（拿掉 sync_open_request_reply 的 with_for_update 仍轉紅）"
+          "test_sync_reply_locks_request_row 不留殘列：以 owner 連線記錄跑前 staff_users 與 roles（is_system=false）筆數 → 跑該測試（含失敗路徑以外的正常結束）→ 兩者筆數與跑前相同；原 413 的鎖列斷言不變（拿掉 sync_open_request_reply 的 with_for_update 仍轉紅）",
+          "test_pickup_requests.py 整檔不留殘列：以 owner 連線記錄跑前 staff_users 與 roles（is_system=false）筆數 → 跑整個 test_pickup_requests.py → 兩者筆數與跑前相同（確認同檔其他 committing 測試也沒有同類殘留）"
         ],
-        "run": "just test-int apps/api/tests/integration/services/pickup/test_pickup_requests.py -k \"test_sync_reply_locks_request_row\"",
+        "run": "just test-int apps/api/tests/integration/services/pickup/test_pickup_requests.py",
         "notes": "殘列筆數檢查可用測試外的手動比對（前後各查一次）記錄在回報；若改寫成自動檢查，放在同一測試的 teardown 斷言。"
       },
       "review": {
