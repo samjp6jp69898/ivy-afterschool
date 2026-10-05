@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 368,
-  "last_updated": "2026-10-05T05:44:41Z",
+  "version": 369,
+  "last_updated": "2026-10-05T05:45:11Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -7823,13 +7823,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:api/student_attendance.py::batch_save_attendance",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-305"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "review-r8-c 打回：batch_check_in 依輸入順序逐生 ensure_attendance_row（FOR UPDATE）上鎖，兩個批次以不同順序處理重疊學生會死結。反例（已在 scratchpad 以真實函式重現）：員工 A 批次 [王小明, 陳小華]、員工 B 同時批次 [陳小華, 王小明] → A 鎖王小明列後等陳小華列、B 鎖陳小華列後等王小明列 → Postgres 40P01 deadlock detected，其中一整批失敗（500）。專案既有慣例（lock_progress_row docstring / BACKEND-378）：批次呼叫者必須依 student_id 排序後依序鎖定。修正方向：先依 student_id 排序逐一 ensure 鎖列（或一次以 ORDER BY id FOR UPDATE 鎖定），succeeded / skipped 仍依輸入順序回報；補兩 session 反序批次的測試（兩批皆完成、無 40P01）。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_attendance_service.py",
@@ -7848,9 +7848,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r8-c",
-        "notes": "打回：反序批次會死結（詳見 risk_notes）。其餘已審項目通過：非營業日整批 409 不寫入；學生一次查詢（含封存 → student_not_found）；skipped code 與順序正確；收件人以 parent_recipients_bulk 一次查詢（guardians 查詢 1 次，突變改逐生查詢即紅）；admin 只廣播一次 batch_updated、家長逐生 attendance.updated；check_in 抽出 _try_check_in 後 305 的 8 條測試仍綠。"
+        "notes": "複審（範圍只限反序批次死結打回項，其餘項目沿用前次審查結論）：通過。紅測 e82791d（test_batch_check_in_reverse_order_no_deadlock：兩執行緒反序批次，鎖住第一列後以 barrier 等對方）先於修正 afc0a07；先分類 not_found / not_active，再依 sorted(student_id) 逐生 ensure + 條件式更新（與 lock_progress_row / BACKEND-378 慣例一致），最後依輸入順序組 succeeded / skipped（測試斷言兩批各自的回報順序等於輸入；mixed 測試 skipped 順序不變）。突變（scratchpad 複本）：改回依輸入順序上鎖 → 新測試 40P01 deadlock 轉紅。test_batch_check_in_ 7 passed、test_attendance_service 整檔 75 passed；跑前跑後各表 0 列無殘列；lint / typecheck 乾淨。"
       }
     },
     {
