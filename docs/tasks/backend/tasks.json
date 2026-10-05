@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 250,
-  "last_updated": "2026-10-05T02:47:41Z",
+  "version": 251,
+  "last_updated": "2026-10-05T02:47:50Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14860,11 +14860,11 @@
     {
       "id": "BACKEND-543",
       "title": "HttpLineMessagingClient 補 close() 與 context manager（token 變更時釋放舊連線池）",
-      "description": "補強 BACKEND-207 `apps/api/app/notifications/channels/line.py`（改寫該 task 產物，BACKEND-207 維持 done）。`HttpLineMessagingClient` 持有 `httpx.Client` 卻沒有關閉方法；BACKEND-209 的 outbox_jobs 以 channel access token 為 key 快取單一實例，token 變更時會對舊實例呼叫 `close()`（若存在），目前只能交給 GC 釋放連線池。\n\n**要求**\n- 新增 `close() -> None`：關閉內部 `httpx.Client`；重複呼叫不拋例外（冪等）。\n- 支援 context manager：`__enter__` 回傳 self、`__exit__` 呼叫 `close()`。\n- `close()` 之後再呼叫 push 類方法 → 拋 `RuntimeError`（訊息不含 token）。\n- 若 client 是由外部注入的 `httpx.Client`（測試用 transport），`close()` 一樣關閉它；不改既有建構子簽章與 push 行為，BACKEND-207 既有測試仍全綠。\n- BACKEND-209 的 outbox_jobs 不需修改（已實作「舊實例若有 close 則關閉」）。\n\n**驗收標準**：每一條對應下列 red_case；BACKEND-207 既有測試仍全綠。",
+      "description": "補強 BACKEND-207 `apps/api/app/notifications/channels/line.py`（改寫該 task 產物，BACKEND-207 維持 done）。`HttpLineMessagingClient` 持有 `httpx.Client` 卻沒有關閉方法；BACKEND-209 的 outbox_jobs 以 channel access token 為 key 快取單一實例，token 變更時會對舊實例呼叫 `close()`（若存在），目前只能交給 GC 釋放連線池。\n\n**要求**\n- 新增 `close() -> None`：關閉內部 `httpx.Client`；重複呼叫不拋例外（冪等）。\n- 支援 context manager：`__enter__` 回傳 self、`__exit__` 呼叫 `close()`。\n- `close()` 之後再呼叫 push 類方法 → 拋 `RuntimeError`（訊息不含 token）。\n- 建構子新增 keyword-only `http_client: httpx.Client | None = None`（既有 `transport` / `timeout` 參數與預設行為不變；與 `transport` 同時給 → `ValueError`）：注入的 `httpx.Client` 由本類別持有，`close()` 一樣關閉它。Authorization header 改為逐請求補上（兩種建法送出的請求相同），BACKEND-207 既有測試仍全綠。\n- BACKEND-209 的 outbox_jobs 不需修改（已實作「舊實例若有 close 則關閉」）。\n\n**驗收標準**：每一條對應下列 red_case；BACKEND-207 既有測試仍全綠。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/channels/line.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-207",
@@ -14879,9 +14879,10 @@
           "unit"
         ],
         "red_cases": [
-          "test_line_client_close_closes_http_client：以 httpx.MockTransport 建 httpx.Client 注入 HttpLineMessagingClient → close() 後該 httpx.Client.is_closed is True；再呼叫一次 close() 不拋例外",
-          "test_line_client_context_manager：with HttpLineMessagingClient(...) as c: 斷言 c 是同一實例；離開 with 後內部 httpx.Client.is_closed is True",
-          "test_line_client_push_after_close_raises：close() 後呼叫 push → RuntimeError，str(exc) 不含 channel access token"
+          "test_line_client_close_closes_http_client：以 httpx.MockTransport 建 httpx.Client 經 http_client 注入 HttpLineMessagingClient → push 成功且請求帶 Authorization → close() 後該 httpx.Client.is_closed is True；再呼叫一次 close() 不拋例外",
+          "test_line_client_context_manager：with HttpLineMessagingClient(..., http_client=hc) as c: 斷言 c 是同一實例；離開 with 後 hc.is_closed is True",
+          "test_line_client_push_after_close_raises：close() 後呼叫 push → RuntimeError，str(exc) 不含 channel access token",
+          "test_line_client_http_client_and_transport_exclusive：同時給 transport 與 http_client → ValueError"
         ],
         "run": "just test apps/api/tests/unit/notifications/test_line_client.py -k \"test_line_client_\"",
         "notes": "tdd.run 沿用 BACKEND-207 的指令；新測試名稱以 test_line_client_ 開頭。"
