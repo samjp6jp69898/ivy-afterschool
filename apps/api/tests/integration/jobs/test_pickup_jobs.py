@@ -94,29 +94,29 @@ def test_pickup_expire_overdue(
     db_session: Session, clock: FakeClock, published: list[Call]
 ) -> None:
     r = _overdue_fixture(db_session)
-    arrived = _request(db_session, minutes_ago=180, status="arrived", reply_source="staff")
 
-    expired = expire_overdue_requests(db_session, clock)
-
-    assert expired == 3
+    assert expire_overdue_requests(db_session, clock) == 2
     assert {k: _status(db_session, v.id) for k, v in r.items()} == {
         "a": "expired",
         "b": "acknowledged",
         "c": "completed",
         "d": "expired",
     }
-    assert _status(db_session, arrived.id) == "expired"
     db_session.commit()
     pushed = {
         m["data"]["id"]: m["data"]["status"]
         for channels, m in published
         if channels == [admin_topic_channel("pickup")]
     }
-    assert pushed == {
-        str(r["a"].id): "expired",
-        str(r["d"].id): "expired",
-        str(arrived.id): "expired",
-    }
+    assert pushed == {str(r["a"].id): "expired", str(r["d"].id): "expired"}
+
+
+def test_pickup_expire_arrived(db_session: Session, clock: FakeClock) -> None:
+    """已抵達但超過時限仍未交付的請求同樣過期。"""
+    arrived = _request(db_session, minutes_ago=180, status="arrived", reply_source="staff")
+
+    assert expire_overdue_requests(db_session, clock) == 1
+    assert _status(db_session, arrived.id) == "expired"
 
 
 def test_pickup_expire_boundary(db_session: Session, clock: FakeClock) -> None:
