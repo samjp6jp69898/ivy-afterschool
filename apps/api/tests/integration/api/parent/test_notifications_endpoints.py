@@ -1,4 +1,6 @@
-"""BACKEND-217：GET /api/parent/notifications。"""
+"""BACKEND-217：GET /api/parent/notifications。
+BACKEND-218：POST /api/parent/notifications/{id}/read。
+BACKEND-221：GET /api/parent/notification-preferences。"""
 
 from __future__ import annotations
 
@@ -10,8 +12,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.models.account import StaffUser
-from app.models.notifications import Notification
+from app.models.notifications import Notification, NotificationPreference
 from app.models.parents import ParentAccount
+from app.notifications.events import EVENTS, PARENT_LINE_CONFIGURABLE, Event
 
 _URL = "/api/parent/notifications"
 ParentClientFactory = Callable[..., tuple[TestClient, ParentAccount]]
@@ -121,3 +124,141 @@ def test_parent_notifications_list_disabled_parent(
     client, _ = parent_client(status="disabled")
 
     assert_error(client.get(_URL), 401, "unauthenticated")
+
+
+# --- BACKEND-218：POST /api/parent/notifications/{id}/read ----------------------------------------
+
+
+def _read_url(notification_id: object) -> str:
+    return f"{_URL}/{notification_id}/read"
+
+
+def test_parent_notification_read_success(
+    parent_client: ParentClientFactory, db_session: Session
+) -> None:
+    client, parent = parent_client()
+    note = _note(db_session, parent.id)
+    db_session.commit()
+
+    resp = client.post(_read_url(note.id))
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == str(note.id)
+    assert body["read_at"] is not None
+    assert body["deep_link"] == "/homework"
+    assert client.get(_URL).json()["unread_count"] == 0
+    # 冪等
+    assert client.post(_read_url(note.id)).json()["read_at"] == body["read_at"]
+
+
+def test_parent_notification_read_422(
+    parent_client: ParentClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = parent_client()
+
+    assert_error(client.post(_read_url("abc")), 422, "validation_error")
+
+
+def test_parent_notification_read_401(
+    api_client: TestClient, staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    assert_error(api_client.post(_read_url(uuid4())), 401, "unauthenticated")
+    staff, _ = staff_client(permissions=["students:read"])
+    assert_error(staff.post(_read_url(uuid4())), 401, "unauthenticated")
+
+
+def test_parent_notification_read_idor(
+    parent_client: ParentClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client_a, parent_a = parent_client()
+    _, parent_b = parent_client()
+    theirs = _note(db_session, parent_b.id, title="B 的通知")
+    staff_same_id = _note(db_session, parent_a.id, recipient_type="staff")
+    db_session.commit()
+
+    resp = client_a.post(_read_url(theirs.id))
+    missing = client_a.post(_read_url(uuid4()))
+
+    assert_error(resp, 404, "notification_not_found")
+    assert_error(missing, 404, "notification_not_found")
+    assert resp.json() == missing.json()
+    assert "B 的通知" not in resp.text
+    assert_error(client_a.post(_read_url(staff_same_id.id)), 404, "notification_not_found")
+    db_session.expire_all()
+    assert theirs.read_at is None
+
+
+def test_parent_notification_read_foreign_origin(
+    parent_client: ParentClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client, parent = parent_client()
+    note = _note(db_session, parent.id)
+    db_session.commit()
+
+    resp = client.post(_read_url(note.id), headers={"Origin": "https://evil.test"})
+
+    assert_error(resp, 403, "origin_forbidden")
+    db_session.expire_all()
+    assert note.read_at is None
+
+
+# --- BACKEND-221：GET /api/parent/notification-preferences ----------------------------------------
+
+_PREFS = "/api/parent/notification-preferences"
+
+
+def test_parent_prefs_get_success(parent_client: ParentClientFactory) -> None:
+    client, _ = parent_client()
+
+    resp = client.get(_PREFS)
+
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    assert len(items) == 7
+    assert all(i["line_enabled"] is True for i in items)
+    assert [i["event"] for i in items] == [e.value for e in Event if e in PARENT_LINE_CONFIGURABLE]
+    assert set(items[0]) == {"event", "label", "line_enabled"}
+    assert set(resp.json()) == {"items"}
+
+
+def test_parent_prefs_get_401(api_client: TestClient, assert_error: AssertError) -> None:
+    assert_error(api_client.get(_PREFS), 401, "unauthenticated")
+
+
+def test_parent_prefs_get_isolation(
+    parent_client: ParentClientFactory, db_session: Session
+) -> None:
+    client_a, _ = parent_client()
+    client_b, parent_b = parent_client()
+    db_session.add(
+        NotificationPreference(
+            parent_account_id=parent_b.id, event="homework.done", line_enabled=False
+        )
+    )
+    db_session.commit()
+
+    a_items = {i["event"]: i["line_enabled"] for i in client_a.get(_PREFS).json()["items"]}
+    b_items = {i["event"]: i["line_enabled"] for i in client_b.get(_PREFS).json()["items"]}
+
+    assert a_items["homework.done"] is True
+    assert b_items["homework.done"] is False
+    assert b_items["exam.published"] is True
+
+
+def test_parent_prefs_get_staff_cookie(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    staff, _ = staff_client(permissions=["students:read"])
+
+    assert_error(staff.get(_PREFS), 401, "unauthenticated")
+
+
+def test_parent_prefs_get_labels(parent_client: ParentClientFactory) -> None:
+    client, _ = parent_client()
+
+    items = client.get(_PREFS).json()["items"]
+
+    homework = next(i for i in items if i["event"] == "homework.done")
+    assert homework["label"] == EVENTS[Event.HOMEWORK_DONE].label == "作業完成"
+    assert items[0]["label"] == "到班通知"
