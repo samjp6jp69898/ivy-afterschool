@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 284,
-  "last_updated": "2026-10-05T03:04:00Z",
+  "version": 285,
+  "last_updated": "2026-10-05T03:04:22Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14922,6 +14922,41 @@
         ],
         "run": "just test-int apps/api/tests/integration/services/test_attendance_service.py -k \"test_daily_attendance_\"",
         "notes": "既有 BACKEND-311 的測試同檔、同 -k 前綴，tdd.run 會一併跑到。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-545",
+      "title": "tx_hooks：savepoint rollback 時丟棄該 savepoint 內註冊的 after-commit callback",
+      "description": "改寫 BACKEND-006 `apps/api/app/core/tx_hooks.py` 的 callback 生命週期（006 其餘行為不變）。\n\n**問題**（review-r8-a 審 BACKEND-206 時實測）：`begin_nested()` 內呼叫 `run_after_commit`（例如 `NotificationService.enqueue`）後，該 savepoint rollback，外層交易 commit 時 callback 仍會執行——會 kick outbox、推播一則實際上已被回滾的通知（幽靈通知 / 幽靈廣播 / 誤刪 Storage 物件）。006 只定義了最外層 rollback 的行為。\n\n**規則**\n- 每個 callback 記錄註冊當下所在的交易層（最外層或某個 savepoint）。\n- savepoint rollback（含 `with session.begin_nested():` 區塊拋例外而回滾）：丟棄在該 savepoint 及其內層 savepoint 中註冊的 callback；外層與先前已註冊的 callback 保留。\n- savepoint 正常釋放：其內註冊的 callback 併入外層，等最外層 commit 才執行（與 006 現況一致）。\n- 最外層 commit / rollback 行為與 006 相同。\n- 完成時同步改寫 BACKEND-006 description，補上 savepoint rollback 的條文。\n\n**驗收標準**：每一條對應下列 red_case；`tests/integration/core/test_tx_hooks.py` 既有測試全綠；`tests/integration/notifications/` 整合測試全綠。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/core/tx_hooks.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "BACKEND-006"
+      ],
+      "suggested_model": "fable-5",
+      "risk_notes": "BACKEND-374（homework_service）與 BACKEND-404（services/pickup/views.py）各自以 session.info 登記、before_commit 才組資料的去重推播，savepoint rollback 後的行為也要確認（重讀最終狀態時被回滾的列已不存在，應不推送）；若發現同類問題一併補測試並在回報中說明。INFRA-010 db_session 本身以 savepoint 包住測試，測試內要另開 begin_nested() 構造內層 savepoint。",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/core/test_tx_hooks.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_tx_hooks_savepoint_rollback_discards_inner：committing_db_session 註冊 fn_outer；with begin_nested() 內註冊 fn_inner 後拋例外使該 savepoint rollback；外層 commit → list == ['fn_outer']",
+          "test_tx_hooks_savepoint_release_keeps_inner：begin_nested() 內註冊 fn_inner 並正常釋放 → commit 前 list == []，外層 commit 後 list == ['fn_inner']",
+          "test_tx_hooks_nested_savepoint_rollback：savepoint A 內註冊 fn_a，A 內再開 savepoint B 註冊 fn_b 後 B rollback，A 正常釋放 → 外層 commit 後 list == ['fn_a']",
+          "test_enqueue_inside_rolled_back_savepoint_no_ghost：begin_nested() 內 NotificationService.enqueue 後該 savepoint rollback、外層 commit → 不 kick outbox、不推播 notification.created（以 BACKEND-206 測試同款記錄點斷言為空）"
+        ],
+        "run": "just test-int apps/api/tests/integration/core/test_tx_hooks.py -k \"test_tx_hooks_ or test_enqueue_inside\"",
+        "notes": "第 4 條可放在 test_tx_hooks.py 或 notifications 測試檔，tdd.run 的路徑要同步。"
       },
       "review": {
         "status": "pending",
