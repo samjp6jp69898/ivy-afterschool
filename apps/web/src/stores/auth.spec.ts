@@ -70,8 +70,8 @@ describe('auth store', () => {
     await store.restore()
 
     expect(store.status).toBe('anonymous')
-    expect(store.restoreError).not.toBeNull()
-    expect(store.restoreError).not.toBeInstanceOf(ApiError)
+    expect(store.restoreError).toBeInstanceOf(ApiError)
+    expect((store.restoreError as ApiError).code).toBe('network_error')
   })
 
   it('auth store restore dedupes concurrent calls', async () => {
