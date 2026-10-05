@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 292,
-  "last_updated": "2026-10-05T03:11:10Z",
+  "version": 293,
+  "last_updated": "2026-10-05T03:11:17Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5183,7 +5183,7 @@
         "BACKEND-102"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "BACKEND-148 schemas 不做跨欄位規則：status=withdrawn 必須有 withdrawn_on、withdrawn_on 不得早於 enrolled_on 等由本 service 以明確錯誤碼檢查（否則 DB CHECK 會落成通用 409 conflict）；id_number、health_note、school_class 只填空白時 schema strip 成空字串，本 service 寫入前轉成 null。",
+      "risk_notes": "BACKEND-148 schemas 不做跨欄位規則：status=withdrawn 必須有 withdrawn_on、withdrawn_on 不得早於 enrolled_on 等由本 service 以明確錯誤碼檢查（否則 DB CHECK 會落成通用 409 conflict）；id_number、health_note、school_class 只填空白時 schema strip 成空字串，本 service 寫入前轉成 null。 [impl-backend-r8b] 並發：class_id 檢查必須先對班級列取 FOR SHARE（of=SchoolClass、populate_existing）再判斷 archived_at，否則與 archive_class 並發時學生會進封存班；之後的改班（BACKEND-152 update_student、匯入、學年升級）要共用同一個 _check_class。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_student_service.py",
@@ -5203,9 +5203,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
+        "status": "concern",
         "reviewer": null,
-        "notes": ""
+        "notes": "[impl-backend-r8b 自曝] 第一版 _check_class 只以 session.get 讀班級、未鎖列：封存（FOR UPDATE）已鎖未 commit 時新增學生會讀到舊的未封存狀態，INSERT 等到封存 commit 後仍成功，學生被放進已封存的班。已於 a683008 修正（班級列先 FOR SHARE + populate_existing 再判斷 archived_at）並補並發 red_case（c9ca9f8 先紅）；待 reviewer 核對。"
       }
     },
     {
