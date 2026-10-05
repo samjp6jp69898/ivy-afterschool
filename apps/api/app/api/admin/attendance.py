@@ -9,6 +9,8 @@
   ``Cache-Control: no-store``；class_id 不存在 → 404 ``class_not_found``。
 - BACKEND-316 ``POST /attendance/{student_id}/check-in``：attendance:operate；``CheckInIn`` 可省略 →
   BACKEND-305 → ``AttendanceRowOut``。
+- BACKEND-317 ``POST /attendance/{student_id}/check-out``：attendance:operate；``CheckOutIn`` 可省略
+  → BACKEND-306（present → left；未到班 409 ``not_checked_in``）。
 - BACKEND-319 ``POST /attendance/{student_id}/mark-absent``：attendance:operate（一般點名動作）；
   ``MarkAbsentIn`` 可省略 → BACKEND-309。
 - BACKEND-320 ``PATCH /attendance/{attendance_id}``：attendance:amend；``AttendanceAmendIn`` +
@@ -38,6 +40,7 @@ from app.schemas.attendance import (
     AttendanceAmendIn,
     AttendanceRowOut,
     CheckInIn,
+    CheckOutIn,
     DailyAttendanceOut,
     DailyAttendanceQuery,
     MarkAbsentIn,
@@ -113,6 +116,21 @@ def check_in(
     body: CheckInIn | None = None,
 ) -> AttendanceRowOut:
     out = attendance_service.check_in(
+        db, student_id, actor=staff, note=body.note if body else None, clock=clock
+    )
+    db.commit()
+    return out
+
+
+@router.post("/{student_id}/check-out", response_model=AttendanceRowOut)
+def check_out(
+    student_id: UUID,
+    staff: AttendanceOperate,
+    db: Db,
+    clock: ClockDep,
+    body: CheckOutIn | None = None,
+) -> AttendanceRowOut:
+    out = attendance_service.check_out(
         db, student_id, actor=staff, note=body.note if body else None, clock=clock
     )
     db.commit()
