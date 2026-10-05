@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 91,
-  "last_updated": "2026-10-05T02:55:26Z",
+  "version": 92,
+  "last_updated": "2026-10-05T02:57:22Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1650,7 +1650,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/JsonSchemaForm.vue",
       "source_ref": "FE:src/components/settings/SettingsLineTab.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-050",
@@ -1686,9 +1686,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "15 條 red_case 皆有對應測試且斷言具體（fieldset 數與 legend、子欄位標籤與元件種類、tip aria-label、emit 新物件且原 props 不變、x-labels 與缺 key 退回、nullable url 清空送 null、errors 顯示與 readonly disabled、unsupported 原值保留、title 退回欄位名、max 屬性、secret 原樣回寫後仍在編輯態、is-required 只在 minLength≥1 字串、循環引用不遞迴且保留原值、time select disabled、頂層 description、中文驗證訊息與 validate() 回傳值、fieldset is-error），另 4 條補充（巢狀不可變更新、修改清除錯誤、time select 顯示與選取、enum）；實跑 tdd.run 19/19 綠、SecretInput.spec 綠、web-lint 乾淨；507d6f8(test) 先於 2735343(impl)。git diff 507d6f8 2735343 的 spec 變動只加 settleErrors（等 el-form-item 100ms debounce）與新增 time select 測試，原斷言未改、未放寬。新增 jsonSchemaForm.ts（解析 / 驗證 / setIn 純函式）與 JsonSchemaFields.vue（遞迴欄位層）為 target 元件的內部拆分，對外 props / emits / expose 與 description 一致，不是範圍擴張。以 settings_registry 實際 11 個 schema 核對：TimeHM pattern 與 TIME_PATTERN 逐字相同、logo_url anyOf nullable uri（minLength 1 不標星）、line.messaging secret 欄位走 SecretInput、notification.toggles 根層開關格線、line.liff pattern 驗證，皆有對應處理。secret 值 onSecret 同步、原樣 setIn 回寫（不 trim），測試驗證回聲後不跳回檢視態。循環引用那層 unsupported、上層 fieldset 仍渲染、原值經 setIn 保留。非 nullable 數字清空送 minimum（無則 0）與稿 L906 `v ?? f.node.minimum` 一致。對照 page-settings-system.html（approved）JsonSchemaForm 相關 decisions（欄位對應與寬度 128/180/420、uri 可清空送 null、標籤 / 灰字 / 巢狀 ? icon tooltip、fieldset 一列 legend 在左、blur 與 validate 中文訊息、必填星號規則、toggles 格線 220px、unsupported 橘字 + 等寬 JSON）逐條一致。殘留：(1) nullable 且 minLength≥1 的 url 欄位只輸入空白時顯示「此欄位不可空白」，而非網址格式訊息（後端同樣會拒，僅文案）；(2) 時間值不在 5 分格點上（例如經 API 寫入 17:03）時 el-time-select 的顯示未測；(3) 根層 toggles 切換不清除 errors（目前 toggles 的錯誤 loc 為空、走卡片 alert，觀測不到）。"
       }
     },
     {
