@@ -1,5 +1,5 @@
-"""BACKEND-373 / 384 / 374 / 383：homework_service（進度列鎖定、家長端當日作業明細、ws 快照推播、
-作業進度看板）。
+"""BACKEND-373 / 384 / 374 / 383 / 376 / 382：homework_service（進度列鎖定、家長端當日作業明細、
+ws 快照推播、作業進度看板、整體完成副作用、設定預計可接送時間）。
 
 推播測試以 monkeypatch 記錄 publish_threadsafe；commit 走 db_session（savepoint 模式的 commit
 同樣觸發 before_commit / after_commit，見 BACKEND-006）。
@@ -9,16 +9,22 @@ import threading
 from collections.abc import Iterator
 from datetime import UTC, date, datetime, time
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import Engine, event, func, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+from app.api.deps import CurrentStaff
+from app.core.errors import AppError
 from app.core.tx_hooks import install_tx_hooks
+from app.models.account import StaffUser
 from app.models.homework import HomeworkDailyProgress
+from app.models.notifications import Notification
+from app.models.pickup import PickupRequest
 from app.models.reference import Subject
+from app.notifications import outbox_jobs
 from app.realtime import publish as publish_module
 from app.realtime.publish import admin_topic_channel, student_channel
 from app.schemas.homework import BoardOut, BoardQuery, BoardStudentOut
@@ -26,16 +32,21 @@ from app.services.homework_service import (
     broadcast_homework_snapshot,
     get_board,
     get_child_homework,
+    handle_homework_done,
     lock_progress_row,
+    set_ready_eta_and_note,
 )
 from app.services.settings_service import clear_settings_cache
 from tests.integration.db.conftest import connect_owner
 from tests.support.factories import (
     make_attendance,
     make_class,
+    make_guardian,
     make_homework_item,
     make_homework_progress,
     make_leave,
+    make_parent,
+    make_pickup_request,
     make_staff,
     make_student,
 )
@@ -627,3 +638,278 @@ def test_homework_board_includes_window(
     changed = get_board(db_session, BoardQuery(date=_DAY), clock=fake_clock)
 
     assert changed.window.model_dump() == {"past_days": 10, "future_days": 3}
+
+
+# --- BACKEND-376 handle_homework_done / BACKEND-382 set_ready_eta_and_note ---
+
+_NOW = datetime(2026, 9, 1, 7, 0, tzinfo=UTC)  # 台北 15:00，_DAY 當天
+
+
+@pytest.fixture
+def clock() -> FakeClock:
+    return FakeClock(_NOW)
+
+
+@pytest.fixture
+def kick_off() -> Iterator[None]:
+    """commit 後的 outbox kick 不實際派送（避免背景執行緒連 DB / LINE）。"""
+    outbox_jobs.set_kick_mode("off")
+    yield
+    outbox_jobs.set_kick_mode("thread")
+
+
+def _current(staff: StaffUser) -> CurrentStaff:
+    return CurrentStaff(
+        id=staff.id,
+        username=staff.username,
+        display_name=staff.display_name,
+        role_id=staff.role.id,
+        role_code=staff.role.code,
+        role_name=staff.role.name,
+        permissions=frozenset(staff.role.permissions),
+        must_change_password=staff.must_change_password,
+        token_version=staff.token_version,
+    )
+
+
+@pytest.fixture
+def actor(db_session: Session) -> CurrentStaff:
+    return _current(make_staff(db_session, permissions=["homework:write"], display_name="林老師"))
+
+
+def _notifications(db: Session, event_name: str, student_id: UUID) -> list[Notification]:
+    return list(
+        db.execute(
+            select(Notification).where(
+                Notification.event == event_name,
+                Notification.payload["student_id"].astext == str(student_id),
+            )
+        ).scalars()
+    )
+
+
+def _progress_row(db: Session, student_id: UUID) -> HomeworkDailyProgress:
+    return db.execute(
+        select(HomeworkDailyProgress)
+        .where(
+            HomeworkDailyProgress.student_id == student_id,
+            HomeworkDailyProgress.service_date == _DAY,
+        )
+        .execution_options(populate_existing=True)
+    ).scalar_one()
+
+
+def test_handle_homework_done_notifies(
+    db_session: Session, clock: FakeClock, kick_off: None
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    p1 = make_parent(db_session)
+    make_guardian(db_session, ming, parent=p1)
+    make_homework_progress(db_session, ming, service_date=_DAY, overall_status="done")
+
+    handle_homework_done(db_session, ming.id, _DAY, clock=clock)
+
+    [row] = _notifications(db_session, "homework.done", ming.id)
+    assert (row.recipient_type, row.recipient_id) == ("parent", p1.id)
+    assert row.title == "王小明 作業已完成"
+    assert row.payload == {"student_id": str(ming.id), "student_name": "王小明"}
+
+
+def test_handle_homework_done_syncs_pickup(
+    db_session: Session, clock: FakeClock, kick_off: None
+) -> None:
+    ming = make_student(db_session)
+    request = make_pickup_request(
+        db_session,
+        ming,
+        service_date=_DAY,
+        reply_source="auto",
+        reply_message="已通知老師，稍後回覆預計時間",
+    )
+    make_homework_progress(db_session, ming, service_date=_DAY, overall_status="done")
+
+    handle_homework_done(db_session, ming.id, _DAY, clock=clock)
+
+    refreshed = db_session.execute(
+        select(PickupRequest)
+        .where(PickupRequest.id == request.id)
+        .execution_options(populate_existing=True)
+    ).scalar_one()
+    assert (refreshed.reply_message, refreshed.reply_source) == ("作業已完成，可以接送", "auto")
+
+
+def test_set_ready_eta_notifies(
+    db_session: Session,
+    clock: FakeClock,
+    actor: CurrentStaff,
+    kick_off: None,
+    published: list[Call],
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    make_guardian(db_session, ming, parent=make_parent(db_session))
+    make_homework_progress(db_session, ming, service_date=_DAY, overall_status="in_progress")
+
+    out = set_ready_eta_and_note(
+        db_session,
+        ming.id,
+        _DAY,
+        ready_eta=time(17, 30),
+        note="剩數學訂正",
+        actor=actor,
+        clock=clock,
+    )
+
+    assert (out.ready_eta, out.note, out.eta_updated_at) == ("17:30", "剩數學訂正", _NOW)
+    assert out.eta_updated_by_name == "林老師"
+    row = _progress_row(db_session, ming.id)
+    assert (row.ready_eta, row.eta_updated_by) == (time(17, 30), actor.id)
+    [notification] = _notifications(db_session, "homework.eta_updated", ming.id)
+    assert notification.body == "預計 17:30 可接送。\n剩數學訂正"
+    assert notification.payload == {
+        "student_id": str(ming.id),
+        "student_name": "王小明",
+        "ready_eta": "17:30",
+        "note": "剩數學訂正",
+    }
+    db_session.commit()
+    [snapshot] = _on(published, admin_topic_channel("homework"))
+    assert snapshot["data"]["progress"]["ready_eta"] == "17:30"
+
+
+def test_set_ready_eta_same_value_no_notify(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session)
+    make_guardian(db_session, ming, parent=make_parent(db_session))
+
+    set_ready_eta_and_note(
+        db_session, ming.id, _DAY, ready_eta=time(17, 30), actor=actor, clock=clock
+    )
+    clock.advance(minutes=10)
+    set_ready_eta_and_note(
+        db_session, ming.id, _DAY, ready_eta=time(17, 30), actor=actor, clock=clock
+    )
+
+    assert len(_notifications(db_session, "homework.eta_updated", ming.id)) == 1
+    assert _progress_row(db_session, ming.id).eta_updated_at == _NOW  # 同值不更新修改時間
+
+
+def test_set_ready_eta_note_only(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session)
+    make_guardian(db_session, ming, parent=make_parent(db_session))
+    make_homework_progress(db_session, ming, service_date=_DAY, ready_eta=time(17, 0))
+
+    out = set_ready_eta_and_note(db_session, ming.id, _DAY, note="剩國語", actor=actor, clock=clock)
+
+    assert (out.note, out.ready_eta) == ("剩國語", "17:00")
+    assert _notifications(db_session, "homework.eta_updated", ming.id) == []
+
+
+def test_set_ready_eta_clear_no_notify_but_syncs(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session)
+    make_guardian(db_session, ming, parent=make_parent(db_session))
+    make_homework_progress(
+        db_session, ming, service_date=_DAY, overall_status="in_progress", ready_eta=time(17, 0)
+    )
+    request = make_pickup_request(
+        db_session,
+        ming,
+        service_date=_DAY,
+        reply_source="auto",
+        reply_message="預計 17:00 可接送",
+        reply_ready_eta=time(17, 0),
+    )
+
+    out = set_ready_eta_and_note(
+        db_session, ming.id, _DAY, ready_eta=None, actor=actor, clock=clock
+    )
+
+    assert out.ready_eta is None
+    assert _notifications(db_session, "homework.eta_updated", ming.id) == []
+    refreshed = db_session.execute(
+        select(PickupRequest)
+        .where(PickupRequest.id == request.id)
+        .execution_options(populate_existing=True)
+    ).scalar_one()
+    # 清除 ETA → 自動回覆改回「已通知老師」（seed homework.defaults）
+    assert (refreshed.reply_ready_eta, refreshed.reply_message) == (
+        None,
+        "已通知老師，稍後回覆預計時間",
+    )
+
+
+def test_set_ready_eta_when_done(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session)
+    make_guardian(db_session, ming, parent=make_parent(db_session))
+    make_homework_progress(db_session, ming, service_date=_DAY, overall_status="done")
+
+    set_ready_eta_and_note(
+        db_session, ming.id, _DAY, ready_eta=time(18, 0), actor=actor, clock=clock
+    )
+
+    assert _notifications(db_session, "homework.eta_updated", ming.id) == []
+
+
+def test_set_ready_eta_other_day_no_notify(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session)
+    make_guardian(db_session, ming, parent=make_parent(db_session))
+
+    out = set_ready_eta_and_note(
+        db_session, ming.id, date(2026, 9, 2), ready_eta=time(18, 0), actor=actor, clock=clock
+    )
+
+    assert (out.service_date, out.ready_eta) == (date(2026, 9, 2), "18:00")
+    assert _notifications(db_session, "homework.eta_updated", ming.id) == []
+
+
+def test_set_ready_eta_errors(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session)
+
+    with pytest.raises(AppError) as missing:
+        set_ready_eta_and_note(db_session, uuid4(), _DAY, note="x", actor=actor, clock=clock)
+    with pytest.raises(AppError) as too_far:
+        # seed homework.window future_days = 7
+        set_ready_eta_and_note(
+            db_session, ming.id, date(2026, 9, 9), note="x", actor=actor, clock=clock
+        )
+    with pytest.raises(ValueError, match="ready_eta"):
+        set_ready_eta_and_note(db_session, ming.id, _DAY, actor=actor, clock=clock)
+
+    assert (missing.value.status, missing.value.code) == (404, "student_not_found")
+    assert (too_far.value.status, too_far.value.code) == (422, "invalid_service_date")
+
+
+def test_set_ready_eta_syncs_pickup(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session)
+    request = make_pickup_request(
+        db_session,
+        ming,
+        service_date=_DAY,
+        reply_source="auto",
+        reply_message="已通知老師，稍後回覆預計時間",
+    )
+
+    set_ready_eta_and_note(
+        db_session, ming.id, _DAY, ready_eta=time(17, 30), actor=actor, clock=clock
+    )
+
+    refreshed = db_session.execute(
+        select(PickupRequest)
+        .where(PickupRequest.id == request.id)
+        .execution_options(populate_existing=True)
+    ).scalar_one()
+    assert refreshed.reply_ready_eta == time(17, 30)
+    assert refreshed.reply_message is not None
+    assert refreshed.reply_message.startswith("預計 17:30 可接送")
