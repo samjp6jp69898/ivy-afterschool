@@ -1,9 +1,11 @@
-"""BACKEND-119：GET /api/admin/{subjects|exam-types|schools|closed-days}。"""
+"""BACKEND-119：GET /api/admin/{subjects|exam-types|schools|closed-days}。
+BACKEND-121：PATCH /api/admin/{resource}/{item_id}（只認 settings:write）。"""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import date
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -218,3 +220,96 @@ def test_admin_reference_create_guard_registered(app: FastAPI) -> None:
     paths = app.openapi()["paths"]
     for resource in RESOURCES:
         assert "post" in paths[f"/api/admin/{resource}"]
+
+
+# --- BACKEND-121：PATCH ----------------------------------------------------------------------------
+
+
+def test_admin_reference_update_success(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    subject = Subject(name="書法", sort_order=5)
+    db_session.add(subject)
+    db_session.commit()
+    client, _ = staff_client(permissions=["settings:write"])
+
+    resp = client.patch(f"/api/admin/subjects/{subject.id}", json={"is_active": False})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == str(subject.id)
+    assert body["is_active"] is False
+    assert body["name"] == "書法"
+    assert body["sort_order"] == 5
+    db_session.refresh(subject)
+    assert subject.is_active is False
+
+
+def test_admin_reference_update_422(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    subject = Subject(name="書法")
+    closed_day = ClosedDay(date=date(2026, 10, 10), reason="國慶日")
+    db_session.add_all([subject, closed_day])
+    db_session.commit()
+    client, _ = staff_client(permissions=["settings:write"])
+
+    empty = client.patch(f"/api/admin/subjects/{subject.id}", json={})
+    bad_uuid = client.patch("/api/admin/subjects/abc", json={"is_active": False})
+    date_change = client.patch(
+        f"/api/admin/closed-days/{closed_day.id}", json={"date": "2026-10-11"}
+    )
+    extra = client.patch(f"/api/admin/subjects/{subject.id}", json={"is_active": False, "foo": 1})
+
+    for resp in (empty, bad_uuid, date_change, extra):
+        assert_error(resp, 422, "validation_error")
+    db_session.refresh(closed_day)
+    assert closed_day.date == date(2026, 10, 10)
+
+
+@pytest.mark.parametrize("resource", RESOURCES)
+def test_admin_reference_update_401(
+    api_client: TestClient, assert_error: AssertError, resource: str
+) -> None:
+    body = {"reason": "x"} if resource == "closed-days" else {"name": "x"}
+
+    assert_error(api_client.patch(f"/api/admin/{resource}/{uuid4()}", json=body), 401, "unauthenticated")
+
+
+@pytest.mark.parametrize("resource", RESOURCES)
+@pytest.mark.parametrize("permission", ["settings:read", "students:read", "exams:read"])
+def test_admin_reference_update_403(
+    staff_client: StaffClientFactory, assert_error: AssertError, resource: str, permission: str
+) -> None:
+    client, _ = staff_client(permissions=[permission])
+    body = {"reason": "x"} if resource == "closed-days" else {"name": "x"}
+
+    resp = client.patch(f"/api/admin/{resource}/{uuid4()}", json=body)
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["settings:write"]}
+
+
+def test_admin_reference_update_404_409(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    db_session.add(School(name="仁愛國小"))
+    other = School(name="新生國小")
+    db_session.add(other)
+    db_session.commit()
+    client, _ = staff_client(permissions=["settings:write"])
+
+    missing = client.patch(f"/api/admin/schools/{uuid4()}", json={"name": "新名稱"})
+    conflict = client.patch(f"/api/admin/schools/{other.id}", json={"name": " 仁愛國小 "})
+
+    assert_error(missing, 404, "school_not_found")
+    assert_error(conflict, 409, "school_name_taken")
+    db_session.refresh(other)
+    assert other.name == "新生國小"
+
+
+def test_admin_reference_update_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    paths = app.openapi()["paths"]
+    for resource in RESOURCES:
+        assert "patch" in paths[f"/api/admin/{resource}/{{item_id}}"]
