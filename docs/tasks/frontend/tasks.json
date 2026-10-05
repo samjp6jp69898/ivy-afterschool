@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 85,
-  "last_updated": "2026-10-05T02:39:23Z",
+  "version": 86,
+  "last_updated": "2026-10-05T02:43:38Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -2317,11 +2317,11 @@
     {
       "id": "FRONTEND-072",
       "title": "實作 views/settings/AuditLogView.vue：稽核紀錄查詢頁",
-      "description": "建立 `apps/web/src/views/settings/AuditLogView.vue`（路由 `/settings/audit`，`audit:read`）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-audit.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：篩選列（動作類別、對象類型、操作者類型、日期區間）、列表、before / after 差異抽屜、空清單。\n\n**內容**\n- 篩選：動作類別（el-select，值為 action_prefix：`staff_user.` 帳號、`role.` 角色、`settings.` 系統設定、`student.` 學生、`guardian.` 監護人、`attendance.` 出勤改判、`exam_score.` 成績修改、`exam.` 考試發布（`exam.unpublish`）、`pickup.` 接送強制完成 / 目視核對）、對象類型 entity_type（el-select `filterable allow-create`：選項為本檔 `AUDIT_ENTITY_LABELS` 的已知類型中文名稱，值為代碼——`staff_user` 員工帳號、`role` 角色、`system_setting` 系統設定、`student` 學生、`student_import` 學生匯入、`academic_year` 學年度、`guardian` 監護人、`student_attendance` 出勤、`exam` 考試、`exam_score` 成績、`pickup_request` 接送請求、`pickup_authorization` 代理接送授權；輸入清單外的文字時以該文字查詢）、操作者類型（員工 / 家長 / 系統 / 裝置）、日期區間（預設近 7 天，`todayTaipei` 為迄日）。`usePagedList`（page_size 50，syncQuery）+ `listAuditLogs`。\n- 表格：時間（formatDateTime）、操作者（actor_name + 類型 tag）、動作（action 原文 + 對照中文，例如 `staff_user.update`「修改員工帳號」；未知顯示原文）、對象（entity_type 中文名稱，未知顯示原文 / entity_id：UUID 只顯示前 8 碼，非 UUID 的 id 例如系統設定 key `pickup.window`、學年度 `114` 完整顯示）、IP。點列開 `AuditDiffDrawer`（FRONTEND-073）。\n- 動作中文對照表 `AUDIT_ACTION_LABELS` 放本檔，至少涵蓋 domain_spec M1 列出的稽核事件。\n- 空清單「這段期間沒有稽核紀錄」。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/settings/AuditLogView.vue')`。\n\n**驗收標準**\n- 預設日期區間與篩選參數正確；點列開抽屜；空狀態。",
+      "description": "建立 `apps/web/src/views/settings/AuditLogView.vue`（路由 `/settings/audit`，`audit:read`）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-settings-audit.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：篩選列（動作類別、對象類型、操作者類型、日期區間）、列表、before / after 差異抽屜、空清單。\n\n**內容**\n- 篩選：動作類別（el-select，值為 action_prefix：`staff_user.` 帳號、`role.` 角色、`settings.` 系統設定、`student.` 學生、`guardian.` 監護人、`attendance.` 出勤改判、`exam_score.` 成績修改、`exam.` 考試發布（`exam.unpublish`）、`pickup.` 接送強制完成 / 目視核對）、對象類型 entity_type（el-select `filterable allow-create`：選項為 `apps/web/src/constants/audit.ts` 的 `AUDIT_ENTITY_LABELS`（與 FRONTEND-073 AuditDiffDrawer 共用，操作者類型 tag 對照 `AUDIT_ACTOR_TAGS` 同檔）的已知類型中文名稱，值為代碼——`staff_user` 員工帳號、`role` 角色、`system_setting` 系統設定、`student` 學生、`student_import` 學生匯入、`academic_year` 學年度、`guardian` 監護人、`student_attendance` 出勤、`exam` 考試、`exam_score` 成績、`pickup_request` 接送請求、`pickup_authorization` 代理接送授權；輸入清單外的文字時以該文字查詢）、操作者類型（員工 / 家長 / 系統 / 裝置）、日期區間（預設近 7 天，`todayTaipei` 為迄日）。`usePagedList`（page_size 50，syncQuery）+ `listAuditLogs`。\n- 表格：時間（formatDateTime）、操作者（actor_name + 類型 tag）、動作（action 原文 + 對照中文，例如 `staff_user.update`「修改員工帳號」；未知顯示原文）、對象（entity_type 中文名稱，未知顯示原文 / entity_id：UUID 只顯示前 8 碼，非 UUID 的 id 例如系統設定 key `pickup.window`、學年度 `114` 完整顯示）、IP。點列開 `AuditDiffDrawer`（FRONTEND-073）。\n- 動作中文對照表 `AUDIT_ACTION_LABELS` 放本檔，至少涵蓋 domain_spec M1 列出的稽核事件。\n- 空清單「這段期間沒有稽核紀錄」。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/settings/AuditLogView.vue')`。\n\n**驗收標準**\n- 預設日期區間與篩選參數正確；點列開抽屜；空狀態。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/settings/AuditLogView.vue",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-054",
