@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 330,
-  "last_updated": "2026-10-05T04:22:47Z",
+  "version": 331,
+  "last_updated": "2026-10-05T04:27:08Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2850,7 +2850,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/roles.py",
       "source_ref": "BE:api/permissions_admin.py::update_role",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-079",
@@ -4917,7 +4917,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/classes.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-138",
@@ -4955,7 +4955,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/classes.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-139",
@@ -4993,7 +4993,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/classes.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-140",
@@ -8086,7 +8086,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-311",
@@ -8125,7 +8125,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-305",
@@ -8242,7 +8242,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-309",
@@ -8281,7 +8281,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-310",
@@ -8299,8 +8299,8 @@
           "integration"
         ],
         "red_cases": [
-          "test_admin_attendance_amend_success：staff_client(permissions=['attendance:amend']) PATCH {'status':'expected','reason':'誤刷'} → 200 status == 'expected'；audit_logs 有 action 'attendance.amend' 且 ip 非空",
-          "test_admin_attendance_amend_422：{'reason':'x'} → 422；{'status':'present'}（缺 reason）→ 422",
+          "test_admin_attendance_amend_success：attendance:amend 帳號以指定來源 IP（203.0.113.5）的 TestClient PATCH {'status':'expected','reason':'誤刷'} → 200 status == 'expected'、check_in_at null；audit_logs 有 action 'attendance.amend'、actor 正確、ip == '203.0.113.5'、after.reason == '誤刷'（預設 TestClient 的來源位址 'testclient' 不是 IP，RequestMeta 會存 None）",
+          "test_admin_attendance_amend_422：{'reason':'x'}（除 reason 外沒有欄位）→ 422 validation_error；{'status':'present'}（缺 reason）→ 422；status='leave' → 422；path 'abc' → 422",
           "test_admin_attendance_amend_401：無 cookie → 401",
           "test_admin_attendance_amend_403：只有 attendance:operate → 403",
           "test_admin_attendance_amend_business：leave 列 → 409 attendance_managed_by_leave；uuid4() → 404 attendance_not_found"
@@ -8321,7 +8321,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-312",
@@ -8360,7 +8360,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-312",
@@ -8864,7 +8864,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/leaves.py",
       "source_ref": "BE:api/student_leaves.py::list_leaves",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-347",
@@ -8982,7 +8982,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/leaves.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-350",
@@ -9742,7 +9742,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/homework.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-383",
@@ -11133,7 +11133,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/dismissal_calls.py::list_dismissal_calls",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-414",
@@ -11368,7 +11368,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/dismissal_pos.py::get_dismissal_pos_status",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-415",
@@ -11407,7 +11407,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/pickup_authorizations.py::list_authorizations",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-423",
