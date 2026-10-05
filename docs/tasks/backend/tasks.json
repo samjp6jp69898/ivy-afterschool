@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 347,
-  "last_updated": "2026-10-05T05:37:39Z",
+  "version": 348,
+  "last_updated": "2026-10-05T05:37:58Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3264,7 +3264,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": "BE:api/auth.py::create_user",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-089",
@@ -3289,9 +3289,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；fa64332 / f8eb487（測試）先於 a39a408（實作）。staff:write（突變改掛 staff:read → 3 條轉紅）、route audit 為空；201 回 user + temp_password（只此一次）、Cache-Control: no-store、回應不含 '$argon2id$'；成功後 expire_all 重讀 DB 與 GET 確認（拿掉 commit → 轉紅）；audit staff_user.create 的 after 只含 username / display_name / role_code / extra / revoked，不含臨時密碼或雜湊；以臨時密碼另開 client 登入 200 且 must_change_password true。422 含缺欄位 / email / 多餘 password 欄位 / 非法 username / invalid_role；403 permission_denied 與 cannot_grant_permissions（details 含 homework:write）；409 username_taken 含大小寫不同（Wang.Tutor）。f8eb487 只是把 409 案例的自訂角色先 commit（db_session 下只釋放 savepoint、測試結束整筆 rollback），斷言不變，不是放寬；跑前後 staff_users / roles 筆數不變。lint / typecheck 乾淨。殘留（不擋）：no-store 已由 middleware 全域加上，拿掉 handler 那行測試仍綠（行為正確）。"
       }
     },
     {
@@ -3301,7 +3301,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-088",
@@ -3326,9 +3326,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 全選到；fa64332 先於 a39a408。staff:read（突變改掛 roles:read → 4 條轉紅）、route audit 為空；欄位集合以 set(body) 鎖定且不含 password_hash、回應不含 '$argon2id$'；422 / 401 / 403 details.required == ['staff:read'] / 404 staff_user_not_found。lint / typecheck 乾淨。"
       }
     },
     {
