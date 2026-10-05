@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 84,
-  "last_updated": "2026-10-05T02:37:13Z",
+  "version": 85,
+  "last_updated": "2026-10-05T02:39:23Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1458,7 +1458,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/settings.ts",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-020",
