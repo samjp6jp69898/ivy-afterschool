@@ -3,8 +3,10 @@
 - BACKEND-421 / 423：家長端列表、後台核驗清單。
 - BACKEND-420：create_authorization（產生接送碼，明碼只回傳一次）。
 - BACKEND-424：load_verifiable_authorization（核銷前鎖定並檢查）。
+- BACKEND-523：regenerate_code（家長重新產生接送碼）。
 """
 
+import json
 import logging
 import re
 import threading
@@ -22,8 +24,10 @@ from app.api.deps import CurrentParent
 from app.core.config import get_settings
 from app.core.crypto import derive_key
 from app.core.errors import AppError
+from app.core.request_meta import RequestMeta
 from app.core.storage import StorageError, build_object_path
 from app.core.tx_hooks import install_tx_hooks
+from app.models.audit import AuditLog
 from app.models.parents import ParentAccount
 from app.models.pickup import PickupAuthorization
 from app.realtime import publish as publish_module
@@ -33,17 +37,20 @@ from app.schemas.pickup import (
     StaffAuthorizationListQuery,
     StaffAuthorizationOut,
 )
+from app.services.pickup import authorizations as authorizations_module
 from app.services.pickup.authorizations import (
     create_authorization,
     list_authorizations_for_staff,
     list_child_authorizations,
     load_verifiable_authorization,
+    regenerate_code,
 )
 from app.services.pickup.codes import pickup_code_matches
 from app.services.settings_service import clear_settings_cache
 from tests.integration.db.conftest import connect_owner
 from tests.support.factories import (
     make_class,
+    make_guardian,
     make_parent,
     make_pickup_authorization,
     make_pickup_person,
@@ -602,3 +609,139 @@ def test_load_verifiable_authorization_locks_row(
     finally:
         s1.close()
         s2.close()
+
+
+# --- BACKEND-523 regenerate_code ---
+
+_META = RequestMeta(ip="203.0.113.5", user_agent="pytest", request_id=None)
+
+
+def _parent_of(db: Session, *students: Any) -> CurrentParent:
+    parent = make_parent(db)
+    for student in students:
+        make_guardian(db, student, parent=parent)
+    return _current_parent(parent)
+
+
+def _fresh(db: Session, auth_id: UUID) -> PickupAuthorization:
+    return db.execute(
+        select(PickupAuthorization)
+        .where(PickupAuthorization.id == auth_id)
+        .execution_options(populate_existing=True)
+    ).scalar_one()
+
+
+def test_regenerate_code_success(
+    db_session: Session, published: list[Call], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 固定新碼，避免亂數剛好產生舊碼（1/900000）讓「舊碼失效」的斷言不穩定
+    monkeypatch.setattr(authorizations_module, "generate_pickup_code", lambda: "654321")
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    parent = _parent_of(db_session, ming)
+    auth = make_pickup_authorization(
+        db_session, ming, service_date=_TODAY, code="123456", code_attempts=5
+    )
+
+    out = regenerate_code(db_session, auth.id, parent=parent, meta=_META, clock=clock)
+
+    assert out.code == "654321"
+    row = _fresh(db_session, auth.id)
+    assert pickup_code_matches(out.code, row.code_hash) is True
+    assert pickup_code_matches("123456", row.code_hash) is False
+    assert (row.code_attempts, row.code_locked_at) == (0, None)
+    assert row.code_last4 == out.code[-4:] == out.authorization.code_last4
+    assert (out.authorization.id, out.authorization.status) == (auth.id, "active")
+    db_session.commit()
+    [message] = [m for ch, m in published if ch == [admin_topic_channel("pickup")]]
+    assert message["type"] == "pickup.authorization_updated"
+    assert message["data"]["code_last4"] == out.code[-4:]
+    assert out.code not in json.dumps(message)
+
+
+def test_regenerate_code_state_errors(db_session: Session) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    parent = _parent_of(db_session, ming)
+    completed = make_pickup_authorization(db_session, ming, service_date=_TODAY, status="completed")
+    cancelled = make_pickup_authorization(db_session, ming, service_date=_TODAY, status="cancelled")
+    stale = make_pickup_authorization(db_session, ming, service_date=_TODAY - timedelta(days=1))
+    future = make_pickup_authorization(db_session, ming, service_date=_TODAY + timedelta(days=1))
+
+    for auth_id, code in (
+        (completed.id, "authorization_not_active"),
+        (cancelled.id, "authorization_not_active"),
+        (stale.id, "authorization_expired"),
+    ):
+        with pytest.raises(AppError) as exc:
+            regenerate_code(db_session, auth_id, parent=parent, meta=_META, clock=clock)
+        assert (exc.value.status, exc.value.code) == (409, code)
+    # 未來日期的 active 授權可以重新產生
+    assert regenerate_code(db_session, future.id, parent=parent, meta=_META, clock=clock).code
+
+
+def test_regenerate_code_withdrawn_student(db_session: Session) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    parent = _parent_of(db_session, ming)
+    auth = make_pickup_authorization(db_session, ming, service_date=_TODAY)
+    ming.status = "withdrawn"
+    ming.withdrawn_on = _TODAY
+    db_session.flush()
+
+    with pytest.raises(AppError) as exc:
+        regenerate_code(db_session, auth.id, parent=parent, meta=_META, clock=clock)
+
+    assert (exc.value.status, exc.value.code) == (409, "student_not_active")
+
+
+def test_regenerate_code_idor(db_session: Session) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    other = make_student(db_session, name="林小安")
+    parent_a = _parent_of(db_session, ming)
+    _parent_of(db_session, other)
+    others_auth = make_pickup_authorization(db_session, other, service_date=_TODAY, code="654321")
+
+    with pytest.raises(AppError) as idor:
+        regenerate_code(db_session, others_auth.id, parent=parent_a, meta=_META, clock=clock)
+    with pytest.raises(AppError) as missing:
+        regenerate_code(db_session, uuid4(), parent=parent_a, meta=_META, clock=clock)
+
+    assert (idor.value.status, idor.value.code) == (404, "pickup_authorization_not_found")
+    assert (idor.value.status, idor.value.code, idor.value.message) == (
+        missing.value.status,
+        missing.value.code,
+        missing.value.message,
+    )
+    assert pickup_code_matches("654321", _fresh(db_session, others_auth.id).code_hash) is True
+
+
+def test_regenerate_code_audit(db_session: Session) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    parent = _parent_of(db_session, ming)
+    auth = make_pickup_authorization(
+        db_session, ming, service_date=_TODAY, code="123456", code_attempts=5
+    )
+    old_hash = auth.code_hash
+
+    out = regenerate_code(db_session, auth.id, parent=parent, meta=_META, clock=clock)
+
+    [log] = db_session.execute(
+        select(AuditLog).where(
+            AuditLog.action == "pickup_authorization.regenerate_code",
+            AuditLog.entity_id == str(auth.id),
+        )
+    ).scalars()
+    assert (log.actor_type, log.actor_id, log.entity_type) == (
+        "parent",
+        parent.id,
+        "pickup_authorization",
+    )
+    assert log.before == {"code_last4": "3456", "code_attempts": 5, "locked": True}
+    assert log.after == {"code_last4": out.code[-4:], "code_attempts": 0, "locked": False}
+    dumped = json.dumps([log.before, log.after])
+    new_hash = _fresh(db_session, auth.id).code_hash
+    for secret in (out.code, "123456", old_hash, new_hash):
+        assert secret not in dumped
