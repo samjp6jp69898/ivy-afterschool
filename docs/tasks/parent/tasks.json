@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 79,
-  "last_updated": "2026-10-05T05:36:35Z",
+  "version": 80,
+  "last_updated": "2026-10-05T05:37:39Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -145,8 +145,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/config.ts",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r8",
       "depends_on": [
         "BACKEND-125",
         "PARENT-004"
@@ -1593,8 +1593,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/homework.ts",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r8",
       "depends_on": [
         "BACKEND-391",
         "PARENT-004",
@@ -2984,8 +2984,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/notifications.ts",
       "source_ref": "FE:src/parent/api/notifications.ts::getNotificationPreferences",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r8",
       "depends_on": [
         "BACKEND-217",
         "BACKEND-218",
@@ -3021,8 +3021,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/notificationPreferences.ts",
       "source_ref": "FE:src/parent/api/notifications.ts::updateNotificationPreferences",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r8",
       "depends_on": [
         "BACKEND-221",
         "BACKEND-222",

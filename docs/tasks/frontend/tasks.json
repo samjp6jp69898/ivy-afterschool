@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 98,
-  "last_updated": "2026-10-05T05:36:13Z",
+  "version": 99,
+  "last_updated": "2026-10-05T05:37:39Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1577,8 +1577,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/roles.ts",
       "source_ref": "FE:src/api/permissions_admin.ts::createRole",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-020",
         "BACKEND-081",
@@ -2402,8 +2402,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/classes.ts",
       "source_ref": "FE:src/api/classrooms.ts::getClassrooms",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-020",
         "BACKEND-141",
@@ -2491,8 +2491,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/guardians.ts",
       "source_ref": "FE:src/api/students.ts::createGuardianBindingCode",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-020",
         "BACKEND-173",

@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 346,
-  "last_updated": "2026-10-05T05:37:33Z",
+  "version": 347,
+  "last_updated": "2026-10-05T05:37:39Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3338,8 +3338,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": "BE:api/auth.py::update_user",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-090",
         "BACKEND-093"
@@ -3375,8 +3375,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": "BE:api/auth.py::reset_password",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-091",
         "BACKEND-093"
@@ -3412,8 +3412,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": "BE:api/auth.py::delete_user",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-092",
         "BACKEND-093"
@@ -14013,8 +14013,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-092",
         "BACKEND-074",
