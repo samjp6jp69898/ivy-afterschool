@@ -16,6 +16,9 @@ BACKEND-075：``assert_admin_capabilities_retained``（移植 ivy
 staff:write）。角色權限變更 / 刪除、員工改角色 / 改個別權限 / 停用之後、commit 之前呼叫（query 會
 autoflush）：所有啟用員工的有效權限中沒有人持有 roles:write → 409 ``last_role_manager``；沒有人持有
 staff:write → 409 ``last_staff_manager``。以帳號為準（留著沒人用的角色不算），停用帳號不算。
+查詢帶 ``populate_existing``（BACKEND-079 改寫）：呼叫端先取 ``rbac:admin_retained`` advisory lock
+再呼叫，鎖後必須讀到其他交易已 commit 的最新值；request session 多半已載入 actor 的員工與角色
+（``get_current_staff``），不覆寫 identity map 會讀到舊值，兩筆各降權一位管理者的交易會同時通過。
 """
 
 from __future__ import annotations
@@ -57,8 +60,17 @@ def assert_can_manage_staff(actor: CurrentStaff, target_effective: frozenset[str
 
 
 def assert_admin_capabilities_retained(session: Session) -> None:
-    # StaffUser.role 為 lazy='joined'：一次查詢同時帶出角色，不 N+1
-    active_staff = session.execute(select(StaffUser).where(StaffUser.is_active.is_(True))).scalars()
+    # StaffUser.role 為 lazy='joined'：一次查詢同時帶出角色，不 N+1；populate_existing 讓 identity
+    # map 中已載入的員工 / 角色（例如 actor 自己的）以 DB 最新值覆寫
+    active_staff = (
+        session.execute(
+            select(StaffUser)
+            .where(StaffUser.is_active.is_(True))
+            .execution_options(populate_existing=True)
+        )
+        .unique()
+        .scalars()
+    )
     has_roles_write = has_staff_write = False
     for staff in active_staff:
         effective = resolve_effective_permissions(

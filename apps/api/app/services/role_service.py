@@ -10,7 +10,9 @@ M1），其他系統角色可改 name / description / permissions；permissions 
 （new - old）須 ⊆ actor 有效權限（403 ``cannot_grant_permissions``，移除不受限）；權限有變動時先取
 ``rbac:admin_retained`` advisory lock 再 ``assert_admin_capabilities_retained``（兩筆交易同時降權 /
 停用管理者時序列化，否則各自看到對方仍有效而同時通過）；稽核 ``role.update`` 的 before / after 只含
-實際變動的欄位，沒有任何變動就不寫稽核。權限每請求即時計算，不 bump token_version。
+實際變動的欄位，沒有任何變動就不寫稽核。權限每請求即時計算，不 bump token_version。鎖列查詢帶
+``populate_existing``（identity map 可能已有 actor 自己的角色舊值）；守衛查詢的 populate_existing 在
+``rbac_guards``。
 """
 
 from __future__ import annotations
@@ -165,9 +167,13 @@ def _active_staff_count(session: Session, role_id: UUID) -> int:
 def update_role(
     session: Session, role_id: UUID, data: RoleUpdateIn, *, actor: CurrentStaff, meta: RequestMeta
 ) -> RoleOut:
-    # 鎖住角色列：與同時進行的另一筆修改 / 刪除序列化（Role 沒有 joined relationship）
+    # 鎖住角色列：與同時進行的另一筆修改 / 刪除序列化（Role 沒有 joined relationship）；
+    # populate_existing：actor 自己的角色已由 get_current_staff 載入，鎖後要讀上鎖當下的最新值
     role = session.execute(
-        select(Role).where(Role.id == role_id).with_for_update()
+        select(Role)
+        .where(Role.id == role_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     ).scalar_one_or_none()
     if role is None:
         raise NotFoundError("role_not_found", "找不到角色")
