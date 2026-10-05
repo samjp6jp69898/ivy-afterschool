@@ -1,5 +1,6 @@
 """BACKEND-119：GET /api/admin/{subjects|exam-types|schools|closed-days}。
-BACKEND-121：PATCH /api/admin/{resource}/{item_id}（只認 settings:write）。"""
+BACKEND-121：PATCH /api/admin/{resource}/{item_id}（只認 settings:write）。
+BACKEND-122：DELETE /api/admin/{resource}/{item_id}（只認 settings:write；被引用改停用）。"""
 
 from __future__ import annotations
 
@@ -10,11 +11,12 @@ from uuid import uuid4
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.account import StaffUser
 from app.models.reference import ClosedDay, School, Subject
-from tests.support.factories import make_staff
+from tests.support.factories import make_school, make_staff, make_student
 from tests.support.route_audit import admin_routes_without_permission
 
 RESOURCES = ["subjects", "exam-types", "schools", "closed-days"]
@@ -315,3 +317,73 @@ def test_admin_reference_update_guard_registered(app: FastAPI) -> None:
     paths = app.openapi()["paths"]
     for resource in RESOURCES:
         assert "patch" in paths[f"/api/admin/{resource}/{{item_id}}"]
+
+
+# --- BACKEND-122：DELETE /api/admin/{resource}/{item_id}（只認 settings:write）--------------------
+
+
+def test_admin_reference_delete_success(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    subject = Subject(name="刪除測試", sort_order=98)
+    db_session.add(subject)
+    db_session.flush()
+    client, _ = staff_client(permissions=["settings:write"])
+
+    resp = client.delete(f"/api/admin/subjects/{subject.id}")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"deleted": True, "deactivated": False}
+    assert db_session.execute(select(Subject).where(Subject.id == subject.id)).first() is None
+
+
+def test_admin_reference_delete_referenced(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    school = make_school(db_session, name="被引用國小")
+    make_student(db_session, school=school)
+    client, _ = staff_client(permissions=["settings:write"])
+
+    resp = client.delete(f"/api/admin/schools/{school.id}")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"deleted": False, "deactivated": True}
+    db_session.expire_all()
+    assert school.is_active is False
+    assert db_session.execute(select(School).where(School.id == school.id)).first() is not None
+
+
+def test_admin_reference_delete_422(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=["settings:write"])
+
+    assert_error(client.delete("/api/admin/schools/abc"), 422, "validation_error")
+
+
+@pytest.mark.parametrize("resource", RESOURCES)
+def test_admin_reference_delete_401_403(
+    api_client: TestClient,
+    staff_client: StaffClientFactory,
+    assert_error: AssertError,
+    app: FastAPI,
+    resource: str,
+) -> None:
+    assert_error(api_client.delete(f"/api/admin/{resource}/{uuid4()}"), 401, "unauthenticated")
+    reader, _ = staff_client(permissions=["settings:read", "students:read", "exams:read"])
+
+    resp = reader.delete(f"/api/admin/{resource}/{uuid4()}")
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["settings:write"]}
+    assert admin_routes_without_permission(app) == []
+    assert "delete" in app.openapi()["paths"][f"/api/admin/{resource}/{{item_id}}"]
+
+
+def test_admin_reference_delete_404(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=["settings:write"])
+
+    assert_error(client.delete(f"/api/admin/closed-days/{uuid4()}"), 404, "closed_day_not_found")
+    assert_error(client.delete(f"/api/admin/subjects/{uuid4()}"), 404, "subject_not_found")
