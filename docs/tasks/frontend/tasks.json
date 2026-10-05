@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 86,
-  "last_updated": "2026-10-05T02:43:38Z",
+  "version": 87,
+  "last_updated": "2026-10-05T02:45:58Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1458,7 +1458,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/settings.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-020",
@@ -1482,9 +1482,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "3 條 red_case 皆有對應測試且斷言具體（items 長度與 key/value、PUT url 與 body 深等於 {value}、422 ApiError status/code/details[0].loc），另加 key 含 / 時 encodeURIComponent 的補充測試；實跑 tdd.run 4/4 綠（名稱清單涵蓋 3 條 red_case）、web-lint 乾淨；e6f5e36(test) 先於 cfaa6ad(impl)。實作走 adminHttp、路徑與 body 符合 description，型別 updated_at 為 ISODateTime（= string）。JsonSchema 比 description 多 items / default：Pydantic 對 list 欄位與預設值會產生這兩個 key，屬寬鬆介面的合理補齊、不改變行為，接受。殘留：無。"
       }
     },
     {
@@ -2321,7 +2321,7 @@
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/settings/AuditLogView.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-054",
@@ -2351,9 +2351,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "7 條 red_case 皆有對應測試且斷言具體（首次 params 深等於、選類別後 params 深等於且 page 1 並同步網址、列文字含中文動作/操作者/2026/10/02 10:00 且抽屜標題、空狀態文案、exam. 前綴、對象類型選「出勤」→ student_attendance 與自由輸入 student_leave、UUID 只留前 8 碼而 pickup.window 完整），另 9 條補充（台北跨午夜預設區間、九類選項順序、操作者切回全部移除參數、未知 action/entity 顯示原文、詳情連結、分頁、重設、錯誤重試、viewLoaders 指向本頁）；實跑 tdd.run 16/16 綠、web-lint 乾淨（含 audit.ts、AuditDiffDrawer.vue、viewLoaders.ts）；f2ba308(test) 先於 47f4b85(impl)。git diff f2ba308 47f4b85 的 spec 變動只把下拉 helper 改為以 aria-controls 定位對應選單（多個 el-select 選單同時留在 DOM），所有 expect 未改、未放寬。共用常數抽到 src/constants/audit.ts：AUDIT_ENTITY_LABELS / AUDIT_ACTOR_TAGS 與 073 原 ENTITY_LABELS / ACTOR_TAGS 逐項相同，073 只改 import，AuditDiffDrawer.spec 實跑 12/12 綠，行為未變；description 的位置改寫與 risk_notes 一致，合理。路由 /settings/audit meta.permission audit:read 已存在，viewLoaders 已改指本頁。AUDIT_ACTION_LABELS 涵蓋 domain_spec M1 全部事件（另含 purge / close_out / binding / unpublish / visual_match），與稿內對照逐字相同。對照 page-settings-audit.html（approved）decisions 1~8 逐條一致（副標、9 類、filterable allow-create、篩選順序與寬度、全部哨兵、重設 disabled、日期不可清空 + 三個快捷 + 禁未來日、欄寬 150、plain tag 配色、動作中文 + 12px 等寬原文、詳情連結、UUID 截斷、每頁 50 與 layout、inline 空狀態 + 說明、v-loading、錯誤 EmptyState + 重試），9~11 為 073 抽屜未變；關閉抽屜不把 diffLog 設 null，risk_notes 的離場動畫風險已處理。殘留：(1) BACKEND-523 的 pickup_authorization.regenerate_code 不在動作對照（顯示原文）且 pickup. 類別篩不到，只能用對象類型「代理接送授權」查；(2) syncQuery 下網址手改 actor_type 為非法值會送出並由後端 422 進錯誤狀態，程式註解「只會是下拉選項的值」不完全精確；(3) risk_notes 中抽共用常數那段已處理（實際位置 src/constants/audit.ts），可於下次整理時移除。"
       }
     },
     {
