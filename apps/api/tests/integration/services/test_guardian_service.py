@@ -351,9 +351,8 @@ def test_archive_guardian_success(db_session: Session) -> None:
     _code(db_session, guardian, staff.id, expires_at=_NOW + timedelta(days=2), used=True)
     _code(db_session, other, staff.id, expires_at=_NOW + timedelta(days=1))
 
-    result = archive_guardian(db_session, guardian.id, actor=_actor(), meta=_META, clock=_clock())
+    archive_guardian(db_session, guardian.id, actor=_actor(), meta=_META, clock=_clock())
 
-    assert result is None
     assert [g.id for g in list_for_student(db_session, student.id, clock=_clock())] == [other.id]
     db_session.refresh(guardian)
     assert guardian.archived_at == _NOW
