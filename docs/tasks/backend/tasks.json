@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 280,
-  "last_updated": "2026-10-05T03:03:00Z",
+  "version": 281,
+  "last_updated": "2026-10-05T03:03:01Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10787,7 +10787,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:api/parent_portal/pickup.py::create_authorizations",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-400",
@@ -10815,9 +10815,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠，--collect-only 對照選到每條 red_case；測試 4a4f7c9 先於實作 c2b1260（實作 commit 未改測試）；test_pickup_authorizations.py 整檔 17 passed；just lint / typecheck 對 authorizations.py 與測試檔乾淨；測試以 app_backend 連線（owner 只用於清理）。 日期範圍取自 pickup.authorization 設定（today~today+max_days_ahead，today 為台北日期），422 details 帶 max_days_ahead；接送人模式要求同學生、未封存，他人 / 封存 / 不存在皆 404 並以快照帶入 proxy_name / proxy_phone；上限只計 active（cancelled 不計，有測試）。明碼：只出現在 PickupAuthorizationCreatedOut.code，DB 只存 HMAC code_hash 與 last4（以 select * 全欄位比對、caplog DEBUG 皆不含明碼），admin:pickup 推播用 PickupAuthorizationOut（無 code / code_hash，測試斷言 message 字串不含明碼）、commit 後才送。實作自加的並發保護（計數前以 get_student_or_404(for_update=True) 鎖學生列，有兩 session 測試：s2 被擋、s1 commit 後 409、最終 3 筆）合理，符合 kickoff「上限計數要先鎖父列序列化」慣例，建議協調者在 description 第 4 點補一句「計數前先鎖學生列序列化同學生的建立」。殘留：學生列用 FOR UPDATE，交易期間會擋住同一學生其他子表的 FK 插入（FOR KEY SHARE），FOR NO KEY UPDATE 即足以序列化；接送人查詢在鎖學生列之前，與封存接送人並發時可能以剛封存的接送人建立（影響極小）。"
       }
     },
     {
@@ -10937,7 +10937,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:services/pickup_verification.py::_load_active",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-401",
@@ -10960,9 +10960,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠，--collect-only 對照選到每條 red_case；測試 4a4f7c9 先於實作 c2b1260（實作 commit 未改測試）；test_pickup_authorizations.py 整檔 17 passed；just lint / typecheck 對 authorizations.py 與測試檔乾淨；測試以 app_backend 連線（owner 只用於清理）。 SELECT ... FOR UPDATE OF pickup_authorizations（joined pickup_person 為 outer join 可空側不鎖）加 populate_existing；404 pickup_authorization_not_found、cancelled / completed → 409 authorization_not_active、明天 / 昨天 → 409 authorization_not_today、鎖定 → 409 pickup_code_locked 皆有測試，檢查順序與 description 一致；allow_locked 只放行鎖定一項（鎖定且 cancelled 仍 409 not_active，有測試）；跨午夜以台北日期判斷今天（UTC 16:30 案例）；第二條連線 FOR UPDATE NOWAIT 得 55P03、s1 commit 後可取得。"
       }
     },
     {
