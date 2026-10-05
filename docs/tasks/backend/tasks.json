@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 278,
-  "last_updated": "2026-10-05T03:01:33Z",
+  "version": 279,
+  "last_updated": "2026-10-05T03:02:30Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -7930,7 +7930,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:services/student_attendance_report.py::build_daily_classroom_overview",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-300",
@@ -13150,7 +13150,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/dashboard_service.py",
       "source_ref": "BE:services/dashboard_query_service.py::DashboardQueryService._compute_student_attendance_summary",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-490",
