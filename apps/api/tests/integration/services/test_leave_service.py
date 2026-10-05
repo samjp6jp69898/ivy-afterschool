@@ -1,4 +1,4 @@
-"""BACKEND-347 / 350：leave_service（後台請假列表、附件短效 URL）。"""
+"""BACKEND-347 / 350 / 348：leave_service（後台請假列表、附件短效 URL、家長端小孩請假列表）。"""
 
 from datetime import UTC, date, datetime
 from uuid import UUID, uuid4
@@ -11,7 +11,7 @@ from app.core.errors import AppError
 from app.core.pagination import PageParams
 from app.core.storage import StorageError
 from app.schemas.leaves import AttachmentUrlOut, LeaveListQuery, LeaveOut
-from app.services.leave_service import get_attachment_url, list_leaves
+from app.services.leave_service import get_attachment_url, list_child_leaves, list_leaves
 from tests.support.factories import (
     make_class,
     make_leave,
@@ -20,6 +20,7 @@ from tests.support.factories import (
     make_staff,
     make_student,
 )
+from tests.support.fake_clock import FakeClock
 from tests.support.fake_storage import FakeStorage
 
 _PAGE = PageParams(page=1, page_size=200)
@@ -230,3 +231,108 @@ def test_attachment_url_mismatch(db_session: Session) -> None:
         assert (exc.value.status, exc.value.code) == (404, "attachment_not_found")
     assert wrong_leave.value.message == missing.value.message
     assert (unavailable.value.status, unavailable.value.code) == (502, "storage_unavailable")
+
+
+# --- BACKEND-348 list_child_leaves ---
+
+
+@pytest.mark.clock("2026-09-02T10:00:00+08:00")
+def test_list_child_leaves(db_session: Session, fake_clock: FakeClock) -> None:
+    ming = make_student(db_session, name="王小明")
+    hua = make_student(db_session, name="陳小華")
+    ended = make_leave(db_session, ming, start_date=date(2026, 9, 1))
+    ongoing = make_leave(db_session, ming, start_date=date(2026, 8, 31), end_date=date(2026, 9, 3))
+    future = make_leave(db_session, ming, start_date=date(2026, 9, 10), leave_type="personal")
+    make_leave(db_session, hua, start_date=date(2026, 9, 2))
+
+    page = list_child_leaves(db_session, ming.id, _PAGE, storage=FakeStorage(), clock=fake_clock)
+
+    assert page.total == 3
+    assert [r.id for r in page.items] == [future.id, ended.id, ongoing.id]
+    assert {r.id: r.can_cancel for r in page.items} == {
+        future.id: True,
+        ended.id: False,
+        ongoing.id: True,
+    }
+    assert {r.student_id for r in page.items} == {ming.id}
+    first = page.items[0]
+    assert (first.leave_type, first.leave_type_label, first.status) == (
+        "personal",
+        "事假",
+        "active",
+    )
+    # 家長端不回傳員工姓名
+    assert "created_by_name" not in first.model_dump()
+
+
+@pytest.mark.clock("2026-09-02T10:00:00+08:00")
+def test_list_child_leaves_includes_cancelled_and_last_day(
+    db_session: Session, fake_clock: FakeClock
+) -> None:
+    ming = make_student(db_session)
+    ends_today = make_leave(
+        db_session, ming, start_date=date(2026, 9, 1), end_date=date(2026, 9, 2)
+    )
+    cancelled = make_leave(db_session, ming, start_date=date(2026, 9, 5), status="cancelled")
+
+    page = list_child_leaves(db_session, ming.id, _PAGE, storage=FakeStorage(), clock=fake_clock)
+
+    rows = {r.id: r for r in page.items}
+    assert page.total == 2
+    # 今天是最後一天仍可取消（取消今天）
+    assert rows[ends_today.id].can_cancel is True
+    assert (rows[cancelled.id].status, rows[cancelled.id].can_cancel) == ("cancelled", False)
+    assert rows[cancelled.id].cancelled_at is not None
+
+
+def test_list_child_leaves_same_start_newest_created_first(
+    db_session: Session, fake_clock: FakeClock
+) -> None:
+    ming = make_student(db_session)
+    older = make_leave(db_session, ming, start_date=date(2026, 9, 1), status="cancelled")
+    newer = make_leave(db_session, ming, start_date=date(2026, 9, 1))
+    older.created_at = datetime(2026, 8, 8, tzinfo=UTC)
+    newer.created_at = datetime(2026, 8, 9, tzinfo=UTC)
+    db_session.flush()
+
+    page = list_child_leaves(db_session, ming.id, _PAGE, storage=FakeStorage(), clock=fake_clock)
+
+    assert [r.id for r in page.items] == [newer.id, older.id]
+
+
+def test_list_child_leaves_attachment_url(db_session: Session, fake_clock: FakeClock) -> None:
+    storage = FakeStorage()
+    ming = make_student(db_session)
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 1))
+    attachment = make_leave_attachment(db_session, leave, ext="jpg")
+
+    page = list_child_leaves(db_session, ming.id, _PAGE, storage=storage, clock=fake_clock)
+
+    [row] = page.items
+    [out] = row.attachments
+    assert out.url == f"https://storage.test/leave-attachments/{attachment.storage_path}?exp=300"
+    assert (out.id, out.mime_type, out.size_bytes) == (attachment.id, "image/jpeg", 1024)
+
+    storage.sign_error = StorageError("S3 generate_presigned_url 失敗")
+    failed = list_child_leaves(db_session, ming.id, _PAGE, storage=storage, clock=fake_clock)
+
+    [failed_row] = failed.items
+    assert failed_row.id == leave.id
+    assert [a.url for a in failed_row.attachments] == [None]
+    assert failed_row.attachments[0].id == attachment.id
+
+
+def test_list_child_leaves_pagination(db_session: Session, fake_clock: FakeClock) -> None:
+    ming = make_student(db_session)
+    leaves = [make_leave(db_session, ming, start_date=date(2026, 9, 1 + 5 * i)) for i in range(3)]
+
+    second = list_child_leaves(
+        db_session,
+        ming.id,
+        PageParams(page=2, page_size=2),
+        storage=FakeStorage(),
+        clock=fake_clock,
+    )
+
+    assert second.total == 3
+    assert [r.id for r in second.items] == [leaves[0].id]
