@@ -14,7 +14,8 @@ from typing import Any
 from uuid import UUID
 
 import pytest
-from sqlalchemy import event, func, select, text
+from sqlalchemy import Engine, event, func, select, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.clock import combine_taipei
@@ -35,6 +36,7 @@ from app.services.pickup.requests import (
     sync_open_request_reply,
 )
 from app.services.settings_service import clear_settings_cache
+from tests.integration.db.conftest import connect_owner
 from tests.support.factories import (
     ARCHIVED_AT,
     make_attendance,
@@ -572,3 +574,56 @@ def test_sync_reply_no_open_request(db_session: Session, clock: FakeClock) -> No
     _progress(db_session, ming.id, overall="done")
 
     assert sync_open_request_reply(db_session, ming.id, _TODAY, clock=clock) is None
+
+
+@pytest.fixture
+def owner_cleanup_students() -> Iterator[list[UUID]]:
+    """committing 測試建立的學生以 owner 連線刪除；排在 committing_db_session 之前
+    （先 close session、truncate 請求與進度表，再刪學生）。"""
+    ids: list[UUID] = []
+    yield ids
+    with connect_owner() as conn:
+        conn.execute("set lock_timeout = '5s'")
+        for student_id in ids:
+            conn.execute("delete from public.students where id = %s", (student_id,))
+        conn.commit()
+
+
+@pytest.mark.cleanup_tables("pickup_requests", "homework_daily_progress")
+def test_sync_reply_locks_request_row(
+    owner_cleanup_students: list[UUID],
+    committing_db_session: Session,
+    db_engine: Engine,
+    clock: FakeClock,
+) -> None:
+    """先鎖請求列再判斷：即使員工回覆不需更新，同步期間其他交易的 FOR UPDATE 也要等它結束。"""
+    ming = make_student(committing_db_session)
+    request = make_pickup_request(
+        committing_db_session,
+        ming,
+        service_date=_TODAY,
+        status="acknowledged",
+        reply_source="staff",
+        reply_message="17:30 好",
+    )
+    _progress(committing_db_session, ming.id, overall="in_progress", eta=time(18, 0))
+    committing_db_session.commit()
+    owner_cleanup_students.append(ming.id)
+    lock_sql = text("select id from public.pickup_requests where id = :id for update nowait")
+
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    try:
+        synced = sync_open_request_reply(s1, ming.id, _TODAY, clock=clock)
+        assert synced is not None
+        assert synced.reply_message == "17:30 好"
+        with pytest.raises(OperationalError) as blocked:
+            s2.execute(lock_sql, {"id": request.id})
+        assert getattr(blocked.value.orig, "sqlstate", None) == "55P03"  # lock_not_available
+        s2.rollback()
+        s1.commit()
+        assert s2.execute(lock_sql, {"id": request.id}).scalar_one() == request.id
+        s2.rollback()
+    finally:
+        s1.close()
+        s2.close()
