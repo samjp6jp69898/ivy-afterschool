@@ -15,6 +15,8 @@ students:sensitive，由 service 檢查）。
 BACKEND-169 → 201。
 ``POST /api/admin/students/{student_id}/purge``（BACKEND-531）：students:purge（預設只有 admin）→
 BACKEND-530 → 200。
+``POST /api/admin/students/{student_id}/photo``（BACKEND-164）：multipart 欄位 ``file``、
+students:write → BACKEND-154 ``upload_photo`` → 200 ``PhotoUploadOut``（短效 URL）。
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.admin._query import query_model
@@ -35,6 +37,7 @@ from app.core.request_meta import RequestMeta, get_request_meta
 from app.core.storage import Storage, get_storage
 from app.schemas.guardians import GuardianCreateIn, GuardianOut
 from app.schemas.students import (
+    PhotoUploadOut,
     StudentCreateIn,
     StudentDetailOut,
     StudentListItemOut,
@@ -96,6 +99,19 @@ def purge_student(
     out = student_service.purge_student(
         db, student_id, body, actor=staff, storage=storage, meta=meta, clock=clock
     )
+    db.commit()
+    return out
+
+
+@router.post("/{student_id}/photo", response_model=PhotoUploadOut)
+def upload_photo(
+    student_id: UUID,
+    file: Annotated[UploadFile, File()],
+    _: Annotated[CurrentStaff, Depends(require_permission(Permission.STUDENTS_WRITE))],
+    db: Annotated[Session, Depends(get_db)],
+    storage: Annotated[Storage, Depends(get_storage)],
+) -> PhotoUploadOut:
+    out = student_service.upload_photo(db, student_id, file, storage=storage)
     db.commit()
     return out
 

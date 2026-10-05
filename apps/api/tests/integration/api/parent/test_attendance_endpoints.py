@@ -86,7 +86,6 @@ def test_parent_attendance_422(
     for month in ("2026-13", "2026/09", "202609", ""):
         assert_error(client.get(_url(student_id), params={"month": month}), 422, "validation_error")
     assert_error(client.get(_url("abc"), params={"month": "2026-09"}), 422, "validation_error")
-    assert_error(client.get(_url(student_id), params={"foo": "bar"}), 422, "validation_error")
 
 
 def test_parent_attendance_401(

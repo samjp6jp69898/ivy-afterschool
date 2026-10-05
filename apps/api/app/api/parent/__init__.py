@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.parent import (
+    attendance,
     auth,
     children,
     config,
@@ -20,6 +21,7 @@ parent_router.include_router(auth.router)
 parent_router.include_router(me.router)
 parent_router.include_router(children.router)
 parent_router.include_router(notifications.router)
+parent_router.include_router(attendance.router)
 parent_router.include_router(leaves.router)
 parent_router.include_router(homework.router)
 parent_router.include_router(pickup.router)
