@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 266,
-  "last_updated": "2026-10-05T02:57:11Z",
+  "version": 267,
+  "last_updated": "2026-10-05T02:57:52Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -7926,7 +7926,7 @@
     {
       "id": "BACKEND-311",
       "title": "實作 AttendanceService.get_daily_attendance：每日出勤清單與統計",
-      "description": "在 `apps/api/app/services/attendance_service.py` 實作：\n```python\ndef get_daily_attendance(session: Session, query: DailyAttendanceQuery, *, clock: Clock) -> DailyAttendanceOut: ...\n```\n- d = query.date or clock.today()；`is_service_day` 結果放進回應。\n- 學生集合 = （active 且未封存的學生，依 class_id 篩選）∪（當天已有出勤列的學生，即使已轉為非 active，保留歷史）。\n- 營業日中尚未建立出勤列的 active 學生以虛擬列呈現：`id=None, status='expected'`（BACKEND-303 尚未執行或剛入班）；`enrolled_on > d`（尚未入班）的學生不產生虛擬列、不計入 summary，與 BACKEND-303 建列範圍一致；非營業日不產生虛擬列。\n- leave 列附 LeaveBriefOut（一次 join，不 N+1）。\n- status 篩選在組完虛擬列後套用；summary 以篩選前的全部列計算。\n- 排序：班級 sort_order、班名、student_no。\n- 移植 ivy `services/student_attendance_report.py::build_daily_classroom_overview` 的統計概念；去掉教師點名完成度。\n\n**驗收標準**\n- 回傳實際列 + 虛擬列，summary 計數正確。\n- class_id、status 篩選生效；status 篩選不影響 summary。\n- 非營業日沒有虛擬列且 is_service_day=False。\n- 查詢次數固定（≤ 4 條 SQL，不隨學生數成長）。",
+      "description": "在 `apps/api/app/services/attendance_service.py` 實作：\n```python\ndef get_daily_attendance(session: Session, query: DailyAttendanceQuery, *, clock: Clock) -> DailyAttendanceOut: ...\n```\n- d = query.date or clock.today()；`is_service_day` 結果放進回應。\n- 學生集合 = （active 且未封存的學生，依 class_id 篩選）∪（當天已有出勤列的學生，即使已轉為非 active，保留歷史）。\n- 營業日中尚未建立出勤列的 active 學生以虛擬列呈現：`id=None, status='expected'`（BACKEND-303 尚未執行或剛入班）；非營業日不產生虛擬列。\n- leave 列附 LeaveBriefOut（一次 join，不 N+1）。\n- status 篩選在組完虛擬列後套用；summary 以篩選前的全部列計算。\n- 排序：班級 sort_order、班名、student_no。\n- 移植 ivy `services/student_attendance_report.py::build_daily_classroom_overview` 的統計概念；去掉教師點名完成度。\n\n**驗收標準**\n- 回傳實際列 + 虛擬列，summary 計數正確。\n- class_id、status 篩選生效；status 篩選不影響 summary。\n- 非營業日沒有虛擬列且 is_service_day=False。\n- 查詢次數固定（≤ 4 條 SQL，不隨學生數成長）。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:services/student_attendance_report.py::build_daily_classroom_overview",
@@ -7952,8 +7952,7 @@
           "test_daily_attendance_filters：class_id=班B → 只回班 B 學生；status='present' → items 只有王小明但 summary.total 仍 3",
           "test_daily_attendance_non_service_day：週日查詢 → is_service_day False、items == []（無任何實際列時）",
           "test_daily_attendance_withdrawn_with_row：張小美已 withdrawn 但當天有 left 列 → 仍出現在 items",
-          "test_daily_attendance_query_count：30 位學生 → before_cursor_execute 計數 ≤ 4",
-          "test_daily_attendance_excludes_not_yet_enrolled：營業日 d=2026-10-05，active 學生 A enrolled_on=2026-10-01、B enrolled_on=2026-10-06，兩人都沒有出勤列 → items 只有 A 的虛擬列（不含 B），summary 的 expected 計數為 1"
+          "test_daily_attendance_query_count：30 位學生 → before_cursor_execute 計數 ≤ 4"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_attendance_service.py -k \"test_daily_attendance_\"",
         "notes": ""
@@ -14893,6 +14892,39 @@
         "status": "pass",
         "reviewer": "review-r8-a",
         "notes": "通過。tdd.run 10 條全綠（4 條新 red_case + BACKEND-207 既有 6 條），collect-only 全選到；eb12756 先於 8fffb1d。close 冪等、context manager、close 後 push → RuntimeError 且訊息不含 token、transport / http_client 互斥 ValueError；Authorization 改逐請求帶且有斷言。outbox_jobs 整合測試 7 條綠。lint / typecheck 乾淨。殘留（不擋）：app/notifications/outbox_jobs.py 模組 docstring 仍寫「HttpLineMessagingClient 持有 httpx.Client 且沒有 close()」，已過時；注入 http_client 時 timeout 參數不生效（只供測試注入，可接受）。"
+      }
+    },
+    {
+      "id": "BACKEND-544",
+      "title": "get_daily_attendance 的虛擬列與 summary 排除尚未入班（enrolled_on > d）的學生",
+      "description": "改寫 BACKEND-311 `AttendanceService.get_daily_attendance`（`apps/api/app/services/attendance_service.py`）的學生集合規則（311 其餘行為不變）：營業日中尚未建立出勤列的 active 學生以虛擬列呈現時，排除 `enrolled_on > d` 的尚未入班學生——不產生虛擬列、不計入 summary，與 BACKEND-303 建列範圍及 BACKEND-491 儀表板的「應到」口徑一致。當天已有出勤列的學生照 311 規則保留（不論 enrolled_on）。\n\n完成時同步改寫 BACKEND-311 description 的虛擬列條文為新規則。\n\n**驗收標準**：每一條對應下列 red_case；BACKEND-311 既有測試全綠、查詢次數上限不變（≤ 4 條 SQL）。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/services/attendance_service.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "BACKEND-311"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/services/test_attendance_service.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_daily_attendance_excludes_not_yet_enrolled：營業日 d=2026-10-05，active 學生 A enrolled_on=2026-10-01、B enrolled_on=2026-10-06，兩人都沒有出勤列 → items 只有 A 的虛擬列（不含 B），summary 的 expected 計數為 1",
+          "test_daily_attendance_keeps_row_even_if_enrolled_later：B enrolled_on=2026-10-06 但 2026-10-05 已有一筆 present 出勤列 → items 含 B 的實際列且計入 summary.present"
+        ],
+        "run": "just test-int apps/api/tests/integration/services/test_attendance_service.py -k \"test_daily_attendance_\"",
+        "notes": "既有 BACKEND-311 的測試同檔、同 -k 前綴，tdd.run 會一併跑到。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
       }
     }
   ]
