@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 77,
-  "last_updated": "2026-10-05T05:33:48Z",
+  "version": 78,
+  "last_updated": "2026-10-05T05:34:42Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -105,7 +105,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/http.ts",
       "source_ref": "FE:src/parent/api/index.ts::buildParentRefreshUrl",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r8",
       "depends_on": [
         "FRONTEND-001",
