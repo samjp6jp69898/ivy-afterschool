@@ -1,4 +1,6 @@
-"""BACKEND-214：GET /api/admin/notifications（個人收件匣，只需登入）。"""
+"""BACKEND-214：GET /api/admin/notifications（個人收件匣，只需登入）。
+BACKEND-215：POST /api/admin/notifications/{id}/read。
+BACKEND-216：POST /api/admin/notifications/read-all。"""
 
 from __future__ import annotations
 
@@ -138,3 +140,148 @@ def test_admin_notifications_list_requires_no_permission_code(
     # 個人收件匣在 route audit 白名單內，其餘後台路由仍須掛權限守衛
     assert admin_routes_without_permission(app) == []
     assert "/api/admin/notifications" in app.openapi()["paths"]
+
+
+# --- BACKEND-215 / 216：POST /{id}/read、POST /read-all ------------------------------------------
+
+
+def _read_url(notification_id: object) -> str:
+    return f"{_URL}/{notification_id}/read"
+
+
+_READ_ALL = f"{_URL}/read-all"
+
+
+def test_admin_notification_read_success(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    client, staff = staff_client(permissions=[])
+    note = _note(db_session, staff.id)
+    db_session.commit()
+
+    resp = client.post(_read_url(note.id))
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == str(note.id)
+    assert body["read_at"] is not None
+    assert body["deep_link"] == "/leaves"
+    # 已 commit：列表 unread_count 歸零；重複標記冪等（read_at 不變）
+    assert client.get(_URL).json()["unread_count"] == 0
+    again = client.post(_read_url(note.id))
+    assert again.status_code == 200
+    assert again.json()["read_at"] == body["read_at"]
+
+
+def test_admin_notification_read_422(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=[])
+
+    assert_error(client.post(_read_url("abc")), 422, "validation_error")
+
+
+def test_admin_notification_read_401(api_client: TestClient, assert_error: AssertError) -> None:
+    assert_error(api_client.post(_read_url(uuid4())), 401, "unauthenticated")
+
+
+def test_admin_notification_read_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client, staff = staff_client(permissions=[], must_change_password=True)
+    note = _note(db_session, staff.id)
+    db_session.commit()
+
+    assert_error(client.post(_read_url(note.id)), 403, "password_change_required")
+    db_session.expire_all()
+    assert note.read_at is None
+
+
+def test_admin_notification_read_404_other(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client, staff = staff_client(permissions=[])
+    _, other = staff_client(permissions=[])
+    theirs = _note(db_session, other.id)
+    parent_same_id = _note(db_session, staff.id, recipient_type="parent")
+    db_session.commit()
+
+    resp = client.post(_read_url(theirs.id))
+    missing = client.post(_read_url(uuid4()))
+
+    assert_error(resp, 404, "notification_not_found")
+    assert_error(missing, 404, "notification_not_found")
+    assert resp.json() == missing.json()
+    assert_error(client.post(_read_url(parent_same_id.id)), 404, "notification_not_found")
+    db_session.expire_all()
+    assert theirs.read_at is None
+
+
+def test_admin_notification_read_guard_registered(app: FastAPI) -> None:
+    # 個人收件匣在 route audit 白名單內（含子路徑），其餘後台路由仍須掛權限守衛
+    assert admin_routes_without_permission(app) == []
+    paths = app.openapi()["paths"]
+    assert "post" in paths["/api/admin/notifications/{notification_id}/read"]
+    assert "post" in paths["/api/admin/notifications/read-all"]
+
+
+def test_admin_notifications_read_all_success(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    client, staff = staff_client(permissions=[])
+    for hour in (8, 9, 10):
+        _note(db_session, staff.id, hour=hour)
+    _note(db_session, staff.id, title="已讀", read=True, hour=7)
+    db_session.commit()
+
+    resp = client.post(_READ_ALL)
+
+    assert resp.status_code == 200
+    assert resp.json() == {"updated": 3}
+    assert client.get(_URL).json()["unread_count"] == 0
+    # 再按一次：沒有未讀 → 0
+    assert client.post(_READ_ALL).json() == {"updated": 0}
+
+
+def test_admin_notifications_read_all_401(
+    api_client: TestClient, assert_error: AssertError
+) -> None:
+    assert_error(api_client.post(_READ_ALL), 401, "unauthenticated")
+
+
+def test_admin_notifications_read_all_403(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=[], must_change_password=True)
+
+    assert_error(client.post(_READ_ALL), 403, "password_change_required")
+
+
+def test_admin_notifications_read_all_isolation(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    client, staff = staff_client(permissions=[])
+    other_client, other = staff_client(permissions=[])
+    _note(db_session, staff.id)
+    _note(db_session, other.id)
+    _note(db_session, other.id, hour=9)
+    _note(db_session, staff.id, recipient_type="parent")
+    db_session.commit()
+
+    assert client.post(_READ_ALL).json() == {"updated": 1}
+
+    assert other_client.get(_URL).json()["unread_count"] == 2
+    assert client.get(_URL).json()["unread_count"] == 0
+
+
+def test_admin_notifications_read_all_foreign_origin(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client, staff = staff_client(permissions=[])
+    _note(db_session, staff.id)
+    db_session.commit()
+
+    resp = client.post(_READ_ALL, headers={"Origin": "https://evil.test"})
+
+    assert_error(resp, 403, "origin_forbidden")
+    assert client.get(_URL).json()["unread_count"] == 1
