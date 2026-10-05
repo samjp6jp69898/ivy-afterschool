@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 
+from app.models.attendance import AttendanceStatus
 from app.models.reference import ClosedDay
 from app.services.dashboard_service import get_today_dashboard
 from app.services.settings_service import clear_settings_cache
@@ -246,7 +247,7 @@ def test_dashboard_recent_leaves_limit_and_order(
 
 @pytest.mark.clock(_CLOCK)
 def test_dashboard_query_count(db_session: Session, fake_clock: FakeClock) -> None:
-    statuses = ["present", "left", "absent", "expected", None]
+    statuses: list[AttendanceStatus | None] = ["present", "left", "absent", "expected", None]
     for index in range(50):
         student = make_student(db_session)
         status = statuses[index % len(statuses)]
