@@ -3,11 +3,13 @@ BACKEND-138：update_class（部分更新、封存班 409、同年同名 409）�
 BACKEND-139：archive_class（有在學學生 409、withdrawn 不阻擋、冪等）。
 BACKEND-140：set_class_staff（整批取代以差異更新、無效員工 422、空清單）。"""
 
+from collections.abc import Iterator
 from datetime import date
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import Engine, func, select, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentStaff
@@ -29,6 +31,7 @@ from app.services.class_service import (
     set_class_staff,
     update_class,
 )
+from tests.integration.db.conftest import connect_owner
 from tests.support.factories import make_class, make_class_staff, make_staff, make_student
 from tests.support.fake_clock import FakeClock
 
@@ -431,3 +434,178 @@ def test_set_class_staff_archived(db_session: Session) -> None:
     with pytest.raises(AppError) as missing:
         set_class_staff(db_session, uuid4(), ClassStaffPutIn(items=[]))
     assert (missing.value.status, missing.value.code) == (404, "class_not_found")
+
+
+# --- 並發（review-r8-b 打回 138 / 139 / 140）：寫入前必須鎖班級列 ------------------------------
+
+_LOCK_NOT_AVAILABLE = "55P03"
+
+
+@pytest.fixture
+def owner_cleanup() -> Iterator[list[tuple[str, UUID]]]:
+    """committing 測試建立的列以 owner 連線依登記的反序刪除；排在 committing_db_session 之前
+    （先 close session、truncate class_staff，再刪學生 / 班級 / 員工 / 角色）。"""
+    rows: list[tuple[str, UUID]] = []
+    yield rows
+    with connect_owner() as conn:
+        conn.execute("set lock_timeout = '5s'")
+        for table, row_id in reversed(rows):
+            conn.execute(f"delete from public.{table} where id = %s", (row_id,))  # noqa: S608  表名為測試常數
+        conn.commit()
+
+
+def _committed_class(db: Session, cleanup: list[tuple[str, UUID]]) -> UUID:
+    klass = make_class(db)
+    db.commit()
+    cleanup.append(("classes", klass.id))
+    return klass.id
+
+
+def _committed_staff(db: Session, cleanup: list[tuple[str, UUID]]) -> UUID:
+    staff = make_staff(db)
+    db.commit()
+    cleanup.append(("roles", staff.role_id))
+    cleanup.append(("staff_users", staff.id))
+    return staff.id
+
+
+def _short_lock_timeout(session: Session) -> None:
+    # SET LOCAL：連線會回 pool，session 級設定會污染其他測試
+    session.execute(text("set local lock_timeout = '200ms'"))
+
+
+@pytest.mark.cleanup_tables("class_staff")
+def test_update_class_blocked_by_concurrent_archive(
+    owner_cleanup: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    fake_clock: FakeClock,
+) -> None:
+    """班 A：s2 先載入（archived_at None）→ s1 封存並 commit → s2 update_class 必須重讀上鎖後的值
+    （populate_existing）→ 409 class_archived。班 B：s1 封存未 commit → s2 update_class 等鎖
+    （lock_timeout 內 55P03）；s1 commit 後再試 → 409。"""
+    class_a = _committed_class(committing_db_session, owner_cleanup)
+    class_b = _committed_class(committing_db_session, owner_cleanup)
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    try:
+        assert get_class(s2, class_a).archived_at is None  # s2 的 identity map 先有舊狀態
+        archive_class(s1, class_a, clock=fake_clock)
+        s1.commit()
+        with pytest.raises(AppError) as stale:
+            update_class(s2, class_a, ClassUpdateIn(name="封存後改名"))
+        assert (stale.value.status, stale.value.code) == (409, "class_archived")
+        s2.rollback()
+
+        archive_class(s1, class_b, clock=fake_clock)
+        _short_lock_timeout(s2)
+        with pytest.raises(OperationalError) as blocked:
+            update_class(s2, class_b, ClassUpdateIn(name="封存後改名"))
+        assert getattr(blocked.value.orig, "sqlstate", None) == _LOCK_NOT_AVAILABLE
+        s2.rollback()
+        s1.commit()
+        with pytest.raises(AppError) as exc:
+            update_class(s2, class_b, ClassUpdateIn(name="封存後改名"))
+        assert (exc.value.status, exc.value.code) == (409, "class_archived")
+        s2.rollback()
+        names = {get_class(s2, cid).name for cid in (class_a, class_b)}
+        assert "封存後改名" not in names
+    finally:
+        s1.close()
+        s2.close()
+
+
+@pytest.mark.cleanup_tables("class_staff")
+def test_archive_class_blocked_by_concurrent_student_insert(
+    owner_cleanup: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    fake_clock: FakeClock,
+) -> None:
+    """s1 新增 active 學生到該班未 commit（FK 檢查對班級列持 KEY SHARE）→ s2 archive_class 的
+    FOR UPDATE 等鎖 55P03；s1 commit 後 s2 再封存 → 409 class_has_students。"""
+    class_id = _committed_class(committing_db_session, owner_cleanup)
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    try:
+        klass = s1.get(SchoolClass, class_id)
+        assert klass is not None
+        student_id = make_student(s1, class_=klass).id
+        owner_cleanup.append(("students", student_id))
+        _short_lock_timeout(s2)
+        with pytest.raises(OperationalError) as blocked:
+            archive_class(s2, class_id, clock=fake_clock)
+        assert getattr(blocked.value.orig, "sqlstate", None) == _LOCK_NOT_AVAILABLE
+        s2.rollback()
+
+        s1.commit()
+        with pytest.raises(AppError) as exc:
+            archive_class(s2, class_id, clock=fake_clock)
+        assert (exc.value.status, exc.value.code) == (409, "class_has_students")
+        assert exc.value.details == {"student_count": 1}
+        s2.rollback()
+        assert get_class(s2, class_id).archived_at is None
+    finally:
+        s1.close()
+        s2.close()
+
+
+@pytest.mark.cleanup_tables("class_staff")
+def test_set_class_staff_serialized(
+    owner_cleanup: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    fake_clock: FakeClock,
+) -> None:
+    """兩個 PUT 同時指派同一位員工：s2 等 s1 的鎖（55P03）；s1 commit 後 s2 以「整批取代」覆蓋成
+    自己的清單（一列、role 為 s2 給的），不會撞 uq_class_staff_class_staff。
+    另外 s1 封存未 commit 時 s2 set_class_staff 也要等鎖，commit 後 409 class_archived。"""
+    class_id = _committed_class(committing_db_session, owner_cleanup)
+    staff_id = _committed_staff(committing_db_session, owner_cleanup)
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    try:
+        set_class_staff(
+            s1,
+            class_id,
+            ClassStaffPutIn(items=[ClassStaffItemIn(staff_user_id=staff_id, role="lead")]),
+        )
+        _short_lock_timeout(s2)
+        with pytest.raises(OperationalError) as blocked:
+            set_class_staff(
+                s2,
+                class_id,
+                ClassStaffPutIn(items=[ClassStaffItemIn(staff_user_id=staff_id, role="assistant")]),
+            )
+        assert getattr(blocked.value.orig, "sqlstate", None) == _LOCK_NOT_AVAILABLE
+        s2.rollback()
+
+        s1.commit()
+        out = set_class_staff(
+            s2,
+            class_id,
+            ClassStaffPutIn(items=[ClassStaffItemIn(staff_user_id=staff_id, role="assistant")]),
+        )
+        s2.commit()
+        assert [(st.staff_user_id, st.role) for st in out.staff] == [(staff_id, "assistant")]
+        rows = (
+            s1.execute(select(ClassStaff.role).where(ClassStaff.class_id == class_id))
+            .scalars()
+            .all()
+        )
+        assert rows == ["assistant"]
+
+        # 封存進行中不可改負責員工
+        archive_class(s1, class_id, clock=fake_clock)
+        _short_lock_timeout(s2)
+        with pytest.raises(OperationalError):
+            set_class_staff(s2, class_id, ClassStaffPutIn(items=[]))
+        s2.rollback()
+        s1.commit()
+        with pytest.raises(AppError) as exc:
+            set_class_staff(s2, class_id, ClassStaffPutIn(items=[]))
+        assert exc.value.code == "class_archived"
+        s2.rollback()
+    finally:
+        s1.close()
+        s2.close()

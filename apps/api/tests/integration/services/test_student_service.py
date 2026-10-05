@@ -16,7 +16,8 @@ from datetime import date, timedelta
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import Engine, func, select, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from starlette.datastructures import Headers, UploadFile
 
@@ -46,6 +47,7 @@ from app.schemas.students import (
     StudentPurgeOut,
 )
 from app.services.binding_code_service import hash_code
+from app.services.class_service import archive_class
 from app.services.parent_scope import get_parent_student_ids
 from app.services.student_service import (
     archive_student,
@@ -56,6 +58,7 @@ from app.services.student_service import (
     upload_photo,
 )
 from app.services.students.id_number import id_number_hmac, normalize_id_number
+from tests.integration.db.conftest import connect_owner
 from tests.support.factories import (
     make_attendance,
     make_class,
@@ -607,6 +610,57 @@ def test_create_student_withdrawn_default_date(db_session: Session, fake_clock: 
     assert defaulted.status == "withdrawn"
     assert explicit.withdrawn_on == date(2026, 8, 20)
     assert active.withdrawn_on is None
+
+
+@pytest.fixture
+def owner_cleanup_classes() -> Iterator[list[UUID]]:
+    """committing 測試建立的班級以 owner 連線刪除；排在 committing_db_session 之前。"""
+    ids: list[UUID] = []
+    yield ids
+    with connect_owner() as conn:
+        conn.execute("set lock_timeout = '5s'")
+        for class_id in ids:
+            conn.execute("delete from public.classes where id = %s", (class_id,))
+        conn.commit()
+
+
+@pytest.mark.cleanup_tables("class_staff")
+def test_create_student_blocked_by_concurrent_class_archive(
+    owner_cleanup_classes: list[UUID],
+    committing_db_session: Session,
+    db_engine: Engine,
+    fake_clock: FakeClock,
+) -> None:
+    """s1 封存班級未 commit（FOR UPDATE）→ s2 create_student(class_id) 對班級列取 FOR SHARE 要等鎖
+    （lock_timeout 內 55P03）；s1 commit 後 s2 再建 → 422 invalid_class，學生不會進封存班。"""
+    klass = make_class(committing_db_session)
+    committing_db_session.commit()
+    owner_cleanup_classes.append(klass.id)
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    data = StudentCreateIn(student_no="S115010", name="林小安", grade_level=2, class_id=klass.id)
+    try:
+        archive_class(s1, klass.id, clock=fake_clock)
+        s2.execute(text("set local lock_timeout = '200ms'"))
+        with pytest.raises(OperationalError) as blocked:
+            create_student(s2, data, actor=_actor("students:write"), meta=_META, clock=fake_clock)
+        assert getattr(blocked.value.orig, "sqlstate", None) == "55P03"
+        s2.rollback()
+
+        s1.commit()
+        with pytest.raises(AppError) as exc:
+            create_student(s2, data, actor=_actor("students:write"), meta=_META, clock=fake_clock)
+        assert (exc.value.status, exc.value.code) == (422, "invalid_class")
+        s2.rollback()
+        assert (
+            s2.execute(
+                select(func.count()).select_from(Student).where(Student.class_id == klass.id)
+            ).scalar_one()
+            == 0
+        )
+    finally:
+        s1.close()
+        s2.close()
 
 
 # --- BACKEND-153：archive_student ----------------------------------------------------------------
