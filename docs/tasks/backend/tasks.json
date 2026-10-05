@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 249,
-  "last_updated": "2026-10-05T02:47:14Z",
+  "version": 250,
+  "last_updated": "2026-10-05T02:47:41Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -8507,7 +8507,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_attendance.py",
       "source_ref": "BE:services/student_leave_service.py::apply_attendance_for_leave",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-300",
@@ -8744,7 +8744,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_service.py",
       "source_ref": "BE:api/parent_portal/leaves.py::list_leaves",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-347",
