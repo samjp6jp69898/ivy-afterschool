@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 272,
-  "last_updated": "2026-10-05T02:59:19Z",
+  "version": 273,
+  "last_updated": "2026-10-05T02:59:33Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10163,7 +10163,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/views.py",
       "source_ref": "BE:api/dismissal_calls.py::_build_calls_out_bulk",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-401",
