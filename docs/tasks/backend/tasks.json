@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 287,
-  "last_updated": "2026-10-05T03:04:59Z",
+  "version": 288,
+  "last_updated": "2026-10-05T03:07:10Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -12148,7 +12148,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-454",
@@ -12217,7 +12217,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-454"
@@ -12250,7 +12250,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-454",
@@ -12286,7 +12286,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-452",
@@ -12399,7 +12399,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-454",
@@ -12433,7 +12433,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-454",
