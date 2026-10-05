@@ -3,6 +3,13 @@
 - BACKEND-467 ``GET /exams``：exams:read；``ExamListQuery`` + 分頁 → ``Page[ExamOut]``。
 - BACKEND-468 ``POST /exams``：exams:write；``ExamCreateIn`` → 201 ``ExamOut``（draft、不含科目）。
 - BACKEND-469 ``GET /exams/{exam_id}``：exams:read → ``ExamOut``。
+- BACKEND-470 ``PATCH /exams/{exam_id}``：exams:write；``ExamUpdateIn`` → BACKEND-456（已發布只可改
+  名稱 / 日期 / 備註，其餘 409 ``exam_published``）→ ``ExamOut``。
+- BACKEND-474 ``PUT /exams/{exam_id}/scores``：exams:write；``ScoresPutIn`` + request meta →
+  BACKEND-460 批次 upsert（格子錯誤 422 ``invalid_score_cells``；發布後修改寫 audit）→
+  ``ScoresPutOut``。
+- BACKEND-475 ``POST /exams/{exam_id}/publish``：exams:publish；無 body → BACKEND-461（無科目 422
+  ``exam_has_no_subjects``、已發布 409 ``exam_already_published``；通知應考家長）→ ``ExamOut``。
 - BACKEND-471 ``DELETE /exams/{exam_id}``：exams:write；只能刪草稿（published → 409）→ 204。
 - BACKEND-472 ``PUT /exams/{exam_id}/subjects``：exams:write；``ExamSubjectsPutIn`` → ``ExamOut``。
 - BACKEND-473 ``GET /exams/{exam_id}/scores``：exams:read → ``ScoreGridOut``（成績格）。
@@ -34,7 +41,10 @@ from app.schemas.exams import (
     ExamOut,
     ExamSubjectsPutIn,
     ExamSummaryOut,
+    ExamUpdateIn,
     ScoreGridOut,
+    ScoresPutIn,
+    ScoresPutOut,
     StudentExamHistoryItemOut,
 )
 from app.services import exam_service
@@ -70,6 +80,13 @@ def get_exam(exam_id: UUID, _: ExamsRead, db: Db) -> ExamOut:
     return exam_service.get_exam(db, exam_id)
 
 
+@router.patch("/{exam_id}", response_model=ExamOut)
+def update_exam(exam_id: UUID, body: ExamUpdateIn, staff: ExamsWrite, db: Db) -> ExamOut:
+    out = exam_service.update_exam(db, exam_id, body, actor=staff)
+    db.commit()
+    return out
+
+
 @router.delete("/{exam_id}", status_code=204, response_class=Response)
 def delete_exam(exam_id: UUID, staff: ExamsWrite, db: Db) -> Response:
     exam_service.delete_exam(db, exam_id, actor=staff)
@@ -87,6 +104,29 @@ def set_exam_subjects(exam_id: UUID, body: ExamSubjectsPutIn, staff: ExamsWrite,
 @router.get("/{exam_id}/scores", response_model=ScoreGridOut)
 def get_score_grid(exam_id: UUID, _: ExamsRead, db: Db) -> ScoreGridOut:
     return exam_service.get_score_grid(db, exam_id)
+
+
+@router.put("/{exam_id}/scores", response_model=ScoresPutOut)
+def upsert_scores(
+    exam_id: UUID,
+    body: ScoresPutIn,
+    staff: ExamsWrite,
+    db: Db,
+    meta: Annotated[RequestMeta, Depends(get_request_meta)],
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> ScoresPutOut:
+    out = exam_service.upsert_scores(db, exam_id, body, actor=staff, meta=meta, clock=clock)
+    db.commit()
+    return out
+
+
+@router.post("/{exam_id}/publish", response_model=ExamOut)
+def publish_exam(
+    exam_id: UUID, staff: ExamsPublish, db: Db, clock: Annotated[Clock, Depends(get_clock)]
+) -> ExamOut:
+    out = exam_service.publish_exam(db, exam_id, actor=staff, clock=clock)
+    db.commit()
+    return out
 
 
 @router.post("/{exam_id}/unpublish", response_model=ExamOut)
