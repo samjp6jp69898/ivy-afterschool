@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 333,
-  "last_updated": "2026-10-05T05:31:49Z",
+  "version": 336,
+  "last_updated": "2026-10-05T05:32:28Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3264,8 +3264,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": "BE:api/auth.py::create_user",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-089",
         "BACKEND-093"
@@ -3301,8 +3301,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-088",
         "BACKEND-093"
@@ -5334,8 +5334,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_import_service.py",
       "source_ref": "BE:utils/excel_io.py::parse_excel",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-151",
         "BACKEND-016",
@@ -7673,8 +7673,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/jobs/attendance_jobs.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-303",
         "BACKEND-018"
@@ -7753,8 +7753,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:api/student_attendance.py::batch_save_attendance",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-305"
       ],
@@ -7789,8 +7789,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-305"
       ],
@@ -7822,8 +7822,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:api/student_attendance.py::batch_save_attendance",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-305"
       ],
@@ -8629,8 +8629,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_service.py",
       "source_ref": "BE:api/parent_portal/leaves.py::create_leave",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-340",
         "BACKEND-341",

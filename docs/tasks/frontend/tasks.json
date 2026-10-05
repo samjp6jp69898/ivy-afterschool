@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 92,
-  "last_updated": "2026-10-05T02:57:22Z",
+  "version": 93,
+  "last_updated": "2026-10-05T05:32:28Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -390,8 +390,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/auth.ts",
       "source_ref": "FE:src/api/auth.ts::login",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-020",
         "BACKEND-042",
@@ -830,8 +830,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/notifications.ts",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-020",
         "BACKEND-214",
@@ -975,8 +975,8 @@
       "granularity_unit": "store",
       "target_path": "apps/web/src/stores/adminWs.ts",
       "source_ref": "FE:src/views/DismissalQueueView.vue::connectWs",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-004",
         "FRONTEND-020",
@@ -1495,8 +1495,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/referenceData.ts",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-020",
         "BACKEND-119",
@@ -5375,8 +5375,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/dashboard.ts",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-020",
         "BACKEND-492"
