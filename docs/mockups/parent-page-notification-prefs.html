@@ -12,7 +12,7 @@
      preview-route  : 對應的家長端路由 path；元件稿寫 component:<相對路徑>
      preview-updated: 最後更新日期 YYYY-MM-DD
      ============================================================ -->
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-178">
 <meta name="preview-route" content="/notifications/preferences">
 <meta name="preview-updated" content="2026-10-05">
@@ -1246,29 +1246,14 @@ function pageSetup({ snack }) {
   const decisions = [
     '版面：頂部列「通知設定」+ 返回鍵（route meta showBack，返回 /notifications）；底部導覽停在「更多」。頁首一段說明文字（body-medium、on-surface-variant）：「關閉後仍會在 App 的通知中看到，只是不會傳 LINE 訊息。」',
     '清單：outlined M3Card 內 ul（aria-label「LINE 通知」），7 列依後端回傳順序，名稱直接顯示後端 label，前端不另寫事件名稱或說明對照。每列最小高 64px、列間 1px outline-variant 分隔線。',
-    '每列：左側 40px 圓形事件圖示（與 NotificationListItem 同一套前綴對照：attendance how_to_reg、homework assignment、pickup directions_walk、exam grading；裝飾用 aria-hidden）、中間 label（body-large）、右側 M3Switch（label 屬性 = 該項 label，作為無障礙名稱）。關閉的項目圖示改 surface-container-high 底，讓開 / 關一眼可辨（開關本身仍是主要表達）。',
+    '每列：左側 40px 圓形事件圖示（與 NotificationListItem 共用 parent/utils 的事件前綴圖示對照：attendance how_to_reg、homework assignment、pickup directions_walk、exam grading；裝飾用 aria-hidden）、中間 label（body-large）、右側 M3Switch（label 屬性 = 該項 label，作為無障礙名稱）。關閉的項目圖示改 surface-container-high 底，讓開 / 關一眼可辨（開關本身仍是主要表達）。',
     '整列是 <label>：點列上任何位置都切換該項（觸控目標為整列而非只有 52×48 的開關），整列有 M3 state layer。',
     '切換流程：樂觀更新 → PUT 只送該項 {items:[{event, line_enabled}]} → 成功以回應的 items 覆蓋全部項目；失敗回滾該項並顯示 error snackbar「儲存失敗，請稍後再試」。',
     '儲存中：該項 M3Switch busy（thumb 內轉圈、aria-busy、保留焦點不淡化），再點同一項忽略；其他項不受影響、可同時切換與儲存。',
     '載入中：說明文字照常顯示，卡片內 SkeletonBlock row × 7。載入失敗：隱藏說明文字與卡片，改顯示 ParentEmptyState error「通知設定載入失敗」+「重試」，重試期間回到載入中骨架。',
-    '清單下方小字（body-small、on-surface-variant）：「接送取消、綁定完成等重要通知不受此設定影響，一律會傳 LINE。」（domain_spec：pickup.cancelled、binding.completed 不可關閉）。',
+    '有資料時清單下方小字（body-small、on-surface-variant）：「接送取消、綁定完成等重要通知不受此設定影響，一律會傳 LINE。」（domain_spec：pickup.cancelled、binding.completed 不可關閉）。',
   ]
-  const openQuestions = [
-    {
-      question: '每列左側要不要事件圖示？',
-      options: [
-        { text: '要：與通知收件匣同一套前綴圖示，實作時把對照表從 NotificationListItem 抽到 parent/utils 共用', recommended: true },
-        { text: '不要：純文字 + 開關，版面更精簡' },
-      ],
-    },
-    {
-      question: '清單下方要不要說明「不可關閉的重要通知」？（description 沒有這段文字）',
-      options: [
-        { text: '要：顯示「接送取消、綁定完成等重要通知不受此設定影響，一律會傳 LINE。」，核可後補進 PARENT-178 description', recommended: true },
-        { text: '不要：只保留頁首說明' },
-      ],
-    },
-  ]
+  const openQuestions = []
   return { pageState, pageStates, prefs, busy, failNext, toggle, retry, resetPrefs, iconOf, decisions, openQuestions }
 }
 

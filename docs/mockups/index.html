@@ -54,7 +54,7 @@ code { font-size: 13px; }
   <h1>設計稿總覽</h1>
   <p class="lead">後台與家長端每張設計稿的狀態，待核可的稿集中在最上方。出稿、核可、改稿時同步更新（待核可與已核可分兩區，各自依檔名排序）（流程見 <code>.claude/skills/ui-design-preview/SKILL.md</code>）。</p>
 
-  <h2>待核可（1）</h2>
+  <h2>待核可（0）</h2>
   <p class="lead">這一區的稿需要你核可後才會進入實作。點稿名打開，右上「設計說明 / 待裁定」可看設計決策與待裁定題；稿已照推薦選項畫。</p>
   <div class="card">
     <table>
@@ -69,19 +69,12 @@ code { font-size: 13px; }
         </tr>
       </thead>
       <tbody>
-        <tr>
-          <td><a href="parent-page-notification-prefs.html">parent-page-notification-prefs.html</a></td>
-          <td class="tasks">PARENT-178</td>
-          <td class="route"><code>/notifications/preferences</code></td>
-          <td>2 題：每列是否加事件圖示（推薦 A：加）；清單下方是否說明不可關閉的重要通知（推薦 A：加）</td>
-          <td><span class="status status--draft">待核可</span></td>
-          <td>2026-10-05</td>
-        </tr>
+        <tr class="empty"><td colspan="6">目前沒有待核可的稿</td></tr>
       </tbody>
     </table>
   </div>
 
-  <h2>已核可（46）</h2>
+  <h2>已核可（47）</h2>
   <div class="card">
     <table>
       <thead>
@@ -423,6 +416,13 @@ code { font-size: 13px; }
           <td><a href="parent-component-today-status-card.html">parent-component-today-status-card.html</a></td>
           <td class="tasks">PARENT-053</td>
           <td class="route"><code>component:parent/components/home/TodayStatusCard.vue</code></td>
+          <td><span class="status status--approved">已核可</span></td>
+          <td>2026-10-05</td>
+        </tr>
+        <tr>
+          <td><a href="parent-page-notification-prefs.html">parent-page-notification-prefs.html</a></td>
+          <td class="tasks">PARENT-178</td>
+          <td class="route"><code>/notifications/preferences</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-05</td>
         </tr>
