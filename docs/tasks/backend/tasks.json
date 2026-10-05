@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 317,
-  "last_updated": "2026-10-05T04:12:07Z",
+  "version": 318,
+  "last_updated": "2026-10-05T04:12:28Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -9406,8 +9406,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-370",
         "BACKEND-206",
@@ -9628,8 +9628,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-373",
         "BACKEND-374",
@@ -10248,8 +10248,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": "BE:api/parent_portal/dismissal_calls.py::create_dismissal_notice",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-401",
         "BACKEND-403",
@@ -10300,8 +10300,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-405",
         "BACKEND-404",
@@ -10342,8 +10342,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": "BE:api/portal/dismissal_calls.py::_db_acknowledge",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-405",
         "BACKEND-404",
@@ -10379,8 +10379,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": "BE:api/parent_portal/dismissal_calls.py::arrive_dismissal_notice",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-405",
         "BACKEND-404",
@@ -10461,8 +10461,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": "BE:api/parent_portal/dismissal_calls.py::cancel_dismissal_notice",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-405",
         "BACKEND-404",
@@ -12191,8 +12191,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-455"
       ],
@@ -12329,8 +12329,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-454",
         "BACKEND-452",
@@ -12370,8 +12370,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-454",
         "BACKEND-452",
@@ -14093,8 +14093,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:api/parent_portal/pickup.py::regenerate_code",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-420",
         "BACKEND-400",
