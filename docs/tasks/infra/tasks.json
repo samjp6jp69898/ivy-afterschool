@@ -1,6 +1,6 @@
 {
   "area": "infra",
-  "version": 130,
+  "version": 131,
   "last_updated": "2026-10-05",
   "tasks": [
     {
@@ -1962,7 +1962,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/nginx/default.conf.template",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-infra-r8",
       "depends_on": [
         "INFRA-033"
@@ -1983,9 +1983,9 @@
         "notes": "另跑 just test scripts/tests/test_deploy_configs.py -k nginx 確認既有 nginx 測試不退化（需 Docker）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-infra",
+        "notes": "2 條 red_case 皆有對應且斷言具體（resolver 單行含 ipv4=off/ipv6=on + 負例；docker nginx -T 輸出 resolver 行含 ipv4=off）。-k nginx_resolver 2 passed、-k nginx 15 passed，collect-only 選得到兩條；測試 commit 5085adf 先於實作 20ff6ff；lint 乾淨；容器/network 無殘留。探針改 IPv6 network + 後端 listen [::]:8080 不削弱偵測：用戶端經 published port 以 IPv4 連入，對照組 0.0.0.0/0 仍涵蓋並看到 6.6.6.6，未信任組 203.0.113.0/24 不涵蓋。殘留：test_nginx_resolver_ipv6_only_loaded 的 -T 僅證明語法保留參數，未實證 DNS 行為（由上述探針間接覆蓋）；Railway healthcheck IPv6 仍待部署實測。"
       }
     }
   ]
