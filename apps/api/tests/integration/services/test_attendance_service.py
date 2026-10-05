@@ -1655,7 +1655,7 @@ def test_check_out_parent_ws_payload(
     [parent] = [m for ch, m in published if ch == [student_channel(ming.id)]]
     assert parent["type"] == "attendance.updated"
     assert parent["data"]["status"] == "left"
-    assert parent["data"]["check_out_at"] == fake_clock.now().isoformat()
+    assert datetime.fromisoformat(parent["data"]["check_out_at"]) == fake_clock.now()
 
 
 # --- BACKEND-307 mark_left_by_pickup ---

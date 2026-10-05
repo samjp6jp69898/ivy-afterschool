@@ -4,40 +4,55 @@
 - BACKEND-350：``get_attachment_url``（後台簽發附件短效 URL）。
 - BACKEND-348：``list_child_leaves``（家長端小孩請假列表，附件短效 URL；呼叫端已驗證所有權）。
 - BACKEND-344：``notify_leave_event``（請假建立 / 取消通知班級負責員工與 leaves:read 員工）。
+- BACKEND-345：``create_leave``（家長 / 員工建立請假；重疊 409、套用出勤、通知）。
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Final, Literal
 from uuid import UUID
 
 from sqlalchemy import Select, literal, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.clock import Clock
-from app.core.errors import AppError, NotFoundError
+from app.core.errors import AppError, ConflictError, NotFoundError
 from app.core.pagination import Page, PageParams, paginate
 from app.core.permissions import Permission
+from app.core.settings_registry import LEAVE_WINDOW
 from app.core.storage import Storage, StorageError
 from app.models.account import StaffUser
-from app.models.leaves import LEAVE_TYPE_LABELS, StudentLeave, StudentLeaveAttachment
+from app.models.leaves import (
+    EXCLUSION_LEAVE_OVERLAP,
+    LEAVE_TYPE_LABELS,
+    StudentLeave,
+    StudentLeaveAttachment,
+)
 from app.models.parents import ParentAccount
 from app.models.students import Student
 from app.notifications.events import Event
 from app.notifications.recipients import staff_recipients
 from app.notifications.service import enqueue
-from app.repositories.students import student_brief_map
+from app.repositories.students import get_student_or_404, student_brief_map
 from app.schemas.leaves import (
     AttachmentUrlOut,
     LeaveAttachmentOut,
+    LeaveCreateIn,
     LeaveListQuery,
     LeaveOut,
     LeaveStudentOut,
     ParentLeaveAttachmentOut,
+    ParentLeaveCreateIn,
     ParentLeaveOut,
 )
+from app.services.audit_service import Actor
+from app.services.leave_attendance import apply_attendance_for_leave
+from app.services.parent_scope import assert_parent_owns_student
+from app.services.service_calendar import list_service_days
+from app.services.settings_service import get_setting
 
 logger = logging.getLogger(__name__)
 
@@ -265,3 +280,90 @@ def notify_leave_event(
         },
         clock=clock,
     )
+
+
+def _actor_id(actor: Actor) -> UUID:
+    if actor.id is None:
+        raise ValueError(f"actor.type={actor.type} 必須帶 actor.id")
+    return actor.id
+
+
+def create_leave(
+    session: Session,
+    data: LeaveCreateIn | ParentLeaveCreateIn,
+    *,
+    actor: Actor,
+    clock: Clock,
+) -> StudentLeave:
+    """家長送出即生效、員工可代登記；套用期間內出勤並通知員工。
+
+    同一學生 active 請假不可重疊由 DB exclusion constraint 把關：連點或兩位家長同時送出時，後到的
+    交易在前者 commit 後拋 23P01 → 409 leave_overlap（以 savepoint 包住，不污染外層交易）。去掉 ivy
+    的審核流程、娃娃車同步、報表快取失效與 client_request_id。
+    """
+    actor_id = _actor_id(actor)
+    if actor.type == "parent":
+        assert_parent_owns_student(session, actor_id, data.student_id, for_write=True)
+        window = get_setting(session, LEAVE_WINDOW)
+        today = clock.today()
+        earliest = today - timedelta(days=window.past_days)
+        latest = today + timedelta(days=window.future_days)
+        if not earliest <= data.start_date <= latest:
+            raise AppError(
+                "leave_date_out_of_window",
+                f"請假開始日須在今天前 {window.past_days} 天到後 {window.future_days} 天之間",
+                status=422,
+                details={"past_days": window.past_days, "future_days": window.future_days},
+            )
+    else:
+        student = get_student_or_404(session, data.student_id)
+        if student.status != "active":
+            raise ConflictError("student_not_active", "學生目前不在學，無法登記請假")
+    if not list_service_days(session, data.start_date, data.end_date):
+        raise AppError("no_service_days_in_range", "請假期間沒有營業日", status=422)
+
+    leave = StudentLeave(
+        student_id=data.student_id,
+        leave_type=data.leave_type,
+        start_date=data.start_date,
+        end_date=data.end_date,
+        reason=data.reason,
+        status="active",
+        created_by_type=actor.type,
+        created_by_id=actor_id,
+    )
+    try:
+        with session.begin_nested():
+            session.add(leave)
+            session.flush()
+    except IntegrityError as exc:
+        orig = exc.orig
+        constraint = getattr(getattr(orig, "diag", None), "constraint_name", None)
+        if getattr(orig, "sqlstate", None) != "23P01" or constraint != EXCLUSION_LEAVE_OVERLAP:
+            raise
+        existing = session.execute(
+            select(StudentLeave.id, StudentLeave.start_date, StudentLeave.end_date)
+            .where(
+                StudentLeave.student_id == data.student_id,
+                StudentLeave.status == "active",
+                StudentLeave.start_date <= data.end_date,
+                StudentLeave.end_date >= data.start_date,
+            )
+            .order_by(StudentLeave.start_date)
+            .limit(1)
+        ).one()
+        raise ConflictError(
+            "leave_overlap",
+            "這段期間已經有請假",
+            details={
+                "leave_id": existing.id,
+                "start_date": existing.start_date,
+                "end_date": existing.end_date,
+            },
+        ) from exc
+
+    apply_attendance_for_leave(
+        session, leave, actor_staff_id=actor_id if actor.type == "staff" else None, clock=clock
+    )
+    notify_leave_event(session, leave, Event.LEAVE_CREATED, clock=clock)
+    return leave

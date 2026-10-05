@@ -9,11 +9,14 @@
 - BACKEND-303：``initialize_daily_attendance``（營業日為在學學生建立出勤列，冪等）。
 - BACKEND-305 / 309：``check_in`` / ``mark_absent``（條件式更新，防兩位員工同時操作）。
 - BACKEND-314：``get_child_monthly_attendance``（家長端單一小孩月出勤，不含內部欄位）。
+- BACKEND-306 / 307：``check_out`` / ``mark_left_by_pickup``（條件式更新；接送完成來源為 pickup）。
+- BACKEND-308：``batch_check_in``（逐生條件式更新、回報略過原因、只廣播一次）。
 """
 
 from __future__ import annotations
 
 import calendar
+import logging
 import re
 from collections import Counter
 from collections.abc import Sequence
@@ -33,9 +36,9 @@ from app.models.classes import SchoolClass
 from app.models.leaves import LEAVE_TYPE_LABELS, StudentLeave
 from app.models.students import Student
 from app.notifications.events import Event
-from app.notifications.recipients import parent_recipients
+from app.notifications.recipients import parent_recipients, parent_recipients_bulk
 from app.notifications.service import enqueue
-from app.realtime.publish import broadcast_after_commit
+from app.realtime.publish import broadcast_after_commit, push_to_student_after_commit
 from app.repositories.students import (
     StudentBrief,
     get_student_or_404,
@@ -45,6 +48,8 @@ from app.repositories.students import (
 from app.schemas.attendance import (
     AttendanceAmendIn,
     AttendanceRowOut,
+    BatchCheckInOut,
+    BatchSkipOut,
     DailyAttendanceOut,
     DailyAttendanceQuery,
     DailySummaryOut,
@@ -64,6 +69,8 @@ from app.services.service_calendar import is_service_day, list_service_days
 if TYPE_CHECKING:
     from app.api.deps import CurrentStaff
     from app.core.request_meta import RequestMeta
+
+logger = logging.getLogger(__name__)
 
 # 與 schemas.attendance.MONTH_PATTERN 相同；家長端 month 為 path / query 字串，service 自行檢查
 _MONTH_RE: Final = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
@@ -610,6 +617,46 @@ def _reload(session: Session, row_id: UUID) -> StudentAttendance:
     ).scalar_one()
 
 
+_CHECK_IN_CONFLICTS: Final = {
+    "already_checked_in": "學生今天已登記到班",
+    "already_checked_out": "學生今天已離班",
+    "student_on_leave": "學生今天請假",
+}
+
+
+def _try_check_in(
+    session: Session,
+    student_id: UUID,
+    d: date,
+    *,
+    actor_id: UUID,
+    note: str | None,
+    now: datetime,
+) -> tuple[StudentAttendance, str | None]:
+    """ensure 鎖列後以條件式 UPDATE 改為 present；回傳 (最新列, 失敗的錯誤碼或 None)。"""
+    row = ensure_attendance_row(session, student_id, d)
+    hit = session.execute(
+        update(StudentAttendance)
+        .where(StudentAttendance.id == row.id, StudentAttendance.status.in_(("expected", "absent")))
+        .values(
+            status="present",
+            check_in_at=now,
+            check_in_source="manual",
+            updated_by=actor_id,
+            note=func.coalesce(note, StudentAttendance.note),
+        )
+        .returning(StudentAttendance.id)
+    ).scalar_one_or_none()
+    row = _reload(session, row.id)
+    if hit is not None:
+        return row, None
+    if row.status == "present":
+        return row, "already_checked_in"
+    if row.status == "left":
+        return row, "already_checked_out"
+    return row, "student_on_leave"
+
+
 def check_in(
     session: Session,
     student_id: UUID,
@@ -626,27 +673,10 @@ def check_in(
     """
     d = clock.today()
     student = _require_active_on_service_day(session, student_id, d)
-    row = ensure_attendance_row(session, student_id, d)
     now = clock.now()
-    hit = session.execute(
-        update(StudentAttendance)
-        .where(StudentAttendance.id == row.id, StudentAttendance.status.in_(("expected", "absent")))
-        .values(
-            status="present",
-            check_in_at=now,
-            check_in_source="manual",
-            updated_by=actor.id,
-            note=func.coalesce(note, StudentAttendance.note),
-        )
-        .returning(StudentAttendance.id)
-    ).scalar_one_or_none()
-    row = _reload(session, row.id)
-    if hit is None:
-        if row.status == "present":
-            raise ConflictError("already_checked_in", "學生今天已登記到班")
-        if row.status == "left":
-            raise ConflictError("already_checked_out", "學生今天已離班")
-        raise ConflictError("student_on_leave", "學生今天請假")
+    row, conflict = _try_check_in(session, student_id, d, actor_id=actor.id, note=note, now=now)
+    if conflict is not None:
+        raise ConflictError(conflict, _CHECK_IN_CONFLICTS[conflict])
 
     enqueue(
         session,
@@ -752,3 +782,177 @@ def get_child_monthly_attendance(
         days=days,
         stats=_monthly_stats(statuses, counted),
     )
+
+
+def check_out(
+    session: Session,
+    student_id: UUID,
+    *,
+    actor: CurrentStaff,
+    note: str | None,
+    clock: Clock,
+) -> AttendanceRowOut:
+    """present → left；通知家長並推播。當日沒有出勤列 → 409（不建立列）。不 commit。
+
+    條件式 UPDATE（status='present' 且 check_in_at <= now）：兩次同時離班只有一次命中，通知一則。
+    """
+    student = get_student_or_404(session, student_id)
+    d = clock.today()
+    row = session.execute(
+        select(StudentAttendance)
+        .where(StudentAttendance.student_id == student_id, StudentAttendance.service_date == d)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if row is None:
+        raise ConflictError("not_checked_in", "學生今天尚未登記到班")
+    now = clock.now()
+    hit = session.execute(
+        update(StudentAttendance)
+        .where(
+            StudentAttendance.id == row.id,
+            StudentAttendance.status == "present",
+            StudentAttendance.check_in_at <= now,
+        )
+        .values(
+            status="left",
+            check_out_at=now,
+            check_out_source="manual",
+            updated_by=actor.id,
+            note=func.coalesce(note, StudentAttendance.note),
+        )
+        .returning(StudentAttendance.id)
+    ).scalar_one_or_none()
+    row = _reload(session, row.id)
+    if hit is None:
+        if row.status in ("expected", "absent"):
+            raise ConflictError("not_checked_in", "學生今天尚未登記到班")
+        if row.status == "left":
+            raise ConflictError("already_checked_out", "學生今天已離班")
+        if row.status == "leave":
+            raise ConflictError("student_on_leave", "學生今天請假")
+        raise ConflictError("invalid_check_out_time", "離班時間不可早於到班時間")
+
+    enqueue(
+        session,
+        Event.ATTENDANCE_CHECKED_OUT,
+        recipients=parent_recipients(session, student_id),
+        payload={
+            "student_id": student_id,
+            "student_name": student.name,
+            "time": to_taipei(now).strftime("%H:%M"),
+        },
+        clock=clock,
+    )
+    return _publish_row(session, row, clock=clock)
+
+
+def mark_left_by_pickup(
+    session: Session, student_id: UUID, service_date: date, *, at: datetime, clock: Clock
+) -> bool:
+    """接送完成時把出勤改為 left（check_out_source='pickup'）；不是 present 時不改並回 False。
+
+    接送完成本身不因出勤狀態失敗；不發 attendance.checked_out（接送完成已發 pickup.completed），
+    updated_by 不填（接送模組已記錄 completed_by）。
+    """
+    row_id = session.execute(
+        update(StudentAttendance)
+        .where(
+            StudentAttendance.student_id == student_id,
+            StudentAttendance.service_date == service_date,
+            StudentAttendance.status == "present",
+            StudentAttendance.check_in_at <= at,
+        )
+        .values(status="left", check_out_at=at, check_out_source="pickup")
+        .returning(StudentAttendance.id)
+    ).scalar_one_or_none()
+    if row_id is None:
+        logger.info(
+            "接送完成但出勤不是已到班，不改出勤 student_id=%s service_date=%s",
+            student_id,
+            service_date,
+        )
+        return False
+    _publish_row(session, _reload(session, row_id), clock=clock)
+    return True
+
+
+_SKIP_MESSAGES: Final = {
+    "student_not_found": "找不到學生",
+    "student_not_active": "學生目前不在學",
+    **_CHECK_IN_CONFLICTS,
+}
+
+
+def batch_check_in(
+    session: Session, student_ids: Sequence[UUID], *, actor: CurrentStaff, clock: Clock
+) -> BatchCheckInOut:
+    """依輸入順序逐生到班（與 check_in 相同的 ensure + 條件式更新），失敗收進 skipped 不中斷。
+
+    家長收件人一次查詢、每位成功學生一則通知；admin 只廣播一次 attendance.batch_updated，家長端
+    逐生收到 attendance.updated。移植 ivy ``batch_save_attendance`` 的「整批送出、逐筆寫入」。
+    """
+    d = clock.today()
+    if not is_service_day(session, d):
+        raise ConflictError("not_service_day", "今天不是營業日")
+    students = {
+        row.id: row
+        for row in session.execute(
+            select(Student.id, Student.name, Student.status, Student.archived_at).where(
+                Student.id.in_(student_ids)
+            )
+        )
+    }
+    now = clock.now()
+    rows: list[StudentAttendance] = []
+    skipped: list[BatchSkipOut] = []
+    for student_id in student_ids:
+        student = students.get(student_id)
+        code: str | None
+        if student is None or student.archived_at is not None:
+            code = "student_not_found"
+        elif student.status != "active":
+            code = "student_not_active"
+        else:
+            row, code = _try_check_in(session, student_id, d, actor_id=actor.id, note=None, now=now)
+            if code is None:
+                rows.append(row)
+        if code is not None:
+            skipped.append(
+                BatchSkipOut(student_id=student_id, code=code, message=_SKIP_MESSAGES[code])
+            )
+
+    if not rows:
+        return BatchCheckInOut(succeeded=[], skipped=skipped)
+    briefs = student_brief_map(session, [row.student_id for row in rows])
+    succeeded = [_row_out(row, briefs[row.student_id], None) for row in rows]
+    recipients = parent_recipients_bulk(session, [row.student_id for row in rows])
+    time_text = to_taipei(now).strftime("%H:%M")
+    for row in rows:
+        enqueue(
+            session,
+            Event.ATTENDANCE_CHECKED_IN,
+            recipients=recipients[row.student_id],
+            payload={
+                "student_id": row.student_id,
+                "student_name": students[row.student_id].name,
+                "time": time_text,
+            },
+            clock=clock,
+        )
+        push_to_student_after_commit(
+            session,
+            row.student_id,
+            topic="attendance",
+            type="attendance.updated",
+            data=to_parent_attendance_event(row),
+            clock=clock,
+        )
+    broadcast_after_commit(
+        session,
+        topic="attendance",
+        type="attendance.batch_updated",
+        data={"items": [out.model_dump() for out in succeeded]},
+        clock=clock,
+    )
+    return BatchCheckInOut(succeeded=succeeded, skipped=skipped)

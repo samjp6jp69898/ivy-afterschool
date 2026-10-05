@@ -501,11 +501,14 @@ def _parent_leave(student_id: UUID, start: date, end: date | None = None) -> Par
 
 
 def _set_leave_window(db: Session, *, past_days: int, future_days: int) -> None:
+    # 只改日期窗兩個欄位，保留 leave.window 的其他設定（附件上限等）
     db.execute(
         text(
-            "update public.system_settings set value = cast(:v as jsonb) where key = 'leave.window'"
+            "update public.system_settings "
+            "set value = value || jsonb_build_object('past_days', :past, 'future_days', :future) "
+            "where key = 'leave.window'"
         ),
-        {"v": f'{{"past_days": {past_days}, "future_days": {future_days}}}'},
+        {"past": past_days, "future": future_days},
     )
     clear_settings_cache()
 
