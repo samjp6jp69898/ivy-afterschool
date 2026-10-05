@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 267,
-  "last_updated": "2026-10-05T02:57:52Z",
+  "version": 268,
+  "last_updated": "2026-10-05T02:58:00Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2810,7 +2810,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/roles.py",
       "source_ref": "BE:api/permissions_admin.py::create_role",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-078",
@@ -2835,9 +2835,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 6 條全綠（5 條 red_case + guard_registered），collect-only 對照全選到；069419f（測試）先於 d0ab664（實作）。require_permission(ROLES_WRITE) 掛上、route audit 綠；422 含格式 / 缺欄位 / 多餘欄位 / unknown_permission、403 含 permission_denied 與 cannot_grant_permissions、409 role_code_taken，失敗皆斷言未建角色；成功斷言 commit 後列表可見與 role.create 稽核。突變：拿掉 db.commit → success 轉紅。lint / typecheck 乾淨。"
       }
     },
     {
@@ -2993,7 +2993,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": "BE:api/auth.py::list_users",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-086",
@@ -3018,9 +3018,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 3 條全綠、collect-only 全選到；230bcab 先於 e57d559。q 以 icontains(autoescape=True) 比對 username / display_name，% 與 _ 皆斷言為字面值；role_id / is_active 篩選；is_active desc, username 排序與分頁（含停用排最後與超頁）；effective_permissions 經 extra / revoked 計算。突變：拿掉 autoescape、拿掉 is_active desc、只比對 username 皆轉紅。lint / typecheck 乾淨。"
       }
     },
     {
@@ -14246,7 +14246,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-086",
@@ -14269,9 +14269,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 2 條全綠、collect-only 全選到；230bcab 先於 e57d559。只 select id / display_name、只回啟用帳號、依 display_name, username 排序（同名依 username 有斷言），StaffOptionOut 只有兩欄。突變：拿掉 is_active 篩選、拿掉 username 次排序皆轉紅。lint / typecheck 乾淨。殘留（不擋）：test_list_staff_options 以 Python sorted() （codepoint）比對 DB 的 display_name 排序，DB collation 非 C 時對中文名可能不一致，目前本機綠。"
       }
     },
     {
