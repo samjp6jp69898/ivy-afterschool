@@ -877,6 +877,7 @@ def test_monthly_attendance_class_filter_and_query_count(
     gone = make_student(db_session, name="張小美", class_=class_a)
     make_attendance(db_session, gone, service_date=date(2026, 9, 1), status="left")
     gone.status = "withdrawn"
+    gone.withdrawn_on = date(2026, 9, 2)
     db_session.flush()
     count_sql.statements.clear()
 
@@ -901,8 +902,8 @@ def test_monthly_attendance_invalid_month(
     assert _error(invalid) == (422, "invalid_month")
 
 
-# schema 的 \d 會接受全形數字（FULLWIDTH DIGIT）
-_FULLWIDTH_2026_09 = "\uff12\uff10\uff12\uff16-\uff10\uff19"
+# schema 的 \d 會接受全形數字（FULLWIDTH DIGIT）的年份；月份是 0[1-9]|1[0-2] 只收半形
+_FULLWIDTH_2026_09 = "\uff12\uff10\uff12\uff16-09"
 
 
 def test_monthly_attendance_fullwidth_month_normalized(
