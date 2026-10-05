@@ -1,9 +1,11 @@
-"""BACKEND-081 / 082 / 084 / 085：後台角色 endpoint。
+"""BACKEND-081 / 082 / 083 / 084 / 085：後台角色 endpoint。
 
 - ``GET /api/admin/roles``：roles:read 或 staff:read（員工帳號頁的角色選單也需要讀角色）。
 - ``POST /api/admin/roles``：roles:write；``RoleCreateIn`` → ``create_role`` → commit → 201
   ``RoleOut``。422（格式 / 多餘欄位 / 未知權限碼）、403（缺權限或授出超出自身的碼）、409（code
   重複）由 schema / service 拋出。
+- ``PATCH /api/admin/roles/{role_id}``：roles:write；``RoleUpdateIn`` → BACKEND-079 ``update_role``
+  （admin 角色 409、防提權 403、保留管理者 409）→ commit → ``RoleOut``。
 - ``DELETE /api/admin/roles/{role_id}``：roles:write；系統角色 / 使用中 409，commit 後 204。
 - ``GET /api/admin/permissions``：roles:read 或 staff:read；權限碼目錄（純記憶體資料）。
 """
@@ -26,6 +28,7 @@ from app.schemas.roles import (
     PermissionItemOut,
     RoleCreateIn,
     RoleOut,
+    RoleUpdateIn,
 )
 from app.services import role_service
 
@@ -50,6 +53,19 @@ def create_role(
     meta: Annotated[RequestMeta, Depends(get_request_meta)],
 ) -> RoleOut:
     out = role_service.create_role(db, body, actor=staff, meta=meta)
+    db.commit()
+    return out
+
+
+@router.patch("/roles/{role_id}", response_model=RoleOut)
+def update_role(
+    role_id: UUID,
+    body: RoleUpdateIn,
+    staff: Annotated[CurrentStaff, Depends(require_permission(Permission.ROLES_WRITE))],
+    db: Annotated[Session, Depends(get_db)],
+    meta: Annotated[RequestMeta, Depends(get_request_meta)],
+) -> RoleOut:
+    out = role_service.update_role(db, role_id, body, actor=staff, meta=meta)
     db.commit()
     return out
 
