@@ -12,6 +12,7 @@
 營業時段讀 seed 預設（週一到週五營業、週六不營業、週日不列）；每個測試前後清空設定快取。
 """
 
+import contextlib
 import threading
 from collections.abc import Iterator
 from datetime import UTC, date, datetime, time, timedelta
@@ -41,6 +42,7 @@ from app.schemas.attendance import (
     MonthlyAttendanceQuery,
     MonthlyStudentRowOut,
 )
+from app.services import attendance_service as attendance_module
 from app.services.attendance_service import (
     DailyInitResult,
     amend_attendance,
@@ -1868,3 +1870,81 @@ def test_batch_check_in_parent_ws(
         }
         assert message["data"]["status"] == "present"
     assert len([1 for ch, _ in published if ch == [admin_topic_channel("attendance")]]) == 1
+
+
+@pytest.mark.clock(_CHECK_IN_NOW)
+@pytest.mark.cleanup_tables("student_attendances", "notification_outbox", "notifications")
+def test_batch_check_in_reverse_order_no_deadlock(
+    owner_cleanup_people: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    fake_clock: FakeClock,
+    kick_off: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 批次 [王小明, 陳小華] 與 B 批次 [陳小華, 王小明] 同時跑：上鎖依 student_id 排序才不死結。
+
+    每個批次鎖住第一列後在 barrier 等對方也鎖住一列（最多 1 秒）。依輸入順序上鎖時兩邊各握一列
+    互等 → 40P01；依 id 排序時後到者在第一列就被擋住，barrier 逾時後先到者繼續完成。
+    """
+    ming = make_student(committing_db_session, name="王小明")
+    hua = make_student(committing_db_session, name="陳小華")
+    for student in (ming, hua):
+        make_attendance(committing_db_session, student, service_date=_DAY)
+    staff = make_staff(committing_db_session, role_code="tutor")
+    committing_db_session.commit()
+    owner_cleanup_people.extend(
+        [("students", ming.id), ("students", hua.id), ("staff_users", staff.id)]
+    )
+    actor = _current(staff)
+
+    original = attendance_module.ensure_attendance_row
+    barrier = threading.Barrier(2)
+    first_locked = threading.local()
+
+    def ensure_then_wait(*args: Any, **kwargs: Any) -> StudentAttendance:
+        row = original(*args, **kwargs)
+        if not getattr(first_locked, "done", False):
+            first_locked.done = True
+            with contextlib.suppress(threading.BrokenBarrierError):
+                barrier.wait(timeout=1)
+        return row
+
+    monkeypatch.setattr(attendance_module, "ensure_attendance_row", ensure_then_wait)
+    outcome: dict[str, Any] = {}
+
+    def run(name: str, order: list[UUID]) -> None:
+        session = Session(bind=db_engine)
+        try:
+            outcome[name] = batch_check_in(session, order, actor=actor, clock=fake_clock)
+            session.commit()
+        except BaseException as exc:
+            outcome[name] = exc
+            session.rollback()
+        finally:
+            session.close()
+
+    threads = [
+        threading.Thread(target=run, args=("a", [ming.id, hua.id])),
+        threading.Thread(target=run, args=("b", [hua.id, ming.id])),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=15)
+
+    errors = [v for v in outcome.values() if isinstance(v, BaseException)]
+    assert errors == []
+    a, b = outcome["a"], outcome["b"]
+    # 一個批次兩位都到班成功；另一個兩位都略過，回報仍依各自的輸入順序
+    winner, loser = (a, b) if a.succeeded else (b, a)
+    assert {r.student_id for r in winner.succeeded} == {ming.id, hua.id}
+    assert [s.code for s in loser.skipped] == ["already_checked_in", "already_checked_in"]
+    assert [r.student_id for r in a.succeeded] + [s.student_id for s in a.skipped] == [
+        ming.id,
+        hua.id,
+    ]
+    assert [r.student_id for r in b.succeeded] + [s.student_id for s in b.skipped] == [
+        hua.id,
+        ming.id,
+    ]
