@@ -11,13 +11,18 @@
     單一 entry 解壓 ≤ ``MAX_ZIP_ENTRY_BYTES``、總解壓 ≤ ``MAX_XLSX_UNCOMPRESSED_BYTES``（先看
     宣告值再串流讀，不先配置記憶體）；宣告大小 / CRC 不符、截斷、不支援的壓縮法等一律 422
     ``import_invalid_file``。全程在記憶體內處理，不解壓到磁碟（路徑穿越檔名不適用）。
-  - XML：zip 內**每一個**內容以 ``<`` 開頭的 entry（不依檔名 / 副檔名過濾，工作表、styles、
-    sharedStrings、workbook、rels、Content_Types、docProps、externalLinks 都算；把工作表改放到
-    worksheets/ 以外的路徑也逃不掉）都以 ``xml.parsers.expat`` 串流掃描、只計數不建樹：元素總數 ≤
-    ``MAX_XML_ELEMENTS``、巢狀深度 ≤ ``MAX_XML_DEPTH``、單一屬性值 / 文字節點長度 ≤
-    ``MAX_XML_VALUE_CHARS``；另依 local name 計 row / c（命名空間前綴、換行 / tab 都算）：列數 ≤
-    ``MAX_IMPORT_ROWS`` + 寬容值、單列 ≤ ``MAX_IMPORT_COLS``、總儲存格 ≤ 列數乘欄數。任一超標即
-    中止，記憶體有界。expat 不載入外部實體、拒絕實體膨脹（billion laughs）。
+  - XML：zip 內**每一個** entry（不依檔名 / 副檔名過濾，也不看內容開頭；工作表、styles、
+    sharedStrings、workbook、rels、Content_Types、docProps、externalLinks 都算，工作表改放到
+    worksheets/ 以外的路徑或在開頭塞空白 / BOM 都逃不掉）都交給 ``xml.parsers.expat`` 串流掃描、
+    只計數不建樹：expat 在讀到第一個元素之前就判定不是 XML 的 entry（圖片、printerSettings*.bin
+    等真二進位）才放行——openpyxl 用的是同一個內建 expat（測試釘住 ``openpyxl.xml.LXML is
+    False``），它解析不了的 openpyxl 也解析不了；讀到元素之後才出錯 → 422。UTF-16（含無 BOM）由
+    expat 原生處理；UTF-32 的 part openpyxl 讀不了，直接 422。上限：**所有 XML part 共用**的元素
+    總額 ≤ ``MAX_XML_ELEMENTS``（合法檔 500 列、13 欄含 sharedStrings / styles 約 4 萬）、巢狀深度 ≤
+    ``MAX_XML_DEPTH``、單一屬性值 / 連續文字節點長度 ≤ ``MAX_XML_VALUE_CHARS``；另依 local name 計
+    row / c（命名空間前綴、換行 / tab 都算）：列數 ≤ ``MAX_IMPORT_ROWS`` + 寬容值、單列 ≤
+    ``MAX_IMPORT_COLS``、總儲存格 ≤ 列數乘欄數。任一超標即中止，記憶體有界。expat 不載入外部實體、
+    拒絕實體膨脹（billion laughs）。
   - openpyxl：``read_only`` + ``data_only``（公式只取快取值，儲存格內容一律當純文字）+
     ``keep_links=False``（不處理外部連結）；丟棄可偽造的 dimension、以 max_row / max_col 硬上限限制
     迭代量；載入與迭代階段的任何例外（sharedStrings 索引越界、壞日期等）一律 422
@@ -93,11 +98,18 @@ _GRID_ROW_SLACK: Final = 16
 MAX_ZIP_ENTRIES: Final = 64  # openpyxl 產生的 xlsx 約 10 個 entry
 MAX_ZIP_ENTRY_BYTES: Final = 16 * 1024 * 1024  # 單一 entry 解壓後
 MAX_XLSX_UNCOMPRESSED_BYTES: Final = 32 * 1024 * 1024  # 全部 entry 解壓後總和
-# 單一 XML part 的元素總數：517 列乘 64 欄、每格 2~3 個元素，再留餘裕
-MAX_XML_ELEMENTS: Final = 250_000
+# 所有 XML part 共用的元素總額：合法匯入檔（500 列、13 欄、sharedStrings、styles）約 4 萬
+MAX_XML_ELEMENTS: Final = 100_000
 MAX_XML_DEPTH: Final = 32  # 單一 XML part 的巢狀深度（正常工作表約 6 層）
 MAX_XML_VALUE_CHARS: Final = 32 * 1024  # 單一屬性值 / 連續文字節點的字元數
 _ALLOWED_COMPRESSION: Final = frozenset({zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED})
+# UTF-32 的 XML part：expat / openpyxl 都讀不了，直接拒絕（不當成二進位放行）
+_UTF32_SIGNATURES: Final = (
+    b"\xff\xfe\x00\x00",
+    b"\x00\x00\xfe\xff",
+    b"<\x00\x00\x00",
+    b"\x00\x00\x00<",
+)
 _ZIP_ENCRYPTED_FLAG: Final = 0x1
 
 _REQUIRED_COLUMNS: Final = [c for c in IMPORT_COLUMNS if c.endswith("*")]
@@ -173,15 +185,28 @@ def _too_many_rows() -> AppError:
     )
 
 
+class _ElementBudget:
+    """所有 XML part 共用的元素總額。"""
+
+    def __init__(self) -> None:
+        self.used = 0
+
+    def consume(self) -> None:
+        self.used += 1
+        if self.used > MAX_XML_ELEMENTS:
+            raise _invalid_file("Excel 內容元素數量超過上限，請確認檔案內容")
+
+
 class _XmlLimitScanner:
     """expat 串流掃描單一 XML part：只計數、不建樹；任一上限超過即拋 AppError（422）。
 
-    通用上限：元素總數、巢狀深度、單一屬性值 / 連續文字節點長度。工作表上限：row / c 的 local name
+    通用上限：共用元素總額、巢狀深度、單一屬性值 / 連續文字節點長度。工作表上限：row / c 的 local name
     計數（命名空間前綴與元素名後的空白都算得到）。expat 的 UseForeignDTD / 外部實體預設不載入；
     內建 expat 2.4.1+ 預設拒絕實體膨脹攻擊。
     """
 
-    def __init__(self) -> None:
+    def __init__(self, budget: _ElementBudget) -> None:
+        self._budget = budget
         self.elements = 0
         self.depth = 0
         self.rows = 0
@@ -211,8 +236,7 @@ class _XmlLimitScanner:
     def _start(self, name: str, attrs: dict[str, str]) -> None:
         self._text_len = 0
         self.elements += 1
-        if self.elements > MAX_XML_ELEMENTS:
-            raise _invalid_file("Excel 內容元素數量超過上限，請確認檔案內容")
+        self._budget.consume()
         self.depth += 1
         if self.depth > MAX_XML_DEPTH:
             raise _invalid_file("Excel 內容巢狀層數超過上限，請確認檔案內容")
@@ -246,10 +270,21 @@ class _XmlLimitScanner:
             raise _invalid_file("Excel 內含過長的文字內容，請確認檔案內容")
 
 
-def _looks_like_xml(head: bytes) -> bool:
-    """內容以 ``<`` 開頭（允許 UTF-8 BOM 與前置空白）就當 XML 掃；其餘（圖片等二進位）只受大小限制，
-    openpyxl 也不會把它們當 XML 解析。"""
-    return head.removeprefix(b"\xef\xbb\xbf").lstrip().startswith(b"<")
+def _scan_entry(stream: IO[bytes], budget: _ElementBudget) -> None:
+    """每個 entry 都交給 expat；只有在看到任何元素之前就判定不是 XML 的才當二進位放行。"""
+    head = stream.read(4)
+    if head[:4] in _UTF32_SIGNATURES:
+        raise _invalid_file("Excel 內含不支援編碼（UTF-32）的內容")
+    scanner = _XmlLimitScanner(budget)
+    try:
+        scanner.feed_head(head)
+        scanner.feed(stream)
+    except expat.ExpatError:
+        if scanner.elements:
+            raise _invalid_file("Excel 內含格式錯誤的 XML 內容") from None
+        # 真二進位（圖片、printerSettings*.bin）：讀完確認實際解壓大小與宣告一致（zipfile 驗 CRC）
+        while stream.read(64 * 1024):
+            pass
 
 
 def _check_zip_directory(infos: list[zipfile.ZipInfo]) -> None:
@@ -280,19 +315,12 @@ def assert_xlsx_within_limits(content: bytes) -> None:
         with zipfile.ZipFile(io.BytesIO(content)) as zf:
             infos = zf.infolist()
             _check_zip_directory(infos)
+            budget = _ElementBudget()
             for info in infos:
                 if info.file_size == 0:
                     continue
                 with zf.open(info) as stream:
-                    head = stream.read(64)
-                    if not _looks_like_xml(head):
-                        # 非 XML：只需確認實際解壓大小與宣告一致（讀完由 zipfile 驗 CRC）
-                        while stream.read(64 * 1024):
-                            pass
-                        continue
-                    scanner = _XmlLimitScanner()
-                    scanner.feed_head(head)
-                    scanner.feed(stream)
+                    _scan_entry(stream, budget)
     except AppError:
         raise
     except _ZIP_ERRORS:
