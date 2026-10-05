@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 275,
-  "last_updated": "2026-10-05T02:59:45Z",
+  "version": 276,
+  "last_updated": "2026-10-05T03:00:50Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -6685,7 +6685,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/service.py",
       "source_ref": "BE:services/notification/dispatch.py::enqueue",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-200",
@@ -6707,16 +6707,16 @@
           "integration"
         ],
         "red_cases": [
-          "test_enqueue_in_app_and_line：p1、p2 為收件人，p2 有 NotificationPreference(event='homework.done', line_enabled=False) → enqueue(HOMEWORK_DONE, recipients=[p1,p2], payload={'student_id':sid,'student_name':'王小明'}) → notifications 2 列（title '王小明 作業已完成'）、outbox 1 列且 notification 屬於 p1、status 'pending'、next_attempt_at == fake_clock.now()",
-          "test_enqueue_ws_only_event：enqueue(PICKUP_ARRIVED, recipients=[staff_a], payload=...) → notifications 0 列、outbox 0 列；monkeypatch push_to_recipient_after_commit 記錄 → 1 次、type == 'notification.transient'",
-          "test_enqueue_toggle_off：notification.toggles 中 'homework.done' 設 false 並 invalidate → enqueue 回 EnqueueResult([], [])，notifications 筆數不變",
-          "test_enqueue_validation：recipients=[Recipient('staff', x)] 搭配 HOMEWORK_DONE → ValueError；payload 缺 student_name → ValueError",
-          "test_enqueue_after_commit_only：monkeypatch kick_outbox 記錄 → enqueue 後尚未 commit 時記錄為空；committing_db_session commit 後記錄 == [outbox_ids]；另一案例 rollback 後記錄仍為空",
-          "test_enqueue_dedupe_recipients：recipients=[p1, p1] → notifications 1 列",
+          "test_enqueue_in_app_and_line：p1、p2 為收件人，p2 有 NotificationPreference(event='homework.done', line_enabled=False) → enqueue(HOMEWORK_DONE, recipients=[p1,p2], payload={'student_id':sid,'student_name':'王小明'}) → notifications 2 列（title '王小明 作業已完成'、payload 的 UUID 轉 str）、outbox 1 列且 notification 屬於 p1、status 'pending'、next_attempt_at == fake_clock.now()；commit 前 kick / 推播記錄為空，commit 後 kick == [outbox_ids]、兩位收件人各收到 type 'notification.created'（data 為 NotificationOut 欄位）",
+          "test_enqueue_ws_only_event：enqueue(PICKUP_ARRIVED, recipients=[staff_a], payload=...) → notifications 0 列、outbox 0 列；commit 後 publish_threadsafe 記錄 1 次、channel == staff_channel(staff_a)、type == 'notification.transient'、data keys == {event, title, body, payload}",
+          "test_enqueue_toggle_off：notification.toggles 中 'homework.done' 設 false 並 invalidate → enqueue 回 EnqueueResult([], [])，notifications 筆數不變；其他事件仍寫入",
+          "test_enqueue_validation：recipients=[Recipient('staff', x)] 搭配 HOMEWORK_DONE → ValueError；payload 缺 student_name → ValueError；空 recipients → 空結果",
+          "test_enqueue_after_commit_only：monkeypatch kick_outbox 與 publish_threadsafe 記錄 → enqueue 後尚未 commit 時記錄為空；db_session.commit()（savepoint 模式亦觸發 after_commit，BACKEND-006）後 kick 記錄 == [outbox_ids]；再 enqueue 後 rollback → 記錄不變、列不存在",
+          "test_enqueue_dedupe_recipients：recipients=[p1, p1] → notifications 1 列、outbox 1 列",
           "test_enqueue_mixed_recipient_event：enqueue(PICKUP_CANCELLED, recipients=[Recipient('parent', p1)], payload={...,'cancelled_by_label':'老師'}) → notifications 1 列、outbox 1 列；recipients=[Recipient('staff', s1)] → notifications 1 列、outbox 0 列"
         ],
         "run": "just test-int apps/api/tests/integration/notifications/test_notification_service.py -k \"test_enqueue_\"",
-        "notes": ""
+        "notes": "ws 推播在測試中記錄 app/realtime/publish.py 的 publish_threadsafe（push_to_recipient_after_commit 本身負責 after-commit 排程，換掉它會讓「commit 前不推播」的斷言失真）。"
       },
       "review": {
         "status": "pending",
