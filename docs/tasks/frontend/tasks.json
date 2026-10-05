@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 108,
-  "last_updated": "2026-10-05T05:42:51Z",
+  "version": 110,
+  "last_updated": "2026-10-05T05:43:19Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -431,7 +431,7 @@
       "granularity_unit": "store",
       "target_path": "apps/web/src/stores/auth.ts",
       "source_ref": "FE:src/utils/auth.ts::setUserInfo",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-021",
@@ -2531,7 +2531,7 @@
       "granularity_unit": "store",
       "target_path": "apps/web/src/stores/lookups.ts",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-080",
