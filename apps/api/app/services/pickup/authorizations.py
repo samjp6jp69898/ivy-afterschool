@@ -5,6 +5,8 @@
 - BACKEND-424：``load_verifiable_authorization``（verify / confirm_visual_match / override 共用的
   鎖定與檢查）。
 - BACKEND-523：``regenerate_code``（家長重新產生接送碼：舊碼立即失效、重設連錯與鎖定、寫 audit）。
+- BACKEND-425：``complete_via_authorization``（核銷後完成授權與接送請求、出勤改 left、通知家長）。
+  鎖序：授權列（BACKEND-424 已鎖）→ 請求列 → 出勤列。
 
 列表只回 ``code_last4``，不回 ``code_hash``（單向 HMAC）；明碼只在建立時的回應出現一次，DB 與 log
 都不保存。``effective_status``：active 且 service_date 早於今天（台北）→ ``expired``，其餘同
@@ -14,24 +16,29 @@ status。
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from app.api.deps import CurrentParent
-from app.core.clock import Clock
+from app.api.deps import CurrentParent, CurrentStaff
+from app.core.clock import Clock, to_taipei
 from app.core.errors import AppError, ConflictError, NotFoundError
 from app.core.request_meta import RequestMeta
 from app.core.settings_registry import PICKUP_AUTHORIZATION
 from app.core.storage import Storage
 from app.models.account import StaffUser
-from app.models.pickup import PickupAuthorization, PickupPerson
+from app.models.homework import HomeworkDailyProgress
+from app.models.pickup import OPEN_STATUSES, PickupAuthorization, PickupPerson, PickupRequest
 from app.models.students import Student
+from app.notifications.events import Event
+from app.notifications.recipients import parent_recipients
+from app.notifications.service import enqueue
 from app.realtime.publish import broadcast_after_commit
 from app.repositories.students import get_student_or_404, student_brief_map
 from app.schemas.pickup import (
+    AuthorizationCompleteOut,
     PickupAuthorizationCreatedOut,
     PickupAuthorizationCreateIn,
     PickupAuthorizationOut,
@@ -39,10 +46,13 @@ from app.schemas.pickup import (
     StaffAuthorizationListQuery,
     StaffAuthorizationOut,
 )
+from app.services.attendance_service import mark_left_by_pickup
 from app.services.audit_service import Actor, record
 from app.services.parent_scope import get_parent_student_ids
 from app.services.pickup.codes import generate_pickup_code, hash_pickup_code, pickup_code_last4
 from app.services.pickup.persons import signed_photo_url
+from app.services.pickup.transitions import transition_request
+from app.services.pickup.views import build_request_views, publish_request_change
 from app.services.settings_service import get_setting
 
 CHILD_LIST_WINDOW_DAYS = 30
@@ -342,3 +352,115 @@ def regenerate_code(
         clock=clock,
     )
     return PickupAuthorizationCreatedOut(authorization=out, code=code)
+
+
+def complete_via_authorization(
+    session: Session,
+    auth: PickupAuthorization,
+    method: Literal["code", "visual_match", "override"],
+    *,
+    actor: CurrentStaff,
+    clock: Clock,
+) -> AuthorizationCompleteOut:
+    """verify / confirm_visual_match / override 共用的核銷收尾（auth 已由 BACKEND-424 鎖定並檢查）。
+
+    該生該日有進行中的接送請求 → 一併完成；沒有 → 新增一筆 source='proxy' 的已完成請求，讓接送紀錄
+    與佇列歷史完整。移植 ivy ``services/pickup_verification.py::_complete`` /
+    ``_close_linked_call``。
+    """
+    now = clock.now()
+    auth.status = "completed"
+    auth.verified_at = now
+    auth.verified_by = actor.id
+    auth.verification_method = method
+    session.flush()
+
+    completion: dict[str, Any] = {
+        "completed_at": now,
+        "completed_by": actor.id,
+        "completion_method": method,
+        "picked_up_by_authorization_id": auth.id,
+    }
+    open_id = session.execute(
+        select(PickupRequest.id).where(
+            PickupRequest.student_id == auth.student_id,
+            PickupRequest.service_date == auth.service_date,
+            PickupRequest.status.in_(OPEN_STATUSES),
+        )
+    ).scalar_one_or_none()
+    if open_id is not None:
+        request = transition_request(
+            session,
+            open_id,
+            from_statuses=OPEN_STATUSES,
+            to_status="completed",
+            values={**completion, "arrived_at": func.coalesce(PickupRequest.arrived_at, now)},
+        )
+    else:
+        homework = session.execute(
+            select(HomeworkDailyProgress.overall_status).where(
+                HomeworkDailyProgress.student_id == auth.student_id,
+                HomeworkDailyProgress.service_date == auth.service_date,
+            )
+        ).scalar_one_or_none()
+        # 直接為終態：不會撞到 uq_pickup_requests_one_open
+        request = PickupRequest(
+            student_id=auth.student_id,
+            service_date=auth.service_date,
+            source="proxy",
+            requested_by_type="staff",
+            requested_by_id=actor.id,
+            status="completed",
+            homework_status_at_request=homework or "not_started",
+            arrived_at=now,
+            **completion,
+        )
+        session.add(request)
+        session.flush()
+
+    mark_left_by_pickup(session, auth.student_id, auth.service_date, at=now, clock=clock)
+    student_name = session.execute(
+        select(Student.name).where(Student.id == auth.student_id)
+    ).scalar_one()
+    enqueue(
+        session,
+        Event.PICKUP_COMPLETED,
+        recipients=parent_recipients(session, auth.student_id),
+        payload={
+            "student_id": auth.student_id,
+            "student_name": student_name,
+            "request_id": request.id,
+            "time": to_taipei(now).strftime("%H:%M"),
+            "picked_up_by": f"代理人 {auth.proxy_name}",
+        },
+        clock=clock,
+    )
+    publish_request_change(session, request, clock=clock)
+
+    today = clock.today()
+    brief = student_brief_map(session, [auth.student_id])[auth.student_id]
+    authorization = StaffAuthorizationOut(
+        **_base_fields(auth, today),
+        student=PickupStudentOut(
+            id=brief.id,
+            student_no=brief.student_no,
+            name=brief.name,
+            grade_level=brief.grade_level,
+            class_id=brief.class_id,
+            class_name=brief.class_name,
+        ),
+        # 沒有 storage 可簽照片網址：核銷結果不需要照片，前端要時重抓核驗清單
+        photo_url=None,
+        code_attempts=auth.code_attempts,
+        locked=auth.code_locked_at is not None,
+        verified_by_name=actor.display_name,
+    )
+    broadcast_after_commit(
+        session,
+        topic="pickup",
+        type="pickup.authorization_updated",
+        data=PickupAuthorizationOut(**_base_fields(auth, today)).model_dump(),
+        clock=clock,
+    )
+    [request_out] = build_request_views(session, [request])
+    return AuthorizationCompleteOut(authorization=authorization, request=request_out)

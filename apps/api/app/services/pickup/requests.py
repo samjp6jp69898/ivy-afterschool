@@ -11,6 +11,10 @@
 - BACKEND-406：``create_request``（家長「我要來接」/ 員工代建；自動回覆、同學生同日只一筆非終態）。
 - BACKEND-407 / 408 / 409 / 411：``reply_request`` / ``acknowledge_request`` / ``mark_arrived`` /
   ``cancel_request``（都經 BACKEND-405 條件式狀態轉換）。
+- BACKEND-410：``complete_request``（監護人 / 強制完成、出勤改 left、通知家長、override 寫 audit）。
+
+鎖序：進度列 → 請求列 → 出勤列（reply_request 先鎖進度列；complete_request 由條件式 UPDATE 鎖請求列
+後才更新出勤）。
 """
 
 from __future__ import annotations
@@ -25,7 +29,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.clock import Clock, combine_taipei, to_taipei
-from app.core.errors import AppError, ConflictError, ForbiddenError
+from app.core.errors import AppError, ConflictError, ForbiddenError, NotFoundError
 from app.core.permissions import Permission
 from app.core.settings_registry import HOMEWORK_DEFAULTS, PICKUP_WINDOW
 from app.models.attendance import StudentAttendance
@@ -36,13 +40,14 @@ from app.models.parents import Guardian
 from app.models.pickup import OPEN_STATUSES, UQ_ONE_OPEN, PickupAuthorization, PickupRequest
 from app.models.students import Student
 from app.notifications.events import Event
-from app.notifications.recipients import Recipient, staff_recipients
+from app.notifications.recipients import Recipient, parent_recipients, staff_recipients
 from app.notifications.service import enqueue
 from app.repositories.students import get_student_or_404
 from app.schemas.pickup import (
     ParentPickupRequestCreateIn,
     ParentPickupRequestOut,
     PickupCancelIn,
+    PickupCompleteIn,
     PickupQueueCountsOut,
     PickupQueueOut,
     PickupQueueQuery,
@@ -54,11 +59,13 @@ from app.schemas.pickup import (
     RosterStudentOut,
     StaffPickupRequestCreateIn,
 )
-from app.services.audit_service import Actor
+from app.services.attendance_service import mark_left_by_pickup
+from app.services.audit_service import Actor, record
 from app.services.parent_scope import assert_parent_owns_student, get_parent_student_ids
 from app.services.pickup.auto_reply import DONE_REPLY_TEXT, ProgressSnapshot, compute_auto_reply
 from app.services.pickup.transitions import transition_request
 from app.services.pickup.views import (
+    OVERRIDE_PICKER_NAME,
     build_parent_request_views,
     build_request_views,
     needs_reply,
@@ -69,6 +76,7 @@ from app.services.settings_service import get_setting
 
 if TYPE_CHECKING:
     from app.api.deps import CurrentParent, CurrentStaff
+    from app.core.request_meta import RequestMeta
 
 UNASSIGNED_CLASS_NAME: Final = "未分班"
 ACK_DEFAULT_MESSAGE: Final = "老師已確認接送請求"
@@ -688,5 +696,86 @@ def cancel_request(
             {"cancelled_by_label": "老師", **extra},
             clock=clock,
         )
+    publish_request_change(session, request, clock=clock)
+    return request
+
+
+def complete_request(
+    session: Session,
+    request_id: UUID,
+    data: PickupCompleteIn,
+    *,
+    actor: CurrentStaff,
+    meta: RequestMeta,
+    clock: Clock,
+) -> PickupRequest:
+    """員工交付學生 → completed：記錄由哪位監護人接走（或主管強制完成），出勤改 left、通知家長。
+
+    員工可從 pending / acknowledged / arrived 直接完成（家長到場但沒按「我到了」也能交付）。兩位
+    員工同時完成時條件式 UPDATE 只讓一個成功，通知、出勤與稽核只發生一次。移植 ivy
+    ``api/portal/dismissal_calls.py::_db_complete``；拿掉「家長尚未抵達不可完成」的限制。
+    """
+    current = session.execute(
+        select(PickupRequest.student_id, PickupRequest.service_date, PickupRequest.status).where(
+            PickupRequest.id == request_id
+        )
+    ).one_or_none()
+    if current is None:
+        raise NotFoundError("pickup_request_not_found", "找不到接送請求")
+
+    guardian = None
+    if data.method == "guardian":
+        guardian = session.get(Guardian, data.guardian_id)
+        if (
+            guardian is None
+            or guardian.student_id != current.student_id
+            or guardian.archived_at is not None
+        ):
+            raise AppError("invalid_guardian", "監護人不屬於此學生", status=422)
+        if not guardian.can_pickup:
+            raise ConflictError("guardian_cannot_pickup", "此監護人未被設定為可接送")
+    elif not actor.has(Permission.PICKUP_OVERRIDE):
+        raise ForbiddenError(details={"required": [str(Permission.PICKUP_OVERRIDE)]})
+
+    now = clock.now()
+    request = transition_request(
+        session,
+        request_id,
+        from_statuses=OPEN_STATUSES,
+        to_status="completed",
+        values={
+            "completed_at": now,
+            "completed_by": actor.id,
+            "completion_method": data.method,
+            # override 忽略 guardian_id：不寫入未經驗證的監護人
+            "picked_up_by_guardian_id": guardian.id if guardian is not None else None,
+            "arrived_at": func.coalesce(PickupRequest.arrived_at, now),
+        },
+    )
+    if data.method == "override":
+        record(
+            session,
+            actor=Actor.staff(actor),
+            action="pickup.override_complete",
+            entity_type="pickup_request",
+            entity_id=request.id,
+            before={"status": current.status},
+            after={"status": "completed", "note": data.note},
+            meta=meta,
+        )
+    mark_left_by_pickup(session, request.student_id, request.service_date, at=now, clock=clock)
+    enqueue(
+        session,
+        Event.PICKUP_COMPLETED,
+        recipients=parent_recipients(session, request.student_id),
+        payload={
+            "student_id": request.student_id,
+            "student_name": _student_name(session, request.student_id),
+            "request_id": request.id,
+            "time": _taipei_hm(now),
+            "picked_up_by": guardian.name if guardian is not None else OVERRIDE_PICKER_NAME,
+        },
+        clock=clock,
+    )
     publish_request_change(session, request, clock=clock)
     return request
