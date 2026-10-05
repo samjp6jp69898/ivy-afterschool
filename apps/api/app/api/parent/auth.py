@@ -13,6 +13,12 @@ BACKEND-059：``POST /refresh``：讀 ``parent_refresh`` cookie（path 限 ``/ap
 
 BACKEND-061：``POST /logout``：讀 ``parent_refresh`` → ``ParentAuthService.logout`` → commit →
 清除家長 access / refresh 與 bind cookie → ``{"message": "已登出"}``；無 cookie 也 200。
+
+BACKEND-057：``POST /bind``（``BindIn``）：身分先試 ``parent_access`` cookie
+（``get_optional_parent``，無效回 None）→ 有效即為加綁；否則讀 ``parent_bind`` cookie 並
+``decode_bind_token`` → 首次；兩者皆無或皆無效 → 401 ``unauthenticated``。``ParentAuthService.bind``
+（BACKEND-056）→ ``get_me`` → commit → 首次：設家長 access / refresh cookie、清 bind cookie；加綁：
+cookie 不動 → ``ParentAuthOut``。綁定碼錯誤由 service 拋 400 / 409，請求 rollback 讓碼不被消耗。
 """
 
 from __future__ import annotations
@@ -23,13 +29,14 @@ from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import CurrentParent
+from app.api.deps import CurrentParent, get_optional_parent
 from app.core.clock import Clock, get_clock
 from app.core.config import Settings, get_settings
 from app.core.db import get_db
 from app.core.errors import UnauthenticatedError, error_response
 from app.core.request_meta import RequestMeta, get_request_meta
 from app.core.security.cookies import (
+    PARENT_BIND,
     PARENT_REFRESH,
     clear_auth_cookies,
     clear_bind_cookie,
@@ -37,8 +44,10 @@ from app.core.security.cookies import (
     set_auth_cookies,
     set_bind_cookie,
 )
+from app.core.security.tokens import BindClaims, decode_bind_token
 from app.core.storage import Storage, get_storage
-from app.schemas.auth import LiffLoginIn, LiffLoginOut, MessageOut, ParentAuthOut
+from app.models.parents import ParentAccount
+from app.schemas.auth import BindIn, LiffLoginIn, LiffLoginOut, MessageOut, ParentAuthOut
 from app.services import parent_account_service
 from app.services.auth import parent_auth
 from app.services.auth.line_id_token import LineIdTokenVerifier, get_line_verifier
@@ -49,7 +58,10 @@ router = APIRouter(prefix="/auth", tags=["parent-auth"])
 
 
 def current_parent_of(session: ParentSession) -> CurrentParent:
-    parent = session.parent
+    return _current_parent(session.parent)
+
+
+def _current_parent(parent: ParentAccount) -> CurrentParent:
     return CurrentParent(
         id=parent.id,
         line_user_id=parent.line_user_id,
@@ -143,3 +155,43 @@ def logout(
     clear_auth_cookies(response, subject_type="parent", settings=settings)
     clear_bind_cookie(response, settings=settings)
     return MessageOut(message="已登出")
+
+
+@router.post("/bind", response_model=ParentAuthOut)
+def bind(
+    body: BindIn,
+    request: Request,
+    response: Response,
+    parent: Annotated[CurrentParent | None, Depends(get_optional_parent)],
+    db: Annotated[Session, Depends(get_db)],
+    throttles: Annotated[AuthThrottles, Depends(get_auth_throttles)],
+    clock: Annotated[Clock, Depends(get_clock)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    storage: Annotated[Storage, Depends(get_storage)],
+) -> ParentAuthOut:
+    identity: CurrentParent | BindClaims
+    if parent is not None:
+        identity = parent
+    else:
+        raw_bind = read_cookie(request, PARENT_BIND.name)
+        if not raw_bind:
+            raise UnauthenticatedError
+        identity = decode_bind_token(raw_bind, clock=clock)
+
+    result = parent_auth.bind(
+        db, raw_code=body.code, identity=identity, throttles=throttles, clock=clock
+    )
+    me = parent_account_service.get_me(
+        db, parent=_current_parent(result.parent), storage=storage, clock=clock
+    )
+    db.commit()
+    if result.session_tokens is not None:
+        set_auth_cookies(
+            response,
+            subject_type="parent",
+            access_token=result.session_tokens.access_token,
+            refresh_token=result.session_tokens.refresh_token,
+            settings=settings,
+        )
+        clear_bind_cookie(response, settings=settings)
+    return ParentAuthOut(parent=me)
