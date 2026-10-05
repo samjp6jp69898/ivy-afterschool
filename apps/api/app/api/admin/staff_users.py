@@ -7,6 +7,12 @@
   ``StaffUserCreatedOut``。臨時密碼只在此回傳一次，回應加 ``Cache-Control: no-store``。
 - BACKEND-095 ``GET /staff-users/{staff_id}``：staff:read → BACKEND-088 ``get_staff_user`` →
   ``StaffUserOut``；不存在 404 ``staff_user_not_found``。
+- BACKEND-096 ``PATCH /staff-users/{staff_id}``：staff:write；``StaffUserUpdateIn`` → BACKEND-090
+  ``update_staff_user`` → commit → ``StaffUserOut``。
+- BACKEND-097 ``POST /staff-users/{staff_id}/reset-password``：staff:write → BACKEND-091
+  ``reset_password`` → commit → ``TempPasswordOut``（no-store）；目標既有登入立即失效。
+- BACKEND-098 ``POST /staff-users/{staff_id}/deactivate``：staff:write → BACKEND-092 ``deactivate``
+  → commit → ``StaffUserOut``；目標既有登入立即失效。
 """
 
 from __future__ import annotations
@@ -19,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.api.admin._query import query_model
 from app.api.deps import CurrentStaff, require_permission
+from app.core.clock import Clock, get_clock
 from app.core.db import get_db
 from app.core.pagination import Page, PageParams, page_params
 from app.core.permissions import Permission
@@ -28,6 +35,8 @@ from app.schemas.staff_users import (
     StaffUserCreateIn,
     StaffUserListQuery,
     StaffUserOut,
+    StaffUserUpdateIn,
+    TempPasswordOut,
 )
 from app.services import staff_user_service
 
@@ -66,3 +75,45 @@ def get_staff_user(
     db: Annotated[Session, Depends(get_db)],
 ) -> StaffUserOut:
     return staff_user_service.get_staff_user(db, staff_id)
+
+
+@router.patch("/{staff_id}", response_model=StaffUserOut)
+def update_staff_user(
+    staff_id: UUID,
+    body: StaffUserUpdateIn,
+    staff: Annotated[CurrentStaff, Depends(require_permission(Permission.STAFF_WRITE))],
+    db: Annotated[Session, Depends(get_db)],
+    meta: Annotated[RequestMeta, Depends(get_request_meta)],
+) -> StaffUserOut:
+    out = staff_user_service.update_staff_user(db, staff_id, body, actor=staff, meta=meta)
+    db.commit()
+    return out
+
+
+@router.post("/{staff_id}/reset-password", response_model=TempPasswordOut)
+def reset_staff_password(
+    staff_id: UUID,
+    response: Response,
+    staff: Annotated[CurrentStaff, Depends(require_permission(Permission.STAFF_WRITE))],
+    db: Annotated[Session, Depends(get_db)],
+    meta: Annotated[RequestMeta, Depends(get_request_meta)],
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> TempPasswordOut:
+    out = staff_user_service.reset_password(db, staff_id, actor=staff, meta=meta, clock=clock)
+    db.commit()
+    # 臨時密碼只回這一次：瀏覽器與中介不得快取
+    response.headers["Cache-Control"] = "no-store"
+    return out
+
+
+@router.post("/{staff_id}/deactivate", response_model=StaffUserOut)
+def deactivate_staff_user(
+    staff_id: UUID,
+    staff: Annotated[CurrentStaff, Depends(require_permission(Permission.STAFF_WRITE))],
+    db: Annotated[Session, Depends(get_db)],
+    meta: Annotated[RequestMeta, Depends(get_request_meta)],
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> StaffUserOut:
+    out = staff_user_service.deactivate(db, staff_id, actor=staff, meta=meta, clock=clock)
+    db.commit()
+    return out
