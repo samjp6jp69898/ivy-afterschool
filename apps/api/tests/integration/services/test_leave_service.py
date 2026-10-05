@@ -1,23 +1,30 @@
-"""BACKEND-347 / 350 / 348 / 344 / 345：leave_service。
+"""BACKEND-347 / 350 / 348 / 344 / 345 / 346 / 349：leave_service。
 
-後台請假列表、附件短效 URL、家長端小孩請假列表、請假建立 / 取消通知、建立請假。
+後台請假列表、附件短效 URL、家長端小孩請假列表、請假建立 / 取消通知、建立請假、取消請假、
+家長上傳附件。
 """
 
+import io
 import threading
 from collections.abc import Iterator
 from datetime import UTC, date, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import Engine, event, func, select, text
 from sqlalchemy.orm import Session
+from starlette.datastructures import Headers, UploadFile
 
+from app.api.deps import CurrentParent
 from app.core.errors import AppError
 from app.core.pagination import PageParams
 from app.core.storage import StorageError
 from app.models.attendance import StudentAttendance
-from app.models.leaves import StudentLeave
+from app.models.audit import AuditLog
+from app.models.leaves import StudentLeave, StudentLeaveAttachment
 from app.models.notifications import Notification
+from app.models.parents import ParentAccount
 from app.notifications import outbox_jobs
 from app.notifications.events import Event
 from app.schemas.leaves import (
@@ -30,11 +37,13 @@ from app.schemas.leaves import (
 from app.services import leave_service
 from app.services.audit_service import Actor
 from app.services.leave_service import (
+    cancel_leave,
     create_leave,
     get_attachment_url,
     list_child_leaves,
     list_leaves,
     notify_leave_event,
+    upload_leave_attachment,
 )
 from app.services.settings_service import clear_settings_cache
 from tests.integration.db.conftest import connect_owner
@@ -778,3 +787,367 @@ def test_create_leave_concurrent_duplicate(
         .where(StudentLeave.student_id == ming.id, StudentLeave.status == "active")
     ).scalar_one()
     assert active == 1
+
+
+# --- BACKEND-346 cancel_leave ---
+
+
+def _clock_on(d: date) -> FakeClock:
+    return FakeClock(datetime(d.year, d.month, d.day, 2, 0, tzinfo=UTC))  # 台北 10:00
+
+
+def _owned(db: Session, name: str = "王小明") -> tuple[Any, ParentAccount]:
+    student = make_student(db, name=name)
+    parent = make_parent(db)
+    make_guardian(db, student, parent=parent)
+    return student, parent
+
+
+def _rows_by_date(db: Session, student_id: UUID) -> dict[date, StudentAttendance]:
+    rows = db.execute(
+        select(StudentAttendance)
+        .where(StudentAttendance.student_id == student_id)
+        .execution_options(populate_existing=True)
+    ).scalars()
+    return {row.service_date: row for row in rows}
+
+
+def _leave_rows(db: Session, student: Any, leave: StudentLeave, days: range) -> None:
+    for day in days:
+        make_attendance(db, student, service_date=date(2026, 9, day), status="leave", leave=leave)
+
+
+def test_cancel_leave_not_started_whole(db_session: Session, kick_off: None) -> None:
+    clock = _clock_on(date(2026, 9, 2))
+    ming, parent = _owned(db_session)
+    make_staff(db_session, permissions=["leaves:read"])
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 2), end_date=date(2026, 9, 3))
+    _leave_rows(db_session, ming, leave, range(2, 3))
+
+    result = cancel_leave(db_session, leave.id, actor=Actor("parent", parent.id), clock=clock)
+
+    assert (result.mode, result.cancelled_from, result.cancelled_to) == (
+        "cancelled",
+        date(2026, 9, 2),
+        date(2026, 9, 3),
+    )
+    assert result.reverted_dates == [date(2026, 9, 2)]
+    assert (result.leave.status, result.leave.cancelled_by_type, result.leave.cancelled_by_id) == (
+        "cancelled",
+        "parent",
+        parent.id,
+    )
+    assert result.leave.cancelled_at == clock.now()
+    row = _rows_by_date(db_session, ming.id)[date(2026, 9, 2)]
+    assert (row.status, row.leave_id) == ("expected", None)
+    assert len(_leave_notifications(db_session, "leave.cancelled", leave.id)) >= 1
+
+
+def test_cancel_leave_truncate_midweek(db_session: Session, kick_off: None) -> None:
+    clock = _clock_on(date(2026, 9, 9))  # 週三
+    ming, parent = _owned(db_session)
+    make_staff(db_session, permissions=["leaves:read"])
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 7), end_date=date(2026, 9, 11))
+    _leave_rows(db_session, ming, leave, range(7, 12))
+
+    result = cancel_leave(db_session, leave.id, actor=Actor("parent", parent.id), clock=clock)
+
+    assert (result.mode, result.cancelled_from, result.cancelled_to) == (
+        "truncated",
+        date(2026, 9, 9),
+        date(2026, 9, 11),
+    )
+    assert (result.leave.end_date, result.leave.status) == (date(2026, 9, 8), "active")
+    assert result.reverted_dates == [date(2026, 9, 9), date(2026, 9, 10), date(2026, 9, 11)]
+    rows = _rows_by_date(db_session, ming.id)
+    for day in (9, 10, 11):
+        assert (rows[date(2026, 9, day)].status, rows[date(2026, 9, day)].leave_id) == (
+            "expected",
+            None,
+        )
+    for day in (7, 8):
+        assert (rows[date(2026, 9, day)].status, rows[date(2026, 9, day)].leave_id) == (
+            "leave",
+            leave.id,
+        )
+    [notification, *_] = _leave_notifications(db_session, "leave.cancelled", leave.id)
+    assert (notification.payload["start_date"], notification.payload["end_date"]) == (
+        "2026-09-09",
+        "2026-09-11",
+    )
+    [log] = db_session.execute(
+        select(AuditLog).where(
+            AuditLog.action == "leave.truncate", AuditLog.entity_id == str(leave.id)
+        )
+    ).scalars()
+    assert (log.actor_type, log.actor_id) == ("parent", parent.id)
+    assert (log.before, log.after) == ({"end_date": "2026-09-11"}, {"end_date": "2026-09-08"})
+
+
+def test_cancel_leave_truncate_keeps_checked_in(db_session: Session, kick_off: None) -> None:
+    clock = _clock_on(date(2026, 9, 9))
+    ming, parent = _owned(db_session)
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 7), end_date=date(2026, 9, 11))
+    _leave_rows(db_session, ming, leave, range(7, 9))
+    make_attendance(db_session, ming, service_date=date(2026, 9, 9), status="present")
+
+    result = cancel_leave(db_session, leave.id, actor=Actor("parent", parent.id), clock=clock)
+
+    assert result.mode == "truncated"
+    assert result.reverted_dates == []
+    assert _rows_by_date(db_session, ming.id)[date(2026, 9, 9)].status == "present"
+
+
+def test_cancel_leave_already_ended(db_session: Session, kick_off: None) -> None:
+    clock = _clock_on(date(2026, 9, 10))
+    ming, parent = _owned(db_session)
+    staff = make_staff(db_session, permissions=["leaves:write"])
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 7), end_date=date(2026, 9, 8))
+    _leave_rows(db_session, ming, leave, range(7, 9))
+
+    for actor in (Actor("parent", parent.id), Actor("staff", staff.id)):
+        with pytest.raises(AppError) as exc:
+            cancel_leave(db_session, leave.id, actor=actor, clock=clock)
+        assert (exc.value.status, exc.value.code) == (409, "leave_already_ended")
+
+    result = cancel_leave(
+        db_session, leave.id, actor=Actor("staff", staff.id), scope="all", clock=clock
+    )
+
+    assert (result.mode, result.leave.status, result.leave.cancelled_by_type) == (
+        "cancelled",
+        "cancelled",
+        "staff",
+    )
+    assert result.reverted_dates == [date(2026, 9, 7), date(2026, 9, 8)]
+    rows = _rows_by_date(db_session, ming.id)
+    assert {rows[date(2026, 9, d)].status for d in (7, 8)} == {"expected"}
+
+
+def test_cancel_leave_staff_all_started(db_session: Session, kick_off: None) -> None:
+    clock = _clock_on(date(2026, 9, 9))
+    ming = make_student(db_session)
+    staff = make_staff(db_session, permissions=["leaves:write"])
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 7), end_date=date(2026, 9, 11))
+    _leave_rows(db_session, ming, leave, range(7, 12))
+
+    result = cancel_leave(
+        db_session, leave.id, actor=Actor("staff", staff.id), scope="all", clock=clock
+    )
+
+    assert (result.mode, result.leave.status, result.leave.end_date) == (
+        "cancelled",
+        "cancelled",
+        date(2026, 9, 11),
+    )
+    assert len(result.reverted_dates) == 5
+    assert {row.status for row in _rows_by_date(db_session, ming.id).values()} == {"expected"}
+
+
+def test_cancel_leave_parent_scope_all_rejected(db_session: Session, kick_off: None) -> None:
+    ming, parent = _owned(db_session)
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 7))
+
+    with pytest.raises(ValueError, match="scope"):
+        cancel_leave(
+            db_session,
+            leave.id,
+            actor=Actor("parent", parent.id),
+            scope="all",
+            clock=_clock_on(date(2026, 9, 1)),
+        )
+
+
+def test_cancel_leave_not_active(db_session: Session, kick_off: None) -> None:
+    ming, parent = _owned(db_session)
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 7), status="cancelled")
+
+    with pytest.raises(AppError) as exc:
+        cancel_leave(
+            db_session,
+            leave.id,
+            actor=Actor("parent", parent.id),
+            clock=_clock_on(date(2026, 9, 1)),
+        )
+
+    assert (exc.value.status, exc.value.code) == (409, "leave_not_active")
+
+
+def test_cancel_leave_idor(db_session: Session, kick_off: None) -> None:
+    clock = _clock_on(date(2026, 9, 1))
+    _, parent_a = _owned(db_session)
+    other, _ = _owned(db_session, name="林小安")
+    leave = make_leave(db_session, other, start_date=date(2026, 9, 7))
+
+    with pytest.raises(AppError) as idor:
+        cancel_leave(db_session, leave.id, actor=Actor("parent", parent_a.id), clock=clock)
+    with pytest.raises(AppError) as missing:
+        cancel_leave(db_session, uuid4(), actor=Actor("parent", parent_a.id), clock=clock)
+
+    assert (idor.value.status, idor.value.code) == (404, "leave_not_found")
+    assert (idor.value.status, idor.value.code, idor.value.message) == (
+        missing.value.status,
+        missing.value.code,
+        missing.value.message,
+    )
+    db_session.refresh(leave)
+    assert leave.status == "active"
+
+
+# --- BACKEND-349 upload_leave_attachment ---
+
+_PDF = b"%PDF-1.7\n" + b"0" * 50
+_JPEG = b"\xff\xd8\xff\xe0" + b"0" * 100
+_ZIP = b"PK\x03\x04" + b"0" * 50
+
+
+def _upload(
+    content: bytes, filename: str = "診斷證明.pdf", content_type: str = "application/pdf"
+) -> UploadFile:
+    return UploadFile(
+        file=io.BytesIO(content), filename=filename, headers=Headers({"content-type": content_type})
+    )
+
+
+def _current_parent(parent: ParentAccount) -> CurrentParent:
+    return CurrentParent(
+        id=parent.id,
+        line_user_id=parent.line_user_id,
+        display_name=parent.display_name,
+        token_version=parent.token_version,
+    )
+
+
+def _attachment_count(db: Session, leave_id: UUID) -> int:
+    return db.execute(
+        select(func.count())
+        .select_from(StudentLeaveAttachment)
+        .where(StudentLeaveAttachment.leave_id == leave_id)
+    ).scalar_one()
+
+
+def test_upload_leave_attachment_success(db_session: Session, fresh_settings: None) -> None:
+    storage = FakeStorage()
+    ming, parent = _owned(db_session)
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 7))
+
+    out = upload_leave_attachment(
+        db_session,
+        leave.id,
+        _upload(_PDF),
+        parent=_current_parent(parent),
+        storage=storage,
+        clock=_clock_on(date(2026, 9, 1)),
+    )
+
+    assert (out.mime_type, out.size_bytes) == ("application/pdf", len(_PDF))
+    assert out.url is not None
+    assert out.url.startswith("https://storage.test/leave-attachments/")
+    [(bucket, path)] = list(storage.objects)
+    assert (bucket, storage.objects[(bucket, path)]) == ("leave-attachments", _PDF)
+    row = db_session.get(StudentLeaveAttachment, out.id)
+    assert row is not None
+    assert row.storage_path == path
+    assert path.startswith(f"{leave.id}/")
+    assert path.endswith(".pdf")
+    assert "診斷" not in path
+
+
+def test_upload_leave_attachment_rules(db_session: Session, fresh_settings: None) -> None:
+    storage = FakeStorage()
+    clock = _clock_on(date(2026, 9, 1))
+    ming, parent = _owned(db_session)
+    other, _ = _owned(db_session, name="林小安")
+    others_leave = make_leave(db_session, other, start_date=date(2026, 9, 7))
+    cancelled = make_leave(db_session, ming, start_date=date(2026, 9, 14), status="cancelled")
+    full = make_leave(db_session, ming, start_date=date(2026, 9, 7))
+    make_leave_attachment(db_session, full)
+    make_leave_attachment(db_session, full)
+    db_session.execute(
+        text(
+            "update public.system_settings "
+            "set value = value || jsonb_build_object('max_attachments', 2) "
+            "where key = 'leave.window'"
+        )
+    )
+    clear_settings_cache()
+    me = _current_parent(parent)
+
+    def upload(leave_id: UUID) -> pytest.ExceptionInfo[AppError]:
+        with pytest.raises(AppError) as exc:
+            upload_leave_attachment(
+                db_session, leave_id, _upload(_PDF), parent=me, storage=storage, clock=clock
+            )
+        return exc
+
+    idor = upload(others_leave.id)
+    missing = upload(uuid4())
+    inactive = upload(cancelled.id)
+    limited = upload(full.id)
+
+    assert (idor.value.status, idor.value.code) == (404, "leave_not_found")
+    assert (missing.value.status, missing.value.code, missing.value.message) == (
+        404,
+        "leave_not_found",
+        idor.value.message,
+    )
+    assert (inactive.value.status, inactive.value.code) == (409, "leave_not_active")
+    assert (limited.value.status, limited.value.code) == (409, "attachment_limit_reached")
+    assert limited.value.details == {"max_attachments": 2}
+    assert storage.objects == {}
+
+
+def test_upload_leave_attachment_file_checks(db_session: Session, fresh_settings: None) -> None:
+    storage = FakeStorage()
+    clock = _clock_on(date(2026, 9, 1))
+    ming, parent = _owned(db_session)
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 7))
+    db_session.execute(
+        text(
+            "update public.system_settings "
+            "set value = value || jsonb_build_object('max_attachment_mb', 1) "
+            "where key = 'leave.window'"
+        )
+    )
+    clear_settings_cache()
+    me = _current_parent(parent)
+
+    with pytest.raises(AppError) as unsupported:
+        upload_leave_attachment(
+            db_session, leave.id, _upload(_ZIP, "a.pdf"), parent=me, storage=storage, clock=clock
+        )
+    big = _JPEG + b"0" * (2 * 1024 * 1024)
+    with pytest.raises(AppError) as too_large:
+        upload_leave_attachment(
+            db_session,
+            leave.id,
+            _upload(big, "a.jpg", "image/jpeg"),
+            parent=me,
+            storage=storage,
+            clock=clock,
+        )
+
+    assert (unsupported.value.status, unsupported.value.code) == (415, "unsupported_file_type")
+    assert (too_large.value.status, too_large.value.code) == (413, "file_too_large")
+    assert too_large.value.details == {"max_bytes": 1024 * 1024}
+    assert (storage.objects, _attachment_count(db_session, leave.id)) == ({}, 0)
+
+
+def test_upload_leave_attachment_storage_error(db_session: Session, fresh_settings: None) -> None:
+    storage = FakeStorage()
+    storage.upload_error = StorageError("S3 put_object 失敗")
+    ming, parent = _owned(db_session)
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 7))
+
+    with pytest.raises(AppError) as exc:
+        upload_leave_attachment(
+            db_session,
+            leave.id,
+            _upload(_PDF),
+            parent=_current_parent(parent),
+            storage=storage,
+            clock=_clock_on(date(2026, 9, 1)),
+        )
+
+    assert (exc.value.status, exc.value.code) == (502, "storage_unavailable")
+    assert _attachment_count(db_session, leave.id) == 0
