@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 106,
-  "last_updated": "2026-10-05T05:41:19Z",
+  "version": 107,
+  "last_updated": "2026-10-05T05:41:21Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -431,8 +431,8 @@
       "granularity_unit": "store",
       "target_path": "apps/web/src/stores/auth.ts",
       "source_ref": "FE:src/utils/auth.ts::setUserInfo",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-021",
         "FRONTEND-008"
@@ -2140,8 +2140,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/RoleCardsGrid.vue",
       "source_ref": "FE:src/components/settings/RoleCardsGrid.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-053"
       ],
@@ -2174,8 +2174,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/PermissionPicker.vue",
       "source_ref": "FE:src/components/settings/PermissionPicker.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-053"
       ],
@@ -2531,8 +2531,8 @@
       "granularity_unit": "store",
       "target_path": "apps/web/src/stores/lookups.ts",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-080",
         "FRONTEND-051"
@@ -2884,8 +2884,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/student/GuardianFormDialog.vue",
       "source_ref": "FE:src/components/student/GuardianManager.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-082",
         "FRONTEND-040"
@@ -3111,8 +3111,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/classes/ClassFormDialog.vue",
       "source_ref": "FE:src/views/ClassroomView.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-080",
         "FRONTEND-084",
