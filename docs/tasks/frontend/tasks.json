@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 115,
-  "last_updated": "2026-10-05T05:48:11Z",
+  "version": 116,
+  "last_updated": "2026-10-05T06:01:05Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -2140,7 +2140,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/RoleCardsGrid.vue",
       "source_ref": "FE:src/components/settings/RoleCardsGrid.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-053"
@@ -2162,9 +2162,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "3 條 red_case 皆有對應測試且斷言具體（卡片名稱順序、系統 tag、code、「4 位員工」「12 項」、emit 值、aria-checked / tabindex、方向鍵 emit 序列、disabled 不 emit 且 aria-disabled），另補 3 條；實跑 tdd.run 6/6 綠、web-lint 乾淨；c42577b(test) 先於 59043f4(impl)，spec 未再改。對照 page-settings-roles.html（approved，preview-tasks 含 067 / 068）decisions 卡片內容、選中樣式、排序（admin → director → clerk → tutor，自訂依名稱）、radiogroup 鍵盤（只有選中可 Tab、方向鍵移動即選取且循環、Enter / 空白）、disabled、每欄 ≥200px 逐條一致；使用 api/roles.ts Role 型別。殘留：系統角色排序以 code 判斷而非 is_system（系統角色 code 固定，觀測不到差異）。"
       }
     },
     {
@@ -2174,7 +2174,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/PermissionPicker.vue",
       "source_ref": "FE:src/components/settings/PermissionPicker.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-053"
@@ -2198,9 +2198,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "5 條 red_case 皆有對應測試且斷言具體（組計數 / 總計 / indeterminate class、emit 排序陣列、不可授出碼 disabled 且已勾者可取消、整組全選只勾可授出碼、搜尋不分大小寫與空文案），另補 3 條；實跑 tdd.run 8/8 綠、web-lint 乾淨；6b5b872(test) 先於 4ea033c(impl)，spec 未再改。對照 page-settings-roles.html decisions：搜尋框 240px、「已選 N / 28」、組標頭收合 / 整組勾選 / 計數、中文名稱 + 等寬代碼、搜尋只列命中並強制展開、「找不到符合的權限」、不可授出 tooltip「你沒有此權限，無法授出」、組內全不可操作時整組 disabled、highlight「角色預設」tag，逐條一致；使用 api/roles.ts PermissionCatalog 型別。殘留（皆與已核可稿行為相同）：組內可授出碼已全勾但另有未勾的不可授出碼時，組標頭停在 indeterminate、點擊仍為全選，無法一鍵取消整組；搜尋中按整組勾選會作用於被過濾掉的碼。"
       }
     },
     {
@@ -2884,7 +2884,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/student/GuardianFormDialog.vue",
       "source_ref": "FE:src/components/student/GuardianManager.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-082",
@@ -2907,9 +2907,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "3 條 red_case 皆有對應測試且斷言具體，另補 4 條（電話留空送 null、必填、無其他主要聯絡人不提示、422 欄位對應與 409 student_archived 顯示後端訊息）；實跑 tdd.run 7/7 綠、web-lint 乾淨；ad8602a(test) 先於 ab64803(impl)，spec 未再改。新增預設值、電話格式、編輯只送變更欄位、422 經 validationFieldErrors 對應 name / relation / phone、其餘錯誤 ElMessage 後端 message 皆符合 description；使用 api/guardians.ts createGuardian / updateGuardian 正確。對照 page-students.html（approved，含 092）對應 decision：FormDialog md、欄位順序與兩欄、placeholder、「將取代原本的主要聯絡人」warning、收通知灰字，逐項一致。偏離「編輯無變更按儲存直接關閉不送請求」：稿未規定 submit-disabled，行為無害，接受。殘留：無。"
       }
     },
     {
@@ -3111,7 +3111,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/classes/ClassFormDialog.vue",
       "source_ref": "FE:src/views/ClassroomView.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-080",
@@ -3135,9 +3135,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "3 條 red_case 皆有對應測試且斷言具體，另補 2 條（名稱必填、409 class_archived 顯示後端訊息），並驗證新增成功後 lookups.invalidate('classes')、編輯無變更時儲存 disabled、只改排序時 PATCH body {sort_order:2}；實跑 tdd.run 5/5 綠、web-lint 乾淨；861305f(test) 先於 0b52dee(impl)，spec 未再改。對照 page-classes.html（approved，preview-tasks 含 097 / 098 / 099）decisions：md 560、編輯無變更時儲存 disabled、年級 checkbox 按鈕組與「可複選（混齡班）」、學年度與排序並排、排序灰字、409 class_name_taken 顯示於名稱欄「此學年度已有同名班級」、invalidate('classes')，逐條一致。偏離：編輯中班級學年度不在選項範圍時補進選項（每次回傳新陣列，不污染共用資料），合理；components.d.ts 只是 unplugin 補的 ElCheckboxButton / ElCheckboxGroup / ElCol / ElRow 宣告（ElCol / ElRow 屬 092，commit message 已註明）。殘留：(1) 名稱只在尾端加空白時 isDirty 為 true 但 trim 後無變更欄位，按儲存無反應、dialog 不關閉（092 同情況會關閉）；(2) 422 grade_levels 若 loc 帶索引（grade_levels.0）對不到欄位，改以 ElMessage 顯示；(3) depends_on 未列 FRONTEND-083（實際使用 stores/lookups，已 done）。"
       }
     },
     {
