@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 338,
-  "last_updated": "2026-10-05T05:33:38Z",
+  "version": 339,
+  "last_updated": "2026-10-05T05:34:48Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -8655,7 +8655,7 @@
         "red_cases": [
           "test_create_leave_by_parent：FakeClock 2026-09-01、家長 p 綁王小明 → create_leave(ParentLeaveCreateIn(student_id, 'sick', 9/1, 9/2), actor=Actor(type='parent', id=p.id)) → created_by_type == 'parent'；9/1 出勤 status 'leave'；notifications(event='leave.created') ≥ 1 列",
           "test_create_leave_overlap_409：既有 active 9/2~9/4 → 新 9/4~9/5 → AppError 409 'leave_overlap'，details.leave_id == 既有 id；既有改 cancelled 後 → 建立成功",
-          "test_create_leave_parent_window：今天 9/1、leave.window 設為 past_days=30、future_days=60 → 家長 start_date=2026-07-31 → 422 'leave_date_out_of_window'、2026-11-01 → 422、2026-08-02 → 成功；leave.window 改為 past_days=0 並 invalidate → 2026-08-31 → 422；staff actor 7/31 → 成功",
+          "test_create_leave_parent_window：今天 9/1、leave.window 設為 past_days=30、future_days=60 → 家長 start_date=2026-07-31 → 422 'leave_date_out_of_window'、2026-11-01 → 422、2026-08-03（週一；8/2 是週日、區間沒有營業日）→ 成功；leave.window 改為 past_days=0 並 invalidate → 2026-08-31 → 422；staff actor 7/31 → 成功",
           "test_create_leave_no_service_days：9/5~9/6（週六日）→ 422 'no_service_days_in_range'",
           "test_create_leave_parent_idor：家長 p 對他人小孩 → AppError 404 'student_not_found'；自己小孩 withdrawn → 409 'student_not_active'",
           "test_create_leave_concurrent_duplicate：committing session 兩條連線同時送出同一學生 9/1~9/1 → 一個成功、另一個 AppError 409 'leave_overlap'，最終 active 請假 1 筆"
