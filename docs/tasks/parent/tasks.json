@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 85,
-  "last_updated": "2026-10-05T05:45:54Z",
+  "version": 86,
+  "last_updated": "2026-10-05T06:01:05Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -257,7 +257,7 @@
       "granularity_unit": "method",
       "target_path": "apps/web/src/parent/services/liff.ts",
       "source_ref": "FE:src/parent/services/liff.ts::initLiff",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r8",
       "depends_on": [
         "PARENT-005",
@@ -283,9 +283,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "6 條 red_case 皆有對應測試且斷言具體，另補 3 條（config 失敗後可重試、未登入不呼叫 logout 且未 init 回 false、sessionStorage 不可用仍嘗試一次）；實跑 tdd.run 9/9 綠、web-lint 乾淨；e61cb3e（規格補充）→ e3cf389(test) → 8d40196(impl)。規格補充合理：SDK 動態載入而 forceLiffReloginOnce 為同步函式，原規格未定義未 init 時的行為；補成「只操作 initLiff 已 resolve 的 client，未 init 回 false 不寫 marker」，呼叫端（PARENT-030 / 033）皆先 await initLiff，只補未定義情況、未刪改既有條件。LIFF ID 由 PARENT-005 getPublicConfig 取得（實際 export 名稱正確），設定或 init 失敗皆清除記憶化 promise 可重試；只重試一次：有 marker 回 false、先寫 marker 再 logout（已登入時）+ login，測試驗 marker 值、清除後可再次 true 與 login 次數。只 import vue、@/shared、parent 自身與動態 @line/liff，無後台依賴。殘留：forceLiffReloginOnce 只在 isLoggedIn() 為真時 logout（規格寫 logout + login；未登入時 logout 無作用，有補充測試涵蓋）。"
       }
     },
     {
@@ -1667,7 +1667,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/homework/HomeworkItemRow.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r8",
       "depends_on": [
         "FRONTEND-005",
@@ -1691,9 +1691,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "2 條 red_case 皆有對應測試且斷言具體，另補 todo / doing 色調；實跑 tdd.run 3/3 綠、web-lint 乾淨；e3cf389(test) 先於 8d40196(impl)。git diff e3cf389 8d40196 的 spec 只改一行：.status-pill 的 text 改取 .status-pill__label（勾選圖示 ligature 在 pill 內，原寫法會得到「check完成」），仍另斷言 status-pill--success 與圖示文字 check，未放寬。對照 parent-component-homework-item-row.html（approved，PARENT-072）6 條 decisions 逐條一致（li、最小高 64、分隔線、科目標籤 60×24 與「其他」、標題兩行截斷、HOMEWORK_ITEM_STATUS_META 色調、完成項目樣式、不可互動）；只用 --m3-* token，無寫死色碼或 --el-*。殘留：無。"
       }
     },
     {
@@ -3209,7 +3209,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/notifications/NotificationListItem.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r8",
       "depends_on": [
         "FRONTEND-003",
@@ -3234,9 +3234,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "3 條 red_case 皆有對應測試且斷言具體，另補台北跨午夜邊界（UTC 16:30 → 同日 00:30、UTC 15:59 → 昨天 23:59）與事件前綴圖示；實跑 tdd.run 5/5 綠、web-lint 乾淨；e3cf389(test) 先於 8d40196(impl)。今天 / 昨天以 toTaipeiDate 與 todayTaipei(now)、addDays(today,-1) 比較，UTC 邊界正確。對照 parent-component-notification-list-item.html（approved，PARENT-176）7 條 decisions 逐條一致（li 包 button、72 高、40px 圓形圖示 aria-hidden、標題單行 / 內文兩行純文字插值、未讀粗體 + 圓點 + 視覺隱藏「未讀」+ primary 時間 + 底色、時間格式、state layer 與 focus-visible）；只用 --m3-* token；無後台依賴。殘留（皆為稿已裁定）：更早通知只顯示 MM/DD 不含年份；時間不自動更新（過午夜不會由今天變昨天）。"
       }
     },
     {
