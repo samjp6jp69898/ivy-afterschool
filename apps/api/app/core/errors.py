@@ -124,11 +124,17 @@ def _envelope(status: int, code: str, message: str, details: Any = None) -> JSON
     return JSONResponse(status_code=status, content=content)
 
 
-async def _app_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, AppError)  # noqa: S101  FastAPI 以註冊型別分派
+def error_response(exc: AppError) -> JSONResponse:
+    """AppError 的錯誤 envelope 回應；endpoint 需在錯誤回應上附加 cookie（例如 refresh 401 清除
+    登入 cookie）時自行組回應用，與 exception handler 的輸出完全相同。"""
     response = _envelope(exc.status, exc.code, exc.message, exc.details)
     response.headers.update(exc.headers())
     return response
+
+
+async def _app_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, AppError)  # noqa: S101  FastAPI 以註冊型別分派
+    return error_response(exc)
 
 
 async def _validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
