@@ -10,11 +10,14 @@ from app.api.admin import (
     audit_logs,
     auth,
     classes,
+    dashboard,
+    exams,
     guardians,
     notifications,
     reference,
     roles,
     settings,
+    staff_users,
     students,
 )
 
@@ -26,7 +29,11 @@ admin_router.include_router(settings.router)
 for _router in reference.reference_routers:
     admin_router.include_router(_router)
 admin_router.include_router(students.router)
+admin_router.include_router(exams.student_exams_router)
 admin_router.include_router(guardians.router)
+admin_router.include_router(exams.router)
+admin_router.include_router(dashboard.router)
+admin_router.include_router(staff_users.router)
 admin_router.include_router(classes.router)
 admin_router.include_router(notifications.router)
 
