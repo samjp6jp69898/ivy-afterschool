@@ -1,6 +1,8 @@
 """BACKEND-093：GET /api/admin/staff-users（staff:read；分頁、搜尋、篩選）。
 BACKEND-094：POST /api/admin/staff-users（staff:write；臨時密碼只回一次）。
-BACKEND-095：GET /api/admin/staff-users/{staff_id}（staff:read）。"""
+BACKEND-095：GET /api/admin/staff-users/{staff_id}（staff:read）。
+BACKEND-096 / 097 / 098：PATCH /{staff_id}、POST /{staff_id}/reset-password、
+POST /{staff_id}/deactivate（staff:write）。"""
 
 from __future__ import annotations
 
@@ -318,3 +320,213 @@ def test_admin_staff_write_guard_registered(app: FastAPI) -> None:
     paths = app.openapi()["paths"]
     assert "post" in paths[_URL]
     assert "get" in paths[_URL + "/{staff_id}"]
+
+
+# --- BACKEND-096 / 097 / 098：PATCH、reset-password、deactivate ---------------------------------
+
+
+def _director_plus_staff_write(db_session: Session) -> list[str]:
+    director = db_session.execute(select(Role).where(Role.code == "director")).scalar_one()
+    return [*director.permissions, "staff:write"]
+
+
+def _reload(db_session: Session, staff_id: Any) -> StaffUser:
+    db_session.expire_all()
+    staff = db_session.get(StaffUser, staff_id)
+    assert staff is not None
+    return staff
+
+
+def test_admin_staff_update_success(staff_client: StaffClientFactory, db_session: Session) -> None:
+    target = make_staff(db_session, role_code="tutor", display_name="王老師")
+    admin, me = staff_client(role_code="admin")
+
+    resp = admin.patch(f"{_URL}/{target.id}", json={"display_name": "王小美"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert (body["id"], body["display_name"], body["role"]["code"]) == (
+        str(target.id),
+        "王小美",
+        "tutor",
+    )
+    assert "password_hash" not in body
+    assert _reload(db_session, target.id).display_name == "王小美"
+    [log] = db_session.execute(
+        select(AuditLog).where(
+            AuditLog.action == "staff_user.update", AuditLog.entity_id == str(target.id)
+        )
+    ).scalars()
+    assert (log.actor_id, log.after) == (me.id, {"display_name": "王小美"})
+
+
+def test_admin_staff_update_422(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    target = make_staff(db_session, role_code="tutor")
+    admin, _ = staff_client(role_code="admin")
+
+    assert_error(admin.patch(f"{_URL}/{target.id}", json={}), 422, "validation_error")
+    assert_error(
+        admin.patch(f"{_URL}/{target.id}", json={"username": "x"}), 422, "validation_error"
+    )
+    assert_error(
+        admin.patch(f"{_URL}/abc", json={"display_name": "王小美"}), 422, "validation_error"
+    )
+
+
+def test_admin_staff_update_401(api_client: TestClient, assert_error: AssertError) -> None:
+    resp = api_client.patch(f"{_URL}/{uuid4()}", json={"display_name": "王小美"})
+
+    assert_error(resp, 401, "unauthenticated")
+
+
+def test_admin_staff_update_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    admin_target = make_staff(db_session, role_code="admin")
+    tutor = make_staff(db_session, role_code="tutor", display_name="王老師")
+    lesser, _ = staff_client(permissions=_director_plus_staff_write(db_session))
+    reader, _ = staff_client(permissions=["staff:read"])
+
+    cannot_manage = lesser.patch(f"{_URL}/{admin_target.id}", json={"display_name": "x"})
+    denied = reader.patch(f"{_URL}/{tutor.id}", json={"display_name": "x"})
+    # 授出自己沒有的權限
+    beyond = lesser.patch(f"{_URL}/{tutor.id}", json={"extra_permissions": ["roles:write"]})
+
+    assert_error(cannot_manage, 403, "cannot_manage_staff")
+    assert_error(denied, 403, "permission_denied")
+    assert denied.json()["error"]["details"] == {"required": ["staff:write"]}
+    assert_error(beyond, 403, "cannot_grant_permissions")
+    assert _reload(db_session, tutor.id).display_name == "王老師"
+
+
+def test_admin_staff_update_409(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    clerk_role = db_session.execute(select(Role).where(Role.code == "clerk")).scalar_one()
+    admin, me = staff_client(role_code="admin")
+
+    own = admin.patch(f"{_URL}/{me.id}", json={"role_id": str(clerk_role.id)})
+    missing = admin.patch(f"{_URL}/{uuid4()}", json={"display_name": "王小美"})
+
+    assert_error(own, 409, "cannot_modify_self_permissions")
+    assert_error(missing, 404, "staff_user_not_found")
+    assert _reload(db_session, me.id).role.code == "admin"
+
+
+def test_admin_staff_reset_success(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    target_client, target = staff_client(role_code="tutor")
+    assert target_client.get("/api/admin/auth/me").status_code == 200
+    admin, _ = staff_client(role_code="admin")
+
+    resp = admin.post(f"{_URL}/{target.id}/reset-password")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {"temp_password"}
+    assert len(body["temp_password"]) == 12
+    assert resp.headers["cache-control"] == "no-store"
+    assert_error(target_client.get("/api/admin/auth/me"), 401, "unauthenticated")
+    reloaded = _reload(db_session, target.id)
+    assert (reloaded.must_change_password, reloaded.token_version) == (True, 1)
+
+
+def test_admin_staff_reset_422(staff_client: StaffClientFactory, assert_error: AssertError) -> None:
+    admin, _ = staff_client(role_code="admin")
+
+    assert_error(admin.post(f"{_URL}/abc/reset-password"), 422, "validation_error")
+
+
+def test_admin_staff_reset_401(api_client: TestClient, assert_error: AssertError) -> None:
+    assert_error(api_client.post(f"{_URL}/{uuid4()}/reset-password"), 401, "unauthenticated")
+
+
+def test_admin_staff_reset_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    target = make_staff(db_session, role_code="tutor")
+    reader, _ = staff_client(permissions=["staff:read"])
+
+    assert_error(reader.post(f"{_URL}/{target.id}/reset-password"), 403, "permission_denied")
+    assert _reload(db_session, target.id).token_version == 0
+
+
+def test_admin_staff_reset_404(staff_client: StaffClientFactory, assert_error: AssertError) -> None:
+    admin, _ = staff_client(role_code="admin")
+
+    assert_error(admin.post(f"{_URL}/{uuid4()}/reset-password"), 404, "staff_user_not_found")
+
+
+def test_admin_staff_reset_409_self(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    admin, me = staff_client(role_code="admin")
+
+    assert_error(admin.post(f"{_URL}/{me.id}/reset-password"), 409, "cannot_reset_self")
+    assert admin.get("/api/admin/auth/me").status_code == 200
+
+
+def test_admin_staff_deactivate_success(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    target_client, target = staff_client(role_code="tutor")
+    assert target_client.get("/api/admin/auth/me").status_code == 200
+    admin, _ = staff_client(role_code="admin")
+
+    resp = admin.post(f"{_URL}/{target.id}/deactivate")
+
+    assert resp.status_code == 200
+    assert (resp.json()["id"], resp.json()["is_active"]) == (str(target.id), False)
+    assert_error(target_client.get("/api/admin/auth/me"), 401, "unauthenticated")
+    reloaded = _reload(db_session, target.id)
+    assert (reloaded.is_active, reloaded.token_version) == (False, 1)
+
+
+def test_admin_staff_deactivate_422(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    admin, _ = staff_client(role_code="admin")
+
+    assert_error(admin.post(f"{_URL}/abc/deactivate"), 422, "validation_error")
+
+
+def test_admin_staff_deactivate_401(api_client: TestClient, assert_error: AssertError) -> None:
+    assert_error(api_client.post(f"{_URL}/{uuid4()}/deactivate"), 401, "unauthenticated")
+
+
+def test_admin_staff_deactivate_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    target = make_staff(db_session, role_code="tutor")
+    reader, _ = staff_client(permissions=["staff:read"])
+
+    assert_error(reader.post(f"{_URL}/{target.id}/deactivate"), 403, "permission_denied")
+    assert _reload(db_session, target.id).is_active is True
+
+
+def test_admin_staff_deactivate_404(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    admin, _ = staff_client(role_code="admin")
+
+    assert_error(admin.post(f"{_URL}/{uuid4()}/deactivate"), 404, "staff_user_not_found")
+
+
+def test_admin_staff_deactivate_409_self(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    admin, me = staff_client(role_code="admin")
+
+    assert_error(admin.post(f"{_URL}/{me.id}/deactivate"), 409, "cannot_deactivate_self")
+    assert admin.get("/api/admin/auth/me").status_code == 200
+
+
+def test_admin_staff_mutations_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    paths = app.openapi()["paths"]
+    assert "patch" in paths[_URL + "/{staff_id}"]
+    assert "post" in paths[_URL + "/{staff_id}/reset-password"]
+    assert "post" in paths[_URL + "/{staff_id}/deactivate"]
