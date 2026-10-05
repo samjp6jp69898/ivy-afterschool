@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 81,
-  "last_updated": "2026-10-05T05:39:28Z",
+  "version": 82,
+  "last_updated": "2026-10-05T05:41:59Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -145,7 +145,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/config.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r8",
       "depends_on": [
         "BACKEND-125",
@@ -168,9 +168,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "3 條 red_case 皆有對應測試且斷言具體（併發兩次 + 再一次共 3 次呼叫 history.get 恰 1、503 reject ApiError 後重試成功 history.get 2、500 → DEFAULT_PARENT_LIMITS 深等於且預設值與規格逐項相同、成功時 leave_future_days 90）；實跑 tdd.run 3/3 綠；b0f8a72(test) 先於 82be380(impl)；web-lint 乾淨；只 import ./http（PARENT-004）與 @/shared/types/api，無後台依賴。 記憶化：in-flight 與成功共用同一 promise，失敗時只在 cached 仍是本次 request 才清除，可重試；/parent/config 在 PARENT-004 noRefreshPaths 內。對照 public_config_service PublicConfigOut / PublicLimitsOut 欄位逐項一致。殘留：org_phone 前端宣告 string | null，後端 PublicConfigOut.org_phone 為 str（非 null），型別較寬不影響行為。"
       }
     },
     {
@@ -1593,7 +1593,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/homework.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r8",
       "depends_on": [
         "BACKEND-391",
@@ -1616,9 +1616,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "2 條 red_case 皆有對應測試且斷言具體（url 恰為 /parent/children/s1/homework 且 params undefined、回傳深等於、date params 深等於、404 code）；實跑 tdd.run 2/2 綠；b0f8a72(test) 先於 82be380(impl)；web-lint 乾淨；只 import ./http（PARENT-004）與 @/shared/types/api，無後台依賴。 對照 apps/api/app/schemas/homework.py ParentHomeworkOut / ParentHomeworkItemOut 與 api/parent/homework.py（Query alias date）一致，HomeworkItemStatus / OverallStatus 值域與共用型別一致。殘留：childId 未 encodeURIComponent（後台 api client 皆有編碼；student id 為 UUID，不影響行為）。"
       }
     },
     {
@@ -2984,7 +2984,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/notifications.ts",
       "source_ref": "FE:src/parent/api/notifications.ts::getNotificationPreferences",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r8",
       "depends_on": [
         "BACKEND-217",
@@ -3009,9 +3009,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "2 條 red_case 皆有對應測試且斷言具體（預設 params {page:1,page_size:20}、unreadOnly true 帶 unread_only、另驗 unreadOnly false 不帶參數、read / read-all url 序列與 updated）；實跑 tdd.run 2/2 綠；b0f8a72(test) 先於 82be380(impl)；web-lint 乾淨；只 import ./http（PARENT-004）與 @/shared/types/api，無後台依賴。 對照 api/parent/notifications.py：NotificationListQuery.unread_only、page_params(page, page_size)、NotificationPageOut / NotificationOut / MarkAllReadOut 一致。殘留：notification id 未 encodeURIComponent（UUID，不影響行為）；共用 Notification.deep_link 宣告 string | null，後端為 str。"
       }
     },
     {
@@ -3021,7 +3021,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/notificationPreferences.ts",
       "source_ref": "FE:src/parent/api/notifications.ts::updateNotificationPreferences",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r8",
       "depends_on": [
         "BACKEND-221",
@@ -3044,9 +3044,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "2 條 red_case 皆有對應測試且斷言具體（unwrap items 長度與 label、PUT body 深等於 {items}、回傳深等於、422 invalid_preference_event）；實跑 tdd.run 2/2 綠；b0f8a72(test) 先於 82be380(impl)；web-lint 乾淨；只 import ./http（PARENT-004）與 @/shared/types/api，無後台依賴。 對照 apps/api/app/schemas/notifications.py PreferencesOut / PreferenceItemOut / PreferencesPutIn 與路由 GET / PUT /parent/notification-preferences 一致。殘留：無。"
       }
     },
     {
