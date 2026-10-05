@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 324,
-  "last_updated": "2026-10-05T04:16:04Z",
+  "version": 325,
+  "last_updated": "2026-10-05T04:18:25Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3226,7 +3226,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": "BE:api/auth.py::list_users",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-087",
@@ -3252,9 +3252,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 6 條全綠、collect-only 全選到；89932da / 882daad 先於 b657a26。staff:read、route audit 為空；422 含 page_size 超限、role_id 非 uuid、is_active 非布林、未知參數。規格修正 eb3b645 是加嚴不是放寬：原本只查 '$argon2id$'，現加查 'password_hash' 鍵名，且 success 以 set(first) 鎖定輸出欄位；專案以 argon2-cffi 預設（argon2id）雜湊，突變把 password_hash 放進輸出欄位 → no_password_hash 轉紅。lint / typecheck 乾淨。"
       }
     },
     {
@@ -4258,7 +4258,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/reference.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-118",
@@ -4283,9 +4283,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 8 條全綠（401_403 對四個資源參數化）、collect-only 全選到；08e1e72 先於 24957ef。DELETE 掛 require_permission(SETTINGS_WRITE)，未沿用 READ_PERMISSIONS（突變改成任一讀取權限 → 8 條轉紅），只有讀取權限（settings:read + students:read + exams:read）→ 403 details.required == ['settings:write']，route audit 為空；deleted / deactivated、404 closed_day_not_found / subject_not_found。lint / typecheck 乾淨。"
       }
     },
     {
@@ -12579,7 +12579,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-453",
@@ -12606,9 +12606,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；exams:read；422 含未宣告參數與 page_size=0；403 details.required == ['exams:read']。測試 4fa92b9 先於實作 b657a26 / 3df6ea6；route audit 為空（test_admin_exams_guard_registered）；lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -12618,7 +12618,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-455",
@@ -12645,9 +12645,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；exams:write，201 draft 並斷言已 commit；422 含 extra='forbid'、invalid_exam_type；業務錯誤 grade_not_in_class 對應 service。測試 4fa92b9 先於實作 b657a26 / 3df6ea6；route audit 為空（test_admin_exams_guard_registered）；lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -12657,7 +12657,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-454",
@@ -12684,9 +12684,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；exams:read；404 exam_not_found。測試 4fa92b9 先於實作 b657a26 / 3df6ea6；route audit 為空（test_admin_exams_guard_registered）；lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -12735,7 +12735,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-457",
@@ -12762,9 +12762,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；exams:write，204 後 GET 404；published 409 exam_published。突變：改掛 exams:read → 3 條轉紅。測試 4fa92b9 先於實作 b657a26 / 3df6ea6；route audit 為空（test_admin_exams_guard_registered）；lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -12774,7 +12774,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-458",
@@ -12801,9 +12801,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；exams:write；422 重複 / 空清單 / invalid_subject；409 full_score_below_existing、exam_published；404。測試 4fa92b9 先於實作 b657a26 / 3df6ea6；route audit 為空（test_admin_exams_guard_registered）；lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。殘留（不擋）：拿掉本 handler 的 db.commit() 測試仍全綠（成功案例只看回應、沒有在請求後重讀 DB），實作本身有 commit；建議在 success 補一次 GET 確認已保存。"
       }
     },
     {
@@ -12813,7 +12813,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-459",
@@ -12840,9 +12840,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；exams:read；格狀資料 students / subjects / cells 與缺考格斷言具體值。測試 4fa92b9 先於實作 b657a26 / 3df6ea6；route audit 為空（test_admin_exams_guard_registered）；lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -12931,7 +12931,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-462",
@@ -12959,9 +12959,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；exams:publish（只有 exams:write → 403 且 details.required == ['exams:publish']，狀態不變）；draft 409 exam_not_published。突變：改掛 exams:write → 4 條轉紅。測試 4fa92b9 先於實作 b657a26 / 3df6ea6；route audit 為空（test_admin_exams_guard_registered）；lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -12971,7 +12971,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-463",
@@ -12998,9 +12998,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；exams:read；average / scored / absent / missing / max / min 具體值。測試 4fa92b9 先於實作 b657a26 / 3df6ea6；route audit 為空（test_admin_exams_guard_registered）；lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -13010,7 +13010,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-464",
@@ -13037,9 +13037,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；exams:read；student_exams_router 掛在 /students 前綴，students.py 只有 /{student_id} 與 /{student_id}/guardians，無路徑衝突；404 student_not_found。突變：拿掉守衛 → route audit 等 3 條轉紅。測試 4fa92b9 先於實作 b657a26 / 3df6ea6；route audit 為空（test_admin_exams_guard_registered）；lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -13202,7 +13202,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/dashboard.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-491",
@@ -13228,9 +13228,9 @@
         "notes": "無 query / body 參數，422 不適用，以 405 案例取代。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 6 條全綠、collect-only 全選到；31035f9 先於 b657a26。dashboard:read（突變改掛 students:read → 4 條轉紅）、route audit 為空、非營業日 is_service_day=false 且 expected_total / not_arrived 為 0；red_cases 的修改（補 clock、各計數與 keys）為加嚴。lint / typecheck 乾淨。殘留（不擋）：儀表板計數涵蓋整個 DB，共用 DB 若有其他測試殘留的 committed 學生 / 出勤列會讓 test_admin_dashboard_success 的 expected_total 失準。"
       }
     },
     {
