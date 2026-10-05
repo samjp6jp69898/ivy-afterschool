@@ -576,6 +576,26 @@ def test_sync_reply_no_open_request(db_session: Session, clock: FakeClock) -> No
     assert sync_open_request_reply(db_session, ming.id, _TODAY, clock=clock) is None
 
 
+def _people_counts() -> tuple[int, int]:
+    with connect_owner() as conn:
+        staff = conn.execute("select count(*) from public.staff_users").fetchone()
+        roles = conn.execute("select count(*) from public.roles where not is_system").fetchone()
+    assert staff is not None
+    assert roles is not None
+    return staff[0], roles[0]
+
+
+@pytest.fixture
+def no_people_residue() -> Iterator[None]:
+    """BACKEND-546：committing 測試結束（含 owner 清理）後 staff_users 與自訂角色筆數不變。
+
+    放在參數第一個：最先建立、最後拆除，拆除時其他清理 fixture 都已執行完。
+    """
+    before = _people_counts()
+    yield
+    assert _people_counts() == before
+
+
 @pytest.fixture
 def owner_cleanup_students() -> Iterator[list[UUID]]:
     """committing 測試建立的學生以 owner 連線刪除；排在 committing_db_session 之前
@@ -591,6 +611,7 @@ def owner_cleanup_students() -> Iterator[list[UUID]]:
 
 @pytest.mark.cleanup_tables("pickup_requests", "homework_daily_progress")
 def test_sync_reply_locks_request_row(
+    no_people_residue: None,
     owner_cleanup_students: list[UUID],
     committing_db_session: Session,
     db_engine: Engine,
