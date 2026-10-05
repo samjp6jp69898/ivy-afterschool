@@ -300,7 +300,7 @@ def test_nginx_config_syntax_valid(run_cmd: RunCmd) -> None:
 
 
 _BACKEND_CONF = (
-    "server { listen 8080; location / { default_type text/plain; "
+    "server { listen [::]:8080; location / { default_type text/plain; "
     'return 200 "xff=[$http_x_forwarded_for]"; } }'
 )
 
@@ -311,6 +311,7 @@ class _NginxProbe:
     def __init__(self, run_cmd: RunCmd, trusted: str) -> None:
         self.run_cmd = run_cmd
         suffix = uuid4().hex[:8]
+        self.suffix = f"{suffix[:4]}:{suffix[4:]}"
         self.network = f"afterschool-nginx-probe-{suffix}"
         self.backend = f"afterschool-nginx-backend-{suffix}"
         self.web = f"afterschool-nginx-web-{suffix}"
@@ -324,7 +325,10 @@ class _NginxProbe:
 
     def start(self) -> None:
         mounts = _nginx_mounts()
-        self._docker("network", "create", self.network)
+        # 與正式環境一致：後端只監聽 IPv6，network 啟用 IPv6 讓 docker DNS 回 AAAA
+        self._docker(
+            "network", "create", "--ipv6", "--subnet", f"fd00:{self.suffix}::/64", self.network
+        )
         self._docker(
             "run",
             "-d",

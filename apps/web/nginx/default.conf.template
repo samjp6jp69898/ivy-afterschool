@@ -32,7 +32,7 @@ server {
     real_ip_recursive on;
 
     # proxy_pass 用變數形式：nginx 依 DNS TTL 重新解析 api 的 private DNS（api 重新部署換 IP 後自動收斂）
-    resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv6=on;
+    resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv4=off ipv6=on;
     set $backend_upstream ${BACKEND_URL};
 
     # X-Forwarded-For 一律以 $remote_addr（real_ip 處理後的真實 client IP）覆寫，
