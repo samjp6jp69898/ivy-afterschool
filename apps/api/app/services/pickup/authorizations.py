@@ -1,7 +1,13 @@
-"""BACKEND-421 / 423：代理接送授權列表（家長端、後台核驗清單）。
+"""代理接送授權（domain_spec M7）。
 
-兩者都只回 ``code_last4``，不回 ``code_hash``（單向 HMAC，明碼只在建立時回傳一次）。
-``effective_status``：active 且 service_date 早於今天（台北）→ ``expired``，其餘同 status。
+- BACKEND-421 / 423：代理接送授權列表（家長端、後台核驗清單）。
+- BACKEND-420：``create_authorization``（家長建立單日代理授權，產生接送碼）。
+- BACKEND-424：``load_verifiable_authorization``（verify / confirm_visual_match / override 共用的
+  鎖定與檢查）。
+
+列表只回 ``code_last4``，不回 ``code_hash``（單向 HMAC）；明碼只在建立時的回應出現一次，DB 與 log
+都不保存。``effective_status``：active 且 service_date 早於今天（台北）→ ``expired``，其餘同
+status。
 """
 
 from __future__ import annotations
@@ -10,21 +16,29 @@ from datetime import date, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api.deps import CurrentParent
 from app.core.clock import Clock
+from app.core.errors import AppError, ConflictError, NotFoundError
+from app.core.settings_registry import PICKUP_AUTHORIZATION
 from app.core.storage import Storage
 from app.models.account import StaffUser
-from app.models.pickup import PickupAuthorization
-from app.repositories.students import student_brief_map
+from app.models.pickup import PickupAuthorization, PickupPerson
+from app.realtime.publish import broadcast_after_commit
+from app.repositories.students import get_student_or_404, student_brief_map
 from app.schemas.pickup import (
+    PickupAuthorizationCreatedOut,
+    PickupAuthorizationCreateIn,
     PickupAuthorizationOut,
     PickupStudentOut,
     StaffAuthorizationListQuery,
     StaffAuthorizationOut,
 )
+from app.services.pickup.codes import generate_pickup_code, hash_pickup_code, pickup_code_last4
 from app.services.pickup.persons import signed_photo_url
+from app.services.settings_service import get_setting
 
 CHILD_LIST_WINDOW_DAYS = 30
 
@@ -132,3 +146,118 @@ def list_authorizations_for_staff(
             )
         )
     return rows
+
+
+def create_authorization(
+    session: Session,
+    student_id: UUID,
+    data: PickupAuthorizationCreateIn,
+    *,
+    parent: CurrentParent,
+    clock: Clock,
+) -> PickupAuthorizationCreatedOut:
+    """呼叫端已以 ``get_owned_student_for_write`` 驗證所有權。
+
+    移植 ivy ``api/parent_portal/pickup.py::create_authorizations`` 的日期範圍與接送人快照；去掉一次
+    多孩、batch_key、可逆加密、連動建立接送請求。先鎖學生列再計數，並發建立時上限仍成立。
+    """
+    settings = get_setting(session, PICKUP_AUTHORIZATION)
+    today = clock.today()
+    if not today <= data.service_date <= today + timedelta(days=settings.max_days_ahead):
+        raise AppError(
+            "invalid_service_date",
+            f"代理接送日期必須在今天起 {settings.max_days_ahead} 天內",
+            status=422,
+            details={"max_days_ahead": settings.max_days_ahead},
+        )
+
+    if data.pickup_person_id is not None:
+        person = session.execute(
+            select(PickupPerson).where(
+                PickupPerson.id == data.pickup_person_id,
+                PickupPerson.student_id == student_id,
+                PickupPerson.archived_at.is_(None),
+            )
+        ).scalar_one_or_none()
+        if person is None:
+            raise NotFoundError("pickup_person_not_found", "找不到接送人")
+        proxy_name, proxy_phone = person.name, person.phone
+    else:
+        if data.proxy_name is None or data.proxy_phone is None:
+            # schema 已保證臨時代理模式兩者皆有值；走到這裡是程式錯誤
+            raise ValueError("臨時代理模式必須提供 proxy_name 與 proxy_phone")
+        proxy_name, proxy_phone = data.proxy_name, data.proxy_phone
+
+    # 同一學生的建立在學生列上序列化：計數與寫入之間不會被另一個交易插入
+    get_student_or_404(session, student_id, include_archived=True, for_update=True)
+    active_count = session.execute(
+        select(func.count())
+        .select_from(PickupAuthorization)
+        .where(
+            PickupAuthorization.student_id == student_id,
+            PickupAuthorization.service_date == data.service_date,
+            PickupAuthorization.status == "active",
+        )
+    ).scalar_one()
+    if active_count >= settings.max_active_per_day:
+        raise ConflictError(
+            "authorization_limit_reached",
+            f"同一天最多建立 {settings.max_active_per_day} 筆代理接送授權",
+            details={"max_active_per_day": settings.max_active_per_day},
+        )
+
+    code = generate_pickup_code()
+    auth = PickupAuthorization(
+        student_id=student_id,
+        service_date=data.service_date,
+        pickup_person_id=data.pickup_person_id,
+        proxy_name=proxy_name,
+        proxy_phone=proxy_phone,
+        code_hash=hash_pickup_code(code),
+        code_last4=pickup_code_last4(code),
+        status="active",
+        created_by_parent_id=parent.id,
+    )
+    session.add(auth)
+    session.flush()
+
+    out = PickupAuthorizationOut(**_base_fields(auth, today))
+    broadcast_after_commit(
+        session,
+        topic="pickup",
+        type="pickup.authorization_updated",
+        data=out.model_dump(),
+        clock=clock,
+    )
+    return PickupAuthorizationCreatedOut(authorization=out, code=code)
+
+
+def load_verifiable_authorization(
+    session: Session, auth_id: UUID, *, clock: Clock, allow_locked: bool = False
+) -> PickupAuthorization:
+    """鎖定（FOR UPDATE）並檢查可核銷；鎖定後不自動解鎖，只有 override 以 allow_locked 處理。
+
+    移植 ivy ``services/pickup_verification.py::_load_active``；ivy 的 403 collapse 改為 404 / 409
+    分開（後台員工本來就看得到全部授權清單，不需防列舉）。
+    """
+    auth = session.execute(
+        select(PickupAuthorization)
+        .where(PickupAuthorization.id == auth_id)
+        # pickup_person 是 joined（outer join 的可空側不能鎖），只鎖授權列；populate_existing 以
+        # 上鎖後的 DB 現值覆蓋同 session 內已載入的舊屬性
+        .with_for_update(of=PickupAuthorization)
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if auth is None:
+        raise NotFoundError("pickup_authorization_not_found", "找不到代理接送授權")
+    if auth.status != "active":
+        raise ConflictError(
+            "authorization_not_active",
+            "此代理接送授權已完成或已取消",
+            details={"status": auth.status},
+        )
+    if auth.service_date != clock.today():
+        raise ConflictError("authorization_not_today", "此代理接送授權不是今天的")
+    if auth.code_locked_at is not None and not allow_locked:
+        raise ConflictError("pickup_code_locked", "接送碼錯誤次數過多已鎖定，請由老師確認後處理")
+    return auth
