@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 74,
-  "last_updated": "2026-10-05T02:47:06Z",
+  "version": 75,
+  "last_updated": "2026-10-05T04:15:36Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -1490,7 +1490,7 @@
     {
       "id": "PARENT-053",
       "title": "建立 TodayStatusCard 元件：今日出勤、作業進度、預計可接送時間與接送狀態",
-      "description": "建立 `apps/web/src/parent/components/home/TodayStatusCard.vue`：\n```ts\nprops: { today: TodayState | null /* PARENT-052 */ }\nemits: { 'request-pickup': []; 'arrive-now': []; 'open-homework': []; 'open-pickup': [] }\n```\n**區塊**（狀態文字與 tone 一律取 FRONTEND-005 statusMeta，時間一律以 FRONTEND-003 轉台北 HH:MM）：\n1. `today === null`：顯示佔位（由頁面決定是否改顯示骨架）。非營業日（`is_service_day === false`）：整張卡只顯示「今天安親班休息」，不顯示其他區塊與按鈕。\n2. 出勤：StatusPill（PARENT-051）+ 說明：`on_leave` 為 true →「今日請假（{leave.leave_type_label}）」與請假期間；否則 `present` →「15:40 到班」；`left` →「17:20 離班」；`absent` →「今日缺席」；`expected` →「尚未到班」；null →「尚無出勤紀錄」。\n3. 作業：「作業進度 {done_count}/{item_count}」+ 進度條 + 整體狀態 StatusPill；`item_count === 0` 且 overall 非 done →「今天尚無作業項目」；整個區塊可點 emit `open-homework`。\n4. 預計可接送：overall `done` →「作業已完成，可以來接送了」；否則 `ready_eta` 有值 →「預計 HH:MM 可接送」，無值 →「老師尚未提供預計時間」；`note` 有值另起一行「老師說明：{note}」。\n5. 接送：`pickup_request` 為 null 或 cancelled / expired → 主要按鈕「我要來接」emit `request-pickup`，旁邊次要按鈕（outlined）「我已經到了」emit `arrive-now`；`on_leave` 或出勤為 absent / left 時兩個按鈕都停用並顯示原因（「今日請假」/「今日缺席」/「已離班」）。（接送權限 `can_pickup` 由 PickupView 檢查，首頁不另外請求。）pending / acknowledged / arrived → StatusPill 狀態 + PARENT-094 PickupReplyMessage（compact，含「系統自動回覆 / 老師回覆」標示）+「查看接送」按鈕 emit `open-pickup`；`can_mark_arrived` 為 true 時另顯示主要按鈕「我到了」emit `arrive-now`；completed →「HH:MM 已由 {picked_up_by_name} 接走」（`completed_at` / `picked_up_by_name` 由 `/today` 首次載入即提供，ws 更新同樣帶入）；兩者任一為 null 時退回「今天已接走」。\n\n新寫元件（ivy 首頁為幼稚園聯絡簿 / 娃娃車卡片，不適用）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-today-status-card.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：非營業日；出勤 expected / present / left / absent / 請假（含假別與期間）；作業 0 項 / 進行中 1/3 / 全部完成；ready_eta 有 / 無、含老師說明；接送無請求（「我要來接」+「我已經到了」可按 / 因請假或離班停用）、進行中且可按「我到了」、pending 系統自動回覆、acknowledged 老師回覆、arrived、completed（含接走時間與接走人；欄位缺漏時的退回文案）；today 為 null 的佔位。可併入 `parent-page-child-hub.html`。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/home/TodayStatusCard.vue`：\n```ts\nprops: { today: TodayState | null /* PARENT-052 */ }\nemits: { 'request-pickup': []; 'arrive-now': []; 'open-homework': []; 'open-pickup': [] }\n```\n**區塊**（狀態文字與 tone 一律取 FRONTEND-005 statusMeta，時間一律以 FRONTEND-003 轉台北 HH:MM）：\n1. `today === null`：顯示佔位（由頁面決定是否改顯示骨架）。非營業日（`is_service_day === false`）：整張卡只顯示「今天安親班休息」，不顯示其他區塊與按鈕。\n2. 出勤：StatusPill（PARENT-051）+ 說明（`on_leave` 優先於 `attendance.status`：BACKEND-525 在有請假但當天尚無出勤列時 status 回 `expected`、on_leave 為 true，此時仍顯示請假）：`on_leave` 為 true →「今日請假（{leave.leave_type_label}）」與請假期間；否則 `present` →「15:40 到班」；`left` →「17:20 離班」；`absent` →「今日缺席」；`expected` →「尚未到班」；null →「尚無出勤紀錄」。\n3. 作業：「作業進度 {done_count}/{item_count}」+ 進度條 + 整體狀態 StatusPill；`item_count === 0` 且 overall 非 done →「今天尚無作業項目」；整個區塊可點 emit `open-homework`。\n4. 預計可接送：overall `done` →「作業已完成，可以來接送了」；否則 `ready_eta` 有值 →「預計 HH:MM 可接送」，無值 →「老師尚未提供預計時間」；`note` 有值另起一行「老師說明：{note}」。\n5. 接送：`pickup_request` 為 null 或 cancelled / expired → 主要按鈕「我要來接」emit `request-pickup`，旁邊次要按鈕（outlined）「我已經到了」emit `arrive-now`；`on_leave` 或出勤為 absent / left 時兩個按鈕都停用並顯示原因（「今日請假」/「今日缺席」/「已離班」）。（接送權限 `can_pickup` 由 PickupView 檢查，首頁不另外請求。）pending / acknowledged / arrived → StatusPill 狀態 + PARENT-094 PickupReplyMessage（compact，含「系統自動回覆 / 老師回覆」標示）+「查看接送」按鈕 emit `open-pickup`；`can_mark_arrived` 為 true 時另顯示主要按鈕「我到了」emit `arrive-now`；completed →「HH:MM 已由 {picked_up_by_name} 接走」（`completed_at` / `picked_up_by_name` 由 `/today` 首次載入即提供，ws 更新同樣帶入）；兩者任一為 null 時退回「今天已接走」。\n\n新寫元件（ivy 首頁為幼稚園聯絡簿 / 娃娃車卡片，不適用）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-today-status-card.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：非營業日；出勤 expected / present / left / absent / 請假（含假別與期間）；作業 0 項 / 進行中 1/3 / 全部完成；ready_eta 有 / 無、含老師說明；接送無請求（「我要來接」+「我已經到了」可按 / 因請假或離班停用）、進行中且可按「我到了」、pending 系統自動回覆、acknowledged 老師回覆、arrived、completed（含接走時間與接走人；欄位缺漏時的退回文案）；today 為 null 的佔位。可併入 `parent-page-child-hub.html`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/home/TodayStatusCard.vue",
       "source_ref": null,
@@ -1524,7 +1524,8 @@
           "TodayStatusCard closed day：is_service_day=false → 只含 '今天安親班休息'，無任何 button",
           "TodayStatusCard empty homework：homework.item_count=0、overall 'not_started' → 含 '今天尚無作業項目'；ready_eta=null → 含 '老師尚未提供預計時間'",
           "TodayStatusCard arrive now entry without request：pickup_request=null、attendance present → 存在「我已經到了」按鈕，點擊 → emitted('arrive-now').length === 1；on_leave=true → 「我已經到了」disabled",
-          "TodayStatusCard arrived button for open request：pickup_request {status:'acknowledged', can_mark_arrived:true} → 含「我到了」，點擊 emit arrive-now；can_mark_arrived=false（status arrived）→ 無「我到了」與「我已經到了」"
+          "TodayStatusCard arrived button for open request：pickup_request {status:'acknowledged', can_mark_arrived:true} → 含「我到了」，點擊 emit arrive-now；can_mark_arrived=false（status arrived）→ 無「我到了」與「我已經到了」",
+          "TodayStatusCard on_leave overrides expected status：attendance {status:'expected'}、on_leave=true、leave {leave_type_label:'事假', start_date:'2026-10-02', end_date:'2026-10-02'} → 膠囊文字為 '請假'、含 '今日請假（事假）'，不含 '尚未到班'；兩個接送按鈕皆 disabled"
         ],
         "run": "just web-test src/parent/components/home/TodayStatusCard.spec.ts -t \"TodayStatusCard\"",
         "notes": ""

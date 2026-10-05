@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 321,
-  "last_updated": "2026-10-05T04:14:54Z",
+  "version": 322,
+  "last_updated": "2026-10-05T04:15:36Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14185,7 +14185,7 @@
         "BACKEND-404"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "有請假但當天尚無出勤列（每日初始化未跑）時 attendance.status 回 expected、on_leave=true；家長端以 on_leave 為權威欄位優先顯示請假（PARENT-053 已明定），本 service 不改。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_parent_today_service.py",
