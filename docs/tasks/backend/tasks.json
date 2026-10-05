@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 341,
-  "last_updated": "2026-10-05T05:35:54Z",
+  "version": 342,
+  "last_updated": "2026-10-05T05:36:34Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2850,7 +2850,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/roles.py",
       "source_ref": "BE:api/permissions_admin.py::update_role",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-079",
@@ -2875,9 +2875,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 7 條全綠、collect-only 對照全選到；b0f4b27 先於 eb1d7e7。roles:write、注入 request meta、route audit 為空；422 空 body / 送 code / 非 uuid；409 system_role_protected、404；另有唯一管理者降權自己 → 409 last_role_manager 且重讀 DB 確認未套用。拿掉 commit → 轉紅。lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -4917,7 +4917,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/classes.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-138",
@@ -4943,9 +4943,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；dfaec41 先於 eede536。classes:write；成功後重讀（拿掉 commit → 轉紅）；409 class_archived、404。lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -4955,7 +4955,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/classes.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-139",
@@ -4981,9 +4981,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；dfaec41 先於 eede536。classes:write；成功後重讀（拿掉 commit → 轉紅）；409 class_has_students。lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -4993,7 +4993,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/classes.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-140",
@@ -5019,9 +5019,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；dfaec41 先於 eede536。classes:write（突變改掛 classes:read → 4 條轉紅）；整批取代；422 role 非法 / invalid_staff；409 class_archived。lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。殘留（不擋）：拿掉 handler 的 db.commit() 測試仍全綠（成功案例只看回應），實作本身有 commit；建議在 success 後 GET 班級確認 staff 已保存。"
       }
     },
     {
@@ -8087,7 +8087,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-311",
@@ -8114,9 +8114,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；5d35958 / 64b6c4e（測試）先於 2f8f9eb（實作）。attendance:read、route audit 為空；422 含不合法日期 / status；不存在的班回空集合。lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -8126,7 +8126,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-305",
@@ -8153,9 +8153,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；5d35958 / 64b6c4e（測試）先於 2f8f9eb（實作）。attendance:operate（突變改掛 attendance:read → 4 條轉紅）；body 可省略、extra 欄位 422；成功後另開查詢確認已 commit（拿掉 commit → 轉紅）；409 already_checked_in / student_on_leave。lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -8243,7 +8243,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-309",
@@ -8270,9 +8270,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；5d35958 / 64b6c4e（測試）先於 2f8f9eb（實作）。attendance:operate（突變改掛 attendance:read → 4 條轉紅）；成功後重讀 DB（拿掉 commit → 轉紅）；409 already_checked_in。lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -8282,7 +8282,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-310",
@@ -8310,9 +8310,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；5d35958 / 64b6c4e（測試）先於 2f8f9eb（實作）。attendance:amend（突變改掛 attendance:operate → 4 條轉紅）；注入 get_request_meta。規格修正 c6c52fd 是加嚴：audit 由「ip 非空」改為以 TestClient(client=('203.0.113.5', ...)) 斷言 ip == '203.0.113.5'，並加斷 actor、after.reason、check_in_at null；{'reason':'x'} 指定為 schema 層 validation_error（原本只寫 422），另補 status='leave' 與非 uuid path。拿掉 commit → 轉紅；409 attendance_managed_by_leave、404 attendance_not_found。lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -8322,7 +8322,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-312",
@@ -8349,9 +8349,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；5d35958 / 64b6c4e（測試）先於 2f8f9eb（實作）。attendance:read；422 缺 month / month 格式；班級篩選。lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -8361,7 +8361,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-312",
@@ -8390,9 +8390,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；5d35958 / 64b6c4e（測試）先於 2f8f9eb（實作）。attendance:read；xlsx content-type、Content-Disposition 為 RFC 5987 filename*=UTF-8''，unquote 後檔名正確（含不給 class_id 的「全部」）、load_workbook 驗 A1 標題與 A3 學號；404 class_not_found。lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。殘留（不擋）：(1) security middleware 已對 /api/ 加 no-store，拿掉 handler 的 Cache-Control 測試仍綠（行為正確）；(2) quote() 預設 safe='/'，班名含 '/' 時檔名中的 '/' 不會被編碼（瀏覽器會自行替換，建議改 quote(..., safe='')）。"
       }
     },
     {
@@ -8865,7 +8865,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/leaves.py",
       "source_ref": "BE:api/student_leaves.py::list_leaves",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-347",
@@ -8892,9 +8892,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；d2b0b32 先於 3417272。leaves:read（突變改掛 attendance:read → 轉紅）；422 含 status / date_from > date_to；空篩選 total 0。lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -8983,7 +8983,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/leaves.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-350",
@@ -9011,9 +9011,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；d2b0b32 先於 3417272。leaves:read；回應只有 url / expires_in（不另外回 storage_path 欄位，物件鍵只出現在簽發 URL 本身）、expires_in 300；附件屬另一筆請假 → 404 attachment_not_found。lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。殘留（不擋）：no-store 已由 middleware 全域加上，handler 那行無法被測試區分。"
       }
     },
     {
@@ -9743,7 +9743,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/homework.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-383",
@@ -9770,9 +9770,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 6 條全綠、collect-only 對照全選到；75799b9 先於 32560fd。homework:read（突變改掛 attendance:read → 4 條轉紅）、route audit 為空；不存在的班回空。lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -11134,7 +11134,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/dismissal_calls.py::list_dismissal_calls",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-414",
@@ -11161,9 +11161,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；e6049bd 先於 e417332。pickup:read（突變改掛 homework:read → 轉紅）；空日 counts 全 0。lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -11369,7 +11369,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/dismissal_pos.py::get_dismissal_pos_status",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-415",
@@ -11396,9 +11396,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；e6049bd 先於 e417332。pickup:read；class_id 非 uuid 422；不存在的班回空。lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
@@ -11408,7 +11408,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/pickup_authorizations.py::list_authorizations",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-423",
@@ -11436,9 +11436,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；e6049bd 先於 e417332。pickup:read；code_last4 為 4 位數字且回應不含 code_hash；status 篩選。lint / typecheck 乾淨；跑前後 staff_users / roles / students 筆數不變。"
       }
     },
     {
