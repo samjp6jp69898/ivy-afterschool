@@ -5,7 +5,7 @@ BACKEND-352：POST /api/admin/leaves（員工代登記）。"""
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date
+from datetime import date, timedelta
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI
@@ -306,4 +306,36 @@ def test_admin_leaves_create_409(
             select(func.count()).select_from(StudentLeave).where(StudentLeave.student_id == ming.id)
         ).scalar_one()
         == 1
+    )
+
+
+def test_admin_leaves_create_many_prior_leaves(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    """該生已有 200 筆以上 start_date 較晚的（已取消）請假時，新請假仍 201 且回傳的是新建那筆。"""
+    ming = make_student(db_session, name="王小明")
+    for offset in range(205):
+        make_leave(
+            db_session,
+            ming,
+            start_date=date(2026, 10, 1) + timedelta(days=offset),
+            status="cancelled",
+        )
+    client, _ = staff_client(permissions=["leaves:write"])
+
+    resp = client.post(
+        _URL, json=_leave_body(ming.id, start_date="2026-09-01", end_date="2026-09-01")
+    )
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert (body["start_date"], body["status"]) == ("2026-09-01", "active")
+    db_session.expire_all()
+    leave = db_session.execute(
+        select(StudentLeave).where(StudentLeave.id == UUID(body["id"]))
+    ).scalar_one()
+    assert (leave.student_id, leave.start_date, leave.status) == (
+        ming.id,
+        date(2026, 9, 1),
+        "active",
     )
