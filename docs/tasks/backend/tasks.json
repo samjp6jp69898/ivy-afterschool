@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 380,
-  "last_updated": "2026-10-05T06:00:49Z",
+  "version": 381,
+  "last_updated": "2026-10-05T06:02:07Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -8677,7 +8677,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_service.py",
       "source_ref": "BE:api/parent_portal/leaves.py::cancel_leave",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-345",
@@ -8707,9 +8707,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。紅測 7f0c549 先於實作 4998e57。tdd.run 全綠且 --collect-only 對照選到每條 red_case；相關測試檔（audit / staff_user / leave / homework / services/pickup / staff_users endpoints / attendance）共 340 passed；lint / typecheck 乾淨；測試以 app_backend 連線；跑前跑後 owner 查人員、自訂 roles、出勤、通知、接送、請假、附件、作業、audit 等表皆 0 列（無殘列）；突變在 scratchpad 複本執行。 FOR UPDATE 鎖請假列；不存在與他人小孩同一 404；非 active 409；家長 scope='all' → ValueError；未開始（含今天）整筆取消並全部還原；已開始未結束 → end_date = 今天 - 1、status 維持 active、from_date=today 還原、寫 leave.truncate（before / after end_date）；已全部過去 remaining 409、員工 all 可整筆取消；通知區間正確；已到班列不受影響。突變：truncate 稽核 action 改錯 → 紅。殘留：FOR UPDATE 沒有測試覆蓋（拿掉鎖的突變仍全綠）；驗收標準未列並發，無鎖時兩筆同時取消會各發一則 leave.cancelled。"
       }
     },
     {
@@ -8790,7 +8790,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_service.py",
       "source_ref": "BE:api/parent_portal/leaves.py::upload_leave_attachment",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-345",
@@ -8819,9 +8819,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。紅測 7f0c549 先於實作 4998e57。tdd.run 全綠且 --collect-only 對照選到每條 red_case；相關測試檔（audit / staff_user / leave / homework / services/pickup / staff_users endpoints / attendance）共 340 passed；lint / typecheck 乾淨；測試以 app_backend 連線；跑前跑後 owner 查人員、自訂 roles、出勤、通知、接送、請假、附件、作業、audit 等表皆 0 列（無殘列）；突變在 scratchpad 複本執行。 404（他人 / 不存在同一）、409 leave_not_active、409 attachment_limit_reached（details.max_attachments）、read_validated_upload 415 / 413、build_object_path（<leave_id>/<hex>.<ext>，不用使用者檔名）、StorageError → 502 且無附件列、flush 失敗刪除剛上傳的物件；回傳短效 URL。殘留：實作自加的「計數前 FOR UPDATE 鎖請假列」防並發超過上限，但沒有測試覆蓋（拿掉鎖的突變仍全綠）；risk_notes 既有的「上傳成功後交易 rollback 留孤兒物件」照舊。"
       }
     },
     {
@@ -9368,7 +9368,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-372",
@@ -9396,9 +9396,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。紅測 ca19d86 先於實作 c84e9f8。tdd.run 全綠且 --collect-only 對照選到每條 red_case；相關測試檔（audit / staff_user / leave / homework / services/pickup / staff_users endpoints / attendance）共 340 passed；lint / typecheck 乾淨；測試以 app_backend 連線；跑前跑後 owner 查人員、自訂 roles、出勤、通知、接送、請假、附件、作業、audit 等表皆 0 列（無殘列）；突變在 scratchpad 複本執行。 lock_progress_row 後才查 items 推導（突變：推導移到上鎖前 → 並發測試紅）；寫回覆蓋手動 done；今天的非 done → done 才 handle_homework_done，過去日期不通知、重算不重複通知；兩連線各完成一項 → 最終 done、homework.done 1 則；鎖序進度列 → 請求列（sync_open_request_reply）與 407 / 413 一致。"
       }
     },
     {
@@ -9591,7 +9591,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-373",
@@ -9618,9 +9618,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。紅測 ca19d86 先於實作 c84e9f8。tdd.run 全綠且 --collect-only 對照選到每條 red_case；相關測試檔（audit / staff_user / leave / homework / services/pickup / staff_users endpoints / attendance）共 340 passed；lint / typecheck 乾淨；測試以 app_backend 連線；跑前跑後 owner 查人員、自訂 roles、出勤、通知、接送、請假、附件、作業、audit 等表皆 0 列（無殘列）；突變在 scratchpad 複本執行。 學生 404、check_service_date、lock_progress_row；done 不論項目、auto 依項目重算；無項目標 done 通知一次、重複標不再通知；共用 _apply_overall 與 375 相同的通知與快照規則。"
       }
     },
     {
@@ -10420,7 +10420,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": "BE:api/portal/dismissal_calls.py::_db_complete",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-405",
@@ -10452,9 +10452,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。紅測 b717956 先於實作 4f270ce。tdd.run 全綠且 --collect-only 對照選到每條 red_case；相關測試檔（audit / staff_user / leave / homework / services/pickup / staff_users endpoints / attendance）共 340 passed；lint / typecheck 乾淨；測試以 app_backend 連線；跑前跑後 owner 查人員、自訂 roles、出勤、通知、接送、請假、附件、作業、audit 等表皆 0 列（無殘列）；突變在 scratchpad 複本執行。 先無鎖讀請求（404）；guardian 須屬於該生且未封存（422）、can_pickup（409）；override 需 pickup:override（403，details.required）且忽略 guardian_id（risk_notes 已處理，有測試；突變：override 時寫入 guardian → 紅）；transition_request 條件式完成（arrived_at coalesce）；override 寫 pickup.override_complete（before 原狀態、after note）；mark_left_by_pickup；pickup.completed picked_up_by 為監護人姓名或「老師確認交付」；兩員工同時完成一成一 409、通知 1 則。鎖序 請求列 → 出勤列。殘留：audit before.status 取自完成前的無鎖讀取，與條件式 UPDATE 之間若狀態剛變動（例如 pending → arrived）會記成舊值。"
       }
     },
     {
@@ -10983,7 +10983,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:services/pickup_verification.py::_complete",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-424",
@@ -11011,9 +11011,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。紅測 b717956 先於實作 4f270ce。tdd.run 全綠且 --collect-only 對照選到每條 red_case；相關測試檔（audit / staff_user / leave / homework / services/pickup / staff_users endpoints / attendance）共 340 passed；lint / typecheck 乾淨；測試以 app_backend 連線；跑前跑後 owner 查人員、自訂 roles、出勤、通知、接送、請假、附件、作業、audit 等表皆 0 列（無殘列）；突變在 scratchpad 複本執行。 auth 已由 424 鎖定 → completed / verified_*；有進行中請求 → transition_request 完成（picked_up_by_authorization_id、completion_method、arrived_at coalesce），否則新增 source proxy 的已完成請求（突變：一律新增 → 紅）；mark_left_by_pickup；pickup.completed picked_up_by「代理人 李阿姨」；publish_request_change + pickup.authorization_updated；photo_url=None 依協調者裁定維持。鎖序 授權列 → 請求列 → 出勤列。全專案鎖序檢查：407 / 413 / 375 / 376 / 381 / 382 為 進度列 → 請求列，410 為 請求列 → 出勤列，307 / 305 / 306 / 308 只鎖出勤列，424 / 523 只鎖授權列，皆與本方法相容；唯一反向路徑是 BACKEND-529 close_out_inactive_student（先取消請求列、後取消授權列），已在 scratchpad 以真實函式重現 40P01（見協調者回報），修正應在 529（授權列必須先於請求列），本 task 的順序受 424 先鎖授權列限制無法反轉，故不打回。"
       }
     },
     {
@@ -14294,7 +14294,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-527",
@@ -14322,9 +14322,9 @@
         "notes": "無 query / body 參數，422 不適用；以路由順序案例確認 path 不被 /{staff_id} 的 UUID 驗證攔截。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。紅測 29af3ec 先於實作 35e1c55。tdd.run 全綠且 --collect-only 對照選到每條 red_case；相關測試檔（audit / staff_user / leave / homework / services/pickup / staff_users endpoints / attendance）共 340 passed；lint / typecheck 乾淨；測試以 app_backend 連線；跑前跑後 owner 查人員、自訂 roles、出勤、通知、接送、請假、附件、作業、audit 等表皆 0 列（無殘列）；突變在 scratchpad 複本執行。 @router.get('/options') 註冊在 '/{staff_id}' 之前（突變：移到之後 → 3 紅）；require_any_permission(classes:write, staff:read)，兩者皆無 403 且 details.required == ['classes:write','staff:read']、401；只含啟用員工、keys == {id, display_name}；route audit 不在未守衛清單且整體為空。"
       }
     },
     {
@@ -15016,7 +15016,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/audit_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-102",
@@ -15039,9 +15039,9 @@
         "notes": "test_audit_service.py 的路徑以 BACKEND-102 既有測試檔為準。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。紅測 a47f562 先於實作 35c1e8b。tdd.run 全綠且 --collect-only 對照選到每條 red_case；相關測試檔（audit / staff_user / leave / homework / services/pickup / staff_users endpoints / attendance）共 340 passed；lint / typecheck 乾淨；測試以 app_backend 連線；跑前跑後 owner 查人員、自訂 roles、出勤、通知、接送、請假、附件、作業、audit 等表皆 0 列（無殘列）；突變在 scratchpad 複本執行。 _NON_SENSITIVE_KEYS 以 lowered in frozenset 精確比對（不分大小寫、巢狀同樣適用），MUST_CHANGE_PASSWORD_HINT、token_version_secret、password / temp_password / password_hash / refresh_token 仍為 ***；521 test_activate_audit_no_password 改回 True；102 description 遮罩條文、521 description / red_case 已同步。突變：白名單改前綴比對 → 1 紅。"
       }
     }
   ]
