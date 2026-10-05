@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 286,
-  "last_updated": "2026-10-05T03:04:28Z",
+  "version": 287,
+  "last_updated": "2026-10-05T03:04:59Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -6136,7 +6136,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/guardians.py",
       "source_ref": "BE:api/guardians_admin.py::create_binding_code",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-054",
@@ -6152,11 +6152,11 @@
           "integration"
         ],
         "red_cases": [
-          "test_admin_binding_code_success：staff_client(permissions=['guardians:write']) → 201，code 長度 8、expires_at == (fake_clock.now()+7d).isoformat()",
+          "test_admin_binding_code_success：staff_client(permissions=['guardians:write']) → 201，code 長度 8 且只含 CODE_ALPHABET，datetime.fromisoformat(expires_at) == fake_clock.now()+7d（pydantic 以 Z 輸出 UTC，比較解析後的值），Cache-Control: no-store；DB 只存 hash、稽核不含明碼；再產一次舊碼作廢",
           "test_admin_binding_code_422：path abc → 422",
           "test_admin_binding_code_401：無 cookie → 401",
-          "test_admin_binding_code_403：staff_client(permissions=['students:write']) → 403",
-          "test_admin_binding_code_409：guardian 已綁定 → 409 guardian_already_bound；uuid4() → 404"
+          "test_admin_binding_code_403：staff_client(permissions=['students:write']) → 403 permission_denied，details.required == ['guardians:write']",
+          "test_admin_binding_code_409：guardian 已綁定 → 409 guardian_already_bound；學生封存 → 409 student_archived；uuid4() → 404 guardian_not_found"
         ],
         "run": "just test-int apps/api/tests/integration/api/admin/test_guardians_endpoints.py -k \"test_admin_binding_code_\"",
         "notes": ""
@@ -7016,7 +7016,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/notifications.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-212",
@@ -7053,7 +7053,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/notifications.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-213",
@@ -7128,7 +7128,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/notifications.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-212",
@@ -7233,7 +7233,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/notifications.py",
       "source_ref": "BE:api/parent_portal/notifications.py::get_preferences",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-219",
