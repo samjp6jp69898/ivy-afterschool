@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 384,
-  "last_updated": "2026-10-05T06:06:36Z",
+  "version": 385,
+  "last_updated": "2026-10-05T06:08:03Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -8901,11 +8901,11 @@
     {
       "id": "BACKEND-352",
       "title": "實作 POST /api/admin/leaves endpoint（員工代登記）",
-      "description": "建立 / 沿用 `apps/api/app/api/admin/leaves.py`（`router = APIRouter(prefix='/leaves', tags=['admin-leaves'])`，掛到 admin_router）。寫入型 handler 呼叫 service 後自行 `db.commit()`。\n- `POST /api/admin/leaves`，`Depends(require_permission(Permission.LEAVES_WRITE))`，body `LeaveCreateIn` → BACKEND-345 → commit → 201 `LeaveOut`（actor = `Actor.staff(staff)`）。\n\n**驗收標準**\n- 成功回應形狀如上；422；401；403（缺 leaves:write）；業務錯誤碼如 red_cases。\n- 路由通過 BACKEND-073 route audit。",
+      "description": "建立 / 沿用 `apps/api/app/api/admin/leaves.py`（`router = APIRouter(prefix='/leaves', tags=['admin-leaves'])`，掛到 admin_router）。寫入型 handler 呼叫 service 後自行 `db.commit()`。\n- `POST /api/admin/leaves`，`Depends(require_permission(Permission.LEAVES_WRITE))`，body `LeaveCreateIn` → BACKEND-345 → 以 `leave_service.leave_out(session, leave)`（本 task 從 `list_leaves` 抽出的公開組裝函式，`leave_outs` 批次版供 list_leaves 共用、行為不變；之後 353 / 355 也用它）直接組新建那筆 → commit → 201 `LeaveOut`（actor = `Actor.staff(staff)`）。不可以列表第一頁回找新建列（該生有大量較晚的請假時會找不到）。\n\n**驗收標準**\n- 成功回應形狀如上；422；401；403（缺 leaves:write）；業務錯誤碼如 red_cases。\n- 路由通過 BACKEND-073 route audit。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/leaves.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-345",
@@ -8926,7 +8926,8 @@
           "test_admin_leaves_create_422：end_date 早於 start_date → 422；多帶 status → 422",
           "test_admin_leaves_create_401：無 cookie → 401",
           "test_admin_leaves_create_403：只有 leaves:read → 403",
-          "test_admin_leaves_create_409：與既有 active 請假重疊 → 409 leave_overlap"
+          "test_admin_leaves_create_409：與既有 active 請假重疊 → 409 leave_overlap",
+          "test_admin_leaves_create_many_prior_leaves：該生已有 205 筆 start_date 較晚的已取消請假 → POST 仍 201，回傳 id 為新建那筆（重讀 DB 驗 start_date / status）"
         ],
         "run": "just test-int apps/api/tests/integration/api/admin/test_leaves_endpoints.py -k \"test_admin_leaves_create_\"",
         "notes": ""
