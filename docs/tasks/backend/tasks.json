@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 329,
-  "last_updated": "2026-10-05T04:22:36Z",
+  "version": 330,
+  "last_updated": "2026-10-05T04:22:47Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3105,8 +3105,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": "BE:api/auth.py::update_user",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-088",
         "BACKEND-074",
@@ -3145,8 +3145,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": "BE:api/auth.py::reset_password",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-088",
         "BACKEND-074",
@@ -3185,8 +3185,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": "BE:api/auth.py::delete_user",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-088",
         "BACKEND-074",
@@ -5519,8 +5519,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::create_student",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-151",
         "BACKEND-159"
@@ -5630,8 +5630,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::delete_student",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-153",
         "BACKEND-159"
@@ -6028,8 +6028,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::create_guardian",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-169",
         "BACKEND-159",
@@ -6067,8 +6067,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/guardians.py",
       "source_ref": "BE:api/students.py::update_guardian",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-170",
         "BACKEND-073",
@@ -6105,8 +6105,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/guardians.py",
       "source_ref": "BE:api/students.py::delete_guardian",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-171",
         "BACKEND-073",
@@ -6181,8 +6181,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/guardians.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-172",
         "BACKEND-073",
@@ -14331,8 +14331,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-131",
         "BACKEND-300",
@@ -14423,8 +14423,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-530",
         "BACKEND-159",
