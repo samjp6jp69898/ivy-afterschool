@@ -1,19 +1,26 @@
 """BACKEND-159：GET /api/admin/students。
 BACKEND-161：GET /api/admin/students/{student_id}（students:read；sensitive 另需
 students:sensitive）。
+BACKEND-160：POST /api/admin/students（students:write；敏感欄位另需 students:sensitive）。
+BACKEND-163：POST /api/admin/students/{student_id}/archive（封存後家長端看不到）。
+BACKEND-531：POST /api/admin/students/{student_id}/purge（students:purge，永久刪除 = 匿名化）。
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.crypto import encrypt_bytes
+from app.core.crypto import decrypt_bytes, encrypt_bytes
 from app.models.account import StaffUser
+from app.models.audit import AuditLog
+from app.models.parents import ParentAccount
 from app.models.students import Student
 from app.services.students.id_number import id_number_hmac
 from tests.support.factories import make_class, make_guardian, make_school, make_student
@@ -21,6 +28,7 @@ from tests.support.route_audit import admin_routes_without_permission
 
 _URL = "/api/admin/students"
 StaffClientFactory = Callable[..., tuple[TestClient, StaffUser]]
+ParentClientFactory = Callable[..., tuple[TestClient, ParentAccount]]
 AssertError = Callable[..., None]
 _ID_NUMBER = "A123456789"
 
@@ -242,3 +250,282 @@ def test_admin_students_get_404(
 def test_admin_students_get_guard_registered(app: FastAPI) -> None:
     assert admin_routes_without_permission(app) == []
     assert "get" in app.openapi()["paths"]["/api/admin/students/{student_id}"]
+
+
+# --- BACKEND-160：POST /api/admin/students --------------------------------------------------------
+
+_CREATE = {"student_no": "S115020", "name": "林小安", "grade_level": 2}
+
+
+def test_admin_students_create_success(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    client, _ = staff_client(permissions=["students:write", "students:read"])
+
+    resp = client.post(_URL, json=_CREATE)
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["name"] == "林小安"
+    assert body["student_no"] == "S115020"
+    assert body["sensitive"] is None  # 沒有 students:sensitive
+    assert body["has_id_number"] is False
+    assert body["status"] == "active"
+    assert body["guardians"] == []
+    stored = db_session.execute(select(Student).where(Student.student_no == "S115020")).scalar_one()
+    assert (stored.name, stored.grade_level, stored.id_number_enc) == ("林小安", 2, None)
+    # 有 sensitive 權限時可寫身分證，回應含明文、DB 只有密文
+    sensitive_client, _ = staff_client(permissions=["students:write", "students:sensitive"])
+    created = sensitive_client.post(
+        _URL, json={**_CREATE, "student_no": "S115021", "id_number": " a123456789 "}
+    )
+    assert created.status_code == 201
+    assert created.json()["sensitive"]["id_number"] == _ID_NUMBER
+    with_id = db_session.execute(
+        select(Student).where(Student.student_no == "S115021")
+    ).scalar_one()
+    assert with_id.id_number_enc is not None
+    assert decrypt_bytes(with_id.id_number_enc) == _ID_NUMBER
+    assert with_id.id_number_hmac == id_number_hmac(_ID_NUMBER)
+
+
+def test_admin_students_create_422(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=["students:write", "students:sensitive"])
+
+    assert_error(client.post(_URL, json={**_CREATE, "grade_level": 0}), 422, "validation_error")
+    assert_error(client.post(_URL, json={**_CREATE, "id_number": "A123"}), 422, "invalid_id_number")
+    assert_error(client.post(_URL, json={**_CREATE, "foo": 1}), 422, "validation_error")
+    assert_error(client.post(_URL, json={}), 422, "validation_error")
+
+
+def test_admin_students_create_401(api_client: TestClient, assert_error: AssertError) -> None:
+    assert_error(api_client.post(_URL, json=_CREATE), 401, "unauthenticated")
+
+
+def test_admin_students_create_403(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    reader, _ = staff_client(permissions=["students:read"])
+    writer, _ = staff_client(permissions=["students:write"])
+
+    denied = reader.post(_URL, json=_CREATE)
+    sensitive = writer.post(_URL, json={**_CREATE, "id_number": _ID_NUMBER})
+
+    assert_error(denied, 403, "permission_denied")
+    assert denied.json()["error"]["details"] == {"required": ["students:write"]}
+    assert_error(sensitive, 403, "sensitive_permission_required")
+    assert (
+        db_session.execute(
+            select(Student).where(Student.student_no == "S115020")
+        ).scalar_one_or_none()
+        is None
+    )
+
+
+def test_admin_students_create_409(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    make_student(db_session, student_no="S115020")
+    db_session.commit()
+    client, _ = staff_client(permissions=["students:write"])
+
+    assert_error(client.post(_URL, json=_CREATE), 409, "student_no_taken")
+
+
+def test_admin_students_create_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "post" in app.openapi()["paths"]["/api/admin/students"]
+
+
+# --- BACKEND-163：POST /api/admin/students/{id}/archive -------------------------------------------
+
+
+def _archive_url(student_id: object) -> str:
+    return f"{_URL}/{student_id}/archive"
+
+
+def test_admin_students_archive_success(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    student = make_student(db_session, name="王小明")
+    client, _ = staff_client(permissions=["students:write"])
+
+    resp = client.post(_archive_url(student.id))
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == str(student.id)
+    assert body["archived_at"] is not None
+    assert body["name"] == "王小明"
+    db_session.expire_all()
+    assert student.archived_at is not None
+    # 冪等
+    again = client.post(_archive_url(student.id))
+    assert again.status_code == 200
+    assert again.json()["archived_at"] == body["archived_at"]
+
+
+def test_admin_students_archive_parent_hidden(
+    staff_client: StaffClientFactory, parent_client: ParentClientFactory, db_session: Session
+) -> None:
+    parent, parent_account = parent_client()
+    student = make_student(db_session, name="王小明")
+    make_guardian(db_session, student, parent=parent_account)
+    db_session.commit()
+    assert [c["name"] for c in parent.get("/api/parent/children").json()] == ["王小明"]
+    client, _ = staff_client(permissions=["students:write"])
+
+    assert client.post(_archive_url(student.id)).status_code == 200
+
+    assert parent.get("/api/parent/children").json() == []
+
+
+def test_admin_students_archive_422_401(
+    staff_client: StaffClientFactory, api_client: TestClient, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=["students:write"])
+
+    assert_error(client.post(_archive_url("abc")), 422, "validation_error")
+    assert_error(api_client.post(_archive_url(uuid4())), 401, "unauthenticated")
+
+
+def test_admin_students_archive_403(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    student = make_student(db_session)
+    client, _ = staff_client(permissions=["students:read"])
+
+    resp = client.post(_archive_url(student.id))
+
+    assert_error(resp, 403, "permission_denied")
+    db_session.expire_all()
+    assert student.archived_at is None
+
+
+def test_admin_students_archive_404(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=["students:write"])
+
+    assert_error(client.post(_archive_url(uuid4())), 404, "student_not_found")
+
+
+# --- BACKEND-531：POST /api/admin/students/{id}/purge ---------------------------------------------
+
+
+def _purge_url(student_id: object) -> str:
+    return f"{_URL}/{student_id}/purge"
+
+
+def _purgeable(db: Session) -> Student:
+    student = make_student(db, name="王小明", student_no="S115001")
+    student.status = "withdrawn"
+    student.withdrawn_on = date(2026, 8, 31)
+    student.archived_at = datetime(2026, 9, 1, tzinfo=UTC)
+    student.id_number_enc = encrypt_bytes(_ID_NUMBER)
+    student.id_number_hmac = id_number_hmac(_ID_NUMBER)
+    db.commit()
+    return student
+
+
+def test_admin_students_purge_success(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    student = _purgeable(db_session)
+    client, staff = staff_client(role_code="admin")
+
+    resp = client.post(_purge_url(student.id), json={"confirm_student_no": "S115001"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["student_id"] == str(student.id)
+    assert body["anonymized_student_no"].startswith("DEL-")
+    assert body["purged_at"] is not None
+    detail = client.get(f"{_URL}/{student.id}").json()
+    assert detail["name"] == "已刪除學生"
+    assert detail["student_no"] == body["anonymized_student_no"]
+    assert detail["has_id_number"] is False
+    db_session.expire_all()
+    assert (student.name, student.id_number_enc, student.id_number_hmac) == (
+        "已刪除學生",
+        None,
+        None,
+    )
+    audits = (
+        db_session.execute(
+            select(AuditLog).where(
+                AuditLog.action == "student.purge", AuditLog.entity_id == str(student.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(audits) == 1
+    assert audits[0].actor_id == staff.id
+
+
+def test_admin_students_purge_422(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    student = _purgeable(db_session)
+    client, _ = staff_client(role_code="admin")
+
+    assert_error(client.post(_purge_url(student.id), json={}), 422, "validation_error")
+    assert_error(
+        client.post(_purge_url(student.id), json={"confirm_student_no": "S999999"}),
+        422,
+        "purge_confirmation_mismatch",
+    )
+    db_session.expire_all()
+    assert student.name == "王小明"
+
+
+def test_admin_students_purge_401(api_client: TestClient, assert_error: AssertError) -> None:
+    assert_error(
+        api_client.post(_purge_url(uuid4()), json={"confirm_student_no": "S115001"}),
+        401,
+        "unauthenticated",
+    )
+
+
+def test_admin_students_purge_403(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    student = _purgeable(db_session)
+    director, _ = staff_client(role_code="director")
+
+    resp = director.post(_purge_url(student.id), json={"confirm_student_no": "S115001"})
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["students:purge"]}
+    db_session.expire_all()
+    assert student.name == "王小明"
+
+
+def test_admin_students_purge_409(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    active = make_student(db_session, student_no="ACT001")
+    student = _purgeable(db_session)
+    client, _ = staff_client(role_code="admin")
+
+    assert_error(
+        client.post(_purge_url(active.id), json={"confirm_student_no": "ACT001"}),
+        409,
+        "student_not_purgeable",
+    )
+    first = client.post(_purge_url(student.id), json={"confirm_student_no": "S115001"})
+    assert first.status_code == 200
+    new_no = first.json()["anonymized_student_no"]
+    assert_error(
+        client.post(_purge_url(student.id), json={"confirm_student_no": new_no}),
+        409,
+        "student_already_purged",
+    )
+
+
+def test_admin_students_purge_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "post" in app.openapi()["paths"]["/api/admin/students/{student_id}/purge"]

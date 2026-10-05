@@ -3,7 +3,9 @@ BACKEND-150：get_student（敏感欄位依權限解密、照片短效 URL、監
 BACKEND-151：create_student（學號唯一、身分證查重含封存、敏感欄位加密與權限、稽核）。
 BACKEND-153：archive_student（封存、刪未使用綁定碼、家長可見範圍排除、冪等）。
 BACKEND-154：upload_photo（驗證、Storage、commit 後刪舊檔、rollback 不刪）。
-BACKEND-530：purge_student（永久刪除 = 匿名化；前置條件、個資清除、統計保留、Storage、稽核）。"""
+BACKEND-530：purge_student（永久刪除 = 匿名化；前置條件、個資清除、統計保留、Storage、稽核）。
+BACKEND-529：close_out_inactive_student（停讀 / 退班收尾：接送請求、代理授權、出勤、請假、稽核、
+同交易）。"""
 
 from __future__ import annotations
 
@@ -50,7 +52,9 @@ from app.services.binding_code_service import hash_code
 from app.services.class_service import archive_class
 from app.services.parent_scope import get_parent_student_ids
 from app.services.student_service import (
+    CloseOutResult,
     archive_student,
+    close_out_inactive_student,
     create_student,
     get_student,
     list_students,
@@ -1293,3 +1297,225 @@ def test_purge_student_audit_and_idempotent(db_session: Session, fake_clock: Fak
             confirm=_stored(db_session, target.student.id).student_no,
         )
     assert (exc.value.status, exc.value.code) == (409, "student_already_purged")
+
+
+# --- BACKEND-529：close_out_inactive_student ------------------------------------------------------
+
+_D = date(2026, 9, 9)  # @pytest.mark.clock 設定的台北今天
+
+
+def _withdrawn_student(db: Session, name: str = "王小明") -> Student:
+    student = make_student(db, name=name)
+    student.status = "withdrawn"
+    student.withdrawn_on = _D
+    db.flush()
+    return student
+
+
+def _close_out(db: Session, student: Student, clock: FakeClock) -> CloseOutResult:
+    return close_out_inactive_student(db, student, actor=_actor("students:write"), clock=clock)
+
+
+@pytest.mark.clock("2026-09-09T10:00:00+08:00")
+def test_close_out_pickup_requests(db_session: Session, fake_clock: FakeClock) -> None:
+    ming = _withdrawn_student(db_session)
+    pending = make_pickup_request(db_session, ming, service_date=_D)
+    done = make_pickup_request(
+        db_session, ming, service_date=_D - timedelta(days=1), status="completed"
+    )
+    other = make_pickup_request(
+        db_session, make_student(db_session, name="陳小華"), service_date=_D
+    )
+
+    result = _close_out(db_session, ming, fake_clock)
+
+    db_session.expire_all()
+    assert pending.status == "cancelled"
+    assert pending.cancel_reason == "學生已退班"
+    assert pending.cancelled_at == fake_clock.now()
+    assert done.status == "completed"
+    assert other.status == "pending"
+    assert result.cancelled_pickup_requests == 1
+    # 停讀文案
+    suspended = make_student(db_session, name="停讀生")
+    suspended.status = "suspended"
+    req = make_pickup_request(db_session, suspended, service_date=_D, status="acknowledged")
+    _close_out(db_session, suspended, fake_clock)
+    db_session.expire_all()
+    assert (req.status, req.cancel_reason) == ("cancelled", "學生已停讀")
+
+
+@pytest.mark.clock("2026-09-09T10:00:00+08:00")
+def test_close_out_authorizations(db_session: Session, fake_clock: FakeClock) -> None:
+    ming = _withdrawn_student(db_session)
+    today = make_pickup_authorization(db_session, ming, service_date=_D, code="111111")
+    tomorrow = make_pickup_authorization(
+        db_session, ming, service_date=_D + timedelta(days=1), code="222222"
+    )
+    yesterday = make_pickup_authorization(
+        db_session, ming, service_date=_D - timedelta(days=1), code="333333"
+    )
+    completed = make_pickup_authorization(
+        db_session, ming, service_date=_D, code="444444", status="completed"
+    )
+
+    result = _close_out(db_session, ming, fake_clock)
+
+    db_session.expire_all()
+    assert (today.status, tomorrow.status) == ("cancelled", "cancelled")
+    assert yesterday.status == "active"
+    assert completed.status == "completed"
+    assert result.cancelled_authorizations == 2
+
+
+@pytest.mark.clock("2026-09-09T10:00:00+08:00")
+def test_close_out_attendance(db_session: Session, fake_clock: FakeClock) -> None:
+    ming = _withdrawn_student(db_session)
+    other = make_student(db_session, name="陳小華")
+    present = make_attendance(
+        db_session, ming, service_date=_D - timedelta(days=1), status="present"
+    )
+    make_attendance(db_session, ming, service_date=_D)
+    make_attendance(db_session, ming, service_date=_D + timedelta(days=1))
+    others_row = make_attendance(db_session, other, service_date=_D)
+
+    result = _close_out(db_session, ming, fake_clock)
+
+    assert result.deleted_attendance_dates == [_D, _D + timedelta(days=1)]
+    rows = db_session.execute(
+        select(StudentAttendance.service_date, StudentAttendance.status).where(
+            StudentAttendance.student_id == ming.id
+        )
+    ).all()
+    assert rows == [(_D - timedelta(days=1), "present")]
+    db_session.expire_all()
+    assert present.status == "present"
+    assert others_row.status == "expected"
+
+
+@pytest.mark.clock("2026-09-09T10:00:00+08:00")
+def test_close_out_leaves(db_session: Session, fake_clock: FakeClock) -> None:
+    ming = _withdrawn_student(db_session)
+    leave_a = make_leave(
+        db_session, ming, start_date=_D - timedelta(days=2), end_date=_D + timedelta(days=2)
+    )
+    make_attendance(db_session, ming, service_date=_D, status="leave", leave=leave_a)
+    past_leave_row = make_attendance(
+        db_session, ming, service_date=_D - timedelta(days=1), status="leave", leave=leave_a
+    )
+    leave_b = make_leave(
+        db_session,
+        ming,
+        start_date=_D + timedelta(days=6),
+        end_date=_D + timedelta(days=7),
+        leave_type="personal",
+    )
+    ended = make_leave(db_session, ming, start_date=_D - timedelta(days=10))
+
+    result = _close_out(db_session, ming, fake_clock)
+
+    db_session.expire_all()
+    assert (leave_a.end_date, leave_a.status) == (_D - timedelta(days=1), "active")
+    assert (leave_b.status, leave_b.cancelled_by_type, leave_b.cancelled_by_id is not None) == (
+        "cancelled",
+        "staff",
+        True,
+    )
+    assert leave_b.cancelled_at == fake_clock.now()
+    assert ended.status == "active"
+    assert (result.truncated_leaves, result.cancelled_leaves) == (1, 1)
+    today_rows = (
+        db_session.execute(
+            select(StudentAttendance).where(
+                StudentAttendance.student_id == ming.id, StudentAttendance.service_date == _D
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert today_rows == []  # 9/9 先還原為 expected，再被刪除
+    assert result.deleted_attendance_dates == [_D]
+    assert (past_leave_row.status, past_leave_row.leave_id) == ("leave", leave_a.id)  # 過去的保留
+    assert (
+        db_session.execute(
+            select(func.count())
+            .select_from(Notification)
+            .where(Notification.event == "leave.cancelled")
+        ).scalar_one()
+        == 0
+    )
+
+
+@pytest.mark.clock("2026-09-09T10:00:00+08:00")
+def test_close_out_keeps_history_and_audit(db_session: Session, fake_clock: FakeClock) -> None:
+    ming = _withdrawn_student(db_session)
+    left = make_attendance(db_session, ming, service_date=date(2026, 9, 1), status="left")
+    exam = make_exam(db_session, status="published")
+    subject = db_session.execute(select(Subject).order_by(Subject.sort_order).limit(1)).scalar_one()
+    make_exam_subject(db_session, exam, subject)
+    score = make_exam_score(db_session, exam, ming, subject)
+    completed = make_pickup_request(
+        db_session, ming, service_date=_D - timedelta(days=1), status="completed"
+    )
+
+    result = _close_out(db_session, ming, fake_clock)
+
+    db_session.expire_all()
+    assert left.status == "left"
+    assert score.score is not None
+    assert completed.status == "completed"
+    assert result == CloseOutResult(
+        cancelled_pickup_requests=0,
+        cancelled_authorizations=0,
+        cancelled_leaves=0,
+        truncated_leaves=0,
+        deleted_attendance_dates=[],
+    )
+    audits = (
+        db_session.execute(
+            select(AuditLog).where(
+                AuditLog.action == "student.close_out", AuditLog.entity_id == str(ming.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(audits) == 1
+    assert audits[0].after == {
+        "status": "withdrawn",
+        "cancelled_pickup_requests": 0,
+        "cancelled_authorizations": 0,
+        "cancelled_leaves": 0,
+        "truncated_leaves": 0,
+        "deleted_attendance_dates": [],
+    }
+    assert "王小明" not in json.dumps(audits[0].after, ensure_ascii=False)
+
+
+@pytest.mark.clock("2026-09-09T10:00:00+08:00")
+def test_close_out_rollback_with_caller(db_session: Session, fake_clock: FakeClock) -> None:
+    ming = _withdrawn_student(db_session)
+    request = make_pickup_request(db_session, ming, service_date=_D)
+    auth = make_pickup_authorization(db_session, ming, service_date=_D)
+    attendance = make_attendance(db_session, ming, service_date=_D)
+    leave = make_leave(db_session, ming, start_date=_D + timedelta(days=3))
+    db_session.commit()  # savepoint 模式：只釋放 savepoint，測試結束仍整筆 rollback
+    ids = (request.id, auth.id, attendance.id, leave.id, ming.id)
+
+    result = _close_out(db_session, ming, fake_clock)
+    assert result.cancelled_pickup_requests == 1
+    db_session.rollback()
+
+    request_id, auth_id, attendance_id, leave_id, _ = ids
+    assert db_session.get(PickupRequest, request_id).status == "pending"  # type: ignore[union-attr]
+    assert db_session.get(PickupAuthorization, auth_id).status == "active"  # type: ignore[union-attr]
+    assert db_session.get(StudentAttendance, attendance_id) is not None
+    assert db_session.get(StudentLeave, leave_id).status == "active"  # type: ignore[union-attr]
+    assert (
+        db_session.execute(
+            select(func.count())
+            .select_from(AuditLog)
+            .where(AuditLog.action == "student.close_out", AuditLog.entity_id == str(ids[4]))
+        ).scalar_one()
+        == 0
+    )
