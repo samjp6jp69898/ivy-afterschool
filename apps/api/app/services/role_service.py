@@ -4,6 +4,13 @@ BACKEND-078：create_role（移植 ivy ``api/permissions_admin.py::create_role``
 platform-only 碼檢查）：``assert_valid_permission_codes``（422）→ ``assert_can_grant``（403）→
 code 重複 409 ``role_code_taken``（先查再插，insert 在 savepoint 內攔截 unique violation 防競態）→
 ``is_system = false`` → 稽核 ``role.create``。
+BACKEND-079：update_role（移植 ivy ``api/permissions_admin.py::update_role``；去掉 tenant、flags、
+legacy snapshot 同步）：admin 角色任何欄位都不可改（409 ``system_role_protected``，domain_spec
+M1），其他系統角色可改 name / description / permissions；permissions 先驗碼（422），**新增的碼**
+（new - old）須 ⊆ actor 有效權限（403 ``cannot_grant_permissions``，移除不受限）；權限有變動時先取
+``rbac:admin_retained`` advisory lock 再 ``assert_admin_capabilities_retained``（兩筆交易同時降權 /
+停用管理者時序列化，否則各自看到對方仍有效而同時通過）；稽核 ``role.update`` 的 before / after 只含
+實際變動的欄位，沒有任何變動就不寫稽核。權限每請求即時計算，不 bump token_version。
 """
 
 from __future__ import annotations
@@ -17,12 +24,34 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentStaff
 from app.core.errors import ConflictError, NotFoundError
+from app.core.locks import advisory_xact_lock
 from app.core.permissions import resolve_effective_permissions
 from app.core.request_meta import RequestMeta
 from app.models.account import Role, StaffUser
-from app.schemas.roles import RoleCreateIn, RoleOut
+from app.schemas.roles import RoleCreateIn, RoleOut, RoleUpdateIn
 from app.services import audit_service
-from app.services.rbac_guards import assert_can_grant, assert_valid_permission_codes
+from app.services.rbac_guards import (
+    assert_admin_capabilities_retained,
+    assert_can_grant,
+    assert_valid_permission_codes,
+)
+
+_ADMIN_ROLE_CODE = "admin"
+
+
+def _role_out(role: Role, staff_count: int) -> RoleOut:
+    return RoleOut(
+        id=role.id,
+        code=role.code,
+        name=role.name,
+        description=role.description,
+        is_system=role.is_system,
+        permissions=list(role.permissions),
+        effective_permissions=sorted(resolve_effective_permissions(role.permissions, [], [])),
+        staff_count=staff_count,
+        created_at=role.created_at,
+        updated_at=role.updated_at,
+    )
 
 
 def list_roles(session: Session) -> list[RoleOut]:
@@ -34,21 +63,7 @@ def list_roles(session: Session) -> list[RoleOut]:
         .group_by(Role.id)
         .order_by(Role.is_system.desc(), Role.code)
     ).all()
-    return [
-        RoleOut(
-            id=role.id,
-            code=role.code,
-            name=role.name,
-            description=role.description,
-            is_system=role.is_system,
-            permissions=list(role.permissions),
-            effective_permissions=sorted(resolve_effective_permissions(role.permissions, [], [])),
-            staff_count=int(count),
-            created_at=role.created_at,
-            updated_at=role.updated_at,
-        )
-        for role, count in rows
-    ]
+    return [_role_out(role, int(count)) for role, count in rows]
 
 
 def delete_role(session: Session, role_id: UUID, *, actor: CurrentStaff, meta: RequestMeta) -> None:
@@ -134,15 +149,63 @@ def create_role(
         after={"code": role.code, "name": role.name, "permissions": list(role.permissions)},
         meta=meta,
     )
-    return RoleOut(
-        id=role.id,
-        code=role.code,
-        name=role.name,
-        description=role.description,
-        is_system=role.is_system,
-        permissions=list(role.permissions),
-        effective_permissions=sorted(resolve_effective_permissions(role.permissions, [], [])),
-        staff_count=0,
-        created_at=role.created_at,
-        updated_at=role.updated_at,
+    return _role_out(role, 0)
+
+
+def _active_staff_count(session: Session, role_id: UUID) -> int:
+    return int(
+        session.execute(
+            select(func.count())
+            .select_from(StaffUser)
+            .where(StaffUser.role_id == role_id, StaffUser.is_active.is_(True))
+        ).scalar_one()
     )
+
+
+def update_role(
+    session: Session, role_id: UUID, data: RoleUpdateIn, *, actor: CurrentStaff, meta: RequestMeta
+) -> RoleOut:
+    # 鎖住角色列：與同時進行的另一筆修改 / 刪除序列化（Role 沒有 joined relationship）
+    role = session.execute(
+        select(Role).where(Role.id == role_id).with_for_update()
+    ).scalar_one_or_none()
+    if role is None:
+        raise NotFoundError("role_not_found", "找不到角色")
+    if role.code == _ADMIN_ROLE_CODE:
+        raise ConflictError("system_role_protected", "admin 角色不可修改")
+
+    before: dict[str, object] = {}
+    after: dict[str, object] = {}
+    if data.permissions is not None:
+        codes = assert_valid_permission_codes(data.permissions)
+        assert_can_grant(actor, set(codes) - set(role.permissions))
+        if codes != sorted(set(role.permissions)):
+            before["permissions"] = list(role.permissions)
+            after["permissions"] = codes
+            role.permissions = codes
+    for field in ("name", "description"):
+        if field not in data.model_fields_set:
+            continue
+        new_value = getattr(data, field)
+        old_value = getattr(role, field)
+        if new_value != old_value:
+            before[field] = old_value
+            after[field] = new_value
+            setattr(role, field, new_value)
+    session.flush()
+
+    if "permissions" in after:
+        advisory_xact_lock(session, "rbac:admin_retained", "global")
+        assert_admin_capabilities_retained(session)
+    if after:
+        audit_service.record(
+            session,
+            actor=audit_service.Actor.staff(actor),
+            action="role.update",
+            entity_type="role",
+            entity_id=role.id,
+            before=before,
+            after=after,
+            meta=meta,
+        )
+    return _role_out(role, _active_staff_count(session, role.id))
