@@ -7,7 +7,7 @@ fake_clock 預設 2026-09-01 01:00 UTC（台北 09:00，週二，營業日）。
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from datetime import date
+from datetime import UTC, date, datetime
 from io import BytesIO
 from urllib.parse import unquote
 from uuid import uuid4
@@ -535,7 +535,14 @@ def _check_out_url(student_id: object) -> str:
 
 def test_admin_check_out_success(staff_client: StaffClientFactory, db_session: Session) -> None:
     ming = make_student(db_session, name="王小明")
-    make_attendance(db_session, ming, service_date=_DAY, status="present")
+    # 到班時間要早於「現在」（fake_clock 台北 09:00）；factory 預設 15:00 會被判為尚未到班
+    make_attendance(
+        db_session,
+        ming,
+        service_date=_DAY,
+        status="present",
+        check_in_at=datetime(2026, 9, 1, 0, 30, tzinfo=UTC),
+    )
     client, staff = staff_client(permissions=["attendance:operate"])
 
     resp = client.post(_check_out_url(ming.id), json={"note": "爸爸來接"})

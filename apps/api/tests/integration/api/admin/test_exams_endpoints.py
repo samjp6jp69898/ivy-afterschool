@@ -710,10 +710,11 @@ def test_admin_exams_update_422(
         client.patch(_exam_url(exam.id), json={"status": "published"}), 422, "validation_error"
     )
     assert_error(client.patch(_exam_url("abc"), json={"name": "x"}), 422, "validation_error")
+    # 兩個範圍都清空 → service 的範圍檢查（422 exam_scope_required）
     assert_error(
         client.patch(_exam_url(exam.id), json={"grade_level": None, "class_id": None}),
         422,
-        "validation_error",
+        "exam_scope_required",
     )
 
 

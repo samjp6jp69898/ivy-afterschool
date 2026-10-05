@@ -322,7 +322,9 @@ def _family(db: Session) -> tuple[Student, ParentAccount]:
 
 def test_admin_pickup_create_success(staff_client: StaffClientFactory, db_session: Session) -> None:
     ming, _ = _family(db_session)
-    client, staff = staff_client(permissions=["pickup:operate"], display_name="林老師")
+    client, staff = staff_client(
+        permissions=["pickup:operate", "pickup:read"], display_name="林老師"
+    )
 
     resp = client.post(_REQUESTS, json={"student_id": str(ming.id), "expected_arrival_at": "17:30"})
 
