@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 381,
-  "last_updated": "2026-10-05T06:02:07Z",
+  "version": 383,
+  "last_updated": "2026-10-05T06:06:06Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -15042,6 +15042,40 @@
         "status": "pass",
         "reviewer": "review-r8-c",
         "notes": "通過。紅測 a47f562 先於實作 35c1e8b。tdd.run 全綠且 --collect-only 對照選到每條 red_case；相關測試檔（audit / staff_user / leave / homework / services/pickup / staff_users endpoints / attendance）共 340 passed；lint / typecheck 乾淨；測試以 app_backend 連線；跑前跑後 owner 查人員、自訂 roles、出勤、通知、接送、請假、附件、作業、audit 等表皆 0 列（無殘列）；突變在 scratchpad 複本執行。 _NON_SENSITIVE_KEYS 以 lowered in frozenset 精確比對（不分大小寫、巢狀同樣適用），MUST_CHANGE_PASSWORD_HINT、token_version_secret、password / temp_password / password_hash / refresh_token 仍為 ***；521 test_activate_audit_no_password 改回 True；102 description 遮罩條文、521 description / red_case 已同步。突變：白名單改前綴比對 → 1 紅。"
+      }
+    },
+    {
+      "id": "BACKEND-548",
+      "title": "close_out_inactive_student 鎖序改為「授權列 → 請求列 → 請假 / 出勤」，消除與 BACKEND-425 的死結",
+      "description": "改寫 BACKEND-529 `StudentService.close_out_inactive_student`（`apps/api/app/services/student_service.py`）的處理順序（529 其餘行為與推播不變）。\n\n**問題**（review-r8-c 以真實函式重現 40P01）：529 先對接送請求列做條件式 UPDATE（鎖請求列）、最後才更新代理授權列，即「請求列 → 授權列」；BACKEND-425 complete_via_authorization 受 424 先 FOR UPDATE 鎖授權列的限制，順序為「授權列 → 請求列 → 出勤列」。員工在櫃台核銷代理接送碼的同時，另一位員工把該生改為停讀 / 退班，兩者互等死結。\n\n**規則**：close_out 改為先取消今天起 active 的代理授權（鎖授權列）→ 再取消非終態接送請求（鎖請求列）→ 最後處理請假與出勤；推播與稽核內容不變。全專案鎖序約定：作業進度列 → 接送請求列；代理授權列 → 接送請求列 → 出勤列；請假列 → 出勤列。完成時同步改寫 BACKEND-529 description 的步驟順序並寫明鎖序。\n\n**驗收標準**：每一條對應下列 red_case；`test_student_service.py` 與 `services/pickup/` 整合測試全綠。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/services/student_service.py",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
+      "depends_on": [
+        "BACKEND-529",
+        "BACKEND-425"
+      ],
+      "suggested_model": "fable-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/services/test_student_service.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_close_out_vs_authorization_complete_no_deadlock：committing、兩條連線——同一學生今日有一筆 active 授權與一筆 pending 請求；s1 先 load_verifiable_authorization（鎖授權列），s2 把學生改 withdrawn 並呼叫 close_out_inactive_student，s1 再 complete_via_authorization → 兩者都不拋 40P01（一方成功、另一方依業務規則回 409 或略過），最終狀態一致（授權與請求各只有一個終態）；以舊順序重跑要能重現死結（轉紅）",
+          "test_close_out_keeps_publish_and_audit：順序調整後，原 529 的三種推播（attendance.bulk_updated、pickup.authorization_updated、pickup.request_updated）與 student.close_out 稽核內容不變（沿用 529 既有斷言）"
+        ],
+        "run": "just test-int apps/api/tests/integration/services/test_student_service.py -k \"test_close_out_\"",
+        "notes": "跑並發測試外層加 timeout；committing 測試跑前後以 owner 確認無殘列。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
       }
     }
   ]
