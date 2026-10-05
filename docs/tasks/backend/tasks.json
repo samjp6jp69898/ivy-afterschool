@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 336,
-  "last_updated": "2026-10-05T05:32:28Z",
+  "version": 337,
+  "last_updated": "2026-10-05T05:33:13Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1957,7 +1957,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/auth/parent_auth.py",
       "source_ref": "BE:api/parent_portal/auth.py::bind_first_child",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-055",
@@ -1985,9 +1985,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed；測試 a4fe27e 先於實作 b14ac77。節流 key 首次 line:<line_user_id>、加綁 parent:<id>，claim 失敗 record、成功 clear（測試驗鎖定表清空）；disabled 在 claim 之前 403，碼未消耗、guardian 未綁；首次 revoke_all_for_subject 後 issue 新 family 並簽 access，加綁不簽 token、refresh 筆數不變；加綁他人已綁定的碼 409 guardian_already_bound 且原綁定不變；binding.completed 站內通知 1 筆。lint / typecheck 乾淨。殘留：(1) 同一 line_user_id 兩個首綁並發時，後到者 INSERT parent_accounts 撞 unique，落到通用 IntegrityError handler 回 409 conflict；整個交易 rollback、碼未消耗，重試即成功，不留錯誤狀態，故不打回，可用 savepoint 攔 23505 後改查既有帳號。(2) test_bind_lockout 末行 assert _parent_count(...) >= count_before 恆真，註解所述「失敗不留帳號」未被驗證（該行為由 endpoint rollback 保證）。"
       }
     },
     {
@@ -5294,7 +5294,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-150",
@@ -5304,7 +5304,7 @@
         "BACKEND-006"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "[review-r8-b] 並發：upload_photo 以 get_student_or_404 讀學生未上鎖，先讀 old_path 再寫。反例（review 以兩個 app_backend session 實測）：A upload_photo 已 flush 未 commit，B upload_photo 讀到舊 photo_path X、上傳新物件、UPDATE 等到 A commit 後照樣成功；A commit 後刪 X，B commit 後也只刪 X → A 上傳的照片物件沒有任何列參照、永遠不會被刪（學生照片孤兒，BACKEND-530 purge 也收不到），違反「commit 後舊物件被刪」。修法：get_student_or_404(for_update=True)（鎖到後再讀 photo_path），並補兩個 session 的並發測試（A 持鎖時 B 被擋；A commit 後 B 完成，最終 Storage 只剩 B 的物件），突變拿掉鎖要轉紅。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_student_service.py",
@@ -5316,15 +5316,16 @@
           "test_upload_photo_old_deleted_after_commit：原 photo_path=old 且 FakeStorage 有 old → upload 後 commit（committing session 或 tx hook 結論）→ old 不在 objects；改為 rollback → old 仍在",
           "test_upload_photo_invalid_type：PDF 內容 → AppError 415 'unsupported_file_type'；6 MiB JPEG → 413",
           "test_upload_photo_storage_error：FakeStorage.upload 拋 StorageError → 502 'storage_unavailable'，photo_path 不變",
-          "test_upload_photo_archived：封存學生 → 404"
+          "test_upload_photo_archived：封存學生 → 404",
+          "test_upload_photo_concurrent_uploads_leave_no_orphan：A 上傳並 flush 未 commit → B 上傳被學生列鎖擋住（0.5 秒內未結束）→ A commit 後 B 完成 → 最終 photo_path 不是原檔，Storage 只剩最後一次上傳的物件"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_student_service.py -k \"test_upload_photo_\"",
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r8-b",
-        "notes": "上傳照片未鎖學生列，並發會留下孤兒照片物件，詳見 risk_notes。其餘：tdd.run 5 passed、測試 42aeaad 先於實作 821338f、驗證 / 502 / flush 失敗刪新檔 / after-commit 刪舊檔正確，lint / typecheck 乾淨。"
+        "notes": "複審（只核對並發打回項）：c655885 並發測試 → 230eea9 修正（get_student_or_404(for_update=True) 後才讀 photo_path）→ 1dc4145 只改 docstring 行長，順序正確。tdd.run 6 passed；review 在 scratchpad 複本拿掉 for_update 後 test_upload_photo_concurrent_uploads_leave_no_orphan 轉紅；committing 測試跑前後無殘列。lint / typecheck 乾淨。"
       }
     },
     {
@@ -6434,7 +6435,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/children.py",
       "source_ref": "BE:api/parent_portal/profile.py::get_child_profile",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-183",
@@ -6459,9 +6460,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。GET /children/{student_id} 走 get_child（內含 IDOR 檢查），他人 / 不存在 / 封存同一 404 student_not_found。測試 6d674a7 先於實作 4a1826f（實作 commit 只把 445 上限案例移到 PDF 案例之後，斷言未改）。401 測試同時涵蓋無 cookie 與員工 cookie；所有 child 路徑經 get_owned_student / get_owned_student_for_write，IDOR 測試斷言他人資源與 uuid4() 的 404 body 完全相同。連跑 4 輪 7 個測試檔、跑前後比對 public 各表列數無殘列。lint / typecheck 乾淨。"
       }
     },
     {
@@ -7277,7 +7278,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/notifications.py",
       "source_ref": "BE:api/parent_portal/notifications.py::update_preferences",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-220",
@@ -7303,9 +7304,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。PUT 偏好後 commit，之後 enqueue 不建 outbox；items 空 / binding.completed 422；他人設定不受影響；外站 Origin 403。review 在 scratchpad 複本拿掉 handler 的 db.commit() 後成功案例轉紅（get_db override 結束時 rollback，未 commit 會被看出）。測試 6d674a7 先於實作 4a1826f（實作 commit 只把 445 上限案例移到 PDF 案例之後，斷言未改）。401 測試同時涵蓋無 cookie 與員工 cookie；所有 child 路徑經 get_owned_student / get_owned_student_for_write，IDOR 測試斷言他人資源與 uuid4() 的 404 body 完全相同。連跑 4 輪 7 個測試檔、跑前後比對 public 各表列數無殘列。lint / typecheck 乾淨。"
       }
     },
     {
@@ -9022,7 +9023,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/leaves.py",
       "source_ref": "BE:api/parent_portal/leaves.py::list_leaves",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-348",
@@ -9051,9 +9052,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。get_owned_student + page_params，page_size 超界 422，封存小孩 404。測試 6d674a7 先於實作 4a1826f（實作 commit 只把 445 上限案例移到 PDF 案例之後，斷言未改）。401 測試同時涵蓋無 cookie 與員工 cookie；所有 child 路徑經 get_owned_student / get_owned_student_for_write，IDOR 測試斷言他人資源與 uuid4() 的 404 body 完全相同。連跑 4 輪 7 個測試檔、跑前後比對 public 各表列數無殘列。lint / typecheck 乾淨。"
       }
     },
     {
@@ -9977,7 +9978,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/homework.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-384",
@@ -10004,9 +10005,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。date 省略為 clock.today()，非法日期 422。測試 6d674a7 先於實作 4a1826f（實作 commit 只把 445 上限案例移到 PDF 案例之後，斷言未改）。401 測試同時涵蓋無 cookie 與員工 cookie；所有 child 路徑經 get_owned_student / get_owned_student_for_write，IDOR 測試斷言他人資源與 uuid4() 的 404 body 完全相同。連跑 4 輪 7 個測試檔、跑前後比對 public 各表列數無殘列。lint / typecheck 乾淨。"
       }
     },
     {
@@ -11607,7 +11608,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/dismissal_calls.py::list_dismissal_notices",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-416",
@@ -11635,9 +11636,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代（業務上的 403 pickup_not_allowed 另測）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。只回自己小孩今日請求，他人小孩的請求不出現。測試 6d674a7 先於實作 4a1826f（實作 commit 只把 445 上限案例移到 PDF 案例之後，斷言未改）。401 測試同時涵蓋無 cookie 與員工 cookie；所有 child 路徑經 get_owned_student / get_owned_student_for_write，IDOR 測試斷言他人資源與 uuid4() 的 404 body 完全相同。連跑 4 輪 7 個測試檔、跑前後比對 public 各表列數無殘列。lint / typecheck 乾淨。"
       }
     },
     {
@@ -11727,7 +11728,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/pickup.py::list_pickup_persons",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-417",
@@ -11756,9 +11757,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代（業務上的 403 pickup_not_allowed 另測）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。已封存接送人不出現。測試 6d674a7 先於實作 4a1826f（實作 commit 只把 445 上限案例移到 PDF 案例之後，斷言未改）。401 測試同時涵蓋無 cookie 與員工 cookie；所有 child 路徑經 get_owned_student / get_owned_student_for_write，IDOR 測試斷言他人資源與 uuid4() 的 404 body 完全相同。連跑 4 輪 7 個測試檔、跑前後比對 public 各表列數無殘列。lint / typecheck 乾淨。"
       }
     },
     {
@@ -11768,7 +11769,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/pickup.py::create_pickup_person",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-418",
@@ -11779,7 +11780,7 @@
         "BACKEND-013"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "[review-r8-b] 測試不穩定：test_parent_pickup_person_create_success 末段斷言 [p['name'] for p in GET 列表] == ['李阿姨', '王叔叔']，但兩次 POST 在測試的同一個外層交易內（db_session 以 create_savepoint 模式共用連線），created_at = now() 相同，list_pickup_persons 依 (created_at, id) 排序時由隨機 uuid 決定先後。review 連跑 6 次失敗 4 次、整檔 4 輪失敗 2 次，tdd.run 約一半機率紅。修法：該斷言改為不依賴順序（比對集合），或兩次 POST 之間推進 created_at；實作本身（multipart 422 envelope、照片驗證、IDOR、commit）review 已核對無誤。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/parent/test_pickup_endpoints.py",
@@ -11797,9 +11798,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代（業務上的 403 pickup_not_allowed 另測）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r8-b",
+        "notes": "成功案例測試依賴同交易內 created_at 相同時的 uuid 排序，約半數失敗，詳見 risk_notes。實作的 multipart 422、照片驗證、IDOR、commit（拿掉 commit 會轉紅）皆已核對。"
       }
     },
     {
@@ -11809,7 +11810,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/pickup.py::delete_pickup_person",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-419",
@@ -11837,9 +11838,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代（業務上的 403 pickup_not_allowed 另測）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。軟刪除 204；他人的接送人與不存在同一 404 pickup_person_not_found 且對方資料未封存；重複刪除 404。review 在 scratchpad 複本拿掉 handler 的 db.commit() 後成功案例轉紅（get_db override 結束時 rollback，未 commit 會被看出）。測試 6d674a7 先於實作 4a1826f（實作 commit 只把 445 上限案例移到 PDF 案例之後，斷言未改）。401 測試同時涵蓋無 cookie 與員工 cookie；所有 child 路徑經 get_owned_student / get_owned_student_for_write，IDOR 測試斷言他人資源與 uuid4() 的 404 body 完全相同。連跑 4 輪 7 個測試檔、跑前後比對 public 各表列數無殘列。lint / typecheck 乾淨。"
       }
     },
     {
@@ -11849,7 +11850,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/pickup.py::list_authorizations",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-421",
@@ -11877,9 +11878,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代（業務上的 403 pickup_not_allowed 另測）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。回應不含 code_hash，昨天的 active 授權 effective_status == expired。測試 6d674a7 先於實作 4a1826f（實作 commit 只把 445 上限案例移到 PDF 案例之後，斷言未改）。401 測試同時涵蓋無 cookie 與員工 cookie；所有 child 路徑經 get_owned_student / get_owned_student_for_write，IDOR 測試斷言他人資源與 uuid4() 的 404 body 完全相同。連跑 4 輪 7 個測試檔、跑前後比對 public 各表列數無殘列。lint / typecheck 乾淨。"
       }
     },
     {
@@ -11889,7 +11890,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/pickup.py::create_authorizations",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-420",
@@ -11917,9 +11918,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代（業務上的 403 pickup_not_allowed 另測）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。201 回應含 6 位數 code 與 code_last4，之後列表不含明碼；兩種模式並給 422、超出 max_days_ahead 422；他人小孩 / 他人接送人 404 與不存在相同；上限與退班 409。review 在 scratchpad 複本拿掉 handler 的 db.commit() 後成功案例轉紅（get_db override 結束時 rollback，未 commit 會被看出）。殘留：handler 的 Cache-Control: no-store 與 security middleware 對 /api/ 的全域 no-store 重複，拿掉 handler 那行測試仍綠（middleware 保證，無行為缺口）。測試 6d674a7 先於實作 4a1826f（實作 commit 只把 445 上限案例移到 PDF 案例之後，斷言未改）。401 測試同時涵蓋無 cookie 與員工 cookie；所有 child 路徑經 get_owned_student / get_owned_student_for_write，IDOR 測試斷言他人資源與 uuid4() 的 404 body 完全相同。連跑 4 輪 7 個測試檔、跑前後比對 public 各表列數無殘列。lint / typecheck 乾淨。"
       }
     },
     {
@@ -13049,7 +13050,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/exams.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-465",
@@ -13076,9 +13077,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。page=0 422，draft 考試即使有成績也不出現。測試 6d674a7 先於實作 4a1826f（實作 commit 只把 445 上限案例移到 PDF 案例之後，斷言未改）。401 測試同時涵蓋無 cookie 與員工 cookie；所有 child 路徑經 get_owned_student / get_owned_student_for_write，IDOR 測試斷言他人資源與 uuid4() 的 404 body 完全相同。連跑 4 輪 7 個測試檔、跑前後比對 public 各表列數無殘列。lint / typecheck 乾淨。"
       }
     },
     {
@@ -13974,7 +13975,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/notifications.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-213",
@@ -14000,9 +14001,9 @@
         "notes": "無 body，422 不適用；家長端無權限碼，403 以 Origin 檢查與 IDOR 案例取代。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。read-all 註冊在 /{notification_id}/read 之前（review 改掉路徑後 4 條轉紅）；只標記自己的，他人家長與員工未讀不變。review 在 scratchpad 複本拿掉 handler 的 db.commit() 後成功案例轉紅（get_db override 結束時 rollback，未 commit 會被看出）。測試 6d674a7 先於實作 4a1826f（實作 commit 只把 445 上限案例移到 PDF 案例之後，斷言未改）。401 測試同時涵蓋無 cookie 與員工 cookie；所有 child 路徑經 get_owned_student / get_owned_student_for_write，IDOR 測試斷言他人資源與 uuid4() 的 404 body 完全相同。連跑 4 輪 7 個測試檔、跑前後比對 public 各表列數無殘列。lint / typecheck 乾淨。"
       }
     },
     {
