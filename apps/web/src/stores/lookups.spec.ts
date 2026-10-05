@@ -74,6 +74,21 @@ describe('lookups store', () => {
     expect(getCount(mock, '/admin/schools')).toBe(2)
   })
 
+  it('lookups store ignores a load invalidated in flight', async () => {
+    mock.onGet('/admin/schools').replyOnce(200, [{ id: 'old', name: '舊資料國小', short_name: null, is_active: true }])
+    mock.onGet('/admin/schools').replyOnce(200, [{ id: 'new', name: '新資料國小', short_name: null, is_active: true }])
+    const store = useLookupsStore()
+
+    const first = store.ensure('schools')
+    store.invalidate('schools')
+    const second = store.ensure('schools')
+    await Promise.all([first, second])
+
+    expect(getCount(mock, '/admin/schools')).toBe(2)
+    expect(store.schools.map((s) => s.id)).toEqual(['new'])
+    expect(store.schoolsLoaded).toBe(true)
+  })
+
   it('lookups store classOptions filters by academic year', async () => {
     mock
       .onGet('/admin/classes')
