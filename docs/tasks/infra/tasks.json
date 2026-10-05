@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 128,
-  "last_updated": "2026-10-05T02:47:06Z",
+  "version": 129,
+  "last_updated": "2026-10-05T02:47:39Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1962,8 +1962,8 @@
       "granularity_unit": "config",
       "target_path": "apps/web/nginx/default.conf.template",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-infra-r8",
       "depends_on": [
         "INFRA-033"
       ],
