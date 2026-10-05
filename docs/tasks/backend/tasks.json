@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 277,
-  "last_updated": "2026-10-05T03:01:30Z",
+  "version": 278,
+  "last_updated": "2026-10-05T03:01:33Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10787,7 +10787,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:api/parent_portal/pickup.py::create_authorizations",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-400",
@@ -10937,7 +10937,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:services/pickup_verification.py::_load_active",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-401",
