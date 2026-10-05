@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 367,
-  "last_updated": "2026-10-05T05:44:18Z",
+  "version": 368,
+  "last_updated": "2026-10-05T05:44:41Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3338,7 +3338,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": "BE:api/auth.py::update_user",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-090",
@@ -3363,9 +3363,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 對照全選到；70bdc23（測試）先於 d543b4c（實作）。staff:write（突變改掛 staff:read → 轉紅）、拿掉 commit → 轉紅；整檔 35 條全綠；lint / typecheck 乾淨；跑前後 staff_users / roles 筆數不變。route audit 與 OpenAPI 斷言在 test_admin_staff_mutations_guard_registered，tdd.run 的 -k 選不到、跑整檔才會跑：可接受（整檔與 CI 都會跑；且 -k 內的 403 permission_denied 案例在守衛被拿掉時也會因改走 cannot_manage_staff 而轉紅），建議改名為 test_admin_staff_update_guard_registered 之類讓 tdd.run 也選得到。403 三種：缺權限 permission_denied（details.required == ['staff:write']）、cannot_manage_staff（director 權限 + staff:write 改 admin 帳號）、cannot_grant_permissions（extra_permissions 加 roles:write），失敗後重讀 DB 未變；409 cannot_modify_self_permissions 且角色未變、404；成功後重讀 DB 與 audit after == {'display_name': ...}。last_role_manager 由 service 測試（BACKEND-090）覆蓋。"
       }
     },
     {
@@ -3375,7 +3375,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": "BE:api/auth.py::reset_password",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-091",
@@ -3400,9 +3400,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 6 條全綠、collect-only 全選到；70bdc23（測試）先於 d543b4c（實作）。staff:write（突變改掛 staff:read → 轉紅）、拿掉 commit → 轉紅；整檔 35 條全綠；lint / typecheck 乾淨；跑前後 staff_users / roles 筆數不變。route audit 與 OpenAPI 斷言在 test_admin_staff_mutations_guard_registered，tdd.run 的 -k 選不到、跑整檔才會跑：可接受（整檔與 CI 都會跑；且 -k 內的 403 permission_denied 案例在守衛被拿掉時也會因改走 cannot_manage_staff 而轉紅），建議改名為 test_admin_staff_update_guard_registered 之類讓 tdd.run 也選得到。回應只有 temp_password（長度 12）且 Cache-Control: no-store；目標以獨立 client 登入的 cookie 在重設後打 /me → 401，重讀 DB must_change_password true、token_version 1；自己重設 → 409 cannot_reset_self 且自己的 /me 仍 200；403 後 token_version 未變；404。audit 不含臨時密碼由 service 測試 test_reset_password_audit（BACKEND-091）覆蓋。殘留（不擋）：no-store 已由 middleware 全域加上，handler 那行無法被區分；成功案例沒有再確認操作者自己的 cookie 仍可用（設計上不會受影響）。"
       }
     },
     {
@@ -3412,7 +3412,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": "BE:api/auth.py::delete_user",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-092",
@@ -3437,9 +3437,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 6 條全綠、collect-only 全選到；70bdc23（測試）先於 d543b4c（實作）。staff:write（突變改掛 staff:read → 轉紅）、拿掉 commit → 轉紅；整檔 35 條全綠；lint / typecheck 乾淨；跑前後 staff_users / roles 筆數不變。route audit 與 OpenAPI 斷言在 test_admin_staff_mutations_guard_registered，tdd.run 的 -k 選不到、跑整檔才會跑：可接受（整檔與 CI 都會跑；且 -k 內的 403 permission_denied 案例在守衛被拿掉時也會因改走 cannot_manage_staff 而轉紅），建議改名為 test_admin_staff_update_guard_registered 之類讓 tdd.run 也選得到。停用後回應 is_active false，目標既有 cookie 打 /me → 401，重讀 DB is_active false、token_version 1；停用自己 → 409 cannot_deactivate_self 且自己的 /me 仍 200；403 後仍啟用；404。last_role_manager 由 service 測試（BACKEND-092）覆蓋。"
       }
     },
     {
