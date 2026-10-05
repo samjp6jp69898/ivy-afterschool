@@ -6,8 +6,9 @@
 import { DocumentCopy } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, ref, watch } from 'vue'
-import type { AuditActorType, AuditLog } from '@/api/auditLogs'
+import type { AuditLog } from '@/api/auditLogs'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { AUDIT_ACTOR_TAGS, AUDIT_ENTITY_LABELS } from '@/constants/audit'
 import { formatDateTime } from '@/shared/utils/datetime'
 
 const props = defineProps<{
@@ -27,28 +28,6 @@ interface DiffRow {
   after: unknown
   inBefore: boolean
   inAfter: boolean
-}
-
-const ENTITY_LABELS: Record<string, string> = {
-  staff_user: '員工帳號',
-  role: '角色',
-  system_setting: '系統設定',
-  student: '學生',
-  student_import: '學生匯入',
-  academic_year: '學年度',
-  guardian: '監護人',
-  student_attendance: '出勤',
-  exam: '考試',
-  exam_score: '成績',
-  pickup_request: '接送請求',
-  pickup_authorization: '代理接送授權',
-}
-
-const ACTOR_TAGS: Record<AuditActorType, { label: string; type: 'info' | 'success' | 'warning' | 'primary' }> = {
-  staff: { label: '員工', type: 'info' },
-  parent: { label: '家長', type: 'success' },
-  system: { label: '系統', type: 'warning' },
-  device: { label: '裝置', type: 'primary' },
 }
 
 const showSame = ref(false)
@@ -107,9 +86,9 @@ const counts = computed(() => {
   return c
 })
 
-const actorTag = computed(() => (props.log ? ACTOR_TAGS[props.log.actor_type] : null))
+const actorTag = computed(() => (props.log ? AUDIT_ACTOR_TAGS[props.log.actor_type] : null))
 const entityLabel = computed(() =>
-  props.log?.entity_type ? (ENTITY_LABELS[props.log.entity_type] ?? props.log.entity_type) : '—',
+  props.log?.entity_type ? (AUDIT_ENTITY_LABELS[props.log.entity_type] ?? props.log.entity_type) : '—',
 )
 
 // 關閉一律交給父層（emit false 後由 modelValue 驅動關閉動畫）

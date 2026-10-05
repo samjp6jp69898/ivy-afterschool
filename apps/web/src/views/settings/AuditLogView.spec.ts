@@ -61,11 +61,19 @@ function filterSelect(wrapper: VueWrapper, name: string) {
   return select
 }
 
-/** 打開下拉後點選文字完全相同的選項（各篩選的選項文字互不重複，「全部」除外） */
-async function chooseOption(wrapper: VueWrapper, name: string, label: string): Promise<void> {
-  await filterSelect(wrapper, name).find('.el-select__wrapper').trigger('click')
+/** 打開下拉，回傳該下拉（以 input 的 aria-controls 對應 teleport 到 body 的選單）的選項 */
+async function openSelect(wrapper: VueWrapper, name: string): Promise<HTMLElement[]> {
+  const select = filterSelect(wrapper, name)
+  await select.find('.el-select__wrapper').trigger('click')
   await settle()
-  const options = Array.from(document.body.querySelectorAll<HTMLElement>('.el-select-dropdown__item'))
+  const listId = select.find('input').attributes('aria-controls')
+  const list = listId ? document.getElementById(listId) : null
+  if (!list) throw new Error(`篩選 ${name} 的下拉選單沒有出現`)
+  return Array.from(list.querySelectorAll<HTMLElement>('.el-select-dropdown__item'))
+}
+
+async function chooseOption(wrapper: VueWrapper, name: string, label: string): Promise<void> {
+  const options = await openSelect(wrapper, name)
   const option = options.find((o) => o.textContent?.trim() === label)
   if (!option) throw new Error(`找不到選項「${label}」，現有：${options.map((o) => o.textContent?.trim()).join('、')}`)
   option.click()
@@ -148,11 +156,7 @@ describe('AuditLogView', () => {
     replyLogs([])
     const { wrapper } = await mountView()
 
-    await filterSelect(wrapper, 'action').find('.el-select__wrapper').trigger('click')
-    await settle()
-    const labels = Array.from(document.body.querySelectorAll('.el-select-dropdown__item')).map((o) =>
-      o.textContent?.trim(),
-    )
+    const labels = (await openSelect(wrapper, 'action')).map((o) => o.textContent?.trim())
 
     expect(labels).toEqual([
       '全部',
