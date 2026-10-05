@@ -5,7 +5,7 @@
 - BACKEND-469 ``GET /exams/{exam_id}``：exams:read → ``ExamOut``。
 - BACKEND-471 ``DELETE /exams/{exam_id}``：exams:write；只能刪草稿（published → 409）→ 204。
 - BACKEND-472 ``PUT /exams/{exam_id}/subjects``：exams:write；``ExamSubjectsPutIn`` → ``ExamOut``。
-- BACKEND-473 ``GET /exams/{exam_id}/scores``：exams:read → ``ScoreGridOut``（學生對科目的格狀資料）。
+- BACKEND-473 ``GET /exams/{exam_id}/scores``：exams:read → ``ScoreGridOut``（成績格）。
 - BACKEND-476 ``POST /exams/{exam_id}/unpublish``：exams:publish；無 body，寫 audit → ``ExamOut``。
 - BACKEND-477 ``GET /exams/{exam_id}/summary``：exams:read → ``ExamSummaryOut``（各科平均）。
 - BACKEND-478 ``GET /students/{student_id}/exam-history``：exams:read；掛在本模組的
