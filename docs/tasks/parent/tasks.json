@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 91,
-  "last_updated": "2026-10-05T06:08:54Z",
+  "version": 92,
+  "last_updated": "2026-10-05T06:09:47Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -3291,7 +3291,7 @@
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/NotificationPrefsView.vue",
       "source_ref": "FE:src/parent/views/NotificationPrefsView.vue::toggle",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r8",
       "depends_on": [
         "PARENT-011",
@@ -3322,9 +3322,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "7 條 red_case 皆有對應測試且斷言具體（7 個 role=switch 與 aria-checked、PUT body 深等於只送該項、500 回滾 + snackbar 文案、同項鎖 PUT 1 次 / 不同項第二個 PUT 送出、載入失敗文案與重試、事件圖示文字與兩段說明、in-flight 項目 aria-checked / aria-busy），另補 2 條（回應覆蓋全部項目、載入骨架）；實跑 tdd.run 9/9 綠、web-lint 乾淨。順序：e2d05df（稿定稿 + 規格補裁定）→ 8652dc5(test) → fde3d8f（規格補充 + 紅測，spec 只新增、未刪改既有斷言）→ 5db12e5(impl，spec 未再改)。fde3d8f 規格補充合理：只以回應覆蓋全部會讓較早回來的回應把另一個仍在儲存中的切換蓋回舊值；review-r8-fe 突變（改回 items = updated）恰好該 red_case 轉紅（1 failed / 8 passed）。PARENT-176 只把 EVENT_ICONS 抽到 parent/utils/notificationEventIcon.ts 並改 import，對照逐項相同，176 spec 5/5 綠。對照 parent-page-notification-prefs.html（approved，PARENT-178）decisions 2~8 逐條一致（outlined 卡片 ul aria-label、後端順序與 label、64px 列與分隔線、40px 事件圖示 aria-hidden 與關閉時 surface-container-high、M3Switch label、整列 <label> 與 state layer、樂觀更新 / 回滾 / snackbar、busy 鎖、載入骨架 row × 7 與說明照常顯示、載入失敗隱藏說明改 ParentEmptyState、清單下方小字）；只用 --m3-* token；只 import vue 與 parent 內部模組，無後台依賴。殘留：decision 1 的頂部列標題、返回鍵（route meta showBack → /notifications）由 PARENT-012 router（pending）負責，本頁未涵蓋；96d027d 在稿核可後同步改 decisions 文字（補「仍在儲存中的其他項保留本地值」），不影響版面。"
       }
     },
     {
