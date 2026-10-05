@@ -1,38 +1,64 @@
 """BACKEND-149：app/services/student_service.py（list_students）。
-BACKEND-150：get_student（敏感欄位依權限解密、照片短效 URL、監護人清單、封存可查）。"""
+BACKEND-150：get_student（敏感欄位依權限解密、照片短效 URL、監護人清單、封存可查）。
+BACKEND-151：create_student（學號唯一、身分證查重含封存、敏感欄位加密與權限、稽核）。
+BACKEND-153：archive_student（封存、刪未使用綁定碼、家長可見範圍排除、冪等）。
+BACKEND-154：upload_photo（驗證、Storage、commit 後刪舊檔、rollback 不刪）。"""
 
 from __future__ import annotations
 
+import io
 import json
 import logging
+import re
 from collections.abc import Iterator
-from datetime import date
+from datetime import date, timedelta
 from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from starlette.datastructures import Headers, UploadFile
 
 from app.api.deps import CurrentStaff
 from app.core.config import get_settings
-from app.core.crypto import derive_key, encrypt_bytes
+from app.core.crypto import decrypt_bytes, derive_key, encrypt_bytes
 from app.core.errors import AppError
 from app.core.pagination import PageParams
-from app.core.storage import StorageError
+from app.core.request_meta import RequestMeta
+from app.core.storage import StorageError, build_object_path
+from app.core.tx_hooks import install_tx_hooks
+from app.core.uploads import PHOTO_MAX_BYTES
+from app.models.audit import AuditLog
+from app.models.parents import ParentBindingCode
 from app.models.students import Student
-from app.schemas.students import StudentDetailOut, StudentListQuery
-from app.services.student_service import get_student, list_students
+from app.schemas.students import StudentCreateIn, StudentDetailOut, StudentListQuery
+from app.services.binding_code_service import hash_code
+from app.services.parent_scope import get_parent_student_ids
+from app.services.student_service import (
+    archive_student,
+    create_student,
+    get_student,
+    list_students,
+    upload_photo,
+)
 from app.services.students.id_number import id_number_hmac, normalize_id_number
 from tests.support.factories import (
     make_class,
     make_guardian,
     make_parent,
     make_school,
+    make_staff,
     make_student,
 )
 from tests.support.fake_clock import FakeClock
 from tests.support.fake_storage import FakeStorage
 
 _PAGE = PageParams(page=1, page_size=50)
+_META = RequestMeta(ip="127.0.0.1", user_agent="pytest", request_id="req-1")
+_ID_NUMBER = "A123456789"
+_JPEG = b"\xff\xd8\xff\xe0" + b"0" * 100
+_PDF = b"%PDF-1.7\n" + b"0" * 50
+_PHOTO_URL_PREFIX = "https://storage.test/student-photos/"
 
 
 @pytest.fixture(autouse=True)
@@ -172,7 +198,7 @@ def test_list_students_order(db_session: Session) -> None:
     assert mine == ["s3a1", "s3a2", "s3b", "s3none", "s4"]
 
 
-# --- BACKEND-150：get_student --------------------------------------------------------------------
+# --- BACKEND-150：get_student -------------------------------------------------------------------
 
 
 def _get(
@@ -302,3 +328,450 @@ def test_get_student_not_found(db_session: Session, fake_clock: FakeClock) -> No
         _get(db_session, uuid4(), _actor("students:read"), fake_clock, FakeStorage())
 
     assert (exc.value.status, exc.value.code) == (404, "student_not_found")
+
+
+# --- BACKEND-151：create_student ------------------------------------------------------------------
+
+
+def _create(
+    db: Session, data: StudentCreateIn, actor: CurrentStaff, clock: FakeClock
+) -> StudentDetailOut:
+    return create_student(db, data, actor=actor, meta=_META, clock=clock)
+
+
+def _stored(db: Session, student_id: UUID) -> Student:
+    return db.execute(select(Student).where(Student.id == student_id)).scalar_one()
+
+
+def _sensitive_audits(db: Session, student_id: UUID) -> list[AuditLog]:
+    return list(
+        db.execute(
+            select(AuditLog).where(
+                AuditLog.action == "student.sensitive_update",
+                AuditLog.entity_id == str(student_id),
+            )
+        ).scalars()
+    )
+
+
+def test_create_student_success(db_session: Session, fake_clock: FakeClock) -> None:
+    actor = _actor("students:write", "students:sensitive")
+    school = make_school(db_session)
+    klass = make_class(db_session, name="A班")
+
+    out = _create(
+        db_session,
+        StudentCreateIn(
+            student_no="S115010",
+            name="林小安",
+            grade_level=2,
+            school_id=school.id,
+            school_class="   ",
+            class_id=klass.id,
+            id_number=" a123456789 ",
+            health_note="氣喘",
+        ),
+        actor,
+        fake_clock,
+    )
+
+    assert isinstance(out, StudentDetailOut)
+    assert (out.student_no, out.name, out.grade_level, out.status) == (
+        "S115010",
+        "林小安",
+        2,
+        "active",
+    )
+    assert out.school is not None
+    assert out.school.id == school.id
+    assert out.class_ is not None
+    assert out.class_.name == "A班"
+    assert out.school_class is None
+    assert (out.has_id_number, out.has_health_note) == (True, True)
+    assert out.sensitive is not None
+    assert out.sensitive.model_dump() == {"id_number": _ID_NUMBER, "health_note": "氣喘"}
+    assert out.photo_url is None
+    assert out.guardians == []
+    stored = _stored(db_session, out.id)
+    assert stored.id_number_hmac == id_number_hmac(_ID_NUMBER)
+    assert stored.id_number_enc is not None
+    assert _ID_NUMBER.encode() not in stored.id_number_enc
+    assert decrypt_bytes(stored.id_number_enc) == _ID_NUMBER
+    assert stored.health_note_enc is not None
+    assert decrypt_bytes(stored.health_note_enc) == "氣喘"
+    assert stored.school_class is None
+    audits = _sensitive_audits(db_session, out.id)
+    assert len(audits) == 1
+    assert audits[0].after == {"set": ["health_note", "id_number"]}
+    assert audits[0].before is None
+    assert (audits[0].actor_type, audits[0].actor_id) == ("staff", actor.id)
+    assert (audits[0].entity_type, audits[0].ip) == ("student", "127.0.0.1")
+
+
+def test_create_student_no_taken(db_session: Session, fake_clock: FakeClock) -> None:
+    make_student(db_session, student_no="S115001")
+    before = db_session.execute(select(func.count()).select_from(Student)).scalar_one()
+
+    with pytest.raises(AppError) as exc:
+        _create(
+            db_session,
+            StudentCreateIn(student_no="S115001", name="林小安", grade_level=2),
+            _actor("students:write"),
+            fake_clock,
+        )
+
+    assert (exc.value.status, exc.value.code) == (409, "student_no_taken")
+    # savepoint 已 rollback：筆數不變、session 仍可用
+    assert db_session.execute(select(func.count()).select_from(Student)).scalar_one() == before
+    _create(
+        db_session,
+        StudentCreateIn(student_no="S115002", name="林小安", grade_level=2),
+        _actor("students:write"),
+        fake_clock,
+    )
+
+
+def test_create_student_id_duplicate_including_archived(
+    db_session: Session, fake_clock: FakeClock
+) -> None:
+    archived = make_student(db_session, name="王小明", student_no="OLD001", archived=True)
+    archived.id_number_enc = encrypt_bytes(_ID_NUMBER)
+    archived.id_number_hmac = id_number_hmac(_ID_NUMBER)
+    db_session.flush()
+    actor = _actor("students:write", "students:sensitive")
+
+    with pytest.raises(AppError) as exc:
+        _create(
+            db_session,
+            StudentCreateIn(
+                student_no="S115010", name="林小安", grade_level=2, id_number="a123456789"
+            ),
+            actor,
+            fake_clock,
+        )
+
+    assert (exc.value.status, exc.value.code) == (409, "id_number_duplicate")
+    assert exc.value.details == {
+        "student_id": archived.id,
+        "student_no": "OLD001",
+        "name": "王小明",
+    }
+    assert (
+        db_session.execute(
+            select(func.count()).select_from(Student).where(Student.student_no == "S115010")
+        ).scalar_one()
+        == 0
+    )
+    assert _sensitive_audits(db_session, archived.id) == []
+
+
+def test_create_student_sensitive_forbidden(db_session: Session, fake_clock: FakeClock) -> None:
+    actor = _actor("students:write")
+
+    with pytest.raises(AppError) as id_exc:
+        _create(
+            db_session,
+            StudentCreateIn(
+                student_no="S115010", name="林小安", grade_level=2, id_number=_ID_NUMBER
+            ),
+            actor,
+            fake_clock,
+        )
+    with pytest.raises(AppError) as note_exc:
+        _create(
+            db_session,
+            StudentCreateIn(student_no="S115010", name="林小安", grade_level=2, health_note="氣喘"),
+            actor,
+            fake_clock,
+        )
+
+    for exc in (id_exc, note_exc):
+        assert (exc.value.status, exc.value.code) == (403, "sensitive_permission_required")
+    # 不給敏感欄位（只填空白視為未給）→ 可建立，且不寫稽核
+    out = _create(
+        db_session,
+        StudentCreateIn(
+            student_no="S115010", name="林小安", grade_level=2, id_number="  ", health_note=" "
+        ),
+        actor,
+        fake_clock,
+    )
+    assert (out.has_id_number, out.has_health_note, out.sensitive) == (False, False, None)
+    stored = _stored(db_session, out.id)
+    assert (stored.id_number_enc, stored.id_number_hmac, stored.health_note_enc) == (
+        None,
+        None,
+        None,
+    )
+    assert _sensitive_audits(db_session, out.id) == []
+
+
+def test_create_student_invalid_refs(db_session: Session, fake_clock: FakeClock) -> None:
+    actor = _actor("students:write", "students:sensitive")
+    inactive_school = make_school(db_session)
+    inactive_school.is_active = False
+    archived_class = make_class(db_session, archived=True)
+    db_session.flush()
+
+    def _attempt(**fields: object) -> AppError:
+        with pytest.raises(AppError) as exc:
+            _create(
+                db_session,
+                StudentCreateIn.model_validate(
+                    {"student_no": "S115010", "name": "林小安", "grade_level": 2, **fields}
+                ),
+                actor,
+                fake_clock,
+            )
+        return exc.value
+
+    missing_school = _attempt(school_id=str(uuid4()))
+    disabled_school = _attempt(school_id=str(inactive_school.id))
+    missing_class = _attempt(class_id=str(uuid4()))
+    closed_class = _attempt(class_id=str(archived_class.id))
+    bad_id = _attempt(id_number="A123")
+    bad_checksum = _attempt(id_number="A123456780")
+    bad_dates = _attempt(status="withdrawn", enrolled_on="2026-09-01", withdrawn_on="2026-08-31")
+
+    assert (missing_school.status, missing_school.code) == (422, "invalid_school")
+    assert (disabled_school.status, disabled_school.code) == (422, "invalid_school")
+    assert (missing_class.status, missing_class.code) == (422, "invalid_class")
+    assert (closed_class.status, closed_class.code) == (422, "invalid_class")
+    assert (bad_id.status, bad_id.code) == (422, "invalid_id_number")
+    assert (bad_checksum.status, bad_checksum.code) == (422, "invalid_id_number")
+    assert (bad_dates.status, bad_dates.code) == (422, "invalid_dates")
+    assert (
+        db_session.execute(
+            select(func.count()).select_from(Student).where(Student.student_no == "S115010")
+        ).scalar_one()
+        == 0
+    )
+
+
+@pytest.mark.clock("2026-09-02T00:30:00+08:00")
+def test_create_student_withdrawn_default_date(db_session: Session, fake_clock: FakeClock) -> None:
+    actor = _actor("students:write")
+
+    defaulted = _create(
+        db_session,
+        StudentCreateIn(student_no="S115010", name="林小安", grade_level=2, status="withdrawn"),
+        actor,
+        fake_clock,
+    )
+    explicit = _create(
+        db_session,
+        StudentCreateIn(
+            student_no="S115011",
+            name="陳小華",
+            grade_level=2,
+            status="withdrawn",
+            enrolled_on=date(2026, 8, 1),
+            withdrawn_on=date(2026, 8, 20),
+        ),
+        actor,
+        fake_clock,
+    )
+    active = _create(
+        db_session,
+        StudentCreateIn(student_no="S115012", name="黃小美", grade_level=2),
+        actor,
+        fake_clock,
+    )
+
+    # UTC 仍是 9/1 16:30，台北已是 9/2
+    assert fake_clock.now().date() == date(2026, 9, 1)
+    assert defaulted.withdrawn_on == date(2026, 9, 2)
+    assert defaulted.status == "withdrawn"
+    assert explicit.withdrawn_on == date(2026, 8, 20)
+    assert active.withdrawn_on is None
+
+
+# --- BACKEND-153：archive_student -----------------------------------------------------------------
+
+
+def _add_binding_code(
+    db: Session, guardian_id: UUID, clock: FakeClock, *, code: str, used: bool
+) -> ParentBindingCode:
+    row = ParentBindingCode(
+        created_at=clock.now() - timedelta(days=1),
+        guardian_id=guardian_id,
+        code_hash=hash_code(code),
+        expires_at=clock.now() + timedelta(days=6),
+        used_at=clock.now() - timedelta(hours=1) if used else None,
+        created_by=make_staff(db).id,
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _code_count(db: Session, guardian_id: UUID, *, used: bool) -> int:
+    stmt = (
+        select(func.count())
+        .select_from(ParentBindingCode)
+        .where(ParentBindingCode.guardian_id == guardian_id)
+    )
+    stmt = stmt.where(
+        ParentBindingCode.used_at.is_not(None) if used else ParentBindingCode.used_at.is_(None)
+    )
+    return db.execute(stmt).scalar_one()
+
+
+def test_archive_student_success(db_session: Session, fake_clock: FakeClock) -> None:
+    student = make_student(db_session, name="王小明")
+    mother = make_guardian(db_session, student, name="王媽媽")
+    father = make_guardian(db_session, student, name="王爸爸", relation="father")
+    _add_binding_code(db_session, mother.id, fake_clock, code="MOTHER01", used=False)
+    _add_binding_code(db_session, mother.id, fake_clock, code="MOTHER02", used=True)
+    _add_binding_code(db_session, father.id, fake_clock, code="FATHER01", used=False)
+    other = make_guardian(db_session, make_student(db_session, name="陳小華"), name="陳媽媽")
+    _add_binding_code(db_session, other.id, fake_clock, code="OTHER001", used=False)
+
+    out = archive_student(db_session, student.id, clock=fake_clock)
+
+    assert isinstance(out, StudentDetailOut)
+    assert out.id == student.id
+    assert out.archived_at == fake_clock.now()
+    assert _stored(db_session, student.id).archived_at == fake_clock.now()
+    assert _code_count(db_session, mother.id, used=False) == 0
+    assert _code_count(db_session, mother.id, used=True) == 1
+    assert _code_count(db_session, father.id, used=False) == 0
+    # 其他學生的綁定碼不受影響
+    assert _code_count(db_session, other.id, used=False) == 1
+
+
+def test_archive_student_parent_scope(db_session: Session, fake_clock: FakeClock) -> None:
+    student = make_student(db_session, name="王小明")
+    sibling = make_student(db_session, name="王小華")
+    parent = make_parent(db_session)
+    make_guardian(db_session, student, parent=parent)
+    make_guardian(db_session, sibling, parent=parent)
+    assert student.id in get_parent_student_ids(db_session, parent.id)
+
+    archive_student(db_session, student.id, clock=fake_clock)
+
+    assert get_parent_student_ids(db_session, parent.id) == [sibling.id]
+
+
+def test_archive_student_idempotent(db_session: Session, fake_clock: FakeClock) -> None:
+    student = make_student(db_session)
+    first = archive_student(db_session, student.id, clock=fake_clock)
+    fake_clock.advance(hours=2)
+
+    again = archive_student(db_session, student.id, clock=fake_clock)
+
+    assert again.archived_at == first.archived_at
+    assert again.archived_at != fake_clock.now()
+    with pytest.raises(AppError) as exc:
+        archive_student(db_session, uuid4(), clock=fake_clock)
+    assert (exc.value.status, exc.value.code) == (404, "student_not_found")
+
+
+# --- BACKEND-154：upload_photo --------------------------------------------------------------------
+
+
+def _upload(
+    content: bytes, *, filename: str = "photo.jpg", content_type: str = "image/jpeg"
+) -> UploadFile:
+    return UploadFile(
+        file=io.BytesIO(content), filename=filename, headers=Headers({"content-type": content_type})
+    )
+
+
+def _seed_old_photo(db: Session, student: Student, storage: FakeStorage) -> str:
+    old = build_object_path(student.id, "jpg")
+    student.photo_path = old
+    db.flush()
+    storage.objects[("student-photos", old)] = b"old"
+    return old
+
+
+def test_upload_photo_success(db_session: Session) -> None:
+    student = make_student(db_session)
+    storage = FakeStorage()
+
+    out = upload_photo(db_session, student.id, _upload(_JPEG), storage=storage)
+
+    assert out.photo_url.startswith(_PHOTO_URL_PREFIX)
+    stored = _stored(db_session, student.id)
+    assert stored.photo_path is not None
+    assert re.fullmatch(rf"{student.id}/[0-9a-f]{{32}}\.jpg", stored.photo_path)
+    assert out.photo_url == f"{_PHOTO_URL_PREFIX}{stored.photo_path}?exp=300"
+    assert storage.objects[("student-photos", stored.photo_path)] == _JPEG
+    assert storage.content_types[("student-photos", stored.photo_path)] == "image/jpeg"
+    # 檔頭判定格式，不信任檔名與 content-type
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 50
+    out_png = upload_photo(db_session, student.id, _upload(png, filename="x.jpg"), storage=storage)
+    assert out_png.photo_url.endswith(".png?exp=300")
+
+
+def test_upload_photo_old_deleted_after_commit(db_session: Session) -> None:
+    install_tx_hooks()
+    storage = FakeStorage()
+    committed = make_student(db_session)
+    old_committed = _seed_old_photo(db_session, committed, storage)
+
+    upload_photo(db_session, committed.id, _upload(_JPEG), storage=storage)
+    new_path = _stored(db_session, committed.id).photo_path
+    assert new_path is not None
+    # commit 前舊檔仍在
+    assert ("student-photos", old_committed) in storage.objects
+    db_session.commit()
+    assert ("student-photos", old_committed) not in storage.objects
+    assert ("student-photos", new_path) in storage.objects
+
+    rolled_back = make_student(db_session)
+    old_rolled_back = _seed_old_photo(db_session, rolled_back, storage)
+    db_session.commit()
+    upload_photo(db_session, rolled_back.id, _upload(_JPEG), storage=storage)
+    db_session.rollback()
+    assert ("student-photos", old_rolled_back) in storage.objects
+    assert _stored(db_session, rolled_back.id).photo_path == old_rolled_back
+
+
+def test_upload_photo_invalid_type(db_session: Session) -> None:
+    student = make_student(db_session)
+    storage = FakeStorage()
+
+    with pytest.raises(AppError) as pdf:
+        upload_photo(db_session, student.id, _upload(_PDF, filename="a.pdf"), storage=storage)
+    with pytest.raises(AppError) as huge:
+        upload_photo(
+            db_session,
+            student.id,
+            _upload(b"\xff\xd8\xff\xe0" + b"0" * (PHOTO_MAX_BYTES + 1)),
+            storage=storage,
+        )
+
+    assert (pdf.value.status, pdf.value.code) == (415, "unsupported_file_type")
+    assert (huge.value.status, huge.value.code) == (413, "file_too_large")
+    assert storage.objects == {}
+    assert _stored(db_session, student.id).photo_path is None
+
+
+def test_upload_photo_storage_error(db_session: Session) -> None:
+    student = make_student(db_session)
+    storage = FakeStorage()
+    old = _seed_old_photo(db_session, student, storage)
+    storage.upload_error = StorageError("上傳失敗")
+
+    with pytest.raises(AppError) as exc:
+        upload_photo(db_session, student.id, _upload(_JPEG), storage=storage)
+
+    assert (exc.value.status, exc.value.code) == (502, "storage_unavailable")
+    assert _stored(db_session, student.id).photo_path == old
+    assert list(storage.objects) == [("student-photos", old)]
+
+
+def test_upload_photo_archived(db_session: Session) -> None:
+    archived = make_student(db_session, archived=True)
+    storage = FakeStorage()
+
+    with pytest.raises(AppError) as exc:
+        upload_photo(db_session, archived.id, _upload(_JPEG), storage=storage)
+    with pytest.raises(AppError) as missing:
+        upload_photo(db_session, uuid4(), _upload(_JPEG), storage=storage)
+
+    assert (exc.value.status, exc.value.code) == (404, "student_not_found")
+    assert (missing.value.status, missing.value.code) == (404, "student_not_found")
+    assert storage.objects == {}
