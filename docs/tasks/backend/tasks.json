@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 314,
-  "last_updated": "2026-10-05T04:10:55Z",
+  "version": 315,
+  "last_updated": "2026-10-05T04:11:01Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -7634,7 +7634,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:services/student_attendance_report.py::_student_active_on",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-302",
@@ -7708,7 +7708,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:api/student_attendance.py::batch_save_attendance",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-302",
@@ -7858,7 +7858,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-302",
@@ -8052,7 +8052,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:api/parent_portal/attendance.py::get_monthly_attendance",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-312"
@@ -8557,7 +8557,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_attendance.py",
       "source_ref": "BE:services/student_leave_service.py::revert_attendance_for_leave",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-342"
@@ -8591,7 +8591,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_service.py",
       "source_ref": "BE:services/student_leave_notify.py::notify_student_leave",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-340",
@@ -14172,7 +14172,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_today_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-181",
