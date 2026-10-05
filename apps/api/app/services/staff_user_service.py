@@ -132,7 +132,8 @@ def create_staff_user(
         display_name=data.display_name,
         phone=data.phone,
         email=data.email,
-        role=role,
+        # 以 role_id 寫入：role=role 會經 Role.staff_users（lazy=raise）的 backref 觸發 SAWarning
+        role_id=role.id,
         extra_permissions=extra,
         revoked_permissions=revoked,
         is_active=True,
