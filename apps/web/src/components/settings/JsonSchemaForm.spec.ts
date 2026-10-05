@@ -158,6 +158,13 @@ async function settle(): Promise<void> {
   await flushPromises()
 }
 
+/** el-form-item 的錯誤訊息顯示 / 隱藏有 100ms debounce（refDebounced），斷言錯誤文字前要等過 */
+async function settleErrors(): Promise<void> {
+  await settle()
+  await new Promise((resolve) => setTimeout(resolve, 150))
+  await settle()
+}
+
 function emitted(wrapper: VueWrapper): Model[] {
   return (wrapper.emitted('update:modelValue') ?? []).map((args) => args[0] as Model)
 }
@@ -278,6 +285,7 @@ describe('JsonSchemaForm', () => {
       modelValue: SERVICE_HOURS_VALUE,
       errors: { 'mon.start': '開始時間需早於結束時間' },
     })
+    await settleErrors()
 
     expect(field(wrapper, 'mon.start').find('.el-form-item__error').text()).toBe('開始時間需早於結束時間')
     expect(field(wrapper, 'tue.start').find('.el-form-item__error').exists()).toBe(false)
@@ -301,12 +309,13 @@ describe('JsonSchemaForm', () => {
       },
       { vModel: true },
     )
+    await settleErrors()
     expect(field(wrapper, 'auto_expire_minutes').text()).toContain('需介於 10~600')
 
     const input = field(wrapper, 'auto_expire_minutes').find('input')
     await input.setValue('90')
     await input.trigger('change')
-    await settle()
+    await settleErrors()
 
     expect(field(wrapper, 'auto_expire_minutes').text()).not.toContain('需介於 10~600')
   })
@@ -361,6 +370,23 @@ describe('JsonSchemaForm', () => {
     expect(labelOf(field(wrapper, 'max_attachments'))).toBe('每筆附件數上限')
     expect(field(wrapper, 'days_before').find('input').attributes('max')).toBe('365')
     expect(field(wrapper, 'max_attachments').find('input').attributes('max')).toBe('10')
+  })
+
+  it('JsonSchemaForm time select shows and emits chosen time', async () => {
+    const wrapper = await mountForm({ schema: PICKUP_WINDOW, modelValue: PICKUP_WINDOW_VALUE })
+
+    const select = field(wrapper, 'request_end').find('.el-select')
+    expect(select.text()).toContain('19:00')
+    await select.find('.el-select__wrapper').trigger('click')
+    await settle()
+    const listId = select.find('input').attributes('aria-controls')
+    const options = Array.from(document.getElementById(listId!)?.querySelectorAll<HTMLElement>('.el-select-dropdown__item') ?? [])
+    expect(options[0]?.textContent?.trim()).toBe('00:00')
+    expect(options.at(-1)?.textContent?.trim()).toBe('23:55')
+    options.find((o) => o.textContent?.trim() === '18:30')!.click()
+    await settle()
+
+    expect(lastEmitted(wrapper)).toEqual({ ...PICKUP_WINDOW_VALUE, request_end: '18:30' })
   })
 
   it('JsonSchemaForm renders enum as select', async () => {
@@ -457,14 +483,14 @@ describe('JsonSchemaForm', () => {
     const liff = await mountForm({ schema: LINE_LIFF, modelValue: { liff_id: '' } }, { vModel: true })
     const liffInput = field(liff, 'liff_id').find('input')
     await liffInput.setValue('abc')
-    await settle()
+    await settleErrors()
     expect(liff.text()).not.toContain('格式不正確')
     await liffInput.trigger('blur')
-    await settle()
+    await settleErrors()
     expect(field(liff, 'liff_id').text()).toContain('格式不正確')
     await liffInput.setValue('1657000000-AbcdEfgh')
     await liffInput.trigger('blur')
-    await settle()
+    await settleErrors()
     expect(liff.text()).not.toContain('格式不正確')
     expect(validate(liff)).toBe(true)
 
@@ -473,12 +499,12 @@ describe('JsonSchemaForm', () => {
       { vModel: true },
     )
     await field(org, 'logo_url').find('input').setValue('logo.png')
-    await settle()
+    await settleErrors()
     expect(validate(org)).toBe(false)
-    await settle()
+    await settleErrors()
     expect(field(org, 'logo_url').text()).toContain('請輸入有效的網址（例如 https://…）')
     await field(org, 'logo_url').find('input').setValue('https://x/logo.png')
-    await settle()
+    await settleErrors()
     expect(validate(org)).toBe(true)
 
     const homework = await mountForm(
@@ -486,9 +512,9 @@ describe('JsonSchemaForm', () => {
       { vModel: true },
     )
     await field(homework, 'no_eta_reply_text').find('input').setValue('  ')
-    await settle()
+    await settleErrors()
     expect(validate(homework)).toBe(false)
-    await settle()
+    await settleErrors()
     expect(field(homework, 'no_eta_reply_text').text()).toContain('此欄位不可空白')
     // 不 trim：原樣送出
     expect(lastEmitted(homework).no_eta_reply_text).toBe('  ')
