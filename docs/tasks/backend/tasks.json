@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 310,
-  "last_updated": "2026-10-05T04:09:50Z",
+  "version": 312,
+  "last_updated": "2026-10-05T04:10:26Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14966,6 +14966,38 @@
         ],
         "run": "just test-int apps/api/tests/integration/core/test_tx_hooks.py apps/api/tests/integration/notifications/test_notification_service.py -k \"test_tx_hooks_ or test_enqueue_inside\"",
         "notes": "第 5 條放在 notifications 測試檔（需要 enqueue 的 fixture），tdd.run 同時列兩個檔案。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-546",
+      "title": "修正 test_sync_reply_locks_request_row 的 committing 測資清理（每跑一次殘留 1 筆 staff_users + 1 筆 test_* roles）",
+      "description": "改寫 BACKEND-413 的測試 `apps/api/tests/integration/services/pickup/test_pickup_requests.py::test_sync_reply_locks_request_row`（413 實作不變）。\n\n**問題**（review-r8-a 查證）：該測試以 `make_pickup_request(..., reply_source=\"staff\")` 建測資，factory 內部另外 `make_staff(session)` 建出一位員工與一個空權限的自訂 `test_*` 角色並隨測試 commit；但測試的 `owner_cleanup_students` 只刪 students、`cleanup_tables` 只清 pickup_requests 與 homework_daily_progress，每跑一次在共用 DB 殘留 1 筆 staff_users + 1 筆 roles（committing 測試不得往 seed 表 roles 寫列，見 kickoff 實作慣例）。殘列會讓 BACKEND-087 / 527 的員工清單測試失敗。\n\n**修正**：committing 測資改用 seed 角色（例如 `make_staff(role_code=\"tutor\")` 後自行設 `replied_by`），或把建出的員工登記進 owner 清理（先刪 staff_users 再刪自訂角色）；測試行為與斷言不變。\n\n**驗收標準**：每一條對應下列 red_case；`test_pickup_requests.py` 整檔全綠。",
+      "granularity_unit": "test",
+      "target_path": "apps/api/app/services/pickup/requests.py",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
+      "depends_on": [
+        "BACKEND-413"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/services/pickup/test_pickup_requests.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_sync_reply_locks_request_row 不留殘列：以 owner 連線記錄跑前 staff_users 與 roles（is_system=false）筆數 → 跑該測試（含失敗路徑以外的正常結束）→ 兩者筆數與跑前相同；原 413 的鎖列斷言不變（拿掉 sync_open_request_reply 的 with_for_update 仍轉紅）"
+        ],
+        "run": "just test-int apps/api/tests/integration/services/pickup/test_pickup_requests.py -k \"test_sync_reply_locks_request_row\"",
+        "notes": "殘列筆數檢查可用測試外的手動比對（前後各查一次）記錄在回報；若改寫成自動檢查，放在同一測試的 teardown 斷言。"
       },
       "review": {
         "status": "pending",
