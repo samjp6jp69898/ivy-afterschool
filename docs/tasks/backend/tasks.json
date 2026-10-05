@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 308,
-  "last_updated": "2026-10-05T04:08:00Z",
+  "version": 309,
+  "last_updated": "2026-10-05T04:08:12Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5228,7 +5228,7 @@
         "BACKEND-529"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "BACKEND-148 schemas 不做跨欄位規則：status=withdrawn 必須有 withdrawn_on、withdrawn_on 不得早於 enrolled_on 等由本 service 以明確錯誤碼檢查（否則 DB CHECK 會落成通用 409 conflict）；id_number、health_note、school_class 只填空白時 schema strip 成空字串，本 service 寫入前轉成 null。",
+      "risk_notes": "BACKEND-148 schemas 不做跨欄位規則：status=withdrawn 必須有 withdrawn_on、withdrawn_on 不得早於 enrolled_on 等由本 service 以明確錯誤碼檢查（否則 DB CHECK 會落成通用 409 conflict）；id_number、health_note、school_class 只填空白時 schema strip 成空字串，本 service 寫入前轉成 null。 改狀態並發（review-r8-b 審 139 / 151 時發現）：學生由 withdrawn 改回 active / suspended 而不改 class_id 時不會觸發 FK 檢查，archive_class 對班級列的 FOR UPDATE 擋不住；update_student 改 status（或改 class_id）時都要經 student_service._check_class 對班級列取 FOR SHARE 再判斷 archived_at，並補兩個 session 的阻塞並發 red case（拿掉鎖要轉紅）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_student_service.py",
