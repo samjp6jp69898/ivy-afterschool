@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 261,
-  "last_updated": "2026-10-05T02:55:17Z",
+  "version": 262,
+  "last_updated": "2026-10-05T02:55:33Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -13148,7 +13148,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/dashboard_service.py",
       "source_ref": "BE:services/dashboard_query_service.py::DashboardQueryService._compute_student_attendance_summary",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-490",
