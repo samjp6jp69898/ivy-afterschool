@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 351,
-  "last_updated": "2026-10-05T05:39:18Z",
+  "version": 352,
+  "last_updated": "2026-10-05T05:39:47Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1997,7 +1997,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/auth.py",
       "source_ref": "BE:api/parent_portal/auth.py::bind_first_child",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-056",
@@ -13089,7 +13089,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/exams.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-466",
