@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 281,
-  "last_updated": "2026-10-05T03:03:01Z",
+  "version": 282,
+  "last_updated": "2026-10-05T03:03:28Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10783,7 +10783,7 @@
     {
       "id": "BACKEND-420",
       "title": "實作 PickupAuthorizationService.create_authorization：家長建立單日代理接送授權（產生接送碼）",
-      "description": "在 `apps/api/app/services/pickup/authorizations.py` 實作（domain_spec M7：單日代理接送授權）：\n```python\ndef create_authorization(session: Session, student_id: UUID, data: PickupAuthorizationCreateIn, *, parent: CurrentParent, clock: Clock) -> PickupAuthorizationCreatedOut: ...\n```\n1. 呼叫端已以 `get_owned_student_for_write` 驗證。\n2. `s = get_setting(session, PICKUP_AUTHORIZATION)`；`today ≤ service_date ≤ today + s.max_days_ahead`（預設 14，承襲 ivy `_MAX_FUTURE_DAYS`）→ 否則 422 `invalid_service_date`。\n3. pickup_person_id 模式：接送人存在、未封存、`student_id` 相同 → 否則 404 `pickup_person_not_found`；proxy_name / proxy_phone 由接送人快照。\n4. 同學生同日 active 授權已達 `s.max_active_per_day`（預設 3）→ 409 `authorization_limit_reached`。\n5. `code = generate_pickup_code()` → code_hash、code_last4（BACKEND-400）；status active、created_by_parent_id。\n6. broadcast `pickup.authorization_updated`（topic pickup，admin 完整資料；不含 code）。\n7. 回傳 `PickupAuthorizationCreatedOut(authorization, code)`：**明碼只在這個回應出現一次**，DB 與 log 都不保存明碼。家長遺失接送碼時以 BACKEND-523 重新產生。\n- 移植 ivy `api/parent_portal/pickup.py::create_authorizations` 的日期範圍、接送人快照；去掉一次多孩、batch_key、可逆加密、連動建立 dismissal_call、儲存為常用接送人選項。\n\n**驗收標準**\n- 兩種模式建立成功，code 為 6 位數字且 `pickup_code_matches(code, code_hash)`；code_last4 正確。\n- DB 中找不到明碼（code_hash 欄位不等於明碼、無其他欄位含明碼）。\n- 日期超出 pickup.authorization 設定範圍 422；他人 / 已封存接送人 404；達到設定上限 409。",
+      "description": "在 `apps/api/app/services/pickup/authorizations.py` 實作（domain_spec M7：單日代理接送授權）：\n```python\ndef create_authorization(session: Session, student_id: UUID, data: PickupAuthorizationCreateIn, *, parent: CurrentParent, clock: Clock) -> PickupAuthorizationCreatedOut: ...\n```\n1. 呼叫端已以 `get_owned_student_for_write` 驗證。\n2. `s = get_setting(session, PICKUP_AUTHORIZATION)`；`today ≤ service_date ≤ today + s.max_days_ahead`（預設 14，承襲 ivy `_MAX_FUTURE_DAYS`）→ 否則 422 `invalid_service_date`。\n3. pickup_person_id 模式：接送人存在、未封存、`student_id` 相同 → 否則 404 `pickup_person_not_found`；proxy_name / proxy_phone 由接送人快照。\n4. 計數前先鎖學生列（`get_student_or_404(..., for_update=True)`），序列化同一學生的並發建立；同學生同日 active 授權已達 `s.max_active_per_day`（預設 3）→ 409 `authorization_limit_reached`。\n5. `code = generate_pickup_code()` → code_hash、code_last4（BACKEND-400）；status active、created_by_parent_id。\n6. broadcast `pickup.authorization_updated`（topic pickup，admin 收 `PickupAuthorizationOut`，含 code_last4、不含 code 與 code_hash；後台需要學生或接送人照片時由前端收到事件後重抓 BACKEND-436 清單）。\n7. 回傳 `PickupAuthorizationCreatedOut(authorization, code)`：**明碼只在這個回應出現一次**，DB 與 log 都不保存明碼。家長遺失接送碼時以 BACKEND-523 重新產生。\n- 移植 ivy `api/parent_portal/pickup.py::create_authorizations` 的日期範圍、接送人快照；去掉一次多孩、batch_key、可逆加密、連動建立 dismissal_call、儲存為常用接送人選項。\n\n**驗收標準**\n- 兩種模式建立成功，code 為 6 位數字且 `pickup_code_matches(code, code_hash)`；code_last4 正確。\n- DB 中找不到明碼（code_hash 欄位不等於明碼、無其他欄位含明碼）。\n- 日期超出 pickup.authorization 設定範圍 422；他人 / 已封存接送人 404；達到設定上限 409。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:api/parent_portal/pickup.py::create_authorizations",
