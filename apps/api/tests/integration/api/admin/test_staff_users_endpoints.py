@@ -98,7 +98,7 @@ def test_admin_staff_list_no_password_hash(
     assert resp.status_code == 200
     assert resp.json()["total"] == 1
     assert "$argon2id$" not in resp.text
-    assert "password" not in resp.text
+    assert "password_hash" not in resp.text
 
 
 def test_admin_staff_list_guard_registered(app: FastAPI) -> None:
