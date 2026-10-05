@@ -3,6 +3,9 @@
 - BACKEND-342：``apply_attendance_for_leave``。移植 ivy
   ``services/student_leave_service.py::apply_attendance_for_leave``：保留「一次範圍處理、不逐日
   N+1」；ivy 以 remark 前綴標記來源改為 ``leave_id`` 欄位；不覆蓋已到班 / 已離班。
+- BACKEND-343：``revert_attendance_for_leave``。移植 ivy
+  ``services/student_leave_service.py::revert_attendance_for_leave``：ivy 以 remark 比對後刪列，改為
+  以 ``leave_id`` 比對、改回 expected（保留列）。
 """
 
 from __future__ import annotations
@@ -11,6 +14,7 @@ from dataclasses import dataclass
 from datetime import date
 from uuid import UUID
 
+from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -79,3 +83,32 @@ def apply_attendance_for_leave(
     return LeaveApplyResult(
         applied=applied, skipped_checked_in=[d for d in days if d not in applied_set]
     )
+
+
+def revert_attendance_for_leave(
+    session: Session, leave: StudentLeave, *, from_date: date | None = None, clock: Clock
+) -> list[date]:
+    """該請假產生的出勤列改回 expected 並清 leave_id，回傳被改回的日期（升冪）。
+
+    from_date 給值時只還原該日起的列（部分取消：今天起的日子）。已到班 / 已離班的列本來就沒有
+    leave_id（BACKEND-342 不覆蓋），不受影響；過去的日期改回 expected（等同未登記），員工可再改判。
+    """
+    stmt = (
+        update(StudentAttendance)
+        .where(StudentAttendance.leave_id == leave.id)
+        # 同時清 leave_id 與改 status，滿足 DB-020 ck_student_attendances_leave_link
+        .values(status="expected", leave_id=None)
+        .returning(StudentAttendance.service_date)
+    )
+    if from_date is not None:
+        stmt = stmt.where(StudentAttendance.service_date >= from_date)
+    reverted = sorted(session.execute(stmt).scalars())
+    if reverted:
+        broadcast_after_commit(
+            session,
+            topic="attendance",
+            type="attendance.bulk_updated",
+            data={"student_id": leave.student_id, "dates": reverted},
+            clock=clock,
+        )
+    return reverted

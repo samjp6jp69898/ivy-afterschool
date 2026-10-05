@@ -6,18 +6,23 @@
 - BACKEND-311：``get_daily_attendance``（每日出勤清單與統計；營業日尚無列的 active 學生以虛擬列
   呈現）。
 - BACKEND-312：``get_monthly_attendance``（月出勤報表；入班前與未來日期不計）。
+- BACKEND-303：``initialize_daily_attendance``（營業日為在學學生建立出勤列，冪等）。
+- BACKEND-305 / 309：``check_in`` / ``mark_absent``（條件式更新，防兩位員工同時操作）。
+- BACKEND-314：``get_child_monthly_attendance``（家長端單一小孩月出勤，不含內部欄位）。
 """
 
 from __future__ import annotations
 
 import calendar
+import re
 from collections import Counter
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 from uuid import UUID
 
-from sqlalchemy import Select, exists, or_, select
+from sqlalchemy import Select, exists, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -27,8 +32,16 @@ from app.models.attendance import AttendanceStatus, StudentAttendance
 from app.models.classes import SchoolClass
 from app.models.leaves import LEAVE_TYPE_LABELS, StudentLeave
 from app.models.students import Student
+from app.notifications.events import Event
+from app.notifications.recipients import parent_recipients
+from app.notifications.service import enqueue
 from app.realtime.publish import broadcast_after_commit
-from app.repositories.students import StudentBrief, student_brief_map
+from app.repositories.students import (
+    StudentBrief,
+    get_student_or_404,
+    list_active_student_ids,
+    student_brief_map,
+)
 from app.schemas.attendance import (
     AttendanceAmendIn,
     AttendanceRowOut,
@@ -41,6 +54,8 @@ from app.schemas.attendance import (
     MonthlyAttendanceQuery,
     MonthlyStatsOut,
     MonthlyStudentRowOut,
+    ParentAttendanceDayOut,
+    ParentMonthlyAttendanceOut,
     to_parent_attendance_event,
 )
 from app.services.audit_service import Actor, record
@@ -49,6 +64,9 @@ from app.services.service_calendar import is_service_day, list_service_days
 if TYPE_CHECKING:
     from app.api.deps import CurrentStaff
     from app.core.request_meta import RequestMeta
+
+# 與 schemas.attendance.MONTH_PATTERN 相同；家長端 month 為 path / query 字串，service 自行檢查
+_MONTH_RE: Final = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
 
 
 def _active_leave_id(session: Session, student_id: UUID, service_date: date) -> UUID | None:
@@ -240,6 +258,11 @@ def amend_attendance(
         after={**after, "reason": data.reason},
         meta=meta,
     )
+    return _publish_row(session, row, clock=clock)
+
+
+def _publish_row(session: Session, row: StudentAttendance, *, clock: Clock) -> AttendanceRowOut:
+    """commit 後推 admin:attendance 完整列與 student:<id> 家長裁切資料（BACKEND-224）。"""
     out = _single_row_out(session, row)
     broadcast_after_commit(
         session,
@@ -380,6 +403,8 @@ def get_daily_attendance(
 
 def _parse_month(month: str) -> tuple[date, date]:
     """schema 的 \\d 也接受全形數字與年份 0000：int() 後再以 date 檢查範圍。"""
+    if not _MONTH_RE.fullmatch(month):
+        raise AppError("invalid_month", "月份格式不正確", status=422)
     year_text, month_text = month.split("-")
     try:
         year, month_no = int(year_text), int(month_text)
@@ -496,4 +521,234 @@ def get_monthly_attendance(
             leave=sum(r.stats.leave for r in rows),
             unrecorded=sum(r.stats.unrecorded for r in rows),
         ),
+    )
+
+
+@dataclass(frozen=True)
+class DailyInitResult:
+    service_date: date
+    skipped: bool  # 非營業日 → True，且不寫入任何列
+    created_expected: int
+    created_leave: int
+
+
+def initialize_daily_attendance(
+    session: Session, service_date: date, *, clock: Clock
+) -> DailyInitResult:
+    """營業日為 active 未封存、已入班的學生建立出勤列；當日有 active 請假者直接建 leave。
+
+    單一 ``INSERT ... ON CONFLICT DO NOTHING RETURNING status``：已存在的列一律不動（員工已登記的
+    到班 / 缺席不被覆蓋），同日重跑或與其他路徑同時寫入都不拋 unique 違反；以 RETURNING 只計本次
+    真正插入的列。與請假建立交易同時進行時，INSERT 會等待對方未 commit 的列。不 commit（由
+    BACKEND-304 的 job runner commit）。移植 ivy ``_student_active_on`` 的「入班日之前不計」。
+    """
+    if not is_service_day(session, service_date):
+        return DailyInitResult(service_date, skipped=True, created_expected=0, created_leave=0)
+
+    candidates = list_active_student_ids(session)
+    if not candidates:
+        return DailyInitResult(service_date, skipped=False, created_expected=0, created_leave=0)
+    not_yet_enrolled = set(
+        session.execute(
+            select(Student.id).where(Student.id.in_(candidates), Student.enrolled_on > service_date)
+        ).scalars()
+    )
+    student_ids = [sid for sid in candidates if sid not in not_yet_enrolled]
+    leaves = {
+        student_id: leave_id
+        for student_id, leave_id in session.execute(
+            select(StudentLeave.student_id, StudentLeave.id).where(
+                StudentLeave.student_id.in_(student_ids),
+                StudentLeave.status == "active",
+                StudentLeave.start_date <= service_date,
+                StudentLeave.end_date >= service_date,
+            )
+        )
+    }
+    if not student_ids:
+        return DailyInitResult(service_date, skipped=False, created_expected=0, created_leave=0)
+    inserted = session.execute(
+        pg_insert(StudentAttendance)
+        .values(
+            [
+                {
+                    "student_id": student_id,
+                    "service_date": service_date,
+                    "status": "leave" if student_id in leaves else "expected",
+                    "leave_id": leaves.get(student_id),
+                }
+                for student_id in student_ids
+            ]
+        )
+        .on_conflict_do_nothing(index_elements=["student_id", "service_date"])
+        .returning(StudentAttendance.status)
+    ).scalars()
+    counts = Counter(inserted)
+    return DailyInitResult(
+        service_date,
+        skipped=False,
+        created_expected=counts["expected"],
+        created_leave=counts["leave"],
+    )
+
+
+def _require_active_on_service_day(session: Session, student_id: UUID, d: date) -> Student:
+    student = get_student_or_404(session, student_id)
+    if student.status != "active":
+        raise ConflictError("student_not_active", "學生目前不在學，無法登記出勤")
+    if not is_service_day(session, d):
+        raise ConflictError("not_service_day", "今天不是營業日")
+    return student
+
+
+def _reload(session: Session, row_id: UUID) -> StudentAttendance:
+    # 條件式 UPDATE 不經 ORM：以 DB 現值覆蓋已載入的物件
+    return session.execute(
+        select(StudentAttendance)
+        .where(StudentAttendance.id == row_id)
+        .execution_options(populate_existing=True)
+    ).scalar_one()
+
+
+def check_in(
+    session: Session,
+    student_id: UUID,
+    *,
+    actor: CurrentStaff,
+    note: str | None,
+    clock: Clock,
+) -> AttendanceRowOut:
+    """expected / absent → present（缺席後到班即遲到情境）；通知家長並推播。不 commit。
+
+    出勤列先以 ``ensure_attendance_row`` 鎖定，再以條件式 UPDATE 寫入：兩位員工同時按時後到者看到
+    present → 409，通知只發一次。移植 ivy ``api/student_attendance.py::batch_save_attendance`` 的
+    單筆寫入；去掉教師端班級權限、中文狀態值、tenant。
+    """
+    d = clock.today()
+    student = _require_active_on_service_day(session, student_id, d)
+    row = ensure_attendance_row(session, student_id, d)
+    now = clock.now()
+    hit = session.execute(
+        update(StudentAttendance)
+        .where(StudentAttendance.id == row.id, StudentAttendance.status.in_(("expected", "absent")))
+        .values(
+            status="present",
+            check_in_at=now,
+            check_in_source="manual",
+            updated_by=actor.id,
+            note=func.coalesce(note, StudentAttendance.note),
+        )
+        .returning(StudentAttendance.id)
+    ).scalar_one_or_none()
+    row = _reload(session, row.id)
+    if hit is None:
+        if row.status == "present":
+            raise ConflictError("already_checked_in", "學生今天已登記到班")
+        if row.status == "left":
+            raise ConflictError("already_checked_out", "學生今天已離班")
+        raise ConflictError("student_on_leave", "學生今天請假")
+
+    enqueue(
+        session,
+        Event.ATTENDANCE_CHECKED_IN,
+        recipients=parent_recipients(session, student_id),
+        payload={
+            "student_id": student_id,
+            "student_name": student.name,
+            "time": to_taipei(now).strftime("%H:%M"),
+        },
+        clock=clock,
+    )
+    return _publish_row(session, row, clock=clock)
+
+
+def mark_absent(
+    session: Session,
+    student_id: UUID,
+    *,
+    actor: CurrentStaff,
+    note: str | None,
+    clock: Clock,
+) -> AttendanceRowOut:
+    """expected → absent；已是 absent 原樣回傳（冪等）。缺席沒有通知事件（M9），只推播。"""
+    d = clock.today()
+    _require_active_on_service_day(session, student_id, d)
+    row = ensure_attendance_row(session, student_id, d)
+    hit = session.execute(
+        update(StudentAttendance)
+        .where(StudentAttendance.id == row.id, StudentAttendance.status == "expected")
+        .values(
+            status="absent",
+            updated_by=actor.id,
+            note=func.coalesce(note, StudentAttendance.note),
+        )
+        .returning(StudentAttendance.id)
+    ).scalar_one_or_none()
+    row = _reload(session, row.id)
+    if hit is None:
+        if row.status == "absent":
+            return _single_row_out(session, row)
+        if row.status in ("present", "left"):
+            raise ConflictError("already_checked_in", "學生今天已登記到班，要更正請使用改判")
+        raise ConflictError("student_on_leave", "學生今天請假")
+    return _publish_row(session, row, clock=clock)
+
+
+def get_child_monthly_attendance(
+    session: Session, student_id: UUID, month: str, *, clock: Clock
+) -> ParentMonthlyAttendanceOut:
+    """家長端單一小孩月出勤（呼叫端已驗證所有權）；stats 規則同 get_monthly_attendance。
+
+    不回傳 note、updated_by 等內部欄位。移植 ivy ``api/parent_portal/attendance.py::
+    get_monthly_attendance``；去掉 tenant 與 SQLite 分支。
+    """
+    month_start, month_end = _parse_month(month)
+    today = clock.today()
+    service_days = set(list_service_days(session, month_start, month_end))
+    enrolled_on = session.execute(
+        select(Student.enrolled_on).where(Student.id == student_id)
+    ).scalar_one_or_none()
+    rows = {
+        row[0]: row[1:]
+        for row in session.execute(
+            select(
+                StudentAttendance.service_date,
+                StudentAttendance.status,
+                StudentAttendance.check_in_at,
+                StudentAttendance.check_out_at,
+                StudentLeave.leave_type,
+            )
+            .outerjoin(StudentLeave, StudentLeave.id == StudentAttendance.leave_id)
+            .where(
+                StudentAttendance.student_id == student_id,
+                StudentAttendance.service_date.between(month_start, month_end),
+            )
+        )
+    }
+
+    days: list[ParentAttendanceDayOut] = []
+    statuses: list[AttendanceStatus | None] = []
+    counted: list[bool] = []
+    d = month_start
+    while d <= month_end:
+        is_service = d in service_days
+        status, check_in_at, check_out_at, leave_type = rows.get(d, (None, None, None, None))
+        days.append(
+            ParentAttendanceDayOut(
+                date=d,
+                is_service_day=is_service,
+                status=status,
+                check_in_at=check_in_at,
+                check_out_at=check_out_at,
+                leave_type=leave_type if status == "leave" else None,
+            )
+        )
+        statuses.append(status if is_service else None)
+        counted.append(is_service and d <= today and (enrolled_on is None or d >= enrolled_on))
+        d += timedelta(days=1)
+    return ParentMonthlyAttendanceOut(
+        student_id=student_id,
+        month=f"{month_start.year:04d}-{month_start.month:02d}",
+        days=days,
+        stats=_monthly_stats(statuses, counted),
     )

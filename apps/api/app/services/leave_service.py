@@ -3,12 +3,14 @@
 - BACKEND-347：``list_leaves``（後台列表，篩選 + 分頁）。
 - BACKEND-350：``get_attachment_url``（後台簽發附件短效 URL）。
 - BACKEND-348：``list_child_leaves``（家長端小孩請假列表，附件短效 URL；呼叫端已驗證所有權）。
+- BACKEND-344：``notify_leave_event``（請假建立 / 取消通知班級負責員工與 leaves:read 員工）。
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Final
+from datetime import date
+from typing import Any, Final, Literal
 from uuid import UUID
 
 from sqlalchemy import Select, literal, select
@@ -17,11 +19,15 @@ from sqlalchemy.orm import Session
 from app.core.clock import Clock
 from app.core.errors import AppError, NotFoundError
 from app.core.pagination import Page, PageParams, paginate
+from app.core.permissions import Permission
 from app.core.storage import Storage, StorageError
 from app.models.account import StaffUser
 from app.models.leaves import LEAVE_TYPE_LABELS, StudentLeave, StudentLeaveAttachment
 from app.models.parents import ParentAccount
 from app.models.students import Student
+from app.notifications.events import Event
+from app.notifications.recipients import staff_recipients
+from app.notifications.service import enqueue
 from app.repositories.students import student_brief_map
 from app.schemas.leaves import (
     AttachmentUrlOut,
@@ -218,3 +224,44 @@ def list_child_leaves(
         for leave in leaves
     ]
     return Page(items=items, total=total)
+
+
+def notify_leave_event(
+    session: Session,
+    leave: StudentLeave,
+    event: Literal[Event.LEAVE_CREATED, Event.LEAVE_CANCELLED],
+    *,
+    date_range: tuple[date, date] | None = None,
+    clock: Clock,
+) -> None:
+    """create / cancel 共用：通知班級負責員工與有 leaves:read 的員工（in_app + ws）。
+
+    部分取消時呼叫端以 date_range 傳入被取消的區間；收件人為空不呼叫 enqueue。移植 ivy
+    ``services/student_leave_notify.py::notify_student_leave`` / ``resolve_recipients``；ivy commit
+    後另開 session 解析收件人改為同交易 enqueue（BACKEND-206 本身就在 commit 後才派送）。
+    """
+    student_name, class_id = session.execute(
+        select(Student.name, Student.class_id).where(Student.id == leave.student_id)
+    ).one()
+    recipients = staff_recipients(
+        session,
+        permission=Permission.LEAVES_READ,
+        class_ids=[class_id] if class_id is not None else [],
+    )
+    if not recipients:
+        return
+    start, end = date_range or (leave.start_date, leave.end_date)
+    enqueue(
+        session,
+        event,
+        recipients=recipients,
+        payload={
+            "student_id": leave.student_id,
+            "student_name": student_name,
+            "leave_id": leave.id,
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "leave_type_label": LEAVE_TYPE_LABELS[leave.leave_type],
+        },
+        clock=clock,
+    )
