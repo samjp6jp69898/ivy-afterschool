@@ -1,30 +1,37 @@
 """BACKEND-467 / 468 / 469 / 471 / 472 / 473 / 476 / 477 / 478：後台考試成績 endpoint
 （app/api/admin/exams.py）。
+BACKEND-470 / 474 / 475：PATCH /{id}、PUT /{id}/scores、POST /{id}/publish。
 
 測資以 db_session 建立並 commit（只釋放 savepoint）後再打 API；科目 / 考試類型用 seed 列。
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from datetime import date
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.account import StaffUser
-from app.models.exams import Exam
+from app.models.audit import AuditLog
+from app.models.exams import Exam, ExamScore
+from app.models.notifications import Notification
 from app.models.reference import ExamType, Subject
+from app.notifications import outbox_jobs
 from tests.support.factories import (
     make_class,
     make_exam,
     make_exam_score,
     make_exam_subject,
+    make_guardian,
+    make_parent,
     make_student,
 )
 from tests.support.route_audit import admin_routes_without_permission
@@ -663,3 +670,287 @@ def test_admin_exam_history_404(
     client, _ = staff_client(permissions=["exams:read"])
 
     assert_error(client.get(_history_url(uuid4())), 404, "student_not_found")
+
+
+# --- BACKEND-470 / 474 / 475：PATCH /{id}、PUT /{id}/scores、POST /{id}/publish ------------------
+
+
+@pytest.fixture(autouse=True)
+def _kick_off() -> Iterator[None]:
+    """publish / 發布後改分會 enqueue 家長通知：commit 後的 outbox kick 不實際派送。"""
+    outbox_jobs.set_kick_mode("off")
+    yield
+    outbox_jobs.set_kick_mode("thread")
+
+
+def test_admin_exams_update_success(staff_client: StaffClientFactory, db_session: Session) -> None:
+    exam = make_exam(db_session, name="第一次段考")
+    client, _ = staff_client(permissions=["exams:write"])
+
+    resp = client.patch(_exam_url(exam.id), json={"name": "第一次段考（補考）"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["name"] == "第一次段考（補考）"
+    assert body["id"] == str(exam.id)
+    db_session.expire_all()
+    assert exam.name == "第一次段考（補考）"
+    moved = client.patch(_exam_url(exam.id), json={"exam_date": "2026-10-20", "note": "延後"})
+    assert (moved.json()["exam_date"], moved.json()["note"]) == ("2026-10-20", "延後")
+
+
+def test_admin_exams_update_422(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    exam = make_exam(db_session)
+    client, _ = staff_client(permissions=["exams:write"])
+
+    assert_error(client.patch(_exam_url(exam.id), json={}), 422, "validation_error")
+    assert_error(
+        client.patch(_exam_url(exam.id), json={"status": "published"}), 422, "validation_error"
+    )
+    assert_error(client.patch(_exam_url("abc"), json={"name": "x"}), 422, "validation_error")
+    assert_error(
+        client.patch(_exam_url(exam.id), json={"grade_level": None, "class_id": None}),
+        422,
+        "validation_error",
+    )
+
+
+def test_admin_exams_update_401(api_client: TestClient, assert_error: AssertError) -> None:
+    assert_error(api_client.patch(_exam_url(uuid4()), json={"name": "x"}), 401, "unauthenticated")
+
+
+def test_admin_exams_update_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    exam = make_exam(db_session, name="原名")
+    client, _ = staff_client(permissions=["exams:read"])
+
+    resp = client.patch(_exam_url(exam.id), json={"name": "x"})
+
+    assert_error(resp, 403, "permission_denied")
+    db_session.expire_all()
+    assert exam.name == "原名"
+
+
+def test_admin_exams_update_409(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    class_a = make_class(db_session, grade_levels=(3,))
+    published = make_exam(db_session, status="published")
+    client, _ = staff_client(permissions=["exams:write"])
+
+    resp = client.patch(_exam_url(published.id), json={"class_id": str(class_a.id)})
+
+    assert_error(resp, 409, "exam_published")
+    assert_error(client.patch(_exam_url(uuid4()), json={"name": "x"}), 404, "exam_not_found")
+    # 已發布仍可改名稱
+    assert client.patch(_exam_url(published.id), json={"name": "改名"}).status_code == 200
+
+
+def _cell(student: object, subject: Subject, **fields: Any) -> dict[str, Any]:
+    return {"student_id": str(student), "subject_id": str(subject.id), **fields}
+
+
+def test_admin_exam_scores_put_success(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    class_a = make_class(db_session, grade_levels=(3,))
+    exam = _exam_with_subjects(db_session, "國語", "數學", grade_level=None, class_=class_a)
+    ming = make_student(db_session, name="王小明", class_=class_a)
+    chinese, math = _subject(db_session, "國語"), _subject(db_session, "數學")
+    client, _ = staff_client(permissions=["exams:write", "exams:read"])
+
+    resp = client.put(
+        _exam_url(exam.id, "/scores"),
+        json={
+            "cells": [
+                _cell(ming.id, chinese, score=95),
+                _cell(ming.id, math, is_absent=True, note="病假"),
+            ]
+        },
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["written"] == 2
+    assert set(body) == {"written", "changed", "renotified_students"}
+    db_session.expire_all()
+    rows = {
+        r.subject_id: r
+        for r in db_session.execute(
+            select(ExamScore).where(ExamScore.exam_id == exam.id, ExamScore.student_id == ming.id)
+        ).scalars()
+    }
+    assert rows[chinese.id].score == Decimal("95")
+    assert (rows[math.id].is_absent, rows[math.id].score, rows[math.id].note) == (
+        True,
+        None,
+        "病假",
+    )
+    grid = client.get(_exam_url(exam.id, "/scores")).json()
+    assert len(grid["cells"]) == 2
+
+
+def test_admin_exam_scores_put_422(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    class_a = make_class(db_session, grade_levels=(3,))
+    exam = _exam_with_subjects(db_session, "國語", grade_level=None, class_=class_a)
+    ming = make_student(db_session, class_=class_a)
+    chinese = _subject(db_session, "國語")
+    client, _ = staff_client(permissions=["exams:write"])
+
+    empty = client.put(_exam_url(exam.id, "/scores"), json={"cells": []})
+    over = client.put(
+        _exam_url(exam.id, "/scores"), json={"cells": [_cell(ming.id, chinese, score=120)]}
+    )
+
+    assert_error(empty, 422, "validation_error")
+    assert_error(over, 422, "invalid_score_cells")
+    details = over.json()["error"]["details"]
+    assert details[0]["code"] == "score_out_of_range"
+    assert details[0]["student_id"] == str(ming.id)
+    assert db_session.execute(select(ExamScore).where(ExamScore.exam_id == exam.id)).first() is None
+
+
+def test_admin_exam_scores_put_401(
+    api_client: TestClient, db_session: Session, assert_error: AssertError
+) -> None:
+    chinese = _subject(db_session, "國語")
+    resp = api_client.put(
+        _exam_url(uuid4(), "/scores"), json={"cells": [_cell(uuid4(), chinese, score=1)]}
+    )
+
+    assert_error(resp, 401, "unauthenticated")
+
+
+def test_admin_exam_scores_put_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    exam = make_exam(db_session)
+    chinese = _subject(db_session, "國語")
+    client, _ = staff_client(permissions=["exams:read"])
+
+    resp = client.put(
+        _exam_url(exam.id, "/scores"), json={"cells": [_cell(uuid4(), chinese, score=1)]}
+    )
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["exams:write"]}
+
+
+def test_admin_exam_scores_put_published_audit(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    class_a = make_class(db_session, grade_levels=(3,))
+    exam = _exam_with_subjects(
+        db_session, "國語", "數學", grade_level=None, class_=class_a, status="published"
+    )
+    chinese, math = _subject(db_session, "國語"), _subject(db_session, "數學")
+    ming = make_student(db_session, class_=class_a)
+    make_exam_score(db_session, exam, ming, chinese, score=Decimal("95"))
+    make_exam_score(db_session, exam, ming, math, score=Decimal("80"))
+    client, staff = staff_client(permissions=["exams:write"])
+
+    resp = client.put(
+        _exam_url(exam.id, "/scores"),
+        json={"cells": [_cell(ming.id, chinese, score=97), _cell(ming.id, math, score=80)]},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["written"] == 2
+    assert resp.json()["changed"] == 1
+    logs = list(
+        db_session.execute(
+            select(AuditLog).where(
+                AuditLog.action == "exam_score.update", AuditLog.actor_id == staff.id
+            )
+        ).scalars()
+    )
+    assert len(logs) == 1
+    assert logs[0].ip is None or isinstance(logs[0].ip, str)
+    db_session.expire_all()
+    changed = db_session.execute(
+        select(ExamScore).where(
+            ExamScore.exam_id == exam.id,
+            ExamScore.student_id == ming.id,
+            ExamScore.subject_id == chinese.id,
+        )
+    ).scalar_one()
+    assert changed.score == Decimal("97")
+
+
+def test_admin_exam_publish_success(staff_client: StaffClientFactory, db_session: Session) -> None:
+    class_a = make_class(db_session, grade_levels=(3,))
+    exam = _exam_with_subjects(db_session, "國語", grade_level=None, class_=class_a)
+    ming = make_student(db_session, name="王小明", class_=class_a)
+    make_guardian(db_session, ming, parent=make_parent(db_session))
+    client, staff = staff_client(permissions=["exams:publish"], display_name="林主任")
+
+    resp = client.post(_exam_url(exam.id, "/publish"))
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "published"
+    assert body["published_at"] is not None
+    assert body["published_by_name"] == "林主任"
+    db_session.expire_all()
+    assert (exam.status, exam.published_by) == ("published", staff.id)
+    # 家長收到成績公布通知（已 commit）
+    notifications = list(
+        db_session.execute(
+            select(Notification).where(Notification.event == "exam.published")
+        ).scalars()
+    )
+    assert len(notifications) == 1
+    assert notifications[0].payload["exam_id"] == str(exam.id)
+
+
+def test_admin_exam_publish_422(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    empty = make_exam(db_session)
+    client, _ = staff_client(permissions=["exams:publish"])
+
+    assert_error(client.post(_exam_url("abc", "/publish")), 422, "validation_error")
+    assert_error(client.post(_exam_url(empty.id, "/publish")), 422, "exam_has_no_subjects")
+    db_session.expire_all()
+    assert empty.status == "draft"
+
+
+def test_admin_exam_publish_401(api_client: TestClient, assert_error: AssertError) -> None:
+    assert_error(api_client.post(_exam_url(uuid4(), "/publish")), 401, "unauthenticated")
+
+
+def test_admin_exam_publish_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    exam = _exam_with_subjects(db_session, "國語")
+    client, _ = staff_client(permissions=["exams:write"])
+
+    resp = client.post(_exam_url(exam.id, "/publish"))
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["exams:publish"]}
+    db_session.expire_all()
+    assert exam.status == "draft"
+
+
+def test_admin_exam_publish_409(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    published = _exam_with_subjects(db_session, "國語", status="published")
+    client, _ = staff_client(permissions=["exams:publish"])
+
+    assert_error(client.post(_exam_url(published.id, "/publish")), 409, "exam_already_published")
+    assert_error(client.post(_exam_url(uuid4(), "/publish")), 404, "exam_not_found")
+
+
+def test_admin_exams_write_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    paths = app.openapi()["paths"]
+    assert "patch" in paths[_URL + "/{exam_id}"]
+    assert "put" in paths[_URL + "/{exam_id}/scores"]
+    assert "post" in paths[_URL + "/{exam_id}/publish"]
