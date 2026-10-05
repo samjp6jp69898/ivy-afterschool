@@ -1,4 +1,5 @@
-"""BACKEND-115：app/services/reference_data_service.py（list_items）。"""
+"""BACKEND-115：app/services/reference_data_service.py（list_items）。
+BACKEND-118：delete_item（未被引用真刪除、被 restrict FK 引用改停用、休息日直接刪除）。"""
 
 from datetime import date
 from uuid import uuid4
@@ -13,6 +14,7 @@ from app.schemas.reference import (
     ClosedDayCreateIn,
     ClosedDayOut,
     ClosedDayUpdateIn,
+    DeleteResultOut,
     NamedItemCreateIn,
     NamedItemOut,
     NamedItemUpdateIn,
@@ -21,8 +23,9 @@ from app.schemas.reference import (
     SchoolOut,
     SchoolUpdateIn,
 )
-from app.services.reference_data_service import create_item, list_items, update_item
+from app.services.reference_data_service import create_item, delete_item, list_items, update_item
 from app.services.reference_specs import SPECS
+from tests.support.factories import make_school, make_student
 
 
 def test_reference_list_subjects_order(db_session: Session) -> None:
@@ -217,3 +220,55 @@ def test_reference_update_conflict(db_session: Session) -> None:
     # 改成自己的名稱（大小寫變化）不算衝突
     out = update_item(db_session, SPECS["subjects"], created.id, NamedItemUpdateIn(name="書法"))
     assert out.name == "書法"  # type: ignore[attr-defined]
+
+
+# --- BACKEND-118：delete_item ---------------------------------------------------------------------
+
+
+def test_reference_delete_unreferenced(db_session: Session) -> None:
+    created = create_item(db_session, SPECS["subjects"], NamedItemCreateIn(name="書法"))
+
+    out = delete_item(db_session, SPECS["subjects"], created.id)  # type: ignore[attr-defined]
+
+    assert isinstance(out, DeleteResultOut)
+    assert out.model_dump() == {"deleted": True, "deactivated": False}
+    remaining = db_session.execute(
+        select(Subject).where(Subject.id == created.id)  # type: ignore[attr-defined]
+    ).scalar_one_or_none()
+    assert remaining is None
+
+
+def test_reference_delete_referenced_deactivates(db_session: Session) -> None:
+    school = make_school(db_session)
+    make_student(db_session, school=school)
+
+    out = delete_item(db_session, SPECS["schools"], school.id)
+
+    assert out.model_dump() == {"deleted": False, "deactivated": True}
+    stored = db_session.execute(select(School).where(School.id == school.id)).scalar_one()
+    assert stored.is_active is False
+    # savepoint 已 rollback：session 仍可用，後續寫入正常
+    create_item(db_session, SPECS["subjects"], NamedItemCreateIn(name="書法"))
+
+
+def test_reference_delete_closed_day(db_session: Session) -> None:
+    created = create_item(
+        db_session, SPECS["closed-days"], ClosedDayCreateIn(date=date(2026, 10, 10), reason="國慶")
+    )
+
+    out = delete_item(db_session, SPECS["closed-days"], created.id)  # type: ignore[attr-defined]
+
+    assert out.model_dump() == {"deleted": True, "deactivated": False}
+    assert (
+        db_session.execute(
+            select(func.count()).select_from(ClosedDay).where(ClosedDay.date == date(2026, 10, 10))
+        ).scalar_one()
+        == 0
+    )
+
+
+def test_reference_delete_not_found(db_session: Session) -> None:
+    with pytest.raises(AppError) as exc:
+        delete_item(db_session, SPECS["schools"], uuid4())
+
+    assert (exc.value.status, exc.value.code) == (404, "school_not_found")
