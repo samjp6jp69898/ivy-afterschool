@@ -5,7 +5,9 @@ BACKEND-153：archive_student（封存、刪未使用綁定碼、家長可見範
 BACKEND-154：upload_photo（驗證、Storage、commit 後刪舊檔、rollback 不刪）。
 BACKEND-530：purge_student（永久刪除 = 匿名化；前置條件、個資清除、統計保留、Storage、稽核）。
 BACKEND-529：close_out_inactive_student（停讀 / 退班收尾：接送請求、代理授權、出勤、請假、稽核、
-同交易）。"""
+同交易）。
+BACKEND-548：close_out 鎖序「授權列 → 請求列 → 請假 / 出勤」，與 425 complete_via_authorization
+不死結。"""
 
 from __future__ import annotations
 
@@ -20,7 +22,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import Engine, func, select
+from sqlalchemy import Engine, func, select, text
 from sqlalchemy.orm import Session
 from starlette.datastructures import Headers, UploadFile
 
@@ -54,6 +56,10 @@ from app.schemas.students import (
 from app.services.binding_code_service import hash_code
 from app.services.class_service import archive_class
 from app.services.parent_scope import get_parent_student_ids
+from app.services.pickup.authorizations import (
+    complete_via_authorization,
+    load_verifiable_authorization,
+)
 from app.services.student_service import (
     CloseOutResult,
     archive_student,
@@ -1577,3 +1583,115 @@ def test_close_out_rollback_with_caller(
         ).scalar_one()
         == 0
     )
+
+
+# --- BACKEND-548：與 complete_via_authorization 的鎖序 --------------------------------------
+
+
+def _staff_actor(staff: object) -> CurrentStaff:
+    return CurrentStaff(
+        id=staff.id,  # type: ignore[attr-defined]
+        username=staff.username,  # type: ignore[attr-defined]
+        display_name=staff.display_name,  # type: ignore[attr-defined]
+        role_id=staff.role_id,  # type: ignore[attr-defined]
+        role_code="clerk",
+        role_name="行政",
+        permissions=frozenset({"students:write", "pickup:operate"}),
+        must_change_password=False,
+        token_version=0,
+    )
+
+
+@pytest.mark.clock("2026-09-09T10:00:00+08:00")
+@pytest.mark.cleanup_tables("class_staff")
+def test_close_out_vs_authorization_complete_no_deadlock(
+    owner_cleanup_rows: list[tuple[str, str, object]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    fake_clock: FakeClock,
+) -> None:
+    """s1 櫃台核銷（先鎖授權列）與 s2 退班收尾同時進行：兩者都不得 40P01。
+
+    close_out 必須先鎖授權列再鎖請求列（與 425 同向）；舊順序（請求列 → 授權列）會互等死結。
+    最終授權與請求各只有一個終態（s1 核銷成功 → completed，s2 的取消因條件式更新 0 列而略過）。
+    """
+    staff = make_staff(committing_db_session)
+    ming = make_student(committing_db_session, name="王小明")
+    auth = make_pickup_authorization(committing_db_session, ming, service_date=_D, code="123456")
+    request = make_pickup_request(committing_db_session, ming, service_date=_D)
+    committing_db_session.commit()
+    sid, auth_id, request_id = ming.id, auth.id, request.id
+    owner_cleanup_rows.extend(
+        [
+            ("roles", "id", staff.role_id),
+            ("staff_users", "id", staff.id),
+            ("students", "id", sid),
+            ("pickup_authorizations", "student_id", sid),
+            ("pickup_requests", "student_id", sid),
+            ("student_attendances", "student_id", sid),
+            ("audit_logs", "entity_id", str(sid)),
+        ]
+    )
+    actor = _staff_actor(staff)
+    a_locked = threading.Event()
+    release_a = threading.Event()
+    b_done = threading.Event()
+    outcome: dict[str, object] = {}
+
+    def worker_a() -> None:  # 櫃台核銷：授權列 → 請求列 → 出勤列
+        sa = Session(bind=db_engine)
+        try:
+            sa.execute(text("set local lock_timeout = '15s'"))
+            locked = load_verifiable_authorization(sa, auth_id, clock=fake_clock)
+            a_locked.set()
+            release_a.wait(timeout=15)
+            complete_via_authorization(sa, locked, "code", actor=actor, clock=fake_clock)
+            sa.commit()
+            outcome["a"] = "ok"
+        except BaseException as exc:
+            sa.rollback()
+            outcome["a"] = exc
+            a_locked.set()
+        finally:
+            sa.close()
+
+    def worker_b() -> None:  # 退班收尾
+        sb = Session(bind=db_engine)
+        try:
+            a_locked.wait(timeout=15)
+            sb.execute(text("set local lock_timeout = '15s'"))
+            student = sb.get(Student, sid)
+            assert student is not None
+            student.status = "withdrawn"
+            student.withdrawn_on = _D
+            sb.flush()
+            result = close_out_inactive_student(sb, student, actor=actor, clock=fake_clock)
+            sb.commit()
+            outcome["b"] = result
+        except BaseException as exc:
+            sb.rollback()
+            outcome["b"] = exc
+        finally:
+            sb.close()
+            b_done.set()
+
+    threads = [threading.Thread(target=worker_a), threading.Thread(target=worker_b)]
+    for t in threads:
+        t.start()
+    try:
+        assert a_locked.wait(timeout=15)
+        # s1 持授權列鎖：s2 的收尾必須在鎖授權列時等待，不能先鎖請求列再等（那就是死結的另一半）
+        assert not b_done.wait(timeout=1.0), outcome
+    finally:
+        release_a.set()
+        for t in threads:
+            t.join(timeout=30)
+
+    assert outcome.get("a") == "ok", outcome
+    assert isinstance(outcome.get("b"), CloseOutResult), outcome
+    assert outcome["b"].cancelled_authorizations == 0  # type: ignore[attr-defined]
+    assert outcome["b"].cancelled_pickup_requests == 0  # type: ignore[attr-defined]
+    with Session(bind=db_engine) as check:
+        assert check.get(PickupAuthorization, auth_id).status == "completed"  # type: ignore[union-attr]
+        assert check.get(PickupRequest, request_id).status == "completed"  # type: ignore[union-attr]
+        assert check.get(Student, sid).status == "withdrawn"  # type: ignore[union-attr]
