@@ -1,6 +1,9 @@
-"""BACKEND-452 / 464 / 465 / 466：exam_service（應考名單、歷次成績、家長端成績）。"""
+"""BACKEND-452 / 464 / 465 / 466 / 453 / 454：exam_service。
 
-from datetime import date
+應考名單、歷次成績、家長端成績、考試列表與詳情。
+"""
+
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -11,11 +14,15 @@ from sqlalchemy.orm import Session
 from app.core.errors import AppError
 from app.core.pagination import PageParams
 from app.models.exams import Exam
-from app.models.reference import Subject
+from app.models.reference import ExamType, Subject
+from app.schemas.exams import ExamListQuery, ExamOut
 from app.services.exam_service import (
     get_child_exam_detail,
+    get_exam,
+    get_exam_or_404,
     get_student_exam_history,
     list_child_exams,
+    list_exams,
     resolve_exam_roster,
 )
 from tests.support.factories import (
@@ -23,6 +30,7 @@ from tests.support.factories import (
     make_exam,
     make_exam_score,
     make_exam_subject,
+    make_staff,
     make_student,
 )
 
@@ -255,3 +263,233 @@ def test_student_exam_history_query_count_is_constant(db_session: Session) -> No
     for _ in range(4):
         add_exam()
     assert count_queries() == one_exam
+
+
+# --- BACKEND-453 list_exams ---
+
+_ALL = PageParams(page=1, page_size=200)
+
+
+def _exam_type(db: Session, name: str) -> ExamType:
+    return db.execute(select(ExamType).where(ExamType.name == name)).scalar_one()
+
+
+def _listed(db: Session, ids: set[UUID], **filters: object) -> list[ExamOut]:
+    """只看本測試建立的考試，避免 DB 內其他資料干擾。"""
+    page = list_exams(db, ExamListQuery(**filters), _ALL)  # type: ignore[arg-type]
+    return [exam for exam in page.items if exam.id in ids]
+
+
+def test_list_exams_filters(db_session: Session) -> None:
+    class_a = make_class(db_session, name="A班", grade_levels=(3, 4))
+    sept = make_exam(
+        db_session,
+        name="九月小考",
+        exam_type=_exam_type(db_session, "小考"),
+        exam_date=date(2026, 9, 30),
+        grade_level=3,
+    )
+    mid = make_exam(
+        db_session,
+        name="第一次段考",
+        exam_date=date(2026, 10, 15),
+        grade_level=None,
+        class_=class_a,
+        status="published",
+    )
+    late = make_exam(db_session, name="第二次段考", exam_date=date(2026, 10, 20), grade_level=4)
+    ids = {sept.id, mid.id, late.id}
+
+    def got(**filters: object) -> list[UUID]:
+        return [exam.id for exam in _listed(db_session, ids, **filters)]
+
+    assert got() == [late.id, mid.id, sept.id]  # exam_date 新到舊
+    assert got(status="draft") == [late.id, sept.id]
+    assert got(status="published") == [mid.id]
+    assert got(grade_level=3) == [sept.id]
+    assert got(q="段考") == [late.id, mid.id]
+    assert got(q="第一次") == [mid.id]
+    assert got(class_id=class_a.id) == [mid.id]
+    assert got(exam_type_id=_exam_type(db_session, "小考").id) == [sept.id]
+    assert got(date_from=date(2026, 10, 15), date_to=date(2026, 10, 19)) == [mid.id]
+    assert got(date_from=date(2026, 10, 16)) == [late.id]
+    assert got(date_to=date(2026, 9, 30)) == [sept.id]
+    # q 的 % / _ 視為一般字元
+    assert got(q="%") == []
+
+
+def test_list_exams_fields(db_session: Session) -> None:
+    class_a = make_class(db_session, name="A班")
+    director = make_staff(db_session, display_name="陳主任")
+    exam = make_exam(db_session, grade_level=None, class_=class_a, status="published")
+    exam.published_by = director.id
+    exam.note = "範圍第一到三課"
+    make_exam_subject(db_session, exam, _subject(db_session, "數學"), sort_order=20)
+    make_exam_subject(
+        db_session, exam, _subject(db_session, "國語"), sort_order=10, full_score=Decimal("50")
+    )
+    db_session.flush()
+    db_session.expire_all()
+
+    [out] = _listed(db_session, {exam.id})
+
+    assert out.name == "第一次段考"
+    assert (out.exam_type.name, out.status, out.note) == ("段考", "published", "範圍第一到三課")
+    assert out.class_ is not None
+    assert (out.class_.id, out.class_.name) == (class_a.id, "A班")
+    assert out.published_by_name == "陳主任"
+    assert out.published_at == datetime(2026, 8, 1, tzinfo=UTC)
+    assert [(s.subject_name, s.full_score) for s in out.subjects] == [
+        ("國語", Decimal("50")),
+        ("數學", Decimal("100")),
+    ]
+
+
+def test_list_exams_same_date_newest_created_first(db_session: Session) -> None:
+    older = make_exam(db_session, name="甲")
+    newer = make_exam(db_session, name="乙")
+    older.created_at = datetime(2026, 8, 8, tzinfo=UTC)
+    newer.created_at = datetime(2026, 8, 9, tzinfo=UTC)
+    db_session.flush()
+
+    assert [e.id for e in _listed(db_session, {older.id, newer.id})] == [newer.id, older.id]
+
+
+def test_list_exams_pagination(db_session: Session) -> None:
+    exams = [
+        make_exam(db_session, name=f"分頁考試{i}", exam_date=date(2026, 9, 1 + i)) for i in range(3)
+    ]
+
+    page = list_exams(db_session, ExamListQuery(q="分頁考試"), PageParams(page=2, page_size=2))
+
+    assert page.total == 3
+    assert [e.id for e in page.items] == [exams[0].id]
+
+
+def test_list_exams_roster_count(db_session: Session) -> None:
+    class_a = make_class(db_session, name="A班", grade_levels=(4, 6))
+    class_b = make_class(db_session, name="B班", grade_levels=(3,))
+    grade = make_exam(db_session, name="六年級段考", grade_level=6)
+    by_class = make_exam(db_session, name="A班段考", grade_level=None, class_=class_a)
+    both = make_exam(db_session, name="A班六年級段考", grade_level=6, class_=class_a)
+    nobody = make_exam(db_session, name="無人段考", grade_level=None, class_=class_b)
+    make_student(db_session, name="王小明", grade_level=6, class_=class_a)
+    make_student(db_session, name="陳小華", grade_level=6, class_=None)
+    make_student(db_session, name="林小安", grade_level=4, class_=class_a)
+    make_student(db_session, name="張小美", grade_level=6, class_=class_a, status="suspended")
+    make_student(db_session, name="趙小雅", grade_level=6, archived=True)
+
+    counts = {
+        e.id: e.roster_count
+        for e in _listed(db_session, {grade.id, by_class.id, both.id, nobody.id})
+    }
+
+    assert counts == {grade.id: 2, by_class.id: 2, both.id: 1, nobody.id: 0}
+
+
+def test_list_exams_query_count(db_session: Session) -> None:
+    class_a = make_class(db_session, grade_levels=(3,))
+    director = make_staff(db_session, display_name="陳主任")
+    for index in range(10):
+        exam = make_exam(
+            db_session,
+            name=f"計數考試{index}",
+            class_=class_a if index % 2 else None,
+            grade_level=3,
+            status="published" if index % 3 == 0 else "draft",
+        )
+        if exam.status == "published":
+            exam.published_by = director.id
+        make_exam_subject(db_session, exam, _subject(db_session, "國語"))
+        make_exam_subject(db_session, exam, _subject(db_session, "數學"), sort_order=1)
+    for _ in range(5):
+        make_student(db_session, grade_level=3, class_=class_a)
+    db_session.flush()
+    db_session.expire_all()
+    statements: list[str] = []
+
+    def record(_conn: object, _cur: object, statement: str, *_args: object) -> None:
+        statements.append(statement)
+
+    engine = db_session.get_bind()
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        page = list_exams(db_session, ExamListQuery(q="計數考試"), _ALL)
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+
+    assert page.total == 10
+    assert all(len(e.subjects) == 2 for e in page.items)
+    assert {e.published_by_name for e in page.items} == {"陳主任", None}
+    assert len(statements) <= 5
+
+
+# --- BACKEND-454 get_exam / get_exam_or_404 ---
+
+
+def test_get_exam_detail(db_session: Session) -> None:
+    exam = _exam_with_subjects(db_session, "國語", "數學", grade_level=6)
+    make_student(db_session, name="王小明", grade_level=6)
+    make_student(db_session, name="陳小華", grade_level=6)
+    make_student(db_session, name="林小安", grade_level=5)
+    db_session.expire_all()
+
+    out = get_exam(db_session, exam.id)
+
+    assert out.id == exam.id
+    assert [s.subject_name for s in out.subjects] == ["國語", "數學"]
+    assert [s.sort_order for s in out.subjects] == [10, 20]
+    assert out.roster_count == 2
+    assert (out.grade_level, out.class_) == (6, None)
+    assert out.published_by_name is None
+    assert out.model_dump(by_alias=True)["class"] is None
+
+
+def test_get_exam_not_found(db_session: Session) -> None:
+    with pytest.raises(AppError) as missing:
+        get_exam(db_session, uuid4())
+    with pytest.raises(AppError) as missing_row:
+        get_exam_or_404(db_session, uuid4(), for_update=True)
+
+    assert (missing.value.status, missing.value.code) == (404, "exam_not_found")
+    assert (missing_row.value.status, missing_row.value.code) == (404, "exam_not_found")
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "clause"),
+    [
+        ({}, None),
+        ({"for_update": True}, "FOR UPDATE OF exams"),
+        ({"for_share": True}, "FOR SHARE OF exams"),
+    ],
+)
+def test_get_exam_or_404_lock_clause(
+    db_session: Session, kwargs: dict[str, bool], clause: str | None
+) -> None:
+    class_a = make_class(db_session)
+    exam = make_exam(db_session, grade_level=None, class_=class_a)
+    statements: list[str] = []
+
+    def record(_conn: object, _cur: object, statement: str, *_args: object) -> None:
+        statements.append(statement)
+
+    engine = db_session.get_bind()
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        row = get_exam_or_404(db_session, exam.id, **kwargs)
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+
+    assert row.id == exam.id
+    exam_selects = [s for s in statements if "FROM exams" in s]
+    assert exam_selects
+    if clause is None:
+        assert all(" FOR " not in s for s in exam_selects)
+    else:
+        assert clause in exam_selects[0]
+
+
+def test_get_exam_or_404_rejects_both_locks(db_session: Session) -> None:
+    exam = make_exam(db_session)
+    with pytest.raises(ValueError, match="for_update"):
+        get_exam_or_404(db_session, exam.id, for_update=True, for_share=True)
