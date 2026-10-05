@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 269,
-  "last_updated": "2026-10-05T02:58:09Z",
+  "version": 270,
+  "last_updated": "2026-10-05T02:58:34Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -7930,7 +7930,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:services/student_attendance_report.py::build_daily_classroom_overview",
-      "status": "done",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-300",
@@ -7940,7 +7940,7 @@
         "BACKEND-133"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "review-r8-c 打回（規格修正 e1672c5）：營業日虛擬列沒有排除 enrolled_on > d 的尚未入班學生。反例：d=2026-10-05，active 學生 B enrolled_on=2026-10-06、當天無出勤列 → get_daily_attendance 仍回 B 的虛擬列，summary.expected 多算 1（attendance_service.py get_daily_attendance 的 missing 查詢只篩 status='active' 與 archived_at is null）。需補 red_case test_daily_attendance_excludes_not_yet_enrolled 並在 missing 查詢加 enrolled_on <= d（enrolled_on 為 null 時的處理與 BACKEND-303 一致）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_attendance_service.py",
@@ -7958,9 +7958,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pass",
+        "status": "concern",
         "reviewer": "review-r8-c",
-        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 commit 先於實作；just lint / typecheck 對 8 個動到的檔案乾淨；測試以 app_backend 連線（owner 只用於清理）。 實際列一次 join 學生 / 班級 / 請假、虛擬列另一條查詢，30 人 ≤ 4 條 SQL；status 篩選在 summary 之後；非營業日保留實際列不產生虛擬列。殘留：查過去日期時，enrolled_on 晚於該日的 active 學生仍以虛擬列出現（description 未要求依 enrolled_on 過濾）。"
+        "notes": "打回：營業日虛擬列未排除 enrolled_on > d 的尚未入班學生（規格修正 e1672c5 新增的 red_case test_daily_attendance_excludes_not_yet_enrolled 尚無測試、實作未過濾），詳見 risk_notes。其餘先前審查項目（tdd.run 全綠、summary 在 status 篩選前計算、≤ 4 條 SQL、非營業日不產生虛擬列）維持通過。"
       }
     },
     {
@@ -12074,7 +12074,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-450",
@@ -12099,9 +12099,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 commit 12f18b0 先於實作 aa10dcc（實作 commit 內測試只把 ExamListQuery(**filters) 改為 model_validate、去掉 type: ignore）；just lint / typecheck 對 exam_service.py 與 test_exam_service.py 乾淨；測試以 app_backend 連線。 篩選（q 以 icontains autoescape，% / _ 視為一般字元）、status / exam_type_id / class_id / grade_level / 日期區間、exam_date desc、created_at desc（id 決勝）、分頁皆有測試；roster_count 以單一 GROUP BY 計算，條件與 resolve_exam_roster（list_active_student_ids：active、未封存、class / grade 交集）一致，含 suspended / archived / 無人班級案例；published_by_name 批次解析；10 場考試 SQL ≤ 5。殘留：_exam_select 以 lazyload 取代 SchoolClass.staff_links 的 selectin，之後若有呼叫端在同 session 存取 exam.school_class.staff_links 會多一條 lazy 查詢（目前無此用法）。"
       }
     },
     {
@@ -12111,7 +12111,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-450",
@@ -12134,9 +12134,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠且 --collect-only 對照選到每條 red_case；測試 commit 12f18b0 先於實作 aa10dcc（實作 commit 內測試只把 ExamListQuery(**filters) 改為 model_validate、去掉 type: ignore）；just lint / typecheck 對 exam_service.py 與 test_exam_service.py 乾淨；測試以 app_backend 連線。 get_exam 回傳 subjects 依 sort_order、roster_count、class=None（只有 grade_level）、published_by_name；不存在 404 exam_not_found（含 for_update 路徑）；for_update / for_share 以 SQL 擷取斷言 'FOR UPDATE OF exams' / 'FOR SHARE OF exams'（of=Exam 避開 outer join 可空側），加鎖時 populate_existing；兩者同時給拋 ValueError 並有測試。"
       }
     },
     {
@@ -13148,7 +13148,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/dashboard_service.py",
       "source_ref": "BE:services/dashboard_query_service.py::DashboardQueryService._compute_student_attendance_summary",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-490",
@@ -13161,7 +13161,7 @@
         "BACKEND-002"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "DashboardTodayOut（BACKEND-490）的 completion_rate 只對 int / float 做四捨五入，傳 Decimal 會原樣輸出（例如 33.333）：service 以 float 計算完成率再交給 schema。",
+      "risk_notes": "DashboardTodayOut（BACKEND-490）的 completion_rate 只對 int / float 做四捨五入，傳 Decimal 會原樣輸出（例如 33.333）：service 以 float 計算完成率再交給 schema。\nreview-r8-c 打回（規格修正 e1672c5）：營業日尚無出勤列的 active 學生併入 not_arrived / expected_total 時沒有排除 enrolled_on > d 的尚未入班學生。反例：today=2026-10-05，A enrolled_on=2026-10-01、B enrolled_on=2026-10-06 皆無出勤列 → attendance.expected_total == 2、not_arrived == 2（應為 1）（dashboard_service.py _attendance_counts 的 missing 子查詢只篩 status='active' 與 archived_at is null）。需補 red_case test_dashboard_excludes_not_yet_enrolled 並在 missing 子查詢加 enrolled_on <= d（與 BACKEND-303 / 311 一致）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_dashboard_service.py",
@@ -13180,9 +13180,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r8-c",
+        "notes": "打回：應到範圍未排除 enrolled_on > d 的尚未入班學生（規格修正 e1672c5 新增的 red_case test_dashboard_excludes_not_yet_enrolled 尚無測試、實作未過濾），詳見 risk_notes。其餘已審項目通過：測試 3f4ebc6 先於實作 4a15774；原 5 條 red_case 加 5 條補充案例全綠；出勤以 GROUP BY + UNION ALL 單一查詢；needs_reply 條件與 description 一致（arrived 測資給 staff 回覆以符合定義，另有 auto 回覆 ETA / 作業完成 / 終態案例）；completion_rate 以 float 計算（risk_notes 已處理，33.3 有測）；近期請假範圍 d~d+7、上限 10、start_date / created_at 排序；50 位學生 SQL ≤ 6；lint / typecheck 乾淨。殘留：測試依賴共用 DB 沒有其他已 commit 的 active 學生 / 請假（儀表板無篩選，計數涵蓋全庫）。"
       }
     },
     {
