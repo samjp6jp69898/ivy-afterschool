@@ -276,7 +276,7 @@ def _exam_type(db: Session, name: str) -> ExamType:
 
 def _listed(db: Session, ids: set[UUID], **filters: object) -> list[ExamOut]:
     """只看本測試建立的考試，避免 DB 內其他資料干擾。"""
-    page = list_exams(db, ExamListQuery(**filters), _ALL)  # type: ignore[arg-type]
+    page = list_exams(db, ExamListQuery.model_validate(filters), _ALL)
     return [exam for exam in page.items if exam.id in ids]
 
 
