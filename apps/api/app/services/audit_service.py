@@ -1,7 +1,8 @@
 """BACKEND-102：稽核寫入（audit_logs，與業務同交易）。
 
 ``record`` 只 add + flush，不 commit：業務 rollback 時稽核一併回滾（不記錄沒發生的事）。
-before / after 轉成 JSON 相容值，並遞迴遮罩敏感 key。action 格式不符是程式錯誤（ValueError），
+before / after 轉成 JSON 相容值，並遞迴遮罩敏感 key（BACKEND-547：must_change_password、
+token_version 這類狀態旗標以精確比對白名單放行）。action 格式不符是程式錯誤（ValueError），
 不是使用者錯誤。
 """
 
@@ -38,6 +39,8 @@ _SENSITIVE_KEY_PARTS: Final = (
     "health_note",
 )
 REDACTED: Final = "***"
+# 含敏感片段但不是機密的狀態欄位：整個 key（不分大小寫）完全相等才放行
+_NON_SENSITIVE_KEYS: Final = frozenset({"must_change_password", "token_version"})
 
 
 @dataclass(frozen=True)
@@ -60,6 +63,8 @@ class Actor:
 
 def _is_sensitive(key: str) -> bool:
     lowered = key.lower()
+    if lowered in _NON_SENSITIVE_KEYS:
+        return False
     return any(part in lowered for part in _SENSITIVE_KEY_PARTS)
 
 
