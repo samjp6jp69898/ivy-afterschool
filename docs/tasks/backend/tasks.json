@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 392,
-  "last_updated": "2026-10-05T06:29:42Z",
+  "version": 393,
+  "last_updated": "2026-10-05T06:30:46Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3553,7 +3553,7 @@
       "review": {
         "status": "pass",
         "reviewer": "review-r7-b",
-        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試先於實作；動到的檔案 just lint / just typecheck 乾淨。突變驗證：flush 改 commit → same_transaction 轉紅；巢狀不遞迴遮罩 → redacts_and_serializes 轉紅。action 以 fullmatch 驗證、非 system actor 無 id → ValueError、Actor 建構子對應正確。殘留（不打回）：敏感 key 以子字串比對，token_version、has_id_number 這類非敏感 key 也會被遮成 '***'（偏保守，可接受）；before / after 內的 float NaN / Infinity 會讓 jsonb 寫入失敗，目前呼叫端都是內部資料，未處理。"
+        "notes": "tdd.run 實跑全綠，--collect-only 帶 / 不帶 -k 比對確認選到每條 red_case；commit 順序測試先於實作；動到的檔案 just lint / just typecheck 乾淨。突變驗證：flush 改 commit → same_transaction 轉紅；巢狀不遞迴遮罩 → redacts_and_serializes 轉紅。action 以 fullmatch 驗證、非 system actor 無 id → ValueError、Actor 建構子對應正確。殘留（不打回）：敏感 key 以子字串比對，has_id_number 這類非敏感 key 會被遮成 '***'（偏保守，可接受；must_change_password / token_version 由 BACKEND-547 白名單放行）；before / after 內的 float NaN / Infinity 會讓 jsonb 寫入失敗，目前呼叫端都是內部資料，未處理。"
       }
     },
     {
@@ -14054,7 +14054,7 @@
       "review": {
         "status": "pass",
         "reviewer": "review-r8-a",
-        "notes": "通過。tdd.run 4 條全綠、collect-only 對照全選到；8be3985（測試）先於 f99afcf（實作），60186ad 修正 821bfc3 送審時仍紅的稽核斷言（實作者自曝）。select ... with_for_update(of=StaffUser) + populate_existing 先鎖列，再走 _get_managed_staff（與 090~092 同一個 404 staff_user_not_found / 403 cannot_manage_staff 判斷）；已啟用 409 staff_already_active 且不寫稽核；is_active / must_change_password = true、新臨時密碼可 verify、舊密碼失效、token_version 維持 1；稽核 before / after 不含臨時密碼與新舊雜湊。after.must_change_password 依協調者裁定暫接受 '***'（audit_service 子字串遮罩），由 BACKEND-547 加白名單後改回 True。scratch 突變：拿掉 409 判斷、不設 must_change_password、略過 cannot_manage 檢查、token_version +1 各有 1 條轉紅。test_staff_user_service.py 30 條全綠；lint / typecheck 乾淨；跑前後 staff_users / roles 筆數不變。殘留（不擋）：拿掉 FOR UPDATE 那段 4 條仍全綠，鎖沒有測試覆蓋（驗收標準未列並發；無鎖時兩筆同時啟用都會成功，先回應的臨時密碼被後者覆蓋而失效）。"
+        "notes": "通過。tdd.run 4 條全綠、collect-only 對照全選到；8be3985（測試）先於 f99afcf（實作），60186ad 修正 821bfc3 送審時仍紅的稽核斷言（實作者自曝）。select ... with_for_update(of=StaffUser) + populate_existing 先鎖列，再走 _get_managed_staff（與 090~092 同一個 404 staff_user_not_found / 403 cannot_manage_staff 判斷）；已啟用 409 staff_already_active 且不寫稽核；is_active / must_change_password = true、新臨時密碼可 verify、舊密碼失效、token_version 維持 1；稽核 before / after 不含臨時密碼與新舊雜湊。after.must_change_password 照實記錄 True（BACKEND-547 白名單）。scratch 突變：拿掉 409 判斷、不設 must_change_password、略過 cannot_manage 檢查、token_version +1 各有 1 條轉紅。test_staff_user_service.py 30 條全綠；lint / typecheck 乾淨；跑前後 staff_users / roles 筆數不變。殘留（不擋）：拿掉 FOR UPDATE 那段 4 條仍全綠，鎖沒有測試覆蓋（驗收標準未列並發；無鎖時兩筆同時啟用都會成功，先回應的臨時密碼被後者覆蓋而失效）。"
       }
     },
     {

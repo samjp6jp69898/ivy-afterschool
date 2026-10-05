@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 92,
-  "last_updated": "2026-10-05T06:09:47Z",
+  "version": 93,
+  "last_updated": "2026-10-05T06:30:46Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -417,7 +417,7 @@
         "INFRA-013"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "",
+      "risk_notes": "通知設定頁（PARENT-178，稿 parent-page-notification-prefs.html decision 1）的頂部列標題與返回鍵由本 router 負責：該路由 meta 要設 showBack，返回目標 /notifications；實作時對照稿 decision 1。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/router.spec.ts",
