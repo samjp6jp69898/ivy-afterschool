@@ -39,11 +39,19 @@ def get_student_or_404(
 
 
 def get_class_or_404(
-    session: Session, class_id: UUID, *, include_archived: bool = False
+    session: Session,
+    class_id: UUID,
+    *,
+    include_archived: bool = False,
+    for_update: bool = False,
 ) -> SchoolClass:
+    """``for_update``：寫入前鎖班級列（FOR UPDATE OF classes + populate_existing），同一班的
+    改名 / 封存 / 指派員工與學生 INSERT 的 FK KEY SHARE 序列化。"""
     stmt = select(SchoolClass).where(SchoolClass.id == class_id)
     if not include_archived:
         stmt = stmt.where(SchoolClass.archived_at.is_(None))
+    if for_update:
+        stmt = stmt.with_for_update(of=SchoolClass).execution_options(populate_existing=True)
     school_class = session.execute(stmt).scalar_one_or_none()
     if school_class is None:
         raise NotFoundError("class_not_found", "找不到班級")
