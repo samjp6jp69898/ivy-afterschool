@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 300,
-  "last_updated": "2026-10-05T03:31:17Z",
+  "version": 301,
+  "last_updated": "2026-10-05T03:32:30Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5880,7 +5880,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/guardian_service.py",
       "source_ref": "BE:api/students.py::update_guardian",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-169"
@@ -5914,7 +5914,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/guardian_service.py",
       "source_ref": "BE:api/students.py::delete_guardian",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-169",
@@ -5950,7 +5950,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/guardian_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-169",
