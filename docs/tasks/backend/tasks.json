@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 327,
-  "last_updated": "2026-10-05T04:19:30Z",
+  "version": 328,
+  "last_updated": "2026-10-05T04:21:55Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5294,7 +5294,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-150",
