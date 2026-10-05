@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 294,
-  "last_updated": "2026-10-05T03:12:32Z",
+  "version": 295,
+  "last_updated": "2026-10-05T03:12:59Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -7627,8 +7627,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:services/student_attendance_report.py::_student_active_on",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-302",
         "BACKEND-123",
@@ -7851,8 +7851,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-302",
         "BACKEND-301",
@@ -8045,8 +8045,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:api/parent_portal/attendance.py::get_monthly_attendance",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-312"
       ],
@@ -8550,8 +8550,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_attendance.py",
       "source_ref": "BE:services/student_leave_service.py::revert_attendance_for_leave",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-342"
       ],
@@ -14165,8 +14165,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_today_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-181",
         "BACKEND-300",
