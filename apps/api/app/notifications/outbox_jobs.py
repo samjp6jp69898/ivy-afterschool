@@ -10,8 +10,8 @@
 - ``sweep_outbox``：``@scheduled_job`` 每 30 秒 ``dispatch_due(limit=50)``；只 flush 不 commit
   （BACKEND-018 的 advisory lock 是交易級，由 runner commit）。
 - LINE client：每次 kick / sweep 以 ``build_line_client(session)`` 取得，但以 channel access token
-  為 key 快取單一實例（HttpLineMessagingClient 持有 httpx.Client 且沒有 close()，每批重建會累積
-  連線）；token 變更後下一次即換新實例（舊實例若有 ``close`` 則關閉）。
+  為 key 快取單一實例（HttpLineMessagingClient 持有 httpx.Client 連線池，每批重建會累積連線）；
+  token 變更後下一次即換新實例，舊實例以 BACKEND-543 的 ``close()`` 釋放連線池。
 """
 
 from __future__ import annotations
