@@ -4,6 +4,7 @@ students:sensitive）。
 BACKEND-160：POST /api/admin/students（students:write；敏感欄位另需 students:sensitive）。
 BACKEND-163：POST /api/admin/students/{student_id}/archive（封存後家長端看不到）。
 BACKEND-531：POST /api/admin/students/{student_id}/purge（students:purge，永久刪除 = 匿名化）。
+BACKEND-164：POST /api/admin/students/{student_id}/photo（multipart file，students:write）。
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from app.models.parents import ParentAccount
 from app.models.students import Student
 from app.services.students.id_number import id_number_hmac
 from tests.support.factories import make_class, make_guardian, make_school, make_student
+from tests.support.fake_storage import FakeStorage
 from tests.support.route_audit import admin_routes_without_permission
 
 _URL = "/api/admin/students"
@@ -141,7 +143,7 @@ def test_admin_students_list_guard_registered(app: FastAPI) -> None:
     assert "/api/admin/students" in app.openapi()["paths"]
 
 
-# --- BACKEND-161：GET /api/admin/students/{student_id} --------------------------------------------
+# --- BACKEND-161：GET /api/admin/students/{student_id} -----------------------------
 
 
 def _with_sensitive(db: Session) -> Student:
@@ -252,7 +254,7 @@ def test_admin_students_get_guard_registered(app: FastAPI) -> None:
     assert "get" in app.openapi()["paths"]["/api/admin/students/{student_id}"]
 
 
-# --- BACKEND-160：POST /api/admin/students --------------------------------------------------------
+# --- BACKEND-160：POST /api/admin/students -----------------------------------------
 
 _CREATE = {"student_no": "S115020", "name": "林小安", "grade_level": 2}
 
@@ -339,7 +341,7 @@ def test_admin_students_create_guard_registered(app: FastAPI) -> None:
     assert "post" in app.openapi()["paths"]["/api/admin/students"]
 
 
-# --- BACKEND-163：POST /api/admin/students/{id}/archive -------------------------------------------
+# --- BACKEND-163：POST /api/admin/students/{id}/archive ----------------------------
 
 
 def _archive_url(student_id: object) -> str:
@@ -412,7 +414,7 @@ def test_admin_students_archive_404(
     assert_error(client.post(_archive_url(uuid4())), 404, "student_not_found")
 
 
-# --- BACKEND-531：POST /api/admin/students/{id}/purge ---------------------------------------------
+# --- BACKEND-531：POST /api/admin/students/{id}/purge ------------------------------
 
 
 def _purge_url(student_id: object) -> str:
@@ -529,3 +531,94 @@ def test_admin_students_purge_409(
 def test_admin_students_purge_guard_registered(app: FastAPI) -> None:
     assert admin_routes_without_permission(app) == []
     assert "post" in app.openapi()["paths"]["/api/admin/students/{student_id}/purge"]
+
+
+# --- BACKEND-164：POST /api/admin/students/{id}/photo ------------------------------
+
+_JPEG = b"\xff\xd8\xff\xe0" + b"0" * 100
+_PDF = b"%PDF-1.7\n" + b"0" * 50
+
+
+def _photo_url(student_id: object) -> str:
+    return f"{_URL}/{student_id}/photo"
+
+
+def test_admin_students_photo_success(
+    staff_client: StaffClientFactory, db_session: Session, fake_storage: FakeStorage
+) -> None:
+    student = make_student(db_session)
+    client, _ = staff_client(permissions=["students:write"])
+
+    resp = client.post(_photo_url(student.id), files={"file": ("a.jpg", _JPEG, "image/jpeg")})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {"photo_url"}
+    assert body["photo_url"].startswith("https://storage.test/student-photos/")
+    db_session.expire_all()
+    assert student.photo_path is not None
+    assert body["photo_url"] == f"https://storage.test/student-photos/{student.photo_path}?exp=300"
+    assert fake_storage.objects == {("student-photos", student.photo_path): _JPEG}
+
+
+def test_admin_students_photo_422(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    student = make_student(db_session)
+    client, _ = staff_client(permissions=["students:write"])
+
+    assert_error(client.post(_photo_url(student.id)), 422, "validation_error")
+    assert_error(
+        client.post(_photo_url("abc"), files={"file": ("a.jpg", _JPEG, "image/jpeg")}),
+        422,
+        "validation_error",
+    )
+
+
+def test_admin_students_photo_401(api_client: TestClient, assert_error: AssertError) -> None:
+    resp = api_client.post(_photo_url(uuid4()), files={"file": ("a.jpg", _JPEG, "image/jpeg")})
+
+    assert_error(resp, 401, "unauthenticated")
+
+
+def test_admin_students_photo_403(
+    staff_client: StaffClientFactory,
+    assert_error: AssertError,
+    db_session: Session,
+    fake_storage: FakeStorage,
+) -> None:
+    student = make_student(db_session)
+    client, _ = staff_client(permissions=["students:read"])
+
+    resp = client.post(_photo_url(student.id), files={"file": ("a.jpg", _JPEG, "image/jpeg")})
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["students:write"]}
+    assert fake_storage.objects == {}
+
+
+def test_admin_students_photo_415(
+    staff_client: StaffClientFactory,
+    assert_error: AssertError,
+    db_session: Session,
+    fake_storage: FakeStorage,
+) -> None:
+    student = make_student(db_session)
+    archived = make_student(db_session, archived=True)
+    client, _ = staff_client(permissions=["students:write"])
+
+    pdf = client.post(_photo_url(student.id), files={"file": ("a.pdf", _PDF, "application/pdf")})
+    missing = client.post(_photo_url(uuid4()), files={"file": ("a.jpg", _JPEG, "image/jpeg")})
+    gone = client.post(_photo_url(archived.id), files={"file": ("a.jpg", _JPEG, "image/jpeg")})
+
+    assert_error(pdf, 415, "unsupported_file_type")
+    assert_error(missing, 404, "student_not_found")
+    assert_error(gone, 404, "student_not_found")
+    assert fake_storage.objects == {}
+    db_session.expire_all()
+    assert student.photo_path is None
+
+
+def test_admin_students_photo_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "post" in app.openapi()["paths"]["/api/admin/students/{student_id}/photo"]
