@@ -44,6 +44,11 @@ export function setAdminHttpHandlers(h: Partial<AdminHttpHandlers>): void {
   handlers = { ...handlers, ...h }
 }
 
+/** http 以外的認證失敗（例如 ws 以 4401 / 4403 關閉）也走同一個 handler 導回登入 */
+export function triggerAuthFailure(): void {
+  handlers.authFailure()
+}
+
 /** 測試用：回到預設 handler */
 export function resetAdminHttpHandlers(): void {
   handlers = { ...DEFAULT_HANDLERS }
