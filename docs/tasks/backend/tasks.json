@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 282,
-  "last_updated": "2026-10-05T03:03:28Z",
+  "version": 283,
+  "last_updated": "2026-10-05T03:03:39Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -6685,7 +6685,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/service.py",
       "source_ref": "BE:services/notification/dispatch.py::enqueue",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-200",
@@ -6719,9 +6719,9 @@
         "notes": "ws 推播在測試中記錄 app/realtime/publish.py 的 publish_threadsafe（push_to_recipient_after_commit 本身負責 after-commit 排程，換掉它會讓「commit 前不推播」的斷言失真）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 7 條全綠、collect-only 對照全選到；83ca166 / e114d3f（測試）先於 3921c32（實作）。實作者對 red_cases 的修改（補 commit 前記錄為空 / commit 後 kick 與 notification.created、ws 改記錄底層 publish_threadsafe、補空收件人 / 其他事件仍寫入 / 去重含 outbox）皆為加嚴，不放寬任何驗收條件，且改記錄 publish_threadsafe 才能讓「commit 前不推播」的斷言有意義，屬合理規格修正。同交易 flush 寫 notifications + outbox、不 commit；kick 與 ws 皆經 run_after_commit，最外層 rollback 不觸發；LINE 偏好只看同事件；ws 只送收件人個人頻道。突變：拿掉偏好判斷、kick 改立即執行、拿掉全域開關、偏好不限事件、拿掉去重皆轉紅。notifications 目錄整合測試 50 條綠；lint / typecheck 乾淨。outbox_jobs.py docstring 已更正（543 殘留結案）。殘留（不擋）：(1) 把 json_payload 改成逐值 str() 測試仍綠（payload 只用 UUID / str），int / None / date 的 JSON 轉換沒有測試覆蓋；(2) BACKEND-006 tx_hooks 的 savepoint rollback 不清除 savepoint 內註冊的 callback：在 begin_nested() 內 enqueue 後 rollback 該 savepoint、外層 commit 時仍 kick 並推播不存在的通知（scratch 實測確認）。目前沒有呼叫端在 savepoint 內 enqueue，屬 006 的設計缺口，已回報協調者。"
       }
     },
     {
