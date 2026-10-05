@@ -116,9 +116,19 @@ def test_nginx_api_location_body_limit() -> None:
 def test_nginx_backend_upstream_resolved_per_request() -> None:
     conf = _template()
 
-    assert "resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv6=on;" in conf
+    assert "resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv4=off ipv6=on;" in conf
     assert "set $backend_upstream ${BACKEND_URL};" in conf
     assert "proxy_pass $backend_upstream" in location_block(conf, "/api/ws/")
+
+
+def resolver_is_ipv6_only(conf: str) -> bool:
+    lines = re.findall(r"^\s*resolver\s+[^;]*;", conf, flags=re.MULTILINE)
+    return len(lines) == 1 and "ipv4=off" in lines[0] and "ipv6=on" in lines[0]
+
+
+def test_nginx_resolver_ipv6_only() -> None:
+    assert resolver_is_ipv6_only(_template())
+    assert not resolver_is_ipv6_only("resolver 127.0.0.11 valid=10s ipv6=on;")
 
 
 def test_nginx_healthz_location() -> None:
@@ -226,6 +236,36 @@ def _nginx_mounts() -> list[str]:
         "-v",
         f"{REAL_IP_SCRIPT}:/docker-entrypoint.d/40-real-ip.sh:ro",
     ]
+
+
+def test_nginx_resolver_ipv6_only_loaded(run_cmd: RunCmd) -> None:
+    _require_docker(run_cmd)
+
+    result = run_cmd(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "-e",
+            "PORT=8080",
+            "-e",
+            "BACKEND_URL=http://127.0.0.1:9",
+            "-e",
+            "NGINX_ENTRYPOINT_LOCAL_RESOLVERS=true",
+            "-e",
+            "TRUSTED_EDGE_CIDRS=10.0.0.0/8",
+            *_nginx_mounts(),
+            NGINX_IMAGE,
+            "nginx",
+            "-T",
+        ],
+        timeout=180,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    resolver_lines = [ln for ln in result.stdout.splitlines() if ln.strip().startswith("resolver ")]
+    assert len(resolver_lines) == 1
+    assert "ipv4=off" in resolver_lines[0]
 
 
 def test_nginx_config_syntax_valid(run_cmd: RunCmd) -> None:
