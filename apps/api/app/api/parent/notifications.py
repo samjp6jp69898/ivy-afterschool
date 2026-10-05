@@ -7,6 +7,10 @@ BACKEND-218 ``POST /notifications/{notification_id}/read`` → BACKEND-212 ``mar
 不存在 id 回相同 404，不洩漏存在與否）→ commit → ``NotificationOut``。
 BACKEND-221 ``GET /notification-preferences`` → BACKEND-219 ``get_preferences`` → ``PreferencesOut``
 （七項 LINE 可設定事件，只反映自己的設定）。
+BACKEND-222 ``PUT /notification-preferences`` → BACKEND-220 ``put_preferences``（只動自己的列）→
+commit → ``PreferencesOut``；之後該事件對這位家長不再建立 outbox。
+BACKEND-520 ``POST /notifications/read-all`` → BACKEND-213 ``mark_all_read``（只標記自己的）→ commit
+→ ``MarkAllReadOut``；註冊在 ``/{notification_id}/read`` 之前。
 """
 
 from __future__ import annotations
@@ -25,10 +29,12 @@ from app.core.pagination import PageParams, page_params
 from app.notifications import inbox_service, preference_service
 from app.notifications.recipients import Recipient
 from app.schemas.notifications import (
+    MarkAllReadOut,
     NotificationListQuery,
     NotificationOut,
     NotificationPageOut,
     PreferencesOut,
+    PreferencesPutIn,
 )
 
 router = APIRouter(tags=["parent-notifications"])
@@ -42,6 +48,17 @@ def list_notifications(
     db: Annotated[Session, Depends(get_db)],
 ) -> NotificationPageOut:
     return inbox_service.list_notifications(db, Recipient("parent", parent.id), query, page)
+
+
+@router.post("/notifications/read-all", response_model=MarkAllReadOut)
+def mark_all_read(
+    parent: Annotated[CurrentParent, Depends(get_current_parent)],
+    db: Annotated[Session, Depends(get_db)],
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> MarkAllReadOut:
+    out = inbox_service.mark_all_read(db, Recipient("parent", parent.id), clock=clock)
+    db.commit()
+    return out
 
 
 @router.post("/notifications/{notification_id}/read", response_model=NotificationOut)
@@ -62,3 +79,14 @@ def get_preferences(
     db: Annotated[Session, Depends(get_db)],
 ) -> PreferencesOut:
     return preference_service.get_preferences(db, parent.id)
+
+
+@router.put("/notification-preferences", response_model=PreferencesOut)
+def put_preferences(
+    body: PreferencesPutIn,
+    parent: Annotated[CurrentParent, Depends(get_current_parent)],
+    db: Annotated[Session, Depends(get_db)],
+) -> PreferencesOut:
+    out = preference_service.put_preferences(db, parent.id, body)
+    db.commit()
+    return out

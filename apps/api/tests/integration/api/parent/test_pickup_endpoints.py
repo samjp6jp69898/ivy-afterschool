@@ -320,12 +320,14 @@ def test_parent_pickup_person_create_business(
     ming = _own_child(db_session, parent)
     gone = _own_child(db_session, parent, name="已退班")
     _withdraw(db_session, gone)
-    for n in range(10):
-        make_pickup_person(db_session, ming, name=f"接送人{n}")
-    _set_setting(db_session, "pickup.persons", "max_per_student", 10)
+    db_session.commit()
 
     withdrawn = _post_person(client, gone.id)
     pdf = _post_person(client, ming.id, photo=("a.pdf", _PDF, "application/pdf"))
+    # 上限：service 先檢查人數再驗檔案，故填滿後再打
+    for n in range(10):
+        make_pickup_person(db_session, ming, name=f"接送人{n}")
+    _set_setting(db_session, "pickup.persons", "max_per_student", 10)
     limit = _post_person(client, ming.id)
 
     assert_error(withdrawn, 409, "student_not_active")
