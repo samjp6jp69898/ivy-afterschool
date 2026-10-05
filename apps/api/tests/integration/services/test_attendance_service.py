@@ -402,7 +402,7 @@ def test_amend_time_wrong_date(
 def test_amend_time_utc_input_on_service_date(
     db_session: Session, actor: CurrentStaff, fake_clock: FakeClock
 ) -> None:
-    """UTC 9/1 16:30 = 台北 9/2 00:30（跨午夜）→ 不是 9/1；UTC 8/31 16:30 = 台北 9/1 00:30 → 可以。"""
+    """跨午夜：UTC 9/1 16:30 = 台北 9/2 00:30 → 拒絕；UTC 8/31 16:30 = 台北 9/1 00:30 → 可以。"""
     student = make_student(db_session)
     row = make_attendance(db_session, student, service_date=_DAY)
 
