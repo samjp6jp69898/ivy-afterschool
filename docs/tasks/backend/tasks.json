@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 291,
-  "last_updated": "2026-10-05T03:10:35Z",
+  "version": 292,
+  "last_updated": "2026-10-05T03:11:10Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3030,8 +3030,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-087"
       ],
@@ -3063,8 +3063,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": "BE:api/auth.py::create_user",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-087",
         "BACKEND-074",
@@ -5877,8 +5877,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/guardian_service.py",
       "source_ref": "BE:api/students.py::update_guardian",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-169"
       ],
@@ -5911,8 +5911,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/guardian_service.py",
       "source_ref": "BE:api/students.py::delete_guardian",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-169",
         "BACKEND-102",
@@ -5947,8 +5947,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/guardian_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-169",
         "BACKEND-102",
