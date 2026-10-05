@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 127,
-  "last_updated": "2026-10-04T14:59:52Z",
+  "version": 128,
+  "last_updated": "2026-10-05T02:47:06Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1112,7 +1112,7 @@
     {
       "id": "INFRA-031",
       "title": "撰寫 apps/api/Dockerfile 與 .dockerignore（uv、非 root、單一 worker）",
-      "description": "建立後端正式部署映像。參考 ivy `BE:Dockerfile::CMD` 與 `BE:.dockerignore`（保留：tini、非 root、依賴層與程式碼層分離、`PORT` 由平台注入；改掉：pip + requirements.lock 換成 uv + uv.lock、去掉 build metadata / scheduler role；alembic 保留，pre-deploy 執行 migration 需要）。Railway 服務的 Root Directory 設為 `apps/api`，build context 即 `apps/api/`。\n\n**Dockerfile**（multi-stage）：\n- builder：`python:3.13-slim` + 從 `ghcr.io/astral-sh/uv:<固定版本>` 複製 `uv` 執行檔；`ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy`；先只複製 `pyproject.toml`、`uv.lock` 執行 `uv sync --frozen --no-dev --no-install-project`（依賴層快取），再複製 `app/`、`alembic.ini`、`alembic/` 執行 `uv sync --frozen --no-dev`。\n- runtime：`python:3.13-slim`；`apt-get install --no-install-recommends tini`；從 builder 複製 `/app/.venv`、`/app/app`、`/app/alembic.ini` 與 `/app/alembic`；`ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PORT=8080`；`useradd --uid 10001 app`、`USER app`；`EXPOSE 8080`；`ENTRYPOINT [\"/usr/bin/tini\", \"--\"]`；`ENV FORWARDED_ALLOW_IPS=fd12::/16`（uvicorn 原生讀取此變數）；`CMD [\"sh\", \"-c\", \"exec uvicorn app.main:create_app --factory --host :: --port ${PORT} --workers 1 --proxy-headers --forwarded-allow-ips \\\"${FORWARDED_ALLOW_IPS}\\\" --no-access-log\"]`。\n  - `--host ::` 監聽 IPv6（Railway private network 走 IPv6）。uvicorn 經 asyncio 建立 AF_INET6 socket 時會設 `IPV6_V6ONLY`，因此**只**接受 IPv6 連線、不接受 IPv4（已在映像內實測：`[::1]` 可連、`127.0.0.1` connection refused）；是否需要 IPv4 見 open_design_questions。\n  - `--workers 1` 是硬性要求：WebSocket broadcaster 與 APScheduler 都在行程內（`docs/architecture_decisions.md` §7）。\n  - `--forwarded-allow-ips` 只信任 Railway private network 的位址範圍（預設 `fd12::/16`），**不得使用 `*`**。真實 client IP 由 web 服務的 nginx 以 real_ip 模組解析後，以 `X-Forwarded-For: $remote_addr` 覆寫轉送（INFRA-033）；來源不在信任範圍的請求，uvicorn 忽略其 `X-Forwarded-For`，`request.client.host` 維持實際連線位址。audit_logs.ip 取自 `request.client.host`。\n- 容器啟動**不跑 migration**；migration 由 Railway pre-deploy command（INFRA-032）以同一映像執行 `python -m app.cli migrate`（BACKEND-535），因此映像必須包含 `alembic.ini` 與 `alembic/`（含 `versions/`）。\n\n**.dockerignore**：`.venv`、`__pycache__`、`*.pyc`、`.pytest_cache`、`.ruff_cache`、`.mypy_cache`、`tests/`、`.env`、`.env.*`（映像不需要任何 env 範本，全部排除）、`*.md`。\n\n**驗收標準**：\n- `docker build -t afterschool-api apps/api` 成功。\n- `docker run --rm afterschool-api id -u` 輸出 `10001`。\n- 映像內沒有 `tests/` 目錄、沒有 pytest（`python -c \"import pytest\"` 失敗）。\n- 映像內 `python -c \"import fastapi, sqlalchemy, psycopg, apscheduler, alembic, boto3\"` 成功，且 `/app/alembic.ini`、`/app/alembic/env.py` 存在。\n- CMD 含 `--workers 1` 與 `--factory`，`--forwarded-allow-ips` 不是 `*`。\n- 來源不在信任範圍的請求自填 `X-Forwarded-For` 時，app 看到的 client IP 是實際連線位址而非自填值。\n- 結構測試（red_cases）鎖住上述 Dockerfile 關鍵設定。",
+      "description": "建立後端正式部署映像。參考 ivy `BE:Dockerfile::CMD` 與 `BE:.dockerignore`（保留：tini、非 root、依賴層與程式碼層分離、`PORT` 由平台注入；改掉：pip + requirements.lock 換成 uv + uv.lock、去掉 build metadata / scheduler role；alembic 保留，pre-deploy 執行 migration 需要）。Railway 服務的 Root Directory 設為 `apps/api`，build context 即 `apps/api/`。\n\n**Dockerfile**（multi-stage）：\n- builder：`python:3.13-slim` + 從 `ghcr.io/astral-sh/uv:<固定版本>` 複製 `uv` 執行檔；`ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy`；先只複製 `pyproject.toml`、`uv.lock` 執行 `uv sync --frozen --no-dev --no-install-project`（依賴層快取），再複製 `app/`、`alembic.ini`、`alembic/` 執行 `uv sync --frozen --no-dev`。\n- runtime：`python:3.13-slim`；`apt-get install --no-install-recommends tini`；從 builder 複製 `/app/.venv`、`/app/app`、`/app/alembic.ini` 與 `/app/alembic`；`ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PORT=8080`；`useradd --uid 10001 app`、`USER app`；`EXPOSE 8080`；`ENTRYPOINT [\"/usr/bin/tini\", \"--\"]`；`ENV FORWARDED_ALLOW_IPS=fd12::/16`（uvicorn 原生讀取此變數）；`CMD [\"sh\", \"-c\", \"exec uvicorn app.main:create_app --factory --host :: --port ${PORT} --workers 1 --proxy-headers --forwarded-allow-ips \\\"${FORWARDED_ALLOW_IPS}\\\" --no-access-log\"]`。\n  - `--host ::` 監聽 IPv6（Railway private network 走 IPv6）。uvicorn 經 asyncio 建立 AF_INET6 socket 時會設 `IPV6_V6ONLY`，因此**只**接受 IPv6 連線、不接受 IPv4（已在映像內實測：`[::1]` 可連、`127.0.0.1` connection refused）；web → api 只走 IPv6（nginx resolver `ipv4=off`，INFRA-053）；Railway healthcheck 是否走 IPv6 見 open_design_questions。\n  - `--workers 1` 是硬性要求：WebSocket broadcaster 與 APScheduler 都在行程內（`docs/architecture_decisions.md` §7）。\n  - `--forwarded-allow-ips` 只信任 Railway private network 的位址範圍（預設 `fd12::/16`），**不得使用 `*`**。真實 client IP 由 web 服務的 nginx 以 real_ip 模組解析後，以 `X-Forwarded-For: $remote_addr` 覆寫轉送（INFRA-033）；來源不在信任範圍的請求，uvicorn 忽略其 `X-Forwarded-For`，`request.client.host` 維持實際連線位址。audit_logs.ip 取自 `request.client.host`。\n- 容器啟動**不跑 migration**；migration 由 Railway pre-deploy command（INFRA-032）以同一映像執行 `python -m app.cli migrate`（BACKEND-535），因此映像必須包含 `alembic.ini` 與 `alembic/`（含 `versions/`）。\n\n**.dockerignore**：`.venv`、`__pycache__`、`*.pyc`、`.pytest_cache`、`.ruff_cache`、`.mypy_cache`、`tests/`、`.env`、`.env.*`（映像不需要任何 env 範本，全部排除）、`*.md`。\n\n**驗收標準**：\n- `docker build -t afterschool-api apps/api` 成功。\n- `docker run --rm afterschool-api id -u` 輸出 `10001`。\n- 映像內沒有 `tests/` 目錄、沒有 pytest（`python -c \"import pytest\"` 失敗）。\n- 映像內 `python -c \"import fastapi, sqlalchemy, psycopg, apscheduler, alembic, boto3\"` 成功，且 `/app/alembic.ini`、`/app/alembic/env.py` 存在。\n- CMD 含 `--workers 1` 與 `--factory`，`--forwarded-allow-ips` 不是 `*`。\n- 來源不在信任範圍的請求自填 `X-Forwarded-For` 時，app 看到的 client IP 是實際連線位址而非自填值。\n- 結構測試（red_cases）鎖住上述 Dockerfile 關鍵設定。",
       "granularity_unit": "config",
       "target_path": "apps/api/Dockerfile",
       "source_ref": "BE:Dockerfile::CMD",
@@ -1126,7 +1126,7 @@
       "suggested_model": "opus-5",
       "risk_notes": "GET /api/health 由 BACKEND 提供；尚未存在時 Railway healthcheck（INFRA-032）會失敗，部署前要確認 BACKEND 已完成 health endpoint。",
       "open_design_questions": [
-        "Railway 的實際網路行為需上線時實測（部署時驗證）：(1) Railway edge 轉送到 web 服務時，來源 IP 落在哪個範圍（決定 nginx `set_real_ip_from` 的值），以及真實 client IP 放在 `X-Forwarded-For` 還是 `X-Real-IP` / 其他標頭；(2) web 服務經 private network 連 api 時的來源位址範圍（決定 uvicorn `FORWARDED_ALLOW_IPS`，目前預設 `fd12::/16`，若環境為雙棧需加上對應 IPv4 範圍）。驗證方式：部署後在 api 暫時記錄 request.client 與原始標頭，用已知 IP 的裝置連線比對；確認後更新 nginx 範本與 Dockerfile 的值，並刪除本問題。 (3) api 以 `--host ::` 只監聽 IPv6：確認 Railway private network（web → api）與 Railway healthcheck（INFRA-032，GET /api/health）都經 IPv6 連到 api；若任一走 IPv4，需改為同時監聽兩種位址（uvicorn 單一 --host 無法雙棧，需另議做法，例如改用 0.0.0.0 並確認 private network 有 IPv4）。 已知事實：Railway 官方文件（working-with-domains）寫明 2025-10-16 之後建立的環境，private DNS 會同時解析出 IPv4 與 IPv6 位址，新建專案必落在此範圍，nginx 解析 `api.railway.internal` 可能先拿到 IPv4 而連線失敗；Python asyncio 以 `::` 建立的 socket 會設 IPV6_V6ONLY，uvicorn 單一 --host 無法雙棧，雙棧大概率需要處理（候選做法：nginx 端只取 IPv6 位址，或 api 改以自建 dual-stack socket 經 --fd 交給 uvicorn），部署前決定。"
+        "Railway 的實際網路行為需上線時實測（部署時驗證）：(1) Railway edge 轉送到 web 服務時，來源 IP 落在哪個範圍（決定 nginx `set_real_ip_from` 的值），以及真實 client IP 放在 `X-Forwarded-For` 還是 `X-Real-IP` / 其他標頭；(2) web 服務經 private network 連 api 時的來源位址範圍（決定 uvicorn `FORWARDED_ALLOW_IPS`，目前預設 `fd12::/16`，若環境為雙棧需加上對應 IPv4 範圍）。驗證方式：部署後在 api 暫時記錄 request.client 與原始標頭，用已知 IP 的裝置連線比對；確認後更新 nginx 範本與 Dockerfile 的值，並刪除本問題。 (3) Railway healthcheck（INFRA-032，GET /api/health）是否經 IPv6 連到 api（api 以 `--host ::` 只監聽 IPv6；web → api 已由 INFRA-053 讓 nginx 只取 IPv6 位址）；若 healthcheck 走 IPv4 而失敗，需另議 api 雙棧做法。"
       ],
       "tdd": {
         "test_path": "scripts/tests/test_deploy_configs.py",
@@ -1953,6 +1953,39 @@
         "status": "pass",
         "reviewer": "review-r5-infra",
         "notes": "通過。2 條 red_case 都有同名測試，`just web-test scripts/check_parent_bundle.spec.ts -t \"parent module graph\"` 12 passed。TDD 順序：80ff2bd（測試）→ 44ca2a5（實作）。在舊 fixture 下，後台沒有引入 element-plus，上一輪已實測 element-plus 被併進 parent entry chunk，所以兩條新斷言在測試 commit 時確實是紅燈。shared 案例現在逐筆斷言：違規所在 chunk 的 isEntry 為 false、不是 parent entry、chain 從 parent entry 開始，而且迴圈前有 length > 0 的檢查，不是恆真。vite.config.ts 改成引入 `./build/parentModuleGraph.ts`，tsconfig.node.json 已開 allowImportingTsExtensions + noEmit，`vue-tsc -p tsconfig.node.json` 乾淨。對 apps/web 實際 vite build：沒有任何警告，dist/index.html 與 dist/parent/index.html 都有產生，.vite 底下只剩 parent-module-graph.json，腳本 exit 0（2 個 chunk、6 個模組）。移除 build.manifest 前已確認沒有讀取者：git grep 全 repo，Dockerfile、nginx、e2e、ci.yml、e2e.yml、scripts、apps/api 都沒有程式讀 dist/.vite/manifest.json，只剩註解與文件提到。INFRA-005 的 description 與 tdd.notes 只記錄最終狀態（不開 build.manifest），它的 tdd.run 是空的，驗收指令在 notes：改動相關的 vite build 產物檢查與 `just web-lint src/main.ts src/parent/main.ts` 都通過。eslint（vite.config.ts、spec）乾淨。殘留（文字層面，觀測不到行為差異）：apps/web/Dockerfile 與 scripts/tests/test_deploy_configs.py 的註解，以及 INFRA-050 description 的「與 manifest 同層」「manifest 與模組圖不對外提供」，仍提到 .vite 底下的 manifest，但現在 .vite 只有模組圖；下次動到這些檔案時順手改掉即可。"
+      }
+    },
+    {
+      "id": "INFRA-053",
+      "title": "nginx resolver 只取 IPv6（ipv4=off），web → api 固定走 IPv6",
+      "description": "改寫 INFRA-033 `apps/web/nginx/default.conf.template` 的 resolver 一行（INFRA-033 其餘內容不變）。\n\n**背景**：Railway 2025-10-16 之後建立的環境，private DNS 對 `api.railway.internal` 同時解析出 IPv4 與 IPv6；api 以 `--host ::` 只監聽 IPv6（INFRA-031，asyncio 建立的 AF_INET6 socket 設 IPV6_V6ONLY）。nginx 若拿到 IPv4 會連線失敗。決策：nginx 端只取 IPv6 位址，api 維持 `--host ::`（`docs/architecture_decisions.md` §2）。\n\n**改動**：`resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv6=on;` 改為 `resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv4=off ipv6=on;`（nginx ≥ 1.23.1 支援 `ipv4=off`）。同步把 INFRA-033 description 的 resolver 一行改成新值。\n\n**驗收標準**：每一條對應下列 red_case；既有 `just test scripts/tests/test_deploy_configs.py -k nginx` 全綠（含 Docker 語法驗證）。",
+      "granularity_unit": "config",
+      "target_path": "apps/web/nginx/default.conf.template",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "INFRA-033"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "Railway healthcheck 是否經 IPv6 連 api 仍待部署時實測（INFRA-031 open_design_questions (3)、docs/deployment.md 上線前驗證）。",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "scripts/tests/test_deploy_configs.py",
+        "markers": [
+          "unit"
+        ],
+        "red_cases": [
+          "test_nginx_resolver_ipv6_only：default.conf.template 中唯一一行 resolver 指令含 'ipv4=off' 與 'ipv6=on'；測試內構造只有 'resolver 127.0.0.11 valid=10s ipv6=on;' 的字串餵給同一檢查函式 → 判定不合格",
+          "test_nginx_resolver_ipv6_only_loaded：以 docker 起被測 nginx（同 test_nginx_config_syntax_valid 的掛載方式）並執行 `nginx -T` → stdout 的 resolver 行含 'ipv4=off'（證明載入後的設定保留該參數、語法有效）"
+        ],
+        "run": "just test scripts/tests/test_deploy_configs.py -k nginx_resolver",
+        "notes": "另跑 just test scripts/tests/test_deploy_configs.py -k nginx 確認既有 nginx 測試不退化（需 Docker）。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
       }
     }
   ]

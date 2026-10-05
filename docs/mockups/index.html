@@ -27,15 +27,18 @@ body {
   margin: 0; padding: 32px 16px; background: var(--page-bg); color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Noto Sans TC', 'Helvetica Neue', sans-serif;
 }
-main { max-width: 1080px; margin: 0 auto; }
+main { max-width: 1480px; margin: 0 auto; }
 h1 { margin: 0 0 4px; font-size: 22px; }
+h2 { margin: 28px 0 4px; font-size: 17px; }
 .lead { margin: 0 0 20px; color: var(--text-secondary); font-size: 14px; }
 .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
 th { background: var(--head-bg); font-weight: 600; }
 tbody tr:last-child td { border-bottom: none; }
-td.tasks { white-space: normal; }
+td.tasks { white-space: normal; min-width: 140px; }
+td.route { white-space: normal; word-break: break-all; min-width: 160px; max-width: 320px; }
+td.note { white-space: normal; min-width: 300px; }
 a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }
 code { font-size: 13px; }
@@ -49,8 +52,29 @@ code { font-size: 13px; }
 <body>
 <main>
   <h1>設計稿總覽</h1>
-  <p class="lead">後台與家長端每張設計稿的狀態。出稿、核可、改稿時同步更新這張表（流程見 <code>.claude/skills/ui-design-preview/SKILL.md</code>）。</p>
+  <p class="lead">後台與家長端每張設計稿的狀態，待核可的稿集中在最上方。出稿、核可、改稿時同步更新（待核可與已核可分兩區，各自依檔名排序）（流程見 <code>.claude/skills/ui-design-preview/SKILL.md</code>）。</p>
 
+  <h2>待核可（0）</h2>
+  <p class="lead">這一區的稿需要你核可後才會進入實作。點稿名打開，右上「設計說明 / 待裁定」可看設計決策與待裁定題；稿已照推薦選項畫。</p>
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>稿名</th>
+          <th>涵蓋 task</th>
+          <th>路由</th>
+          <th>待裁定 / 裁定結果</th>
+          <th>狀態</th>
+          <th>更新</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="empty"><td colspan="6">目前沒有待核可的稿</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>已核可（46）</h2>
   <div class="card">
     <table>
       <thead>
@@ -67,332 +91,332 @@ code { font-size: 13px; }
         <tr>
           <td><a href="page-students.html">page-students.html</a></td>
           <td class="tasks">FRONTEND-020, FRONTEND-021</td>
-          <td><code>/students</code></td>
+          <td class="route"><code>/students</code></td>
           <td><span class="status status--draft">待核可</span></td>
           <td>2026-10-02</td>
         </tr>
         狀態 class：status--draft（待核可）/ status--approved（已核可）/ status--superseded（已取代）
         -->
         <tr>
-          <td><a href="component-common.html">component-common.html</a></td>
-          <td class="tasks">FRONTEND-039, FRONTEND-041, FRONTEND-042</td>
-          <td><code>component:components/common/{PageHeader,AdminListToolbar,EmptyState}.vue</code></td>
+          <td><a href="component-common-extra.html">component-common-extra.html</a></td>
+          <td class="tasks">FRONTEND-040, FRONTEND-043</td>
+          <td class="route"><code>component:components/common/{FormDialog,StatCard}.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-03</td>
         </tr>
         <tr>
-          <td><a href="component-common-extra.html">component-common-extra.html</a></td>
-          <td class="tasks">FRONTEND-040, FRONTEND-043</td>
-          <td><code>component:components/common/{FormDialog,StatCard}.vue</code></td>
+          <td><a href="component-common.html">component-common.html</a></td>
+          <td class="tasks">FRONTEND-039, FRONTEND-041, FRONTEND-042</td>
+          <td class="route"><code>component:components/common/{PageHeader,AdminListToolbar,EmptyState}.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-03</td>
         </tr>
         <tr>
           <td><a href="component-exams.html">component-exams.html</a></td>
           <td class="tasks">FRONTEND-236, FRONTEND-238</td>
-          <td><code>component:components/exams/{ScoreCell,RenotifyChoiceDialog}.vue</code></td>
+          <td class="route"><code>component:components/exams/{ScoreCell,RenotifyChoiceDialog}.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-03</td>
         </tr>
         <tr>
           <td><a href="component-pickup-countdown.html">component-pickup-countdown.html</a></td>
           <td class="tasks">FRONTEND-196</td>
-          <td><code>component:components/pickup/pos/CountdownBar.vue</code></td>
+          <td class="route"><code>component:components/pickup/pos/CountdownBar.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-03</td>
         </tr>
         <tr>
           <td><a href="component-settings.html">component-settings.html</a></td>
           <td class="tasks">FRONTEND-056, FRONTEND-066</td>
-          <td><code>component:components/settings/{SecretInput,TempPasswordDialog}.vue</code></td>
+          <td class="route"><code>component:components/settings/{SecretInput,TempPasswordDialog}.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-03</td>
         </tr>
         <tr>
           <td><a href="component-student-select.html">component-student-select.html</a></td>
           <td class="tasks">FRONTEND-096</td>
-          <td><code>component:components/student/StudentSelect.vue</code></td>
+          <td class="route"><code>component:components/student/StudentSelect.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="page-admin-shell.html">page-admin-shell.html</a></td>
           <td class="tasks">FRONTEND-029, FRONTEND-031, FRONTEND-032, FRONTEND-035, FRONTEND-036</td>
-          <td><code>layout:AdminLayout（所有後台頁面）</code></td>
+          <td class="route"><code>layout:AdminLayout（所有後台頁面）</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-03</td>
         </tr>
         <tr>
           <td><a href="page-attendance-today.html">page-attendance-today.html</a></td>
           <td class="tasks">FRONTEND-122, FRONTEND-123, FRONTEND-124, FRONTEND-125</td>
-          <td><code>/attendance</code></td>
+          <td class="route"><code>/attendance</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-03</td>
         </tr>
         <tr>
           <td><a href="page-change-password.html">page-change-password.html</a></td>
           <td class="tasks">FRONTEND-048</td>
-          <td><code>/change-password</code></td>
-          <td><span class="status status--draft">待核可</span></td>
+          <td class="route"><code>/change-password</code></td>
+          <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-05</td>
         </tr>
         <tr>
           <td><a href="page-classes.html">page-classes.html</a></td>
           <td class="tasks">FRONTEND-097, FRONTEND-098, FRONTEND-099</td>
-          <td><code>/classes</code></td>
-          <td><span class="status status--draft">待核可</span></td>
+          <td class="route"><code>/classes</code></td>
+          <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-05</td>
         </tr>
         <tr>
           <td><a href="page-error.html">page-error.html</a></td>
           <td class="tasks">FRONTEND-049</td>
-          <td><code>/forbidden、/:pathMatch(.*)*</code></td>
+          <td class="route"><code>/forbidden、/:pathMatch(.*)*</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="page-homework-board.html">page-homework-board.html</a></td>
           <td class="tasks">FRONTEND-151, FRONTEND-153, FRONTEND-154, FRONTEND-155, FRONTEND-156, FRONTEND-157</td>
-          <td><code>/homework</code></td>
+          <td class="route"><code>/homework</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-03</td>
         </tr>
         <tr>
           <td><a href="page-login.html">page-login.html</a></td>
           <td class="tasks">FRONTEND-047</td>
-          <td><code>/login</code></td>
-          <td><span class="status status--draft">待核可</span></td>
+          <td class="route"><code>/login</code></td>
+          <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-05</td>
         </tr>
         <tr>
           <td><a href="page-settings-accounts.html">page-settings-accounts.html</a></td>
           <td class="tasks">FRONTEND-064, FRONTEND-065</td>
-          <td><code>/settings/accounts</code></td>
-          <td><span class="status status--draft">待核可</span></td>
+          <td class="route"><code>/settings/accounts</code></td>
+          <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-05</td>
         </tr>
         <tr>
           <td><a href="page-settings-audit.html">page-settings-audit.html</a></td>
           <td class="tasks">FRONTEND-072, FRONTEND-073</td>
-          <td><code>/settings/audit</code></td>
+          <td class="route"><code>/settings/audit</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="page-settings-reference.html">page-settings-reference.html</a></td>
           <td class="tasks">FRONTEND-059, FRONTEND-060, FRONTEND-061, FRONTEND-062, FRONTEND-063</td>
-          <td><code>/settings/reference</code></td>
-          <td><span class="status status--draft">待核可</span></td>
+          <td class="route"><code>/settings/reference</code></td>
+          <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-05</td>
         </tr>
         <tr>
           <td><a href="page-settings-roles.html">page-settings-roles.html</a></td>
           <td class="tasks">FRONTEND-067, FRONTEND-068, FRONTEND-069, FRONTEND-070, FRONTEND-071</td>
-          <td><code>/settings/roles</code></td>
+          <td class="route"><code>/settings/roles</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="page-settings-system.html">page-settings-system.html</a></td>
           <td class="tasks">FRONTEND-055, FRONTEND-057, FRONTEND-058</td>
-          <td><code>/settings/system</code></td>
+          <td class="route"><code>/settings/system</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="page-students.html">page-students.html</a></td>
           <td class="tasks">FRONTEND-085, FRONTEND-086, FRONTEND-087, FRONTEND-088, FRONTEND-089, FRONTEND-090, FRONTEND-091, FRONTEND-092, FRONTEND-093, FRONTEND-094, FRONTEND-095, FRONTEND-100, FRONTEND-240</td>
-          <td><code>/students</code></td>
+          <td class="route"><code>/students</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-03</td>
         </tr>
         <tr>
           <td><a href="parent-component-add-friend-card.html">parent-component-add-friend-card.html</a></td>
           <td class="tasks">PARENT-035</td>
-          <td><code>component:parent/components/AddFriendCard.vue</code></td>
+          <td class="route"><code>component:parent/components/AddFriendCard.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="parent-component-arrival-time-picker.html">parent-component-arrival-time-picker.html</a></td>
           <td class="tasks">PARENT-096</td>
-          <td><code>component:parent/components/pickup/ArrivalTimePicker.vue</code></td>
+          <td class="route"><code>component:parent/components/pickup/ArrivalTimePicker.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="parent-component-attendance-calendar.html">parent-component-attendance-calendar.html</a></td>
           <td class="tasks">PARENT-131</td>
-          <td><code>component:parent/components/attendance/AttendanceCalendar.vue</code></td>
-          <td><span class="status status--draft">待核可</span></td>
+          <td class="route"><code>component:parent/components/attendance/AttendanceCalendar.vue</code></td>
+          <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-05</td>
         </tr>
         <tr>
           <td><a href="parent-component-authorization-list-item.html">parent-component-authorization-list-item.html</a></td>
           <td class="tasks">PARENT-103</td>
-          <td><code>component:parent/components/pickup/AuthorizationListItem.vue</code></td>
+          <td class="route"><code>component:parent/components/pickup/AuthorizationListItem.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="parent-component-bind-code-error.html">parent-component-bind-code-error.html</a></td>
           <td class="tasks">PARENT-032</td>
-          <td><code>component:parent/components/bind/BindCodeErrorNotice.vue</code></td>
+          <td class="route"><code>component:parent/components/bind/BindCodeErrorNotice.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="parent-component-bottom-sheet.html">parent-component-bottom-sheet.html</a></td>
           <td class="tasks">PARENT-025</td>
-          <td><code>component:parent/components/ParentBottomSheet.vue</code></td>
+          <td class="route"><code>component:parent/components/ParentBottomSheet.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-03</td>
         </tr>
         <tr>
           <td><a href="parent-component-child-context-header.html">parent-component-child-context-header.html</a></td>
           <td class="tasks">PARENT-050</td>
-          <td><code>component:parent/components/ChildContextHeader.vue</code></td>
+          <td class="route"><code>component:parent/components/ChildContextHeader.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="parent-component-confirm-dialog.html">parent-component-confirm-dialog.html</a></td>
           <td class="tasks">PARENT-026</td>
-          <td><code>component:parent/components/ConfirmDialog.vue</code></td>
+          <td class="route"><code>component:parent/components/ConfirmDialog.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="parent-component-connection-banner.html">parent-component-connection-banner.html</a></td>
           <td class="tasks">PARENT-174</td>
-          <td><code>component:parent/components/ConnectionBanner.vue</code></td>
-          <td><span class="status status--draft">待核可</span></td>
+          <td class="route"><code>component:parent/components/ConnectionBanner.vue</code></td>
+          <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-05</td>
         </tr>
         <tr>
           <td><a href="parent-component-empty-state.html">parent-component-empty-state.html</a></td>
           <td class="tasks">PARENT-029</td>
-          <td><code>component:parent/components/ParentEmptyState.vue</code></td>
+          <td class="route"><code>component:parent/components/ParentEmptyState.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="parent-component-exam-list-item.html">parent-component-exam-list-item.html</a></td>
           <td class="tasks">PARENT-151</td>
-          <td><code>component:parent/components/exams/ExamListItem.vue</code></td>
-          <td><span class="status status--draft">待核可</span></td>
+          <td class="route"><code>component:parent/components/exams/ExamListItem.vue</code></td>
+          <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-05</td>
         </tr>
         <tr>
           <td><a href="parent-component-exam-score-table.html">parent-component-exam-score-table.html</a></td>
           <td class="tasks">PARENT-152</td>
-          <td><code>component:parent/components/exams/ExamScoreTable.vue</code></td>
-          <td><span class="status status--draft">待核可</span></td>
+          <td class="route"><code>component:parent/components/exams/ExamScoreTable.vue</code></td>
+          <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-05</td>
         </tr>
         <tr>
           <td><a href="parent-component-homework-item-row.html">parent-component-homework-item-row.html</a></td>
           <td class="tasks">PARENT-072</td>
-          <td><code>component:parent/components/homework/HomeworkItemRow.vue</code></td>
+          <td class="route"><code>component:parent/components/homework/HomeworkItemRow.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="parent-component-leave-attachment-list.html">parent-component-leave-attachment-list.html</a></td>
           <td class="tasks">PARENT-135</td>
-          <td><code>component:parent/components/leaves/LeaveAttachmentList.vue</code></td>
-          <td><span class="status status--draft">待核可</span></td>
+          <td class="route"><code>component:parent/components/leaves/LeaveAttachmentList.vue</code></td>
+          <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-05</td>
         </tr>
         <tr>
           <td><a href="parent-component-leave-form.html">parent-component-leave-form.html</a></td>
           <td class="tasks">PARENT-134</td>
-          <td><code>component:parent/components/leaves/LeaveForm.vue</code></td>
-          <td><span class="status status--draft">待核可</span></td>
+          <td class="route"><code>component:parent/components/leaves/LeaveForm.vue</code></td>
+          <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-05</td>
         </tr>
         <tr>
           <td><a href="parent-component-leave-list-item.html">parent-component-leave-list-item.html</a></td>
           <td class="tasks">PARENT-136</td>
-          <td><code>component:parent/components/leaves/LeaveListItem.vue</code></td>
-          <td><span class="status status--draft">待核可</span></td>
+          <td class="route"><code>component:parent/components/leaves/LeaveListItem.vue</code></td>
+          <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-05</td>
         </tr>
         <tr>
           <td><a href="parent-component-m3-kit.html">parent-component-m3-kit.html</a></td>
           <td class="tasks">PARENT-014, PARENT-015, PARENT-016, PARENT-017, PARENT-018, PARENT-019, PARENT-020, PARENT-021, PARENT-022, PARENT-023, PARENT-098, PARENT-175</td>
-          <td><code>component:parent/components/m3/{M3Icon,M3Button,M3IconButton,M3Card,M3TextField,M3Chip,M3ListItem,M3TopAppBar,M3NavigationBar,M3Snackbar,M3SegmentedButton,M3Switch}.vue</code></td>
+          <td class="route"><code>component:parent/components/m3/{M3Icon,M3Button,M3IconButton,M3Card,M3TextField,M3Chip,M3ListItem,M3TopAppBar,M3NavigationBar,M3Snackbar,M3SegmentedButton,M3Switch}.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-03</td>
         </tr>
         <tr>
           <td><a href="parent-component-notification-list-item.html">parent-component-notification-list-item.html</a></td>
           <td class="tasks">PARENT-176</td>
-          <td><code>component:parent/components/notifications/NotificationListItem.vue</code></td>
-          <td><span class="status status--draft">待核可</span></td>
+          <td class="route"><code>component:parent/components/notifications/NotificationListItem.vue</code></td>
+          <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-05</td>
         </tr>
         <tr>
           <td><a href="parent-component-pickup-code-card.html">parent-component-pickup-code-card.html</a></td>
           <td class="tasks">PARENT-101</td>
-          <td><code>component:parent/components/pickup/PickupCodeCard.vue</code></td>
+          <td class="route"><code>component:parent/components/pickup/PickupCodeCard.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="parent-component-pickup-person-form.html">parent-component-pickup-person-form.html</a></td>
           <td class="tasks">PARENT-099</td>
-          <td><code>component:parent/components/pickup/PickupPersonForm.vue</code></td>
+          <td class="route"><code>component:parent/components/pickup/PickupPersonForm.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="parent-component-pickup-person-list-item.html">parent-component-pickup-person-list-item.html</a></td>
           <td class="tasks">PARENT-100</td>
-          <td><code>component:parent/components/pickup/PickupPersonListItem.vue</code></td>
+          <td class="route"><code>component:parent/components/pickup/PickupPersonListItem.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="parent-component-pickup-progress-steps.html">parent-component-pickup-progress-steps.html</a></td>
           <td class="tasks">PARENT-095</td>
-          <td><code>component:parent/components/pickup/PickupProgressSteps.vue</code></td>
+          <td class="route"><code>component:parent/components/pickup/PickupProgressSteps.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="parent-component-pickup-reply-message.html">parent-component-pickup-reply-message.html</a></td>
           <td class="tasks">PARENT-094</td>
-          <td><code>component:parent/components/pickup/PickupReplyMessage.vue</code></td>
+          <td class="route"><code>component:parent/components/pickup/PickupReplyMessage.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="parent-component-pull-to-refresh.html">parent-component-pull-to-refresh.html</a></td>
           <td class="tasks">PARENT-027</td>
-          <td><code>component:parent/components/PullToRefresh.vue</code></td>
+          <td class="route"><code>component:parent/components/PullToRefresh.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-03</td>
         </tr>
         <tr>
           <td><a href="parent-component-skeleton.html">parent-component-skeleton.html</a></td>
           <td class="tasks">PARENT-028</td>
-          <td><code>component:parent/components/SkeletonBlock.vue</code></td>
+          <td class="route"><code>component:parent/components/SkeletonBlock.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-03</td>
         </tr>
         <tr>
           <td><a href="parent-component-status-pill.html">parent-component-status-pill.html</a></td>
           <td class="tasks">PARENT-051</td>
-          <td><code>component:parent/components/StatusPill.vue</code></td>
+          <td class="route"><code>component:parent/components/StatusPill.vue</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
         </tr>
         <tr>
           <td><a href="parent-component-today-status-card.html">parent-component-today-status-card.html</a></td>
           <td class="tasks">PARENT-053</td>
-          <td><code>component:parent/components/home/TodayStatusCard.vue</code></td>
-          <td><span class="status status--draft">待核可</span></td>
+          <td class="route"><code>component:parent/components/home/TodayStatusCard.vue</code></td>
+          <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-05</td>
         </tr>
       </tbody>

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="FRONTEND-097,FRONTEND-098,FRONTEND-099">
 <meta name="preview-route" content="/classes">
 <meta name="preview-updated" content="2026-10-05">
@@ -1019,9 +1019,9 @@ const app = createApp({
       '狀態欄只在勾選「含已封存」時出現：已封存的列顯示灰色線框「已封存」+ 封存日（2026/09/01），整列文字變灰；未封存顯示「—」。',
       '操作欄（只有 classes:write）：未封存的列有「編輯」「指派老師」「封存」（紅字）；已封存的列顯示「—」（後端 class_archived 不允許修改與指派）。只有 classes:read（課輔老師）：沒有「新增班級」，整個操作欄移除。',
       '封存：確認框「封存後此班級不會出現在班級選單，確定要封存 {name} 嗎？」（紅色「封存」）。成功 ElMessage.success「已封存 {name}」，列從清單消失（含已封存時改顯示封存狀態）。',
-      '【待使用者裁定】封存被 409 class_has_students 擋下時：跳警告框「班級仍有 {student_count} 位在學學生，請先將學生調班或退班」，按鈕「查看班上學生」（→ /students?class_id={id}）/「關閉」；替代選項：只以 ElMessage.error 顯示同一句話。目前照推薦畫（控制列預設就是 409，點有學生的班「封存」可看）。人數用 details.student_count（後端含暫停中的學生），可能比表格的在學人數多。',
+      '封存被 409 class_has_students 擋下時：跳警告框「班級仍有 {student_count} 位在學學生，請先將學生調班或退班」，按鈕「查看班上學生」（→ /students?class_id={id}）/「關閉」（控制列預設就是 409，點有學生的班「封存」可看）。人數用 details.student_count（後端含暫停中的學生），可能比表格的在學人數多。',
       '空清單：EmptyState「{year} 學年度還沒有班級」，有 classes:write 時附「新增班級」（切到 116 或 114 學年度可看）。載入中：表格 v-loading；載入失敗：EmptyState error「無法載入班級」+「重試」取代表格。',
-      '【待使用者裁定】勾「只看我的班」後沒有結果時改用專用文案：EmptyState「{year} 學年度沒有你負責的班級」+ 說明「負責老師由有「管理班級」權限的人在「指派老師」設定」+「顯示全部班級」按鈕（取消勾選）；替代選項：沿用「{year} 學年度還沒有班級」。目前照推薦畫（以主任身分勾選可看）。',
+      '勾「只看我的班」後沒有結果時改用專用文案：EmptyState「{year} 學年度沒有你負責的班級」+ 說明「負責老師由有「管理班級」權限的人在「指派老師」設定」+「顯示全部班級」按鈕（取消勾選）（以主任身分勾選可看）。',
       'ClassFormDialog（FormDialog md 560px，標題「新增班級」/「編輯班級」，送出「儲存」，編輯沒有變更時 disabled）：班級名稱（必填 ≤30 字計數）、年級（一~六年級的 checkbox 按鈕組，可複選，下方灰字「可複選（混齡班）」，沒選「請至少選擇一個年級」）、學年度（新增預設為目前篩選的學年度，編輯可改）、排序（≥0 整數，預設 0，灰字「數字小的排前面，也是班級下拉選單的順序」）。學年度與排序並排。',
       'ClassFormDialog 錯誤：409 class_name_taken → 名稱欄「此學年度已有同名班級」；409 class_archived → ElMessage.error 顯示後端 message。編輯只送有變更的欄位（例：只改排序 → {"sort_order":2}）。寫入成功後 useLookupsStore().invalidate(\'classes\')。',
       'ClassStaffDialog（FormDialog md 560px，標題「指派老師：{班級名稱}」）：上方灰字說明「負責老師用於後台「只看我的班」篩選與班級相關通知，不影響可操作的權限。可指派多位老師，最多 20 位。」；每列 = 員工下拉（可搜尋）+ 角色下拉（負責老師 / 協助老師，132px）+ 垃圾桶移除鈕；下方「新增老師」+ 右側「N / 20」。',
@@ -1029,18 +1029,7 @@ const app = createApp({
       'ClassStaffDialog 員工清單：開啟時呼叫 listStaffOptions()，載入中下拉顯示 loading、「儲存」disabled；失敗 → 紅色 alert「無法載入員工清單」+「重試」，「新增老師」disabled，重試成功後恢復。',
       'ClassStaffDialog 已停用員工：班上已指派但不在員工清單中的人（資料過期時才會出現，見控制列勾選），下拉顯示「黃老師（已停用）」並在旁邊加紅色線框「已停用」tag；送出時該列紅框 +「此員工已停用，請移除或更換」，不發請求。後端 422 invalid_staff → 頂端紅色 alert「部分員工已停用或不存在，請重新選擇」，並把 details 中的 id 所在列標紅框（class is-error）。',
     ]
-    const openQuestions = [
-      {
-        question: '封存班級被「仍有在學學生」擋下時，要不要提供前往學生清單的捷徑？（目前稿上已照 A 畫）',
-        optionA: '警告框附「查看班上學生」按鈕，直接開學生工作台並篩選該班（推薦）',
-        optionB: '只用 ElMessage.error 顯示「班級仍有 N 位在學學生，請先將學生調班或退班」（FRONTEND-097 description 現況）',
-      },
-      {
-        question: '勾「只看我的班」後沒有結果時，空狀態文案要不要分開？（目前稿上已照 A 畫）',
-        optionA: '分開：「{year} 學年度沒有你負責的班級」+「顯示全部班級」按鈕（推薦，避免誤以為整個學年度都沒有班）',
-        optionB: '沿用「{year} 學年度還沒有班級」（FRONTEND-097 description 現況）',
-      },
-    ]
+    const openQuestions = []
 
     return {
       meta, decisions, openQuestions, roles: ROLES, viewAs, perms, can, user, device, onNavigate, notesOpen: ref(false),

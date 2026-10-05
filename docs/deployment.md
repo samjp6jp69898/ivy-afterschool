@@ -136,6 +136,6 @@ api 的 `numReplicas` 必須為 1（`apps/api/railway.json`）。要擴充需先
 - [ ] pre-deploy command 能經 private network 連到 Postgres，且失敗時確實中止部署、保留舊版本。
 - [ ] Railway edge 轉送到 web 時的來源 IP 範圍（決定 `TRUSTED_EDGE_CIDRS`），以及真實 client IP 放在 `X-Forwarded-For` 還是其他標頭。
 - [ ] web 經 private network 連 api 的來源位址範圍（決定 `FORWARDED_ALLOW_IPS`，目前預設 `fd12::/16`，雙棧環境需加上 IPv4 範圍）。
-- [ ] api 以 `--host ::` 只監聽 IPv6（待決）：Railway 2025-10-16 之後建立的環境，private DNS 同時解析 IPv4 與 IPv6，nginx 解析 `api.railway.internal` 可能先拿到 IPv4 而連線失敗。需確認 web → api 與 Railway healthcheck（`/api/health`）都能連入，雙棧處理方式部署前決定（INFRA-031 open_design_questions）。
+- [ ] api 以 `--host ::` 只監聽 IPv6，web → api 由 nginx resolver `ipv4=off` 固定走 IPv6（INFRA-053）。需確認 web → api 實際連得到，以及 Railway healthcheck（`/api/health`）也經 IPv6 連入；healthcheck 若走 IPv4 而失敗，另議 api 雙棧做法（INFRA-031 open_design_questions）。
 - [ ] Railway Postgres 資料庫的 collation（`select datcollate from pg_database where datname = current_database()`）。班級、學生等中文名稱排序依 DB collation（本機 `en_US.utf8` 為字碼順序，「丙班、乙班、甲班」），不會照天干或筆畫；要固定顯示順序靠 `sort_order`。
 - [ ] R2 presigned URL 在 LINE in-app browser 內能正常載入圖片與開啟 PDF。

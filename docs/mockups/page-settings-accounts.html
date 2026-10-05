@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="FRONTEND-064,FRONTEND-065">
 <meta name="preview-route" content="/settings/accounts">
 <meta name="preview-updated" content="2026-10-05">
@@ -1259,7 +1259,7 @@ const app = createApp({
     const rowClass = ({ row }) => (row.is_active ? '' : 'acct-row-inactive')
     const label = (c) => LABEL_OF[c] ?? c
     const adjustAria = (r) => `額外授予 ${r.extra_permissions.length} 項、移除 ${r.revoked_permissions.length} 項`
-    /** 【待使用者裁定】目標有效權限 ⊄ 自己的權限 → 操作 disabled（對應後端 cannot_manage_staff） */
+    /** 目標有效權限 ⊄ 自己的權限 → 操作 disabled（對應後端 cannot_manage_staff） */
     const canManage = (row) => row.effective_permissions.every((c) => perms.value.includes(c))
     const retry = () => { listState.value = 'loading'; setTimeout(() => { listState.value = 'data' }, 900) }
 
@@ -1318,7 +1318,7 @@ const app = createApp({
       '個別調整欄：有額外授予顯示綠色「+N」、有移除顯示紅色「−N」小 tag；hover / 鍵盤 focus 顯示 tooltip「額外授予：代理接送強制完成」「移除：接送回覆、確認、完成」（權限中文名稱）；沒有調整顯示灰色「—」。',
       '狀態欄：啟用 = 綠色「啟用」、停用 = 灰色線框「停用」；must_change_password 再加橘色「待改密碼」。最後登入 formatDateTime（2026/10/05 08:12），null 顯示淡灰「從未登入」。',
       '操作欄：「編輯」+「更多 ▾」下拉。啟用帳號的下拉是「重設密碼」與（分隔線）紅字「停用」；停用帳號的下拉只有「重新啟用」（重新啟用本身就會產生臨時密碼，不另外提供重設）。自己那一列只有「編輯」（沒有重設密碼與停用，對應後端 cannot_reset_self / cannot_deactivate_self）。',
-      '【待使用者裁定】權限比自己大的帳號（目標有效權限不是自己權限的子集合，例如人事主管看系統管理員、主任）：「編輯」「更多」直接 disabled，hover 提示「無法管理權限比你大的帳號」；替代選項：照常顯示，按下後由後端 403 cannot_manage_staff 以 ElMessage.error 顯示。目前照推薦畫（以「人事主管」身分檢視可看到）。',
+      '權限比自己大的帳號（目標有效權限不是自己權限的子集合，例如人事主管看系統管理員、主任）：「編輯」「更多」直接 disabled，hover 提示「無法管理權限比你大的帳號」（以「人事主管」身分檢視可看到）。',
       '只有 staff:read（主任）：沒有「新增員工」，表格整個沒有「操作」欄（不是空白欄），其餘可查詢篩選。',
       '確認框：重設密碼「重設後 {display_name} 目前的登入會失效，確定要重設嗎？」（按鈕「重設密碼」）；停用「停用後 {display_name} 將無法登入，確定要停用嗎？」（紅色「停用」）；重新啟用「重新啟用後會產生新的臨時密碼，{display_name} 登入後必須先修改密碼。確定要重新啟用嗎？」（按鈕「重新啟用」）。建立、重設、重新啟用成功都開 TempPasswordDialog（外觀依 component-settings.html，已核可），關閉時父層清空密碼字串；停用成功更新該列並 ElMessage.success「已停用 {display_name}」。',
       '列操作失敗以 errorMessage 顯示後端 message（cannot_manage_staff、last_role_manager 等）於 ElMessage.error，列資料不變。',
@@ -1328,23 +1328,12 @@ const app = createApp({
       '角色：RoleCardsGrid（外觀依 page-settings-roles.html，已核可；不顯示員工數、自動多欄）單選，必填「請選擇角色」。',
       '個別權限調整：可收合的框，標頭「個別權限調整」+ 右側摘要（「與角色預設相同」或藍字「額外授予 N 項、移除 M 項」）；預設收合，編輯有調整的帳號時預設展開；還沒選角色時標頭 disabled、摘要「請先選擇角色」。展開後是說明灰字 + PermissionPicker（勾選 = 最終有效權限；highlight = 所選角色的權限，名稱後有「角色預設」小 tag；grantable = 自己的權限）+ 差異 tag 列（綠「＋ 權限名」、紅刪除線「－ 權限名」）。',
       '切換角色時重算勾選：保留仍有意義的額外授予（新角色沒有的）與移除（新角色有的），其餘回到新角色預設。',
-      '【待使用者裁定】選了含有自己無法授出權限的角色（例如人事主管選「主任」）時，角色卡下方立即顯示橘字「包含你沒有的 N 項權限（…），送出時會被拒絕。請改選其他角色，或在「個別權限調整」取消勾選這些權限。」；替代選項：不預先提示，只在送出後顯示後端錯誤。目前照推薦畫。',
+      '選了含有自己無法授出權限的角色（例如人事主管選「主任」）時，角色卡下方立即顯示橘字「包含你沒有的 N 項權限（…），送出時會被拒絕。請改選其他角色，或在「個別權限調整」取消勾選這些權限。」。',
       '403 cannot_grant_permissions：自動展開個別權限調整，在 PermissionPicker 上方顯示紅色 alert「你沒有以下權限，無法授出：{權限中文名稱、…}」（可關閉）。',
       '編輯自己：角色卡與 PermissionPicker 全部 disabled，角色區上方 info alert「不可修改自己的權限」+ 說明「角色與個別權限需由其他有「管理員工帳號」權限的人調整；姓名、電話、Email 可以修改。」。',
       '編輯只送有變更的欄位（控制列「最後送出」可看 body）：例如只改姓名 → {"display_name":"陳老師"}；角色或勾選有變才送 role_id / extra_permissions / revoked_permissions。',
     ]
-    const openQuestions = [
-      {
-        question: '權限比自己大的帳號（例如人事主管看系統管理員）那一列的操作要怎麼呈現？（目前稿上已照 A 畫）',
-        optionA: '「編輯」「更多」直接 disabled，hover 提示「無法管理權限比你大的帳號」（推薦：不用按了才知道不行）',
-        optionB: '照常顯示，按下後由後端 403 cannot_manage_staff 以錯誤訊息告知（FRONTEND-064 description 不用改）',
-      },
-      {
-        question: '新增 / 編輯員工時選到含有自己無法授出權限的角色，要不要先提示？（目前稿上已照 A 畫）',
-        optionA: '角色卡下方立即顯示橘字提示，列出那些權限並說明可改選角色或取消勾選（推薦）',
-        optionB: '不預先提示，只在送出後顯示後端 cannot_grant_permissions 錯誤（FRONTEND-065 description 不用改）',
-      },
-    ]
+    const openQuestions = []
 
     return {
       meta, decisions, openQuestions, roles: ROLES, viewAs, perms, can, user, selfId, device, onNavigate, notesOpen: ref(false),

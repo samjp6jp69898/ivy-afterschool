@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 73,
-  "last_updated": "2026-10-04T16:30:16Z",
+  "version": 74,
+  "last_updated": "2026-10-05T02:47:06Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -2447,7 +2447,7 @@
     {
       "id": "PARENT-131",
       "title": "建立 AttendanceCalendar 元件：月出勤日曆格",
-      "description": "建立 `apps/web/src/parent/components/attendance/AttendanceCalendar.vue`：\n```ts\nprops: { month: string /* YYYY-MM */; days: AttendanceDay[]; today: string; selectedDate: string | null }\nemits: { select: [date: string] }\n```\n- 週日開頭的 7 欄格，表頭「日 一 二 三 四 五 六」；月初前補空格。日期與星期以純日期運算（`Date.UTC`）計算，不受時區影響、不用 `toISOString().slice`。\n- 每格為 `<button>`：日期數字 + 狀態色點（FRONTEND-005 statusLabels 的出勤顏色語意；`leave` 依 leave_type 顯示病假 / 事假 / 其他）；`is_service_day === false` 灰階且仍可點；today 加外框；selectedDate 為選中樣式。`aria-label` 為「10月2日 已到班」（無紀錄「10月2日 無紀錄」、非營業日「10月4日 休息」）。\n- 下方圖例：已到班 / 已離班 / 請假 / 缺席 / 預計到班 / 休息。\n\n移植 ivy `FE:src/parent/views/AttendanceView.vue::calendarDays` 的格子產生方式與 `cellClass` 的 today / selected 標示；狀態改為本專案五種出勤狀態。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-attendance-calendar.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：一整個月含五種狀態、非營業日、今天、選中日、月初不是週日的補格。可併入 `parent-page-attendance.html`。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/attendance/AttendanceCalendar.vue`：\n```ts\nprops: { month: string /* YYYY-MM */; days: AttendanceDay[]; today: string; selectedDate: string | null }\nemits: { select: [date: string] }\n```\n- 週日開頭的 7 欄格，表頭「日 一 二 三 四 五 六」；月初前補空格。日期與星期以純日期運算（`Date.UTC`）計算，不受時區影響、不用 `toISOString().slice`。\n- 每格為 `<button>`：日期數字 + 狀態以「底色 + 圖示」雙重表達（FRONTEND-005 statusLabels 的出勤顏色語意；`leave` 依 leave_type 顯示病假 / 事假 / 其他）。例外：請假格在月曆格與圖例改用 tertiary-container + event_busy，與已離班（secondary-container + done_all）明顯區分，StatusPill 的 tone 仍照 FRONTEND-005；今天以前（date < today）仍是 `expected` 的日子顯示為「未登記」（surface-container-high + remove，與統計列 PARENT-132 用詞一致），today 與之後的 `expected` 仍是「預計到班」；`is_service_day === false` 灰階且仍可點；today 加外框；selectedDate 為選中樣式。`aria-label` 為「10月2日 已到班」（無紀錄「10月2日 無紀錄」、非營業日「10月4日 休息」、過去日期的 expected「10月1日 未登記」）。\n- 下方圖例：已到班 / 已離班 / 請假 / 缺席 / 預計到班 / 未登記 / 休息。\n\n移植 ivy `FE:src/parent/views/AttendanceView.vue::calendarDays` 的格子產生方式與 `cellClass` 的 today / selected 標示；狀態改為本專案五種出勤狀態。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-attendance-calendar.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：一整個月含五種狀態、非營業日、今天、選中日、月初不是週日的補格。可併入 `parent-page-attendance.html`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/attendance/AttendanceCalendar.vue",
       "source_ref": "FE:src/parent/views/AttendanceView.vue::calendarDays",
@@ -2471,7 +2471,9 @@
           "AttendanceCalendar pads first week：month '2026-10'（10/1 為週四）→ 前 4 格為空白（無 button），第 1 個 button 文字 '1'，button 總數 31",
           "AttendanceCalendar labels status：days 含 {date:'2026-10-02', is_service_day:true, status:'present'} 與 {date:'2026-10-05', status:'leave', leave_type:'sick'} → 對應 button aria-label 分別為 '10月2日 已到班'、'10月5日 病假'",
           "AttendanceCalendar marks closed day and today：{date:'2026-10-04', is_service_day:false} → aria-label '10月4日 休息' 且有 closed class；today '2026-10-02' → 該格 aria-current === 'date'",
-          "AttendanceCalendar emits select：點 '15' → emitted('select')[0] 深等於 ['2026-10-15']；selectedDate '2026-10-15' → 該格 aria-pressed === 'true'"
+          "AttendanceCalendar emits select：點 '15' → emitted('select')[0] 深等於 ['2026-10-15']；selectedDate '2026-10-15' → 該格 aria-pressed === 'true'",
+          "AttendanceCalendar shows past expected as unregistered：today '2026-10-02'；days 含 {date:'2026-10-01', is_service_day:true, status:'expected'} 與 {date:'2026-10-02', is_service_day:true, status:'expected'} → aria-label 分別為 '10月1日 未登記'、'10月2日 預計到班'；圖例文字含 '未登記'",
+          "AttendanceCalendar distinguishes leave from left：{date:'2026-10-05', status:'leave', leave_type:'sick'} 與 {date:'2026-10-06', status:'left'} → 兩格的狀態 class 不同（leave 格帶 tertiary 狀態 class、left 格帶 secondary 狀態 class）"
         ],
         "run": "just web-test src/parent/components/attendance/AttendanceCalendar.spec.ts -t \"AttendanceCalendar\"",
         "notes": ""

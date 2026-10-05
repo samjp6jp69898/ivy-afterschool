@@ -32,7 +32,7 @@
 | 測試 | pytest（unit / integration）、Vitest + @vue/test-utils、Playwright（e2e，少量關鍵流程） | 見 `docs/testing_conventions.md` |
 | 套件管理 | 後端 uv（`apps/api/pyproject.toml` + `uv.lock`）；前端 pnpm | |
 | 指令入口 | root `justfile` | 所有 lint / test 指令都帶路徑參數 |
-| 部署 | Railway（api service + web service + Postgres）+ Cloudflare R2 | api 不開 public domain，由 web 的 nginx 經 Railway private network 反代 `/api` 與 `/api/ws`，cookie 同源（避免 LINE webview 擋第三方 cookie）；api 固定單一實例、uvicorn 單 worker；migration 由 api 服務的 Railway pre-deploy command 執行（§5） |
+| 部署 | Railway（api service + web service + Postgres）+ Cloudflare R2 | api 不開 public domain，由 web 的 nginx 經 Railway private network 反代 `/api` 與 `/api/ws`，cookie 同源（避免 LINE webview 擋第三方 cookie）；web → api 只走 IPv6（nginx resolver `ipv4=off`，api `--host ::` 只監聽 IPv6）；api 固定單一實例、uvicorn 單 worker；migration 由 api 服務的 Railway pre-deploy command 執行（§5） |
 | CI | GitHub Actions | lint / typecheck / 全量測試；integration 與 db-checks job 以 `compose.yaml` 起 Postgres 與 SeaweedFS，在乾淨 DB 上套用全部 revision |
 
 ## 3. Repo 結構
