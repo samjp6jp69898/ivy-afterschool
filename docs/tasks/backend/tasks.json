@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 366,
-  "last_updated": "2026-10-05T05:43:43Z",
+  "version": 367,
+  "last_updated": "2026-10-05T05:44:18Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -7823,7 +7823,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:api/student_attendance.py::batch_save_attendance",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-305"
@@ -7841,7 +7841,8 @@
           "test_batch_check_in_notifications：三位 expected 學生各有一位綁定家長 → notifications(event='attendance.checked_in') 3 列；以 before_cursor_execute 計數 guardians 查詢次數 == 1",
           "test_batch_check_in_single_broadcast：monkeypatch publish_threadsafe 記錄，committing session commit 後 admin:attendance 收到 1 則 type == 'attendance.batch_updated'，data.items 長度 3",
           "test_batch_check_in_not_service_day：ClosedDay(today) → AppError 409 'not_service_day'，student_attendances 筆數 0",
-          "test_batch_check_in_parent_ws：三位成功學生 → commit 後 student_channel 各收到 1 則 'attendance.updated'，admin:attendance 只收到 1 則 'attendance.batch_updated'"
+          "test_batch_check_in_parent_ws：三位成功學生 → commit 後 student_channel 各收到 1 則 'attendance.updated'，admin:attendance 只收到 1 則 'attendance.batch_updated'",
+          "test_batch_check_in_reverse_order_no_deadlock：committing session 兩條連線同時跑 A=[王小明, 陳小華]、B=[陳小華, 王小明]（各鎖住第一列後以 barrier 等對方）→ 兩者皆無例外（依輸入順序上鎖時重現 40P01）；一批兩位都成功、另一批兩位 already_checked_in，succeeded / skipped 仍依各自輸入順序"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_attendance_service.py -k \"test_batch_check_in_\"",
         "notes": ""

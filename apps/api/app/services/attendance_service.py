@@ -904,23 +904,32 @@ def batch_check_in(
         )
     }
     now = clock.now()
+    outcome: dict[UUID, StudentAttendance | str] = {}
+    eligible: list[UUID] = []
+    for student_id in student_ids:
+        student = students.get(student_id)
+        if student is None or student.archived_at is not None:
+            outcome[student_id] = "student_not_found"
+        elif student.status != "active":
+            outcome[student_id] = "student_not_active"
+        else:
+            eligible.append(student_id)
+    # 上鎖依 student_id 排序（與 lock_progress_row / BACKEND-378 相同慣例）：兩個反序批次同時跑
+    # 時不會各握一列互等成死結；回報仍依輸入順序
+    for student_id in sorted(eligible):
+        row, code = _try_check_in(session, student_id, d, actor_id=actor.id, note=None, now=now)
+        outcome[student_id] = code if code is not None else row
+
     rows: list[StudentAttendance] = []
     skipped: list[BatchSkipOut] = []
     for student_id in student_ids:
-        student = students.get(student_id)
-        code: str | None
-        if student is None or student.archived_at is not None:
-            code = "student_not_found"
-        elif student.status != "active":
-            code = "student_not_active"
-        else:
-            row, code = _try_check_in(session, student_id, d, actor_id=actor.id, note=None, now=now)
-            if code is None:
-                rows.append(row)
-        if code is not None:
+        result = outcome[student_id]
+        if isinstance(result, str):
             skipped.append(
-                BatchSkipOut(student_id=student_id, code=code, message=_SKIP_MESSAGES[code])
+                BatchSkipOut(student_id=student_id, code=result, message=_SKIP_MESSAGES[result])
             )
+        else:
+            rows.append(result)
 
     if not rows:
         return BatchCheckInOut(succeeded=[], skipped=skipped)
