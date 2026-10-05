@@ -2,11 +2,14 @@
 
 ``GET /api/parent/children/{student_id}/exams?page=&page_size=``：``get_owned_student``（不屬於自己
 → 404）→ BACKEND-465 ``list_child_exams``（只含已發布且該生有成績的考試）。
+``GET /api/parent/children/{student_id}/exams/{exam_id}``（BACKEND-480）：``get_owned_student`` →
+BACKEND-466 ``get_child_exam_detail``；draft / 該生無成績 / 不存在皆同一個 404 ``exam_not_found``。
 """
 
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -15,7 +18,7 @@ from app.api.deps import get_owned_student
 from app.core.db import get_db
 from app.core.pagination import Page, PageParams, page_params
 from app.models.students import Student
-from app.schemas.exams import ParentExamListItemOut
+from app.schemas.exams import ParentExamDetailOut, ParentExamListItemOut
 from app.services import exam_service
 
 router = APIRouter(tags=["parent-exams"])
@@ -28,3 +31,12 @@ def list_child_exams(
     db: Annotated[Session, Depends(get_db)],
 ) -> Page[ParentExamListItemOut]:
     return exam_service.list_child_exams(db, student.id, page)
+
+
+@router.get("/children/{student_id}/exams/{exam_id}", response_model=ParentExamDetailOut)
+def get_child_exam_detail(
+    exam_id: UUID,
+    student: Annotated[Student, Depends(get_owned_student)],
+    db: Annotated[Session, Depends(get_db)],
+) -> ParentExamDetailOut:
+    return exam_service.get_child_exam_detail(db, student.id, exam_id)
