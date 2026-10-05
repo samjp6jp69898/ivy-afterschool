@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 102,
-  "last_updated": "2026-10-05T05:39:11Z",
+  "version": 103,
+  "last_updated": "2026-10-05T05:39:19Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -390,7 +390,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/auth.ts",
       "source_ref": "FE:src/api/auth.ts::login",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-020",
@@ -419,9 +419,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "4 條 red_case 皆有對應測試且斷言具體（login body 深等於與回傳 username / permissions、429 / 422 ApiError code 與 details、各端點 url 序列、fetchPublicConfig 深等於）；實跑 tdd.run 4/4 綠、web-lint 乾淨；0c1830b(test) 先於 04cca77(impl)。對照 apps/api/app/schemas/auth.py：StaffMeOut / RoleBrief / StaffAuthOut {user} 與型別一致，login / refresh / change-password 回 data.user、me 直接回 StaffMe。殘留：PublicConfig 依 description 只宣告 liff_id / org_name / logo_url，後端 PublicConfigOut 另有 add_friend_url、org_phone、limits，需要時再補型別。"
       }
     },
     {
@@ -830,7 +830,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/notifications.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-020",
@@ -855,9 +855,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "3 條 red_case 皆有對應測試且斷言具體（params 深等於、unread_count / deep_link、read_at、{updated:3}、post url 序列、404 code）；實跑 tdd.run 3/3 綠、web-lint 乾淨；e41f807(test) 先於 0e85f4f(impl)。對照 apps/api/app/schemas/notifications.py NotificationPageOut / NotificationOut / MarkAllReadOut 一致；id 以 encodeURIComponent 放入路徑。殘留：FRONTEND-002 的 Notification.deep_link 宣告為 string | null，後端 NotificationOut.deep_link 為 str（非 null），型別較寬、不影響行為。"
       }
     },
     {
@@ -975,7 +975,7 @@
       "granularity_unit": "store",
       "target_path": "apps/web/src/stores/adminWs.ts",
       "source_ref": "FE:src/views/DismissalQueueView.vue::connectWs",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-004",
@@ -983,7 +983,7 @@
         "BACKEND-226"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "",
+      "risk_notes": "[review-r8-fe 打回] store.on('*', handler) 收不到任何事件：dispatch 只查 handlers.get(env.type)，不含 '*' 註冊的 handler；但 description 規定 on 轉給 client.on（FRONTEND-004 契約：type '*' 收全部），store 自己的註解也寫「type '*' 收全部」。反例（review-r8-fe 以暫存 spec 實測）：store.on('*', h)、start、open、server 送 {type:'pickup.request_updated',data:{id:'p1'}} → h 呼叫 0 次（預期 1）。修法：dispatch 同時呼叫 handlers.get('*')，並補一條測試（含 stop / start 後仍有效）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/stores/adminWs.spec.ts",
@@ -1002,9 +1002,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r8-fe",
+        "notes": "打回 1 項（見 risk_notes）：store.on('*') 不分派。其餘核對通過：6 條 red_case 皆有對應測試且斷言具體，另 5 條補充；實跑 tdd.run 11/11 綠、web-lint 乾淨；592e74f(test) 先於 e310dca(impl)。控制訊息格式（type / code / reason / topics 在信封頂層、無 data）與 apps/api/app/api/ws/admin.py 一致；topic 引用計數、CONNECTING 時只記數、onOpen 一次送出全部 > 0 topic、重連後重新訂閱、poller 與 reconnect listener、permission_denied / permission_revoked、4401 / 4403 → triggerAuthFailure 皆符合 description。api/http.ts 新增 triggerAuthFailure() 讀取目前註冊的 authFailure，是取用模組私有 handler 的最小改動；FRONTEND-020 的 http.spec 實跑 9/9 綠，行為不變。殘留：start() 在 client 已存在時直接返回，4401 / 4403 後（status closed）需先 stop() 才能重新 start，依 FRONTEND-029 AdminLayout unmount 時 stop 的流程可行；pollers / reconnect listener 在 stop 後保留（與 handler 相同處理）。"
       }
     },
     {
@@ -1495,7 +1495,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/referenceData.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-020",
@@ -1521,9 +1521,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "3 條 red_case 皆有對應測試且斷言具體（list 的 url 與 params、closed-days 回傳深等於、POST / PATCH body 深等於、DELETE url 與 {deleted,deactivated}）；實跑 tdd.run 3/3 綠、web-lint 乾淨；a9b4277(test) 先於 b2d99b8(impl)。對照 apps/api/app/schemas/reference.py 與 api/admin/reference.py：list 回陣列（response_model=list[...]）、NamedItem / School / ClosedDay 的 In / Out 欄位與可空性一致，ClosedDayUpdateBody 不含 date。殘留：ReferenceListParams 對四個資源共用，型別上允許對 subjects 傳 date_from（後端 RequestModel 可能 422），由呼叫端自律。"
       }
     },
     {
@@ -5375,7 +5375,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/dashboard.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-020",
@@ -5397,9 +5397,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "2 條 red_case 皆有對應測試且斷言具體（completion_rate / not_arrived / recent_leaves、403 code）；實跑 tdd.run 2/2 綠、web-lint 乾淨；92e2ef0(test) 先於 ad84e87(impl)。對照 apps/api/app/schemas/dashboard.py：欄位集合一致；created_by_type 收窄為 ActorCreatedByType（parent | staff），後端宣告 str 但值來自 student_leaves.created_by_type（DB-018 CHECK parent / staff），一致。殘留：DashboardHomeworkCounts.completion_rate 的註解寫「0~1」，但 BACKEND-490 / HomeworkCountsOut 為 0~100、1 位小數（red_case fixture 0.571 也沿用 0~1 假設）；本檔只是透傳不影響行為，但 FRONTEND-261（pending）規格寫 Math.round(completion_rate * 100)% 會顯示成 5710%，需在 261 實作前修正規格並同步改此註解。"
       }
     },
     {
