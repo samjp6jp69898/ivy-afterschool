@@ -5,13 +5,15 @@
 - BACKEND-374：``broadcast_homework_snapshot``（寫入方法共用的 ws 推播；同交易同一學生同一天只推最後
   狀態）。
 - BACKEND-383：``get_board``（作業進度看板，逐生卡片）。
+- BACKEND-376：``handle_homework_done``（整體轉為 done 的副作用：通知家長、同步接送回覆）。
+- BACKEND-382：``set_ready_eta_and_note``（設定預計可接送時間與說明，通知 homework.eta_updated）。
 """
 
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from datetime import date
-from typing import Final
+from datetime import date, timedelta
+from typing import TYPE_CHECKING, Any, Final
 from uuid import UUID
 
 from sqlalchemy import event, select
@@ -19,13 +21,18 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session, SessionTransaction
 
 from app.core.clock import Clock
+from app.core.errors import AppError
 from app.core.settings_registry import HOMEWORK_WINDOW
 from app.models.account import StaffUser
 from app.models.attendance import AttendanceStatus, StudentAttendance
 from app.models.classes import SchoolClass
 from app.models.homework import HomeworkDailyProgress, HomeworkItem
 from app.models.students import Student
+from app.notifications.events import Event
+from app.notifications.recipients import parent_recipients
+from app.notifications.service import enqueue
 from app.realtime.publish import broadcast_after_commit
+from app.repositories.students import get_student_or_404
 from app.schemas.homework import (
     BoardOut,
     BoardQuery,
@@ -37,11 +44,17 @@ from app.schemas.homework import (
     ParentHomeworkOut,
     ProgressOut,
 )
+from app.services.pickup.requests import sync_open_request_reply
 from app.services.settings_service import get_setting
+
+if TYPE_CHECKING:
+    from app.api.deps import CurrentStaff
 
 UQ_PROGRESS_STUDENT_DATE = "uq_homework_daily_progress_student_date"
 BROADCAST_KEYS: Final = "homework_broadcast_keys"
 _BROADCAST_HOOKED: Final = "homework_broadcast_hooked"
+# set_ready_eta_and_note 的「未提供」標記（與給 None 代表清除區分）
+UNSET: Final[Any] = object()
 
 
 def lock_progress_row(
@@ -321,3 +334,101 @@ def get_board(session: Session, query: BoardQuery, *, clock: Clock) -> BoardOut:
         ),
         students=cards,
     )
+
+
+def check_service_date(session: Session, service_date: date, *, clock: Clock) -> None:
+    """作業日期必須在 homework.window（今天 - past_days ~ 今天 + future_days）內，否則 422。"""
+    window = get_setting(session, HOMEWORK_WINDOW)
+    today = clock.today()
+    earliest = today - timedelta(days=window.past_days)
+    latest = today + timedelta(days=window.future_days)
+    if not earliest <= service_date <= latest:
+        raise AppError(
+            "invalid_service_date",
+            "作業日期超出可編輯的範圍",
+            status=422,
+            details={"min_date": earliest.isoformat(), "max_date": latest.isoformat()},
+        )
+
+
+def handle_homework_done(
+    session: Session, student_id: UUID, service_date: date, *, clock: Clock
+) -> None:
+    """整體轉為 done 的副作用：通知家長 homework.done、同步進行中的接送回覆。
+
+    只由呼叫端在「今天、非 done → done」時呼叫；本方法不再判斷。
+    """
+    student_name = session.execute(
+        select(Student.name).where(Student.id == student_id)
+    ).scalar_one()
+    enqueue(
+        session,
+        Event.HOMEWORK_DONE,
+        recipients=parent_recipients(session, student_id),
+        payload={"student_id": student_id, "student_name": student_name},
+        clock=clock,
+    )
+    sync_open_request_reply(session, student_id, service_date, clock=clock)
+
+
+def set_ready_eta_and_note(
+    session: Session,
+    student_id: UUID,
+    service_date: date,
+    *,
+    ready_eta: Any = UNSET,  # time | None | UNSET
+    note: Any = UNSET,  # str | None | UNSET
+    actor: CurrentStaff,
+    clock: Clock,
+) -> ProgressOut:
+    """設定 / 清除預計可接送時間與說明（UNSET 不改，None 清除）。
+
+    ETA 設為新的非 null 值、作業未完成且為今天 → 通知家長 homework.eta_updated；只改 note 或清除 ETA
+    不通知。ETA 有變動時同步進行中的接送回覆（BACKEND-413），最後推作業快照。
+    """
+    if ready_eta is UNSET and note is UNSET:
+        raise ValueError("ready_eta 與 note 至少要給一個")
+    student = get_student_or_404(session, student_id)
+    check_service_date(session, service_date, clock=clock)
+    progress = lock_progress_row(session, student_id, service_date)
+
+    eta_changed = ready_eta is not UNSET and ready_eta != progress.ready_eta
+    if eta_changed:
+        progress.ready_eta = ready_eta
+        # 清除時也記錄最後一次修改的人與時間
+        progress.eta_updated_by = actor.id
+        progress.eta_updated_at = clock.now()
+    if note is not UNSET:
+        progress.note = note
+    session.flush()
+
+    if (
+        eta_changed
+        and ready_eta is not None
+        and progress.overall_status != "done"
+        and service_date == clock.today()
+    ):
+        payload: dict[str, Any] = {
+            "student_id": student_id,
+            "student_name": student.name,
+            "ready_eta": ready_eta.strftime("%H:%M"),
+        }
+        if progress.note:
+            payload["note"] = progress.note
+        enqueue(
+            session,
+            Event.HOMEWORK_ETA_UPDATED,
+            recipients=parent_recipients(session, student_id),
+            payload=payload,
+            clock=clock,
+        )
+    if eta_changed:
+        sync_open_request_reply(session, student_id, service_date, clock=clock)
+    broadcast_homework_snapshot(session, student_id, service_date, clock=clock)
+
+    eta_by = None
+    if progress.eta_updated_by is not None:
+        eta_by = session.execute(
+            select(StaffUser.display_name).where(StaffUser.id == progress.eta_updated_by)
+        ).scalar_one_or_none()
+    return _progress_out(student_id, service_date, progress, eta_by)
