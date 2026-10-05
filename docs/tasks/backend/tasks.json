@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 364,
-  "last_updated": "2026-10-05T05:42:53Z",
+  "version": 365,
+  "last_updated": "2026-10-05T05:43:02Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1997,7 +1997,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/auth.py",
       "source_ref": "BE:api/parent_portal/auth.py::bind_first_child",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-056",
@@ -2024,9 +2024,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 7 條全綠、collect-only 對照全選到；8571cdb（測試）先於 3a16480（實作）。身分判定：get_optional_parent（只吞 401）有效 → 加綁；否則讀 parent_bind 並 decode_bind_token → 首次；皆無 / 垃圾 / 過期 11 分鐘 → 401 且碼 used_at 仍為 null。首次綁定 Set-Cookie 發 parent_access / parent_refresh、清 parent_bind，重讀 DB 確認帳號建立、guardian 綁定、碼已用，新 cookie 打 /me 200，同碼再用 → 400 binding_code_used；加綁完全沒有 Set-Cookie、access cookie 不變、children 兩位。422 缺 code / 多餘欄位 / 長度；403 外站 Origin 且未建帳號；400 binding_code_invalid、409 guardian_already_bound 皆不發 cookie且碼未消耗。scratch 突變：加綁也清 bind cookie、首次不清 bind cookie、拿掉 commit 皆轉紅。家長端 123 條整合測試綠；lint / typecheck 乾淨；跑前後殘列筆數不變。"
       }
     },
     {
@@ -13090,7 +13090,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/exams.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-466",
@@ -13115,9 +13115,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 全選到；dd8f62c 先於 10f9395。Depends(get_owned_student)：他人小孩與不存在學生 404 student_not_found 且 body 相同、不含考試名；自己小孩搭配只有他人有成績的考試、draft 皆 404 exam_not_found 且與 uuid4() 相同、不含考試名；缺考 cell (None, is_absent True)；欄位集合鎖定、不含 published_by；無 cookie 與員工 cookie 皆 401。突變：get_owned_student 改為不檢查擁有權 → idor 轉紅。lint / typecheck 乾淨。"
       }
     },
     {
