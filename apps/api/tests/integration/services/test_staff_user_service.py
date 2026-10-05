@@ -6,7 +6,8 @@ BACKEND-090：update_staff_user（基本資料 / 角色 / 個別權限、cannot_
 最後一位管理者 409）。
 BACKEND-091：reset_password（臨時密碼、token_version +1、撤銷 refresh、自己 409、稽核不含密碼）。
 BACKEND-092：deactivate（停用、token 失效、冪等、最後一位管理者 409、兩 session 並發各停一位
-admin）。"""
+admin）。
+BACKEND-521：activate（重新啟用、臨時密碼只回一次、強制改密碼、token_version 不變、稽核不含密碼）。"""
 
 import json
 import threading
@@ -36,6 +37,7 @@ from app.schemas.staff_users import (
 )
 from app.services.auth.refresh_tokens import issue
 from app.services.staff_user_service import (
+    activate,
     create_staff_user,
     deactivate,
     get_staff_user,
@@ -870,3 +872,72 @@ def test_deactivate_concurrent_last_admins(
         ).scalar_one()
         assert active == 1
         assert check.get(StaffUser, b_id).is_active is True  # type: ignore[union-attr]
+
+
+# --- BACKEND-521 activate ---
+
+
+def _deactivated(db: Session, role_code: str = "tutor") -> StaffUser:
+    """停用中的帳號（停用時 token_version 已 +1）。"""
+    staff = make_staff(db, role_code=role_code, is_active=False)
+    staff.token_version = 1
+    db.flush()
+    return staff
+
+
+def test_activate_success(db_session: Session, fake_clock: FakeClock) -> None:
+    target = _deactivated(db_session)
+
+    out = activate(db_session, target.id, actor=_admin(), meta=_META, clock=fake_clock)
+
+    assert isinstance(out, StaffUserCreatedOut)
+    assert (out.user.id, out.user.is_active, out.user.must_change_password) == (
+        target.id,
+        True,
+        True,
+    )
+    db_session.refresh(target)
+    assert verify_password(out.temp_password, target.password_hash) is True
+    assert verify_password("Passw0rd-Test1", target.password_hash) is False
+    assert (target.is_active, target.must_change_password, target.token_version) == (True, True, 1)
+
+
+def test_activate_already_active(db_session: Session, fake_clock: FakeClock) -> None:
+    target = make_staff(db_session, role_code="tutor")
+
+    with pytest.raises(AppError) as exc:
+        activate(db_session, target.id, actor=_admin(), meta=_META, clock=fake_clock)
+
+    assert (exc.value.status, exc.value.code) == (409, "staff_already_active")
+    assert _audits(db_session, "staff_user.activate", target.id) == []
+
+
+def test_activate_cannot_manage(db_session: Session, fake_clock: FakeClock) -> None:
+    admin = _deactivated(db_session, role_code="admin")
+    actor = _director_plus_staff_write(db_session)
+
+    with pytest.raises(AppError) as forbidden:
+        activate(db_session, admin.id, actor=actor, meta=_META, clock=fake_clock)
+    with pytest.raises(AppError) as missing:
+        activate(db_session, uuid4(), actor=actor, meta=_META, clock=fake_clock)
+
+    assert (forbidden.value.status, forbidden.value.code) == (403, "cannot_manage_staff")
+    assert (missing.value.status, missing.value.code) == (404, "staff_user_not_found")
+    db_session.refresh(admin)
+    assert admin.is_active is False
+
+
+def test_activate_audit_no_password(db_session: Session, fake_clock: FakeClock) -> None:
+    target = _deactivated(db_session)
+    old_hash = target.password_hash
+
+    out = activate(db_session, target.id, actor=_admin(), meta=_META, clock=fake_clock)
+
+    [log] = _audits(db_session, "staff_user.activate", target.id)
+    assert (log.entity_type, log.ip) == ("staff_user", "127.0.0.1")
+    assert log.before == {"is_active": False}
+    assert log.after == {"is_active": True, "must_change_password": True}
+    dumped = json.dumps([log.before, log.after])
+    db_session.refresh(target)
+    for secret in (out.temp_password, old_hash, target.password_hash):
+        assert secret not in dumped
