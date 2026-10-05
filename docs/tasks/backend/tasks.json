@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 257,
-  "last_updated": "2026-10-05T02:53:40Z",
+  "version": 258,
+  "last_updated": "2026-10-05T02:53:48Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5171,11 +5171,11 @@
     {
       "id": "BACKEND-151",
       "title": "實作 StudentService.create_student：學號唯一、身分證查重、敏感欄位加密",
-      "description": "在 `apps/api/app/services/student_service.py` 實作：\n```python\ndef create_student(session: Session, data: StudentCreateIn, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> StudentDetailOut: ...\n```\n1. 給了 id_number 或 health_note 而 actor 無 `students:sensitive` → 403 `sensitive_permission_required`（身分證與健康備註的寫入與讀取都需要 students:sensitive）。\n2. school_id 不存在或停用 → 422 `invalid_school`；class_id 不存在或已封存 → 422 `invalid_class`。\n3. status=withdrawn 未給 withdrawn_on → 預設 `clock.today()`；withdrawn_on 早於 enrolled_on → 422 `invalid_dates`。\n4. id_number：normalize → validate（422）→ hmac；同 hmac 的既有學生（含封存）→ 409 `id_number_duplicate`，details `{\"student_id\", \"student_no\", \"name\"}`（DB-014：同一人再次入班應沿用原紀錄）。\n5. 加密 id_number_enc / health_note_enc（BACKEND-009）。\n6. insert（savepoint）；`uq_students_student_no` → 409 `student_no_taken`；`uq_students_id_number_hmac`（競態）→ 409 `id_number_duplicate`。\n7. 有寫入敏感欄位時稽核 `student.sensitive_update`（after 只記 `{\"id_number\": \"set\", \"health_note\": \"set\"}`，不記值）。\n- 移植 ivy `api/students.py::create_student` 的唯一檢查與 `services/student_dedup.py` 的查重精神（改為身分證 HMAC）。\n\n**驗收標準**\n- 建立成功，DB 只有密文與 HMAC。\n- 學號重複 409；身分證重複（含封存學生）409 並指出既有學生；身分證格式錯 422。\n- 無 sensitive 權限寫敏感欄位 403；不寫則可建立。\n- 無效學校 / 班級 422；withdrawn 預設退班日。",
+      "description": "在 `apps/api/app/services/student_service.py` 實作：\n```python\ndef create_student(session: Session, data: StudentCreateIn, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> StudentDetailOut: ...\n```\n1. 給了 id_number 或 health_note 而 actor 無 `students:sensitive` → 403 `sensitive_permission_required`（身分證與健康備註的寫入與讀取都需要 students:sensitive）。\n2. school_id 不存在或停用 → 422 `invalid_school`；class_id 不存在或已封存 → 422 `invalid_class`。\n3. status=withdrawn 未給 withdrawn_on → 預設 `clock.today()`；withdrawn_on 早於 enrolled_on → 422 `invalid_dates`。\n4. id_number：normalize → validate（422）→ hmac；同 hmac 的既有學生（含封存）→ 409 `id_number_duplicate`，details `{\"student_id\", \"student_no\", \"name\"}`（DB-014：同一人再次入班應沿用原紀錄）。\n5. 加密 id_number_enc / health_note_enc（BACKEND-009）。\n6. insert（savepoint）；`uq_students_student_no` → 409 `student_no_taken`；`uq_students_id_number_hmac`（競態）→ 409 `id_number_duplicate`。\n7. 有寫入敏感欄位時稽核 `student.sensitive_update`（after 只記欄位名、不記值：`{\"set\": [\"health_note\", \"id_number\"]}`，欄位名排序；以 list 記而不以欄位名當 key，因為 BACKEND-102 會把 key 含 id_number / health_note 的值遮罩成 `***`）。\n- 移植 ivy `api/students.py::create_student` 的唯一檢查與 `services/student_dedup.py` 的查重精神（改為身分證 HMAC）。\n\n**驗收標準**\n- 建立成功，DB 只有密文與 HMAC。\n- 學號重複 409；身分證重複（含封存學生）409 並指出既有學生；身分證格式錯 422。\n- 無 sensitive 權限寫敏感欄位 403；不寫則可建立。\n- 無效學校 / 班級 422；withdrawn 預設退班日。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": "BE:api/students.py::create_student",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-150",
@@ -5191,7 +5191,7 @@
           "integration"
         ],
         "red_cases": [
-          "test_create_student_success：actor 有 students:write + students:sensitive，StudentCreateIn(student_no='S115010', name='林小安', grade_level=2, id_number=' a123456789 ', health_note='氣喘') → 回傳 sensitive.id_number == 'A123456789'；DB id_number_hmac == id_number_hmac('A123456789')、decrypt_bytes(id_number_enc) == 'A123456789'；audit 'student.sensitive_update' after == {'id_number':'set','health_note':'set'}",
+          "test_create_student_success：actor 有 students:write + students:sensitive，StudentCreateIn(student_no='S115010', name='林小安', grade_level=2, id_number=' a123456789 ', health_note='氣喘') → 回傳 sensitive.id_number == 'A123456789'；DB id_number_hmac == id_number_hmac('A123456789')、decrypt_bytes(id_number_enc) == 'A123456789'；audit 'student.sensitive_update' after == {'set': ['health_note', 'id_number']}",
           "test_create_student_no_taken：student_no 與既有重複 → 409 'student_no_taken'",
           "test_create_student_id_duplicate_including_archived：封存學生已有 A123456789 → 409 'id_number_duplicate'，details.student_no == 該封存學生學號",
           "test_create_student_sensitive_forbidden：actor 只有 students:write 且給 id_number → 403 'sensitive_permission_required'；不給敏感欄位 → 成功",
@@ -5210,7 +5210,7 @@
     {
       "id": "BACKEND-152",
       "title": "實作 StudentService.update_student：部分更新（狀態、班級、敏感欄位）",
-      "description": "在 `apps/api/app/services/student_service.py` 實作：\n```python\ndef update_student(session: Session, student_id: UUID, data: StudentUpdateIn, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> StudentDetailOut: ...\n```\n- 不存在或已封存 → 404（封存學生不可編輯）；`get_student_or_404(for_update=True)`。\n- 只處理 `model_fields_set` 中的欄位；敏感欄位規則同 BACKEND-151（含 403、422、409：沒有 students:sensitive 不可寫入或清除身分證與健康備註）；給 null → 同時清除 enc 與 hmac。\n- 狀態轉換：→ withdrawn 未給 withdrawn_on 時預設 today；withdrawn → active / suspended 時清除 withdrawn_on。\n- student_no 改為既有值 → 409；class_id 改為封存班 → 422。\n- 敏感欄位有變動時稽核 `student.sensitive_update`（after：`set` / `cleared`）。\n- **停讀 / 退班自動收尾**：status 由其他值改為 `suspended` 或 `withdrawn` 時，同一交易內呼叫 `close_out_inactive_student(session, student, actor=actor, clock=clock)`（BACKEND-529：取消進行中接送請求與 active 代理授權、刪除今天起 expected 出勤、取消未來請假 / 已開始的截到昨天）。\n\n**驗收標準**\n- 部分更新只動給定欄位。\n- 狀態轉換的 withdrawn_on 處理。\n- 敏感欄位清除 / 修改與權限檢查。\n- 封存學生 404；學號衝突 409。\n- 改為 suspended / withdrawn 時觸發 BACKEND-529 收尾；改回 active 或其他欄位變更不觸發。",
+      "description": "在 `apps/api/app/services/student_service.py` 實作：\n```python\ndef update_student(session: Session, student_id: UUID, data: StudentUpdateIn, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> StudentDetailOut: ...\n```\n- 不存在或已封存 → 404（封存學生不可編輯）；`get_student_or_404(for_update=True)`。\n- 只處理 `model_fields_set` 中的欄位；敏感欄位規則同 BACKEND-151（含 403、422、409：沒有 students:sensitive 不可寫入或清除身分證與健康備註）；給 null → 同時清除 enc 與 hmac。\n- 狀態轉換：→ withdrawn 未給 withdrawn_on 時預設 today；withdrawn → active / suspended 時清除 withdrawn_on。\n- student_no 改為既有值 → 409；class_id 改為封存班 → 422。\n- 敏感欄位有變動時稽核 `student.sensitive_update`（after 只記欄位名：`{\"set\": [...], \"cleared\": [...]}`，只放有變動的 key、欄位名排序；格式同 BACKEND-151，不以欄位名當 key——BACKEND-102 會把 key 含 id_number / health_note 的值遮罩成 `***`）。\n- **停讀 / 退班自動收尾**：status 由其他值改為 `suspended` 或 `withdrawn` 時，同一交易內呼叫 `close_out_inactive_student(session, student, actor=actor, clock=clock)`（BACKEND-529：取消進行中接送請求與 active 代理授權、刪除今天起 expected 出勤、取消未來請假 / 已開始的截到昨天）。\n\n**驗收標準**\n- 部分更新只動給定欄位。\n- 狀態轉換的 withdrawn_on 處理。\n- 敏感欄位清除 / 修改與權限檢查。\n- 封存學生 404；學號衝突 409。\n- 改為 suspended / withdrawn 時觸發 BACKEND-529 收尾；改回 active 或其他欄位變更不觸發。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": "BE:api/students.py::update_student",
@@ -5231,7 +5231,7 @@
         "red_cases": [
           "test_update_student_partial：update_student(s, StudentUpdateIn(note='喜歡數學')) → note 更新、grade_level 不變",
           "test_update_student_withdraw_and_reactivate：status='withdrawn' → withdrawn_on == fake_clock.today()；再改 status='active' → withdrawn_on is None",
-          "test_update_student_clear_sensitive：actor 有 sensitive，StudentUpdateIn.model_validate({'id_number': None}) → id_number_enc 與 id_number_hmac 皆 None；audit after == {'id_number':'cleared'}",
+          "test_update_student_clear_sensitive：actor 有 sensitive，StudentUpdateIn.model_validate({'id_number': None}) → id_number_enc 與 id_number_hmac 皆 None；audit after == {'cleared': ['id_number']}",
           "test_update_student_sensitive_forbidden：actor 無 sensitive 改 health_note → 403 'sensitive_permission_required'",
           "test_update_student_archived_404_and_conflict：封存學生 → 404 'student_not_found'；student_no 改為他人學號 → 409 'student_no_taken'",
           "test_update_student_triggers_close_out：王小明今日有 pending 接送請求 → update status='withdrawn' → 請求 status 'cancelled'；另一位學生只改 note → close_out 未被呼叫（monkeypatch 計數 0）"
@@ -5252,7 +5252,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": "BE:api/students.py::delete_student",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-150",
@@ -5287,7 +5287,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-150",
