@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 288,
-  "last_updated": "2026-10-05T03:07:10Z",
+  "version": 289,
+  "last_updated": "2026-10-05T03:09:35Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -7425,7 +7425,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/ws/admin.py",
       "source_ref": "BE:api/dismissal_ws.py::admin_dismissal_ws",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-225",
@@ -7444,15 +7444,15 @@
           "integration"
         ],
         "red_cases": [
-          "test_ws_admin_ready_and_notification：with TestClient(app) as c（lifespan 設定 main loop）+ staff cookie → websocket_connect('/api/ws/admin') 收到 {'type':'ready','topics':[]}；呼叫 publish_threadsafe([staff_channel(staff.id)], {'type':'notification.created'}) → ws 收到該訊息",
-          "test_ws_admin_subscribe_with_permission：staff permissions ['pickup:read'] 送 subscribe ['pickup'] → 收到 {'type':'subscribed','topics':['pickup']}；publish 到 'admin:pickup' → 收到",
-          "test_ws_admin_subscribe_forbidden：staff 無 homework:read 送 subscribe ['homework'] → 收到 {'type':'error','code':'permission_denied','topics':['homework']}；publish 到 'admin:homework' → 收不到（receive 逾時）",
-          "test_ws_admin_unauthenticated：無 cookie → WebSocketDisconnect code 4401；parent_access cookie → 4401",
+          "test_ws_admin_ready_and_notification：api_client（lifespan 設定 main loop）+ staff cookie → websocket_connect('/api/ws/admin') 收到 {'type':'ready','topics':[]}；publish_threadsafe([staff_channel(staff.id)], {'type':'notification.created',...}) → ws 收到該訊息；別人 staff channel 的訊息收不到（哨兵）",
+          "test_ws_admin_subscribe_with_permission：tutor（有 pickup:read / attendance:read）送 subscribe ['pickup'] → {'type':'subscribed','topics':['pickup']}；publish 到 'admin:pickup' → 收到；再訂 attendance 回排序後全部；unsubscribe pickup 後 'admin:pickup' 收不到（哨兵）",
+          "test_ws_admin_subscribe_forbidden：tutor revoked_permissions=['homework:read'] 送 subscribe ['homework'] → {'type':'error','code':'permission_denied','topics':['homework']}；publish 到 'admin:homework' → 收不到（哨兵）；混合 ['homework','pickup'] → error + subscribed ['pickup']；未知 topic / topics 非 list / 未知 action → bad_message",
+          "test_ws_admin_unauthenticated：無 cookie → WebSocketDisconnect code 4401；parent_access cookie → 4401；垃圾 cookie → 4401",
           "test_ws_admin_foreign_origin：headers origin https://evil.test → 4403",
-          "test_ws_admin_revalidate_revoked：REVALIDATE_SECONDS monkeypatch 為 0.1；訂閱 pickup 後把該員工 role.permissions 移除 pickup:read 並 commit → 收到 {'type':'unsubscribed','topics':['pickup'],'reason':'permission_revoked'}；接著停用帳號 → 4401"
+          "test_ws_admin_revalidate_revoked：app.api.ws.admin.REVALIDATE_SECONDS monkeypatch 為 0.1；訂閱 pickup + attendance 後把該員工 revoked_permissions 設為 ['pickup:read'] 並 commit（committing 測試不改 seed 角色列）→ 收到 {'type':'unsubscribed','topics':['pickup'],'reason':'permission_revoked'}，'admin:pickup' 收不到；接著停用帳號 → 4401"
         ],
         "run": "just test-int apps/api/tests/integration/api/ws/test_ws_endpoints.py -k \"test_ws_admin_\"",
-        "notes": ""
+        "notes": "測資以綁 db_engine 的真 commit session 建立、owner 連線逐筆刪除（只用 seed 系統角色）。「收不到」以哨兵驗證：先 publish 到不該收到的頻道，再 publish 哨兵到已訂閱的個人頻道，下一則收到的必須是哨兵。"
       },
       "review": {
         "status": "pending",
@@ -7467,7 +7467,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/ws/parent.py",
       "source_ref": "BE:api/inbox_ws.py::employee_inbox_ws",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-225",
@@ -7486,15 +7486,15 @@
           "integration"
         ],
         "red_cases": [
-          "test_ws_parent_ready_children：家長綁王小明 → 連線收到 {'type':'ready','children':[str(王小明.id)]}",
-          "test_ws_parent_receives_own_child_only：publish 到 student_channel(王小明) → 收到；publish 到 student_channel(陳小華，他人小孩) → 收不到；publish 到 parent_channel(自己) → 收到",
-          "test_ws_parent_cannot_subscribe：送 {'action':'subscribe','topics':['pickup']} → 收到 {'type':'error','code':'not_allowed'}；publish 到 'admin:pickup' → 收不到",
-          "test_ws_parent_unbind_revalidate：REVALIDATE_SECONDS=0.1；連線後解除王小明的綁定並 commit → 收到 {'type':'children_changed','children':[]}；之後 publish 到 student_channel(王小明) → 收不到",
+          "test_ws_parent_ready_children：家長綁王小明 → 連線收到 {'type':'ready','children':[str(王小明.id)]}；ping → pong",
+          "test_ws_parent_receives_own_child_only：publish 到 student_channel(王小明) → 收到；publish 到 parent_channel(自己) → 收到；publish 到 student_channel(陳小華，他人小孩) → 收不到（哨兵）",
+          "test_ws_parent_cannot_subscribe：送 {'action':'subscribe','topics':['pickup']} 與 unsubscribe → 各收到 {'type':'error','code':'not_allowed'}；publish 到 'admin:pickup' → 收不到（哨兵）",
+          "test_ws_parent_unbind_revalidate：app.api.ws.parent.REVALIDATE_SECONDS=0.1；連線後把王小明的 guardian 封存並 commit → 收到 {'type':'children_changed','children':[]}；之後 publish 到 student_channel(王小明) → 收不到（哨兵）；再綁陳小華 → 收到 children_changed [陳小華] 且其 student channel 訊息收得到",
           "test_ws_parent_unauthenticated：無 cookie → 4401；staff_access cookie → 4401；Origin https://evil.test → 4403",
-          "test_ws_parent_receives_attendance：committing session，員工對王小明 check_in（BACKEND-305）並 commit → 家長 ws 收到 type 'attendance.updated'，data == {'student_id': str(王小明.id), 'service_date': ..., 'status': 'present', 'check_in_at': ..., 'check_out_at': None}；對陳小華（他人小孩）check_in → 收不到"
+          "test_ws_parent_receives_attendance：以真 commit session 呼叫 broadcast_after_commit(topic='attendance', type='attendance.updated', data=完整版, student_id=王小明, parent_data={'student_id','service_date','status','check_in_at','check_out_at'}) 並 commit（BACKEND-305 check_in 尚未實作，直接驅動出勤 service 使用的同一條 BACKEND-224 路徑）→ 家長 ws 收到 type 'attendance.updated'、data == parent_data、不含員工姓名；對陳小華（他人小孩）同樣廣播 → 收不到（哨兵）"
         ],
         "run": "just test-int apps/api/tests/integration/api/ws/test_ws_endpoints.py -k \"test_ws_parent_\"",
-        "notes": ""
+        "notes": "同 BACKEND-226 的測資與哨兵作法。"
       },
       "review": {
         "status": "pending",
