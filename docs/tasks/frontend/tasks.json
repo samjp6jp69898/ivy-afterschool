@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 107,
-  "last_updated": "2026-10-05T05:41:21Z",
+  "version": 108,
+  "last_updated": "2026-10-05T05:42:51Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -975,7 +975,7 @@
       "granularity_unit": "store",
       "target_path": "apps/web/src/stores/adminWs.ts",
       "source_ref": "FE:src/views/DismissalQueueView.vue::connectWs",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-004",
@@ -983,7 +983,7 @@
         "BACKEND-226"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "[review-r8-fe 打回] store.on('*', handler) 收不到任何事件：dispatch 只查 handlers.get(env.type)，不含 '*' 註冊的 handler；但 description 規定 on 轉給 client.on（FRONTEND-004 契約：type '*' 收全部），store 自己的註解也寫「type '*' 收全部」。反例（review-r8-fe 以暫存 spec 實測）：store.on('*', h)、start、open、server 送 {type:'pickup.request_updated',data:{id:'p1'}} → h 呼叫 0 次（預期 1）。修法：dispatch 同時呼叫 handlers.get('*')，並補一條測試（含 stop / start 後仍有效）。",
+      "risk_notes": "start() 在 client 已存在時直接返回：server 以 4401 / 4403 關閉後 status 為 closed，需先 stop() 才能重新 start()；目前依 FRONTEND-029 AdminLayout 卸載時 stop、重新登入掛載時 start 的流程可行，其他呼叫端要重連時須先 stop。pollers / reconnect listener 與事件 handler 一樣在 stop 後保留，由註冊端自行解除。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/stores/adminWs.spec.ts",
@@ -1002,9 +1002,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r8-fe",
-        "notes": "打回 1 項（見 risk_notes）：store.on('*') 不分派。其餘核對通過：6 條 red_case 皆有對應測試且斷言具體，另 5 條補充；實跑 tdd.run 11/11 綠、web-lint 乾淨；592e74f(test) 先於 e310dca(impl)。控制訊息格式（type / code / reason / topics 在信封頂層、無 data）與 apps/api/app/api/ws/admin.py 一致；topic 引用計數、CONNECTING 時只記數、onOpen 一次送出全部 > 0 topic、重連後重新訂閱、poller 與 reconnect listener、permission_denied / permission_revoked、4401 / 4403 → triggerAuthFailure 皆符合 description。api/http.ts 新增 triggerAuthFailure() 讀取目前註冊的 authFailure，是取用模組私有 handler 的最小改動；FRONTEND-020 的 http.spec 實跑 9/9 綠，行為不變。殘留：start() 在 client 已存在時直接返回，4401 / 4403 後（status closed）需先 stop() 才能重新 start，依 FRONTEND-029 AdminLayout unmount 時 stop 的流程可行；pollers / reconnect listener 在 stop 後保留（與 handler 相同處理）。"
+        "notes": "6 條 red_case 皆有對應測試且斷言具體，另 6 條補充；實跑 tdd.run 12/12 綠、web-lint 乾淨；592e74f(test) 先於 e310dca(impl)。控制訊息格式（type / code / reason / topics 在信封頂層、無 data）與 apps/api/app/api/ws/admin.py 一致；topic 引用計數、CONNECTING 時只記數、onOpen 一次送出全部 > 0 topic、重連後重新訂閱、poller 與 reconnect listener、permission_denied / permission_revoked、4401 / 4403 → triggerAuthFailure 皆符合 description。api/http.ts 新增 triggerAuthFailure() 是取用模組私有 authFailure handler 的最小改動，FRONTEND-020 http.spec 9/9 綠、行為不變。前次打回項（store.on('*') 不分派）已修：7b11c62(test，涵蓋多種 type、typed handler 不受影響、stop / start 後仍收到、解除後不再收到) 先於 df90083(fix，dispatch 同時取 env.type 與 '*' 的 handler)；review-r8-fe 突變驗證：還原為只取 env.type → 恰好 wildcard 測試轉紅（1 failed / 11 passed）。殘留：見 risk_notes（4401 / 4403 後需先 stop 才能 start）。"
       }
     },
     {
