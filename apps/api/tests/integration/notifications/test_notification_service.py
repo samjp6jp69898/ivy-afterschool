@@ -1,8 +1,8 @@
 """BACKEND-206：app/notifications/service.py（NotificationService.enqueue）。
 
 after-commit 以 db_session 的 commit 觸發（savepoint 模式的 commit 仍會發 after_commit，見
-BACKEND-006 tx_hooks 的實測結論）；kick_outbox 與 push_to_recipient_after_commit 以 monkeypatch
-記錄。
+BACKEND-006 tx_hooks 的實測結論）；kick_outbox 以 monkeypatch 記錄，ws 推播則記錄 BACKEND-224 底層
+的 publish_threadsafe（push_to_recipient_after_commit 本身負責 after-commit 排程，不能被換掉）。
 """
 
 from __future__ import annotations
@@ -22,11 +22,13 @@ from app.notifications import service as service_module
 from app.notifications.events import Event
 from app.notifications.recipients import Recipient
 from app.notifications.service import EnqueueResult, enqueue
+from app.realtime import publish as publish_module
+from app.realtime.publish import parent_channel, staff_channel
 from app.services.settings_service import invalidate_setting
 from tests.support.factories import make_parent, make_staff
 from tests.support.fake_clock import FakeClock
 
-PushCall = tuple[Recipient, str, dict[str, Any]]
+PushCall = tuple[list[str], dict[str, Any]]
 
 
 @pytest.fixture(autouse=True)
@@ -43,12 +45,13 @@ def kicked(monkeypatch: pytest.MonkeyPatch) -> list[list[UUID]]:
 
 @pytest.fixture
 def pushed(monkeypatch: pytest.MonkeyPatch) -> list[PushCall]:
+    """記錄 commit 後實際送出的 (channels, envelope)。"""
     calls: list[PushCall] = []
 
-    def record(session: Session, recipient: Recipient, type: str, data: Any, *, clock: Any) -> None:
-        calls.append((recipient, type, dict(data)))
+    def record(channels: list[str], message: dict[str, Any]) -> None:
+        calls.append((list(channels), dict(message)))
 
-    monkeypatch.setattr(service_module, "push_to_recipient_after_commit", record)
+    monkeypatch.setattr(publish_module, "publish_threadsafe", record)
     return calls
 
 
@@ -138,9 +141,12 @@ def test_enqueue_in_app_and_line(
 
     assert kicked == [result.outbox_ids]
     assert len(pushed) == 2
-    assert {c[0] for c in pushed} == {Recipient("parent", p1.id), Recipient("parent", p2.id)}
-    assert all(c[1] == "notification.created" for c in pushed)
-    data = next(c[2] for c in pushed if c[0].id == p1.id)
+    assert {tuple(c[0]) for c in pushed} == {
+        (parent_channel(p1.id),),
+        (parent_channel(p2.id),),
+    }
+    assert all(c[1]["type"] == "notification.created" for c in pushed)
+    data = next(c[1]["data"] for c in pushed if c[0] == [parent_channel(p1.id)])
     assert data["title"] == "王小明 作業已完成"
     assert data["event"] == "homework.done"
     assert data["deep_link"] == "/homework"
@@ -180,9 +186,10 @@ def test_enqueue_ws_only_event(
     assert _count(db_session, NotificationOutbox) == before_o
     assert kicked == []
     assert len(pushed) == 1
-    recipient, type_, data = pushed[0]
-    assert recipient == Recipient("staff", staff.id)
-    assert type_ == "notification.transient"
+    channels, message = pushed[0]
+    assert channels == [staff_channel(staff.id)]
+    assert message["type"] == "notification.transient"
+    data = message["data"]
     assert data["event"] == "pickup.arrived"
     assert "王小明" in data["title"]
     assert data["payload"] == {
