@@ -1,4 +1,5 @@
-"""BACKEND-042 / 046 / 048：POST /api/admin/auth/login、POST /logout、GET /me。"""
+"""BACKEND-042 / 046 / 048：POST /api/admin/auth/login、POST /logout、GET /me。
+BACKEND-044：POST /api/admin/auth/refresh。"""
 
 from __future__ import annotations
 
@@ -18,6 +19,7 @@ from app.models.parents import ParentAccount
 from app.services.auth import refresh_tokens
 from app.services.auth.throttle import AuthThrottles, get_auth_throttles
 from tests.support.factories import make_staff
+from tests.support.fake_clock import FakeClock
 from tests.support.route_audit import admin_routes_without_permission
 
 _URL = "/api/admin/auth/login"
@@ -331,3 +333,128 @@ def test_admin_me_inactive_401(
     db_session.commit()
 
     assert_error(client.get(_ME), 401, "unauthenticated")
+
+
+# --- BACKEND-044：POST /api/admin/auth/refresh --------------------------------------------------
+
+_REFRESH = "/api/admin/auth/refresh"
+
+
+def _set_refresh(client: TestClient, raw: str) -> None:
+    client.cookies.set("staff_refresh", raw, path="/api/admin/auth")
+
+
+def test_admin_refresh_success(api_client: TestClient, db_session: Session) -> None:
+    make_staff(db_session, username="lin.teacher", role_code="tutor", display_name="林老師")
+    db_session.commit()
+    old_refresh = _login(api_client)
+    old_access = api_client.cookies.get("staff_access")
+
+    resp = api_client.post(_REFRESH)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {"user"}
+    assert body["user"]["username"] == "lin.teacher"
+    assert body["user"]["role"]["code"] == "tutor"
+    assert body["user"]["permissions"] == sorted(body["user"]["permissions"])
+    new_refresh = resp.cookies.get("staff_refresh")
+    new_access = resp.cookies.get("staff_access")
+    assert new_refresh
+    assert new_refresh != old_refresh
+    assert new_access
+    assert new_access not in resp.text
+    assert new_refresh not in resp.text
+    # 新 refresh 已 commit：可再輪替一次；舊 access 仍未被撤銷（token_version 不變）
+    assert api_client.post(_REFRESH).status_code == 200
+    api_client.cookies.set("staff_access", old_access or "")
+    assert api_client.get(_ME).status_code == 200
+
+
+def test_admin_refresh_401_no_cookie(api_client: TestClient, assert_error: AssertError) -> None:
+    api_client.cookies.clear()
+
+    resp = api_client.post(_REFRESH)
+
+    assert_error(resp, 401, "unauthenticated")
+    assert _cleared(resp, "staff_access")
+    assert _cleared(resp, "staff_refresh")
+
+
+def test_admin_refresh_reuse_401(
+    api_client: TestClient, db_session: Session, fake_clock: FakeClock, assert_error: AssertError
+) -> None:
+    make_staff(db_session, username="lin.teacher")
+    db_session.commit()
+    old_refresh = _login(api_client)
+    assert api_client.post(_REFRESH).status_code == 200
+    fake_clock.advance(seconds=6)
+    _set_refresh(api_client, old_refresh)
+
+    resp = api_client.post(_REFRESH)
+
+    assert_error(resp, 401, "refresh_reused")
+    assert _cleared(resp, "staff_access")
+    assert _cleared(resp, "staff_refresh")
+    # 整個 family 已撤銷且 token_version +1：新 refresh 與 access 全部失效
+    with pytest.raises(AppError) as exc:
+        refresh_tokens.rotate(db_session, old_refresh, clock=fake_clock)
+    assert exc.value.code == "refresh_revoked"
+    assert api_client.get(_ME).status_code == 401
+
+
+def test_admin_refresh_409_in_progress(
+    api_client: TestClient, db_session: Session, fake_clock: FakeClock, assert_error: AssertError
+) -> None:
+    make_staff(db_session, username="lin.teacher")
+    db_session.commit()
+    old_refresh = _login(api_client)
+    first = api_client.post(_REFRESH)
+    assert first.status_code == 200
+    new_refresh = first.cookies.get("staff_refresh")
+    fake_clock.advance(seconds=1)
+    _set_refresh(api_client, old_refresh)
+
+    resp = api_client.post(_REFRESH)
+
+    assert_error(resp, 409, "refresh_in_progress")
+    assert resp.headers.get_list("set-cookie") == []
+    # 併發容忍：family 未撤銷，新 refresh 仍可用
+    assert new_refresh
+    _set_refresh(api_client, new_refresh)
+    assert api_client.post(_REFRESH).status_code == 200
+
+
+def test_admin_refresh_403_foreign_origin(
+    api_client: TestClient, db_session: Session, fake_clock: FakeClock, assert_error: AssertError
+) -> None:
+    make_staff(db_session, username="lin.teacher")
+    db_session.commit()
+    raw = _login(api_client)
+
+    resp = api_client.post(_REFRESH, headers={"Origin": "https://evil.test"})
+
+    assert_error(resp, 403, "origin_forbidden")
+    assert resp.headers.get_list("set-cookie") == []
+    # 被擋下的請求沒有輪替 token
+    assert refresh_tokens.rotate(db_session, raw, clock=fake_clock).subject_type == "staff"
+
+
+def test_admin_refresh_after_logout_401_other_device_kept(
+    api_client: TestClient, db_session: Session, app: FastAPI, assert_error: AssertError
+) -> None:
+    make_staff(db_session, username="lin.teacher")
+    db_session.commit()
+    raw1 = _login(api_client)
+    with TestClient(app, base_url="http://testserver") as other:
+        _login(other)
+        assert api_client.post(_LOGOUT).status_code == 200
+
+        # 登出後的裝置：舊 refresh 經 endpoint 輪替 → 401 refresh_revoked 並清 cookie
+        _set_refresh(api_client, raw1)
+        resp = api_client.post(_REFRESH)
+        assert_error(resp, 401, "refresh_revoked")
+        assert _cleared(resp, "staff_refresh")
+
+        # 其他裝置的 family 不受影響
+        assert other.post(_REFRESH).status_code == 200
