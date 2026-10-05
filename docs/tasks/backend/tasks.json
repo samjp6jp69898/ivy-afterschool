@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 352,
-  "last_updated": "2026-10-05T05:39:47Z",
+  "version": 354,
+  "last_updated": "2026-10-05T05:40:02Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -15005,6 +15005,41 @@
         "status": "pass",
         "reviewer": "review-r8-c",
         "notes": "通過。紅測 bd6a1d0（no_people_residue fixture：teardown 斷言 staff_users 與非系統 roles 筆數與跑前相同，置於參數第一個、最後拆除）先於修正 3df43ae；修正改用 make_staff(role_code='tutor') 並手動設 replied_by / reply 欄位，員工登記進 owner 清理，鎖列斷言不變。突變（scratchpad 複本）：拿掉 sync_open_request_reply 的 with_for_update → test_sync_reply_locks_request_row 仍轉紅。test_pickup_requests.py 整檔 20 passed；跑完後 owner 查 staff_users 與非系統 roles 皆 0 列（同檔其他測試無同類殘留）；lint / typecheck 乾淨。"
+      }
+    },
+    {
+      "id": "BACKEND-547",
+      "title": "AuditService 遮罩規則排除非機密狀態旗標 must_change_password、token_version",
+      "description": "改寫 BACKEND-102 `apps/api/app/services/audit_service.py` 的敏感欄位遮罩（102 其餘行為不變）。\n\n**問題**：`_is_sensitive` 以子字串比對 `_SENSITIVE_KEY_PARTS`（password、token、secret…），使非機密的狀態旗標 `must_change_password`、`token_version` 也被遮成 `***`，後台稽核頁（FRONTEND-072 / 073）看不出帳號是否需改密碼。\n\n**規則**：新增精確比對的白名單 `_NON_SENSITIVE_KEYS = frozenset({\"must_change_password\", \"token_version\"})`（大小寫不敏感、整個 key 完全相等才放行）；其餘含敏感片段的 key 照舊遮罩（例如 `password`、`temp_password`、`password_hash`、`refresh_token` 仍是 `***`）。\n\n**連動**：BACKEND-521 `test_activate_audit_no_password` 與其 red_case / description 目前斷言 `must_change_password == \"***\"`，改回斷言 `True`；BACKEND-091 reset_password 若有同類斷言一併改。完成時同步改寫 BACKEND-102 description 的遮罩條文。\n\n**驗收標準**：每一條對應下列 red_case；`tests/integration/services/test_audit_service.py` 與 `test_staff_user_service.py` 全綠。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/services/audit_service.py",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
+      "depends_on": [
+        "BACKEND-102",
+        "BACKEND-521"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "白名單只能放確定非機密的狀態欄位，不可用子字串或前綴放行。",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/services/test_audit_service.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_audit_keeps_non_sensitive_flags：record(after={'must_change_password': True, 'token_version': 3, 'is_active': True}) → 寫入的 after 深等於原值（不含 '***'）",
+          "test_audit_still_masks_password_like_keys：after={'password': 'x', 'temp_password': 'y', 'password_hash': 'z', 'refresh_token': 't', 'MUST_CHANGE_PASSWORD_HINT': 'h'} → 五個值都是 '***'（白名單只放行完全相等的 key）",
+          "test_activate_audit_no_password（BACKEND-521 既有測試改寫）：重新啟用後 staff_user.activate 稽核 after 深等於 {'is_active': True, 'must_change_password': True}，且整筆稽核 JSON 不含臨時密碼"
+        ],
+        "run": "just test-int apps/api/tests/integration/services/test_audit_service.py apps/api/tests/integration/services/test_staff_user_service.py -k \"test_audit_keeps_non_sensitive_flags or test_audit_still_masks_password_like_keys or test_activate_audit_no_password\"",
+        "notes": "test_audit_service.py 的路徑以 BACKEND-102 既有測試檔為準。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
       }
     }
   ]
