@@ -222,7 +222,7 @@ def test_admin_reference_create_guard_registered(app: FastAPI) -> None:
         assert "post" in paths[f"/api/admin/{resource}"]
 
 
-# --- BACKEND-121：PATCH ----------------------------------------------------------------------------
+# --- BACKEND-121：PATCH ---------------------------------------------------------------------------
 
 
 def test_admin_reference_update_success(
@@ -273,7 +273,9 @@ def test_admin_reference_update_401(
 ) -> None:
     body = {"reason": "x"} if resource == "closed-days" else {"name": "x"}
 
-    assert_error(api_client.patch(f"/api/admin/{resource}/{uuid4()}", json=body), 401, "unauthenticated")
+    assert_error(
+        api_client.patch(f"/api/admin/{resource}/{uuid4()}", json=body), 401, "unauthenticated"
+    )
 
 
 @pytest.mark.parametrize("resource", RESOURCES)

@@ -3,12 +3,15 @@
 ``build_reference_router(spec)`` 為 ``SPECS`` 的每個資源建一個 router（prefix ``/{resource}``）。
 GET 清單：settings:read、students:read、exams:read、homework:read 任一即可（科目、考試類型、國小
 是成績 / 學生 / 作業頁的下拉選單來源，課輔老師沒有 settings:read 也需要讀取）。
-寫入（POST）：只認 settings:write，不可沿用讀取的任一權限。
+寫入（POST、PATCH）：只認 settings:write，不可沿用讀取的任一權限。
+PATCH ``/{resource}/{item_id}``（BACKEND-121）：body 為 ``spec.update_schema``（至少一欄；
+closed-days 不可改日期）→ BACKEND-117 ``update_item``。
 """
 
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, Query
 from pydantic import BaseModel
@@ -58,6 +61,24 @@ def build_reference_router(spec: ReferenceSpec) -> APIRouter:
         methods=["POST"],
         response_model=spec.out_schema,
         status_code=201,
+    )
+
+    def update_item(
+        item_id: UUID,
+        _: Annotated[CurrentStaff, Depends(require_permission(WRITE_PERMISSION))],
+        body: BaseModel,
+        db: Annotated[Session, Depends(get_db)],
+    ) -> BaseModel:
+        out = reference_data_service.update_item(db, spec, item_id, body)
+        db.commit()
+        return out
+
+    update_item.__annotations__["body"] = Annotated[spec.update_schema, Body()]
+    router.add_api_route(
+        "/{item_id}",
+        update_item,
+        methods=["PATCH"],
+        response_model=spec.out_schema,
     )
     return router
 
