@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 254,
-  "last_updated": "2026-10-05T02:50:50Z",
+  "version": 255,
+  "last_updated": "2026-10-05T02:51:02Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2810,7 +2810,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/roles.py",
       "source_ref": "BE:api/permissions_admin.py::create_role",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-078",
