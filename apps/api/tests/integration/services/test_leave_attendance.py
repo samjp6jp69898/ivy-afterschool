@@ -1,4 +1,7 @@
-"""BACKEND-342：leave_attendance.apply_attendance_for_leave（請假生效時把期間內出勤改為 leave）。
+"""leave_attendance（請假與出勤連動）。
+
+- BACKEND-342：apply_attendance_for_leave（請假生效時把期間內出勤改為 leave）。
+- BACKEND-343：revert_attendance_for_leave（取消請假時把出勤改回 expected）。
 
 營業時段讀 seed 預設（週一到週五營業、週六不營業、週日不列）；每個測試前後清空設定快取。
 """
@@ -17,7 +20,11 @@ from app.models.attendance import StudentAttendance
 from app.models.reference import ClosedDay
 from app.realtime import publish as publish_module
 from app.realtime.publish import admin_topic_channel
-from app.services.leave_attendance import LeaveApplyResult, apply_attendance_for_leave
+from app.services.leave_attendance import (
+    LeaveApplyResult,
+    apply_attendance_for_leave,
+    revert_attendance_for_leave,
+)
 from app.services.settings_service import clear_settings_cache
 from tests.support.factories import make_attendance, make_leave, make_staff, make_student
 from tests.support.fake_clock import FakeClock
@@ -186,3 +193,70 @@ def test_apply_leave_nothing_applied_no_broadcast(
 
     assert result == LeaveApplyResult(applied=[], skipped_checked_in=[date(2026, 9, 3)])
     assert published == []
+
+
+# --- BACKEND-343 revert_attendance_for_leave ---
+
+
+def test_revert_leave_attendance(
+    db_session: Session, fake_clock: FakeClock, published: list[Call]
+) -> None:
+    ming = make_student(db_session)
+    l1 = make_leave(db_session, ming, start_date=date(2026, 9, 1), end_date=date(2026, 9, 3))
+    l2 = make_leave(db_session, ming, start_date=date(2026, 9, 5))
+    for d in (date(2026, 9, 1), date(2026, 9, 2)):
+        make_attendance(db_session, ming, service_date=d, status="leave", leave=l1)
+    make_attendance(db_session, ming, service_date=date(2026, 9, 3), status="present")
+    make_attendance(db_session, ming, service_date=date(2026, 9, 5), status="leave", leave=l2)
+    # 別的學生同日的請假列不動
+    hua = make_student(db_session, name="陳小華")
+    hua_leave = make_leave(db_session, hua, start_date=date(2026, 9, 1))
+    make_attendance(db_session, hua, service_date=date(2026, 9, 1), status="leave", leave=hua_leave)
+
+    reverted = revert_attendance_for_leave(db_session, l1, clock=fake_clock)
+
+    assert reverted == [date(2026, 9, 1), date(2026, 9, 2)]
+    rows = _rows(db_session, ming.id)
+    for d in reverted:
+        assert (rows[d].status, rows[d].leave_id) == ("expected", None)
+    assert (rows[date(2026, 9, 5)].status, rows[date(2026, 9, 5)].leave_id) == ("leave", l2.id)
+    assert rows[date(2026, 9, 3)].status == "present"
+    assert _rows(db_session, hua.id)[date(2026, 9, 1)].status == "leave"
+
+    db_session.commit()
+    assert published == [
+        (
+            [admin_topic_channel("attendance")],
+            {
+                "type": "attendance.bulk_updated",
+                "data": {"student_id": str(ming.id), "dates": ["2026-09-01", "2026-09-02"]},
+                "sent_at": "2026-09-01T01:00:00Z",
+            },
+        )
+    ]
+
+
+def test_revert_leave_attendance_none(
+    db_session: Session, fake_clock: FakeClock, published: list[Call]
+) -> None:
+    leave = make_leave(db_session, make_student(db_session), start_date=date(2026, 9, 10))
+
+    assert revert_attendance_for_leave(db_session, leave, clock=fake_clock) == []
+    db_session.commit()
+    assert published == []
+
+
+def test_revert_leave_attendance_from_date(db_session: Session, fake_clock: FakeClock) -> None:
+    ming = make_student(db_session)
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 7), end_date=date(2026, 9, 11))
+    days = [date(2026, 9, d) for d in range(7, 12)]
+    for d in days:
+        make_attendance(db_session, ming, service_date=d, status="leave", leave=leave)
+
+    reverted = revert_attendance_for_leave(
+        db_session, leave, from_date=date(2026, 9, 9), clock=fake_clock
+    )
+
+    assert reverted == [date(2026, 9, 9), date(2026, 9, 10), date(2026, 9, 11)]
+    rows = _rows(db_session, ming.id)
+    assert [rows[d].status for d in days] == ["leave", "leave", "expected", "expected", "expected"]

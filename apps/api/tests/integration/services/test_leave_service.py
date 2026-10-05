@@ -1,19 +1,33 @@
-"""BACKEND-347 / 350 / 348：leave_service（後台請假列表、附件短效 URL、家長端小孩請假列表）。"""
+"""BACKEND-347 / 350 / 348 / 344：leave_service。
 
+後台請假列表、附件短效 URL、家長端小孩請假列表、請假建立 / 取消通知。
+"""
+
+from collections.abc import Iterator
 from datetime import UTC, date, datetime
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.core.pagination import PageParams
 from app.core.storage import StorageError
+from app.models.notifications import Notification
+from app.notifications import outbox_jobs
+from app.notifications.events import Event
 from app.schemas.leaves import AttachmentUrlOut, LeaveListQuery, LeaveOut
-from app.services.leave_service import get_attachment_url, list_child_leaves, list_leaves
+from app.services import leave_service
+from app.services.leave_service import (
+    get_attachment_url,
+    list_child_leaves,
+    list_leaves,
+    notify_leave_event,
+)
 from tests.support.factories import (
     make_class,
+    make_class_staff,
     make_leave,
     make_leave_attachment,
     make_parent,
@@ -337,3 +351,119 @@ def test_list_child_leaves_pagination(db_session: Session, fake_clock: FakeClock
 
     assert second.total == 3
     assert [r.id for r in second.items] == [leaves[0].id]
+
+
+# --- BACKEND-344 notify_leave_event ---
+
+
+@pytest.fixture
+def kick_off() -> Iterator[None]:
+    """commit 後的 outbox kick 不實際派送（員工事件沒有 line，保險起見仍關閉）。"""
+    outbox_jobs.set_kick_mode("off")
+    yield
+    outbox_jobs.set_kick_mode("thread")
+
+
+def _leave_notifications(db: Session, event_name: str, leave_id: UUID) -> list[Notification]:
+    return list(
+        db.execute(
+            select(Notification).where(
+                Notification.event == event_name,
+                Notification.payload["leave_id"].astext == str(leave_id),
+            )
+        ).scalars()
+    )
+
+
+def test_notify_leave_created_recipients(
+    db_session: Session, fake_clock: FakeClock, kick_off: None
+) -> None:
+    class_a = make_class(db_session, name="A班")
+    class_b = make_class(db_session, name="B班")
+    ming = make_student(db_session, name="王小明", class_=class_a)
+    f = make_staff(db_session, permissions=[], display_name="助教 f")
+    g = make_staff(db_session, permissions=["leaves:read"], display_name="員工 g")
+    h = make_staff(db_session, permissions=[], display_name="員工 h")
+    other_class = make_staff(db_session, permissions=[], display_name="B班老師")
+    inactive = make_staff(db_session, permissions=["leaves:read"], is_active=False)
+    make_class_staff(db_session, class_a, f, role="assistant")
+    make_class_staff(db_session, class_b, other_class)
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 1), end_date=date(2026, 9, 2))
+
+    notify_leave_event(db_session, leave, Event.LEAVE_CREATED, clock=fake_clock)
+
+    rows = _leave_notifications(db_session, "leave.created", leave.id)
+    recipients = {row.recipient_id for row in rows}
+    assert {f.id, g.id} <= recipients
+    assert not {h.id, other_class.id, inactive.id} & recipients
+    assert {row.recipient_type for row in rows} == {"staff"}
+    assert rows[0].payload == {
+        "student_id": str(ming.id),
+        "student_name": "王小明",
+        "leave_id": str(leave.id),
+        "start_date": "2026-09-01",
+        "end_date": "2026-09-02",
+        "leave_type_label": "病假",
+    }
+    assert rows[0].title == "王小明 請假"
+
+
+def test_notify_leave_without_class(
+    db_session: Session, fake_clock: FakeClock, kick_off: None
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    g = make_staff(db_session, permissions=["leaves:read"])
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 1))
+
+    notify_leave_event(db_session, leave, Event.LEAVE_CREATED, clock=fake_clock)
+
+    assert g.id in {
+        r.recipient_id for r in _leave_notifications(db_session, "leave.created", leave.id)
+    }
+
+
+def test_notify_leave_cancelled_title(
+    db_session: Session, fake_clock: FakeClock, kick_off: None
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    make_staff(db_session, permissions=["leaves:read"])
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 1), status="cancelled")
+
+    notify_leave_event(db_session, leave, Event.LEAVE_CANCELLED, clock=fake_clock)
+
+    rows = _leave_notifications(db_session, "leave.cancelled", leave.id)
+    assert rows
+    assert {row.title for row in rows} == {"王小明 取消請假"}
+
+
+def test_notify_leave_cancelled_partial_range(
+    db_session: Session, fake_clock: FakeClock, kick_off: None
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    make_staff(db_session, permissions=["leaves:read"])
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 7), end_date=date(2026, 9, 11))
+
+    notify_leave_event(
+        db_session,
+        leave,
+        Event.LEAVE_CANCELLED,
+        date_range=(date(2026, 9, 9), date(2026, 9, 11)),
+        clock=fake_clock,
+    )
+
+    [row, *_] = _leave_notifications(db_session, "leave.cancelled", leave.id)
+    assert (row.payload["start_date"], row.payload["end_date"]) == ("2026-09-09", "2026-09-11")
+
+
+def test_notify_leave_no_recipients(
+    db_session: Session, fake_clock: FakeClock, kick_off: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """收件人為空 → 不呼叫 enqueue。"""
+    calls: list[object] = []
+    monkeypatch.setattr(leave_service, "staff_recipients", lambda *a, **k: [])
+    monkeypatch.setattr(leave_service, "enqueue", lambda *a, **k: calls.append(a))
+    leave = make_leave(db_session, make_student(db_session), start_date=date(2026, 9, 1))
+
+    notify_leave_event(db_session, leave, Event.LEAVE_CREATED, clock=fake_clock)
+
+    assert calls == []
