@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import io
 import re
+import tracemalloc
 import zipfile
 from collections.abc import Callable, Iterator, Sequence
 from datetime import date
@@ -26,6 +27,8 @@ from app.services import student_import_service
 from app.services.student_import_service import (
     IMPORT_COLUMNS,
     MAX_IMPORT_ROWS,
+    MAX_XML_ELEMENTS,
+    MAX_ZIP_ENTRIES,
     ImportPreview,
     ImportRowResult,
     check_header,
@@ -331,23 +334,42 @@ def test_import_preview_no_writes(db_session: Session, lookups: dict[str, object
     assert db_session.execute(select(func.count()).select_from(Student)).scalar_one() == before
 
 
-# --- 不受信任 xlsx 的防護（review-r8-b 打回補強）---------------------------------------------
+# --- 不受信任 xlsx 的防護（review-r8-b 兩輪打回的攻擊面清單）---------------------------
+
+_SHEET1 = "xl/worksheets/sheet1.xml"
+_INVALID = (422, "import_invalid_file")
+
+
+def _parts(upload: ValidatedUpload) -> dict[str, bytes]:
+    src = zipfile.ZipFile(io.BytesIO(upload.content))
+    return {i.filename: src.read(i) for i in src.infolist()}
+
+
+def _pack(parts: dict[str, bytes], *, compress: int = zipfile.ZIP_DEFLATED) -> ValidatedUpload:
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", compress, compresslevel=9) as dst:
+        for name, data in parts.items():
+            dst.writestr(name, data)
+    content = out.getvalue()
+    return ValidatedUpload(
+        content=content,
+        mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ext="xlsx",
+        size=len(content),
+    )
 
 
 def _rewrite_sheet(upload: ValidatedUpload, fn: Callable[[bytes], bytes]) -> ValidatedUpload:
-    """改寫 xlsx 內第一個工作表的 XML 後重新打包（高壓縮比，模擬小檔案解壓成大量儲存格）。"""
-    src = zipfile.ZipFile(io.BytesIO(upload.content))
-    out = io.BytesIO()
-    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as dst:
-        for info in src.infolist():
-            data = src.read(info)
-            if info.filename == "xl/worksheets/sheet1.xml":
-                data = fn(data)
-            dst.writestr(info.filename, data)
-    content = out.getvalue()
-    return ValidatedUpload(
-        content=content, mime_type=upload.mime_type, ext="xlsx", size=len(content)
-    )
+    """改寫第一個工作表的 XML 後重新打包（高壓縮比，模擬小檔案解壓成大量內容）。"""
+    parts = _parts(upload)
+    parts[_SHEET1] = fn(parts[_SHEET1])
+    return _pack(parts)
+
+
+def _rewrite_parts(
+    upload: ValidatedUpload, fn: Callable[[dict[str, bytes]], dict[str, bytes]]
+) -> ValidatedUpload:
+    return _pack(fn(_parts(upload)))
 
 
 @pytest.fixture
@@ -363,29 +385,123 @@ def forbid_openpyxl(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     return calls
 
 
-def _wide_row_whitespace(data: bytes) -> bytes:
-    # 標題列尾端塞大量以換行 / tab 分隔的空儲存格：位元組字面量 b"<c " / b"<c/>" 都數不到
-    return data.replace(b"</row>", (b"<c\n/>" * 2000 + b'<c\tr="ZZ1"/>' * 100) + b"</row>", 1)
+_SST_REL = (
+    b'<Relationship Id="rId99" Type="http://schemas.openxmlformats.org/officeDocument/2006/'
+    b'relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>'
+)
+_SST_CT = (
+    b'<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-'
+    b'officedocument.spreadsheetml.sharedStrings+xml"/></Types>'
+)
 
 
-def _wide_row_ns_prefix(data: bytes) -> bytes:
-    data = data.replace(
+def _with_sst(parts: dict[str, bytes], sst_xml: bytes) -> dict[str, bytes]:
+    parts["xl/sharedStrings.xml"] = sst_xml
+    parts["xl/_rels/workbook.xml.rels"] = parts["xl/_rels/workbook.xml.rels"].replace(
+        b"</Relationships>", _SST_REL
+    )
+    parts["[Content_Types].xml"] = parts["[Content_Types].xml"].replace(b"</Types>", _SST_CT)
+    return parts
+
+
+def _wide_row_whitespace(d: bytes) -> bytes:
+    return d.replace(b"</row>", (b"<c\n/>" * 2000 + b'<c\tr="ZZ1"/>' * 100) + b"</row>", 1)
+
+
+def _wide_row_ns_prefix(d: bytes) -> bytes:
+    d = d.replace(
         b'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"',
         b'<x:worksheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"',
     )
-    data = re.sub(
+    d = re.sub(
         rb"<(/?)(sheetPr|outlinePr|pageSetUpPr|dimension|sheetViews|sheetView|selection|"
         rb"sheetFormatPr|sheetData|row|c|v|is|t|pageMargins|worksheet)\b",
         rb"<\1x:\2",
-        data,
+        d,
     )
-    return data.replace(b"</x:row>", b"<x:c/>" * 2000 + b"</x:row>", 1)
+    return d.replace(b"</x:row>", b"<x:c/>" * 2000 + b"</x:row>", 1)
 
 
-def _lying_uncompressed_size(content: bytes) -> bytes:
-    """把 sheet1.xml 在 local header 與 central directory 宣告的解壓大小改小（CRC / 大小不符）。"""
-    c = bytearray(content)
-    name = b"xl/worksheets/sheet1.xml"
+def _many_rows(d: bytes) -> bytes:
+    rows = b"".join(b'<row r="%d"><c/></row>' % (n + 3) for n in range(MAX_IMPORT_ROWS + 20))
+    return d.replace(b"</sheetData>", rows + b"</sheetData>", 1)
+
+
+def _many_other_elems(d: bytes) -> bytes:
+    return d.replace(b"<sheetData>", b"<sheetData>" + b"<a/>" * (MAX_XML_ELEMENTS + 1000), 1)
+
+
+def _many_other_elems_root(d: bytes) -> bytes:
+    return d.replace(b"</sheetData>", b"</sheetData>" + b"<a/>" * (MAX_XML_ELEMENTS + 1000), 1)
+
+
+def _deep(d: bytes) -> bytes:
+    return d.replace(b"</sheetData>", b"</sheetData>" + b"<a>" * 200 + b"</a>" * 200, 1)
+
+
+def _long_attr(d: bytes) -> bytes:
+    return d.replace(b"<sheetData>", b'<sheetData><row r="3" x="' + b"a" * 300_000 + b'"/>', 1)
+
+
+def _long_text(d: bytes) -> bytes:
+    cell = b'<row r="3"><c r="B3" t="inlineStr"><is><t>' + b"\xe7\x8e\x8b" * 100_000
+    return d.replace(b"</sheetData>", cell + b"</t></is></c></row></sheetData>", 1)
+
+
+def _styles_bomb(parts: dict[str, bytes]) -> dict[str, bytes]:
+    parts["xl/styles.xml"] = re.sub(
+        rb'<cellXfs count="\d+">',
+        b'<cellXfs count="1">'
+        + b'<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+        * (MAX_XML_ELEMENTS + 1000),
+        parts["xl/styles.xml"],
+        count=1,
+    )
+    return parts
+
+
+def _sst_many(parts: dict[str, bytes]) -> dict[str, bytes]:
+    sst = (
+        b'<?xml version="1.0"?>'
+        b'<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        + b"<si><t>a</t></si>" * (MAX_XML_ELEMENTS // 2 + 1000)
+        + b"</sst>"
+    )
+    return _with_sst(parts, sst)
+
+
+def _path_bypass(parts: dict[str, bytes]) -> dict[str, bytes]:
+    """工作表改放到 worksheets/ 以外、非 .xml 副檔名，rels 與 Content_Types 同步改。"""
+    sheet = parts.pop(_SHEET1).replace(b"</row>", b"<c/>" * 2000 + b"</row>", 1)
+    parts["xl/data/s.bin"] = sheet
+    parts["xl/_rels/workbook.xml.rels"] = parts["xl/_rels/workbook.xml.rels"].replace(
+        b"worksheets/sheet1.xml", b"data/s.bin"
+    )
+    parts["[Content_Types].xml"] = parts["[Content_Types].xml"].replace(
+        b"/xl/worksheets/sheet1.xml", b"/xl/data/s.bin"
+    )
+    return parts
+
+
+def _many_entries(parts: dict[str, bytes]) -> dict[str, bytes]:
+    for i in range(MAX_ZIP_ENTRIES + 1):
+        parts[f"x/{i}"] = b""
+    return parts
+
+
+def _big_other_part(parts: dict[str, bytes]) -> dict[str, bytes]:
+    parts["docProps/custom.xml"] = (
+        b'<?xml version="1.0"?><Properties>'
+        + b"<p/>" * (MAX_XML_ELEMENTS + 1000)
+        + b"</Properties>"
+    )
+    return parts
+
+
+def _lying_uncompressed_size(upload: ValidatedUpload) -> ValidatedUpload:
+    """把 sheet1.xml 宣告的解壓大小改小（CRC / 大小不符）。"""
+    c = bytearray(upload.content)
+    name = _SHEET1.encode()
     for sig, size_off, nlen_off, fname_off in (
         (b"PK\x01\x02", 24, 28, 46),
         (b"PK\x03\x04", 22, 26, 30),
@@ -396,31 +512,109 @@ def _lying_uncompressed_size(content: bytes) -> bytes:
             if bytes(c[i + fname_off : i + fname_off + nlen]) == name:
                 c[i + size_off : i + size_off + 4] = (1000).to_bytes(4, "little")
             i += 4
-    return bytes(c)
+    return ValidatedUpload(content=bytes(c), mime_type=upload.mime_type, ext="xlsx", size=len(c))
 
 
-@pytest.mark.parametrize("mutate", [_wide_row_whitespace, _wide_row_ns_prefix])
-def test_import_preview_rejects_wide_row_before_openpyxl(
-    db_session: Session, forbid_openpyxl: list[str], mutate: Callable[[bytes], bytes]
+def _encrypted_flag(upload: ValidatedUpload) -> ValidatedUpload:
+    """把 sheet1.xml 的 general purpose flag 加上 bit 0（加密）。"""
+    c = bytearray(upload.content)
+    name = _SHEET1.encode()
+    for sig, flag_off, nlen_off, fname_off in (
+        (b"PK\x01\x02", 8, 28, 46),
+        (b"PK\x03\x04", 6, 26, 30),
+    ):
+        i = 0
+        while (i := c.find(sig, i)) >= 0:
+            nlen = int.from_bytes(c[i + nlen_off : i + nlen_off + 2], "little")
+            if bytes(c[i + fname_off : i + fname_off + nlen]) == name:
+                c[i + flag_off] |= 0x01
+            i += 4
+    return ValidatedUpload(content=bytes(c), mime_type=upload.mime_type, ext="xlsx", size=len(c))
+
+
+def _duplicate_entry(upload: ValidatedUpload) -> ValidatedUpload:
+    parts = _parts(upload)
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as dst:
+        for name, data in parts.items():
+            dst.writestr(name, data)
+        dst.writestr(_SHEET1, parts[_SHEET1])  # 同名第二份
+    content = out.getvalue()
+    return ValidatedUpload(
+        content=content, mime_type=upload.mime_type, ext="xlsx", size=len(content)
+    )
+
+
+def _bzip2(upload: ValidatedUpload) -> ValidatedUpload:
+    return _pack(_parts(upload), compress=zipfile.ZIP_BZIP2)
+
+
+def _truncated(upload: ValidatedUpload) -> ValidatedUpload:
+    half = upload.content[: len(upload.content) // 2]
+    return ValidatedUpload(content=half, mime_type=upload.mime_type, ext="xlsx", size=len(half))
+
+
+_SHEET_ATTACKS: dict[str, Callable[[bytes], bytes]] = {
+    "wide_ws": _wide_row_whitespace,
+    "ns_prefix": _wide_row_ns_prefix,
+    "many_other_elems": _many_other_elems,
+    "many_other_elems_root": _many_other_elems_root,
+    "deep": _deep,
+    "long_attr": _long_attr,
+    "long_text": _long_text,
+}
+_PARTS_ATTACKS: dict[str, Callable[[dict[str, bytes]], dict[str, bytes]]] = {
+    "styles_bomb": _styles_bomb,
+    "sst_many": _sst_many,
+    "path_bypass": _path_bypass,
+    "many_entries": _many_entries,
+    "big_other_part": _big_other_part,
+}
+_ZIP_ATTACKS: dict[str, Callable[[ValidatedUpload], ValidatedUpload]] = {
+    "lying_size": _lying_uncompressed_size,
+    "encrypted": _encrypted_flag,
+    "duplicate_entry": _duplicate_entry,
+    "bzip2": _bzip2,
+    "truncated": _truncated,
+}
+
+
+def _attack(name: str) -> ValidatedUpload:
+    base = _xlsx([_row()], header=IMPORT_COLUMNS)
+    if name in _SHEET_ATTACKS:
+        return _rewrite_sheet(base, _SHEET_ATTACKS[name])
+    if name in _PARTS_ATTACKS:
+        return _rewrite_parts(base, _PARTS_ATTACKS[name])
+    return _ZIP_ATTACKS[name](base)
+
+
+@pytest.mark.parametrize("name", [*_SHEET_ATTACKS, *_PARTS_ATTACKS, *_ZIP_ATTACKS])
+def test_import_preview_rejects_before_openpyxl(
+    db_session: Session, forbid_openpyxl: list[str], name: str
 ) -> None:
-    upload = _rewrite_sheet(_xlsx([_row()], header=IMPORT_COLUMNS), mutate)
-    assert upload.size < 20 * 1024  # 小檔案、解壓後大量儲存格
+    """每種構造檔都在 zip / XML 掃描階段以 422 拒絕、不進 openpyxl，且掃描本身不建樹
+    （峰值 < 50 MB）。"""
+    upload = _attack(name)
+    assert upload.size < 2 * 1024 * 1024
 
-    with pytest.raises(AppError) as exc:
-        _preview(db_session, upload)
+    tracemalloc.start()
+    try:
+        with pytest.raises(AppError) as exc:
+            _preview(db_session, upload)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
 
-    assert (exc.value.status, exc.value.code) == (422, "import_invalid_file")
+    assert exc.value.status == 422
+    assert exc.value.code == "import_invalid_file"
     assert forbid_openpyxl == []
+    assert peak < 50 * 1024 * 1024, f"{name}: 掃描階段峰值 {peak / 1e6:.0f} MB"
 
 
 def test_import_preview_rejects_too_many_rows_before_openpyxl(
     db_session: Session, forbid_openpyxl: list[str]
 ) -> None:
-    def many_rows(data: bytes) -> bytes:
-        rows = b"".join(b'<row r="%d"><c/></row>' % (n + 3) for n in range(MAX_IMPORT_ROWS + 20))
-        return data.replace(b"</sheetData>", rows + b"</sheetData>", 1)
-
-    upload = _rewrite_sheet(_xlsx([_row()], header=IMPORT_COLUMNS), many_rows)
+    upload = _rewrite_sheet(_xlsx([_row()], header=IMPORT_COLUMNS), _many_rows)
 
     with pytest.raises(AppError) as exc:
         _preview(db_session, upload)
@@ -429,22 +623,94 @@ def test_import_preview_rejects_too_many_rows_before_openpyxl(
     assert forbid_openpyxl == []
 
 
-def test_import_preview_rejects_corrupt_zip(
-    db_session: Session, forbid_openpyxl: list[str]
-) -> None:
-    good = _xlsx([_row()], header=IMPORT_COLUMNS)
-    lying = ValidatedUpload(
-        content=_lying_uncompressed_size(good.content),
-        mime_type=good.mime_type,
-        ext="xlsx",
-        size=good.size,
+def test_import_preview_openpyxl_errors_become_422(db_session: Session) -> None:
+    """掃描放行但 openpyxl 解析才出錯（sharedStrings 索引越界、壞的日期 / 數值）→ 422，不是 500。"""
+    base = _xlsx([_row()], header=IMPORT_COLUMNS)
+    big_index = _rewrite_sheet(
+        base,
+        lambda d: d.replace(
+            b"</sheetData>",
+            b'<row r="3"><c r="B3" t="s"><v>1000000000</v></c></row></sheetData>',
+            1,
+        ),
     )
-    truncated = ValidatedUpload(
-        content=good.content[: len(good.content) // 2], mime_type=good.mime_type, ext="xlsx", size=1
+    bad_date = _rewrite_sheet(
+        base,
+        lambda d: d.replace(
+            b"</sheetData>",
+            b'<row r="3"><c r="A3" t="d"><v>99999-99-99T99:99</v></c></row></sheetData>',
+            1,
+        ),
     )
 
-    for upload in (lying, truncated):
+    for upload in (big_index, bad_date):
         with pytest.raises(AppError) as exc:
             _preview(db_session, upload)
-        assert (exc.value.status, exc.value.code) == (422, "import_invalid_file")
-    assert forbid_openpyxl == []
+        assert (exc.value.status, exc.value.code) == _INVALID
+
+
+def test_import_preview_uses_first_visible_sheet(
+    db_session: Session, lookups: dict[str, object]
+) -> None:
+    """第一張工作表 hidden / veryHidden 時取第一張可見的；沒有任何可見工作表 → 422。"""
+    wb = Workbook()
+    hidden = wb.active
+    assert hidden is not None
+    hidden.title = "隱藏"
+    hidden.sheet_state = "veryHidden"
+    hidden.append(["垃圾"])
+    visible = wb.create_sheet("學生資料")
+    visible.append(list(IMPORT_COLUMNS))
+    visible.append(_row(student_no="S115301"))
+    buf = io.BytesIO()
+    wb.save(buf)
+    upload = ValidatedUpload(content=buf.getvalue(), mime_type="x", ext="xlsx", size=buf.tell())
+
+    result = _preview(db_session, upload)
+
+    assert result.valid == 1
+    assert result.rows[0].data is not None
+    assert result.rows[0].data.student_no == "S115301"
+
+    visible.sheet_state = "hidden"
+    buf = io.BytesIO()
+    wb.save(buf)
+    with pytest.raises(AppError) as exc:
+        _preview(
+            db_session, ValidatedUpload(content=buf.getvalue(), mime_type="x", ext="xlsx", size=1)
+        )
+    assert (exc.value.status, exc.value.code) == _INVALID
+
+
+def test_import_preview_accepts_normal_shared_strings_and_styles(
+    db_session: Session, lookups: dict[str, object]
+) -> None:
+    """合理大小的 sharedStrings / styles / docProps 不受上限影響；OOXML _x0000_ 跳脫成為該列錯誤。"""
+    base = _xlsx([_row(), _row(student_no="S115302", name="陳小華")], header=IMPORT_COLUMNS)
+    sst = (
+        b'<?xml version="1.0"?>'
+        b'<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        + b"<si><t>a</t></si>" * 2000
+        + b"</sst>"
+    )
+    with_sst = _rewrite_parts(base, lambda p: _with_sst(p, sst))
+
+    result = _preview(db_session, with_sst)
+    assert result.valid == 2
+
+    escaped = _rewrite_sheet(
+        base,
+        lambda d: d.replace(
+            b"</sheetData>",
+            b'<row r="4"><c r="A4" t="inlineStr"><is><t>S115303</t></is></c>'
+            + b'<c r="B4" t="inlineStr"><is><t>'
+            + "王_x0000_明".encode()
+            + b"</t></is></c>"
+            + b'<c r="E4"><v>2</v></c></row></sheetData>',
+            1,
+        ),
+    )
+    escaped_result = _preview(db_session, escaped)
+    assert escaped_result.total == 3
+    assert escaped_result.rows[2].data is None
+    assert any("姓名*" in e for e in escaped_result.rows[2].errors)
