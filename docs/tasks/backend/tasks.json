@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 348,
-  "last_updated": "2026-10-05T05:37:58Z",
+  "version": 349,
+  "last_updated": "2026-10-05T05:38:14Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5335,7 +5335,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_import_service.py",
       "source_ref": "BE:utils/excel_io.py::parse_excel",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-151",
