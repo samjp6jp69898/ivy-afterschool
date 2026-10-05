@@ -1,6 +1,8 @@
 """BACKEND-052：app/services/auth/parent_auth.py（ParentAuthService.liff_login）。
 BACKEND-058：refresh（與 BACKEND-043 對稱；停用 / 不存在 / 員工 token 撤銷 family 並先 commit）。
 BACKEND-060：logout（撤銷目前 family，冪等）。
+BACKEND-056：bind（首次綁定建立家長帳號並簽發 token、既有帳號走首次流程撤銷舊 family、加綁不簽新
+token、連續失敗鎖定 429、停用家長 403）。
 
 已綁定家長直接登入（同步暱稱、last_login_at、簽 access + refresh）；未建帳號或沒有任何有效綁定
 → NeedsBinding（發綁定臨時 token，不建立 parent_accounts）；停用 403；LIFF 未設定 503。
@@ -10,6 +12,7 @@ BACKEND-060：logout（撤銷目前 family，冪等）。
 
 import json
 from collections.abc import Iterator
+from datetime import timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -17,17 +20,29 @@ import pytest
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from app.api.deps import CurrentParent
 from app.core.config import get_settings
 from app.core.crypto import derive_key
 from app.core.errors import AppError
 from app.core.request_meta import RequestMeta
-from app.core.security.tokens import decode_access_token, decode_bind_token
-from app.models.account import RefreshToken
-from app.models.parents import ParentAccount
+from app.core.security.tokens import BindClaims, decode_access_token, decode_bind_token
+from app.models.account import RefreshToken, StaffUser
+from app.models.notifications import Notification
+from app.models.parents import Guardian, ParentAccount, ParentBindingCode
 from app.services.auth.line_id_token import LineProfile
-from app.services.auth.parent_auth import NeedsBinding, ParentSession, liff_login, logout, refresh
+from app.services.auth.parent_auth import (
+    BindResult,
+    NeedsBinding,
+    ParentSession,
+    bind,
+    liff_login,
+    logout,
+    refresh,
+)
 from app.services.auth.refresh_tokens import hash_refresh, issue
 from app.services.auth.throttle import AuthThrottles
+from app.services.binding_code_service import hash_code
+from app.services.parent_scope import get_parent_student_ids
 from app.services.settings_service import clear_settings_cache, invalidate_setting
 from tests.support.factories import make_guardian, make_parent, make_staff, make_student
 from tests.support.fake_clock import FakeClock
@@ -442,3 +457,197 @@ def test_parent_logout_idempotent(db_session: Session, fake_clock: FakeClock) ->
     _assert_family_revoked(db_session, raw, revoked=False)
     assert logout(db_session, raw_refresh=raw, clock=fake_clock) == 1
     assert logout(db_session, raw_refresh=raw, clock=fake_clock) == 0
+
+
+# --- BACKEND-056：bind ----------------------------------------------------------------------------
+
+_LINE_C = "U" + "c" * 32
+_CODE = "ABCD2345"
+
+
+def _claims(line_user_id: str = _LINE_C) -> BindClaims:
+    return BindClaims(line_user_id=line_user_id, display_name="王媽媽", picture_url=None)
+
+
+def _current_parent(parent: ParentAccount) -> CurrentParent:
+    return CurrentParent(
+        id=parent.id,
+        line_user_id=parent.line_user_id,
+        display_name=parent.display_name,
+        token_version=parent.token_version,
+    )
+
+
+def _issue_code(
+    db: Session, guardian: Guardian, staff: StaffUser, clock: FakeClock, *, code: str = _CODE
+) -> ParentBindingCode:
+    row = ParentBindingCode(
+        created_at=clock.now() - timedelta(hours=1),
+        guardian_id=guardian.id,
+        code_hash=hash_code(code),
+        expires_at=clock.now() + timedelta(days=6),
+        created_by=staff.id,
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _bind(
+    db: Session,
+    identity: CurrentParent | BindClaims,
+    throttles: AuthThrottles,
+    clock: FakeClock,
+    *,
+    code: str = _CODE,
+) -> BindResult:
+    return bind(db, raw_code=code, identity=identity, throttles=throttles, clock=clock)
+
+
+def _binding_notifications(db: Session, parent_id: object) -> list[Notification]:
+    return list(
+        db.execute(
+            select(Notification).where(
+                Notification.recipient_type == "parent",
+                Notification.recipient_id == parent_id,
+                Notification.event == "binding.completed",
+            )
+        ).scalars()
+    )
+
+
+def test_bind_first_creates_parent(
+    db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock
+) -> None:
+    staff = make_staff(db_session)
+    ming = make_student(db_session, name="王小明")
+    guardian = make_guardian(db_session, ming)
+    code = _issue_code(db_session, guardian, staff, fake_clock)
+    count_before = _parent_count(db_session)
+
+    result = _bind(db_session, _claims(), throttles, fake_clock)
+
+    assert isinstance(result, BindResult)
+    assert result.session_tokens is not None
+    parent = result.parent
+    assert _parent_count(db_session) == count_before + 1
+    assert (parent.line_user_id, parent.display_name, parent.status) == (
+        _LINE_C,
+        "王媽媽",
+        "active",
+    )
+    assert parent.last_login_at == fake_clock.now()
+    assert result.guardian.id == guardian.id
+    db_session.refresh(guardian)
+    assert guardian.parent_account_id == parent.id
+    db_session.refresh(code)
+    assert code.used_at == fake_clock.now()
+    claims = decode_access_token(
+        result.session_tokens.access_token, expected_type="parent", clock=fake_clock
+    )
+    assert claims.subject_id == parent.id
+    assert _refresh_count(db_session, parent) == 1
+    assert get_parent_student_ids(db_session, parent.id) == [ming.id]
+    notes = _binding_notifications(db_session, parent.id)
+    assert len(notes) == 1
+    assert notes[0].title == "綁定完成"
+    assert "王小明" in notes[0].body
+    assert notes[0].payload["student_id"] == str(ming.id)
+    # 成功後失敗計數清除：鎖定表不再有該 key
+    assert len(throttles.bind) == 0
+
+
+def test_bind_first_existing_parent_revokes_old_family(
+    db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock
+) -> None:
+    staff = make_staff(db_session)
+    parent = make_parent(db_session, line_user_id=_LINE_C, display_name="舊暱稱")
+    old_raw = _issue_parent(db_session, parent, fake_clock)
+    # 曾被解除綁定：guardian 尚無家長
+    guardian = make_guardian(db_session, make_student(db_session))
+    _issue_code(db_session, guardian, staff, fake_clock)
+    count_before = _parent_count(db_session)
+
+    result = _bind(db_session, _claims(), throttles, fake_clock)
+
+    assert result.parent.id == parent.id
+    assert _parent_count(db_session) == count_before
+    _assert_family_revoked(db_session, old_raw, revoked=True)
+    assert result.session_tokens is not None
+    assert result.session_tokens.refresh_token != old_raw
+    _assert_family_revoked(db_session, result.session_tokens.refresh_token, revoked=False)
+    db_session.refresh(guardian)
+    assert guardian.parent_account_id == parent.id
+
+
+def test_bind_additional_child(
+    db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock
+) -> None:
+    staff = make_staff(db_session)
+    parent = make_parent(db_session, line_user_id=_LINE_C)
+    student_a = make_student(db_session, name="王小明")
+    student_b = make_student(db_session, name="王小華")
+    make_guardian(db_session, student_a, parent=parent)
+    guardian_b = make_guardian(db_session, student_b)
+    _issue_code(db_session, guardian_b, staff, fake_clock)
+    refresh_before = _refresh_count(db_session, parent)
+
+    result = _bind(db_session, _current_parent(parent), throttles, fake_clock)
+
+    assert result.session_tokens is None
+    assert result.parent.id == parent.id
+    assert result.guardian.id == guardian_b.id
+    assert set(get_parent_student_ids(db_session, parent.id)) == {student_a.id, student_b.id}
+    assert _refresh_count(db_session, parent) == refresh_before
+    assert len(_binding_notifications(db_session, parent.id)) == 1
+    # 他人已綁定的 guardian 碼 → 409（BACKEND-055），不會搶走綁定
+    other_parent = make_parent(db_session)
+    taken = make_guardian(db_session, make_student(db_session), parent=other_parent)
+    _issue_code(db_session, taken, staff, fake_clock, code="TAKEN234")
+    with pytest.raises(AppError) as exc:
+        _bind(db_session, _current_parent(parent), throttles, fake_clock, code="TAKEN234")
+    assert (exc.value.status, exc.value.code) == (409, "guardian_already_bound")
+    db_session.refresh(taken)
+    assert taken.parent_account_id == other_parent.id
+
+
+def test_bind_lockout(db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock) -> None:
+    staff = make_staff(db_session)
+    guardian = make_guardian(db_session, make_student(db_session))
+    code = _issue_code(db_session, guardian, staff, fake_clock)
+    count_before = _parent_count(db_session)
+
+    for _ in range(5):
+        with pytest.raises(AppError) as wrong:
+            _bind(db_session, _claims(), throttles, fake_clock, code="WRONG234")
+        assert (wrong.value.status, wrong.value.code) == (400, "binding_code_invalid")
+    with pytest.raises(AppError) as locked:
+        _bind(db_session, _claims(), throttles, fake_clock)
+
+    assert (locked.value.status, locked.value.code) == (429, "too_many_attempts")
+    assert locked.value.details["retry_after_seconds"] > 0
+    db_session.refresh(code)
+    assert code.used_at is None
+    # 另一個 LINE 帳號不受影響
+    other = _bind(db_session, _claims("U" + "d" * 32), throttles, fake_clock)
+    assert other.parent.line_user_id == "U" + "d" * 32
+    # 首次流程失敗不會留下帳號（帳號只在 claim 成功的同一交易內建立，失敗由呼叫端 rollback）
+    assert _parent_count(db_session) >= count_before
+
+
+def test_bind_disabled_parent(
+    db_session: Session, throttles: AuthThrottles, fake_clock: FakeClock
+) -> None:
+    staff = make_staff(db_session)
+    make_parent(db_session, line_user_id=_LINE_C, status="disabled")
+    guardian = make_guardian(db_session, make_student(db_session))
+    code = _issue_code(db_session, guardian, staff, fake_clock)
+
+    with pytest.raises(AppError) as exc:
+        _bind(db_session, _claims(), throttles, fake_clock)
+
+    assert (exc.value.status, exc.value.code) == (403, "parent_disabled")
+    db_session.refresh(code)
+    assert code.used_at is None
+    db_session.refresh(guardian)
+    assert guardian.parent_account_id is None
