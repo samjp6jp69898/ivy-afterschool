@@ -13,6 +13,9 @@
   ``reset_password`` → commit → ``TempPasswordOut``（no-store）；目標既有登入立即失效。
 - BACKEND-098 ``POST /staff-users/{staff_id}/deactivate``：staff:write → BACKEND-092 ``deactivate``
   → commit → ``StaffUserOut``；目標既有登入立即失效。
+- BACKEND-528 ``GET /staff-users/options``：classes:write 或 staff:read → BACKEND-527
+  ``list_staff_options`` → ``list[StaffOptionOut]``（只含啟用員工）。必須註冊在
+  ``GET /staff-users/{staff_id}`` 之前，否則 ``options`` 會被當成 staff_id 而回 422。
 """
 
 from __future__ import annotations
@@ -24,13 +27,14 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
 from app.api.admin._query import query_model
-from app.api.deps import CurrentStaff, require_permission
+from app.api.deps import CurrentStaff, require_any_permission, require_permission
 from app.core.clock import Clock, get_clock
 from app.core.db import get_db
 from app.core.pagination import Page, PageParams, page_params
 from app.core.permissions import Permission
 from app.core.request_meta import RequestMeta, get_request_meta
 from app.schemas.staff_users import (
+    StaffOptionOut,
     StaffUserCreatedOut,
     StaffUserCreateIn,
     StaffUserListQuery,
@@ -66,6 +70,17 @@ def create_staff_user(
     # 臨時密碼只回這一次：瀏覽器與中介不得快取
     response.headers["Cache-Control"] = "no-store"
     return out
+
+
+@router.get("/options", response_model=list[StaffOptionOut])
+def list_staff_options(
+    _: Annotated[
+        CurrentStaff,
+        Depends(require_any_permission(Permission.CLASSES_WRITE, Permission.STAFF_READ)),
+    ],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[StaffOptionOut]:
+    return staff_user_service.list_staff_options(db)
 
 
 @router.get("/{staff_id}", response_model=StaffUserOut)
