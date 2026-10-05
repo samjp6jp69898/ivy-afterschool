@@ -1,33 +1,48 @@
-"""BACKEND-347 / 350 / 348 / 344：leave_service。
+"""BACKEND-347 / 350 / 348 / 344 / 345：leave_service。
 
-後台請假列表、附件短效 URL、家長端小孩請假列表、請假建立 / 取消通知。
+後台請假列表、附件短效 URL、家長端小孩請假列表、請假建立 / 取消通知、建立請假。
 """
 
+import threading
 from collections.abc import Iterator
 from datetime import UTC, date, datetime
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import event, select
+from sqlalchemy import Engine, event, func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.core.pagination import PageParams
 from app.core.storage import StorageError
+from app.models.attendance import StudentAttendance
+from app.models.leaves import StudentLeave
 from app.models.notifications import Notification
 from app.notifications import outbox_jobs
 from app.notifications.events import Event
-from app.schemas.leaves import AttachmentUrlOut, LeaveListQuery, LeaveOut
+from app.schemas.leaves import (
+    AttachmentUrlOut,
+    LeaveCreateIn,
+    LeaveListQuery,
+    LeaveOut,
+    ParentLeaveCreateIn,
+)
 from app.services import leave_service
+from app.services.audit_service import Actor
 from app.services.leave_service import (
+    create_leave,
     get_attachment_url,
     list_child_leaves,
     list_leaves,
     notify_leave_event,
 )
+from app.services.settings_service import clear_settings_cache
+from tests.integration.db.conftest import connect_owner
 from tests.support.factories import (
+    make_attendance,
     make_class,
     make_class_staff,
+    make_guardian,
     make_leave,
     make_leave_attachment,
     make_parent,
@@ -467,3 +482,296 @@ def test_notify_leave_no_recipients(
     notify_leave_event(db_session, leave, Event.LEAVE_CREATED, clock=fake_clock)
 
     assert calls == []
+
+
+# --- BACKEND-345 create_leave ---
+
+
+@pytest.fixture
+def fresh_settings() -> Iterator[None]:
+    clear_settings_cache()
+    yield
+    clear_settings_cache()
+
+
+def _parent_leave(student_id: UUID, start: date, end: date | None = None) -> ParentLeaveCreateIn:
+    return ParentLeaveCreateIn(
+        student_id=student_id, leave_type="sick", start_date=start, end_date=end or start
+    )
+
+
+def _set_leave_window(db: Session, *, past_days: int, future_days: int) -> None:
+    db.execute(
+        text(
+            "update public.system_settings set value = cast(:v as jsonb) where key = 'leave.window'"
+        ),
+        {"v": f'{{"past_days": {past_days}, "future_days": {future_days}}}'},
+    )
+    clear_settings_cache()
+
+
+def test_create_leave_by_parent(
+    db_session: Session, fake_clock: FakeClock, kick_off: None, fresh_settings: None
+) -> None:
+    ming = make_student(db_session)
+    parent = make_parent(db_session)
+    make_guardian(db_session, ming, parent=parent)
+    make_staff(db_session, permissions=["leaves:read"])
+
+    leave = create_leave(
+        db_session,
+        _parent_leave(ming.id, date(2026, 9, 1), date(2026, 9, 2)),
+        actor=Actor(type="parent", id=parent.id),
+        clock=fake_clock,
+    )
+
+    assert (leave.created_by_type, leave.created_by_id, leave.status) == (
+        "parent",
+        parent.id,
+        "active",
+    )
+    rows = db_session.execute(
+        select(StudentAttendance).where(StudentAttendance.student_id == ming.id)
+    ).scalars()
+    # 今天 9/1 套用為 leave；9/2 尚未到，由每日初始化建立
+    assert [(r.service_date, r.status, r.leave_id) for r in rows] == [
+        (date(2026, 9, 1), "leave", leave.id)
+    ]
+    assert len(_leave_notifications(db_session, "leave.created", leave.id)) >= 1
+
+
+def test_create_leave_by_staff_sets_updated_by(
+    db_session: Session, fake_clock: FakeClock, kick_off: None, fresh_settings: None
+) -> None:
+    ming = make_student(db_session)
+    staff = make_staff(db_session, permissions=["leaves:write"])
+    make_attendance(db_session, ming, service_date=date(2026, 9, 1), status="absent")
+
+    leave = create_leave(
+        db_session,
+        LeaveCreateIn(
+            student_id=ming.id,
+            leave_type="personal",
+            start_date=date(2026, 9, 1),
+            end_date=date(2026, 9, 1),
+        ),
+        actor=Actor(type="staff", id=staff.id),
+        clock=fake_clock,
+    )
+
+    assert (leave.created_by_type, leave.created_by_id) == ("staff", staff.id)
+    row = db_session.execute(
+        select(StudentAttendance)
+        .where(StudentAttendance.student_id == ming.id)
+        .execution_options(populate_existing=True)
+    ).scalar_one()
+    assert (row.status, row.updated_by) == ("leave", staff.id)
+
+
+def test_create_leave_overlap_409(
+    db_session: Session, fake_clock: FakeClock, kick_off: None, fresh_settings: None
+) -> None:
+    ming = make_student(db_session)
+    staff = Actor(type="staff", id=make_staff(db_session).id)
+    existing = make_leave(db_session, ming, start_date=date(2026, 9, 2), end_date=date(2026, 9, 4))
+    data = LeaveCreateIn(
+        student_id=ming.id,
+        leave_type="sick",
+        start_date=date(2026, 9, 4),
+        end_date=date(2026, 9, 5),
+    )
+
+    with pytest.raises(AppError) as exc:
+        create_leave(db_session, data, actor=staff, clock=fake_clock)
+    assert (exc.value.status, exc.value.code) == (409, "leave_overlap")
+    assert exc.value.details == {
+        "leave_id": existing.id,
+        "start_date": date(2026, 9, 2),
+        "end_date": date(2026, 9, 4),
+    }
+
+    existing.status = "cancelled"
+    existing.cancelled_at = datetime(2026, 9, 1, tzinfo=UTC)
+    existing.cancelled_by_type = "staff"
+    existing.cancelled_by_id = staff.id
+    db_session.flush()
+    created = create_leave(db_session, data, actor=staff, clock=fake_clock)
+    assert created.status == "active"
+
+
+def test_create_leave_parent_window(
+    db_session: Session, fake_clock: FakeClock, kick_off: None, fresh_settings: None
+) -> None:
+    ming = make_student(db_session)
+    parent = make_parent(db_session)
+    make_guardian(db_session, ming, parent=parent)
+    actor = Actor(type="parent", id=parent.id)
+    _set_leave_window(db_session, past_days=30, future_days=60)
+
+    for start in (date(2026, 7, 31), date(2026, 11, 1)):
+        with pytest.raises(AppError) as exc:
+            create_leave(db_session, _parent_leave(ming.id, start), actor=actor, clock=fake_clock)
+        assert (exc.value.status, exc.value.code) == (422, "leave_date_out_of_window")
+        assert exc.value.details == {"past_days": 30, "future_days": 60}
+    assert (
+        create_leave(
+            db_session, _parent_leave(ming.id, date(2026, 8, 3)), actor=actor, clock=fake_clock
+        ).status
+        == "active"
+    )
+
+    _set_leave_window(db_session, past_days=0, future_days=60)
+    with pytest.raises(AppError) as narrowed:
+        create_leave(
+            db_session, _parent_leave(ming.id, date(2026, 8, 31)), actor=actor, clock=fake_clock
+        )
+    assert narrowed.value.code == "leave_date_out_of_window"
+
+    staff_leave = create_leave(
+        db_session,
+        LeaveCreateIn(
+            student_id=ming.id,
+            leave_type="sick",
+            start_date=date(2026, 7, 31),
+            end_date=date(2026, 7, 31),
+        ),
+        actor=Actor(type="staff", id=make_staff(db_session).id),
+        clock=fake_clock,
+    )
+    assert staff_leave.start_date == date(2026, 7, 31)
+
+
+def test_create_leave_no_service_days(
+    db_session: Session, fake_clock: FakeClock, kick_off: None, fresh_settings: None
+) -> None:
+    ming = make_student(db_session)
+
+    with pytest.raises(AppError) as exc:
+        create_leave(
+            db_session,
+            LeaveCreateIn(
+                student_id=ming.id,
+                leave_type="sick",
+                start_date=date(2026, 9, 5),
+                end_date=date(2026, 9, 6),
+            ),
+            actor=Actor(type="staff", id=make_staff(db_session).id),
+            clock=fake_clock,
+        )
+
+    assert (exc.value.status, exc.value.code) == (422, "no_service_days_in_range")
+
+
+def test_create_leave_parent_idor(
+    db_session: Session, fake_clock: FakeClock, kick_off: None, fresh_settings: None
+) -> None:
+    ming = make_student(db_session)
+    other = make_student(db_session, name="林小安")
+    parent = make_parent(db_session)
+    make_guardian(db_session, ming, parent=parent)
+    actor = Actor(type="parent", id=parent.id)
+
+    with pytest.raises(AppError) as idor:
+        create_leave(
+            db_session, _parent_leave(other.id, date(2026, 9, 2)), actor=actor, clock=fake_clock
+        )
+    ming.status = "withdrawn"
+    ming.withdrawn_on = date(2026, 9, 1)
+    db_session.flush()
+    with pytest.raises(AppError) as withdrawn:
+        create_leave(
+            db_session, _parent_leave(ming.id, date(2026, 9, 2)), actor=actor, clock=fake_clock
+        )
+    suspended = make_student(db_session, status="suspended")
+    with pytest.raises(AppError) as staff_inactive:
+        create_leave(
+            db_session,
+            LeaveCreateIn(
+                student_id=suspended.id,
+                leave_type="sick",
+                start_date=date(2026, 9, 2),
+                end_date=date(2026, 9, 2),
+            ),
+            actor=Actor(type="staff", id=make_staff(db_session).id),
+            clock=fake_clock,
+        )
+
+    assert (idor.value.status, idor.value.code) == (404, "student_not_found")
+    assert (withdrawn.value.status, withdrawn.value.code) == (409, "student_not_active")
+    assert (staff_inactive.value.status, staff_inactive.value.code) == (409, "student_not_active")
+
+
+@pytest.fixture
+def owner_cleanup() -> Iterator[list[tuple[str, UUID]]]:
+    """committing 測試建立的人員以 owner 連線刪除；排在 committing_db_session 之前（先 truncate
+    請假 / 出勤 / 通知表，再依 FK 順序刪監護人、學生、家長）。"""
+    rows: list[tuple[str, UUID]] = []
+    yield rows
+    with connect_owner() as conn:
+        conn.execute("set lock_timeout = '5s'")
+        for table, row_id in rows:
+            conn.execute(f"delete from public.{table} where id = %s", (row_id,))  # noqa: S608
+        conn.commit()
+
+
+@pytest.mark.cleanup_tables(
+    "student_attendances", "student_leaves", "notification_outbox", "notifications"
+)
+def test_create_leave_concurrent_duplicate(
+    owner_cleanup: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    fake_clock: FakeClock,
+    kick_off: None,
+    fresh_settings: None,
+) -> None:
+    ming = make_student(committing_db_session)
+    parent = make_parent(committing_db_session)
+    guardian = make_guardian(committing_db_session, ming, parent=parent)
+    committing_db_session.commit()
+    owner_cleanup.extend(
+        [("guardians", guardian.id), ("students", ming.id), ("parent_accounts", parent.id)]
+    )
+    actor = Actor(type="parent", id=parent.id)
+
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    s2_done = threading.Event()
+    outcome: dict[str, object] = {}
+
+    def worker() -> None:
+        try:
+            outcome["s2"] = create_leave(
+                s2, _parent_leave(ming.id, date(2026, 9, 1)), actor=actor, clock=fake_clock
+            ).id
+            s2.commit()
+        except BaseException as exc:
+            outcome["s2"] = exc
+            s2.rollback()
+        finally:
+            s2_done.set()
+
+    thread = threading.Thread(target=worker)
+    try:
+        outcome["s1"] = create_leave(
+            s1, _parent_leave(ming.id, date(2026, 9, 1)), actor=actor, clock=fake_clock
+        ).id
+        thread.start()
+        assert not s2_done.wait(timeout=0.5)  # s1 尚未 commit：s2 等待 exclusion constraint 判定
+        s1.commit()
+        thread.join(timeout=10)
+    finally:
+        s1.close()
+        if thread.is_alive():
+            thread.join(timeout=10)
+        s2.close()
+
+    error = outcome["s2"]
+    assert isinstance(error, AppError)
+    assert (error.status, error.code) == (409, "leave_overlap")
+    active = committing_db_session.execute(
+        select(func.count())
+        .select_from(StudentLeave)
+        .where(StudentLeave.student_id == ming.id, StudentLeave.status == "active")
+    ).scalar_one()
+    assert active == 1

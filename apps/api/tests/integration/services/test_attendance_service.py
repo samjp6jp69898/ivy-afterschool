@@ -7,13 +7,14 @@
 - BACKEND-303：``initialize_daily_attendance``（每日初始化，冪等）。
 - BACKEND-305 / 309：``check_in`` / ``mark_absent``（條件式更新、通知、推播）。
 - BACKEND-314：``get_child_monthly_attendance``（家長端月出勤）。
+- BACKEND-306 / 307 / 308：``check_out`` / ``mark_left_by_pickup`` / ``batch_check_in``。
 
 營業時段讀 seed 預設（週一到週五營業、週六不營業、週日不列）；每個測試前後清空設定快取。
 """
 
 import threading
 from collections.abc import Iterator
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -43,13 +44,16 @@ from app.schemas.attendance import (
 from app.services.attendance_service import (
     DailyInitResult,
     amend_attendance,
+    batch_check_in,
     check_in,
+    check_out,
     ensure_attendance_row,
     get_child_monthly_attendance,
     get_daily_attendance,
     get_monthly_attendance,
     initialize_daily_attendance,
     mark_absent,
+    mark_left_by_pickup,
 )
 from app.services.settings_service import clear_settings_cache
 from tests.integration.db.conftest import connect_owner
@@ -1492,3 +1496,375 @@ def test_child_monthly_attendance_invalid_month(
     with pytest.raises(AppError) as exc:
         get_child_monthly_attendance(db_session, uuid4(), month, clock=fake_clock)
     assert _error(exc) == (422, "invalid_month")
+
+
+# --- BACKEND-306 check_out ---
+
+_CHECK_OUT_NOW = "2026-09-01T10:30:00+00:00"  # 台北 18:30
+
+
+@pytest.mark.clock(_CHECK_OUT_NOW)
+def test_check_out_success(
+    db_session: Session, fake_clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    mom = make_parent(db_session)
+    make_guardian(db_session, ming, parent=mom)
+    row = make_attendance(db_session, ming, service_date=_DAY, status="present")
+
+    out = check_out(db_session, ming.id, actor=actor, note="爸爸來接", clock=fake_clock)
+
+    assert (out.id, out.status, out.check_out_source) == (row.id, "left", "manual")
+    assert (out.check_out_at, out.check_in_at, out.note) == (
+        fake_clock.now(),
+        _taipei(_DAY, 15),
+        "爸爸來接",
+    )
+    db_row = db_session.get(StudentAttendance, row.id)
+    assert db_row is not None
+    assert db_row.updated_by == actor.id
+    [notification] = _notifications(db_session, "attendance.checked_out", ming.id)
+    assert (notification.recipient_id, notification.payload["time"]) == (mom.id, "18:30")
+    assert notification.title == "王小明 已離班"
+
+
+@pytest.mark.clock(_CHECK_OUT_NOW)
+def test_check_out_conflicts(
+    db_session: Session, fake_clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    expected, no_row, left, on_leave, absent = (make_student(db_session) for _ in range(5))
+    make_attendance(db_session, expected, service_date=_DAY)
+    make_attendance(db_session, left, service_date=_DAY, status="left")
+    make_attendance(db_session, absent, service_date=_DAY, status="absent")
+    leave = make_leave(db_session, on_leave, start_date=_DAY)
+    make_attendance(db_session, on_leave, service_date=_DAY, status="leave", leave=leave)
+
+    for student_id, expected_error in (
+        (expected.id, (409, "not_checked_in")),
+        (no_row.id, (409, "not_checked_in")),
+        (absent.id, (409, "not_checked_in")),
+        (left.id, (409, "already_checked_out")),
+        (on_leave.id, (409, "student_on_leave")),
+        (uuid4(), (404, "student_not_found")),
+    ):
+        with pytest.raises(AppError) as exc:
+            check_out(db_session, student_id, actor=actor, note=None, clock=fake_clock)
+        assert _error(exc) == expected_error
+        assert _notifications(db_session, "attendance.checked_out", student_id) == []
+    # 無出勤列時不建立列
+    assert _attendance_count(db_session, no_row.id) == 0
+
+
+@pytest.mark.clock(_CHECK_OUT_NOW)
+def test_check_out_before_check_in_time(
+    db_session: Session, fake_clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session)
+    row = make_attendance(
+        db_session,
+        ming,
+        service_date=_DAY,
+        status="present",
+        check_in_at=fake_clock.now() + timedelta(minutes=1),
+    )
+
+    with pytest.raises(AppError) as exc:
+        check_out(db_session, ming.id, actor=actor, note=None, clock=fake_clock)
+
+    assert _error(exc) == (409, "invalid_check_out_time")
+    db_row = db_session.get(StudentAttendance, row.id)
+    assert db_row is not None
+    db_session.refresh(db_row)
+    assert db_row.status == "present"
+
+
+@pytest.mark.clock(_CHECK_OUT_NOW)
+@pytest.mark.cleanup_tables("student_attendances", "notification_outbox", "notifications")
+def test_check_out_concurrent(
+    owner_cleanup_people: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    fake_clock: FakeClock,
+    kick_off: None,
+) -> None:
+    ming = make_student(committing_db_session, name="王小明")
+    mom = make_parent(committing_db_session)
+    guardian = make_guardian(committing_db_session, ming, parent=mom)
+    staff = make_staff(committing_db_session, role_code="tutor")
+    make_attendance(committing_db_session, ming, service_date=_DAY, status="present")
+    committing_db_session.commit()
+    owner_cleanup_people.extend(
+        [
+            ("guardians", guardian.id),
+            ("students", ming.id),
+            ("parent_accounts", mom.id),
+            ("staff_users", staff.id),
+        ]
+    )
+    actor = _current(staff)
+
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    s2_done = threading.Event()
+    outcome: dict[str, Any] = {}
+
+    def worker() -> None:
+        try:
+            outcome["s2"] = check_out(s2, ming.id, actor=actor, note=None, clock=fake_clock)
+            s2.commit()
+        except BaseException as exc:
+            outcome["s2"] = exc
+            s2.rollback()
+        finally:
+            s2_done.set()
+
+    thread = threading.Thread(target=worker)
+    try:
+        outcome["s1"] = check_out(s1, ming.id, actor=actor, note=None, clock=fake_clock)
+        thread.start()
+        assert not s2_done.wait(timeout=0.5)  # s1 尚未 commit：s2 被擋住
+        s1.commit()
+        thread.join(timeout=10)
+    finally:
+        s1.close()
+        if thread.is_alive():
+            thread.join(timeout=10)
+        s2.close()
+
+    assert outcome["s1"].status == "left"
+    error = outcome["s2"]
+    assert isinstance(error, AppError)
+    assert (error.status, error.code) == (409, "already_checked_out")
+    assert len(_notifications(committing_db_session, "attendance.checked_out", ming.id)) == 1
+
+
+@pytest.mark.clock(_CHECK_OUT_NOW)
+def test_check_out_parent_ws_payload(
+    db_session: Session,
+    fake_clock: FakeClock,
+    actor: CurrentStaff,
+    kick_off: None,
+    published: list[Call],
+) -> None:
+    ming = make_student(db_session)
+    make_attendance(db_session, ming, service_date=_DAY, status="present")
+
+    check_out(db_session, ming.id, actor=actor, note=None, clock=fake_clock)
+    db_session.commit()
+
+    [parent] = [m for ch, m in published if ch == [student_channel(ming.id)]]
+    assert parent["type"] == "attendance.updated"
+    assert parent["data"]["status"] == "left"
+    assert parent["data"]["check_out_at"] == fake_clock.now().isoformat()
+
+
+# --- BACKEND-307 mark_left_by_pickup ---
+
+
+@pytest.mark.clock(_CHECK_OUT_NOW)
+def test_mark_left_by_pickup_present(
+    db_session: Session, fake_clock: FakeClock, kick_off: None, published: list[Call]
+) -> None:
+    ming = make_student(db_session)
+    make_guardian(db_session, ming, parent=make_parent(db_session))
+    row = make_attendance(db_session, ming, service_date=_DAY, status="present")
+
+    assert (
+        mark_left_by_pickup(db_session, ming.id, _DAY, at=fake_clock.now(), clock=fake_clock)
+        is True
+    )
+
+    db_session.refresh(row)
+    assert (row.status, row.check_out_at, row.check_out_source) == (
+        "left",
+        fake_clock.now(),
+        "pickup",
+    )
+    assert row.updated_by is None
+    assert _notifications(db_session, "attendance.checked_out", ming.id) == []
+    db_session.commit()
+    [parent] = [m for ch, m in published if ch == [student_channel(ming.id)]]
+    assert parent["data"]["status"] == "left"
+
+
+@pytest.mark.clock(_CHECK_OUT_NOW)
+def test_mark_left_by_pickup_not_present(
+    db_session: Session, fake_clock: FakeClock, published: list[Call]
+) -> None:
+    expected, on_leave, left, early = (make_student(db_session) for _ in range(4))
+    expected_row = make_attendance(db_session, expected, service_date=_DAY)
+    leave = make_leave(db_session, on_leave, start_date=_DAY)
+    leave_row = make_attendance(
+        db_session, on_leave, service_date=_DAY, status="leave", leave=leave
+    )
+    left_row = make_attendance(db_session, left, service_date=_DAY, status="left")
+    original_out = left_row.check_out_at
+    # 到班時間晚於接送完成時間（時鐘異常）也不改
+    early_row = make_attendance(
+        db_session,
+        early,
+        service_date=_DAY,
+        status="present",
+        check_in_at=fake_clock.now() + timedelta(minutes=1),
+    )
+
+    for student, row, status in (
+        (expected, expected_row, "expected"),
+        (on_leave, leave_row, "leave"),
+        (left, left_row, "left"),
+        (early, early_row, "present"),
+    ):
+        assert (
+            mark_left_by_pickup(db_session, student.id, _DAY, at=fake_clock.now(), clock=fake_clock)
+            is False
+        )
+        db_session.refresh(row)
+        assert row.status == status
+    assert left_row.check_out_at == original_out
+    # 沒有出勤列也回 False
+    assert (
+        mark_left_by_pickup(
+            db_session, make_student(db_session).id, _DAY, at=fake_clock.now(), clock=fake_clock
+        )
+        is False
+    )
+    db_session.commit()
+    assert published == []
+
+
+# --- BACKEND-308 batch_check_in ---
+
+
+@pytest.mark.clock(_CHECK_IN_NOW)
+def test_batch_check_in_mixed(
+    db_session: Session, fake_clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    hua = make_student(db_session, name="陳小華")
+    an = make_student(db_session, name="林小安", status="suspended")
+    mei = make_student(db_session, name="張小美")
+    make_attendance(db_session, ming, service_date=_DAY)
+    make_attendance(db_session, hua, service_date=_DAY, status="present")
+    leave = make_leave(db_session, mei, start_date=_DAY)
+    make_attendance(db_session, mei, service_date=_DAY, status="leave", leave=leave)
+    missing = uuid4()
+
+    out = batch_check_in(
+        db_session, [ming.id, hua.id, an.id, missing, mei.id], actor=actor, clock=fake_clock
+    )
+
+    assert [(r.student_id, r.status) for r in out.succeeded] == [(ming.id, "present")]
+    assert [(s.student_id, s.code) for s in out.skipped] == [
+        (hua.id, "already_checked_in"),
+        (an.id, "student_not_active"),
+        (missing, "student_not_found"),
+        (mei.id, "student_on_leave"),
+    ]
+    assert all(s.message for s in out.skipped)
+
+
+@pytest.mark.clock(_CHECK_IN_NOW)
+def test_batch_check_in_skips_left_and_archived(
+    db_session: Session, fake_clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    left = make_student(db_session)
+    make_attendance(db_session, left, service_date=_DAY, status="left")
+    archived = make_student(db_session, archived=True)
+    absent = make_student(db_session)
+    make_attendance(db_session, absent, service_date=_DAY, status="absent")
+    new = make_student(db_session)  # 尚無出勤列 → 建立後到班
+
+    out = batch_check_in(
+        db_session, [left.id, archived.id, absent.id, new.id], actor=actor, clock=fake_clock
+    )
+
+    assert [s.code for s in out.skipped] == ["already_checked_out", "student_not_found"]
+    assert [r.student_id for r in out.succeeded] == [absent.id, new.id]
+    assert _attendance_count(db_session, new.id) == 1
+
+
+@pytest.mark.clock(_CHECK_IN_NOW)
+def test_batch_check_in_notifications(
+    db_session: Session,
+    fake_clock: FakeClock,
+    actor: CurrentStaff,
+    kick_off: None,
+    count_sql: _SqlCounter,
+) -> None:
+    students = [make_student(db_session, name=f"學生{i}") for i in range(3)]
+    for student in students:
+        make_attendance(db_session, student, service_date=_DAY)
+        make_guardian(db_session, student, parent=make_parent(db_session))
+    count_sql.statements.clear()
+
+    batch_check_in(db_session, [s.id for s in students], actor=actor, clock=fake_clock)
+
+    for student in students:
+        assert len(_notifications(db_session, "attendance.checked_in", student.id)) == 1
+    guardian_queries = [s for s in count_sql.statements if "FROM guardians" in s]
+    assert len(guardian_queries) == 1
+
+
+@pytest.mark.clock(_CHECK_IN_NOW)
+def test_batch_check_in_single_broadcast(
+    db_session: Session,
+    fake_clock: FakeClock,
+    actor: CurrentStaff,
+    kick_off: None,
+    published: list[Call],
+) -> None:
+    students = [make_student(db_session) for _ in range(3)]
+    for student in students:
+        make_attendance(db_session, student, service_date=_DAY)
+
+    batch_check_in(db_session, [s.id for s in students], actor=actor, clock=fake_clock)
+    assert published == []
+    db_session.commit()
+
+    [admin] = [m for ch, m in published if ch == [admin_topic_channel("attendance")]]
+    assert admin["type"] == "attendance.batch_updated"
+    assert [item["student_id"] for item in admin["data"]["items"]] == [str(s.id) for s in students]
+
+
+@pytest.mark.clock(_CHECK_IN_NOW)
+def test_batch_check_in_not_service_day(
+    db_session: Session, fake_clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session)
+    db_session.add(ClosedDay(date=_DAY, reason="颱風假"))
+    db_session.flush()
+
+    with pytest.raises(AppError) as exc:
+        batch_check_in(db_session, [ming.id], actor=actor, clock=fake_clock)
+
+    assert _error(exc) == (409, "not_service_day")
+    assert _attendance_count(db_session, ming.id) == 0
+
+
+@pytest.mark.clock(_CHECK_IN_NOW)
+def test_batch_check_in_parent_ws(
+    db_session: Session,
+    fake_clock: FakeClock,
+    actor: CurrentStaff,
+    kick_off: None,
+    published: list[Call],
+) -> None:
+    students = [make_student(db_session) for _ in range(3)]
+    for student in students:
+        make_attendance(db_session, student, service_date=_DAY)
+
+    batch_check_in(db_session, [s.id for s in students], actor=actor, clock=fake_clock)
+    db_session.commit()
+
+    for student in students:
+        [message] = [m for ch, m in published if ch == [student_channel(student.id)]]
+        assert message["type"] == "attendance.updated"
+        assert set(message["data"]) == {
+            "student_id",
+            "service_date",
+            "status",
+            "check_in_at",
+            "check_out_at",
+        }
+        assert message["data"]["status"] == "present"
+    assert len([1 for ch, _ in published if ch == [admin_topic_channel("attendance")]]) == 1
