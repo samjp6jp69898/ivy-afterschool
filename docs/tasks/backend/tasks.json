@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 262,
-  "last_updated": "2026-10-05T02:55:33Z",
+  "version": 263,
+  "last_updated": "2026-10-05T02:56:25Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1485,7 +1485,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/auth.py",
       "source_ref": "BE:api/auth.py::refresh_token",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-043",
@@ -1510,9 +1510,9 @@
         "notes": "本 endpoint 無 request body，422 不適用；403 以外站 Origin 驗證。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 6 條全綠（5 條 red_case + test_admin_refresh_after_logout_401_other_device_kept，collect-only 對照全選到）；commit 0c15311（測試）先於 7283441 / aef4097（實作）。401 以 error_response 自組 envelope 並清 staff cookie，409 不清（Set-Cookie 為空有斷言），外站 Origin 403 且不輪替；family 撤銷由 service 在 raise 前 commit。突變：拿掉成功路徑 db.commit → 3 條轉紅。/api/admin/auth/ 在 route audit 白名單內，route audit 測試綠。lint / typecheck 乾淨。"
       }
     },
     {
@@ -1712,7 +1712,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/auth.py",
       "source_ref": "BE:api/auth.py::change_password",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-049",
@@ -1737,9 +1737,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 全選到；429c195 先於 4ddcf94。get_current_staff 掛上且路徑在強制改密碼 allowlist；成功後舊 access → 401、舊 refresh family 撤銷、新 cookie 可用、新密碼可登入；422 含多餘欄位與 weak_password reasons、400 / 401 / 403 皆斷言 cookie 與密碼未變。突變：拿掉 db.commit → success 轉紅。lint / typecheck 乾淨。"
       }
     },
     {
@@ -2073,7 +2073,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/auth.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-058",
@@ -2099,9 +2099,9 @@
         "notes": "無 request body，422 不適用。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 全選到；4c4c6d1 先於 7c1a8d8。401 自組 envelope 清 parent_access / parent_refresh，409 不清，reuse 後 access 一併失效（token_version）有斷言；外站 Origin 403 且不輪替。突變：401 不清 cookie → 3 條轉紅。lint / typecheck 乾淨。"
       }
     },
     {
@@ -2145,7 +2145,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/auth.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-060",
@@ -2170,9 +2170,9 @@
         "notes": "無 body、不需登入，422 與 401 不適用。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 全選到；4c4c6d1 先於 7c1a8d8。清 parent_access / parent_refresh / parent_bind，登出後舊 refresh → 401 refresh_revoked，其他裝置 refresh 仍 200，外站 Origin 403 且不撤銷。突變：拿掉 clear_bind_cookie → success 轉紅。lint / typecheck 乾淨。"
       }
     },
     {
@@ -2697,7 +2697,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/role_service.py",
       "source_ref": "BE:api/permissions_admin.py::update_role",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-077",
@@ -2706,7 +2706,7 @@
         "BACKEND-102"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "",
+      "risk_notes": "【review-r8-a 打回 1】守衛讀到 identity map 舊值，並發時兩筆降權仍可同時通過。endpoint 的 get_current_staff 以同一個 request session 載入 actor 的 StaffUser 與其 Role（lazy='joined'）；assert_admin_capabilities_retained 的 select(StaffUser) 沒有 populate_existing，已在 identity map 的 Role 不會被覆寫。反例：只有 u1（自訂角色 M1）與 u2（自訂角色 M2）兩位啟用帳號，M1 / M2 都有 roles:write、staff:write；交易 A（actor u1）把 M2 改成 ['staff:write'] 並 commit；交易 B（actor u2，M2 已在 identity map）把 M1 改成 ['staff:write']，取得 advisory lock 後守衛看到的 M2 仍含 roles:write → 通過，commit 後系統沒有任何持有 roles:write 的啟用帳號。在同一 session 先載入 M2、以 Core update(Role).execution_options(synchronize_session=False) 模擬 A 已 commit，再呼叫 update_role(M1) → 未拋 last_role_manager（預期 409）；在守衛查詢加 populate_existing 後轉綠。要求：取鎖後的守衛查詢讀到 DB 最新值（修在 rbac_guards 會改寫 BACKEND-075 產物，description 要註明），並補會因此轉紅的測試。\n【review-r8-a 打回 2】update_role 的 select(Role).with_for_update() 沒有 populate_existing：要改的是 actor 自己的角色（已由 get_current_staff 載入）時，鎖後拿到的是上鎖前的舊值。反例：角色 R = [roles:write, staff:write, exams:publish]、actor u 屬於 R；另一交易已 commit 把 R 改成 [roles:write, staff:write]；u 送 permissions=[exams:publish, roles:write, staff:write] → 與舊值比對判定「無變動」，不寫入、不寫稽核，卻回 200 且 RoleOut.permissions 含 exams:publish，與 DB 實際值不符。要求：鎖列查詢讀最新值（kickoff 實作慣例：同一 session 可能已載入該列時加 populate_existing），並補測試。\n【review-r8-a 打回 3】description 要求權限變動時先取 rbac:admin_retained advisory lock 再呼叫守衛，但目前沒有任何測試驗證：把 advisory_xact_lock 那行拿掉，test_role_service.py 16 條仍全綠。要求補一條拿掉取鎖就會轉紅的測試（例如呼叫後查 pg_locks 確認本連線持有該 advisory key，或兩條 app_backend 連線的並發測試；committing 測試不得寫 seed 表 roles）；只改 name / description 時不取鎖也一併斷言。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_role_service.py",
@@ -2724,9 +2724,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r8-a",
+        "notes": "打回。tdd.run 5 條全綠、collect-only 全選到、e12844e 先於 05e1117，lint / typecheck 乾淨；但 advisory lock 之後的守衛與上鎖的角色列都讀到 session identity map 的舊值，序列化目的未達成（反例見 risk_notes），且沒有任何測試在拿掉 advisory_xact_lock 時轉紅（scratch 突變驗證：16 條仍全綠）。殘留（不擋）：test_update_role_last_manager 第二段依賴第一段 409 後未 rollback 的 flush 狀態，語意上不是「原狀態下只拿掉 staff:write」。"
       }
     },
     {
@@ -14864,7 +14864,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/channels/line.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-207",
@@ -14888,9 +14888,9 @@
         "notes": "tdd.run 沿用 BACKEND-207 的指令；新測試名稱以 test_line_client_ 開頭。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 10 條全綠（4 條新 red_case + BACKEND-207 既有 6 條），collect-only 全選到；eb12756 先於 8fffb1d。close 冪等、context manager、close 後 push → RuntimeError 且訊息不含 token、transport / http_client 互斥 ValueError；Authorization 改逐請求帶且有斷言。outbox_jobs 整合測試 7 條綠。lint / typecheck 乾淨。殘留（不擋）：app/notifications/outbox_jobs.py 模組 docstring 仍寫「HttpLineMessagingClient 持有 httpx.Client 且沒有 close()」，已過時；注入 http_client 時 timeout 參數不生效（只供測試注入，可接受）。"
       }
     }
   ]
