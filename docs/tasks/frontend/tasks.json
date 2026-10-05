@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 111,
-  "last_updated": "2026-10-05T05:44:26Z",
+  "version": 115,
+  "last_updated": "2026-10-05T05:48:11Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -2140,7 +2140,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/RoleCardsGrid.vue",
       "source_ref": "FE:src/components/settings/RoleCardsGrid.vue::default",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-053"
@@ -2174,7 +2174,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/PermissionPicker.vue",
       "source_ref": "FE:src/components/settings/PermissionPicker.vue::default",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-053"
@@ -2884,7 +2884,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/student/GuardianFormDialog.vue",
       "source_ref": "FE:src/components/student/GuardianManager.vue::default",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-082",
@@ -3111,7 +3111,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/classes/ClassFormDialog.vue",
       "source_ref": "FE:src/views/ClassroomView.vue::default",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-080",
