@@ -36,7 +36,8 @@ from app.core.locks import try_advisory_xact_lock
 
 logger = logging.getLogger(__name__)
 
-JobFunc = Callable[[Session, Clock], None]
+# 回傳值（例如處理筆數）runner 不使用，工作函式可回傳任意值方便測試
+JobFunc = Callable[[Session, Clock], object]
 RunKey = Callable[[Clock], str]
 JobResult = Literal["ran", "skipped", "failed"]
 
