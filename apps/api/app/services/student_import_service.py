@@ -119,7 +119,7 @@ def _invalid_file(message: str) -> AppError:
     return AppError("import_invalid_file", message, status=422)
 
 
-# --- 檔案層防護 -------------------------------------------------------------------------------------
+# --- 檔案層防護 ------------------------------------------------------------------------
 
 
 def _assert_sheet_grid_within_limits(data: bytes) -> None:
@@ -163,7 +163,7 @@ def assert_xlsx_within_limits(content: bytes) -> None:
                 _assert_sheet_grid_within_limits(zf.read(info))
 
 
-# --- 標題與讀列 -------------------------------------------------------------------------------------
+# --- 標題與讀列 ------------------------------------------------------------------------
 
 
 def _header_text(cell: object) -> str:
@@ -227,7 +227,7 @@ def _read_rows(content: bytes) -> tuple[list[str], list[tuple[int, tuple[Any, ..
     return header, rows
 
 
-# --- 儲存格轉換 -------------------------------------------------------------------------------------
+# --- 儲存格轉換 ------------------------------------------------------------------------
 
 
 def _cell_text(value: object) -> str | None:
@@ -301,7 +301,7 @@ def _validation_messages(exc: ValidationError) -> list[str]:
     return messages
 
 
-# --- 查表 ------------------------------------------------------------------------------------------
+# --- 查表 ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -347,7 +347,7 @@ def _load_lookups(
     return _Lookups(schools, classes, existing_nos, existing_hmacs)
 
 
-# --- preview -------------------------------------------------------------------------------------
+# --- preview ----------------------------------------------------------------------
 
 
 def _cells(header: list[str], raw: tuple[Any, ...]) -> dict[str, Any]:
