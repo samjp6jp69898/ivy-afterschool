@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 90,
-  "last_updated": "2026-10-05T06:08:28Z",
+  "version": 91,
+  "last_updated": "2026-10-05T06:08:54Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -880,7 +880,7 @@
         "INFRA-013"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "",
+      "risk_notes": "版面內距慣例：家長端頁面（例如 PARENT-178 NotificationPrefsView）自帶左右 16px、底部 24px 內距（對應設計稿 screen__content），ParentLayout 的 main 區不要再加左右內距，否則會疊成兩倍；之後家長端頁面統一由頁面自帶內距。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/layouts/ParentLayout.spec.ts",
