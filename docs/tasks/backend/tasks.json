@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 307,
-  "last_updated": "2026-10-05T04:07:49Z",
+  "version": 308,
+  "last_updated": "2026-10-05T04:08:00Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2697,7 +2697,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/role_service.py",
       "source_ref": "BE:api/permissions_admin.py::update_role",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-077",
@@ -2706,7 +2706,7 @@
         "BACKEND-102"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "【review-r8-a 打回 1】守衛讀到 identity map 舊值，並發時兩筆降權仍可同時通過。endpoint 的 get_current_staff 以同一個 request session 載入 actor 的 StaffUser 與其 Role（lazy='joined'）；assert_admin_capabilities_retained 的 select(StaffUser) 沒有 populate_existing，已在 identity map 的 Role 不會被覆寫。反例：只有 u1（自訂角色 M1）與 u2（自訂角色 M2）兩位啟用帳號，M1 / M2 都有 roles:write、staff:write；交易 A（actor u1）把 M2 改成 ['staff:write'] 並 commit；交易 B（actor u2，M2 已在 identity map）把 M1 改成 ['staff:write']，取得 advisory lock 後守衛看到的 M2 仍含 roles:write → 通過，commit 後系統沒有任何持有 roles:write 的啟用帳號。在同一 session 先載入 M2、以 Core update(Role).execution_options(synchronize_session=False) 模擬 A 已 commit，再呼叫 update_role(M1) → 未拋 last_role_manager（預期 409）；在守衛查詢加 populate_existing 後轉綠。要求：取鎖後的守衛查詢讀到 DB 最新值（修在 rbac_guards 會改寫 BACKEND-075 產物，description 要註明），並補會因此轉紅的測試。\n【review-r8-a 打回 2】update_role 的 select(Role).with_for_update() 沒有 populate_existing：要改的是 actor 自己的角色（已由 get_current_staff 載入）時，鎖後拿到的是上鎖前的舊值。反例：角色 R = [roles:write, staff:write, exams:publish]、actor u 屬於 R；另一交易已 commit 把 R 改成 [roles:write, staff:write]；u 送 permissions=[exams:publish, roles:write, staff:write] → 與舊值比對判定「無變動」，不寫入、不寫稽核，卻回 200 且 RoleOut.permissions 含 exams:publish，與 DB 實際值不符。要求：鎖列查詢讀最新值（kickoff 實作慣例：同一 session 可能已載入該列時加 populate_existing），並補測試。\n【review-r8-a 打回 3】description 要求權限變動時先取 rbac:admin_retained advisory lock 再呼叫守衛，但目前沒有任何測試驗證：把 advisory_xact_lock 那行拿掉，test_role_service.py 16 條仍全綠。要求補一條拿掉取鎖就會轉紅的測試（例如呼叫後查 pg_locks 確認本連線持有該 advisory key，或兩條 app_backend 連線的並發測試；committing 測試不得寫 seed 表 roles）；只改 name / description 時不取鎖也一併斷言。",
+      "risk_notes": "assert_admin_capabilities_retained 的 populate_existing（BACKEND-079 改寫 BACKEND-075）是並發正確性的必要條件：呼叫端必須先取 advisory_xact_lock(session, 'rbac:admin_retained', 'global') 再呼叫守衛，守衛才讀得到其他交易已 commit 的最新值。其他可能減少管理者的異動（停用員工、改員工角色 / extra / revoked 權限、刪角色）同樣要先取鎖再呼叫守衛，且鎖列查詢在同一 session 可能已載入該列時要加 populate_existing。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_role_service.py",
@@ -2727,9 +2727,9 @@
         "notes": "test_update_role_last_manager 兩段各自包在 begin_nested() 內，第二段從原狀態出發。"
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r8-a",
-        "notes": "打回。tdd.run 5 條全綠、collect-only 全選到、e12844e 先於 05e1117，lint / typecheck 乾淨；但 advisory lock 之後的守衛與上鎖的角色列都讀到 session identity map 的舊值，序列化目的未達成（反例見 risk_notes），且沒有任何測試在拿掉 advisory_xact_lock 時轉紅（scratch 突變驗證：16 條仍全綠）。殘留（不擋）：test_update_role_last_manager 第二段依賴第一段 409 後未 rollback 的 flush 狀態，語意上不是「原狀態下只拿掉 staff:write」。"
+        "notes": "複審通過。三項打回皆已修正並有會轉紅的測試：ab3d32b（測試）先於 56106d7（修正）。tdd.run 8 條全綠、collect-only 全選到；test_role_service + test_rbac_retained 24 條、unit test_rbac_guards 7 條綠；lint / typecheck 乾淨。scratch 突變：拿掉 update_role 鎖列查詢的 populate_existing → test_update_role_locked_row_reads_latest 紅；拿掉 rbac_guards 守衛查詢的 populate_existing → test_update_role_guard_reads_latest_values 紅；拿掉 advisory_xact_lock → test_update_role_takes_admin_retained_lock 紅（pg_locks 探針同時斷言改 name / 同值不持鎖）。last_manager 兩段各包 begin_nested，第二段從原狀態出發。079 測試全在 db_session（rollback）內，重跑前後 staff_users / roles 筆數不變；共用 DB 中 03:25:55～03:26:58 UTC 的 6 筆「林老師 + 空權限自訂角色」殘列不是 079 測試留下的。description 已註明改寫 BACKEND-075 rbac_guards。"
       }
     },
     {
@@ -7474,7 +7474,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/ws/parent.py",
       "source_ref": "BE:api/inbox_ws.py::employee_inbox_ws",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-225",
@@ -7485,7 +7485,7 @@
         "BACKEND-023"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "同 BACKEND-226：測資需以 committing_db_session 建立。\nBACKEND-225 的 run_ws_loop 中 on_message 拋出的例外會以 ExceptionGroup（anyio task group）往外拋；要以 close code 回應業務錯誤須在 on_message 內自行 try / except（或用 except*）。run_ws_loop 不做 server 端 ping，閒置連線存活偵測交給 60 秒重驗；revalidate 由本 endpoint 提供（重新 load_current_*，token_version / 停用的實際檢查與測試在這裡）。握手驗證以 `await run_in_thread(ws_load_*, ws, clock=clock)` 取得身分，AppError 以 `close_code_for(exc)` 轉關閉碼。\n【review-r8-a 打回 1】description 流程 4 與本 task risk_notes 要求重驗時的 token / 帳號狀態檢查「實際檢查與測試在這裡」，但沒有任何測試涵蓋家長 WS 重驗失敗 → 4401：把 revalidate 內重新 ws_load_parent 那行拿掉（只重算小孩清單），test_ws_endpoints.py 的 test_ws_parent_ 6 條仍全綠。後果是家長帳號被停用或 token_version 遞增（全裝置登出）後，既有連線仍持續收到小孩的接送 / 作業 / 出勤事件。要求補 red_case 與測試：REVALIDATE_SECONDS=0.1，連線後把該家長 status 設 'disabled'（或 token_version + 1）並 commit → 收到 WebSocketDisconnect 4401，且之後 student channel 的訊息不再送達。\n【review-r8-a 打回 2】test_ws_endpoints.py 每個 ws.receive_json() 都沒有逾時：handler 退化成「不送某則訊息」時測試會無限等待，不會失敗，還會一直持有共用的 /tmp/afterschool_db.lock，committed 測資也因 teardown 沒跑而留下。review 期間的實例：把 admin revalidate 的 ws_load_staff 拿掉後，test_ws_admin_revalidate_revoked 停在第 291 行的 receive_json，佔住 DB 鎖 7 分鐘，擋住 6 位 agent（faulthandler 確認卡在測試端 starlette testclient.receive，不是 handler 不結束；未改動的實作在 timeout 120 下連跑 5 次，12 條都約 1.1 秒全綠）。要求：整個檔案（226 / 227 共用）的 receive 一律加逾時（例如以 helper 包 anyio.fail_after / 另開 thread 加 timeout，或 pytest-timeout marker），逾時以失敗結束並照常跑 teardown 清測資；並在 tdd.notes 註明。",
+      "risk_notes": "同 BACKEND-226：測資需以 committing_db_session 建立。\nBACKEND-225 的 run_ws_loop 中 on_message 拋出的例外會以 ExceptionGroup（anyio task group）往外拋；要以 close code 回應業務錯誤須在 on_message 內自行 try / except（或用 except*）。run_ws_loop 不做 server 端 ping，閒置連線存活偵測交給 60 秒重驗；revalidate 由本 endpoint 提供（重新 load_current_*，token_version / 停用的實際檢查與測試在這裡，見 test_ws_parent_revalidate_disabled）。握手驗證以 `await run_in_thread(ws_load_*, ws, clock=clock)` 取得身分，AppError 以 `close_code_for(exc)` 轉關閉碼。\ntests/integration/api/ws/test_ws_endpoints.py 的 receive 一律走 _recv(ws)（逾時即失敗、teardown 照常）；新增 ws 測試沿用，不可直接呼叫 ws.receive_json()，否則實作退化時測試會無限等待並佔住共用 DB 鎖。跑 ws 測試外層加 timeout。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/ws/test_ws_endpoints.py",
@@ -7505,9 +7505,9 @@
         "notes": "同 BACKEND-226 的測資與哨兵作法。tests/integration/api/ws/test_ws_endpoints.py 的每個 receive 一律走 _recv(ws)（另開執行緒等待 receive_json，預設 5 秒逾時後 pytest.fail，teardown 照常清測資）；WebSocketDisconnect 原樣往外拋。跑 ws 測試外層加 timeout。"
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r8-a",
-        "notes": "打回。tdd.run 6 條全綠、collect-only 全選到、1ca4666 先於 3dc8c80，lint / typecheck 乾淨；ready / 只收自己小孩 （IDOR 哨兵）/ 不可自選頻道 / 封存後取消與新綁定加入 / 4401 / 4403 / 家長裁切版原樣轉送皆有測試。receives_attendance 改以 broadcast_after_commit 驗證合理（305 不在 depends_on，且 305 自身有 test_check_in_parent_ws_payload）。打回項見 risk_notes：(1) 重驗時的 token / 帳號狀態檢查沒有任何測試；(2) ws 測試的 receive 沒有逾時，實作退化時測試會掛住並佔住共用 DB 鎖。殘留（不擋）：解除綁定以 guardian 封存驗證，未覆蓋 parent_account_id 清空的解除路徑（同一個 get_parent_student_ids 查詢，風險低）。"
+        "notes": "複審通過。2ea4199 補 test_ws_parent_revalidate_disabled（停用家長 → 4401 且 student / parent channel 的 subscriber_count 歸 0；恢復啟用但 token_version + 1 → 4401），整檔 receive 改走 _recv（另開執行緒、5 秒逾時 → pytest.fail、teardown 照常）。tdd.run 7 條全綠、collect-only 全選到（含新 red_case）；226 的 6 條只把 ws.receive_json() 換成 _recv(ws)，逐行比對斷言值完全不變。scratch 突變（外層 timeout 120）：拿掉家長 revalidate 的 ws_load_parent → test_ws_parent_revalidate_disabled 約 5.9 秒內失敗；拿掉員工 revalidate 的 ws_load_staff → test_ws_admin_revalidate_revoked 約 5.4 秒內失敗，皆不再掛住；失敗路徑跑完前後 staff_users / parent_accounts / students / guardians 筆數不變。lint / typecheck 乾淨。殘留（不擋）：解除綁定以 guardian 封存驗證，未覆蓋 parent_account_id 清空的解除路徑（同一個 get_parent_student_ids 查詢，風險低）。"
       }
     },
     {
