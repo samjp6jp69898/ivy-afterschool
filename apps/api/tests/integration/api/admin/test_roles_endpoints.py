@@ -1,5 +1,6 @@
 """BACKEND-081 / 084 / 085：roles 列表與刪除、permissions 目錄。
-BACKEND-082：POST /api/admin/roles。"""
+BACKEND-082：POST /api/admin/roles。
+BACKEND-083：PATCH /api/admin/roles/{role_id}。"""
 
 from __future__ import annotations
 
@@ -8,7 +9,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.permissions import PERMISSION_GROUPS, PERMISSION_LABELS, Permission
@@ -342,3 +343,135 @@ def test_admin_roles_create_409(
 def test_admin_roles_create_guard_registered(app: FastAPI) -> None:
     assert admin_routes_without_permission(app) == []
     assert "post" in app.openapi()["paths"]["/api/admin/roles"]
+
+
+# --- BACKEND-083：PATCH /api/admin/roles/{id} ---------------------------------------------------
+
+
+def _update_url(role_id: object) -> str:
+    return f"{_URL}/{role_id}"
+
+
+def _role(db_session: Session, code: str) -> Role:
+    return db_session.execute(select(Role).where(Role.code == code)).scalar_one()
+
+
+def test_admin_roles_update_success(
+    api_client: TestClient,
+    db_session: Session,
+    login_staff: Callable[[TestClient, StaffUser], None],
+) -> None:
+    admin = make_staff(db_session, role_code="admin")
+    db_session.commit()
+    login_staff(api_client, admin)
+    tutor = _role(db_session, "tutor")
+    original = list(tutor.permissions)
+    assert "leaves:write" not in original
+
+    resp = api_client.patch(
+        _update_url(tutor.id), json={"permissions": [*original, "leaves:write"]}
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == str(tutor.id)
+    assert "leaves:write" in body["permissions"]
+    assert body["permissions"] == sorted(body["permissions"])
+    assert body["is_system"] is True
+    # 已 commit：DB 與列表皆更新；audit 已寫
+    db_session.expire_all()
+    assert "leaves:write" in _role(db_session, "tutor").permissions
+    listed = next(r for r in api_client.get(_URL).json() if r["code"] == "tutor")
+    assert "leaves:write" in listed["permissions"]
+    log = db_session.execute(
+        select(AuditLog).where(
+            AuditLog.action == "role.update", AuditLog.entity_id == str(tutor.id)
+        )
+    ).scalar_one()
+    assert log.actor_id == admin.id
+    # 改名 + 清 description
+    renamed = api_client.patch(
+        _update_url(tutor.id), json={"name": "課輔教師", "description": None}
+    )
+    assert renamed.status_code == 200
+    assert (renamed.json()["name"], renamed.json()["description"]) == ("課輔教師", None)
+
+
+def test_admin_roles_update_422(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    role = make_role(db_session, code="patch_me", permissions=["pickup:read"])
+    client, _ = staff_client(permissions=["roles:write", "pickup:read"])
+
+    assert_error(client.patch(_update_url(role.id), json={}), 422, "validation_error")
+    assert_error(client.patch(_update_url("not-uuid"), json={"name": "x"}), 422, "validation_error")
+    assert_error(
+        client.patch(_update_url(role.id), json={"code": "renamed"}), 422, "validation_error"
+    )
+    assert_error(client.patch(_update_url(role.id), json={"name": None}), 422, "validation_error")
+    assert_error(
+        client.patch(_update_url(role.id), json={"permissions": ["pickup:fly"]}),
+        422,
+        "unknown_permission",
+    )
+
+
+def test_admin_roles_update_401(api_client: TestClient, assert_error: AssertError) -> None:
+    assert_error(api_client.patch(_update_url(uuid4()), json={"name": "x"}), 401, "unauthenticated")
+
+
+def test_admin_roles_update_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    role = make_role(db_session, code="patch_me", permissions=["pickup:read"])
+    reader, _ = staff_client(permissions=["roles:read"])
+    limited, _ = staff_client(permissions=["roles:write", "pickup:read"])
+
+    denied = reader.patch(_update_url(role.id), json={"name": "x"})
+    beyond = limited.patch(_update_url(role.id), json={"permissions": ["pickup:override"]})
+
+    assert_error(denied, 403, "permission_denied")
+    assert denied.json()["error"]["details"] == {"required": ["roles:write"]}
+    assert_error(beyond, 403, "cannot_grant_permissions")
+    db_session.expire_all()
+    assert role.permissions == ["pickup:read"]
+
+
+def test_admin_roles_update_409_admin(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    admin_role = _role(db_session, "admin")
+    client, _ = staff_client(permissions=["roles:write"])
+
+    assert_error(
+        client.patch(_update_url(admin_role.id), json={"name": "x"}), 409, "system_role_protected"
+    )
+    assert_error(client.patch(_update_url(uuid4()), json={"name": "x"}), 404, "role_not_found")
+    db_session.expire_all()
+    assert _role(db_session, "admin").name != "x"
+
+
+def test_admin_roles_update_409_last_manager(
+    api_client: TestClient,
+    db_session: Session,
+    login_staff: Callable[[TestClient, StaffUser], None],
+    assert_error: AssertError,
+) -> None:
+    """唯一的管理者把自己角色的 roles:write 拿掉 → 409，且變更未套用（request rollback）。"""
+    db_session.execute(update(StaffUser).values(is_active=False))
+    mgr = make_role(db_session, code="mgr", permissions=["roles:write", "staff:write"])
+    boss = make_staff(db_session)
+    boss.role = mgr
+    db_session.commit()
+    login_staff(api_client, boss)
+
+    resp = api_client.patch(_update_url(mgr.id), json={"permissions": ["staff:write"]})
+
+    assert_error(resp, 409, "last_role_manager")
+    db_session.expire_all()
+    assert _role(db_session, "mgr").permissions == ["roles:write", "staff:write"]
+
+
+def test_admin_roles_update_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "patch" in app.openapi()["paths"]["/api/admin/roles/{role_id}"]
