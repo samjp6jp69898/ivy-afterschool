@@ -597,39 +597,41 @@ def no_people_residue() -> Iterator[None]:
 
 
 @pytest.fixture
-def owner_cleanup_students() -> Iterator[list[UUID]]:
-    """committing 測試建立的學生以 owner 連線刪除；排在 committing_db_session 之前
-    （先 close session、truncate 請求與進度表，再刪學生）。"""
-    ids: list[UUID] = []
-    yield ids
+def owner_cleanup() -> Iterator[list[tuple[str, UUID]]]:
+    """committing 測試建立的學生 / 員工以 owner 連線刪除；排在 committing_db_session 之前
+    （先 close session、truncate 請求與進度表，再刪人）。員工一律用 seed 系統角色，不建自訂角色。"""
+    rows: list[tuple[str, UUID]] = []
+    yield rows
     with connect_owner() as conn:
         conn.execute("set lock_timeout = '5s'")
-        for student_id in ids:
-            conn.execute("delete from public.students where id = %s", (student_id,))
+        for table, row_id in rows:
+            conn.execute(f"delete from public.{table} where id = %s", (row_id,))  # noqa: S608
         conn.commit()
 
 
 @pytest.mark.cleanup_tables("pickup_requests", "homework_daily_progress")
 def test_sync_reply_locks_request_row(
     no_people_residue: None,
-    owner_cleanup_students: list[UUID],
+    owner_cleanup: list[tuple[str, UUID]],
     committing_db_session: Session,
     db_engine: Engine,
     clock: FakeClock,
 ) -> None:
     """先鎖請求列再判斷：即使員工回覆不需更新，同步期間其他交易的 FOR UPDATE 也要等它結束。"""
     ming = make_student(committing_db_session)
+    # 不用 factory 的 reply_source="staff"（會建自訂角色）：committing 測試不往 roles 寫列
+    teacher = make_staff(committing_db_session, role_code="tutor")
     request = make_pickup_request(
-        committing_db_session,
-        ming,
-        service_date=_TODAY,
-        status="acknowledged",
-        reply_source="staff",
-        reply_message="17:30 好",
+        committing_db_session, ming, service_date=_TODAY, status="acknowledged"
     )
+    request.reply_source = "staff"
+    request.reply_message = "17:30 好"
+    request.replied_by = teacher.id
+    request.replied_at = ARCHIVED_AT
     _progress(committing_db_session, ming.id, overall="in_progress", eta=time(18, 0))
     committing_db_session.commit()
-    owner_cleanup_students.append(ming.id)
+    # 依 FK 順序：請求表由 cleanup_tables 先清，再刪學生與員工
+    owner_cleanup.extend([("students", ming.id), ("staff_users", teacher.id)])
     lock_sql = text("select id from public.pickup_requests where id = :id for update nowait")
 
     s1 = Session(bind=db_engine)
