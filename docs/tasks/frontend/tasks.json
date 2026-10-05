@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 110,
-  "last_updated": "2026-10-05T05:43:19Z",
+  "version": 111,
+  "last_updated": "2026-10-05T05:44:26Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -431,7 +431,7 @@
       "granularity_unit": "store",
       "target_path": "apps/web/src/stores/auth.ts",
       "source_ref": "FE:src/utils/auth.ts::setUserInfo",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-021",
@@ -458,9 +458,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "7 條 red_case 皆有對應測試且斷言具體（status / user / hasPermission 真偽、401 → anonymous 且 user null、併發與已還原後 history.get 恰 1、login 成功與 401 invalid_credentials 後仍 anonymous、logout 500 仍 reset 且 url、mustChangePassword 由 true 變 false、hasAnyPermission 真偽），另補 network error 一條；實跑 tdd.run 8/8 綠、web-lint 乾淨；109e229(test) 先於 091273e(impl)。實作後改動的是補充測試「restore records network error」（不在 red_cases）：原斷言「restoreError 不是 ApiError」與 FRONTEND-001 正規化（無 response → ApiError(0, network_error)）相矛盾，改為 toBeInstanceOf(ApiError) 且 code === network_error，較原本更具體，未放寬。restore 以 isApiError && status 401 區分：401 → anonymous、restoreError null；其他（含 status 0 network_error / timeout、5xx）→ anonymous 並記 restoreError，符合 description；併發共用 promise、非 unknown 直接返回；setUser 清 restoreError；logout 失敗也 reset；changePassword 以回傳 user 取代。殘留：restore 進行中若先 login 成功，restore 隨後失敗會把狀態 reset 回 anonymous（實際流程 restore 在路由守衛完成後才會顯示登入頁，觀測不到）。"
       }
     },
     {
@@ -2531,7 +2531,7 @@
       "granularity_unit": "store",
       "target_path": "apps/web/src/stores/lookups.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-080",
@@ -2556,9 +2556,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "5 條 red_case 皆有對應測試且斷言具體（併發 + 再呼叫請求數 1、invalidate 後請求數 2、classOptions(115) 深等於與長度、schoolOptions label 序、500 後 examTypesLoaded false 且再次請求），另 3 條補充（多種類各帶正確 query：classes {include_archived:false}、exam-types {active_only:true}、班級依 academic_year desc 再 sort_order、in-flight invalidate）；實跑 tdd.run 8/8 綠、web-lint 乾淨；c06426a(test) 先於 a062e8b(impl)。generation 防護合理：invalidate 遞增 generation 並清 pending / loaded，在途請求的舊結果不寫回、不把已 invalidate 種類標回已載入，避免異動後舊資料覆蓋新資料；失敗時 pending 於 finally 清除、loaded 維持 false 並 rethrow。殘留：補充測試「ignores a load invalidated in flight」未真正覆蓋 generation 防護——review-r8-fe 突變（拿掉 gen 比對）後 8/8 仍綠，因 mock 依序回應、新請求較晚寫回；能區分的情境是舊請求晚於新請求回應（舊資料覆蓋新資料）或 invalidate 後不再 ensure（舊請求把 loaded 標回 true），可在之後補測試。"
       }
     },
     {
