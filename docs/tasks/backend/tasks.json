@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 378,
-  "last_updated": "2026-10-05T05:55:08Z",
+  "version": 379,
+  "last_updated": "2026-10-05T05:58:56Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5668,7 +5668,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-154",
@@ -5693,9 +5693,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 6 passed（含 route audit）；測試 2b241a1 先於實作 9d25c14。multipart file + students:write → upload_photo → commit；成功案例 expire_all 後重讀 photo_path 並比對 Storage 物件（review 拿掉 commit 後轉紅）；缺 file 422、PDF 415、uuid4 404、401、students:read 403。lint / typecheck 乾淨。"
       }
     },
     {
@@ -8403,7 +8403,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/attendance.py",
       "source_ref": "BE:api/parent_portal/attendance.py::get_monthly_attendance",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-314",
@@ -8430,9 +8430,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed；測試 2b241a1 先於實作 9d25c14。get_owned_student（他人小孩與 uuid4() 同一 404 body）；month 以 Query(pattern=MONTH_PATTERN) 驗證，2026-13 / 非 uuid 422；省略時取 clock.today() 所在月；401 涵蓋無 cookie 與員工 cookie。移除的「未知 query 參數 422」測試不在 red_cases，且該 GET 無 query model，與其他家長端 GET 行為一致，合理。lint / typecheck 乾淨。"
       }
     },
     {
@@ -11771,7 +11771,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/pickup.py::create_pickup_person",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-418",
@@ -11782,7 +11782,7 @@
         "BACKEND-013"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "[review-r8-b] 測試不穩定：test_parent_pickup_person_create_success 末段斷言 [p['name'] for p in GET 列表] == ['李阿姨', '王叔叔']，但兩次 POST 在測試的同一個外層交易內（db_session 以 create_savepoint 模式共用連線），created_at = now() 相同，list_pickup_persons 依 (created_at, id) 排序時由隨機 uuid 決定先後。review 連跑 6 次失敗 4 次、整檔 4 輪失敗 2 次，tdd.run 約一半機率紅。修法：該斷言改為不依賴順序（比對集合），或兩次 POST 之間推進 created_at；實作本身（multipart 422 envelope、照片驗證、IDOR、commit）review 已核對無誤。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/parent/test_pickup_endpoints.py",
@@ -11800,9 +11800,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代（業務上的 403 pickup_not_allowed 另測）。"
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r8-b",
-        "notes": "成功案例測試依賴同交易內 created_at 相同時的 uuid 排序，約半數失敗，詳見 risk_notes。實作的 multipart 422、照片驗證、IDOR、commit（拿掉 commit 會轉紅）皆已核對。"
+        "notes": "複審（只核對排序不穩）：f362a60 把末段列表斷言改為比對集合（同交易內 created_at 相同、順序由 uuid 決定），其餘斷言未動。review 連跑 tdd.run 10 次全綠（修正前 6 次失敗 4 次）。實作的 multipart 422 envelope、照片驗證、IDOR、commit 先前已核對。"
       }
     },
     {
@@ -14219,7 +14219,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/children.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-525",
@@ -14247,9 +14247,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed；測試 2b241a1 先於實作 9d25c14。/children/{student_id}/today 走 get_owned_student → BACKEND-525，他人小孩與 uuid4() 同一 404、封存 404、非 uuid 422、401 含員工 cookie。lint / typecheck 乾淨。"
       }
     },
     {
@@ -14334,7 +14334,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-131",
@@ -14348,7 +14348,7 @@
         "BACKEND-002"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "[review-r8-b] 未驗收：description 第 3～5 步的推播沒有任何測試涵蓋。review 在 scratchpad 複本分別把 attendance.bulk_updated 廣播、pickup.authorization_updated 廣播、逐筆 publish_request_change 拿掉，test_close_out_ 六條仍全綠。這三項若壞掉，後台接送 / 出勤畫面與家長端會停在舊狀態，現有測試看不出來。修法：在既有 red_case 補斷言（參照 BACKEND-374 / 206 測試記錄 broadcast 的寫法）——commit 後 admin:attendance 收到 attendance.bulk_updated 且 dates == 刪除的日期、admin:pickup 收到被取消授權的 pickup.authorization_updated 與被取消請求的推播；test_close_out_rollback_with_caller 補「rollback 後不推任何訊息」；拿掉任一推播要有測試轉紅。（順帶建議，非打回條件：from app.services.pickup.authorizations import _base_fields 依賴 r8c 模組的私有函式，宜請 r8c 提供公開的 PickupAuthorizationOut 組裝函式後改用。）",
+      "risk_notes": "close_out 以 alias 匯入 app.services.pickup.authorizations 的私有 _base_fields 組授權推播資料；pickup 模組重構時需同步，宜改由該模組提供公開的 PickupAuthorizationOut 組裝函式。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_student_service.py",
@@ -14367,9 +14367,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r8-b",
-        "notes": "推播（attendance.bulk_updated、pickup.authorization_updated、publish_request_change）未被測試涵蓋，詳見 risk_notes。其餘：tdd.run 6 passed、請假 / 出勤 / 接送 / 授權 / 稽核行為與同交易 rollback 已核對，測試 485a6fd 先於實作 8b35443；跑前後比對 public 各表列數無殘列；lint / typecheck 乾淨。"
+        "notes": "複審（只核對推播打回項）：d917523 以 monkeypatch publish_threadsafe 記錄 commit 後實際送出的訊息，pickup_requests / authorizations / attendance 三條 red_case 各斷言 commit 前為空、commit 後的 channel、type 與 data（request_updated 另驗 student channel 家長版；bulk_updated 驗 dates 且不送 student channel；授權不含 code_hash），rollback 案例斷言 rollback 後再 commit 仍為空。review 在 scratchpad 複本分別拿掉 attendance.bulk_updated、pickup.authorization_updated、publish_request_change，各自對應的測試轉紅。tdd.run 6 passed、無殘列、lint / typecheck 乾淨。殘留：仍以 alias 匯入 app.services.pickup.authorizations 的私有 _base_fields（目前行為正確，r8c 改名時 import 會直接失敗）。"
       }
     },
     {
