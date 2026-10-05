@@ -4,6 +4,7 @@
 - BACKEND-420：create_authorization（產生接送碼，明碼只回傳一次）。
 - BACKEND-424：load_verifiable_authorization（核銷前鎖定並檢查）。
 - BACKEND-523：regenerate_code（家長重新產生接送碼）。
+- BACKEND-425：complete_via_authorization（核銷後完成授權與接送請求）。
 """
 
 import json
@@ -20,16 +21,20 @@ from sqlalchemy import Engine, func, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-from app.api.deps import CurrentParent
+from app.api.deps import CurrentParent, CurrentStaff
 from app.core.config import get_settings
 from app.core.crypto import derive_key
 from app.core.errors import AppError
 from app.core.request_meta import RequestMeta
 from app.core.storage import StorageError, build_object_path
 from app.core.tx_hooks import install_tx_hooks
+from app.models.account import StaffUser
+from app.models.attendance import StudentAttendance
 from app.models.audit import AuditLog
+from app.models.notifications import Notification
 from app.models.parents import ParentAccount
-from app.models.pickup import PickupAuthorization
+from app.models.pickup import PickupAuthorization, PickupRequest
+from app.notifications import outbox_jobs
 from app.realtime import publish as publish_module
 from app.realtime.publish import admin_topic_channel
 from app.schemas.pickup import (
@@ -39,6 +44,7 @@ from app.schemas.pickup import (
 )
 from app.services.pickup import authorizations as authorizations_module
 from app.services.pickup.authorizations import (
+    complete_via_authorization,
     create_authorization,
     list_authorizations_for_staff,
     list_child_authorizations,
@@ -49,11 +55,13 @@ from app.services.pickup.codes import pickup_code_matches
 from app.services.settings_service import clear_settings_cache
 from tests.integration.db.conftest import connect_owner
 from tests.support.factories import (
+    make_attendance,
     make_class,
     make_guardian,
     make_parent,
     make_pickup_authorization,
     make_pickup_person,
+    make_pickup_request,
     make_staff,
     make_student,
 )
@@ -745,3 +753,158 @@ def test_regenerate_code_audit(db_session: Session) -> None:
     new_hash = _fresh(db_session, auth.id).code_hash
     for secret in (out.code, "123456", old_hash, new_hash):
         assert secret not in dumped
+
+
+# --- BACKEND-425 complete_via_authorization ---
+
+
+@pytest.fixture
+def kick_off() -> Iterator[None]:
+    """commit 後的 outbox kick 不實際派送（避免背景執行緒連 DB / LINE）。"""
+    outbox_jobs.set_kick_mode("off")
+    yield
+    outbox_jobs.set_kick_mode("thread")
+
+
+def _current_staff(staff: StaffUser) -> CurrentStaff:
+    return CurrentStaff(
+        id=staff.id,
+        username=staff.username,
+        display_name=staff.display_name,
+        role_id=staff.role.id,
+        role_code=staff.role.code,
+        role_name=staff.role.name,
+        permissions=frozenset(staff.role.permissions),
+        must_change_password=staff.must_change_password,
+        token_version=staff.token_version,
+    )
+
+
+def _completed_requests(db: Session, student_id: UUID) -> list[PickupRequest]:
+    return list(
+        db.execute(
+            select(PickupRequest)
+            .where(PickupRequest.student_id == student_id)
+            .execution_options(populate_existing=True)
+        ).scalars()
+    )
+
+
+def test_complete_via_authorization_closes_open_request(
+    db_session: Session, kick_off: None, published: list[Call]
+) -> None:
+    clock = FakeClock(datetime(2026, 9, 10, 9, 0, tzinfo=UTC))  # 台北 17:00
+    ming = make_student(db_session)
+    _parent_of(db_session, ming)
+    staff = make_staff(db_session, permissions=["pickup:operate"], display_name="林老師")
+    make_attendance(db_session, ming, service_date=_TODAY, status="present")
+    request = make_pickup_request(
+        db_session, ming, service_date=_TODAY, status="arrived", reply_source="staff"
+    )
+    auth = make_pickup_authorization(db_session, ming, service_date=_TODAY, proxy_name="李阿姨")
+    locked = load_verifiable_authorization(db_session, auth.id, clock=clock)
+
+    out = complete_via_authorization(
+        db_session, locked, "code", actor=_current_staff(staff), clock=clock
+    )
+
+    row = _fresh(db_session, auth.id)
+    assert (row.status, row.verification_method, row.verified_by, row.verified_at) == (
+        "completed",
+        "code",
+        staff.id,
+        clock.now(),
+    )
+    [completed] = _completed_requests(db_session, ming.id)
+    assert completed.id == request.id
+    assert (
+        completed.status,
+        completed.completion_method,
+        completed.picked_up_by_authorization_id,
+    ) == (
+        "completed",
+        "code",
+        auth.id,
+    )
+    assert (completed.completed_by, completed.completed_at) == (staff.id, clock.now())
+    attendance = db_session.execute(
+        select(StudentAttendance)
+        .where(StudentAttendance.student_id == ming.id)
+        .execution_options(populate_existing=True)
+    ).scalar_one()
+    assert (attendance.status, attendance.check_out_source) == ("left", "pickup")
+    assert (out.authorization.id, out.authorization.status, out.authorization.verified_by_name) == (
+        auth.id,
+        "completed",
+        "林老師",
+    )
+    assert (out.request.id, out.request.status, out.request.picked_up_by_name) == (
+        request.id,
+        "completed",
+        "李阿姨",
+    )
+    db_session.commit()
+    pushed = {m["type"] for ch, m in published if ch == [admin_topic_channel("pickup")]}
+    assert pushed == {"pickup.request_updated", "pickup.authorization_updated"}
+
+
+def test_complete_via_authorization_creates_proxy_request(
+    db_session: Session, kick_off: None
+) -> None:
+    clock = FakeClock(datetime(2026, 9, 10, 9, 0, tzinfo=UTC))
+    ming = make_student(db_session)
+    staff = make_staff(db_session, permissions=["pickup:operate", "pickup:override"])
+    # 今天只有終態請求：不算進行中
+    old = make_pickup_request(db_session, ming, service_date=_TODAY, status="cancelled")
+    auth = make_pickup_authorization(db_session, ming, service_date=_TODAY, code_attempts=5)
+    locked = load_verifiable_authorization(db_session, auth.id, clock=clock, allow_locked=True)
+
+    out = complete_via_authorization(
+        db_session, locked, "override", actor=_current_staff(staff), clock=clock
+    )
+
+    created = [r for r in _completed_requests(db_session, ming.id) if r.id != old.id]
+    assert len(created) == 1
+    new = created[0]
+    assert (new.source, new.status, new.requested_by_type, new.requested_by_id) == (
+        "proxy",
+        "completed",
+        "staff",
+        staff.id,
+    )
+    assert (
+        new.completion_method,
+        new.picked_up_by_authorization_id,
+        new.homework_status_at_request,
+    ) == (
+        "override",
+        auth.id,
+        "not_started",
+    )
+    assert new.arrived_at == new.completed_at == clock.now()
+    assert out.request.id == new.id
+
+
+def test_complete_via_authorization_notifies(db_session: Session, kick_off: None) -> None:
+    clock = FakeClock(datetime(2026, 9, 10, 9, 0, tzinfo=UTC))
+    ming = make_student(db_session)
+    parent = _parent_of(db_session, ming)
+    staff = make_staff(db_session, permissions=["pickup:operate"])
+    auth = make_pickup_authorization(db_session, ming, service_date=_TODAY, proxy_name="李阿姨")
+    locked = load_verifiable_authorization(db_session, auth.id, clock=clock)
+
+    out = complete_via_authorization(
+        db_session, locked, "visual_match", actor=_current_staff(staff), clock=clock
+    )
+
+    [row] = db_session.execute(
+        select(Notification).where(
+            Notification.event == "pickup.completed",
+            Notification.payload["request_id"].astext == str(out.request.id),
+        )
+    ).scalars()
+    assert (row.recipient_id, row.payload["picked_up_by"], row.payload["time"]) == (
+        parent.id,
+        "代理人 李阿姨",
+        "17:00",
+    )

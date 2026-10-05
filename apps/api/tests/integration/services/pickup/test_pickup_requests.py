@@ -4,8 +4,8 @@
 - BACKEND-415：get_roster（接送 POS 學生卡）。
 - BACKEND-416：list_today_requests_for_parent（家長端今日請求）。
 - BACKEND-413：sync_open_request_reply（作業完成或 ETA 變動時同步回覆）。
-- BACKEND-406 / 407 / 408 / 409 / 411：create_request、reply_request、acknowledge_request、
-  mark_arrived、cancel_request（狀態轉換、通知、推播）。
+- BACKEND-406 / 407 / 408 / 409 / 410 / 411：create_request、reply_request、acknowledge_request、
+  mark_arrived、complete_request、cancel_request（狀態轉換、通知、推播）。
 
 營運資料以 db_session 建立、測試結束 rollback；計數類斷言以班級或本測試建立的 id 限縮範圍。
 """
@@ -26,8 +26,11 @@ from app.core.clock import combine_taipei
 from app.core.config import get_settings
 from app.core.crypto import derive_key
 from app.core.errors import AppError
+from app.core.request_meta import RequestMeta
 from app.core.tx_hooks import install_tx_hooks
 from app.models.account import StaffUser
+from app.models.attendance import StudentAttendance
+from app.models.audit import AuditLog
 from app.models.homework import HomeworkDailyProgress
 from app.models.notifications import Notification, NotificationOutbox
 from app.models.parents import ParentAccount
@@ -39,6 +42,7 @@ from app.realtime.publish import admin_topic_channel, staff_channel
 from app.schemas.pickup import (
     ParentPickupRequestCreateIn,
     PickupCancelIn,
+    PickupCompleteIn,
     PickupQueueQuery,
     PickupReplyIn,
     RosterQuery,
@@ -50,6 +54,7 @@ from app.services.pickup.auto_reply import DONE_REPLY_TEXT
 from app.services.pickup.requests import (
     acknowledge_request,
     cancel_request,
+    complete_request,
     create_request,
     get_queue,
     get_roster,
@@ -1570,3 +1575,256 @@ def test_reply_pickup_request_lock_order_no_deadlock(
     final = _reload_request(committing_db_session, request.id)
     assert (final.reply_source, final.reply_ready_eta) == ("staff", time(18, 0))
     assert _progress_of(committing_db_session, ming.id).ready_eta == time(18, 0)
+
+
+# --- BACKEND-410 complete_request ---
+
+_META = RequestMeta(ip="203.0.113.5", user_agent="pytest", request_id=None)
+
+
+def _attendance_of(db: Session, student_id: UUID) -> StudentAttendance:
+    return db.execute(
+        select(StudentAttendance)
+        .where(StudentAttendance.student_id == student_id, StudentAttendance.service_date == _TODAY)
+        .execution_options(populate_existing=True)
+    ).scalar_one()
+
+
+def test_complete_pickup_request_guardian(
+    db_session: Session, clock: FakeClock, operator: StaffUser, kick_off: None
+) -> None:
+    ming, mom = _family(db_session)
+    dad = make_guardian(db_session, ming, name="王爸爸", relation="father")
+    make_attendance(db_session, ming, service_date=_TODAY, status="present")
+    request = make_pickup_request(
+        db_session,
+        ming,
+        service_date=_TODAY,
+        status="arrived",
+        reply_source="staff",
+        requested_by=mom.id,
+    )
+
+    out = complete_request(
+        db_session,
+        request.id,
+        PickupCompleteIn(method="guardian", guardian_id=dad.id),
+        actor=_current_staff(operator),
+        meta=_META,
+        clock=clock,
+    )
+
+    assert (out.status, out.completion_method, out.picked_up_by_guardian_id) == (
+        "completed",
+        "guardian",
+        dad.id,
+    )
+    assert (out.completed_at, out.completed_by) == (_CLOCK_NOW, operator.id)
+    attendance = _attendance_of(db_session, ming.id)
+    assert (attendance.status, attendance.check_out_source, attendance.check_out_at) == (
+        "left",
+        "pickup",
+        _CLOCK_NOW,
+    )
+    [row] = _events(db_session, "pickup.completed", request.id)
+    assert (row.recipient_id, row.payload["picked_up_by"], row.payload["time"]) == (
+        mom.id,
+        "王爸爸",
+        "16:00",
+    )
+
+
+def test_complete_pickup_request_from_pending(
+    db_session: Session, clock: FakeClock, operator: StaffUser, kick_off: None
+) -> None:
+    ming, _ = _family(db_session)
+    dad = make_guardian(db_session, ming, name="王爸爸")
+    request = make_pickup_request(db_session, ming, service_date=_TODAY)
+
+    out = complete_request(
+        db_session,
+        request.id,
+        PickupCompleteIn(method="guardian", guardian_id=dad.id),
+        actor=_current_staff(operator),
+        meta=_META,
+        clock=clock,
+    )
+
+    assert out.status == "completed"
+    assert out.arrived_at == out.completed_at == _CLOCK_NOW
+
+
+def test_complete_pickup_request_guardian_checks(
+    db_session: Session, clock: FakeClock, operator: StaffUser, kick_off: None
+) -> None:
+    ming, _ = _family(db_session)
+    hua, _ = _family(db_session, name="陳小華")
+    hua_guardian = make_guardian(db_session, hua, name="陳媽媽")
+    no_pickup = make_guardian(db_session, ming, name="王奶奶", can_pickup=False)
+    archived = make_guardian(db_session, ming, name="王叔叔", archived=True)
+    request = make_pickup_request(db_session, ming, service_date=_TODAY)
+    actor = _current_staff(operator)
+
+    def complete(guardian_id: UUID) -> pytest.ExceptionInfo[AppError]:
+        with pytest.raises(AppError) as exc:
+            complete_request(
+                db_session,
+                request.id,
+                PickupCompleteIn(method="guardian", guardian_id=guardian_id),
+                actor=actor,
+                meta=_META,
+                clock=clock,
+            )
+        return exc
+
+    for guardian_id in (hua_guardian.id, archived.id, uuid4()):
+        exc = complete(guardian_id)
+        assert (exc.value.status, exc.value.code) == (422, "invalid_guardian")
+    blocked = complete(no_pickup.id)
+    assert (blocked.value.status, blocked.value.code) == (409, "guardian_cannot_pickup")
+    assert _reload_request(db_session, request.id).status == "pending"
+    with pytest.raises(AppError) as missing:
+        complete_request(
+            db_session,
+            uuid4(),
+            PickupCompleteIn(method="override", note="x"),
+            actor=actor,
+            meta=_META,
+            clock=clock,
+        )
+    assert (missing.value.status, missing.value.code) == (404, "pickup_request_not_found")
+
+
+def test_complete_pickup_request_override(
+    db_session: Session, clock: FakeClock, operator: StaffUser, kick_off: None
+) -> None:
+    ming, mom = _family(db_session)
+    dad = make_guardian(db_session, ming, name="王爸爸")
+    request = make_pickup_request(
+        db_session,
+        ming,
+        service_date=_TODAY,
+        status="acknowledged",
+        reply_source="staff",
+        requested_by=mom.id,
+    )
+    supervisor = make_staff(db_session, permissions=["pickup:operate", "pickup:override"])
+    data = PickupCompleteIn(method="override", note="家長來電確認由鄰居接", guardian_id=dad.id)
+
+    with pytest.raises(AppError) as forbidden:
+        complete_request(
+            db_session, request.id, data, actor=_current_staff(operator), meta=_META, clock=clock
+        )
+    assert (forbidden.value.status, forbidden.value.code) == (403, "permission_denied")
+
+    out = complete_request(
+        db_session, request.id, data, actor=_current_staff(supervisor), meta=_META, clock=clock
+    )
+
+    assert (out.status, out.completion_method) == ("completed", "override")
+    # override 忽略 guardian_id：不寫入未經驗證的監護人
+    assert out.picked_up_by_guardian_id is None
+    [log] = db_session.execute(
+        select(AuditLog).where(
+            AuditLog.action == "pickup.override_complete", AuditLog.entity_id == str(request.id)
+        )
+    ).scalars()
+    assert (log.entity_type, log.actor_id) == ("pickup_request", supervisor.id)
+    assert log.before == {"status": "acknowledged"}
+    assert log.after == {"status": "completed", "note": "家長來電確認由鄰居接"}
+    [row] = _events(db_session, "pickup.completed", request.id)
+    assert row.payload["picked_up_by"] == "老師確認交付"
+
+
+def test_complete_pickup_request_terminal(
+    db_session: Session, clock: FakeClock, operator: StaffUser, kick_off: None
+) -> None:
+    ming, _ = _family(db_session)
+    dad = make_guardian(db_session, ming, name="王爸爸")
+    cancelled = make_pickup_request(db_session, ming, service_date=_TODAY, status="cancelled")
+
+    with pytest.raises(AppError) as exc:
+        complete_request(
+            db_session,
+            cancelled.id,
+            PickupCompleteIn(method="guardian", guardian_id=dad.id),
+            actor=_current_staff(operator),
+            meta=_META,
+            clock=clock,
+        )
+
+    assert (exc.value.status, exc.value.code) == (409, "invalid_pickup_status")
+    assert _events(db_session, "pickup.completed", cancelled.id) == []
+
+
+@pytest.mark.cleanup_tables(
+    "pickup_requests", "student_attendances", "notification_outbox", "notifications"
+)
+def test_complete_pickup_request_concurrent(
+    no_people_residue: None,
+    owner_cleanup: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    clock: FakeClock,
+    kick_off: None,
+) -> None:
+    ming = make_student(committing_db_session)
+    parent = make_parent(committing_db_session)
+    guardian = make_guardian(committing_db_session, ming, parent=parent)
+    make_attendance(committing_db_session, ming, service_date=_TODAY, status="present")
+    request = make_pickup_request(
+        committing_db_session, ming, service_date=_TODAY, status="arrived", reply_source="auto"
+    )
+    first = make_staff(committing_db_session, role_code="tutor")
+    second = make_staff(committing_db_session, role_code="tutor")
+    committing_db_session.commit()
+    owner_cleanup.extend(
+        [
+            ("guardians", guardian.id),
+            ("students", ming.id),
+            ("parent_accounts", parent.id),
+            ("staff_users", first.id),
+            ("staff_users", second.id),
+        ]
+    )
+    data = PickupCompleteIn(method="guardian", guardian_id=guardian.id)
+
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    s2_done = threading.Event()
+    outcome: dict[str, Any] = {}
+
+    def worker() -> None:
+        try:
+            outcome["s2"] = complete_request(
+                s2, request.id, data, actor=_current_staff(second), meta=_META, clock=clock
+            ).status
+            s2.commit()
+        except BaseException as exc:
+            outcome["s2"] = exc
+            s2.rollback()
+        finally:
+            s2_done.set()
+
+    thread = threading.Thread(target=worker)
+    try:
+        outcome["s1"] = complete_request(
+            s1, request.id, data, actor=_current_staff(first), meta=_META, clock=clock
+        ).status
+        thread.start()
+        assert not s2_done.wait(timeout=0.5)  # s1 尚未 commit：s2 的條件式 UPDATE 等待
+        s1.commit()
+        thread.join(timeout=10)
+    finally:
+        s1.close()
+        if thread.is_alive():
+            thread.join(timeout=10)
+        s2.close()
+
+    assert outcome["s1"] == "completed"
+    error = outcome["s2"]
+    assert isinstance(error, AppError)
+    assert (error.status, error.code) == (409, "invalid_pickup_status")
+    assert len(_events(committing_db_session, "pickup.completed", request.id)) == 1
+    final = _reload_request(committing_db_session, request.id)
+    assert final.completed_by == first.id
