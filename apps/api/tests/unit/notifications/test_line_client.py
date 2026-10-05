@@ -1,4 +1,5 @@
 """BACKEND-207：app/notifications/channels/line.py（LINE Messaging push 用戶端）。
+BACKEND-543：close() 與 context manager。
 
 一律以 httpx.MockTransport 模擬 LINE，不連外；build_line_client 以 monkeypatch 的 get_setting 取代
 DB 讀取。
@@ -171,3 +172,58 @@ def test_line_client_build_without_token(monkeypatch: pytest.MonkeyPatch) -> Non
     # 結構相容 Protocol：靜態型別檢查把關，這裡只確認方法存在
     typed: LineMessagingClient = client
     assert callable(typed.push_text)
+
+
+# --- BACKEND-543：close() 與 context manager -----------------------------------------------------
+
+
+def _http_client(recorder: _Recorder) -> httpx.Client:
+    return httpx.Client(transport=httpx.MockTransport(recorder))
+
+
+def test_line_client_close_closes_http_client() -> None:
+    recorder = _Recorder(_json(200, {}))
+    http_client = _http_client(recorder)
+    client = HttpLineMessagingClient(_TOKEN, http_client=http_client)
+    # 注入的 client 照常可推播（Authorization 由本類別補上）
+    assert client.push_text(to=_TO, text="hi", retry_key=_RETRY_KEY).ok is True
+    assert recorder.requests[0].headers["authorization"] == "Bearer tok-1"
+    assert http_client.is_closed is False
+
+    client.close()
+
+    assert http_client.is_closed is True
+    client.close()  # 冪等
+    assert http_client.is_closed is True
+
+
+def test_line_client_context_manager() -> None:
+    http_client = _http_client(_Recorder(_json(200, {})))
+    outer = HttpLineMessagingClient(_TOKEN, http_client=http_client)
+
+    with outer as c:
+        assert c is outer
+        assert http_client.is_closed is False
+        assert c.push_text(to=_TO, text="hi", retry_key=_RETRY_KEY).ok is True
+
+    assert http_client.is_closed is True
+
+
+def test_line_client_push_after_close_raises() -> None:
+    client = _client(_Recorder(_json(200, {})))
+    client.close()
+
+    with pytest.raises(RuntimeError) as exc:
+        client.push_text(to=_TO, text="hi", retry_key=_RETRY_KEY)
+
+    assert _TOKEN not in str(exc.value)
+    assert "關閉" in str(exc.value)
+
+
+def test_line_client_http_client_and_transport_exclusive() -> None:
+    http_client = _http_client(_Recorder(_json(200, {})))
+
+    with pytest.raises(ValueError, match="http_client"):
+        HttpLineMessagingClient(
+            _TOKEN, transport=httpx.MockTransport(_json(200, {})), http_client=http_client
+        )
