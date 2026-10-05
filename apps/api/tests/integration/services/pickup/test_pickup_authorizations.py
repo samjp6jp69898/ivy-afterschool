@@ -1,22 +1,50 @@
-"""BACKEND-421 / 423：app/services/pickup/authorizations.py（家長端列表、後台核驗清單）。"""
+"""app/services/pickup/authorizations.py。
 
+- BACKEND-421 / 423：家長端列表、後台核驗清單。
+- BACKEND-420：create_authorization（產生接送碼，明碼只回傳一次）。
+- BACKEND-424：load_verifiable_authorization（核銷前鎖定並檢查）。
+"""
+
+import logging
+import re
+import threading
 from collections.abc import Iterator
 from datetime import UTC, date, datetime, timedelta
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy import Engine, func, select, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+from app.api.deps import CurrentParent
 from app.core.config import get_settings
 from app.core.crypto import derive_key
+from app.core.errors import AppError
 from app.core.storage import StorageError, build_object_path
-from app.schemas.pickup import StaffAuthorizationListQuery, StaffAuthorizationOut
+from app.core.tx_hooks import install_tx_hooks
+from app.models.parents import ParentAccount
+from app.models.pickup import PickupAuthorization
+from app.realtime import publish as publish_module
+from app.realtime.publish import admin_topic_channel
+from app.schemas.pickup import (
+    PickupAuthorizationCreateIn,
+    StaffAuthorizationListQuery,
+    StaffAuthorizationOut,
+)
 from app.services.pickup.authorizations import (
+    create_authorization,
     list_authorizations_for_staff,
     list_child_authorizations,
+    load_verifiable_authorization,
 )
+from app.services.pickup.codes import pickup_code_matches
+from app.services.settings_service import clear_settings_cache
+from tests.integration.db.conftest import connect_owner
 from tests.support.factories import (
     make_class,
+    make_parent,
     make_pickup_authorization,
     make_pickup_person,
     make_staff,
@@ -242,3 +270,335 @@ def test_staff_authorizations_no_hash(db_session: Session) -> None:
     dumped = rows[0].model_dump()
     assert "code_hash" not in dumped
     assert dumped["code_last4"] == "3456"
+
+
+# --- BACKEND-420 create_authorization ---
+
+Call = tuple[list[str], dict[str, Any]]
+
+
+@pytest.fixture
+def fresh_settings() -> Iterator[None]:
+    clear_settings_cache()
+    yield
+    clear_settings_cache()
+
+
+@pytest.fixture
+def published(monkeypatch: pytest.MonkeyPatch) -> list[Call]:
+    install_tx_hooks()
+    calls: list[Call] = []
+
+    def record(channels: list[str], message: dict[str, Any]) -> None:
+        calls.append((list(channels), dict(message)))
+
+    monkeypatch.setattr(publish_module, "publish_threadsafe", record)
+    return calls
+
+
+def _current_parent(parent: ParentAccount) -> CurrentParent:
+    return CurrentParent(
+        id=parent.id,
+        line_user_id=parent.line_user_id,
+        display_name=parent.display_name,
+        token_version=parent.token_version,
+    )
+
+
+def _set_authorization_settings(session: Session, **values: int) -> None:
+    for key, value in values.items():
+        session.execute(
+            text(
+                "update public.system_settings "
+                "set value = jsonb_set(value, cast(:path as text[]), to_jsonb(cast(:v as int))) "
+                "where key = 'pickup.authorization'"
+            ),
+            {"path": "{" + key + "}", "v": value},
+        )
+    clear_settings_cache()
+
+
+def _proxy(service_date: date) -> PickupAuthorizationCreateIn:
+    return PickupAuthorizationCreateIn(
+        service_date=service_date, proxy_name="李阿姨", proxy_phone="0912-000-101"
+    )
+
+
+def test_create_authorization_proxy(
+    db_session: Session, fresh_settings: None, published: list[Call]
+) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    parent = make_parent(db_session)
+
+    out = create_authorization(
+        db_session, ming.id, _proxy(_TODAY), parent=_current_parent(parent), clock=clock
+    )
+
+    assert re.fullmatch(r"\d{6}", out.code)
+    auth = out.authorization
+    assert auth.code_last4 == out.code[-4:]
+    assert (auth.status, auth.effective_status) == ("active", "active")
+    assert (auth.student_id, auth.service_date) == (ming.id, _TODAY)
+    assert (auth.proxy_name, auth.proxy_phone, auth.pickup_person_id) == (
+        "李阿姨",
+        "0912-000-101",
+        None,
+    )
+    row = db_session.get(PickupAuthorization, auth.id)
+    assert row is not None
+    assert pickup_code_matches(out.code, row.code_hash) is True
+    assert (row.created_by_parent_id, row.code_attempts) == (parent.id, 0)
+
+    db_session.commit()
+    [message] = [m for channels, m in published if channels == [admin_topic_channel("pickup")]]
+    assert message["type"] == "pickup.authorization_updated"
+    assert message["data"]["id"] == str(auth.id)
+    assert message["data"]["code_last4"] == out.code[-4:]
+    assert out.code not in str(message)
+    assert "code_hash" not in message["data"]
+
+
+def test_create_authorization_from_person(db_session: Session, fresh_settings: None) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    person = make_pickup_person(db_session, ming, name="李阿姨", phone="0912-000-202")
+    data = PickupAuthorizationCreateIn(
+        service_date=_TODAY + timedelta(days=1), pickup_person_id=person.id
+    )
+
+    out = create_authorization(
+        db_session, ming.id, data, parent=_current_parent(make_parent(db_session)), clock=clock
+    )
+
+    assert out.authorization.pickup_person_id == person.id
+    assert (out.authorization.proxy_name, out.authorization.proxy_phone) == (
+        "李阿姨",
+        "0912-000-202",
+    )
+
+
+def test_create_authorization_no_plaintext_stored(
+    db_session: Session, fresh_settings: None, caplog: pytest.LogCaptureFixture
+) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    caplog.set_level(logging.DEBUG)
+
+    out = create_authorization(
+        db_session,
+        ming.id,
+        _proxy(_TODAY),
+        parent=_current_parent(make_parent(db_session)),
+        clock=clock,
+    )
+
+    row = db_session.execute(
+        text("select * from public.pickup_authorizations where id = :id"),
+        {"id": out.authorization.id},
+    ).one()
+    values = [str(value) for value in row]
+    assert out.code not in values
+    assert row.code_hash != out.code
+    assert out.code not in row.code_hash
+    assert out.code not in caplog.text
+
+
+def test_create_authorization_validation(db_session: Session, fresh_settings: None) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    other = make_student(db_session, name="林小安")
+    parent = _current_parent(make_parent(db_session))
+    _set_authorization_settings(db_session, max_days_ahead=14)
+
+    def create(data: PickupAuthorizationCreateIn) -> Any:
+        return create_authorization(db_session, ming.id, data, parent=parent, clock=clock)
+
+    for bad in (_TODAY + timedelta(days=15), _TODAY - timedelta(days=1)):
+        with pytest.raises(AppError) as invalid:
+            create(_proxy(bad))
+        assert (invalid.value.status, invalid.value.code) == (422, "invalid_service_date")
+    assert create(_proxy(_TODAY + timedelta(days=14))).authorization.status == "active"
+
+    others_person = make_pickup_person(db_session, other)
+    archived = make_pickup_person(db_session, ming)
+    archived.archived_at = datetime(2026, 9, 1, tzinfo=UTC)
+    db_session.flush()
+    for person_id in (others_person.id, archived.id, uuid4()):
+        with pytest.raises(AppError) as missing:
+            create(PickupAuthorizationCreateIn(service_date=_TODAY, pickup_person_id=person_id))
+        assert (missing.value.status, missing.value.code) == (404, "pickup_person_not_found")
+
+    _set_authorization_settings(db_session, max_active_per_day=1)
+    make_pickup_authorization(db_session, ming, service_date=_TODAY + timedelta(days=2))
+    # 已取消的不計入上限
+    make_pickup_authorization(
+        db_session, ming, service_date=_TODAY + timedelta(days=3), status="cancelled"
+    )
+    assert create(_proxy(_TODAY + timedelta(days=3))).authorization.status == "active"
+    with pytest.raises(AppError) as limit:
+        create(_proxy(_TODAY + timedelta(days=2)))
+    assert (limit.value.status, limit.value.code) == (409, "authorization_limit_reached")
+
+
+@pytest.fixture
+def owner_cleanup_students() -> Iterator[list[UUID]]:
+    """committing 測試建立的學生 / 家長以 owner 連線刪除；排在 committing_db_session 之前
+    （先 close session、truncate 授權表，再刪學生）。"""
+    ids: list[UUID] = []
+    yield ids
+    with connect_owner() as conn:
+        conn.execute("set lock_timeout = '5s'")
+        for row_id in ids:
+            conn.execute("delete from public.students where id = %s", (row_id,))
+            conn.execute("delete from public.parent_accounts where id = %s", (row_id,))
+        conn.commit()
+
+
+def _active_count(session: Session, student_id: UUID) -> int:
+    return session.execute(
+        select(func.count())
+        .select_from(PickupAuthorization)
+        .where(PickupAuthorization.student_id == student_id, PickupAuthorization.status == "active")
+    ).scalar_one()
+
+
+@pytest.mark.cleanup_tables("pickup_authorizations")
+def test_create_authorization_concurrent_limit(
+    owner_cleanup_students: list[UUID],
+    committing_db_session: Session,
+    db_engine: Engine,
+    fresh_settings: None,
+) -> None:
+    """預設上限 3、已有 2 筆：s1 建立第 3 筆未 commit 時 s2 被擋住，s1 commit 後 s2 得到 409。"""
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(committing_db_session)
+    parent_row = make_parent(committing_db_session)
+    for _ in range(2):
+        make_pickup_authorization(committing_db_session, ming, service_date=_TODAY)
+    committing_db_session.commit()
+    owner_cleanup_students.extend([ming.id, parent_row.id])
+    parent = _current_parent(parent_row)
+
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    s2_done = threading.Event()
+    errors: list[BaseException] = []
+
+    def worker() -> None:
+        try:
+            create_authorization(s2, ming.id, _proxy(_TODAY), parent=parent, clock=clock)
+            s2.commit()
+        except BaseException as exc:
+            errors.append(exc)
+        finally:
+            s2_done.set()
+
+    thread = threading.Thread(target=worker)
+    try:
+        create_authorization(s1, ming.id, _proxy(_TODAY), parent=parent, clock=clock)
+        thread.start()
+        assert not s2_done.wait(timeout=0.5), errors  # s1 尚未 commit：s2 被擋住
+        s1.commit()
+        thread.join(timeout=10)
+    finally:
+        s1.close()
+        if thread.is_alive():
+            thread.join(timeout=10)
+        s2.close()
+
+    [error] = errors
+    assert isinstance(error, AppError)
+    assert (error.status, error.code) == (409, "authorization_limit_reached")
+    assert _active_count(committing_db_session, ming.id) == 3
+
+
+# --- BACKEND-424 load_verifiable_authorization ---
+
+
+def test_load_verifiable_authorization_errors(db_session: Session) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    ok = make_pickup_authorization(db_session, ming, service_date=_TODAY)
+    cancelled = make_pickup_authorization(db_session, ming, service_date=_TODAY, status="cancelled")
+    completed = make_pickup_authorization(db_session, ming, service_date=_TODAY, status="completed")
+    tomorrow = make_pickup_authorization(db_session, ming, service_date=_TODAY + timedelta(days=1))
+    yesterday = make_pickup_authorization(db_session, ming, service_date=_TODAY - timedelta(days=1))
+    locked = make_pickup_authorization(db_session, ming, service_date=_TODAY, code_attempts=5)
+
+    def error_of(auth_id: UUID) -> tuple[int, str]:
+        with pytest.raises(AppError) as exc:
+            load_verifiable_authorization(db_session, auth_id, clock=clock)
+        return exc.value.status, exc.value.code
+
+    assert load_verifiable_authorization(db_session, ok.id, clock=clock).id == ok.id
+    assert error_of(uuid4()) == (404, "pickup_authorization_not_found")
+    assert error_of(cancelled.id) == (409, "authorization_not_active")
+    assert error_of(completed.id) == (409, "authorization_not_active")
+    assert error_of(tomorrow.id) == (409, "authorization_not_today")
+    assert error_of(yesterday.id) == (409, "authorization_not_today")
+    assert error_of(locked.id) == (409, "pickup_code_locked")
+
+
+def test_load_verifiable_authorization_today_follows_taipei(db_session: Session) -> None:
+    """UTC 9/9 16:30 = 台北 9/10 00:30：9/10 的授權已是今天。"""
+    clock = FakeClock(datetime(2026, 9, 9, 16, 30, tzinfo=UTC))
+    auth = make_pickup_authorization(db_session, make_student(db_session), service_date=_TODAY)
+
+    assert load_verifiable_authorization(db_session, auth.id, clock=clock).id == auth.id
+
+
+def test_load_verifiable_authorization_allow_locked(db_session: Session) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    locked = make_pickup_authorization(db_session, ming, service_date=_TODAY, code_attempts=5)
+    cancelled_locked = make_pickup_authorization(
+        db_session, ming, service_date=_TODAY, code_attempts=5, status="cancelled"
+    )
+
+    loaded = load_verifiable_authorization(db_session, locked.id, clock=clock, allow_locked=True)
+
+    assert (loaded.id, loaded.code_attempts) == (locked.id, 5)
+    assert loaded.code_locked_at is not None
+    # allow_locked 只放行鎖定，其他檢查照常
+    with pytest.raises(AppError) as exc:
+        load_verifiable_authorization(
+            db_session, cancelled_locked.id, clock=clock, allow_locked=True
+        )
+    assert exc.value.code == "authorization_not_active"
+
+
+@pytest.mark.cleanup_tables("pickup_authorizations")
+def test_load_verifiable_authorization_locks_row(
+    owner_cleanup_students: list[UUID], committing_db_session: Session, db_engine: Engine
+) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(committing_db_session)
+    auth = make_pickup_authorization(committing_db_session, ming, service_date=_TODAY)
+    committing_db_session.commit()
+    owner_cleanup_students.append(ming.id)
+
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    try:
+        assert load_verifiable_authorization(s1, auth.id, clock=clock).id == auth.id
+        with pytest.raises(OperationalError) as blocked:
+            s2.execute(
+                text(
+                    "select id from public.pickup_authorizations where id = :id for update nowait"
+                ),
+                {"id": auth.id},
+            )
+        assert getattr(blocked.value.orig, "sqlstate", None) == "55P03"  # lock_not_available
+        s2.rollback()
+
+        s1.commit()
+        # 釋放後可取得
+        s2.execute(
+            text("select id from public.pickup_authorizations where id = :id for update nowait"),
+            {"id": auth.id},
+        )
+        s2.rollback()
+    finally:
+        s1.close()
+        s2.close()
