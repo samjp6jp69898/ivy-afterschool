@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 350,
-  "last_updated": "2026-10-05T05:38:39Z",
+  "version": 351,
+  "last_updated": "2026-10-05T05:39:18Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14009,7 +14009,7 @@
     {
       "id": "BACKEND-521",
       "title": "實作 StaffUserService.activate：重新啟用已停用的員工帳號（臨時密碼、強制改密碼、稽核）",
-      "description": "在 `apps/api/app/services/staff_user_service.py` 實作停用帳號的重新啟用（使用者裁定：停用的員工帳號可以重新啟用）：\n```python\ndef activate(session: Session, staff_id: UUID, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> StaffUserCreatedOut: ...\n```\n1. `select ... FOR UPDATE`；不存在 → 404 `staff_user_not_found`。\n2. `assert_can_manage_staff`（BACKEND-534）→ 權限較大的帳號 403 `cannot_manage_staff`。\n3. 已啟用 → 409 `staff_already_active`（不冪等回傳：每次啟用都會產生新臨時密碼，重複呼叫應明確失敗）。\n4. `is_active = true`、以 `generate_temp_password()`（BACKEND-032）產生臨時密碼並 `hash_password`（BACKEND-031）、`must_change_password = true`。token_version 不變動（停用時已 +1，舊 token 早已失效）；refresh token 停用時已全部撤銷，不需再處理。\n5. 稽核 `staff_user.activate`（before `{'is_active': False}`、after `{'is_active': True, 'must_change_password': True}`，**不含密碼**）（BACKEND-102）。\n6. 回傳 `StaffUserCreatedOut(user, temp_password)`（BACKEND-086；臨時密碼只在此回傳一次）。\n- 不需 `assert_admin_capabilities_retained`（啟用只會增加可用帳號）。\n\n**驗收標準**\n- 停用帳號啟用後 is_active=true、must_change_password=true，回傳的臨時密碼可通過 verify_password、舊密碼失效。\n- token_version 與啟用前相同。\n- 已啟用 409；權限較大者 403；不存在 404。\n- audit 'staff_user.activate' 存在且不含臨時密碼。",
+      "description": "在 `apps/api/app/services/staff_user_service.py` 實作停用帳號的重新啟用（使用者裁定：停用的員工帳號可以重新啟用）：\n```python\ndef activate(session: Session, staff_id: UUID, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> StaffUserCreatedOut: ...\n```\n1. `select ... FOR UPDATE`；不存在 → 404 `staff_user_not_found`。\n2. `assert_can_manage_staff`（BACKEND-534）→ 權限較大的帳號 403 `cannot_manage_staff`。\n3. 已啟用 → 409 `staff_already_active`（不冪等回傳：每次啟用都會產生新臨時密碼，重複呼叫應明確失敗）。\n4. `is_active = true`、以 `generate_temp_password()`（BACKEND-032）產生臨時密碼並 `hash_password`（BACKEND-031）、`must_change_password = true`。token_version 不變動（停用時已 +1，舊 token 早已失效）；refresh token 停用時已全部撤銷，不需再處理。\n5. 稽核 `staff_user.activate`（before `{'is_active': False}`、after `{'is_active': True, 'must_change_password': True}`，**不含密碼**；audit_service 依 key 遮罩含 password 的欄位，must_change_password 的值實際存成 `***`）（BACKEND-102）。\n6. 回傳 `StaffUserCreatedOut(user, temp_password)`（BACKEND-086；臨時密碼只在此回傳一次）。\n- 不需 `assert_admin_capabilities_retained`（啟用只會增加可用帳號）。\n\n**驗收標準**\n- 停用帳號啟用後 is_active=true、must_change_password=true，回傳的臨時密碼可通過 verify_password、舊密碼失效。\n- token_version 與啟用前相同。\n- 已啟用 409；權限較大者 403；不存在 404。\n- audit 'staff_user.activate' 存在且不含臨時密碼。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": null,
@@ -14036,7 +14036,7 @@
           "test_activate_success：停用的 tutor 帳號（token_version=1）→ activate 回傳 temp_password；verify_password(temp, hash) is True、verify_password('Passw0rd-Test1', hash) is False、is_active is True、must_change_password is True、token_version == 1",
           "test_activate_already_active：啟用中的帳號 → 409 'staff_already_active'",
           "test_activate_cannot_manage：actor 有效權限 = director 權限 ∪ {'staff:write'}，啟用已停用的 admin 帳號 → 403 'cannot_manage_staff'；uuid4() → 404 'staff_user_not_found'",
-          "test_activate_audit_no_password：audit 'staff_user.activate' 1 筆，after == {'is_active': True, 'must_change_password': True}，json.dumps(before, after) 不含 temp"
+          "test_activate_audit_no_password：audit 'staff_user.activate' 1 筆，after == {'is_active': True, 'must_change_password': '***'}（audit_service 依 key 遮罩含 password 的欄位，傳入 True 存成 ***），json.dumps(before, after) 不含 temp"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_staff_user_service.py -k \"test_activate_\"",
         "notes": ""

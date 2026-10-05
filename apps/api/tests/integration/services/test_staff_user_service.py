@@ -937,7 +937,8 @@ def test_activate_audit_no_password(db_session: Session, fake_clock: FakeClock) 
     [log] = _audits(db_session, "staff_user.activate", target.id)
     assert (log.entity_type, log.ip) == ("staff_user", "127.0.0.1")
     assert log.before == {"is_active": False}
-    assert log.after == {"is_active": True, "must_change_password": True}
+    # audit_service 依 key 遮罩含 password 的欄位：must_change_password 的值以 *** 儲存
+    assert log.after == {"is_active": True, "must_change_password": "***"}
     dumped = json.dumps([log.before, log.after])
     db_session.refresh(target)
     for secret in (out.temp_password, old_hash, target.password_hash):
