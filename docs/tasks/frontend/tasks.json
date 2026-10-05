@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 89,
-  "last_updated": "2026-10-05T02:47:39Z",
+  "version": 90,
+  "last_updated": "2026-10-05T02:48:17Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -2334,7 +2334,7 @@
         "FRONTEND-024"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "FRONTEND-073 AuditDiffDrawer 內含 ENTITY_LABELS（entity_type 中文對照）與操作者類型 tag 對照；本頁也需要，實作時抽成共用常數（例如 src/shared/constants/audit.ts）並讓 073 改引用同一份。AuditDiffDrawer 以 :before-close emit update:modelValue=false，父層關閉時不要在離場動畫期間把 log 設為 null（內容會提前消失）。",
+      "risk_notes": "entity_type 中文對照與操作者類型 tag 對照與 FRONTEND-073 共用 src/constants/audit.ts（AUDIT_ENTITY_LABELS、AUDIT_ACTOR_TAGS），新增 entity_type 時只改這一份。AuditDiffDrawer 以 :before-close emit update:modelValue=false，父層關閉時不要在離場動畫期間把 log 設為 null（內容會提前消失）。BACKEND-523 的 pickup_authorization.regenerate_code 尚無 AUDIT_ACTION_LABELS 中文對照（畫面顯示原文），動作類別篩選也篩不到。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/views/settings/AuditLogView.spec.ts",
