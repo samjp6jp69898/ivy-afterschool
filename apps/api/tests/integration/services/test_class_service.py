@@ -230,7 +230,7 @@ def test_create_class_archived_name_reusable(db_session: Session) -> None:
     assert out.archived_at is None
 
 
-# --- BACKEND-138：update_class ---------------------------------------------------------------------
+# --- BACKEND-138：update_class --------------------------------------------------------------------
 
 
 def test_update_class_partial(db_session: Session) -> None:
@@ -285,7 +285,7 @@ def test_update_class_conflict(db_session: Session) -> None:
     assert year_conflict.value.code == "class_name_taken"
 
 
-# --- BACKEND-139：archive_class --------------------------------------------------------------------
+# --- BACKEND-139：archive_class -------------------------------------------------------------------
 
 
 def test_archive_class_success(db_session: Session, fake_clock: FakeClock) -> None:
@@ -344,7 +344,7 @@ def test_archive_class_idempotent(db_session: Session, fake_clock: FakeClock) ->
     assert again.archived_at != fake_clock.now()
 
 
-# --- BACKEND-140：set_class_staff ------------------------------------------------------------------
+# --- BACKEND-140：set_class_staff -----------------------------------------------------------------
 
 
 def _staff_rows(db: Session, class_id: UUID) -> dict[UUID, ClassStaff]:
