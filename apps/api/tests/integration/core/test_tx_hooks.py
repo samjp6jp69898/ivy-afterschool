@@ -4,6 +4,7 @@
 一張可清的表），被測 session 一律是 app_backend。
 """
 
+import contextlib
 import logging
 from collections.abc import Iterator
 from typing import Any
@@ -177,3 +178,79 @@ def test_tx_hooks_with_savepoint_session_rollback(db_session: Session) -> None:
     db_session.commit()
 
     assert calls == []
+
+
+# --- BACKEND-545：savepoint rollback 丟棄該層註冊的 callback -------------------------------------
+
+
+@pytest.mark.cleanup_tables(TABLE)
+def test_tx_hooks_savepoint_rollback_discards_inner(committing_db_session: Session) -> None:
+    calls: list[str] = []
+    _insert(committing_db_session)
+    run_after_commit(committing_db_session, _appender(calls, "fn_outer"))
+
+    # begin_nested 區塊內拋例外 → 該 savepoint 回滾（業務錯誤的典型路徑）
+    with contextlib.suppress(RuntimeError), committing_db_session.begin_nested():
+        _insert(committing_db_session, "林小華")
+        run_after_commit(committing_db_session, _appender(calls, "fn_inner"))
+        raise RuntimeError("業務錯誤，savepoint 回滾")
+    assert calls == []
+
+    committing_db_session.commit()
+
+    assert calls == ["fn_outer"]
+    assert _count() == 1
+
+
+@pytest.mark.cleanup_tables(TABLE)
+def test_tx_hooks_savepoint_release_keeps_inner(committing_db_session: Session) -> None:
+    calls: list[str] = []
+    with committing_db_session.begin_nested():
+        _insert(committing_db_session)
+        run_after_commit(committing_db_session, _appender(calls, "fn_inner"))
+    assert calls == []
+
+    committing_db_session.commit()
+
+    assert calls == ["fn_inner"]
+    assert _count() == 1
+
+
+@pytest.mark.cleanup_tables(TABLE)
+def test_tx_hooks_nested_savepoint_rollback(committing_db_session: Session) -> None:
+    calls: list[str] = []
+    with committing_db_session.begin_nested():
+        run_after_commit(committing_db_session, _appender(calls, "fn_a"))
+        savepoint_b = committing_db_session.begin_nested()
+        run_after_commit(committing_db_session, _appender(calls, "fn_b"))
+        savepoint_b.rollback()
+    # 已釋放的 savepoint A 若之後整層被回滾（A 的外層再回滾）不在此案例；這裡 A 正常釋放
+    assert calls == []
+
+    committing_db_session.commit()
+
+    assert calls == ["fn_a"]
+
+    # 反向：內層 B 正常釋放、外層 A 回滾 → fn_a、fn_b 都丟棄
+    calls.clear()
+    savepoint_a = committing_db_session.begin_nested()
+    run_after_commit(committing_db_session, _appender(calls, "fn_a2"))
+    with committing_db_session.begin_nested():
+        run_after_commit(committing_db_session, _appender(calls, "fn_b2"))
+    savepoint_a.rollback()
+    run_after_commit(committing_db_session, _appender(calls, "fn_after"))
+    committing_db_session.commit()
+    assert calls == ["fn_after"]
+
+
+def test_tx_hooks_savepoint_rollback_with_db_session(db_session: Session) -> None:
+    """INFRA-010 db_session 本身是 savepoint 模式：測試內再開 begin_nested() 構造內層 savepoint。"""
+    calls: list[str] = []
+    run_after_commit(db_session, _appender(calls, "outer"))
+    nested = db_session.begin_nested()
+    run_after_commit(db_session, _appender(calls, "inner"))
+    nested.rollback()
+
+    db_session.commit()
+
+    assert calls == ["outer"]

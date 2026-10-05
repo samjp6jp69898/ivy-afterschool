@@ -7,6 +7,7 @@ BACKEND-006 tx_hooks 的實測結論）；kick_outbox 以 monkeypatch 記錄，w
 
 from __future__ import annotations
 
+import contextlib
 import json
 from collections.abc import Iterator
 from typing import Any
@@ -347,3 +348,42 @@ def test_enqueue_mixed_recipient_event(db_session: Session, fake_clock: FakeCloc
     staff_row = _notifications(db_session, to_staff.notification_ids)[0]
     assert (staff_row.recipient_type, staff_row.recipient_id) == ("staff", s1.id)
     assert staff_row.payload["cancelled_by_label"] == "老師"
+
+
+# --- BACKEND-545：savepoint 回滾後不推幽靈通知 ---------------------------------------------------
+
+
+def test_enqueue_inside_rolled_back_savepoint_no_ghost(
+    db_session: Session, fake_clock: FakeClock, kicked: list[list[UUID]], pushed: list[PushCall]
+) -> None:
+    p1 = make_parent(db_session)
+    db_session.commit()
+
+    result: EnqueueResult | None = None
+    with contextlib.suppress(RuntimeError), db_session.begin_nested():
+        result = enqueue(
+            db_session,
+            Event.HOMEWORK_DONE,
+            recipients=[Recipient("parent", p1.id)],
+            payload=_homework_payload(uuid4()),
+            clock=fake_clock,
+        )
+        raise RuntimeError("業務錯誤，savepoint 回滾")
+    db_session.commit()
+
+    assert result is not None
+    assert len(result.outbox_ids) == 1
+    assert kicked == []
+    assert pushed == []
+    assert _notifications(db_session, result.notification_ids) == []
+    # savepoint 外的 enqueue 不受影響
+    kept = enqueue(
+        db_session,
+        Event.HOMEWORK_DONE,
+        recipients=[Recipient("parent", p1.id)],
+        payload=_homework_payload(uuid4()),
+        clock=fake_clock,
+    )
+    db_session.commit()
+    assert kicked == [kept.outbox_ids]
+    assert len(pushed) == 1
