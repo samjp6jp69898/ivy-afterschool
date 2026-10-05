@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 276,
-  "last_updated": "2026-10-05T03:00:50Z",
+  "version": 277,
+  "last_updated": "2026-10-05T03:01:30Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10163,7 +10163,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/views.py",
       "source_ref": "BE:api/dismissal_calls.py::_build_calls_out_bulk",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-401",
@@ -10191,9 +10191,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。tdd.run 全綠（8 passed），--collect-only 對照選到 5 條 red_case 與 3 條補充案例；測試 ee814d5 先於實作 5f0c453（實作 commit 內測試改兩處：query count 測試拿掉 expire_all——production 的 SessionLocal 為 expire_on_commit=False，傳入的請求不會是 expired 狀態，不算放寬；推播測試先建員工再改回覆欄位以避開 ck_pickup_requests_reply）；just lint / typecheck 對 views.py 與測試檔乾淨；測試以 app_backend 連線。名稱解析：員工 / 家長名稱以一條 UNION ALL、guardian（接走人與 (家長, 學生) 對應，未封存優先覆寫）一條、代理授權一條、作業進度一條、student_brief_map 一條，20 筆請求 SQL ≤ 6；家長查無 guardian 時退回 display_name、override 無接走人時為「老師確認交付」皆有測試。needs_reply（非終態且 reply_source null 或 auto 無 ETA）、can_cancel（非終態）、can_mark_arrived（pending / acknowledged）與 BACKEND-402 定義一致。推播：session.info 去重，before_commit（跳過 savepoint）以 populate_existing 重讀請求後組資料，交 broadcast_after_commit 於 commit 後送 admin:pickup 完整版與 student:<id> 家長版（ParentPickupRequestOut，不含 replied_by_name / completed_by_name / cancel_reason / 作業進度），rollback 清除登記，皆有測試。殘留：與 BACKEND-374 相同，組資料的查詢在 before_commit 執行，若該查詢 DB 失敗會讓整筆 commit 失敗；build_* 依賴傳入的請求物件未 expired（呼叫端若在 expire 後傳入會逐筆 refresh）；red_case 寫 committing session，測試用 db_session（BACKEND-006 已實測等價）。"
       }
     },
     {
