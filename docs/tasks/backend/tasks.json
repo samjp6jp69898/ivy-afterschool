@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 391,
-  "last_updated": "2026-10-05T06:26:48Z",
+  "version": 392,
+  "last_updated": "2026-10-05T06:29:42Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5335,7 +5335,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_import_service.py",
       "source_ref": "BE:utils/excel_io.py::parse_excel",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-151",
@@ -5344,7 +5344,7 @@
         "BACKEND-133"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "openpyxl 解析惡意檔案的記憶體風險：先過 BACKEND-016 的 XLSX 檢頭與 5 MB 上限，再套用 zip / XML 層掃描。\n[review-r8-b 第三輪複審] (1) 必修：_looks_like_xml 只看前 64 bytes 去掉 UTF-8 BOM 與空白後是否以 '<' 開頭；XML 允許無宣告時前置任意長度空白，工作表開頭放 200 個空白（或 BOM + 100 個換行）、不寫 XML 宣告，前 64 bytes 全是空白而被當成非 XML 略過掃描，openpyxl（目前 LXML=False，以內建 expat 的 ET 解析）照常讀取，超寬列約 17 KB → 3.1 秒、峰值 +950 MB（make.py 模式 leading_ws、bom_ws）。修法：不要以內容開頭猜測；每個 entry 都餵 expat 掃描，expat 在看到任何元素之前就判定不是 well-formed（真正的二進位，如 printerSettings*.bin、圖片）才視為非 XML 放行——openpyxl 用的是同一個 expat，它解析不了的 openpyxl 也解析不了；看到第一個元素之後才失敗 → 422。並加測試釘住 openpyxl.xml.LXML is False（若日後安裝 lxml，接受的 XML 範圍會不同，需重新評估）。UTF-16 / UTF-32 編碼的工作表目前雖回 422（make.py utf16_sheet、utf16_nobom、utf32），也請以上述方式納入掃描並各補一例。(2) 必修：上限內最壞情況仍偏高——styles.xml 塞 249,000 個 <xf/>（每個 part 的元素上限 250,000 之內），約 50 KB → 3.3 秒、峰值 +211 MB（make.py cap_styles）；sheet + styles + sharedStrings 各自逼近上限合計 +211 MB（combined_max）。合法匯入檔 styles 只有數百個元素、sharedStrings 約數千。修法：改為跨所有 XML part 的元素總預算（建議 100,000，可涵蓋 500 列 × 13 欄的合法檔），或對非工作表內容另設較低上限；並加一條「各上限逼近邊界仍被接受的最壞檔」的 tracemalloc 測試，峰值 < 100 MB。\n殘留提醒（不擋）：display 回傳的原始字串若以 = + - @ 開頭，日後若提供「匯出錯誤列」會形成 CSV / Excel 公式注入，匯出時須加前置單引號或拒絕。",
+      "risk_notes": "xlsx 防護建立在「openpyxl 與掃描器用同一個內建 expat」上：被掃描器判為非 XML（第一個元素前即解析失敗）而放行的 entry，openpyxl 也解析不了。若日後安裝 lxml 或 defusedxml，openpyxl 會改用它們，接受的輸入範圍不同，必須重新評估（test_import_preview_openpyxl_parser_is_builtin_expat 會先紅）。\n上限內最壞情況：styles.xml 塞滿共用元素總額（約 99,000 個 <xf/>，約 23 KB 檔）單一請求約 1.2 秒、峰值 +93 MB；多個並發上傳會疊加，endpoint 需 students:write，風險限於內部帳號，若日後開放更多角色上傳應加並發限制。\n公式注入提醒：display 回傳的原始字串若以 = + - @ 開頭，日後若提供「匯出錯誤列」會形成 CSV / Excel 公式注入，匯出時須加前置單引號或拒絕。\n標題列有重複欄名時 check_header 不報錯、取值用最後一欄；狀態「退班」而入學日在未來時 preview 判 valid，執行階段 create_student 預設退班日為今天會撞 invalid_dates。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_student_import_service.py",
@@ -5370,9 +5370,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r8-b",
-        "notes": "第三輪複審：0c07a23 測試先於 6aefaafc 修正；tdd.run 及整檔 27 passed（參數化 17 種構造皆 422 且 load_workbook 未被呼叫、tracemalloc 峰值檢查、openpyxl 階段錯誤 422、第一張可見工作表、合理 sharedStrings / _x0000_）；lint / typecheck 乾淨。review 以 make.py 全模式重跑：清單 A1～A5、B 全部、C1～C4、C6、C7、C10 皆 422 或正常且記憶體不增。仍有兩項打回（詳見 risk_notes）：前置空白超過 64 bytes 的 XML part 可繞過掃描（+950 MB）、上限內最壞 styles 檔 +211 MB。"
+        "notes": "第四輪複審（只核對 a95b705 兩項）：e47367c 測試先於 87edaa8 修正（7541e2d / 710f375 只改 docstring）；整檔 37 passed、lint / typecheck 乾淨。(1) 移除 _looks_like_xml，每個非空 entry 都交 expat，看到元素前即解析失敗才當二進位放行、之後出錯 422：leading_ws、bom_ws、UTF-16 LE / BE（有無 BOM）、UTF-32 皆 422 且記憶體不增。review 另試「放行為二進位」路徑：XML 1.1 宣告、ISO-8859-1 / windows-1252 / Big5 宣告、外部參數實體與 DOCTYPE SYSTEM、根元素前大量 PI / 註解、stored（不壓縮）3.6 MB 超寬列，皆 422 且記憶體不增；Big5 這類 expat 不支援的編碼在掃描器被放行，但 openpyxl 用同一個 expat 同樣解析失敗 → 422，無法讓 openpyxl 讀到未掃描的內容。openpyxl.xml.LXML 與 DEFUSEDXML 皆為 False，已有測試釘住。(2) 所有 XML part 共用元素總額 100,000：cap_styles、cap_styles_fonts、cap_sst、cap_sheet、combined_max 皆 422；逼近總額的 styles 99k 檔被接受，+93 MB / 1.2 秒，低於 100 MB。make.py 先前全部模式（wide_ws、ns_prefix、lying_size、many_other_elems*、deep、laughs、xxe、styles_bomb、path_bypass、many_entries、many_sheets、long_*、sst_*、numfmt_redos 等）重跑皆 422 或正常解析，記憶體不增。"
       }
     },
     {
