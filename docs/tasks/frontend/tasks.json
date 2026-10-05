@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 103,
-  "last_updated": "2026-10-05T05:39:19Z",
+  "version": 104,
+  "last_updated": "2026-10-05T05:40:44Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -5405,7 +5405,7 @@
     {
       "id": "FRONTEND-261",
       "title": "實作 views/DashboardView.vue：今日儀表板",
-      "description": "建立 `apps/web/src/views/DashboardView.vue`（路由 `/`，`dashboard:read`；domain_spec M11：今日應到 / 已到 / 未到 / 請假 / 缺席人數、待回覆接送請求數、作業完成率、近期請假清單，單一 endpoint 聚合）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-dashboard.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：營業日（出勤、接送、作業、近期請假四區）、非營業日、各卡片依權限是否可點、載入中、載入失敗。\n\n**內容**\n- `PageHeader`「今日儀表板」，副標 `formatDateWithWeekday(date)`；「重新整理」按鈕與「{n} 秒前更新」。\n- 非營業日：el-alert info「今天不是營業日」，下方仍顯示近期請假。\n- 出勤區（`StatCard` ×5）：應到 expected_total、已到 arrived（hint「在班 {present}・已離班 {left}」）、未到 not_arrived（warning）、請假 leave、缺席 absent（danger）。有 `attendance:read` 時卡片 `to` 為 `/attendance`（未到卡帶 `?status=expected` 不實作篩選 query 時僅導頁）。\n- 接送區：進行中 open、待回覆 needs_reply（> 0 danger）、家長已到 arrived（> 0 danger）、今日已完成 completed；有 `pickup:read` 時 `to` 為 `/pickup`。\n- 作業區：完成率 el-progress（`Math.round(completion_rate * 100)`%）+ 已完成 / 進行中 / 尚未開始；有 `homework:read` 時可點至 `/homework`。\n- 近期請假：`RecentLeavesList`（FRONTEND-262）。\n- 自動更新：頁面可見時每 60 秒重抓（`document.hidden` 時暫停，回到可見立即重抓一次）；無 ws。\n- 載入失敗：EmptyState error + 重試；已有資料時失敗只顯示 ElMessage 並保留舊資料。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/DashboardView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case（fake timers）。",
+      "description": "建立 `apps/web/src/views/DashboardView.vue`（路由 `/`，`dashboard:read`；domain_spec M11：今日應到 / 已到 / 未到 / 請假 / 缺席人數、待回覆接送請求數、作業完成率、近期請假清單，單一 endpoint 聚合）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-dashboard.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：營業日（出勤、接送、作業、近期請假四區）、非營業日、各卡片依權限是否可點、載入中、載入失敗。\n\n**內容**\n- `PageHeader`「今日儀表板」，副標 `formatDateWithWeekday(date)`；「重新整理」按鈕與「{n} 秒前更新」。\n- 非營業日：el-alert info「今天不是營業日」，下方仍顯示近期請假。\n- 出勤區（`StatCard` ×5）：應到 expected_total、已到 arrived（hint「在班 {present}・已離班 {left}」）、未到 not_arrived（warning）、請假 leave、缺席 absent（danger）。有 `attendance:read` 時卡片 `to` 為 `/attendance`（未到卡帶 `?status=expected` 不實作篩選 query 時僅導頁）。\n- 接送區：進行中 open、待回覆 needs_reply（> 0 danger）、家長已到 arrived（> 0 danger）、今日已完成 completed；有 `pickup:read` 時 `to` 為 `/pickup`。\n- 作業區：完成率 el-progress（後端 BACKEND-490 的 completion_rate 已是 0~100、1 位小數，顯示 `Math.round(completion_rate)`%，例如 57.1 → 57%；不可再乘 100。完成時順手把 FRONTEND-260 `api/dashboard.ts` 的 completion_rate 註解改為「0~100，1 位小數」、`dashboard.spec.ts` fixture 0.571 改為 57.1）+ 已完成 / 進行中 / 尚未開始；有 `homework:read` 時可點至 `/homework`。\n- 近期請假：`RecentLeavesList`（FRONTEND-262）。\n- 自動更新：頁面可見時每 60 秒重抓（`document.hidden` 時暫停，回到可見立即重抓一次）；無 ws。\n- 載入失敗：EmptyState error + 重試；已有資料時失敗只顯示 ElMessage 並保留舊資料。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/DashboardView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case（fake timers）。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/DashboardView.vue",
       "source_ref": null,
