@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import CurrentStaff
 from app.core.errors import AppError
 from app.core.pagination import PageParams
-from app.core.permissions import ALL_PERMISSIONS
+from app.core.permissions import ALL_PERMISSIONS, resolve_effective_permissions
 from app.core.request_meta import RequestMeta
 from app.core.security.passwords import verify_password
 from app.models.account import RefreshToken, Role, StaffUser
@@ -449,14 +449,16 @@ def _as_staff(staff: StaffUser) -> CurrentStaff:
         role_id=role.id,
         role_code=role.code,
         role_name=role.name,
-        permissions=frozenset(str(p) for p in role.permissions if p != "*")
-        | set(staff.extra_permissions) - set(staff.revoked_permissions),
+        permissions=resolve_effective_permissions(
+            role.permissions, staff.extra_permissions, staff.revoked_permissions
+        ),
         must_change_password=False,
         token_version=staff.token_version,
     )
 
 
 def test_update_staff_user_success(db_session: Session) -> None:
+    make_staff(db_session, role_code="admin")  # 守衛需要系統內仍有啟用中的管理者
     clerk = _role(db_session, "clerk")
     target = make_staff(db_session, role_code="tutor", display_name="王老師")
     actor = _admin()
@@ -567,6 +569,7 @@ def test_update_staff_user_self_permissions(db_session: Session) -> None:
 def test_update_staff_user_cannot_grant(db_session: Session) -> None:
     tutor = _role(db_session, "tutor")
     assert "pickup:override" not in tutor.permissions
+    make_staff(db_session, role_code="admin")
     target = make_staff(db_session, role_code="tutor")
     actor = _actor(frozenset(tutor.permissions) | {"staff:write"}, role_code="tutor")
 
@@ -697,6 +700,7 @@ def test_reset_password_audit(db_session: Session, fake_clock: FakeClock) -> Non
 
 
 def test_deactivate_success(db_session: Session, fake_clock: FakeClock) -> None:
+    make_staff(db_session, role_code="admin")  # 守衛需要系統內仍有啟用中的管理者
     target = make_staff(db_session, role_code="tutor")
     issue(db_session, subject_type="staff", subject_id=target.id, clock=fake_clock)
     issue(db_session, subject_type="staff", subject_id=target.id, clock=fake_clock)
@@ -728,6 +732,7 @@ def test_deactivate_self(db_session: Session, fake_clock: FakeClock) -> None:
 
 
 def test_deactivate_idempotent(db_session: Session, fake_clock: FakeClock) -> None:
+    make_staff(db_session, role_code="admin")
     target = make_staff(db_session, role_code="tutor")
     deactivate(db_session, target.id, actor=_admin(), meta=_META, clock=fake_clock)
 

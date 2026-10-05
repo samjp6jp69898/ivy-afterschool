@@ -37,13 +37,20 @@ BACKEND-530 ``purge_student``（domain_spec M3 個資保存：對已封存且 wi
 含該生 student_id 的站內通知刪除；出勤、成績、接送、請假列保留（統計）只清自由文字。Storage 物件
 在 commit 後刪除；稽核 ``student.purge`` 只記各類筆數，不含姓名 / 學號 / 電話。再次執行以既有的
 ``student.purge`` 稽核判定 → 409 ``student_already_purged``。
+
+BACKEND-529 ``close_out_inactive_student``（domain_spec M3：學生改為 suspended / withdrawn 時同交易
+收尾，已發生的紀錄保留；由 BACKEND-152 / 158 呼叫，不 commit）：請假（未開始整筆 cancelled、已開始
+截到昨天，對應出勤還原）→ 刪除今天起 ``expected`` 出勤 → 非終態接送請求條件式改 cancelled 並
+``publish_request_change`` → 今天起 active 代理授權 cancelled 並廣播 → 有刪出勤時廣播
+``attendance.bulk_updated`` → 稽核 ``student.close_out``（只記計數與新狀態）。不發通知。
 """
 
 from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from datetime import date, datetime
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from functools import partial
 from typing import Any, Final, cast
 from uuid import UUID, uuid4
@@ -71,10 +78,12 @@ from app.models.exams import ExamScore
 from app.models.leaves import StudentLeave, StudentLeaveAttachment
 from app.models.notifications import Notification
 from app.models.parents import Guardian, ParentBindingCode
-from app.models.pickup import PickupAuthorization, PickupPerson
+from app.models.pickup import OPEN_STATUSES, PickupAuthorization, PickupPerson, PickupRequest
 from app.models.reference import School
 from app.models.students import Student
+from app.realtime.publish import broadcast_after_commit
 from app.repositories.students import get_student_or_404
+from app.schemas.pickup import PickupAuthorizationOut
 from app.schemas.students import (
     PhotoUploadOut,
     StudentCreateIn,
@@ -87,6 +96,11 @@ from app.schemas.students import (
 )
 from app.services import audit_service
 from app.services.guardian_service import list_for_student
+from app.services.leave_attendance import revert_attendance_for_leave
+
+# 授權輸出欄位的組裝在 r8c 的 authorizations 模組（私有 helper），廣播資料形狀須與該模組一致
+from app.services.pickup.authorizations import _base_fields as authorization_fields
+from app.services.pickup.views import publish_request_change
 from app.services.students.id_number import (
     id_number_hmac,
     normalize_id_number,
@@ -620,3 +634,159 @@ def purge_student(
     return StudentPurgeOut(
         student_id=student.id, purged_at=now, anonymized_student_no=student.student_no
     )
+
+
+# --- BACKEND-529：close_out_inactive_student ------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CloseOutResult:
+    cancelled_pickup_requests: int
+    cancelled_authorizations: int
+    cancelled_leaves: int
+    truncated_leaves: int
+    deleted_attendance_dates: list[date]
+
+
+_CLOSE_OUT_REASONS: Final = {"suspended": "學生已停讀", "withdrawn": "學生已退班"}
+
+
+def _close_out_leaves(
+    session: Session, student: Student, *, actor: CurrentStaff, clock: Clock
+) -> tuple[int, int]:
+    """未開始 → cancelled（還原全部出勤）；已開始 → end_date 截到昨天（還原今天起的出勤）。"""
+    today = clock.today()
+    leaves = session.execute(
+        select(StudentLeave).where(
+            StudentLeave.student_id == student.id,
+            StudentLeave.status == "active",
+            StudentLeave.end_date >= today,
+        )
+    ).scalars()
+    cancelled = truncated = 0
+    for leave in leaves:
+        if leave.start_date >= today:
+            leave.status = "cancelled"
+            leave.cancelled_at = clock.now()
+            leave.cancelled_by_type = "staff"
+            leave.cancelled_by_id = actor.id
+            revert_attendance_for_leave(session, leave, clock=clock)
+            cancelled += 1
+        else:
+            leave.end_date = today - timedelta(days=1)
+            revert_attendance_for_leave(session, leave, from_date=today, clock=clock)
+            truncated += 1
+    session.flush()
+    return cancelled, truncated
+
+
+def _close_out_attendance(session: Session, student: Student, *, clock: Clock) -> list[date]:
+    dates = sorted(
+        session.execute(
+            delete(StudentAttendance)
+            .where(
+                StudentAttendance.student_id == student.id,
+                StudentAttendance.service_date >= clock.today(),
+                StudentAttendance.status == "expected",
+            )
+            .returning(StudentAttendance.service_date)
+        ).scalars()
+    )
+    if dates:
+        broadcast_after_commit(
+            session,
+            topic="attendance",
+            type="attendance.bulk_updated",
+            data={"student_id": student.id, "dates": dates},
+            clock=clock,
+        )
+    return dates
+
+
+def _close_out_pickup_requests(session: Session, student: Student, *, clock: Clock) -> int:
+    reason = _CLOSE_OUT_REASONS[student.status]
+    ids = list(
+        session.execute(
+            update(PickupRequest)
+            .where(
+                PickupRequest.student_id == student.id,
+                PickupRequest.status.in_(list(OPEN_STATUSES)),
+            )
+            .values(status="cancelled", cancelled_at=clock.now(), cancel_reason=reason)
+            .returning(PickupRequest.id)
+        ).scalars()
+    )
+    for request in session.execute(
+        select(PickupRequest)
+        .where(PickupRequest.id.in_(ids))
+        .execution_options(populate_existing=True)
+    ).scalars():
+        publish_request_change(session, request, clock=clock)
+    return len(ids)
+
+
+def _close_out_authorizations(session: Session, student: Student, *, clock: Clock) -> int:
+    today = clock.today()
+    ids = list(
+        session.execute(
+            update(PickupAuthorization)
+            .where(
+                PickupAuthorization.student_id == student.id,
+                PickupAuthorization.status == "active",
+                PickupAuthorization.service_date >= today,
+            )
+            .values(status="cancelled")
+            .returning(PickupAuthorization.id)
+        ).scalars()
+    )
+    for auth in session.execute(
+        select(PickupAuthorization)
+        .where(PickupAuthorization.id.in_(ids))
+        .execution_options(populate_existing=True)
+    ).scalars():
+        broadcast_after_commit(
+            session,
+            topic="pickup",
+            type="pickup.authorization_updated",
+            data=PickupAuthorizationOut(**authorization_fields(auth, today)).model_dump(),
+            clock=clock,
+        )
+    return len(ids)
+
+
+def close_out_inactive_student(
+    session: Session, student: Student, *, actor: CurrentStaff, clock: Clock
+) -> CloseOutResult:
+    """學生已改為 suspended / withdrawn 後呼叫；與呼叫端同交易，任何一步失敗整筆回滾。"""
+    if student.status not in _CLOSE_OUT_REASONS:
+        raise ValueError(f"close_out 只適用 suspended / withdrawn 學生：{student.status!r}")
+    cancelled_leaves, truncated_leaves = _close_out_leaves(
+        session, student, actor=actor, clock=clock
+    )
+    deleted_dates = _close_out_attendance(session, student, clock=clock)
+    cancelled_requests = _close_out_pickup_requests(session, student, clock=clock)
+    cancelled_authorizations = _close_out_authorizations(session, student, clock=clock)
+    result = CloseOutResult(
+        cancelled_pickup_requests=cancelled_requests,
+        cancelled_authorizations=cancelled_authorizations,
+        cancelled_leaves=cancelled_leaves,
+        truncated_leaves=truncated_leaves,
+        deleted_attendance_dates=deleted_dates,
+    )
+    audit_service.record(
+        session,
+        actor=audit_service.Actor.staff(actor),
+        action="student.close_out",
+        entity_type="student",
+        entity_id=student.id,
+        after={
+            "status": student.status,
+            "cancelled_pickup_requests": result.cancelled_pickup_requests,
+            "cancelled_authorizations": result.cancelled_authorizations,
+            "cancelled_leaves": result.cancelled_leaves,
+            "truncated_leaves": result.truncated_leaves,
+            "deleted_attendance_dates": result.deleted_attendance_dates,
+        },
+        meta=None,
+    )
+    return result
