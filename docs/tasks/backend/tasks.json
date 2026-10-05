@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 387,
-  "last_updated": "2026-10-05T06:10:05Z",
+  "version": 388,
+  "last_updated": "2026-10-05T06:11:47Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -15052,7 +15052,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-529",
@@ -15074,9 +15074,9 @@
         "notes": "跑並發測試外層加 timeout；committing 測試跑前後以 owner 確認無殘列。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。紅測 0646b1a（test_close_out_vs_authorization_complete_no_deadlock）先於修正 c474fa5；close_out 改為 授權列 → 請求列 → 請假 → 出勤，推播與稽核內容不變。突變（scratchpad 複本）：還原舊順序 → 新測試 40P01（locking tuple in pickup_authorizations）轉紅。red_case 2 依其文字沿用 529 既有斷言：test_close_out_pickup_requests / authorizations / attendance 各斷言 pickup.request_updated、pickup.authorization_updated、attendance.bulk_updated，keeps_history_and_audit / rollback_with_caller 斷言 student.close_out，529 原 6 條與新測試共 7 passed；test_student_service + services/pickup 共 144 passed（pickup 不退化）。並發測試兩條連線各 set local lock_timeout = '15s'、Event.wait 與 join 皆有 timeout，不會掛住共用 DB；跑前跑後與突變失敗路徑之後，owner 查人員、自訂 roles、出勤、通知、接送、請假等表皆 0 列（無殘列）。lint / typecheck 乾淨。529 description 寫明的全專案鎖序約定（作業進度列 → 接送請求列；代理授權列 → 接送請求列 → 出勤列；請假列 → 出勤列）與 review-r8-c 先前盤點一致。殘留：新測試以 make_staff(committing_db_session) 建員工，會連帶建立自訂 test_* 角色並 commit（kickoff 規定 committing 測試不得往 roles 寫列，應改 role_code='tutor'）；目前已登記 owner 清理、正常與失敗路徑實測都無殘列，但測試被中斷時會留下角色列。"
       }
     }
   ]
