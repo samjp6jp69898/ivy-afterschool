@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 328,
-  "last_updated": "2026-10-05T04:21:55Z",
+  "version": 329,
+  "last_updated": "2026-10-05T04:22:36Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10248,7 +10248,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": "BE:api/parent_portal/dismissal_calls.py::create_dismissal_notice",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-401",
@@ -10300,7 +10300,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-405",
@@ -10342,7 +10342,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": "BE:api/portal/dismissal_calls.py::_db_acknowledge",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-405",
@@ -10379,7 +10379,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": "BE:api/parent_portal/dismissal_calls.py::arrive_dismissal_notice",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-405",
@@ -10461,7 +10461,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": "BE:api/parent_portal/dismissal_calls.py::cancel_dismissal_notice",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-405",
