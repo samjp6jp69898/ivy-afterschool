@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 318,
-  "last_updated": "2026-10-05T04:12:28Z",
+  "version": 319,
+  "last_updated": "2026-10-05T04:14:14Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3226,7 +3226,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": "BE:api/auth.py::list_users",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-087",
@@ -3242,11 +3242,11 @@
           "integration"
         ],
         "red_cases": [
-          "test_admin_staff_list_success：staff_client(permissions=['staff:read']) GET /api/admin/staff-users?q=lin → 200，items[0].username 以 'lin' 開頭，含 total",
-          "test_admin_staff_list_422：page_size=500 → 422；role_id=abc → 422",
+          "test_admin_staff_list_success：staff_client(permissions=['staff:read']) GET /api/admin/staff-users?q=lin → 200，items[0].username 以 'lin' 開頭，含 total；啟用在前；is_active / role_id 篩選與分頁正確",
+          "test_admin_staff_list_422：page_size=500 → 422；role_id=abc → 422；is_active=maybe / 未知參數 → 422",
           "test_admin_staff_list_401：無 cookie → 401",
-          "test_admin_staff_list_403：staff_client(permissions=['roles:read']) → 403",
-          "test_admin_staff_list_no_password_hash：回應文字不含 '$argon2id$'"
+          "test_admin_staff_list_403：staff_client(permissions=['roles:read']) → 403，details.required == ['staff:read']",
+          "test_admin_staff_list_no_password_hash：回應文字不含 '$argon2id$' 與 'password_hash'（must_change_password 欄位名本身含 password，不以 'password' 子字串斷言）"
         ],
         "run": "just test-int apps/api/tests/integration/api/admin/test_staff_users_endpoints.py -k \"test_admin_staff_list_\"",
         "notes": ""
@@ -4258,7 +4258,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/reference.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-118",
@@ -12579,7 +12579,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-453",
@@ -12618,7 +12618,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-455",
@@ -12657,7 +12657,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-454",
@@ -12735,7 +12735,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-457",
@@ -12774,7 +12774,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-458",
@@ -12813,7 +12813,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-459",
@@ -12931,7 +12931,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-462",
@@ -12971,7 +12971,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-463",
@@ -13010,7 +13010,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/exams.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-464",
@@ -13202,7 +13202,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/dashboard.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-491",
@@ -13218,11 +13218,11 @@
           "integration"
         ],
         "red_cases": [
-          "test_admin_dashboard_success：staff_client(permissions=['dashboard:read']) → 200，attendance.present == 2",
+          "test_admin_dashboard_success：clock 2026-09-08（週二）15:00+08:00，3 位學生其中 2 位 present → 200，attendance.present == 2、arrived == 2、expected_total == 3、not_arrived == 1、homework.total == 2，回應 keys 完整",
           "test_admin_dashboard_422：GET /api/admin/dashboard/today?date=x 忽略未宣告參數仍 200；以 POST 呼叫 → 405 method_not_allowed",
           "test_admin_dashboard_401：無 cookie → 401",
-          "test_admin_dashboard_403：只有 students:read → 403",
-          "test_admin_dashboard_non_service_day：FakeClock 週日 → 200 is_service_day False、attendance.expected_total == 0"
+          "test_admin_dashboard_403：只有 students:read → 403，details.required == ['dashboard:read']",
+          "test_admin_dashboard_non_service_day：FakeClock 2026-09-06（週日）→ 200 is_service_day False、attendance.expected_total == 0、not_arrived == 0"
         ],
         "run": "just test-int apps/api/tests/integration/api/admin/test_dashboard_endpoints.py -k \"test_admin_dashboard_\"",
         "notes": "無 query / body 參數，422 不適用，以 405 案例取代。"
