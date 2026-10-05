@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 331,
-  "last_updated": "2026-10-05T04:27:08Z",
+  "version": 332,
+  "last_updated": "2026-10-05T04:34:44Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3105,7 +3105,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": "BE:api/auth.py::update_user",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-088",
@@ -3126,7 +3126,7 @@
           "test_update_staff_user_success：actor admin 把 tutor 帳號 role_id 改為 clerk、display_name 改 '王行政' → 回傳 role.code == 'clerk'；audit 'staff_user.update' before == {'role_code':'tutor','display_name':'王老師'}、after 對應新值",
           "test_update_staff_user_cannot_manage：actor 有效權限 = director 權限 ∪ {'staff:write'}，修改 admin 帳號 display_name → 403 'cannot_manage_staff'",
           "test_update_staff_user_self_permissions：actor 修改自己的 extra_permissions → 409 'cannot_modify_self_permissions'；修改自己的 phone → 成功",
-          "test_update_staff_user_cannot_grant：actor 有效權限 {'staff:write','students:read'} 對 tutor 帳號加 extra 'pickup:override' → 403 'cannot_grant_permissions'",
+          "test_update_staff_user_cannot_grant：actor 有效權限 = tutor 權限 ∪ {'staff:write'}（必須涵蓋目標目前的有效權限，否則先被 assert_can_manage_staff 擋成 403 cannot_manage_staff）對 tutor 帳號加 extra 'pickup:override' → 403 'cannot_grant_permissions'，details.permissions == ['pickup:override']",
           "test_update_staff_user_last_manager：把 db 中其他啟用帳號全部停用；建立 mgr（自訂角色含 roles:write、staff:write）；actor 為以 ALL_PERMISSIONS 建構、對應 DB 帳號已停用的 CurrentStaff → 把 mgr 的 role_id 改為 tutor → 409 'last_role_manager'"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_staff_user_service.py -k \"test_update_staff_user_\"",
@@ -3145,7 +3145,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": "BE:api/auth.py::reset_password",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-088",
@@ -3185,7 +3185,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": "BE:api/auth.py::delete_user",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-088",
@@ -5519,7 +5519,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::create_student",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-151",
@@ -5630,7 +5630,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::delete_student",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-153",
@@ -6028,7 +6028,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::create_guardian",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-169",
@@ -6067,7 +6067,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/guardians.py",
       "source_ref": "BE:api/students.py::update_guardian",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-170",
@@ -6105,7 +6105,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/guardians.py",
       "source_ref": "BE:api/students.py::delete_guardian",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-171",
@@ -6181,7 +6181,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/guardians.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-172",
@@ -14331,7 +14331,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-131",
@@ -14423,7 +14423,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-530",
