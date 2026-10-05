@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 76,
-  "last_updated": "2026-10-05T05:32:28Z",
+  "version": 77,
+  "last_updated": "2026-10-05T05:33:48Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -101,7 +101,7 @@
     {
       "id": "PARENT-004",
       "title": "建立家長端 http instance parent/api/http.ts（基於 FRONTEND-001，401 自動 refresh）",
-      "description": "建立 `apps/web/src/parent/api/http.ts`：\n```ts\nexport const parentHttp: AxiosInstance\nexport const parentRefreshHttp: AxiosInstance\nexport function setUnauthenticatedHandler(handler: () => void): void\n```\n- 以 FRONTEND-001 的 `createHttpClient(opts)` 建立：`baseURL: '/api'`（同源，經 nginx / vite proxy）；`refresh: () => parentRefreshHttp.post('/parent/auth/refresh').then(() => undefined)`，其中 `export const parentRefreshHttp = axios.create({ baseURL: '/api', withCredentials: true })` 是不掛攔截器的獨立 instance（避免 refresh 經過 parentHttp 自身攔截器造成遞迴；測試以 `createApiMock(parentRefreshHttp)` mock refresh）；`noRefreshPaths: ['/parent/auth/liff-login', '/parent/auth/bind', '/parent/auth/refresh', '/parent/auth/logout', '/parent/config']`（綁定頁自己處理 bind 的 401）；`onAuthFailure: () => handler?.()`，handler 由 `setUnauthenticatedHandler` 註冊（PARENT-013：清 store、導向 `/login`）。handler 只在 http 模組內保存，http.ts 不得 import router 或 store（避免循環）。不設定 `onPasswordChangeRequired`（家長無此流程）。\n- 錯誤一律是 FRONTEND-002 的 `ApiError`（FRONTEND-001 正規化），呼叫端以 `error.code` 判斷業務錯誤。\n- 移植 ivy `FE:src/parent/api/index.ts::buildParentRefreshUrl` 的「refresh 去重、並發 401 共用同一次 refresh」語意（實作在 FRONTEND-001，此處只做設定）；**去掉**租戶三態、maintenance 503、staff session 偵測、離線佇列、timing buffer。\n\n**驗收標準**：每一條對應 red_case（`createApiMock(parentHttp)`，INFRA-013）。",
+      "description": "建立 `apps/web/src/parent/api/http.ts`：\n```ts\nexport const parentHttp: AxiosInstance\nexport const parentRefreshHttp: AxiosInstance\nexport function setUnauthenticatedHandler(handler: () => void): void\n```\n- 以 FRONTEND-001 的 `createHttpClient(opts)` 建立：`baseURL: '/api'`（同源，經 nginx / vite proxy）；`refresh: () => parentRefreshHttp.post('/parent/auth/refresh').then(() => undefined, (e) => { throw toApiError(e) })`：parentRefreshHttp 不經 FRONTEND-001 正規化，reject 的是 AxiosError，refresh 必須把帶 envelope 的錯誤回應轉成 `ApiError(status, code, message, details ?? null)`（無 response 或無 envelope 原樣 reject），FRONTEND-001 才認得 409 `refresh_in_progress`（BACKEND-059：另一分頁已輪替、cookie 已更新、不清 cookie）並視同成功重送，而不是當成 refresh 失敗把家長登出；其中 `export const parentRefreshHttp = axios.create({ baseURL: '/api', withCredentials: true })` 是不掛攔截器的獨立 instance（避免 refresh 經過 parentHttp 自身攔截器造成遞迴；測試以 `createApiMock(parentRefreshHttp)` mock refresh）；`noRefreshPaths: ['/parent/auth/liff-login', '/parent/auth/bind', '/parent/auth/refresh', '/parent/auth/logout', '/parent/config']`（綁定頁自己處理 bind 的 401）；`onAuthFailure: () => handler?.()`，handler 由 `setUnauthenticatedHandler` 註冊（PARENT-013：清 store、導向 `/login`）。handler 只在 http 模組內保存，http.ts 不得 import router 或 store（避免循環）。不設定 `onPasswordChangeRequired`（家長無此流程）。\n- 錯誤一律是 FRONTEND-002 的 `ApiError`（FRONTEND-001 正規化），呼叫端以 `error.code` 判斷業務錯誤。\n- 移植 ivy `FE:src/parent/api/index.ts::buildParentRefreshUrl` 的「refresh 去重、並發 401 共用同一次 refresh」語意（實作在 FRONTEND-001，此處只做設定）；**去掉**租戶三態、maintenance 503、staff session 偵測、離線佇列、timing buffer。\n\n**驗收標準**：每一條對應 red_case（`createApiMock(parentHttp)`，INFRA-013）。",
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/http.ts",
       "source_ref": "FE:src/parent/api/index.ts::buildParentRefreshUrl",
@@ -126,7 +126,8 @@
           "parentHttp calls unauthenticated handler when refresh fails：GET /parent/me 401、refresh 401（parentRefreshHttp 的 mock）→ promise reject 且 error.status === 401，註冊的 handler 被呼叫恰 1 次",
           "parentHttp skips refresh for login endpoints：POST /parent/auth/liff-login 回 401 {error:{code:'invalid_id_token'}} → reject，error.code === 'invalid_id_token'，refresh mock 的 history.post 長度為 0，handler 未被呼叫",
           "parentHttp skips refresh for bind：POST /parent/auth/bind 回 401 {error:{code:'unauthenticated'}} → reject 且 refresh mock 的 history.post 長度為 0",
-          "parentHttp exposes business error code：POST /parent/pickup/requests 回 409 {error:{code:'pickup_request_exists', message:'今天已有接送請求', details:{request_id:'r1'}}} → reject，error.code === 'pickup_request_exists'、error.details.request_id === 'r1'"
+          "parentHttp exposes business error code：POST /parent/pickup/requests 回 409 {error:{code:'pickup_request_exists', message:'今天已有接送請求', details:{request_id:'r1'}}} → reject，error.code === 'pickup_request_exists'、error.details.request_id === 'r1'",
+          "parentHttp treats refresh 409 as rotated：GET /parent/children 第一次 401、refresh 回 409 {error:{code:'refresh_in_progress', message:'登入狀態更新中'}}（parentRefreshHttp 的 mock）、第二次 GET 200 [{id:'c1'}] → resolve 的 data 深等於 [{id:'c1'}]，parentHttp mock 的 history.get 長度為 2，handler 未被呼叫"
         ],
         "run": "just web-test src/parent/api/http.spec.ts -t \"parentHttp\"",
         "notes": "其他 PARENT task 的測試若需模擬 refresh 失敗，對 parentRefreshHttp 另建 createApiMock 註冊 POST /parent/auth/refresh。"
