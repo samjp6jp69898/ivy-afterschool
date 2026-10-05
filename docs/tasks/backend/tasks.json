@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 244,
-  "last_updated": "2026-10-05T02:42:53Z",
+  "version": 245,
+  "last_updated": "2026-10-05T02:44:41Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -1485,14 +1485,14 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/auth.py",
       "source_ref": "BE:api/auth.py::refresh_token",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-043",
         "BACKEND-042"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "回傳 StaffAuthOut / StaffMeOut 時 permissions 要先排序再傳入（BACKEND-039 的 StaffMeOut 不自行排序）。\nBACKEND-046 logout endpoint 先於本 task 完成，「logout 後舊 refresh 打 refresh → 401 refresh_revoked、其他裝置 refresh 仍成功」當時只能在 service 層驗證；本 task 要在 tests/integration/api/admin/test_auth_endpoints.py 補一條經 endpoint 的 logout → refresh 401 案例。",
+      "risk_notes": "回傳 StaffAuthOut / StaffMeOut 時 permissions 要先排序再傳入（BACKEND-039 的 StaffMeOut 不自行排序）。\n401 路徑由 endpoint 捕捉 UnauthenticatedError、以 app/core/errors.py 的 error_response(exc) 自組錯誤 envelope 再清 cookie（exception handler 另建回應時附在 Response 參數上的 Set-Cookie 不會帶出去）。\nendpoint 層 logout → refresh 401 refresh_revoked、其他裝置 refresh 仍成功的案例在 test_admin_refresh_after_logout_401_other_device_kept。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_auth_endpoints.py",
@@ -1712,7 +1712,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/auth.py",
       "source_ref": "BE:api/auth.py::change_password",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-049",
