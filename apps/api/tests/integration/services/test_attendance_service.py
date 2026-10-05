@@ -703,6 +703,46 @@ def test_daily_attendance_withdrawn_with_row(db_session: Session, fake_clock: Fa
     assert archived.id not in {r.student_id for r in out.items}
 
 
+_OCT5 = date(2026, 10, 5)  # 週一
+
+
+def test_daily_attendance_excludes_not_yet_enrolled(
+    db_session: Session, fake_clock: FakeClock
+) -> None:
+    class_a = make_class(db_session)
+    enrolled = make_student(db_session, name="王小明", class_=class_a)
+    enrolled.enrolled_on = date(2026, 10, 1)
+    later = make_student(db_session, name="陳小華", class_=class_a)
+    later.enrolled_on = date(2026, 10, 6)
+    on_day = make_student(db_session, name="林小安", class_=class_a)
+    on_day.enrolled_on = _OCT5  # 入班當天即算
+    db_session.flush()
+
+    out = get_daily_attendance(
+        db_session, DailyAttendanceQuery(date=_OCT5, class_id=class_a.id), clock=fake_clock
+    )
+
+    assert [(r.student_name, r.id) for r in out.items] == [("王小明", None), ("林小安", None)]
+    assert (out.summary.total, out.summary.expected) == (2, 2)
+
+
+def test_daily_attendance_keeps_row_even_if_enrolled_later(
+    db_session: Session, fake_clock: FakeClock
+) -> None:
+    class_a = make_class(db_session)
+    later = make_student(db_session, name="陳小華", class_=class_a)
+    later.enrolled_on = date(2026, 10, 6)
+    db_session.flush()
+    row = make_attendance(db_session, later, service_date=_OCT5, status="present")
+
+    out = get_daily_attendance(
+        db_session, DailyAttendanceQuery(date=_OCT5, class_id=class_a.id), clock=fake_clock
+    )
+
+    assert [(r.id, r.status) for r in out.items] == [(row.id, "present")]
+    assert (out.summary.total, out.summary.present, out.summary.expected) == (1, 1, 0)
+
+
 def test_daily_attendance_query_count(
     db_session: Session, fake_clock: FakeClock, count_sql: _SqlCounter
 ) -> None:

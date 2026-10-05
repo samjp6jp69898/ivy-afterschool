@@ -80,6 +80,20 @@ def test_dashboard_attendance_expected_rows_and_missing(
     assert (out.attendance.expected_total, out.attendance.not_arrived) == (2, 2)
 
 
+@pytest.mark.clock("2026-10-05T15:00:00+08:00")
+def test_dashboard_excludes_not_yet_enrolled(db_session: Session, fake_clock: FakeClock) -> None:
+    enrolled = make_student(db_session, name="王小明")
+    enrolled.enrolled_on = date(2026, 10, 1)
+    later = make_student(db_session, name="陳小華")
+    later.enrolled_on = date(2026, 10, 6)
+    db_session.flush()
+
+    out = get_today_dashboard(db_session, clock=fake_clock)
+
+    assert out.date == date(2026, 10, 5)
+    assert (out.attendance.expected_total, out.attendance.not_arrived) == (1, 1)
+
+
 @pytest.mark.clock(_CLOCK)
 def test_dashboard_non_service_day_counts_actual_rows_only(
     db_session: Session, fake_clock: FakeClock
