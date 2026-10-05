@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 385,
-  "last_updated": "2026-10-05T06:08:03Z",
+  "version": 386,
+  "last_updated": "2026-10-05T06:09:02Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -8905,7 +8905,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/leaves.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-345",
@@ -8914,7 +8914,7 @@
         "BACKEND-023"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "【review-r8-a 打回 1】_leave_out 以 list_leaves(LeaveListQuery(student_id=...), page_size=MAX_PAGE_SIZE=200) 的第一頁找剛建立的請假；list_leaves 依 start_date desc 排序且不限狀態，該生若已有 ≥ 200 筆 start_date 較晚的請假（含已取消者，取消的請假不參與重疊檢查），新建的那筆不在第一頁 → 拋 500 internal_error「剛建立的請假讀不到」，請求 rollback、合法的代登記失敗。scratch 實測：王小明有 200 筆 2027 年起的 cancelled 請假，POST 2026-09-01 的病假 → 500。要求：回應改為直接以新建的那筆組 LeaveOut（例如抽出 list_leaves 內的組裝成共用 leave_out，或至少把查詢限縮到該筆 id），並補一條上述情境回 201 的測試。",
+      "risk_notes": "寫入型請假 endpoint 的單筆回應一律以 leave_service.leave_out（與 list_leaves 共用 leave_outs 組裝）組新建 / 異動的那筆，不可從列表分頁回找（分頁排序與筆數上限會讓目標落在頁外）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/admin/test_leaves_endpoints.py",
@@ -8933,9 +8933,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r8-a",
-        "notes": "打回。tdd.run 5 條全綠、collect-only 全選到、9bece0c 先於 45c3874；leaves:write（改 leaves:read → 3 條轉紅）、拿掉 commit → 轉紅；lint / typecheck 乾淨。但回應組裝以 list_leaves(student_id=...) 第一頁（page_size = MAX_PAGE_SIZE 200、依 start_date desc）找剛建立的那筆，可構造出合法請求回 500（見 risk_notes）。"
+        "notes": "複審通過。打回項已修正：fd1c182（測試：205 筆 start_date 較晚的已取消請假 + POST）先於 da427fc（修正）。leave_service 抽出公開 leave_outs / leave_out，list_leaves 改用（查詢條件、排序與分頁不變），POST 以 leave_out 直接組新建那筆。tdd.run 6 條全綠、collect-only 對照全選到（含 test_admin_leaves_create_many_prior_leaves）；scratch 突變把 leaves.py 還原成從列表第一頁回找 → many_prior_leaves 轉紅。回歸：admin / parent test_leaves_endpoints 與 test_leave_service（含 test_list_leaves_order_and_query_count 的查詢次數上限）共 63 條全綠；lint / typecheck 乾淨；跑前後殘列筆數不變。前次審查已驗：leaves:write 讀寫分開、拿掉 commit 轉紅。"
       }
     },
     {
