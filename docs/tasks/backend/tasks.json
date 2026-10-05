@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 301,
-  "last_updated": "2026-10-05T03:32:30Z",
+  "version": 302,
+  "last_updated": "2026-10-05T03:32:40Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -7471,7 +7471,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/ws/parent.py",
       "source_ref": "BE:api/inbox_ws.py::employee_inbox_ws",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-225",
@@ -7495,10 +7495,11 @@
           "test_ws_parent_cannot_subscribe：送 {'action':'subscribe','topics':['pickup']} 與 unsubscribe → 各收到 {'type':'error','code':'not_allowed'}；publish 到 'admin:pickup' → 收不到（哨兵）",
           "test_ws_parent_unbind_revalidate：app.api.ws.parent.REVALIDATE_SECONDS=0.1；連線後把王小明的 guardian 封存並 commit → 收到 {'type':'children_changed','children':[]}；之後 publish 到 student_channel(王小明) → 收不到（哨兵）；再綁陳小華 → 收到 children_changed [陳小華] 且其 student channel 訊息收得到",
           "test_ws_parent_unauthenticated：無 cookie → 4401；staff_access cookie → 4401；Origin https://evil.test → 4403",
-          "test_ws_parent_receives_attendance：以真 commit session 呼叫 broadcast_after_commit(topic='attendance', type='attendance.updated', data=完整版, student_id=王小明, parent_data={'student_id','service_date','status','check_in_at','check_out_at'}) 並 commit（BACKEND-305 check_in 尚未實作，直接驅動出勤 service 使用的同一條 BACKEND-224 路徑）→ 家長 ws 收到 type 'attendance.updated'、data == parent_data、不含員工姓名；對陳小華（他人小孩）同樣廣播 → 收不到（哨兵）"
+          "test_ws_parent_receives_attendance：以真 commit session 呼叫 broadcast_after_commit(topic='attendance', type='attendance.updated', data=完整版, student_id=王小明, parent_data={'student_id','service_date','status','check_in_at','check_out_at'}) 並 commit（BACKEND-305 check_in 尚未實作，直接驅動出勤 service 使用的同一條 BACKEND-224 路徑）→ 家長 ws 收到 type 'attendance.updated'、data == parent_data、不含員工姓名；對陳小華（他人小孩）同樣廣播 → 收不到（哨兵）",
+          "test_ws_parent_revalidate_disabled：REVALIDATE_SECONDS=0.1；連線後把家長 status 改 'disabled' 並 commit → WebSocketDisconnect 4401，之後 broadcaster 的 student / parent channel 都沒有這條連線（subscriber_count == 0）；恢復啟用但 token_version + 1 並 commit → 同樣 4401 並取消訂閱（拿掉 revalidate 內的 ws_load_parent 即在逾時內轉紅）"
         ],
         "run": "just test-int apps/api/tests/integration/api/ws/test_ws_endpoints.py -k \"test_ws_parent_\"",
-        "notes": "同 BACKEND-226 的測資與哨兵作法。"
+        "notes": "同 BACKEND-226 的測資與哨兵作法。tests/integration/api/ws/test_ws_endpoints.py 的每個 receive 一律走 _recv(ws)（另開執行緒等待 receive_json，預設 5 秒逾時後 pytest.fail，teardown 照常清測資）；WebSocketDisconnect 原樣往外拋。跑 ws 測試外層加 timeout。"
       },
       "review": {
         "status": "concern",
