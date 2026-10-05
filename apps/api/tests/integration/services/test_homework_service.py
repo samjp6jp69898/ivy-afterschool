@@ -1,5 +1,5 @@
 """BACKEND-373 / 384 / 374 / 383 / 376 / 382：homework_service（進度列鎖定、家長端當日作業明細、
-ws 快照推播、作業進度看板、整體完成副作用、設定預計可接送時間）。
+ws 快照推播、作業進度看板、整體完成副作用、設定預計可接送時間、重算整體進度、手動標整體完成）。
 
 推播測試以 monkeypatch 記錄 publish_threadsafe；commit 走 db_session（savepoint 模式的 commit
 同樣觸發 before_commit / after_commit，見 BACKEND-006）。
@@ -20,7 +20,7 @@ from app.api.deps import CurrentStaff
 from app.core.errors import AppError
 from app.core.tx_hooks import install_tx_hooks
 from app.models.account import StaffUser
-from app.models.homework import HomeworkDailyProgress
+from app.models.homework import HomeworkDailyProgress, HomeworkItem
 from app.models.notifications import Notification
 from app.models.pickup import PickupRequest
 from app.models.reference import Subject
@@ -29,11 +29,14 @@ from app.realtime import publish as publish_module
 from app.realtime.publish import admin_topic_channel, student_channel
 from app.schemas.homework import BoardOut, BoardQuery, BoardStudentOut
 from app.services.homework_service import (
+    ProgressChange,
     broadcast_homework_snapshot,
     get_board,
     get_child_homework,
     handle_homework_done,
     lock_progress_row,
+    recompute_progress,
+    set_overall_status,
     set_ready_eta_and_note,
 )
 from app.services.settings_service import clear_settings_cache
@@ -913,3 +916,186 @@ def test_set_ready_eta_syncs_pickup(
     assert refreshed.reply_ready_eta == time(17, 30)
     assert refreshed.reply_message is not None
     assert refreshed.reply_message.startswith("預計 17:30 可接送")
+
+
+# --- BACKEND-375 recompute_progress / BACKEND-381 set_overall_status ---
+
+
+def _with_parent(db: Session, name: str = "王小明") -> Any:
+    student = make_student(db, name=name)
+    make_guardian(db, student, parent=make_parent(db))
+    return student
+
+
+def test_recompute_progress_derives(db_session: Session, clock: FakeClock, kick_off: None) -> None:
+    ming = make_student(db_session)
+    make_homework_item(db_session, ming, service_date=_DAY)
+    make_homework_item(db_session, ming, service_date=_DAY, status="done", title="國語生字")
+
+    change = recompute_progress(db_session, ming.id, _DAY, clock=clock)
+
+    assert isinstance(change, ProgressChange)
+    assert (change.old_status, change.new_status) == ("not_started", "in_progress")
+    assert _progress_row(db_session, ming.id).overall_status == "in_progress"
+
+
+def test_recompute_progress_done_notifies_today(
+    db_session: Session, clock: FakeClock, kick_off: None, published: list[Call]
+) -> None:
+    ming = _with_parent(db_session)
+    item = make_homework_item(db_session, ming, service_date=_DAY, status="doing")
+    recompute_progress(db_session, ming.id, _DAY, clock=clock)
+    item.status = "done"
+    db_session.flush()
+
+    change = recompute_progress(db_session, ming.id, _DAY, clock=clock)
+    again = recompute_progress(db_session, ming.id, _DAY, clock=clock)
+
+    assert (change.old_status, change.new_status) == ("in_progress", "done")
+    assert (again.old_status, again.new_status) == ("done", "done")
+    assert len(_notifications(db_session, "homework.done", ming.id)) == 1
+    db_session.commit()
+    [snapshot] = _on(published, admin_topic_channel("homework"))
+    assert snapshot["data"]["progress"]["overall_status"] == "done"
+
+
+def test_recompute_progress_past_date_no_notify(
+    db_session: Session, clock: FakeClock, kick_off: None
+) -> None:
+    ming = _with_parent(db_session)
+    past = date(2026, 8, 31)
+    make_homework_item(db_session, ming, service_date=past, status="done")
+
+    change = recompute_progress(db_session, ming.id, past, clock=clock)
+
+    assert change.new_status == "done"
+    assert _notifications(db_session, "homework.done", ming.id) == []
+
+
+def test_recompute_progress_overrides_manual_done(
+    db_session: Session, clock: FakeClock, kick_off: None
+) -> None:
+    ming = make_student(db_session)
+    make_homework_progress(db_session, ming, service_date=_DAY, overall_status="done")
+    make_homework_item(db_session, ming, service_date=_DAY, status="done")
+    make_homework_item(db_session, ming, service_date=_DAY, title="新加的作業")
+
+    change = recompute_progress(db_session, ming.id, _DAY, clock=clock)
+
+    assert (change.old_status, change.new_status) == ("done", "in_progress")
+    assert _progress_row(db_session, ming.id).overall_status == "in_progress"
+
+
+@pytest.fixture
+def owner_cleanup_people() -> Iterator[list[tuple[str, UUID]]]:
+    """committing 測試建立的監護人 / 學生 / 家長以 owner 連線依 FK 順序刪除；排在
+    committing_db_session 之前（先 truncate 作業與通知表，再刪人）。"""
+    rows: list[tuple[str, UUID]] = []
+    yield rows
+    with connect_owner() as conn:
+        conn.execute("set lock_timeout = '5s'")
+        for table, row_id in rows:
+            conn.execute(f"delete from public.{table} where id = %s", (row_id,))  # noqa: S608
+        conn.commit()
+
+
+@pytest.mark.cleanup_tables(
+    "homework_items", "homework_daily_progress", "notification_outbox", "notifications"
+)
+def test_recompute_progress_concurrent_single_notification(
+    owner_cleanup_people: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    clock: FakeClock,
+    kick_off: None,
+) -> None:
+    ming = make_student(committing_db_session, name="王小明")
+    parent = make_parent(committing_db_session)
+    guardian = make_guardian(committing_db_session, ming, parent=parent)
+    first = make_homework_item(committing_db_session, ming, service_date=_DAY)
+    second = make_homework_item(committing_db_session, ming, service_date=_DAY, title="國語生字")
+    committing_db_session.commit()
+    owner_cleanup_people.extend(
+        [("guardians", guardian.id), ("students", ming.id), ("parent_accounts", parent.id)]
+    )
+
+    def finish(session: Session, item_id: UUID) -> ProgressChange:
+        item = session.get(HomeworkItem, item_id)
+        assert item is not None
+        item.status = "done"
+        session.flush()
+        return recompute_progress(session, ming.id, _DAY, clock=clock)
+
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    s2_done = threading.Event()
+    outcome: dict[str, Any] = {}
+
+    def worker() -> None:
+        try:
+            outcome["s2"] = finish(s2, second.id)
+            s2.commit()
+        except BaseException as exc:
+            outcome["s2"] = exc
+            s2.rollback()
+        finally:
+            s2_done.set()
+
+    thread = threading.Thread(target=worker)
+    try:
+        outcome["s1"] = finish(s1, first.id)
+        thread.start()
+        assert not s2_done.wait(timeout=0.5)  # s1 尚未 commit：s2 在進度列排隊
+        s1.commit()
+        thread.join(timeout=10)
+    finally:
+        s1.close()
+        if thread.is_alive():
+            thread.join(timeout=10)
+        s2.close()
+
+    assert outcome["s1"].new_status == "in_progress"
+    assert outcome["s2"].new_status == "done"
+    assert _progress_row(committing_db_session, ming.id).overall_status == "done"
+    assert len(_notifications(committing_db_session, "homework.done", ming.id)) == 1
+
+
+def test_set_overall_done_without_items(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = _with_parent(db_session)
+
+    change = set_overall_status(db_session, ming.id, _DAY, "done", actor=actor, clock=clock)
+    again = set_overall_status(db_session, ming.id, _DAY, "done", actor=actor, clock=clock)
+
+    assert (change.old_status, change.new_status) == ("not_started", "done")
+    assert (again.old_status, again.new_status) == ("done", "done")
+    assert len(_notifications(db_session, "homework.done", ming.id)) == 1
+
+
+def test_set_overall_auto(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session)
+    make_homework_progress(db_session, ming, service_date=_DAY, overall_status="done")
+    make_homework_item(db_session, ming, service_date=_DAY, status="done")
+    make_homework_item(db_session, ming, service_date=_DAY, title="國語生字")
+
+    change = set_overall_status(db_session, ming.id, _DAY, "auto", actor=actor, clock=clock)
+
+    assert (change.old_status, change.new_status) == ("done", "in_progress")
+    assert _progress_row(db_session, ming.id).overall_status == "in_progress"
+
+
+def test_set_overall_not_found(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session)
+
+    with pytest.raises(AppError) as missing:
+        set_overall_status(db_session, uuid4(), _DAY, "done", actor=actor, clock=clock)
+    with pytest.raises(AppError) as too_far:
+        set_overall_status(db_session, ming.id, date(2026, 9, 9), "done", actor=actor, clock=clock)
+
+    assert (missing.value.status, missing.value.code) == (404, "student_not_found")
+    assert (too_far.value.status, too_far.value.code) == (422, "invalid_service_date")
