@@ -45,6 +45,7 @@ from app.schemas.pickup import (
     StaffPickupRequestCreateIn,
 )
 from app.services.audit_service import Actor
+from app.services.homework_service import lock_progress_row
 from app.services.pickup.auto_reply import DONE_REPLY_TEXT
 from app.services.pickup.requests import (
     acknowledge_request,
@@ -1487,3 +1488,85 @@ def test_cancel_pickup_request_notifies_parent(
     ).scalar_one()
     assert outbox == 1
     assert _events(db_session, "pickup.cancelled", by_staff.id) == []
+
+
+@pytest.mark.cleanup_tables(
+    "pickup_requests", "homework_daily_progress", "notification_outbox", "notifications"
+)
+def test_reply_pickup_request_lock_order_no_deadlock(
+    no_people_residue: None,
+    owner_cleanup: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    clock: FakeClock,
+    kick_off: None,
+) -> None:
+    """鎖序一律「進度列 → 請求列」（與 BACKEND-376 / 382 / 413 一致）。
+
+    s2 模擬作業模組（382）：先 lock_progress_row，再 sync_open_request_reply 鎖請求列。s1 同時
+    reply_request(reply_ready_eta)：必須先等進度列、還沒碰請求列，否則兩邊互等成 40P01 死結。
+    """
+    ming = make_student(committing_db_session)
+    parent = make_parent(committing_db_session)
+    guardian = make_guardian(committing_db_session, ming, parent=parent)
+    staff = make_staff(committing_db_session, role_code="tutor")
+    make_homework_progress(
+        committing_db_session,
+        ming,
+        service_date=_TODAY,
+        overall_status="in_progress",
+        ready_eta=time(17, 0),
+    )
+    request = make_pickup_request(
+        committing_db_session, ming, service_date=_TODAY, requested_by=parent.id
+    )
+    committing_db_session.commit()
+    owner_cleanup.extend(
+        [
+            ("guardians", guardian.id),
+            ("students", ming.id),
+            ("parent_accounts", parent.id),
+            ("staff_users", staff.id),
+        ]
+    )
+    actor = _current_staff(staff)
+
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    s1_done = threading.Event()
+    errors: list[BaseException] = []
+
+    def worker() -> None:
+        try:
+            reply_request(
+                s1, request.id, PickupReplyIn(reply_ready_eta="18:00"), actor=actor, clock=clock
+            )
+            s1.commit()
+        except BaseException as exc:
+            errors.append(exc)
+            s1.rollback()
+        finally:
+            s1_done.set()
+
+    thread = threading.Thread(target=worker)
+    try:
+        lock_progress_row(s2, ming.id, _TODAY)
+        thread.start()
+        assert not s1_done.wait(timeout=0.5)  # s1 等進度列
+        # s2 接著鎖請求列：若 s1 已先鎖住請求列，這裡會與 s1 互等成死結
+        sync_open_request_reply(s2, ming.id, _TODAY, clock=clock)
+        s2.commit()
+        thread.join(timeout=10)
+    except BaseException as exc:
+        errors.append(exc)
+        s2.rollback()
+    finally:
+        s2.close()
+        if thread.is_alive():
+            thread.join(timeout=10)
+        s1.close()
+
+    assert errors == []
+    final = _reload_request(committing_db_session, request.id)
+    assert (final.reply_source, final.reply_ready_eta) == ("staff", time(18, 0))
+    assert _progress_of(committing_db_session, ming.id).ready_eta == time(18, 0)
