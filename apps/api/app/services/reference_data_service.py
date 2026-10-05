@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import ConflictError, NotFoundError
 from app.models.reference import ClosedDay
-from app.schemas.reference import ReferenceListQuery
+from app.schemas.reference import DeleteResultOut, ReferenceListQuery
 from app.services.reference_specs import ReferenceSpec
 
 
@@ -33,6 +33,7 @@ def list_items(session: Session, spec: ReferenceSpec, query: ReferenceListQuery)
 
 
 _UNIQUE_VIOLATION = "23505"
+_FK_VIOLATION = "23503"
 
 
 def create_item(session: Session, spec: ReferenceSpec, data: BaseModel) -> BaseModel:
@@ -68,3 +69,30 @@ def update_item(session: Session, spec: ReferenceSpec, item_id: UUID, data: Base
             setattr(row, field, value)
         session.flush()
     return spec.out_schema.model_validate(row)
+
+
+def delete_item(session: Session, spec: ReferenceSpec, item_id: UUID) -> DeleteResultOut:
+    """不存在 404；在 savepoint 內 delete，撞 restrict FK（被 students / exam_subjects 等引用）時依
+    ``spec.deactivate_when_referenced`` 改為停用，否則 409 ``in_use``。
+
+    引用表清單不寫死在這裡：由 DB 的 FK 告知，營運模組新增引用時不需改本檔。
+    """
+    row = session.execute(
+        select(spec.model).where(spec.model.id == item_id)  # type: ignore[attr-defined]
+    ).scalar_one_or_none()
+    if row is None:
+        raise NotFoundError(spec.not_found_code, "找不到資料")
+    try:
+        with session.begin_nested():
+            session.delete(row)
+            session.flush()
+    except IntegrityError as exc:
+        if getattr(exc.orig, "sqlstate", None) != _FK_VIOLATION:
+            raise
+        if not spec.deactivate_when_referenced:
+            raise ConflictError("in_use", "資料已被使用，無法刪除") from None
+        # savepoint 已 rollback、row 仍在 session 內（delete 被撤銷）：改成停用
+        row.is_active = False  # type: ignore[attr-defined]
+        session.flush()
+        return DeleteResultOut(deleted=False, deactivated=True)
+    return DeleteResultOut(deleted=True, deactivated=False)
