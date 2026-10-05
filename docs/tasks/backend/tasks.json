@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 265,
-  "last_updated": "2026-10-05T02:57:00Z",
+  "version": 266,
+  "last_updated": "2026-10-05T02:57:11Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10162,8 +10162,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/views.py",
       "source_ref": "BE:api/dismissal_calls.py::_build_calls_out_bulk",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-401",
         "BACKEND-402",
@@ -10786,8 +10786,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:api/parent_portal/pickup.py::create_authorizations",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-400",
         "BACKEND-401",
@@ -10936,8 +10936,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:services/pickup_verification.py::_load_active",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-401",
         "BACKEND-002"
