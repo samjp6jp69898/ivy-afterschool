@@ -23,7 +23,7 @@ describe('HomeworkItemRow', () => {
     })
 
     expect(wrapper.get('.hw-row__subject').text()).toBe('其他')
-    expect(wrapper.get('.status-pill').text()).toBe('完成')
+    expect(wrapper.get('.status-pill__label').text()).toBe('完成')
     expect(wrapper.get('.status-pill').classes()).toContain('status-pill--success')
     const icon = wrapper.get('.status-pill .m3-icon')
     expect(icon.text()).toBe('check')
