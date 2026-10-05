@@ -97,34 +97,11 @@ def _actor_names(
     return {(row[0], row[1]): row[2] for row in session.execute(stmt)}
 
 
-def list_leaves(session: Session, query: LeaveListQuery, page: PageParams) -> Page[LeaveOut]:
-    """篩選後依 start_date desc、created_at desc 分頁；附件只回 metadata（不簽 URL）。
-
-    SQL 次數固定：count、列表（附件 selectin）、學生、建立 / 取消者名稱。
-    """
-    stmt = select(StudentLeave)
-    if query.class_id is not None:
-        stmt = stmt.join(Student, Student.id == StudentLeave.student_id).where(
-            Student.class_id == query.class_id
-        )
-    if query.student_id is not None:
-        stmt = stmt.where(StudentLeave.student_id == query.student_id)
-    if query.status is not None:
-        stmt = stmt.where(StudentLeave.status == query.status)
-    if query.leave_type is not None:
-        stmt = stmt.where(StudentLeave.leave_type == query.leave_type)
-    if query.created_by_type is not None:
-        stmt = stmt.where(StudentLeave.created_by_type == query.created_by_type)
-    # 區間交集（含頭尾）：start <= date_to 且 end >= date_from
-    if query.date_to is not None:
-        stmt = stmt.where(StudentLeave.start_date <= query.date_to)
-    if query.date_from is not None:
-        stmt = stmt.where(StudentLeave.end_date >= query.date_from)
-    stmt = stmt.order_by(
-        StudentLeave.start_date.desc(), StudentLeave.created_at.desc(), StudentLeave.id
-    )
-
-    leaves, total = paginate(session, stmt, page)
+def leave_outs(session: Session, leaves: list[StudentLeave]) -> list[LeaveOut]:
+    """後台 ``LeaveOut`` 組裝（學生摘要、建立 / 取消者名稱各一次查詢；附件只回 metadata）。
+    list_leaves 與單筆回應（BACKEND-352 等寫入 endpoint）共用。"""
+    if not leaves:
+        return []
     students = student_brief_map(session, {leave.student_id for leave in leaves})
     names = _actor_names(session, leaves)
     items = []
@@ -167,7 +144,42 @@ def list_leaves(session: Session, query: LeaveListQuery, page: PageParams) -> Pa
                 ],
             )
         )
-    return Page(items=items, total=total)
+    return items
+
+
+def leave_out(session: Session, leave: StudentLeave) -> LeaveOut:
+    return leave_outs(session, [leave])[0]
+
+
+def list_leaves(session: Session, query: LeaveListQuery, page: PageParams) -> Page[LeaveOut]:
+    """篩選後依 start_date desc、created_at desc 分頁；附件只回 metadata（不簽 URL）。
+
+    SQL 次數固定：count、列表（附件 selectin）、學生、建立 / 取消者名稱。
+    """
+    stmt = select(StudentLeave)
+    if query.class_id is not None:
+        stmt = stmt.join(Student, Student.id == StudentLeave.student_id).where(
+            Student.class_id == query.class_id
+        )
+    if query.student_id is not None:
+        stmt = stmt.where(StudentLeave.student_id == query.student_id)
+    if query.status is not None:
+        stmt = stmt.where(StudentLeave.status == query.status)
+    if query.leave_type is not None:
+        stmt = stmt.where(StudentLeave.leave_type == query.leave_type)
+    if query.created_by_type is not None:
+        stmt = stmt.where(StudentLeave.created_by_type == query.created_by_type)
+    # 區間交集（含頭尾）：start <= date_to 且 end >= date_from
+    if query.date_to is not None:
+        stmt = stmt.where(StudentLeave.start_date <= query.date_to)
+    if query.date_from is not None:
+        stmt = stmt.where(StudentLeave.end_date >= query.date_from)
+    stmt = stmt.order_by(
+        StudentLeave.start_date.desc(), StudentLeave.created_at.desc(), StudentLeave.id
+    )
+
+    leaves, total = paginate(session, stmt, page)
+    return Page(items=leave_outs(session, leaves), total=total)
 
 
 def get_attachment_url(
