@@ -348,7 +348,13 @@ def get_daily_attendance(
             _with_class_filter(
                 select(*_student_columns())
                 .outerjoin(SchoolClass, SchoolClass.id == Student.class_id)
-                .where(Student.status == "active", Student.archived_at.is_(None), ~has_row),
+                .where(
+                    Student.status == "active",
+                    Student.archived_at.is_(None),
+                    # 尚未入班者不產生虛擬列（與 BACKEND-303 建列範圍一致）
+                    or_(Student.enrolled_on.is_(None), Student.enrolled_on <= d),
+                    ~has_row,
+                ),
                 query.class_id,
             )
         ).all()

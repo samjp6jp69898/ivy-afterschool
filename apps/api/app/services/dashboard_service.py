@@ -49,7 +49,11 @@ def _attendance_counts(session: Session, d: date, service_day: bool) -> Attendan
             StudentAttendance.student_id == Student.id, StudentAttendance.service_date == d
         )
         missing = select(literal(_MISSING), func.count()).where(
-            Student.status == "active", Student.archived_at.is_(None), ~has_row
+            Student.status == "active",
+            Student.archived_at.is_(None),
+            # 尚未入班者不算應到（與 BACKEND-303 / 311 一致）
+            or_(Student.enrolled_on.is_(None), Student.enrolled_on <= d),
+            ~has_row,
         )
         stmt = union_all(by_status, missing)
     counts: Counter[str] = Counter({status: n for status, n in session.execute(stmt)})
