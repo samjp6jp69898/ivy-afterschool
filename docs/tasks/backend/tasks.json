@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 386,
-  "last_updated": "2026-10-05T06:09:02Z",
+  "version": 387,
+  "last_updated": "2026-10-05T06:10:05Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14331,7 +14331,7 @@
     {
       "id": "BACKEND-529",
       "title": "實作 StudentService.close_out_inactive_student：學生停讀 / 退班時同交易收尾接送、代理授權、出勤與請假",
-      "description": "在 `apps/api/app/services/student_service.py` 實作（domain_spec M3：學生狀態改為 suspended 或 withdrawn 時，同一交易內自動收尾；已發生的紀錄保留）。由 BACKEND-152 update_student 與 BACKEND-158 學年升級呼叫。\n```python\n@dataclass(frozen=True)\nclass CloseOutResult:\n    cancelled_pickup_requests: int\n    cancelled_authorizations: int\n    cancelled_leaves: int\n    truncated_leaves: int\n    deleted_attendance_dates: list[date]\n\ndef close_out_inactive_student(session: Session, student: Student, *, actor: CurrentStaff, clock: Clock) -> CloseOutResult: ...\n```\ntoday = clock.today()，依序：\n1. **請假**：該生 active 且 `end_date >= today` 的請假——`start_date >= today` → 整筆 cancelled（cancelled_by_type='staff'、cancelled_by_id=actor.id），`revert_attendance_for_leave(leave)`；已開始 → `end_date = today - 1`，`revert_attendance_for_leave(leave, from_date=today)`（BACKEND-343）。不發 leave.cancelled 通知（員工本身就是操作者）。\n2. **出勤**：刪除 `service_date >= today and status = 'expected'` 的列（含第 1 步剛還原的列）；present / left / absent 與過去的列保留。\n3. **接送請求**：該生所有非終態請求（不限日期）以條件式更新改為 cancelled，cancel_reason = '學生已停讀' 或 '學生已退班'（依新狀態）；逐筆 `publish_request_change`（BACKEND-404）。不發 pickup.cancelled（避免家長收到系統性取消通知；家長端畫面經 ws 更新）。\n4. **代理授權**：`status='active' and service_date >= today` 改為 cancelled；broadcast `pickup.authorization_updated`。\n5. 有任何刪除的出勤 → broadcast `attendance.bulk_updated`。\n6. 稽核 `student.close_out`（after：上述各計數與新狀態，不含個資）（BACKEND-102）。\n- 冪等：沒有可收尾的資料時各計數為 0，仍寫 audit（記錄狀態轉換時點）。\n- 不 commit；與 update_student 同交易，任何一步失敗整筆回滾。\n\n**驗收標準**\n- 進行中接送請求 cancelled（已完成的不動）。\n- 今天起的 active 代理授權 cancelled（過去日期與已核銷的不動）。\n- 今天起 expected 出勤刪除；present / left / absent 與過去的列保留。\n- 未開始請假 cancelled、已開始請假 end_date 截到昨天，對應出勤還原後被刪除。\n- audit student.close_out 計數正確；整體與呼叫端同交易。",
+      "description": "在 `apps/api/app/services/student_service.py` 實作（domain_spec M3：學生狀態改為 suspended 或 withdrawn 時，同一交易內自動收尾；已發生的紀錄保留）。由 BACKEND-152 update_student 與 BACKEND-158 學年升級呼叫。\n```python\n@dataclass(frozen=True)\nclass CloseOutResult:\n    cancelled_pickup_requests: int\n    cancelled_authorizations: int\n    cancelled_leaves: int\n    truncated_leaves: int\n    deleted_attendance_dates: list[date]\n\ndef close_out_inactive_student(session: Session, student: Student, *, actor: CurrentStaff, clock: Clock) -> CloseOutResult: ...\n```\ntoday = clock.today()，依序（處理順序即鎖序，BACKEND-548：代理授權列 → 接送請求列 → 請假列 → 出勤列，與 BACKEND-425 complete_via_authorization 的「授權列 → 請求列 → 出勤列」同向，避免 40P01）：\n1. **代理授權**：`status='active' and service_date >= today` 改為 cancelled；broadcast `pickup.authorization_updated`。\n2. **接送請求**：該生所有非終態請求（不限日期）以條件式更新改為 cancelled，cancel_reason = '學生已停讀' 或 '學生已退班'（依新狀態）；逐筆 `publish_request_change`（BACKEND-404）。不發 pickup.cancelled（避免家長收到系統性取消通知；家長端畫面經 ws 更新）。\n3. **請假**：該生 active 且 `end_date >= today` 的請假——`start_date >= today` → 整筆 cancelled（cancelled_by_type='staff'、cancelled_by_id=actor.id），`revert_attendance_for_leave(leave)`；已開始 → `end_date = today - 1`，`revert_attendance_for_leave(leave, from_date=today)`（BACKEND-343）。不發 leave.cancelled 通知（員工本身就是操作者）。\n4. **出勤**：刪除 `service_date >= today and status = 'expected'` 的列（含第 3 步剛還原的列）；present / left / absent 與過去的列保留。有任何刪除 → broadcast `attendance.bulk_updated`。\n5. 稽核 `student.close_out`（after：上述各計數與新狀態，不含個資）（BACKEND-102）。\n- 全專案鎖序約定：作業進度列 → 接送請求列；代理授權列 → 接送請求列 → 出勤列；請假列 → 出勤列。\n- 冪等：沒有可收尾的資料時各計數為 0，仍寫 audit（記錄狀態轉換時點）。\n- 不 commit；與 update_student 同交易，任何一步失敗整筆回滾。\n\n**驗收標準**\n- 進行中接送請求 cancelled（已完成的不動）。\n- 今天起的 active 代理授權 cancelled（過去日期與已核銷的不動）。\n- 今天起 expected 出勤刪除；present / left / absent 與過去的列保留。\n- 未開始請假 cancelled、已開始請假 end_date 截到昨天，對應出勤還原後被刪除。\n- audit student.close_out 計數正確；整體與呼叫端同交易。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": null,
@@ -15052,7 +15052,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-529",
