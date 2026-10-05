@@ -1,11 +1,13 @@
 """BACKEND-064：GET /api/parent/me。
-BACKEND-053：POST /api/parent/auth/liff-login。"""
+BACKEND-053：POST /api/parent/auth/liff-login。
+BACKEND-059 / 061：POST /api/parent/auth/refresh、POST /api/parent/auth/logout。"""
 
 from __future__ import annotations
 
 import json
 from collections.abc import Callable
 
+import httpx2
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -15,10 +17,12 @@ from sqlalchemy.orm import Session
 from app.core.errors import AppError
 from app.models.account import StaffUser
 from app.models.parents import ParentAccount
+from app.services.auth import refresh_tokens
 from app.services.auth.line_id_token import LineProfile, get_line_verifier
 from app.services.auth.throttle import AuthThrottles, get_auth_throttles
 from app.services.settings_service import invalidate_setting
 from tests.support.factories import make_guardian, make_parent, make_student
+from tests.support.fake_clock import FakeClock
 from tests.support.fake_line import FakeLineVerifier
 
 _URL = "/api/parent/me"
@@ -276,3 +280,208 @@ def test_parent_liff_login_503_not_configured(
 
 def test_parent_liff_login_route_registered(app: FastAPI) -> None:
     assert "post" in app.openapi()["paths"][_LIFF_LOGIN]
+
+
+# --- BACKEND-059 / 061：POST /api/parent/auth/refresh、POST /api/parent/auth/logout ---------------
+# 綁定 endpoint（BACKEND-056）尚未提供，家長 cookie 一律由已綁定家長的 liff-login 取得。
+
+_REFRESH = "/api/parent/auth/refresh"
+_LOGOUT = "/api/parent/auth/logout"
+
+
+def _liff_login(client: TestClient) -> str:
+    resp = client.post(_LIFF_LOGIN, json={"id_token": _ID_TOKEN})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "ok"
+    raw = resp.cookies.get("parent_refresh")
+    assert raw
+    return raw
+
+
+def _bound_parent(db_session: Session) -> ParentAccount:
+    parent = make_parent(db_session, line_user_id=_LINE_A, display_name="王媽媽")
+    make_guardian(db_session, make_student(db_session, name="王小明"), parent=parent)
+    db_session.commit()
+    return parent
+
+
+def _set_refresh(client: TestClient, raw: str) -> None:
+    client.cookies.set("parent_refresh", raw, path="/api/parent/auth")
+
+
+def _cleared(resp: httpx2.Response, name: str) -> bool:
+    return any(
+        header.startswith(f'{name}="";') and "Max-Age=0" in header
+        for header in resp.headers.get_list("set-cookie")
+    )
+
+
+@pytest.mark.usefixtures("liff_configured", "line_verifier", "parent_throttles")
+def test_parent_refresh_endpoint_success(api_client: TestClient, db_session: Session) -> None:
+    parent = _bound_parent(db_session)
+    old_refresh = _liff_login(api_client)
+    old_access = api_client.cookies.get("parent_access")
+
+    resp = api_client.post(_REFRESH)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {"parent"}
+    assert body["parent"]["id"] == str(parent.id)
+    assert body["parent"]["display_name"] == "王媽媽"
+    assert [c["name"] for c in body["parent"]["children"]] == ["王小明"]
+    new_refresh = resp.cookies.get("parent_refresh")
+    new_access = resp.cookies.get("parent_access")
+    assert new_refresh
+    assert new_refresh != old_refresh
+    assert new_access
+    assert new_access not in resp.text
+    assert new_refresh not in resp.text
+    # 已 commit：新 refresh 可再輪替；舊 access 仍有效（token_version 不變）
+    assert api_client.post(_REFRESH).status_code == 200
+    api_client.cookies.set("parent_access", old_access or "")
+    assert api_client.get("/api/parent/me").status_code == 200
+
+
+def test_parent_refresh_endpoint_401(api_client: TestClient, assert_error: AssertError) -> None:
+    api_client.cookies.clear()
+
+    resp = api_client.post(_REFRESH)
+
+    assert_error(resp, 401, "unauthenticated")
+    assert _cleared(resp, "parent_access")
+    assert _cleared(resp, "parent_refresh")
+
+
+@pytest.mark.usefixtures("liff_configured", "line_verifier", "parent_throttles")
+def test_parent_refresh_endpoint_reuse(
+    api_client: TestClient, db_session: Session, fake_clock: FakeClock, assert_error: AssertError
+) -> None:
+    _bound_parent(db_session)
+    old_refresh = _liff_login(api_client)
+    assert api_client.post(_REFRESH).status_code == 200
+    fake_clock.advance(seconds=6)
+    _set_refresh(api_client, old_refresh)
+
+    resp = api_client.post(_REFRESH)
+
+    assert_error(resp, 401, "refresh_reused")
+    assert _cleared(resp, "parent_access")
+    assert _cleared(resp, "parent_refresh")
+    # 整個 family 撤銷、token_version +1：access 也失效
+    with pytest.raises(AppError) as exc:
+        refresh_tokens.rotate(db_session, old_refresh, clock=fake_clock)
+    assert exc.value.code == "refresh_revoked"
+    assert api_client.get("/api/parent/me").status_code == 401
+
+
+@pytest.mark.usefixtures("liff_configured", "line_verifier", "parent_throttles")
+def test_parent_refresh_endpoint_409(
+    api_client: TestClient, db_session: Session, fake_clock: FakeClock, assert_error: AssertError
+) -> None:
+    _bound_parent(db_session)
+    old_refresh = _liff_login(api_client)
+    first = api_client.post(_REFRESH)
+    assert first.status_code == 200
+    new_refresh = first.cookies.get("parent_refresh")
+    fake_clock.advance(seconds=1)
+    _set_refresh(api_client, old_refresh)
+
+    resp = api_client.post(_REFRESH)
+
+    assert_error(resp, 409, "refresh_in_progress")
+    assert resp.headers.get_list("set-cookie") == []
+    assert new_refresh
+    _set_refresh(api_client, new_refresh)
+    assert api_client.post(_REFRESH).status_code == 200
+
+
+@pytest.mark.usefixtures("liff_configured", "line_verifier", "parent_throttles")
+def test_parent_refresh_endpoint_403_foreign_origin(
+    api_client: TestClient, db_session: Session, fake_clock: FakeClock, assert_error: AssertError
+) -> None:
+    _bound_parent(db_session)
+    raw = _liff_login(api_client)
+
+    resp = api_client.post(_REFRESH, headers={"Origin": "https://evil.test"})
+
+    assert_error(resp, 403, "origin_forbidden")
+    assert resp.headers.get_list("set-cookie") == []
+    assert refresh_tokens.rotate(db_session, raw, clock=fake_clock).subject_type == "parent"
+
+
+@pytest.mark.usefixtures("liff_configured", "line_verifier", "parent_throttles")
+def test_parent_logout_endpoint_success(
+    api_client: TestClient, db_session: Session, fake_clock: FakeClock
+) -> None:
+    _bound_parent(db_session)
+    raw = _liff_login(api_client)
+
+    resp = api_client.post(_LOGOUT)
+
+    assert resp.status_code == 200
+    assert resp.json() == {"message": "已登出"}
+    assert _cleared(resp, "parent_access")
+    assert _cleared(resp, "parent_refresh")
+    assert _cleared(resp, "parent_bind")
+    with pytest.raises(AppError) as exc:
+        refresh_tokens.rotate(db_session, raw, clock=fake_clock)
+    assert exc.value.code == "refresh_revoked"
+
+
+@pytest.mark.usefixtures("liff_configured", "line_verifier", "parent_throttles")
+def test_parent_logout_endpoint_refresh_after(
+    api_client: TestClient, db_session: Session, assert_error: AssertError
+) -> None:
+    _bound_parent(db_session)
+    raw = _liff_login(api_client)
+    assert api_client.post(_LOGOUT).status_code == 200
+
+    _set_refresh(api_client, raw)
+    resp = api_client.post(_REFRESH)
+
+    assert_error(resp, 401, "refresh_revoked")
+    assert _cleared(resp, "parent_refresh")
+
+
+def test_parent_logout_endpoint_no_cookie(api_client: TestClient) -> None:
+    api_client.cookies.clear()
+
+    resp = api_client.post(_LOGOUT)
+
+    assert resp.status_code == 200
+    assert resp.json() == {"message": "已登出"}
+    assert _cleared(resp, "parent_access")
+    assert _cleared(resp, "parent_refresh")
+
+
+@pytest.mark.usefixtures("liff_configured", "line_verifier", "parent_throttles")
+def test_parent_logout_endpoint_403_foreign_origin(
+    api_client: TestClient, db_session: Session, fake_clock: FakeClock, assert_error: AssertError
+) -> None:
+    _bound_parent(db_session)
+    raw = _liff_login(api_client)
+
+    resp = api_client.post(_LOGOUT, headers={"Origin": "https://evil.test"})
+
+    assert_error(resp, 403, "origin_forbidden")
+    assert api_client.cookies.get("parent_refresh") == raw
+    # 被擋下的請求不得撤銷 token
+    assert refresh_tokens.rotate(db_session, raw, clock=fake_clock).subject_type == "parent"
+
+
+@pytest.mark.usefixtures("liff_configured", "line_verifier", "parent_throttles")
+def test_parent_logout_endpoint_other_device_kept(
+    api_client: TestClient, db_session: Session, app: FastAPI
+) -> None:
+    _bound_parent(db_session)
+    raw1 = _liff_login(api_client)
+    with TestClient(app, base_url="http://testserver") as other:
+        raw2 = _liff_login(other)
+        assert raw1 != raw2
+
+        assert api_client.post(_LOGOUT).status_code == 200
+
+        assert other.post(_REFRESH).status_code == 200
+        _set_refresh(api_client, raw1)
+        assert api_client.post(_REFRESH).status_code == 401
