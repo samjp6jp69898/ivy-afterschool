@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 354,
-  "last_updated": "2026-10-05T05:40:02Z",
+  "version": 355,
+  "last_updated": "2026-10-05T05:40:15Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -7674,7 +7674,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/jobs/attendance_jobs.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-303",
@@ -7697,9 +7697,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。紅測 fe837df 先於實作 a208e6f；實作 commit 內兩處測試改寫未放寬（check_out_at 改以 datetime 相等比對同一時刻，避免 'Z' / '+00:00' 字串差異；leave.window 改以 jsonb || 只覆寫兩個日期欄位、保留其他設定）。tdd.run 全綠且 --collect-only 對照選到每條 red_case；jobs、core/test_scheduler、test_attendance_service、test_leave_service、test_leave_attendance 共 131 passed；lint / typecheck 乾淨；測試以 app_backend 連線；跑前跑後 owner 查人員、自訂 roles、出勤、通知、請假等表皆 0 列（無殘列）；突變在 scratchpad 複本執行。 @scheduled_job('attendance.daily_init', CronTrigger(minute='0,30', hour='5-20', timezone='Asia/Taipei'))，run_key 用 scheduler 既有的 daily_run_key（clock.today().isoformat()，與 description 的 lambda 等價），UTC 9/1 16:30 → '2026-09-02'；只 flush，run_job_once commit 後另開連線查得 2 列、再跑仍 2 列；jobs/__init__.py 已 import。"
       }
     },
     {
@@ -7754,7 +7754,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:api/student_attendance.py::batch_save_attendance",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-305"
@@ -7778,9 +7778,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。紅測 fe837df 先於實作 a208e6f；實作 commit 內兩處測試改寫未放寬（check_out_at 改以 datetime 相等比對同一時刻，避免 'Z' / '+00:00' 字串差異；leave.window 改以 jsonb || 只覆寫兩個日期欄位、保留其他設定）。tdd.run 全綠且 --collect-only 對照選到每條 red_case；jobs、core/test_scheduler、test_attendance_service、test_leave_service、test_leave_attendance 共 131 passed；lint / typecheck 乾淨；測試以 app_backend 連線；跑前跑後 owner 查人員、自訂 roles、出勤、通知、請假等表皆 0 列（無殘列）；突變在 scratchpad 複本執行。 先 FOR UPDATE 取當日列，無列 → 409 not_checked_in（不建列）；條件式 UPDATE WHERE status='present' AND check_in_at <= now；expected / absent / left / leave / 時鐘異常各對應 409 且不通知；attendance.checked_out payload.time 18:30；兩 session 同時離班一成一 409 already_checked_out、通知 1 筆；commit 後推家長裁切資料。突變：拿掉 status 條件 → 2 紅。"
       }
     },
     {
@@ -7790,7 +7790,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-305"
@@ -7811,9 +7811,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。紅測 fe837df 先於實作 a208e6f；實作 commit 內兩處測試改寫未放寬（check_out_at 改以 datetime 相等比對同一時刻，避免 'Z' / '+00:00' 字串差異；leave.window 改以 jsonb || 只覆寫兩個日期欄位、保留其他設定）。tdd.run 全綠且 --collect-only 對照選到每條 red_case；jobs、core/test_scheduler、test_attendance_service、test_leave_service、test_leave_attendance 共 131 passed；lint / typecheck 乾淨；測試以 app_backend 連線；跑前跑後 owner 查人員、自訂 roles、出勤、通知、請假等表皆 0 列（無殘列）；突變在 scratchpad 複本執行。 單一條件式 UPDATE（present 且 check_in_at <= at）→ left / source pickup / 不填 updated_by，命中才推播並回 True；expected / leave / left 回 False 不改（left 的 check_out_at 不變）、logger.info；不產生 attendance.checked_out。突變：拿掉 present 條件 → 紅。"
       }
     },
     {
@@ -7823,13 +7823,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/attendance_service.py",
       "source_ref": "BE:api/student_attendance.py::batch_save_attendance",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-305"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "",
+      "risk_notes": "review-r8-c 打回：batch_check_in 依輸入順序逐生 ensure_attendance_row（FOR UPDATE）上鎖，兩個批次以不同順序處理重疊學生會死結。反例（已在 scratchpad 以真實函式重現）：員工 A 批次 [王小明, 陳小華]、員工 B 同時批次 [陳小華, 王小明] → A 鎖王小明列後等陳小華列、B 鎖陳小華列後等王小明列 → Postgres 40P01 deadlock detected，其中一整批失敗（500）。專案既有慣例（lock_progress_row docstring / BACKEND-378）：批次呼叫者必須依 student_id 排序後依序鎖定。修正方向：先依 student_id 排序逐一 ensure 鎖列（或一次以 ORDER BY id FOR UPDATE 鎖定），succeeded / skipped 仍依輸入順序回報；補兩 session 反序批次的測試（兩批皆完成、無 40P01）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_attendance_service.py",
@@ -7847,9 +7847,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r8-c",
+        "notes": "打回：反序批次會死結（詳見 risk_notes）。其餘已審項目通過：非營業日整批 409 不寫入；學生一次查詢（含封存 → student_not_found）；skipped code 與順序正確；收件人以 parent_recipients_bulk 一次查詢（guardians 查詢 1 次，突變改逐生查詢即紅）；admin 只廣播一次 batch_updated、家長逐生 attendance.updated；check_in 抽出 _try_check_in 後 305 的 8 條測試仍綠。"
       }
     },
     {
@@ -8630,7 +8630,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_service.py",
       "source_ref": "BE:api/parent_portal/leaves.py::create_leave",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-340",
@@ -8664,9 +8664,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-c",
+        "notes": "通過。紅測 fe837df 先於實作 a208e6f；實作 commit 內兩處測試改寫未放寬（check_out_at 改以 datetime 相等比對同一時刻，避免 'Z' / '+00:00' 字串差異；leave.window 改以 jsonb || 只覆寫兩個日期欄位、保留其他設定）。tdd.run 全綠且 --collect-only 對照選到每條 red_case；jobs、core/test_scheduler、test_attendance_service、test_leave_service、test_leave_attendance 共 131 passed；lint / typecheck 乾淨；測試以 app_backend 連線；跑前跑後 owner 查人員、自訂 roles、出勤、通知、請假等表皆 0 列（無殘列）；突變在 scratchpad 複本執行。 家長 assert_parent_owns_student(for_write)（他人 404、退班 409）＋ leave.window 日期窗（start_date 比對、422 帶 past / future_days，設定變更即時生效）；員工 get_student_or_404 + active、不受日期窗限制；區間無營業日 422；savepoint 內寫入，23P01 且 constraint == ex_student_leaves_no_overlap → 409 leave_overlap 帶既有 leave_id / 起迄，取消的不擋；套用出勤（員工時 updated_by 為員工）、通知 leave.created；兩 session 同時送出一成一 409、最終 active 1 筆。規格修正 4ced574 合理（2026-08-02 為週日，區間無營業日會先 422）。突變：拿掉 savepoint → 2 紅；拿掉家長日期窗 → 1 紅。殘留：409 分支以 .one() 查重疊請假，若該請假恰在衝突後瞬間被取消會變 500（極窄競態）。"
       }
     },
     {
