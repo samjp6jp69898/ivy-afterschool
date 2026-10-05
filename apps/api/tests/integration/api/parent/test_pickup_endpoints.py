@@ -1,29 +1,33 @@
 """BACKEND-441：GET /api/parent/pickup/requests/today。
 BACKEND-444 / 445 / 446：家長端常用接送人（列表、新增 multipart 含照片、刪除）。
-BACKEND-447 / 448：家長端代理接送授權（列表、建立；接送碼只回一次、Cache-Control: no-store）。"""
+BACKEND-447 / 448：家長端代理接送授權（列表、建立；接送碼只回一次、Cache-Control: no-store）。
+BACKEND-440 / 442 / 443：接送請求「我要來接」（含 arrived 捷徑）、「我到了」、取消。"""
 
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.models.account import StaffUser
+from app.models.notifications import Notification
 from app.models.parents import ParentAccount
-from app.models.pickup import PickupPerson
+from app.models.pickup import PickupPerson, PickupRequest
 from app.models.students import Student
 from app.services.settings_service import clear_settings_cache
 from tests.support.factories import (
     make_guardian,
+    make_homework_progress,
     make_pickup_authorization,
     make_pickup_person,
     make_pickup_request,
+    make_staff,
     make_student,
 )
 from tests.support.fake_clock import FakeClock
@@ -601,3 +605,328 @@ def test_parent_pickup_auth_create_409(
     assert_error(limit, 409, "authorization_limit_reached")
     assert_error(withdrawn, 409, "student_not_active")
     assert len(client.get(_auths_url(ming.id)).json()) == 3
+
+
+# --- BACKEND-440：POST /api/parent/pickup/requests ------------------------------------------------
+
+_REQUESTS_URL = "/api/parent/pickup/requests"
+_IN_WINDOW = "2026-09-01T16:00:00+08:00"  # 接送時段預設 12:00～19:00（台北）
+
+
+def _request_count(db: Session, student_id: object) -> int:
+    return db.execute(
+        select(func.count())
+        .select_from(PickupRequest)
+        .where(PickupRequest.student_id == student_id)
+    ).scalar_one()
+
+
+@pytest.mark.clock(_IN_WINDOW)
+def test_parent_pickup_create_success(
+    parent_client: ParentClientFactory, db_session: Session
+) -> None:
+    client, parent = parent_client()
+    ming = _own_child(db_session, parent)
+    make_homework_progress(db_session, ming, service_date=_TODAY, overall_status="done")
+    hua = _own_child(db_session, parent, name="王小華")
+    db_session.commit()
+
+    resp = client.post(
+        _REQUESTS_URL, json={"student_id": str(ming.id), "expected_arrival_at": "17:30"}
+    )
+    shortcut = client.post(_REQUESTS_URL, json={"student_id": str(hua.id), "arrived": True})
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["student_id"] == str(ming.id)
+    assert body["student_name"] == "王小明"
+    assert body["status"] == "pending"
+    assert body["expected_arrival_at"] == "17:30"
+    assert body["reply_message"] == "作業已完成，可以接送"
+    assert body["reply_source"] == "auto"
+    assert body["can_mark_arrived"] is True
+    assert body["can_cancel"] is True
+    assert "replied_by_name" not in body
+    assert shortcut.status_code == 201
+    assert shortcut.json()["status"] == "arrived"
+    assert shortcut.json()["can_mark_arrived"] is False
+    assert shortcut.json()["arrived_at"] is not None
+    db_session.expire_all()
+    stored = db_session.execute(
+        select(PickupRequest).where(PickupRequest.id == body["id"])
+    ).scalar_one()
+    assert (stored.status, stored.source, stored.requested_by_id) == (
+        "pending",
+        "parent",
+        parent.id,
+    )
+    assert len(client.get(_TODAY_URL).json()) == 2
+
+
+@pytest.mark.clock(_IN_WINDOW)
+def test_parent_pickup_create_422(
+    parent_client: ParentClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client, parent = parent_client()
+    ming = _own_child(db_session, parent)
+    db_session.commit()
+
+    bad_time = client.post(
+        _REQUESTS_URL, json={"student_id": str(ming.id), "expected_arrival_at": "17:3"}
+    )
+    with_source = client.post(_REQUESTS_URL, json={"student_id": str(ming.id), "source": "staff"})
+    both = client.post(
+        _REQUESTS_URL,
+        json={"student_id": str(ming.id), "arrived": True, "expected_arrival_at": "17:30"},
+    )
+    missing_student = client.post(_REQUESTS_URL, json={})
+
+    for resp in (bad_time, with_source, both, missing_student):
+        assert_error(resp, 422, "validation_error")
+    assert _request_count(db_session, ming.id) == 0
+
+
+def test_parent_pickup_create_401(
+    api_client: TestClient, staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    body = {"student_id": str(uuid4())}
+
+    assert_error(api_client.post(_REQUESTS_URL, json=body), 401, "unauthenticated")
+    staff, _ = staff_client(permissions=["pickup:operate"])
+    assert_error(staff.post(_REQUESTS_URL, json=body), 401, "unauthenticated")
+
+
+@pytest.mark.clock(_IN_WINDOW)
+def test_parent_pickup_create_idor(
+    parent_client: ParentClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client_a, _ = parent_client()
+    _, parent_b = parent_client()
+    hua = _own_child(db_session, parent_b, name="陳小華")
+    db_session.commit()
+
+    theirs = client_a.post(_REQUESTS_URL, json={"student_id": str(hua.id)})
+    missing = client_a.post(_REQUESTS_URL, json={"student_id": str(uuid4())})
+
+    assert_error(theirs, 404, "student_not_found")
+    assert theirs.json() == missing.json()
+    assert _request_count(db_session, hua.id) == 0
+
+
+@pytest.mark.clock(_IN_WINDOW)
+def test_parent_pickup_create_business(
+    parent_client: ParentClientFactory,
+    db_session: Session,
+    assert_error: AssertError,
+    fake_clock: FakeClock,
+) -> None:
+    client, parent = parent_client()
+    ming = _own_child(db_session, parent)
+    existing = make_pickup_request(db_session, ming, service_date=_TODAY, requested_by=parent.id)
+    blocked = make_student(db_session, name="不可接送")
+    make_guardian(db_session, blocked, parent=parent, can_pickup=False)
+    db_session.commit()
+
+    duplicate = client.post(_REQUESTS_URL, json={"student_id": str(ming.id), "arrived": True})
+    not_allowed = client.post(_REQUESTS_URL, json={"student_id": str(blocked.id)})
+    fake_clock.set(datetime(2026, 9, 1, 2, 0, tzinfo=UTC))  # 台北 10:00，時段外
+    closed = client.post(_REQUESTS_URL, json={"student_id": str(blocked.id)})
+
+    assert_error(duplicate, 409, "pickup_request_exists")
+    assert duplicate.json()["error"]["details"]["request_id"] == str(existing.id)
+    assert_error(not_allowed, 403, "pickup_not_allowed")
+    assert_error(closed, 409, "pickup_window_closed")
+    assert _request_count(db_session, ming.id) == 1
+    assert _request_count(db_session, blocked.id) == 0
+
+
+# --- BACKEND-442：POST /api/parent/pickup/requests/{id}/arrived -----------------------------------
+
+
+def _arrived_url(request_id: object) -> str:
+    return f"{_REQUESTS_URL}/{request_id}/arrived"
+
+
+@pytest.mark.clock(_IN_WINDOW)
+def test_parent_pickup_arrived_success(
+    parent_client: ParentClientFactory, db_session: Session
+) -> None:
+    client, parent = parent_client()
+    ming = _own_child(db_session, parent)
+    request = make_pickup_request(db_session, ming, service_date=_TODAY, requested_by=parent.id)
+    db_session.commit()
+
+    resp = client.post(_arrived_url(request.id))
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == str(request.id)
+    assert body["status"] == "arrived"
+    assert body["arrived_at"] is not None
+    assert body["can_mark_arrived"] is False
+    assert body["can_cancel"] is True
+    db_session.expire_all()
+    assert request.status == "arrived"
+    assert request.arrived_at is not None
+
+
+def test_parent_pickup_arrived_422(
+    parent_client: ParentClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = parent_client()
+
+    assert_error(client.post(_arrived_url("abc")), 422, "validation_error")
+
+
+def test_parent_pickup_arrived_401(
+    api_client: TestClient, staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    assert_error(api_client.post(_arrived_url(uuid4())), 401, "unauthenticated")
+    staff, _ = staff_client(permissions=["pickup:operate"])
+    assert_error(staff.post(_arrived_url(uuid4())), 401, "unauthenticated")
+
+
+def test_parent_pickup_arrived_idor(
+    parent_client: ParentClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client_a, _ = parent_client()
+    _, parent_b = parent_client()
+    hua = _own_child(db_session, parent_b, name="陳小華")
+    theirs_request = make_pickup_request(db_session, hua, service_date=_TODAY)
+    db_session.commit()
+
+    theirs = client_a.post(_arrived_url(theirs_request.id))
+    missing = client_a.post(_arrived_url(uuid4()))
+
+    assert_error(theirs, 404, "pickup_request_not_found")
+    assert theirs.json() == missing.json()
+    db_session.expire_all()
+    assert theirs_request.status == "pending"
+
+
+def test_parent_pickup_arrived_409(
+    parent_client: ParentClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client, parent = parent_client()
+    ming = _own_child(db_session, parent)
+    arrived = make_pickup_request(db_session, ming, service_date=_TODAY, status="arrived")
+    completed = make_pickup_request(
+        db_session, ming, service_date=_TODAY - timedelta(days=1), status="completed"
+    )
+    db_session.commit()
+
+    again = client.post(_arrived_url(arrived.id))
+    done = client.post(_arrived_url(completed.id))
+
+    assert_error(again, 409, "invalid_pickup_status")
+    assert again.json()["error"]["details"] == {"current_status": "arrived"}
+    assert_error(done, 409, "invalid_pickup_status")
+
+
+# --- BACKEND-443：POST /api/parent/pickup/requests/{id}/cancel ------------------------------------
+
+
+def _cancel_url(request_id: object) -> str:
+    return f"{_REQUESTS_URL}/{request_id}/cancel"
+
+
+def _staff_notifications(db: Session, staff_id: object, event: str) -> int:
+    return db.execute(
+        select(func.count())
+        .select_from(Notification)
+        .where(
+            Notification.recipient_type == "staff",
+            Notification.recipient_id == staff_id,
+            Notification.event == event,
+        )
+    ).scalar_one()
+
+
+def test_parent_pickup_cancel_success(
+    parent_client: ParentClientFactory, db_session: Session
+) -> None:
+    operator = make_staff(db_session, permissions=["pickup:operate"])
+    bystander = make_staff(db_session, permissions=["students:read"])
+    client, parent = parent_client()
+    ming = _own_child(db_session, parent)
+    request = make_pickup_request(
+        db_session, ming, service_date=_TODAY, status="acknowledged", requested_by=parent.id
+    )
+    db_session.commit()
+
+    resp = client.post(_cancel_url(request.id), json={"reason": "臨時有事"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == str(request.id)
+    assert body["status"] == "cancelled"
+    assert body["cancelled_at"] is not None
+    assert body["can_cancel"] is False
+    db_session.expire_all()
+    assert (request.status, request.cancel_reason) == ("cancelled", "臨時有事")
+    assert _staff_notifications(db_session, operator.id, "pickup.cancelled") == 1
+    assert _staff_notifications(db_session, bystander.id, "pickup.cancelled") == 0
+    # body 可省略
+    second = make_pickup_request(db_session, ming, service_date=_TODAY, requested_by=parent.id)
+    db_session.commit()
+    assert client.post(_cancel_url(second.id)).status_code == 200
+
+
+def test_parent_pickup_cancel_422(
+    parent_client: ParentClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client, parent = parent_client()
+    ming = _own_child(db_session, parent)
+    request = make_pickup_request(db_session, ming, service_date=_TODAY)
+    db_session.commit()
+
+    too_long = client.post(_cancel_url(request.id), json={"reason": "x" * 201})
+    extra = client.post(_cancel_url(request.id), json={"foo": 1})
+
+    assert_error(too_long, 422, "validation_error")
+    assert_error(extra, 422, "validation_error")
+    assert_error(client.post(_cancel_url("abc")), 422, "validation_error")
+    db_session.expire_all()
+    assert request.status == "pending"
+
+
+def test_parent_pickup_cancel_401(
+    api_client: TestClient, staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    assert_error(api_client.post(_cancel_url(uuid4())), 401, "unauthenticated")
+    staff, _ = staff_client(permissions=["pickup:operate"])
+    assert_error(staff.post(_cancel_url(uuid4())), 401, "unauthenticated")
+
+
+def test_parent_pickup_cancel_idor(
+    parent_client: ParentClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client_a, _ = parent_client()
+    _, parent_b = parent_client()
+    hua = _own_child(db_session, parent_b, name="陳小華")
+    theirs_request = make_pickup_request(
+        db_session, hua, service_date=_TODAY, status="acknowledged"
+    )
+    db_session.commit()
+
+    theirs = client_a.post(_cancel_url(theirs_request.id), json={"reason": "x"})
+    missing = client_a.post(_cancel_url(uuid4()), json={"reason": "x"})
+
+    assert_error(theirs, 404, "pickup_request_not_found")
+    assert theirs.json() == missing.json()
+    db_session.expire_all()
+    assert theirs_request.status == "acknowledged"
+
+
+def test_parent_pickup_cancel_409(
+    parent_client: ParentClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client, parent = parent_client()
+    ming = _own_child(db_session, parent)
+    completed = make_pickup_request(db_session, ming, service_date=_TODAY, status="completed")
+    db_session.commit()
+
+    resp = client.post(_cancel_url(completed.id))
+
+    assert_error(resp, 409, "invalid_pickup_status")
+    assert resp.json()["error"]["details"] == {"current_status": "completed"}
