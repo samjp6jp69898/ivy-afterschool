@@ -2,7 +2,8 @@
 BACKEND-150：get_student（敏感欄位依權限解密、照片短效 URL、監護人清單、封存可查）。
 BACKEND-151：create_student（學號唯一、身分證查重含封存、敏感欄位加密與權限、稽核）。
 BACKEND-153：archive_student（封存、刪未使用綁定碼、家長可見範圍排除、冪等）。
-BACKEND-154：upload_photo（驗證、Storage、commit 後刪舊檔、rollback 不刪）。"""
+BACKEND-154：upload_photo（驗證、Storage、commit 後刪舊檔、rollback 不刪）。
+BACKEND-530：purge_student（永久刪除 = 匿名化；前置條件、個資清除、統計保留、Storage、稽核）。"""
 
 from __future__ import annotations
 
@@ -28,10 +29,22 @@ from app.core.request_meta import RequestMeta
 from app.core.storage import StorageError, build_object_path
 from app.core.tx_hooks import install_tx_hooks
 from app.core.uploads import PHOTO_MAX_BYTES
+from app.models.attendance import StudentAttendance
 from app.models.audit import AuditLog
-from app.models.parents import ParentBindingCode
+from app.models.exams import ExamScore
+from app.models.leaves import StudentLeave, StudentLeaveAttachment
+from app.models.notifications import Notification
+from app.models.parents import Guardian, ParentAccount, ParentBindingCode
+from app.models.pickup import PickupAuthorization, PickupPerson, PickupRequest
+from app.models.reference import Subject
 from app.models.students import Student
-from app.schemas.students import StudentCreateIn, StudentDetailOut, StudentListQuery
+from app.schemas.students import (
+    StudentCreateIn,
+    StudentDetailOut,
+    StudentListQuery,
+    StudentPurgeIn,
+    StudentPurgeOut,
+)
 from app.services.binding_code_service import hash_code
 from app.services.parent_scope import get_parent_student_ids
 from app.services.student_service import (
@@ -39,13 +52,22 @@ from app.services.student_service import (
     create_student,
     get_student,
     list_students,
+    purge_student,
     upload_photo,
 )
 from app.services.students.id_number import id_number_hmac, normalize_id_number
 from tests.support.factories import (
+    make_attendance,
     make_class,
+    make_exam,
+    make_exam_score,
     make_guardian,
+    make_leave,
+    make_leave_attachment,
     make_parent,
+    make_pickup_authorization,
+    make_pickup_person,
+    make_pickup_request,
     make_school,
     make_staff,
     make_student,
@@ -198,7 +220,7 @@ def test_list_students_order(db_session: Session) -> None:
     assert mine == ["s3a1", "s3a2", "s3b", "s3none", "s4"]
 
 
-# --- BACKEND-150：get_student -------------------------------------------------------------------
+# --- BACKEND-150：get_student ------------------------------------------------------------------
 
 
 def _get(
@@ -330,7 +352,7 @@ def test_get_student_not_found(db_session: Session, fake_clock: FakeClock) -> No
     assert (exc.value.status, exc.value.code) == (404, "student_not_found")
 
 
-# --- BACKEND-151：create_student ------------------------------------------------------------------
+# --- BACKEND-151：create_student -----------------------------------------------------------------
 
 
 def _create(
@@ -586,7 +608,7 @@ def test_create_student_withdrawn_default_date(db_session: Session, fake_clock: 
     assert active.withdrawn_on is None
 
 
-# --- BACKEND-153：archive_student -----------------------------------------------------------------
+# --- BACKEND-153：archive_student ----------------------------------------------------------------
 
 
 def _add_binding_code(
@@ -667,7 +689,7 @@ def test_archive_student_idempotent(db_session: Session, fake_clock: FakeClock) 
     assert (exc.value.status, exc.value.code) == (404, "student_not_found")
 
 
-# --- BACKEND-154：upload_photo --------------------------------------------------------------------
+# --- BACKEND-154：upload_photo -------------------------------------------------------------------
 
 
 def _upload(
@@ -775,3 +797,334 @@ def test_upload_photo_archived(db_session: Session) -> None:
     assert (exc.value.status, exc.value.code) == (404, "student_not_found")
     assert (missing.value.status, missing.value.code) == (404, "student_not_found")
     assert storage.objects == {}
+
+
+# --- BACKEND-530：purge_student ------------------------------------------------------------------
+
+
+class _Purgeable:
+    """封存且 withdrawn 的王小明（S115001）與他的全部關聯資料。"""
+
+    def __init__(self, db: Session, clock: FakeClock, storage: FakeStorage) -> None:
+        self.klass = make_class(db, name="A班")
+        self.student = make_student(
+            db, name="王小明", student_no="S115001", class_=self.klass, status="withdrawn"
+        )
+        self.student.withdrawn_on = date(2026, 8, 31)
+        self.student.enrolled_on = date(2025, 9, 1)
+        self.student.birthday = date(2017, 5, 1)
+        self.student.gender = "male"
+        self.student.school_class = "三年二班"
+        self.student.note = "王小明家長備註"
+        self.student.id_number_enc = encrypt_bytes(_ID_NUMBER)
+        self.student.id_number_hmac = id_number_hmac(_ID_NUMBER)
+        self.student.health_note_enc = encrypt_bytes("對花生過敏")
+        self.student.archived_at = clock.now() - timedelta(days=1)
+        self.photo = build_object_path(self.student.id, "jpg")
+        self.student.photo_path = self.photo
+        storage.objects[("student-photos", self.photo)] = b"photo"
+
+        self.parent = make_parent(db, display_name="王媽媽")
+        self.guardian = make_guardian(
+            db, self.student, parent=self.parent, name="王媽媽", is_primary=True
+        )
+        self.guardian.phone = "0912-000-123"
+        _add_binding_code(db, self.guardian.id, clock, code="WANGMOM1", used=False)
+
+        self.person_photo = f"{uuid4()}/{uuid4().hex}.jpg"
+        self.person = make_pickup_person(
+            db, self.student, name="李阿姨", phone="0912-000-101", photo_path=self.person_photo
+        )
+        storage.objects[("pickup-person-photos", self.person_photo)] = b"person"
+        self.authorization = make_pickup_authorization(
+            db,
+            self.student,
+            service_date=clock.today(),
+            person=self.person,
+            proxy_name="李阿姨",
+            proxy_phone="0912-000-101",
+        )
+
+        for offset in range(5):
+            make_attendance(
+                db,
+                self.student,
+                service_date=date(2026, 8, 25) + timedelta(days=offset),
+                status="present",
+                note="王小明發燒" if offset == 0 else None,
+            )
+        exam = make_exam(db, class_=self.klass)
+        subjects = db.execute(select(Subject).order_by(Subject.sort_order).limit(3)).scalars().all()
+        for subject in subjects:
+            score = make_exam_score(db, exam, self.student, subject)
+            score.note = "王小明請假補考"
+        for offset in (0, 1):
+            make_pickup_request(
+                db, self.student, service_date=date(2026, 8, 25) + timedelta(days=offset)
+            )
+
+        self.leave = make_leave(
+            db, self.student, start_date=date(2026, 8, 27), reason="王小明發燒就醫"
+        )
+        self.attachment = make_leave_attachment(db, self.leave, ext="pdf")
+        storage.objects[("leave-attachments", self.attachment.storage_path)] = b"pdf"
+
+        for title in ("王小明已到班", "王小明作業完成"):
+            db.add(
+                Notification(
+                    recipient_type="parent",
+                    recipient_id=self.parent.id,
+                    event="attendance.checked_in",
+                    title=title,
+                    body=f"{title}（通知內文）",
+                    payload={"student_id": str(self.student.id), "name": "王小明"},
+                )
+            )
+        # 另一位學生的通知不受影響
+        self.other = make_student(db, name="陳小華")
+        db.add(
+            Notification(
+                recipient_type="parent",
+                recipient_id=self.parent.id,
+                event="attendance.checked_in",
+                title="陳小華已到班",
+                body="陳小華已到班",
+                payload={"student_id": str(self.other.id)},
+            )
+        )
+        db.flush()
+
+
+def _purge(
+    db: Session,
+    student_id: UUID,
+    actor: CurrentStaff,
+    clock: FakeClock,
+    storage: FakeStorage,
+    *,
+    confirm: str = "S115001",
+) -> StudentPurgeOut:
+    return purge_student(
+        db,
+        student_id,
+        StudentPurgeIn(confirm_student_no=confirm),
+        actor=actor,
+        storage=storage,
+        meta=_META,
+        clock=clock,
+    )
+
+
+def _purger() -> CurrentStaff:
+    return _actor("students:write", "students:purge")
+
+
+def _count(db: Session, model: type, student_id: UUID) -> int:
+    return db.execute(
+        select(func.count()).select_from(model).where(model.student_id == student_id)  # type: ignore[attr-defined]
+    ).scalar_one()
+
+
+def _notifications_for(db: Session, student_id: UUID) -> int:
+    return db.execute(
+        select(func.count())
+        .select_from(Notification)
+        .where(Notification.payload["student_id"].astext == str(student_id))
+    ).scalar_one()
+
+
+def test_purge_student_preconditions(db_session: Session, fake_clock: FakeClock) -> None:
+    storage = FakeStorage()
+    active = make_student(db_session, student_no="ACT001", archived=True)
+    withdrawn_not_archived = make_student(db_session, student_no="WD001", status="withdrawn")
+    withdrawn_not_archived.withdrawn_on = date(2026, 8, 31)
+    db_session.flush()
+    target = _Purgeable(db_session, fake_clock, storage)
+
+    with pytest.raises(AppError) as still_active:
+        _purge(db_session, active.id, _purger(), fake_clock, storage, confirm="ACT001")
+    with pytest.raises(AppError) as not_archived:
+        _purge(
+            db_session, withdrawn_not_archived.id, _purger(), fake_clock, storage, confirm="WD001"
+        )
+    with pytest.raises(AppError) as mismatch:
+        _purge(db_session, target.student.id, _purger(), fake_clock, storage, confirm="WRONG")
+    with pytest.raises(AppError) as forbidden:
+        _purge(db_session, target.student.id, _actor("students:write"), fake_clock, storage)
+    with pytest.raises(AppError) as missing:
+        _purge(db_session, uuid4(), _purger(), fake_clock, storage)
+
+    assert (still_active.value.status, still_active.value.code) == (409, "student_not_purgeable")
+    assert (not_archived.value.status, not_archived.value.code) == (409, "student_not_purgeable")
+    assert (mismatch.value.status, mismatch.value.code) == (422, "purge_confirmation_mismatch")
+    assert (forbidden.value.status, forbidden.value.code) == (403, "permission_denied")
+    assert (missing.value.status, missing.value.code) == (404, "student_not_found")
+    # 全部失敗：資料完全沒動
+    assert _stored(db_session, target.student.id).name == "王小明"
+    assert _stored(db_session, active.id).name == "王小明"
+    assert len(storage.objects) == 3
+
+
+def test_purge_student_anonymizes(db_session: Session, fake_clock: FakeClock) -> None:
+    storage = FakeStorage()
+    target = _Purgeable(db_session, fake_clock, storage)
+
+    out = _purge(db_session, target.student.id, _purger(), fake_clock, storage)
+
+    assert isinstance(out, StudentPurgeOut)
+    assert out.student_id == target.student.id
+    assert out.purged_at == fake_clock.now()
+    assert re.fullmatch(r"DEL-[0-9a-f]{8}", out.anonymized_student_no)
+    db_session.expire_all()
+    stored = _stored(db_session, target.student.id)
+    assert stored.name == "已刪除學生"
+    assert stored.student_no == out.anonymized_student_no
+    assert (
+        stored.id_number_enc,
+        stored.id_number_hmac,
+        stored.health_note_enc,
+        stored.photo_path,
+        stored.birthday,
+        stored.note,
+        stored.gender,
+        stored.school_class,
+    ) == (None,) * 8
+    assert (stored.grade_level, stored.class_id, stored.status) == (3, target.klass.id, "withdrawn")
+    assert (stored.enrolled_on, stored.withdrawn_on) == (date(2025, 9, 1), date(2026, 8, 31))
+    assert stored.archived_at is not None
+    # 其他學生不受影響
+    assert _stored(db_session, target.other.id).name == "陳小華"
+
+
+def test_purge_student_guardians_and_pickup(db_session: Session, fake_clock: FakeClock) -> None:
+    storage = FakeStorage()
+    target = _Purgeable(db_session, fake_clock, storage)
+    assert _code_count(db_session, target.guardian.id, used=False) == 1
+
+    _purge(db_session, target.student.id, _purger(), fake_clock, storage)
+
+    db_session.expire_all()
+    guardian = db_session.get(Guardian, target.guardian.id)
+    assert guardian is not None
+    assert (guardian.name, guardian.phone, guardian.parent_account_id) == ("已刪除", None, None)
+    assert guardian.is_primary is False
+    assert guardian.archived_at == fake_clock.now()
+    assert _code_count(db_session, target.guardian.id, used=False) == 0
+    person = db_session.get(PickupPerson, target.person.id)
+    assert person is not None
+    assert (person.name, person.phone, person.photo_path) == ("已刪除", "00000000", None)
+    assert person.archived_at == fake_clock.now()
+    authorization = db_session.get(PickupAuthorization, target.authorization.id)
+    assert authorization is not None
+    assert (authorization.proxy_name, authorization.proxy_phone) == ("已刪除", "00000000")
+    # 家長帳號本身保留（可能綁定其他小孩）
+    parent = db_session.get(ParentAccount, target.parent.id)
+    assert parent is not None
+    assert parent.display_name == "王媽媽"
+    assert get_parent_student_ids(db_session, target.parent.id) == []
+
+
+def test_purge_student_keeps_statistics(db_session: Session, fake_clock: FakeClock) -> None:
+    storage = FakeStorage()
+    target = _Purgeable(db_session, fake_clock, storage)
+    sid = target.student.id
+    assert (_count(db_session, StudentAttendance, sid), _count(db_session, ExamScore, sid)) == (
+        5,
+        3,
+    )
+    assert _count(db_session, PickupRequest, sid) == 2
+    assert _notifications_for(db_session, sid) == 2
+
+    _purge(db_session, sid, _purger(), fake_clock, storage)
+
+    db_session.expire_all()
+    assert _count(db_session, StudentAttendance, sid) == 5
+    assert _count(db_session, ExamScore, sid) == 3
+    assert _count(db_session, PickupRequest, sid) == 2
+    assert _count(db_session, StudentLeave, sid) == 1
+    notes = db_session.execute(
+        select(StudentAttendance.note).where(StudentAttendance.student_id == sid)
+    ).scalars()
+    assert list(notes) == [None] * 5
+    score_notes = db_session.execute(select(ExamScore.note).where(ExamScore.student_id == sid))
+    assert list(score_notes.scalars()) == [None] * 3
+    leave = db_session.get(StudentLeave, target.leave.id)
+    assert leave is not None
+    assert leave.reason is None
+    assert (
+        db_session.execute(
+            select(func.count())
+            .select_from(StudentLeaveAttachment)
+            .where(StudentLeaveAttachment.leave_id == target.leave.id)
+        ).scalar_one()
+        == 0
+    )
+    assert _notifications_for(db_session, sid) == 0
+    assert _notifications_for(db_session, target.other.id) == 1
+
+
+def test_purge_student_storage_after_commit(db_session: Session, fake_clock: FakeClock) -> None:
+    install_tx_hooks()
+    storage = FakeStorage()
+    committed = _Purgeable(db_session, fake_clock, storage)
+    committed_paths = {
+        ("student-photos", committed.photo),
+        ("leave-attachments", committed.attachment.storage_path),
+        ("pickup-person-photos", committed.person_photo),
+    }
+    db_session.commit()
+
+    _purge(db_session, committed.student.id, _purger(), fake_clock, storage)
+    assert committed_paths <= set(storage.objects)  # commit 前不刪
+    db_session.commit()
+    assert committed_paths.isdisjoint(storage.objects)
+
+    rolled_back = _Purgeable(db_session, fake_clock, storage)
+    rolled_back_paths = {
+        ("student-photos", rolled_back.photo),
+        ("leave-attachments", rolled_back.attachment.storage_path),
+        ("pickup-person-photos", rolled_back.person_photo),
+    }
+    db_session.commit()
+    _purge(db_session, rolled_back.student.id, _purger(), fake_clock, storage)
+    db_session.rollback()
+    assert rolled_back_paths <= set(storage.objects)
+    assert _stored(db_session, rolled_back.student.id).name == "王小明"
+
+
+def test_purge_student_audit_and_idempotent(db_session: Session, fake_clock: FakeClock) -> None:
+    storage = FakeStorage()
+    target = _Purgeable(db_session, fake_clock, storage)
+    actor = _purger()
+
+    _purge(db_session, target.student.id, actor, fake_clock, storage)
+
+    audits = list(
+        db_session.execute(
+            select(AuditLog).where(
+                AuditLog.action == "student.purge", AuditLog.entity_id == str(target.student.id)
+            )
+        ).scalars()
+    )
+    assert len(audits) == 1
+    audit = audits[0]
+    assert (audit.actor_type, audit.actor_id, audit.entity_type) == ("staff", actor.id, "student")
+    assert audit.after == {
+        "guardians": 1,
+        "pickup_persons": 1,
+        "attachments": 1,
+        "notifications": 2,
+    }
+    dumped = json.dumps(audit.after, ensure_ascii=False) + json.dumps(audit.before)
+    for leaked in ("王小明", "S115001", "0912", _ID_NUMBER, "王媽媽", "李阿姨"):
+        assert leaked not in dumped
+    with pytest.raises(AppError) as exc:
+        _purge(
+            db_session,
+            target.student.id,
+            actor,
+            fake_clock,
+            storage,
+            confirm=_stored(db_session, target.student.id).student_no,
+        )
+    assert (exc.value.status, exc.value.code) == (409, "student_already_purged")
