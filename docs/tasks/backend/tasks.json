@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 303,
-  "last_updated": "2026-10-05T03:33:40Z",
+  "version": 304,
+  "last_updated": "2026-10-05T03:34:59Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -211,7 +211,7 @@
     {
       "id": "BACKEND-006",
       "title": "實作 app/core/tx_hooks.py：run_after_commit（commit 後執行、rollback 丟棄）",
-      "description": "建立 `apps/api/app/core/tx_hooks.py`，提供「交易成功 commit 後才執行」的掛鉤，供通知派送（BACKEND-206/209）、ws 廣播（BACKEND-224）、Storage 舊檔刪除（BACKEND-154）使用。移植 ivy `services/notification/dispatch.py` 的 `install_session_hooks` / `_drain_after_commit` / `_clear_on_rollback` 概念。\n\n**介面**\n```python\ndef run_after_commit(session: Session, fn: Callable[[], None]) -> None: ...\ndef install_tx_hooks() -> None: ...   # 在 Session class 上註冊 after_commit / after_soft_rollback 監聽；create_app 與 session_scope 使用前呼叫（重複呼叫冪等）\n```\n- callback 存在 `session.info['after_commit_callbacks']`（list，保序）；session 尚未開始交易時 `run_after_commit` 先 `session.begin()`，讓之後的 rollback 一定觸發 after_soft_rollback 清掉清單。\n- `after_commit`：取出並清空清單後依序執行（SQLAlchemy 在 `begin_nested()` 的 savepoint 釋放時也會發 after_commit，`session.in_nested_transaction()` 為 True 時跳過，等最外層 commit）；單一 callback 拋例外只記 `logger.exception`，不影響其他 callback，也不讓已成功的 commit 變成錯誤回應。\n- `after_soft_rollback`（最外層 rollback）：清空清單，不執行。\n- callback 內不得再使用同一個 session 寫 DB（需要 DB 的 callback 自行開 `session_scope()`）。\n- 與 INFRA-010 `db_session`（`join_transaction_mode=\"create_savepoint\"`）搭配時：service 呼叫 `session.commit()` 會觸發 Session 層級的 after_commit；需以測試確認此行為，若不觸發則改用 `committing_db_session`，並把結論寫進本檔 docstring。\n\n**驗收標準**\n- commit 後 callback 依註冊順序執行一次。\n- rollback 後 callback 不執行且清單被清空，下一次 commit 不會補跑。\n- 某 callback 拋例外時其餘 callback 仍執行，commit 本身成功。",
+      "description": "建立 `apps/api/app/core/tx_hooks.py`，提供「交易成功 commit 後才執行」的掛鉤，供通知派送（BACKEND-206/209）、ws 廣播（BACKEND-224）、Storage 舊檔刪除（BACKEND-154）使用。移植 ivy `services/notification/dispatch.py` 的 `install_session_hooks` / `_drain_after_commit` / `_clear_on_rollback` 概念。\n\n**介面**\n```python\ndef run_after_commit(session: Session, fn: Callable[[], None]) -> None: ...\ndef install_tx_hooks() -> None: ...   # 在 Session class 上註冊 after_commit / after_soft_rollback 監聽；create_app 與 session_scope 使用前呼叫（重複呼叫冪等）\n```\n- callback 存在 `session.info['after_commit_callbacks']`（list，保序）；session 尚未開始交易時 `run_after_commit` 先 `session.begin()`，讓之後的 rollback 一定觸發 after_soft_rollback 清掉清單。\n- `after_commit`：取出並清空清單後依序執行（SQLAlchemy 在 `begin_nested()` 的 savepoint 釋放時也會發 after_commit，`session.in_nested_transaction()` 為 True 時跳過，等最外層 commit）；單一 callback 拋例外只記 `logger.exception`，不影響其他 callback，也不讓已成功的 commit 變成錯誤回應。\n- `after_soft_rollback`（最外層 rollback）：清空清單，不執行。\n- savepoint rollback（BACKEND-545 改寫）：callback 記錄註冊當下所在的交易層（目前 savepoint 或最外層交易）；savepoint 回滾（含 `with session.begin_nested():` 區塊拋例外）只丟棄在該 savepoint 及其內層 savepoint 中註冊的 callback，外層與先前已註冊的保留；savepoint 正常釋放時其內的 callback 併入外層，等最外層 commit 才執行。\n- callback 內不得再使用同一個 session 寫 DB（需要 DB 的 callback 自行開 `session_scope()`）。\n- 與 INFRA-010 `db_session`（`join_transaction_mode=\"create_savepoint\"`）搭配時：service 呼叫 `session.commit()` 會觸發 Session 層級的 after_commit；需以測試確認此行為，若不觸發則改用 `committing_db_session`，並把結論寫進本檔 docstring。\n\n**驗收標準**\n- commit 後 callback 依註冊順序執行一次。\n- rollback 後 callback 不執行且清單被清空，下一次 commit 不會補跑。\n- 某 callback 拋例外時其餘 callback 仍執行，commit 本身成功。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/tx_hooks.py",
       "source_ref": "BE:services/notification/dispatch.py::install_session_hooks",
@@ -14941,7 +14941,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/tx_hooks.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-006"
@@ -14955,13 +14955,14 @@
           "integration"
         ],
         "red_cases": [
-          "test_tx_hooks_savepoint_rollback_discards_inner：committing_db_session 註冊 fn_outer；with begin_nested() 內註冊 fn_inner 後拋例外使該 savepoint rollback；外層 commit → list == ['fn_outer']",
+          "test_tx_hooks_savepoint_rollback_discards_inner：committing_db_session 註冊 fn_outer；with begin_nested() 內註冊 fn_inner 後拋例外（contextlib.suppress）使該 savepoint rollback；外層 commit → list == ['fn_outer']",
           "test_tx_hooks_savepoint_release_keeps_inner：begin_nested() 內註冊 fn_inner 並正常釋放 → commit 前 list == []，外層 commit 後 list == ['fn_inner']",
-          "test_tx_hooks_nested_savepoint_rollback：savepoint A 內註冊 fn_a，A 內再開 savepoint B 註冊 fn_b 後 B rollback，A 正常釋放 → 外層 commit 後 list == ['fn_a']",
-          "test_enqueue_inside_rolled_back_savepoint_no_ghost：begin_nested() 內 NotificationService.enqueue 後該 savepoint rollback、外層 commit → 不 kick outbox、不推播 notification.created（以 BACKEND-206 測試同款記錄點斷言為空）"
+          "test_tx_hooks_nested_savepoint_rollback：savepoint A 內註冊 fn_a，A 內再開 savepoint B 註冊 fn_b 後 B rollback，A 正常釋放 → 外層 commit 後 list == ['fn_a']；反向：B 正常釋放後 A rollback → fn_a、fn_b 都丟棄，之後註冊的 fn_after 照常執行",
+          "test_tx_hooks_savepoint_rollback_with_db_session：INFRA-010 db_session 內再開 begin_nested() 註冊 inner 後 rollback → db_session.commit() 只跑 outer",
+          "test_enqueue_inside_rolled_back_savepoint_no_ghost（tests/integration/notifications/test_notification_service.py）：begin_nested() 內 NotificationService.enqueue 後該 savepoint rollback、外層 commit → 不 kick outbox、不推播 notification.created（BACKEND-206 同款記錄點為空）、列不存在；savepoint 外的 enqueue 不受影響"
         ],
-        "run": "just test-int apps/api/tests/integration/core/test_tx_hooks.py -k \"test_tx_hooks_ or test_enqueue_inside\"",
-        "notes": "第 4 條可放在 test_tx_hooks.py 或 notifications 測試檔，tdd.run 的路徑要同步。"
+        "run": "just test-int apps/api/tests/integration/core/test_tx_hooks.py apps/api/tests/integration/notifications/test_notification_service.py -k \"test_tx_hooks_ or test_enqueue_inside\"",
+        "notes": "第 5 條放在 notifications 測試檔（需要 enqueue 的 fixture），tdd.run 同時列兩個檔案。"
       },
       "review": {
         "status": "pending",
