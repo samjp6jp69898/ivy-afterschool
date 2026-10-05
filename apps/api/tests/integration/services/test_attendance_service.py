@@ -3,6 +3,7 @@
 - BACKEND-302：``ensure_attendance_row``（取得或建立出勤列，冪等、並發安全）。
 - BACKEND-310：``amend_attendance``（改判，寫 audit、commit 後推播）。
 - BACKEND-311：``get_daily_attendance``（每日清單、虛擬列與統計）。
+- BACKEND-312：``get_monthly_attendance``（月出勤報表）。
 
 營業時段讀 seed 預設（週一到週五營業、週六不營業、週日不列）；每個測試前後清空設定快取。
 """
@@ -25,13 +26,20 @@ from app.core.tx_hooks import install_tx_hooks
 from app.models.account import StaffUser
 from app.models.attendance import StudentAttendance
 from app.models.audit import AuditLog
+from app.models.reference import ClosedDay
 from app.realtime import publish as publish_module
 from app.realtime.publish import admin_topic_channel, student_channel
-from app.schemas.attendance import AttendanceAmendIn, DailyAttendanceQuery
+from app.schemas.attendance import (
+    AttendanceAmendIn,
+    DailyAttendanceQuery,
+    MonthlyAttendanceQuery,
+    MonthlyStudentRowOut,
+)
 from app.services.attendance_service import (
     amend_attendance,
     ensure_attendance_row,
     get_daily_attendance,
+    get_monthly_attendance,
 )
 from app.services.settings_service import clear_settings_cache
 from tests.integration.db.conftest import connect_owner
@@ -722,3 +730,191 @@ def test_daily_attendance_query_count(
         "leave": 10,
     }
     assert len(count_sql.statements) <= 4
+
+
+# --- BACKEND-312 get_monthly_attendance ---
+
+
+def _closed(session: Session, d: date) -> None:
+    session.add(ClosedDay(date=d, reason="颱風假"))
+    session.flush()
+
+
+def _monthly_row(rows: list[MonthlyStudentRowOut], student_id: UUID) -> MonthlyStudentRowOut:
+    [row] = [r for r in rows if r.student_id == student_id]
+    return row
+
+
+@pytest.mark.clock("2026-09-10T15:00:00+08:00")
+def test_monthly_attendance_days(db_session: Session, fake_clock: FakeClock) -> None:
+    class_a = make_class(db_session, name="A班")
+    _closed(db_session, date(2026, 9, 3))
+
+    out = get_monthly_attendance(
+        db_session, MonthlyAttendanceQuery(month="2026-09", class_id=class_a.id), clock=fake_clock
+    )
+
+    assert (out.month, out.class_id, out.class_name) == ("2026-09", class_a.id, "A班")
+    assert len(out.days) == 30
+    assert out.days[0].model_dump() == {
+        "date": date(2026, 9, 1),
+        "weekday": 1,
+        "is_service_day": True,
+    }
+    assert out.days[2].is_service_day is False  # 9/3 休息日
+    assert out.days[4].is_service_day is False  # 9/5 週六（seed 不營業）
+    assert out.days[5].is_service_day is False  # 9/6 週日
+    assert out.days[29].date == date(2026, 9, 30)
+    assert out.students == []
+
+
+@pytest.mark.clock("2026-09-10T15:00:00+08:00")
+def test_monthly_attendance_stats(db_session: Session, fake_clock: FakeClock) -> None:
+    class_a = make_class(db_session, name="A班")
+    _closed(db_session, date(2026, 9, 3))
+    ming = make_student(db_session, name="王小明", class_=class_a)
+    make_attendance(db_session, ming, service_date=date(2026, 9, 1), status="present")
+    make_attendance(db_session, ming, service_date=date(2026, 9, 2), status="left")
+    make_attendance(db_session, ming, service_date=date(2026, 9, 4), status="absent")
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 7))
+    make_attendance(db_session, ming, service_date=date(2026, 9, 7), status="leave", leave=leave)
+    make_attendance(db_session, ming, service_date=date(2026, 9, 8), status="expected")
+    # 未來日期（9/11 之後）的列與非營業日的列都不計
+    make_attendance(db_session, ming, service_date=date(2026, 9, 14), status="absent")
+    make_attendance(db_session, ming, service_date=date(2026, 9, 5), status="present")
+
+    out = get_monthly_attendance(
+        db_session, MonthlyAttendanceQuery(month="2026-09", class_id=class_a.id), clock=fake_clock
+    )
+
+    row = _monthly_row(out.students, ming.id)
+    assert (row.name, row.class_name) == ("王小明", "A班")
+    assert row.stats.model_dump() == {
+        "service_days": 7,
+        "attended": 2,
+        "absent": 1,
+        "leave": 1,
+        "unrecorded": 3,
+    }
+    assert len(row.statuses) == 30
+    assert row.statuses[0] == "present"
+    assert row.statuses[1] == "left"
+    assert row.statuses[2] is None  # 9/3 休息日
+    assert row.statuses[4] is None  # 9/5 週六：即使有列也不顯示
+    assert row.statuses[6] == "leave"
+    assert row.statuses[8] is None  # 9/9 無列
+    assert row.statuses[13] == "absent"  # 9/14 未來日期照實顯示，只是不計入
+    assert out.totals == row.stats
+
+
+@pytest.mark.clock("2026-09-10T15:00:00+08:00")
+def test_monthly_attendance_enrolled_mid_month(db_session: Session, fake_clock: FakeClock) -> None:
+    class_a = make_class(db_session)
+    ming = make_student(db_session, name="王小明", student_no="M-001", class_=class_a)
+    hua = make_student(db_session, name="陳小華", student_no="M-002", class_=class_a)
+    hua.enrolled_on = date(2026, 9, 8)
+    db_session.flush()
+    make_attendance(db_session, hua, service_date=date(2026, 9, 8), status="present")
+
+    out = get_monthly_attendance(
+        db_session, MonthlyAttendanceQuery(month="2026-09", class_id=class_a.id), clock=fake_clock
+    )
+
+    assert [r.name for r in out.students] == ["王小明", "陳小華"]
+    hua_row = _monthly_row(out.students, hua.id)
+    assert hua_row.stats.model_dump() == {
+        "service_days": 3,
+        "attended": 1,
+        "absent": 0,
+        "leave": 0,
+        "unrecorded": 2,
+    }
+    ming_row = _monthly_row(out.students, ming.id)
+    # 9/1~9/10 的營業日（9/5、9/6 週末）共 8 天，都沒有列
+    assert ming_row.stats.service_days == 8
+    assert ming_row.stats.unrecorded == 8
+    assert out.totals.model_dump() == {
+        "service_days": 11,
+        "attended": 1,
+        "absent": 0,
+        "leave": 0,
+        "unrecorded": 10,
+    }
+
+
+@pytest.mark.clock("2026-09-10T15:00:00+08:00")
+def test_monthly_attendance_past_month_counts_all_days(
+    db_session: Session, fake_clock: FakeClock
+) -> None:
+    class_a = make_class(db_session)
+    ming = make_student(db_session, class_=class_a)
+    make_attendance(db_session, ming, service_date=date(2026, 8, 31), status="present")
+
+    out = get_monthly_attendance(
+        db_session, MonthlyAttendanceQuery(month="2026-08", class_id=class_a.id), clock=fake_clock
+    )
+
+    assert len(out.days) == 31
+    row = _monthly_row(out.students, ming.id)
+    # 2026-08 週一到週五共 21 天
+    assert (row.stats.service_days, row.stats.attended, row.stats.unrecorded) == (21, 1, 20)
+
+
+@pytest.mark.clock("2026-09-10T15:00:00+08:00")
+def test_monthly_attendance_class_filter_and_query_count(
+    db_session: Session, fake_clock: FakeClock, count_sql: _SqlCounter
+) -> None:
+    class_a = make_class(db_session, name="A班")
+    class_b = make_class(db_session, name="B班")
+    ids = []
+    for index in range(30):
+        student = make_student(db_session, name=f"學生{index}", class_=class_a)
+        ids.append(student.id)
+        make_attendance(db_session, student, service_date=date(2026, 9, 1), status="present")
+        make_attendance(db_session, student, service_date=date(2026, 9, 2), status="absent")
+    other = make_student(db_session, name="陳小華", class_=class_b)
+    # 已退班但本月有列的學生仍列出
+    gone = make_student(db_session, name="張小美", class_=class_a)
+    make_attendance(db_session, gone, service_date=date(2026, 9, 1), status="left")
+    gone.status = "withdrawn"
+    db_session.flush()
+    count_sql.statements.clear()
+
+    out = get_monthly_attendance(
+        db_session, MonthlyAttendanceQuery(month="2026-09", class_id=class_a.id), clock=fake_clock
+    )
+
+    student_ids = {r.student_id for r in out.students}
+    assert student_ids == {*ids, gone.id}
+    assert other.id not in student_ids
+    assert out.totals.attended == 31
+    assert out.totals.absent == 30
+    assert len(count_sql.statements) <= 4
+
+
+@pytest.mark.parametrize("month", ["0000-01"])
+def test_monthly_attendance_invalid_month(
+    db_session: Session, fake_clock: FakeClock, month: str
+) -> None:
+    with pytest.raises(AppError) as invalid:
+        get_monthly_attendance(db_session, MonthlyAttendanceQuery(month=month), clock=fake_clock)
+    assert _error(invalid) == (422, "invalid_month")
+
+
+# schema 的 \d 會接受全形數字（FULLWIDTH DIGIT）
+_FULLWIDTH_2026_09 = "\uff12\uff10\uff12\uff16-\uff10\uff19"
+
+
+def test_monthly_attendance_fullwidth_month_normalized(
+    db_session: Session, fake_clock: FakeClock
+) -> None:
+    class_a = make_class(db_session)
+
+    out = get_monthly_attendance(
+        db_session,
+        MonthlyAttendanceQuery(month=_FULLWIDTH_2026_09, class_id=class_a.id),
+        clock=fake_clock,
+    )
+
+    assert out.month == "2026-09"
+    assert len(out.days) == 30
