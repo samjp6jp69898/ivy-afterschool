@@ -24,7 +24,13 @@ from app.models.attendance import StudentAttendance
 from app.models.audit import AuditLog
 from app.notifications import outbox_jobs
 from app.services.settings_service import clear_settings_cache
-from tests.support.factories import make_attendance, make_class, make_leave, make_student
+from tests.support.factories import (
+    make_attendance,
+    make_class,
+    make_leave,
+    make_staff,
+    make_student,
+)
 from tests.support.route_audit import admin_routes_without_permission
 
 _URL = "/api/admin/attendance"
@@ -281,11 +287,19 @@ def _amend_url(attendance_id: object) -> str:
 
 
 def test_admin_attendance_amend_success(
-    staff_client: StaffClientFactory, db_session: Session
+    api_client: TestClient,
+    app: FastAPI,
+    db_session: Session,
+    login_staff: Callable[[TestClient, StaffUser], None],
 ) -> None:
     ming = make_student(db_session, name="王小明")
     row = make_attendance(db_session, ming, service_date=_DAY, status="present")
-    client, staff = staff_client(permissions=["attendance:amend"])
+    staff = make_staff(db_session, permissions=["attendance:amend"])
+    db_session.commit()
+    # 預設 TestClient 的來源位址是 'testclient'（非 IP，RequestMeta 存 None）：指定真實 IP 才能驗
+    # audit.ip
+    client = TestClient(app, base_url="http://testserver", client=("203.0.113.5", 50000))
+    login_staff(client, staff)
 
     resp = client.patch(_amend_url(row.id), json={"status": "expected", "reason": "誤刷"})
 
@@ -300,7 +314,7 @@ def test_admin_attendance_amend_success(
         )
     ).scalar_one()
     assert log.actor_id == staff.id
-    assert log.ip
+    assert log.ip == "203.0.113.5"
     assert log.after is not None
     assert log.after["reason"] == "誤刷"
 
@@ -311,8 +325,8 @@ def test_admin_attendance_amend_422(
     row = make_attendance(db_session, make_student(db_session), service_date=_DAY, status="present")
     client, _ = staff_client(permissions=["attendance:amend"])
 
-    # 只給 reason：沒有任何變動 → 422（service no_changes）
-    assert_error(client.patch(_amend_url(row.id), json={"reason": "x"}), 422, "no_changes")
+    # 只給 reason：schema 要求除 reason 外至少一欄
+    assert_error(client.patch(_amend_url(row.id), json={"reason": "x"}), 422, "validation_error")
     # 缺 reason
     assert_error(
         client.patch(_amend_url(row.id), json={"status": "present"}), 422, "validation_error"
