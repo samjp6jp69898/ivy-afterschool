@@ -30,18 +30,25 @@ BACKEND-179 的家長可見範圍自動排除。不限制 status。
 BACKEND-154 ``upload_photo``：BACKEND-016 驗證 → ``build_object_path`` → upload（StorageError →
 502 ``storage_unavailable``）→ 更新 photo_path（flush 失敗刪掉剛上傳的物件）→ 舊檔以
 ``run_after_commit`` 刪除（rollback 不刪、刪除失敗只記 log）→ 回傳短效 URL。
+
+BACKEND-530 ``purge_student``（domain_spec M3 個資保存：對已封存且 withdrawn 的學生永久刪除 =
+匿名化）：學生 / 監護人 / 接送人 / 代理授權的個資欄位清除或改成固定文字、綁定碼與請假附件列刪除、
+含該生 student_id 的站內通知刪除；出勤、成績、接送、請假列保留（統計）只清自由文字。Storage 物件
+在 commit 後刪除；稽核 ``student.purge`` 只記各類筆數，不含姓名 / 學號 / 電話。再次執行以既有的
+``student.purge`` 稽核判定 → 409 ``student_already_purged``。
 """
 
 from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from datetime import date
-from typing import Final
-from uuid import UUID
+from datetime import date, datetime
+from functools import partial
+from typing import Any, Final, cast
+from uuid import UUID, uuid4
 
 from psycopg.errors import UniqueViolation
-from sqlalchemy import delete, or_, select
+from sqlalchemy import CursorResult, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
@@ -56,8 +63,14 @@ from app.core.request_meta import RequestMeta
 from app.core.storage import Bucket, Storage, StorageError, build_object_path
 from app.core.tx_hooks import run_after_commit
 from app.core.uploads import IMAGE_TYPES, PHOTO_MAX_BYTES, read_validated_upload
+from app.models.attendance import StudentAttendance
+from app.models.audit import AuditLog
 from app.models.classes import SchoolClass
+from app.models.exams import ExamScore
+from app.models.leaves import StudentLeave, StudentLeaveAttachment
+from app.models.notifications import Notification
 from app.models.parents import Guardian, ParentBindingCode
+from app.models.pickup import PickupAuthorization, PickupPerson
 from app.models.reference import School
 from app.models.students import Student
 from app.repositories.students import get_student_or_404
@@ -67,6 +80,8 @@ from app.schemas.students import (
     StudentDetailOut,
     StudentListItemOut,
     StudentListQuery,
+    StudentPurgeIn,
+    StudentPurgeOut,
     StudentSensitiveOut,
 )
 from app.services import audit_service
@@ -81,6 +96,11 @@ logger = logging.getLogger(__name__)
 
 PHOTO_URL_TTL_SECONDS = 300
 PHOTO_BUCKET: Final[Bucket] = "student-photos"
+LEAVE_ATTACHMENT_BUCKET: Final[Bucket] = "leave-attachments"
+PICKUP_PHOTO_BUCKET: Final[Bucket] = "pickup-person-photos"
+PURGED_STUDENT_NAME: Final = "已刪除學生"
+PURGED_TEXT: Final = "已刪除"
+PURGED_PHONE: Final = "00000000"  # 符合 DB CHECK 的電話格式
 _STUDENT_NO_UNIQUE: Final = "uq_students_student_no"
 _ID_NUMBER_UNIQUE: Final = "uq_students_id_number_hmac"
 
@@ -381,11 +401,11 @@ def archive_student(
 # --- BACKEND-154：upload_photo --------------------------------------------------------------------
 
 
-def _delete_quietly(storage: Storage, paths: Sequence[str]) -> None:
+def _delete_quietly(storage: Storage, paths: Sequence[str], bucket: Bucket = PHOTO_BUCKET) -> None:
     try:
-        storage.delete(PHOTO_BUCKET, paths)
+        storage.delete(bucket, paths)
     except StorageError:
-        logger.warning("刪除學生照片失敗（留下孤兒物件）：%s", list(paths), exc_info=True)
+        logger.warning("刪除 %s 物件失敗（留下孤兒物件）：%s", bucket, list(paths), exc_info=True)
 
 
 def upload_photo(
@@ -413,3 +433,180 @@ def upload_photo(
     if old_path:
         run_after_commit(session, lambda: _delete_quietly(storage, [old_path]))
     return PhotoUploadOut(photo_url=url)
+
+
+# --- BACKEND-530：purge_student -------------------------------------------------------------------
+
+
+def _rowcount(result: object) -> int:
+    return int(cast(CursorResult[Any], result).rowcount or 0)
+
+
+def _already_purged(session: Session, student_id: UUID) -> bool:
+    return (
+        session.execute(
+            select(AuditLog.id)
+            .where(AuditLog.action == "student.purge", AuditLog.entity_id == str(student_id))
+            .limit(1)
+        ).scalar_one_or_none()
+        is not None
+    )
+
+
+def _anonymize_student(student: Student) -> None:
+    """統計用欄位保留：grade_level、school_id、class_id、status、enrolled_on、withdrawn_on、
+    archived_at。"""
+    student.name = PURGED_STUDENT_NAME
+    student.student_no = f"DEL-{uuid4().hex[:8]}"
+    student.gender = None
+    student.birthday = None
+    student.school_class = None
+    student.note = None
+    student.photo_path = None
+    student.id_number_enc = None
+    student.id_number_hmac = None
+    student.health_note_enc = None
+
+
+def _purge_guardians(session: Session, student_id: UUID, now: datetime) -> int:
+    guardian_ids = select(Guardian.id).where(Guardian.student_id == student_id)
+    session.execute(
+        delete(ParentBindingCode).where(ParentBindingCode.guardian_id.in_(guardian_ids))
+    )
+    # 家長帳號本身不刪（可能綁定其他小孩），只解除綁定
+    return _rowcount(
+        session.execute(
+            update(Guardian)
+            .where(Guardian.student_id == student_id)
+            .values(
+                name=PURGED_TEXT,
+                phone=None,
+                parent_account_id=None,
+                is_primary=False,
+                archived_at=func.coalesce(Guardian.archived_at, now),
+            )
+        )
+    )
+
+
+def _purge_pickup(session: Session, student_id: UUID, now: datetime) -> tuple[int, list[str]]:
+    photo_paths = list(
+        session.execute(
+            select(PickupPerson.photo_path).where(
+                PickupPerson.student_id == student_id, PickupPerson.photo_path.is_not(None)
+            )
+        ).scalars()
+    )
+    persons = _rowcount(
+        session.execute(
+            update(PickupPerson)
+            .where(PickupPerson.student_id == student_id)
+            .values(
+                name=PURGED_TEXT,
+                phone=PURGED_PHONE,
+                photo_path=None,
+                archived_at=func.coalesce(PickupPerson.archived_at, now),
+            )
+        )
+    )
+    session.execute(
+        update(PickupAuthorization)
+        .where(PickupAuthorization.student_id == student_id)
+        .values(proxy_name=PURGED_TEXT, proxy_phone=PURGED_PHONE)
+    )
+    return persons, [str(path) for path in photo_paths]
+
+
+def _purge_leaves(session: Session, student_id: UUID) -> list[str]:
+    """請假列保留、reason 清空；附件列刪除並回傳其 storage path。"""
+    leave_ids = select(StudentLeave.id).where(StudentLeave.student_id == student_id)
+    attachment_paths = list(
+        session.execute(
+            select(StudentLeaveAttachment.storage_path).where(
+                StudentLeaveAttachment.leave_id.in_(leave_ids)
+            )
+        ).scalars()
+    )
+    session.execute(
+        delete(StudentLeaveAttachment).where(StudentLeaveAttachment.leave_id.in_(leave_ids))
+    )
+    session.execute(
+        update(StudentLeave).where(StudentLeave.student_id == student_id).values(reason=None)
+    )
+    return attachment_paths
+
+
+def _purge_free_text(session: Session, student_id: UUID) -> None:
+    """出勤與成績列保留（統計），只清可能含姓名的自由文字。"""
+    session.execute(
+        update(StudentAttendance)
+        .where(StudentAttendance.student_id == student_id)
+        .values(note=None)
+    )
+    session.execute(update(ExamScore).where(ExamScore.student_id == student_id).values(note=None))
+
+
+def _purge_notifications(session: Session, student_id: UUID) -> int:
+    # outbox 隨 FK cascade 刪除
+    return _rowcount(
+        session.execute(
+            delete(Notification).where(Notification.payload["student_id"].astext == str(student_id))
+        )
+    )
+
+
+def purge_student(
+    session: Session,
+    student_id: UUID,
+    data: StudentPurgeIn,
+    *,
+    actor: CurrentStaff,
+    storage: Storage,
+    meta: RequestMeta,
+    clock: Clock,
+) -> StudentPurgeOut:
+    # endpoint 已守衛 students:purge，service 縱深防禦
+    if not actor.has(Permission.STUDENTS_PURGE):
+        raise ForbiddenError()
+    student = get_student_or_404(session, student_id, include_archived=True, for_update=True)
+    if student.archived_at is None or student.status != "withdrawn":
+        raise ConflictError("student_not_purgeable", "只有已封存且已退班的學生可以永久刪除")
+    if _already_purged(session, student.id):
+        raise ConflictError("student_already_purged", "此學生已經永久刪除過")
+    if data.confirm_student_no != student.student_no:
+        raise AppError("purge_confirmation_mismatch", "確認學號與目前學號不符", status=422)
+
+    now = clock.now()
+    objects: dict[Bucket, list[str]] = {
+        PHOTO_BUCKET: [student.photo_path] if student.photo_path else [],
+    }
+    _anonymize_student(student)
+    guardians = _purge_guardians(session, student.id, now)
+    pickup_persons, objects[PICKUP_PHOTO_BUCKET] = _purge_pickup(session, student.id, now)
+    objects[LEAVE_ATTACHMENT_BUCKET] = _purge_leaves(session, student.id)
+    _purge_free_text(session, student.id)
+    notifications = _purge_notifications(session, student.id)
+    session.flush()
+
+    # Storage 只在 commit 成功後刪；commit 失敗（rollback）不刪，刪除失敗只記 log
+    for bucket, paths in objects.items():
+        if paths:
+            run_after_commit(session, partial(_delete_quietly, storage, paths, bucket))
+
+    audit_service.record(
+        session,
+        actor=audit_service.Actor.staff(actor),
+        action="student.purge",
+        entity_type="student",
+        entity_id=student.id,
+        after={
+            "guardians": guardians,
+            "pickup_persons": pickup_persons,
+            "attachments": len(objects[LEAVE_ATTACHMENT_BUCKET]),
+            "notifications": notifications,
+        },
+        meta=meta,
+    )
+    return StudentPurgeOut(
+        student_id=student.id, purged_at=now, anonymized_student_no=student.student_no
+    )

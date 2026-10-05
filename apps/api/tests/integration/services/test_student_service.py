@@ -61,6 +61,7 @@ from tests.support.factories import (
     make_class,
     make_exam,
     make_exam_score,
+    make_exam_subject,
     make_guardian,
     make_leave,
     make_leave_attachment,
@@ -806,10 +807,10 @@ class _Purgeable:
     """封存且 withdrawn 的王小明（S115001）與他的全部關聯資料。"""
 
     def __init__(self, db: Session, clock: FakeClock, storage: FakeStorage) -> None:
-        self.klass = make_class(db, name="A班")
-        self.student = make_student(
-            db, name="王小明", student_no="S115001", class_=self.klass, status="withdrawn"
-        )
+        self.klass = make_class(db)
+        # withdrawn 需同時有 withdrawn_on（DB CHECK），先建 active 再改狀態
+        self.student = make_student(db, name="王小明", student_no="S115001", class_=self.klass)
+        self.student.status = "withdrawn"
         self.student.withdrawn_on = date(2026, 8, 31)
         self.student.enrolled_on = date(2025, 9, 1)
         self.student.birthday = date(2017, 5, 1)
@@ -856,6 +857,7 @@ class _Purgeable:
         exam = make_exam(db, class_=self.klass)
         subjects = db.execute(select(Subject).order_by(Subject.sort_order).limit(3)).scalars().all()
         for subject in subjects:
+            make_exam_subject(db, exam, subject)
             score = make_exam_score(db, exam, self.student, subject)
             score.note = "王小明請假補考"
         for offset in (0, 1):
@@ -936,7 +938,8 @@ def _notifications_for(db: Session, student_id: UUID) -> int:
 def test_purge_student_preconditions(db_session: Session, fake_clock: FakeClock) -> None:
     storage = FakeStorage()
     active = make_student(db_session, student_no="ACT001", archived=True)
-    withdrawn_not_archived = make_student(db_session, student_no="WD001", status="withdrawn")
+    withdrawn_not_archived = make_student(db_session, student_no="WD001")
+    withdrawn_not_archived.status = "withdrawn"
     withdrawn_not_archived.withdrawn_on = date(2026, 8, 31)
     db_session.flush()
     target = _Purgeable(db_session, fake_clock, storage)
