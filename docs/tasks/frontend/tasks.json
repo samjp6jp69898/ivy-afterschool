@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 90,
-  "last_updated": "2026-10-05T02:48:17Z",
+  "version": 91,
+  "last_updated": "2026-10-05T02:55:26Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1650,7 +1650,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/JsonSchemaForm.vue",
       "source_ref": "FE:src/components/settings/SettingsLineTab.vue::default",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-050",
