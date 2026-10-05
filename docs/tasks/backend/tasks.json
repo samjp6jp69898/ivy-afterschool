@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 323,
-  "last_updated": "2026-10-05T04:15:58Z",
+  "version": 324,
+  "last_updated": "2026-10-05T04:16:04Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2850,8 +2850,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/roles.py",
       "source_ref": "BE:api/permissions_admin.py::update_role",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-079",
         "BACKEND-081"
@@ -4917,8 +4917,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/classes.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-138",
         "BACKEND-073",
@@ -4955,8 +4955,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/classes.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-139",
         "BACKEND-073",
@@ -4993,8 +4993,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/classes.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-140",
         "BACKEND-073",
@@ -8086,8 +8086,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-311",
         "BACKEND-301",
@@ -8125,8 +8125,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-305",
         "BACKEND-301",
@@ -8242,8 +8242,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-309",
         "BACKEND-301",
@@ -8281,8 +8281,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-310",
         "BACKEND-301",
@@ -8321,8 +8321,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-312",
         "BACKEND-301",
@@ -8360,8 +8360,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-312",
         "BACKEND-301",
@@ -8864,8 +8864,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/leaves.py",
       "source_ref": "BE:api/student_leaves.py::list_leaves",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-347",
         "BACKEND-341",
@@ -8982,8 +8982,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/leaves.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-350",
         "BACKEND-341",
@@ -9742,8 +9742,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/homework.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-383",
         "BACKEND-371",
@@ -11133,8 +11133,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/dismissal_calls.py::list_dismissal_calls",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-414",
         "BACKEND-402",
@@ -11368,8 +11368,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/dismissal_pos.py::get_dismissal_pos_status",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-415",
         "BACKEND-402",
@@ -11407,8 +11407,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/pickup_authorizations.py::list_authorizations",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-423",
         "BACKEND-402",
