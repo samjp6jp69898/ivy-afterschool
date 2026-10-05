@@ -262,7 +262,8 @@ def test_parent_pickup_person_create_success(
     plain = _post_person(client, ming.id, {**_PERSON_FORM, "name": "王叔叔", "relation": "叔叔"})
     assert plain.status_code == 201
     assert plain.json()["photo_url"] is None
-    assert [p["name"] for p in client.get(_persons_url(ming.id)).json()] == ["李阿姨", "王叔叔"]
+    # 同一交易內兩筆 created_at 相同，排序由 id 決定：只比對集合
+    assert {p["name"] for p in client.get(_persons_url(ming.id)).json()} == {"李阿姨", "王叔叔"}
 
 
 def test_parent_pickup_person_create_422(
