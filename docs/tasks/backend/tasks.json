@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 253,
-  "last_updated": "2026-10-05T02:49:54Z",
+  "version": 254,
+  "last_updated": "2026-10-05T02:50:50Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -9660,7 +9660,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-370",
