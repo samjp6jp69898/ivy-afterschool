@@ -4,10 +4,12 @@
 - BACKEND-384：``get_child_homework``（家長端當日作業明細，呼叫端已驗證所有權）。
 - BACKEND-374：``broadcast_homework_snapshot``（寫入方法共用的 ws 推播；同交易同一學生同一天只推最後
   狀態）。
+- BACKEND-383：``get_board``（作業進度看板，逐生卡片）。
 """
 
 from __future__ import annotations
 
+from collections import Counter, defaultdict
 from datetime import date
 from typing import Final
 from uuid import UUID
@@ -17,15 +19,25 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session, SessionTransaction
 
 from app.core.clock import Clock
+from app.core.settings_registry import HOMEWORK_WINDOW
 from app.models.account import StaffUser
+from app.models.attendance import AttendanceStatus, StudentAttendance
+from app.models.classes import SchoolClass
 from app.models.homework import HomeworkDailyProgress, HomeworkItem
+from app.models.students import Student
 from app.realtime.publish import broadcast_after_commit
 from app.schemas.homework import (
+    BoardOut,
+    BoardQuery,
+    BoardStudentOut,
+    BoardSummaryOut,
+    BoardWindowOut,
     HomeworkItemOut,
     ParentHomeworkItemOut,
     ParentHomeworkOut,
     ProgressOut,
 )
+from app.services.settings_service import get_setting
 
 UQ_PROGRESS_STUDENT_DATE = "uq_homework_daily_progress_student_date"
 BROADCAST_KEYS: Final = "homework_broadcast_keys"
@@ -221,3 +233,91 @@ def broadcast_homework_snapshot(
         session.begin()
     keys: dict[tuple[UUID, date], Clock] = session.info.setdefault(BROADCAST_KEYS, {})
     keys[(student_id, service_date)] = clock
+
+
+def get_board(session: Session, query: BoardQuery, *, clock: Clock) -> BoardOut:
+    """active 未封存學生（class_id 篩選）的當日卡片，依班級 sort_order、班名、學號排序。
+
+    summary 只計當日出勤不是 leave / absent 的學生。SQL 固定：學生、出勤、items、progress（join
+    員工姓名）、作業日期範圍設定（快取未命中時）。window 讓課輔老師不需 settings:read 也能取得。
+    """
+    d = query.date or clock.today()
+    stmt = (
+        select(Student.id, Student.student_no, Student.name, Student.class_id, SchoolClass.name)
+        .outerjoin(SchoolClass, SchoolClass.id == Student.class_id)
+        .where(Student.status == "active", Student.archived_at.is_(None))
+        .order_by(
+            SchoolClass.sort_order.asc().nulls_last(),
+            SchoolClass.name.asc().nulls_last(),
+            Student.student_no,
+            Student.id,
+        )
+    )
+    if query.class_id is not None:
+        stmt = stmt.where(Student.class_id == query.class_id)
+    students = session.execute(stmt).all()
+    ids = [row[0] for row in students]
+
+    attendance: dict[UUID, AttendanceStatus] = {}
+    items_by: defaultdict[UUID, list[HomeworkItem]] = defaultdict(list)
+    progress_by: dict[UUID, HomeworkDailyProgress] = {}
+    eta_by_name: dict[UUID, str | None] = {}
+    if ids:
+        # Result 有 keys()，dict(result) 會被當成 mapping：改用 comprehension
+        attendance = {
+            student_id: status
+            for student_id, status in session.execute(
+                select(StudentAttendance.student_id, StudentAttendance.status).where(
+                    StudentAttendance.student_id.in_(ids), StudentAttendance.service_date == d
+                )
+            )
+        }
+        for item in session.execute(
+            select(HomeworkItem)
+            .where(HomeworkItem.student_id.in_(ids), HomeworkItem.service_date == d)
+            .order_by(HomeworkItem.sort_order, HomeworkItem.created_at, HomeworkItem.id)
+        ).scalars():
+            items_by[item.student_id].append(item)
+        for progress, eta_by in session.execute(
+            select(HomeworkDailyProgress, StaffUser.display_name)
+            .outerjoin(StaffUser, StaffUser.id == HomeworkDailyProgress.eta_updated_by)
+            .where(
+                HomeworkDailyProgress.student_id.in_(ids), HomeworkDailyProgress.service_date == d
+            )
+        ):
+            progress_by[progress.student_id] = progress
+            eta_by_name[progress.student_id] = eta_by
+
+    cards: list[BoardStudentOut] = []
+    for student_id, student_no, name, class_id, class_name in students:
+        cards.append(
+            BoardStudentOut(
+                student_id=student_id,
+                student_no=student_no,
+                name=name,
+                class_id=class_id,
+                class_name=class_name,
+                attendance_status=attendance.get(student_id),
+                items=[_item_out(item) for item in items_by[student_id]],
+                progress=_progress_out(
+                    student_id, d, progress_by.get(student_id), eta_by_name.get(student_id)
+                ),
+            )
+        )
+    counted = Counter(
+        card.progress.overall_status
+        for card in cards
+        if card.attendance_status not in ("leave", "absent")
+    )
+    window = get_setting(session, HOMEWORK_WINDOW)
+    return BoardOut(
+        date=d,
+        window=BoardWindowOut(past_days=window.past_days, future_days=window.future_days),
+        summary=BoardSummaryOut(
+            total=sum(counted.values()),
+            done=counted["done"],
+            in_progress=counted["in_progress"],
+            not_started=counted["not_started"],
+        ),
+        students=cards,
+    )
