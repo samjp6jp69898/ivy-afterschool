@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 289,
-  "last_updated": "2026-10-05T03:09:35Z",
+  "version": 290,
+  "last_updated": "2026-10-05T03:10:07Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -4694,7 +4694,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": "BE:api/classrooms.py::update_classroom",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-137"
@@ -4728,7 +4728,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": "BE:api/classrooms.py::delete_classroom",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-136"
@@ -4762,7 +4762,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-136"
@@ -5171,7 +5171,7 @@
     {
       "id": "BACKEND-151",
       "title": "實作 StudentService.create_student：學號唯一、身分證查重、敏感欄位加密",
-      "description": "在 `apps/api/app/services/student_service.py` 實作：\n```python\ndef create_student(session: Session, data: StudentCreateIn, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> StudentDetailOut: ...\n```\n1. 給了 id_number 或 health_note 而 actor 無 `students:sensitive` → 403 `sensitive_permission_required`（身分證與健康備註的寫入與讀取都需要 students:sensitive）。\n2. school_id 不存在或停用 → 422 `invalid_school`；class_id 不存在或已封存 → 422 `invalid_class`。\n3. status=withdrawn 未給 withdrawn_on → 預設 `clock.today()`；withdrawn_on 早於 enrolled_on → 422 `invalid_dates`。\n4. id_number：normalize → validate（422）→ hmac；同 hmac 的既有學生（含封存）→ 409 `id_number_duplicate`，details `{\"student_id\", \"student_no\", \"name\"}`（DB-014：同一人再次入班應沿用原紀錄）。\n5. 加密 id_number_enc / health_note_enc（BACKEND-009）。\n6. insert（savepoint）；`uq_students_student_no` → 409 `student_no_taken`；`uq_students_id_number_hmac`（競態）→ 409 `id_number_duplicate`。\n7. 有寫入敏感欄位時稽核 `student.sensitive_update`（after 只記欄位名、不記值：`{\"set\": [\"health_note\", \"id_number\"]}`，欄位名排序；以 list 記而不以欄位名當 key，因為 BACKEND-102 會把 key 含 id_number / health_note 的值遮罩成 `***`）。\n- 移植 ivy `api/students.py::create_student` 的唯一檢查與 `services/student_dedup.py` 的查重精神（改為身分證 HMAC）。\n\n**驗收標準**\n- 建立成功，DB 只有密文與 HMAC。\n- 學號重複 409；身分證重複（含封存學生）409 並指出既有學生；身分證格式錯 422。\n- 無 sensitive 權限寫敏感欄位 403；不寫則可建立。\n- 無效學校 / 班級 422；withdrawn 預設退班日。",
+      "description": "在 `apps/api/app/services/student_service.py` 實作：\n```python\ndef create_student(session: Session, data: StudentCreateIn, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> StudentDetailOut: ...\n```\n1. 給了 id_number 或 health_note 而 actor 無 `students:sensitive` → 403 `sensitive_permission_required`（身分證與健康備註的寫入與讀取都需要 students:sensitive）。\n2. school_id 不存在或停用 → 422 `invalid_school`；class_id 不存在或已封存 → 422 `invalid_class`（班級列先取 FOR SHARE 再判斷 archived_at：封存進行中時等待其 commit，學生不會被放進剛封存的班）。\n3. status=withdrawn 未給 withdrawn_on → 預設 `clock.today()`；withdrawn_on 早於 enrolled_on → 422 `invalid_dates`。\n4. id_number：normalize → validate（422）→ hmac；同 hmac 的既有學生（含封存）→ 409 `id_number_duplicate`，details `{\"student_id\", \"student_no\", \"name\"}`（DB-014：同一人再次入班應沿用原紀錄）。\n5. 加密 id_number_enc / health_note_enc（BACKEND-009）。\n6. insert（savepoint）；`uq_students_student_no` → 409 `student_no_taken`；`uq_students_id_number_hmac`（競態）→ 409 `id_number_duplicate`。\n7. 有寫入敏感欄位時稽核 `student.sensitive_update`（after 只記欄位名、不記值：`{\"set\": [\"health_note\", \"id_number\"]}`，欄位名排序；以 list 記而不以欄位名當 key，因為 BACKEND-102 會把 key 含 id_number / health_note 的值遮罩成 `***`）。\n- 移植 ivy `api/students.py::create_student` 的唯一檢查與 `services/student_dedup.py` 的查重精神（改為身分證 HMAC）。\n\n**驗收標準**\n- 建立成功，DB 只有密文與 HMAC。\n- 學號重複 409；身分證重複（含封存學生）409 並指出既有學生；身分證格式錯 422。\n- 無 sensitive 權限寫敏感欄位 403；不寫則可建立。\n- 無效學校 / 班級 422；withdrawn 預設退班日。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": "BE:api/students.py::create_student",
@@ -5196,7 +5196,8 @@
           "test_create_student_id_duplicate_including_archived：封存學生已有 A123456789 → 409 'id_number_duplicate'，details.student_no == 該封存學生學號",
           "test_create_student_sensitive_forbidden：actor 只有 students:write 且給 id_number → 403 'sensitive_permission_required'；不給敏感欄位 → 成功",
           "test_create_student_invalid_refs：school_id=uuid4() → 422 'invalid_school'；封存班 → 422 'invalid_class'；id_number='A123' → 422 'invalid_id_number'",
-          "test_create_student_withdrawn_default_date：status='withdrawn' 未給 withdrawn_on → withdrawn_on == fake_clock.today()"
+          "test_create_student_withdrawn_default_date：status='withdrawn' 未給 withdrawn_on → withdrawn_on == fake_clock.today()",
+          "test_create_student_blocked_by_concurrent_class_archive：session A archive_class 持鎖未 commit → session B create_student(class_id) 對班級列取 FOR SHARE 等待（0.5 秒內未結束）→ A commit → B 重讀 archived_at → 422 'invalid_class'，班內學生數 0"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_student_service.py -k \"test_create_student_\"",
         "notes": ""
