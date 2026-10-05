@@ -7,13 +7,17 @@
 from fastapi import APIRouter
 
 from app.api.admin import (
+    attendance,
     audit_logs,
     auth,
     classes,
     dashboard,
     exams,
     guardians,
+    homework,
+    leaves,
     notifications,
+    pickup,
     reference,
     roles,
     settings,
@@ -36,5 +40,9 @@ admin_router.include_router(dashboard.router)
 admin_router.include_router(staff_users.router)
 admin_router.include_router(classes.router)
 admin_router.include_router(notifications.router)
+admin_router.include_router(attendance.router)
+admin_router.include_router(leaves.router)
+admin_router.include_router(homework.router)
+admin_router.include_router(pickup.router)
 
 __all__ = ["admin_router"]
