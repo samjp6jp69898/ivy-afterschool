@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 371,
-  "last_updated": "2026-10-05T05:46:12Z",
+  "version": 372,
+  "last_updated": "2026-10-05T05:48:06Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -8677,7 +8677,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_service.py",
       "source_ref": "BE:api/parent_portal/leaves.py::cancel_leave",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-345",
@@ -8790,7 +8790,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/leave_service.py",
       "source_ref": "BE:api/parent_portal/leaves.py::upload_leave_attachment",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-345",
