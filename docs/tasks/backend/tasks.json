@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 306,
-  "last_updated": "2026-10-05T04:07:12Z",
+  "version": 307,
+  "last_updated": "2026-10-05T04:07:49Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -4697,13 +4697,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": "BE:api/classrooms.py::update_classroom",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-137"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "[review-r8-b] 並發：update_class 讀 class 未上鎖。反例（review 以兩個 app_backend session 實測）：session A archive_class 已 flush 未 commit，session B update_class(name='封存後改名') 讀到 archived_at IS NULL、UPDATE 等到 A commit 後照樣成功 → 已封存班被改名，違反「封存班不可改 409 class_archived」。修法：寫入前以 SELECT ... FOR UPDATE（of=SchoolClass、populate_existing）鎖 class 列再判斷 archived_at（_get_writable_class 與 archive_class 都要；可給 get_class_or_404 加 for_update 參數，比照 get_student_or_404），並補兩個 session 的並發測試（參照 test_homework_service.py 的 test_lock_progress_row_* 寫法）。",
+      "risk_notes": "班級的寫入（改名 / 封存 / 指派員工）以 get_class_or_404(for_update=True) 鎖班級列序列化；之後新增會改班級的路徑也必須經 _get_writable_class，不可直接讀了就寫。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_class_service.py",
@@ -4713,15 +4713,16 @@
         "red_cases": [
           "test_update_class_partial：update_class(A, ClassUpdateIn(sort_order=3)) → sort_order 3、name 不變",
           "test_update_class_archived：封存班 → 409 'class_archived'",
-          "test_update_class_conflict：改成同年另一班的名稱 → 409 'class_name_taken'"
+          "test_update_class_conflict：改成同年另一班的名稱 → 409 'class_name_taken'",
+          "test_update_class_blocked_by_concurrent_archive：s2 先載入班級 → s1 封存並 commit → s2 update_class → 409 'class_archived' 且同一 ORM 物件 archived_at 已刷新；s1 封存未 commit 時 s2 update_class 等鎖（lock_timeout 55P03），s1 commit 後 → 409"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_class_service.py -k \"test_update_class_\"",
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r8-b",
-        "notes": "並發未鎖 class 列，詳見 risk_notes。tdd.run 全綠、測試先於實作、lint / typecheck 乾淨。"
+        "notes": "複審（只核對並發打回項）：c9ca9f8 測試 → 9ef2d3d get_class_or_404(for_update) → a683008 修正，順序正確。review 在 scratchpad 複本逐一突變：拿掉 _get_writable_class 的鎖 → test_update_class_blocked_by_concurrent_archive 與 test_set_class_staff_serialized 轉紅；拿掉 archive_class 的鎖 → test_archive_class_blocked_by_concurrent_student_insert 轉紅；拿掉 get_class_or_404 的 populate_existing → test_update_class_blocked_by_concurrent_archive 轉紅；拿掉 151 _check_class 的 FOR SHARE → test_create_student_blocked_by_concurrent_class_archive 轉紅。tdd.run 全綠且選到新增的並發測試，lint / typecheck 乾淨。"
       }
     },
     {
@@ -4731,13 +4732,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": "BE:api/classrooms.py::delete_classroom",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-136"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "[review-r8-b] 並發：archive_class 先計數再寫，未鎖 class 列。反例（review 實測）：session A 新增一位 active 學生到該班（未 commit），session B archive_class 計數 0 → 設 archived_at 並 commit 成功，A 隨後 commit → 封存班內有 1 位 active 學生，違反「有在學學生 409 class_has_students」。學生 INSERT / 改 class_id 的 FK 檢查會對 class 列取 KEY SHARE，archive 端改成先 FOR UPDATE 鎖 class 列再計數即可序列化（READ COMMITTED 下鎖到後的計數語句會看到已 commit 的學生）。修法：寫入前以 SELECT ... FOR UPDATE（of=SchoolClass、populate_existing）鎖 class 列再判斷 archived_at（_get_writable_class 與 archive_class 都要；可給 get_class_or_404 加 for_update 參數，比照 get_student_or_404），並補兩個 session 的並發測試（參照 test_homework_service.py 的 test_lock_progress_row_* 寫法）。",
+      "risk_notes": "封存先 FOR UPDATE 鎖班級列再計數，能擋住學生 INSERT / 改 class_id（FK 檢查對班級列取 KEY SHARE）與 BACKEND-151 _check_class 的 FOR SHARE。仍成立的風險：學生 status 由 withdrawn 改回 active / suspended 而不改 class_id 時不會觸發 FK 檢查，BACKEND-152 update_student 改狀態（及匯入、學年升級寫入班級）必須同樣對班級列取 FOR SHARE 再判斷封存，否則與封存並發時封存班仍可能出現在學學生。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_class_service.py",
@@ -4747,15 +4748,16 @@
         "red_cases": [
           "test_archive_class_success：班內只有 withdrawn 學生 → archive_class → archived_at == fake_clock.now()",
           "test_archive_class_has_students：班內一位 active、一位 suspended → 409 'class_has_students'，details == {'student_count': 2}",
-          "test_archive_class_idempotent：再次封存 → archived_at 不變"
+          "test_archive_class_idempotent：再次封存 → archived_at 不變",
+          "test_archive_class_blocked_by_concurrent_student_insert：s1 新增 active 學生到該班未 commit → s2 archive_class 等鎖（55P03）；s1 commit 後 s2 封存 → 409 'class_has_students'，details == {'student_count': 1}"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_class_service.py -k \"test_archive_class_\"",
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r8-b",
-        "notes": "並發未鎖 class 列，詳見 risk_notes。tdd.run 全綠、測試先於實作、lint / typecheck 乾淨。"
+        "notes": "複審（只核對並發打回項）：c9ca9f8 測試 → 9ef2d3d get_class_or_404(for_update) → a683008 修正，順序正確。review 在 scratchpad 複本逐一突變：拿掉 _get_writable_class 的鎖 → test_update_class_blocked_by_concurrent_archive 與 test_set_class_staff_serialized 轉紅；拿掉 archive_class 的鎖 → test_archive_class_blocked_by_concurrent_student_insert 轉紅；拿掉 get_class_or_404 的 populate_existing → test_update_class_blocked_by_concurrent_archive 轉紅；拿掉 151 _check_class 的 FOR SHARE → test_create_student_blocked_by_concurrent_class_archive 轉紅。tdd.run 全綠且選到新增的並發測試，lint / typecheck 乾淨。"
       }
     },
     {
@@ -4765,13 +4767,13 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/class_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-136"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "[review-r8-b] 並發：set_class_staff 經 _get_writable_class 讀 class 未上鎖，與 138 同根因：與 archive_class 並發時可對已封存班改負責員工（違反 409 class_archived）；兩個 PUT 並發新增同一位員工會撞 uq_class_staff_class_staff，落到通用 IntegrityError handler 回 409 conflict 而非整批取代的結果。修法：寫入前以 SELECT ... FOR UPDATE（of=SchoolClass、populate_existing）鎖 class 列再判斷 archived_at（_get_writable_class 與 archive_class 都要；可給 get_class_or_404 加 for_update 參數，比照 get_student_or_404），並補兩個 session 的並發測試（參照 test_homework_service.py 的 test_lock_progress_row_* 寫法）。",
+      "risk_notes": "員工存在且啟用的檢查未對 staff_users 上鎖：與停用員工並發時可能指派到剛停用的員工（停用流程目前不清 class_staff）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_class_service.py",
@@ -4782,15 +4784,16 @@
           "test_set_class_staff_replace：原有 s1(lead)、s2(assistant) → 設為 [s2(lead), s3(assistant)] → staff 為 {(s2,'lead'),(s3,'assistant')}，s2 的 class_staff 列 id 不變",
           "test_set_class_staff_invalid：含停用員工與 uuid4() → 422 'invalid_staff'，details.invalid 含兩者",
           "test_set_class_staff_empty：items=[] → staff == []",
-          "test_set_class_staff_archived：封存班 → 409 'class_archived'"
+          "test_set_class_staff_archived：封存班 → 409 'class_archived'",
+          "test_set_class_staff_serialized：A、B 同時把同一位員工指派到同班（A lead、B assistant）→ B 被擋到 A commit 後完成，最終只有一列 role 'assistant'；s1 封存未 commit 時 s2 set_class_staff 等鎖（55P03），commit 後 → 409 'class_archived'"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_class_service.py -k \"test_set_class_staff_\"",
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r8-b",
-        "notes": "並發未鎖 class 列，詳見 risk_notes。tdd.run 全綠、測試先於實作、lint / typecheck 乾淨。"
+        "notes": "複審（只核對並發打回項）：c9ca9f8 測試 → 9ef2d3d get_class_or_404(for_update) → a683008 修正，順序正確。review 在 scratchpad 複本逐一突變：拿掉 _get_writable_class 的鎖 → test_update_class_blocked_by_concurrent_archive 與 test_set_class_staff_serialized 轉紅；拿掉 archive_class 的鎖 → test_archive_class_blocked_by_concurrent_student_insert 轉紅；拿掉 get_class_or_404 的 populate_existing → test_update_class_blocked_by_concurrent_archive 轉紅；拿掉 151 _check_class 的 FOR SHARE → test_create_student_blocked_by_concurrent_class_archive 轉紅。tdd.run 全綠且選到新增的並發測試，lint / typecheck 乾淨。兩個 PUT 同時指派同一位員工已被班級列鎖序列化：B 等 A commit 後以整批取代覆蓋（單列、role 為 B 的），不再撞 uq_class_staff_class_staff。"
       }
     },
     {
@@ -5178,7 +5181,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": "BE:api/students.py::create_student",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-150",
@@ -5206,9 +5209,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
-        "reviewer": null,
-        "notes": "[impl-backend-r8b 自曝] 第一版 _check_class 只以 session.get 讀班級、未鎖列：封存（FOR UPDATE）已鎖未 commit 時新增學生會讀到舊的未封存狀態，INSERT 等到封存 commit 後仍成功，學生被放進已封存的班。已於 a683008 修正（班級列先 FOR SHARE + populate_existing 再判斷 archived_at）並補並發 red_case（c9ca9f8 先紅）；待 reviewer 核對。"
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 7 passed（含新增的並發 red_case）；測試 42aeaad / c9ca9f8 先於實作 821338f / a683008。敏感欄位只存密文與 HMAC（測試驗密文不含明文、可解回）；HMAC 查重含封存學生且 details 指出既有學生，unique 競態以 savepoint 轉 409；無 students:sensitive 寫敏感欄位 403；school / class / 日期以明確錯誤碼擋在 DB CHECK 之前；稽核 after 為 {'set': [欄位名]}（audit_service 以 key 遮罩，改成 list 正確，152 description / red_case 已同步）。班級 FOR SHARE 經突變驗證。殘留：_check_class 的 populate_existing 拿掉測試不會轉紅（create_student 先前未載入班級，目前無影響）；_check_school 未鎖國小列，與停用國小並發時可寫入剛停用的國小（停用不影響既有引用，影響低）。"
       }
     },
     {
@@ -5256,7 +5259,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": "BE:api/students.py::delete_student",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-150",
@@ -5279,9 +5282,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 3 passed；測試 42aeaad 先於實作 821338f。FOR UPDATE 鎖學生列後設 archived_at、只刪該生監護人的未使用綁定碼（已使用與其他學生的保留，測試皆有斷言）；冪等；家長可見範圍排除封存學生。多收的選填 actor / storage 只影響回應是否帶 sensitive / photo_url，預設 None 時 sensitive 一律 None，不外洩。與綁定碼產生並發時可能留下未使用碼，但 claim 端會擋封存學生，不構成可綁定的漏洞。"
       }
     },
     {
@@ -5291,7 +5294,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-150",
@@ -5301,7 +5304,7 @@
         "BACKEND-006"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "[review-r8-b] 並發：upload_photo 以 get_student_or_404 讀學生未上鎖，先讀 old_path 再寫。反例（review 以兩個 app_backend session 實測）：A upload_photo 已 flush 未 commit，B upload_photo 讀到舊 photo_path X、上傳新物件、UPDATE 等到 A commit 後照樣成功；A commit 後刪 X，B commit 後也只刪 X → A 上傳的照片物件沒有任何列參照、永遠不會被刪（學生照片孤兒，BACKEND-530 purge 也收不到），違反「commit 後舊物件被刪」。修法：get_student_or_404(for_update=True)（鎖到後再讀 photo_path），並補兩個 session 的並發測試（A 持鎖時 B 被擋；A commit 後 B 完成，最終 Storage 只剩 B 的物件），突變拿掉鎖要轉紅。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_student_service.py",
@@ -5319,9 +5322,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r8-b",
+        "notes": "上傳照片未鎖學生列，並發會留下孤兒照片物件，詳見 risk_notes。其餘：tdd.run 5 passed、測試 42aeaad 先於實作 821338f、驗證 / 502 / flush 失敗刪新檔 / after-commit 刪舊檔正確，lint / typecheck 乾淨。"
       }
     },
     {
@@ -5553,7 +5556,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::get_student",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-150",
@@ -5578,9 +5581,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 6 passed（5 條 red_case + route audit）；測試 52c2393 先於實作 54dddf2。students:read 守衛，classes:read → 403 details.required == ['students:read']；無 students:sensitive 時 sensitive None 且回應本文不含身分證、健康備註、_enc、hmac；回應欄位集合固定；封存學生可查；路由註解標明固定路徑須在 /{student_id} 之前。lint / typecheck 乾淨。"
       }
     },
     {
@@ -14373,7 +14376,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-148",
@@ -14408,9 +14411,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 6 passed；測試 7be059e 先於實作 a82cc71。實作 commit 改的三處測資（withdrawn 學生先建 active 再改以滿足 ck_students_withdrawn_status、成績前補 exam_subject、班名改隨機）都是讓測資符合 DB 約束，未刪改任何斷言。service 自檢 students:purge、FOR UPDATE 鎖學生、前置條件 / 已 purge / 確認學號依序檢查；學生、監護人、接送人、代理授權個資清除，綁定碼、附件列、payload.student_id 通知刪除，統計列保留只清自由文字；Storage 三類物件以 run_after_commit 刪除（rollback 不刪、失敗只記 log）；稽核 after 只有筆數。lint / typecheck 乾淨。"
       }
     },
     {
