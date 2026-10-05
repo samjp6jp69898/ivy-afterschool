@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 82,
-  "last_updated": "2026-10-05T05:41:59Z",
+  "version": 83,
+  "last_updated": "2026-10-05T05:42:31Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -257,8 +257,8 @@
       "granularity_unit": "method",
       "target_path": "apps/web/src/parent/services/liff.ts",
       "source_ref": "FE:src/parent/services/liff.ts::initLiff",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r8",
       "depends_on": [
         "PARENT-005",
         "INFRA-012"
@@ -1667,8 +1667,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/homework/HomeworkItemRow.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r8",
       "depends_on": [
         "FRONTEND-005",
         "PARENT-051",
@@ -3209,8 +3209,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/notifications/NotificationListItem.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r8",
       "depends_on": [
         "FRONTEND-003",
         "PARENT-014",
