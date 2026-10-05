@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 355,
-  "last_updated": "2026-10-05T05:40:15Z",
+  "version": 356,
+  "last_updated": "2026-10-05T05:40:48Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10297,11 +10297,11 @@
     {
       "id": "BACKEND-407",
       "title": "實作 PickupRequestService.reply_request：員工覆寫回覆（通知家長 pickup.replied）",
-      "description": "在 `apps/api/app/services/pickup/requests.py` 實作（domain_spec M7 流程 3：員工可覆寫回覆，`reply_source = staff`）：\n```python\ndef reply_request(session: Session, request_id: UUID, data: PickupReplyIn, *, actor: CurrentStaff, clock: Clock) -> PickupRequest: ...\n```\n1. reply_message 未給 → 以 `f\"預計 {HH:MM} 可接送\"` 組出；兩者都給則照用。\n2. `transition_request(from=OPEN_STATUSES, to_status=None, values={reply_ready_eta, reply_message, reply_source:'staff', replied_by: actor.id, replied_at: now})`（BACKEND-405；不改變狀態）。\n3. **同步寫回作業進度**：data.reply_ready_eta 有值時，於同一交易 `lock_progress_row(session, student_id, request.service_date)`（BACKEND-373）→ `ready_eta = reply_ready_eta`、`eta_updated_by = actor.id`、`eta_updated_at = now`（值相同時不改），再 `broadcast_homework_snapshot`（BACKEND-374）讓作業看板與家長端作業卡同步。**不**發 `homework.eta_updated`（家長已收到下一步的 pickup.replied，避免重複通知），也不呼叫 sync_open_request_reply（本請求已是 staff 回覆）。只給 reply_message 時不動作業進度。\n4. requested_by_type == 'parent' → `enqueue(Event.PICKUP_REPLIED, recipients=[Recipient('parent', requested_by_id)], payload={'student_id','student_name','request_id','reply_message'})`；員工代建的請求沒有發起家長，不通知。\n5. `publish_request_change`。\n\n**驗收標準**\n- 回覆欄位寫入、reply_source staff、狀態不變。\n- 只給 ETA 時自動組訊息。\n- 回覆的 ETA 同交易寫回 homework_daily_progress.ready_eta 並推作業看板 ws；不產生 homework.eta_updated；只給訊息時作業進度不變。\n- 家長發起的請求通知發起家長；員工代建不通知。\n- 終態請求 409；不存在 404。",
+      "description": "在 `apps/api/app/services/pickup/requests.py` 實作（domain_spec M7 流程 3：員工可覆寫回覆，`reply_source = staff`）：\n```python\ndef reply_request(session: Session, request_id: UUID, data: PickupReplyIn, *, actor: CurrentStaff, clock: Clock) -> PickupRequest: ...\n```\n1. reply_message 未給 → 以 `f\"預計 {HH:MM} 可接送\"` 組出；兩者都給則照用。\n2. **鎖序一律「進度列 → 請求列」（與 BACKEND-376 / 382 / 413 一致，相反會與作業模組互等成 40P01 死結）**：data.reply_ready_eta 有值時，先以不上鎖的查詢取得請求的 student_id / service_date，`lock_progress_row(session, student_id, service_date)`（BACKEND-373）；請求不存在時略過，由下一步回 404。\n3. `transition_request(from=OPEN_STATUSES, to_status=None, values={reply_ready_eta, reply_message, reply_source:'staff', replied_by: actor.id, replied_at: now})`（BACKEND-405；不改變狀態）。之後**同步寫回作業進度**：已鎖的進度列 `ready_eta = reply_ready_eta`、`eta_updated_by = actor.id`、`eta_updated_at = now`（值相同時不改），再 `broadcast_homework_snapshot`（BACKEND-374）讓作業看板與家長端作業卡同步。**不**發 `homework.eta_updated`（家長已收到下一步的 pickup.replied，避免重複通知），也不呼叫 sync_open_request_reply（本請求已是 staff 回覆）。只給 reply_message 時不動作業進度。\n4. requested_by_type == 'parent' → `enqueue(Event.PICKUP_REPLIED, recipients=[Recipient('parent', requested_by_id)], payload={'student_id','student_name','request_id','reply_message'})`；員工代建的請求沒有發起家長，不通知。\n5. `publish_request_change`。\n\n**驗收標準**\n- 回覆欄位寫入、reply_source staff、狀態不變。\n- 只給 ETA 時自動組訊息。\n- 回覆的 ETA 同交易寫回 homework_daily_progress.ready_eta 並推作業看板 ws；不產生 homework.eta_updated；只給訊息時作業進度不變。\n- 家長發起的請求通知發起家長；員工代建不通知。\n- 終態請求 409；不存在 404。\n- 與作業模組同時寫同一學生（對方先鎖進度列、再鎖請求列）時不死結：reply_request 等對方完成後成功。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-405",
@@ -10325,7 +10325,8 @@
           "test_reply_pickup_request_terminal：completed → 409 'invalid_pickup_status'；uuid4() → 404 'pickup_request_not_found'",
           "test_reply_pickup_request_writes_back_eta：王小明今日 progress ready_eta 17:00 → reply(reply_ready_eta=time(18,0)) → homework_daily_progress.ready_eta == time(18,0)、eta_updated_by == actor.id；notifications(event='homework.eta_updated') 0 列、pickup.replied 1 列；monkeypatch publish_threadsafe，commit 後 admin:homework 收到 type 'homework.progress_updated' 且 progress.ready_eta == '18:00'",
           "test_reply_pickup_request_message_only_keeps_progress：reply(reply_message='稍等十分鐘') → progress.ready_eta 仍 17:00、eta_updated_at 不變；無 progress 列時 reply(reply_ready_eta=18:00) → 建立 progress 列 ready_eta 18:00、overall_status 'not_started'",
-          "test_reply_pickup_request_rollback_atomic：reply 後 db_session.rollback() → 請求 reply_source 與 progress.ready_eta 皆回原值"
+          "test_reply_pickup_request_rollback_atomic：reply 後 db_session.rollback() → 請求 reply_source 與 progress.ready_eta 皆回原值",
+          "test_reply_pickup_request_lock_order_no_deadlock：committing session；s2 先 lock_progress_row（模擬 382），s1 以執行緒 reply_request(reply_ready_eta=18:00) 被擋；s2 接著 sync_open_request_reply 鎖請求列並 commit → 兩邊皆無例外（舊鎖序在此重現 40P01），最終請求 reply_source 'staff'、reply_ready_eta 18:00，progress.ready_eta 18:00"
         ],
         "run": "just test-int apps/api/tests/integration/services/pickup/test_pickup_requests.py -k \"test_reply_pickup_request_\"",
         "notes": ""

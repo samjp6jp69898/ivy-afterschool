@@ -549,6 +549,17 @@ def reply_request(
     now = clock.now()
     eta = _parse_hm(data.reply_ready_eta) if data.reply_ready_eta is not None else None
     message = data.reply_message or f"預計 {data.reply_ready_eta} 可接送"
+    progress = None
+    if eta is not None:
+        # 鎖序一律「進度列 → 請求列」（與 BACKEND-376 / 382 / 413 一致），否則與作業模組互等成死結：
+        # 先以不上鎖的查詢取得學生與日期、鎖進度列，再做請求列的條件式 UPDATE
+        target = session.execute(
+            select(PickupRequest.student_id, PickupRequest.service_date).where(
+                PickupRequest.id == request_id
+            )
+        ).one_or_none()
+        if target is not None:
+            progress = lock_progress_row(session, target.student_id, target.service_date)
     request = transition_request(
         session,
         request_id,
@@ -562,8 +573,7 @@ def reply_request(
             "replied_at": now,
         },
     )
-    if eta is not None:
-        progress = lock_progress_row(session, request.student_id, request.service_date)
+    if progress is not None:
         if progress.ready_eta != eta:
             progress.ready_eta = eta
             progress.eta_updated_by = actor.id
