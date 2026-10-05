@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 105,
-  "last_updated": "2026-10-05T05:40:58Z",
+  "version": 106,
+  "last_updated": "2026-10-05T05:41:19Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -975,7 +975,7 @@
       "granularity_unit": "store",
       "target_path": "apps/web/src/stores/adminWs.ts",
       "source_ref": "FE:src/views/DismissalQueueView.vue::connectWs",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-004",
