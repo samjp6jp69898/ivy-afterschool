@@ -7,19 +7,22 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_owned_student
+from app.api.deps import CurrentParent, get_current_parent, get_owned_student
 from app.core.clock import Clock, get_clock
 from app.core.db import get_db
 from app.core.pagination import Page, PageParams, page_params
 from app.core.storage import Storage, get_storage
+from app.models.leaves import LEAVE_TYPE_LABELS, StudentLeave
 from app.models.students import Student
-from app.schemas.leaves import ParentLeaveOut
+from app.schemas.leaves import ParentLeaveCreateIn, ParentLeaveOut
 from app.services import leave_service
+from app.services.audit_service import Actor
 
 router = APIRouter(tags=["parent-leaves"])
 
@@ -33,3 +36,35 @@ def list_child_leaves(
     clock: Annotated[Clock, Depends(get_clock)],
 ) -> Page[ParentLeaveOut]:
     return leave_service.list_child_leaves(db, student.id, page, storage=storage, clock=clock)
+
+
+def _parent_leave_out(leave: StudentLeave, *, today: date) -> ParentLeaveOut:
+    """剛建立的請假：沒有附件；欄位對齊 BACKEND-348 的列表輸出。"""
+    return ParentLeaveOut(
+        id=leave.id,
+        student_id=leave.student_id,
+        leave_type=leave.leave_type,
+        leave_type_label=LEAVE_TYPE_LABELS[leave.leave_type],
+        start_date=leave.start_date,
+        end_date=leave.end_date,
+        reason=leave.reason,
+        status=leave.status,
+        created_by_type=leave.created_by_type,
+        created_at=leave.created_at,
+        cancelled_at=leave.cancelled_at,
+        can_cancel=leave.status == "active" and leave.end_date >= today,
+        attachments=[],
+    )
+
+
+@router.post("/leaves", response_model=ParentLeaveOut, status_code=201)
+def create_leave(
+    body: ParentLeaveCreateIn,
+    parent: Annotated[CurrentParent, Depends(get_current_parent)],
+    db: Annotated[Session, Depends(get_db)],
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> ParentLeaveOut:
+    leave = leave_service.create_leave(db, body, actor=Actor.parent(parent), clock=clock)
+    out = _parent_leave_out(leave, today=clock.today())
+    db.commit()
+    return out

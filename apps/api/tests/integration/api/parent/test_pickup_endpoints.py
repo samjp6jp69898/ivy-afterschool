@@ -730,7 +730,7 @@ def test_parent_pickup_create_business(
     duplicate = client.post(_REQUESTS_URL, json={"student_id": str(ming.id), "arrived": True})
     not_allowed = client.post(_REQUESTS_URL, json={"student_id": str(blocked.id)})
     fake_clock.set(datetime(2026, 9, 1, 2, 0, tzinfo=UTC))  # 台北 10:00，時段外
-    closed = client.post(_REQUESTS_URL, json={"student_id": str(blocked.id)})
+    closed = client.post(_REQUESTS_URL, json={"student_id": str(ming.id)})
 
     assert_error(duplicate, 409, "pickup_request_exists")
     assert duplicate.json()["error"]["details"]["request_id"] == str(existing.id)

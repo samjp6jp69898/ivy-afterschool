@@ -11,6 +11,13 @@
 - BACKEND-447 ``GET /children/{student_id}/pickup-authorizations``：BACKEND-421。
 - BACKEND-448 ``POST /children/{student_id}/pickup-authorizations``：BACKEND-420 → 201，接送碼只在
   此回應出現一次，回應帶 ``Cache-Control: no-store``。
+- BACKEND-440 ``POST /pickup/requests``（我要來接；``arrived: true`` 為「我已經到了」捷徑）：
+  student_id 由 BACKEND-406 ``create_request`` 以 ``assert_parent_owns_student(for_write=True)``
+  驗證 → 201 ``ParentPickupRequestOut``（含自動回覆）。
+- BACKEND-442 ``POST /pickup/requests/{request_id}/arrived``：BACKEND-409（他人小孩的請求與不存在
+  同一 404）→ 200。
+- BACKEND-443 ``POST /pickup/requests/{request_id}/cancel``：body ``PickupCancelIn`` 可省略 →
+  BACKEND-411 → 200。
 """
 
 from __future__ import annotations
@@ -34,14 +41,18 @@ from app.core.db import get_db
 from app.core.storage import Storage, get_storage
 from app.models.students import Student
 from app.schemas.pickup import (
+    ParentPickupRequestCreateIn,
     ParentPickupRequestOut,
     PickupAuthorizationCreatedOut,
     PickupAuthorizationCreateIn,
     PickupAuthorizationOut,
+    PickupCancelIn,
     PickupPersonCreateIn,
     PickupPersonOut,
 )
+from app.services.audit_service import Actor
 from app.services.pickup import authorizations, persons, requests
+from app.services.pickup.views import build_parent_request_views
 
 router = APIRouter(tags=["parent-pickup"])
 
@@ -139,4 +150,46 @@ def create_authorization(
     db.commit()
     # 接送碼明碼只回一次：禁止任何快取
     response.headers["Cache-Control"] = "no-store"
+    return out
+
+
+@router.post(
+    "/pickup/requests", response_model=ParentPickupRequestOut, status_code=status.HTTP_201_CREATED
+)
+def create_pickup_request(
+    body: ParentPickupRequestCreateIn,
+    parent: Annotated[CurrentParent, Depends(get_current_parent)],
+    db: Annotated[Session, Depends(get_db)],
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> ParentPickupRequestOut:
+    request = requests.create_request(db, body, actor=Actor.parent(parent), clock=clock)
+    out = build_parent_request_views(db, [request])[0]
+    db.commit()
+    return out
+
+
+@router.post("/pickup/requests/{request_id}/arrived", response_model=ParentPickupRequestOut)
+def mark_arrived(
+    request_id: UUID,
+    parent: Annotated[CurrentParent, Depends(get_current_parent)],
+    db: Annotated[Session, Depends(get_db)],
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> ParentPickupRequestOut:
+    request = requests.mark_arrived(db, request_id, parent=parent, clock=clock)
+    out = build_parent_request_views(db, [request])[0]
+    db.commit()
+    return out
+
+
+@router.post("/pickup/requests/{request_id}/cancel", response_model=ParentPickupRequestOut)
+def cancel_pickup_request(
+    request_id: UUID,
+    parent: Annotated[CurrentParent, Depends(get_current_parent)],
+    db: Annotated[Session, Depends(get_db)],
+    clock: Annotated[Clock, Depends(get_clock)],
+    body: PickupCancelIn | None = None,
+) -> ParentPickupRequestOut:
+    request = requests.cancel_request(db, request_id, body, actor=Actor.parent(parent), clock=clock)
+    out = build_parent_request_views(db, [request])[0]
+    db.commit()
     return out
