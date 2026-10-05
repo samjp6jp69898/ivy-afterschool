@@ -6,6 +6,8 @@ GET 清單：settings:read、students:read、exams:read、homework:read 任一�
 寫入（POST、PATCH）：只認 settings:write，不可沿用讀取的任一權限。
 PATCH ``/{resource}/{item_id}``（BACKEND-121）：body 為 ``spec.update_schema``（至少一欄；
 closed-days 不可改日期）→ BACKEND-117 ``update_item``。
+DELETE ``/{resource}/{item_id}``（BACKEND-122）：settings:write → BACKEND-118 ``delete_item`` →
+commit → 200 ``DeleteResultOut``（被引用時 ``deactivated=true``，前端提示「已改為停用」）。
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import CurrentStaff, require_any_permission, require_permission
 from app.core.db import get_db
 from app.core.permissions import Permission
-from app.schemas.reference import ReferenceListQuery
+from app.schemas.reference import DeleteResultOut, ReferenceListQuery
 from app.services import reference_data_service
 from app.services.reference_specs import SPECS, ReferenceSpec
 
@@ -80,6 +82,17 @@ def build_reference_router(spec: ReferenceSpec) -> APIRouter:
         methods=["PATCH"],
         response_model=spec.out_schema,
     )
+
+    @router.delete("/{item_id}", response_model=DeleteResultOut)
+    def delete_item(
+        item_id: UUID,
+        _: Annotated[CurrentStaff, Depends(require_permission(WRITE_PERMISSION))],
+        db: Annotated[Session, Depends(get_db)],
+    ) -> DeleteResultOut:
+        out = reference_data_service.delete_item(db, spec, item_id)
+        db.commit()
+        return out
+
     return router
 
 
