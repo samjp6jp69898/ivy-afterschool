@@ -8759,7 +8759,7 @@
           "integration"
         ],
         "red_cases": [
-          "test_list_child_leaves：王小明三筆（9/1 單日已結束、8/31~9/3 進行中、9/10 未來）、陳小華一筆；今天 9/2 → total == 3，9/10 與 8/31~9/3 那筆 can_cancel True、9/1 那筆 False",
+          "test_list_child_leaves：王小明三筆（8/28 單日已結束、8/31~9/3 進行中、9/10 未來；同一學生的 active 請假不可重疊）、陳小華一筆；今天 9/2 → total == 3，依序 9/10、8/31~9/3、8/28；9/10 與 8/31~9/3 那筆 can_cancel True、8/28 那筆 False",
           "test_list_child_leaves_attachment_url：附件 path p → attachments[0].url == f'https://storage.test/leave-attachments/{p}?exp=300'；FakeStorage.create_signed_url 拋 StorageError → url is None 且回應成功"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_leave_service.py -k \"test_list_child_leaves\"",
