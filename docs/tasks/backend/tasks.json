@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 248,
-  "last_updated": "2026-10-05T02:46:22Z",
+  "version": 249,
+  "last_updated": "2026-10-05T02:47:14Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -4835,7 +4835,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/classes.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-137",
@@ -4873,7 +4873,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/classes.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-136",
