@@ -1,8 +1,10 @@
 """BACKEND-102：app/services/audit_service.py（record、Actor）。
+BACKEND-547：遮罩白名單（must_change_password、token_version 照實記錄）。
 
 稽核與業務同交易：只 add + flush，不 commit。
 """
 
+from collections.abc import Mapping
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
@@ -128,6 +130,51 @@ def test_audit_record_redacts_and_serializes(db_session: Session) -> None:
         "student_id_number": "***",
         "health_note": "***",
         "code_hash": "***",
+    }
+
+
+def _stored_after(db: Session, after: Mapping[str, object]) -> object:
+    row = record(
+        db,
+        actor=Actor.system(),
+        action="staff_user.update",
+        entity_type="staff_user",
+        entity_id=str(uuid4()),
+        after=after,
+    )
+    return db.execute(select(AuditLog.after).where(AuditLog.id == row.id)).scalar_one()
+
+
+def test_audit_keeps_non_sensitive_flags(db_session: Session) -> None:
+    after = {"must_change_password": True, "token_version": 3, "is_active": True}
+
+    assert _stored_after(db_session, after) == after
+    # 大小寫不敏感；巢狀結構同樣適用
+    assert _stored_after(
+        db_session, {"Must_Change_Password": False, "nested": {"TOKEN_VERSION": 1}}
+    ) == {"Must_Change_Password": False, "nested": {"TOKEN_VERSION": 1}}
+
+
+def test_audit_still_masks_password_like_keys(db_session: Session) -> None:
+    stored = _stored_after(
+        db_session,
+        {
+            "password": "x",
+            "temp_password": "y",
+            "password_hash": "z",
+            "refresh_token": "t",
+            "MUST_CHANGE_PASSWORD_HINT": "h",
+            "token_version_secret": "s",
+        },
+    )
+
+    assert stored == {
+        "password": "***",
+        "temp_password": "***",
+        "password_hash": "***",
+        "refresh_token": "***",
+        "MUST_CHANGE_PASSWORD_HINT": "***",
+        "token_version_secret": "***",
     }
 
 
