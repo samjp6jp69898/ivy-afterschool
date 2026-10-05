@@ -3,10 +3,12 @@
 ``assert_xlsx_not_zip_bomb`` 的防護，欄位改為本專案學生欄位。
 
 - 呼叫端先以 BACKEND-016 ``read_validated_upload``（XLSX 檔頭 + 5 MB 上限）取得
-  ``ValidatedUpload``；
-  本模組在交給 openpyxl 之前再做 zip 層檢查：解壓後總位元組上限、工作表 XML 的列數 / 單列欄數 /
-  總儲存格數上限（避免解壓炸彈與超寬表讓 openpyxl OOM），並丟棄可偽造的 dimension、以硬上限限制
-  迭代列數。``data_only=True``：公式儲存格只取快取值，儲存格內容一律當純文字，不評估任何公式。
+  ``ValidatedUpload``；本模組在交給 openpyxl 之前再做 zip 層檢查：解壓後總位元組上限、每個工作表
+  XML 以 ``ElementTree.iterparse`` 串流掃描、依 local name 計 row / c（命名空間前綴、元素名後的
+  換行 / tab 都算得到），列數 / 單列欄數 / 總儲存格數任一超標即中止（最多只讀到第 65 個儲存格，
+  記憶體有界）；zip 宣告大小被竄改、截斷、不支援的壓縮法等解壓錯誤一律 422
+  ``import_invalid_file``。載入 openpyxl 時丟棄可偽造的 dimension、以 max_row / max_col 硬上限限制
+  迭代量。``data_only=True``：公式儲存格只取快取值，儲存格內容一律當純文字，不評估任何公式。
 - 標題列：``check_header`` 回 ``(missing, unexpected)``（必填欄缺少依 IMPORT_COLUMNS 順序、無法辨識
   的欄名依標題列順序；選填欄缺少不算錯）→ 422 ``import_invalid_header``。資料列 > 500 → 422
   ``import_too_many_rows``；沒有資料列（整列空白不算）→ 422 ``import_empty``。
@@ -25,11 +27,13 @@ from __future__ import annotations
 import io
 import re
 import zipfile
+import zlib
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, Final
+from typing import IO, Any, Final
 from uuid import UUID
+from xml.etree import ElementTree as ET
 
 from openpyxl import load_workbook
 from pydantic import ValidationError
@@ -95,8 +99,17 @@ _DATE_RE: Final = re.compile(r"^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$")
 _HEALTH_NOTE_MASK: Final = "（已隱藏）"
 _SENSITIVE_PERMISSION_ERROR: Final = "沒有權限匯入敏感欄位"
 
-_ROW_TAG: Final = b"<row"
-_CELL_TAGS: Final = (b"<c ", b"<c>", b"<c/>")
+# zip / XML 解析階段可能拋出的錯誤：壞檔一律 422，不讓 500 外洩
+_ZIP_ERRORS: Final = (
+    zipfile.BadZipFile,
+    zipfile.LargeZipFile,
+    zlib.error,
+    EOFError,
+    NotImplementedError,
+    OSError,
+    ValueError,
+    ET.ParseError,
+)
 
 
 @dataclass(frozen=True)
@@ -122,45 +135,67 @@ def _invalid_file(message: str) -> AppError:
 # --- 檔案層防護 ------------------------------------------------------------------------
 
 
-def _assert_sheet_grid_within_limits(data: bytes) -> None:
-    """掃描工作表 XML：列數 / 總儲存格數 / 單列欄數皆在上限內（bytes.count，不切片複製）。"""
-    n_rows = data.count(_ROW_TAG)
-    if n_rows > MAX_IMPORT_ROWS + _GRID_ROW_SLACK:
-        raise AppError(
-            "import_too_many_rows",
-            f"匯入列數超過上限 {MAX_IMPORT_ROWS}，請分批匯入",
-            status=422,
-            details={"max_rows": MAX_IMPORT_ROWS},
-        )
-    if sum(data.count(tag) for tag in _CELL_TAGS) > MAX_IMPORT_ROWS * MAX_IMPORT_COLS:
-        raise _invalid_file("Excel 儲存格數量超過上限，請確認檔案內容")
-    starts: list[int] = []
-    cursor = 0
-    while (idx := data.find(_ROW_TAG, cursor)) >= 0:
-        starts.append(idx)
-        cursor = idx + len(_ROW_TAG)
-    for i, start in enumerate(starts):
-        end = starts[i + 1] if i + 1 < len(starts) else len(data)
-        if sum(data.count(tag, start, end) for tag in _CELL_TAGS) > MAX_IMPORT_COLS:
-            raise _invalid_file(f"Excel 欄位數超過上限 {MAX_IMPORT_COLS}，請確認檔案未含異常寬列")
+def _local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1].rsplit(":", 1)[-1]
+
+
+def _too_many_rows() -> AppError:
+    return AppError(
+        "import_too_many_rows",
+        f"匯入列數超過上限 {MAX_IMPORT_ROWS}，請分批匯入",
+        status=422,
+        details={"max_rows": MAX_IMPORT_ROWS},
+    )
+
+
+def _scan_sheet_grid(stream: IO[bytes]) -> None:
+    """串流掃描工作表 XML：列數 / 單列欄數 / 總儲存格數任一超標即中止。
+
+    依 local name 比對（``<x:c/>``、``<c\n/>`` 都算），每個元素結束即 clear；超標在第 65 個儲存格
+    或第 517 列就拋出，不會把整張表讀進記憶體。
+    """
+    rows = cells = row_cells = 0
+    max_cells = MAX_IMPORT_ROWS * MAX_IMPORT_COLS
+    # 只計元素數量、不展開任何內容；Python 3.11+ 內建 expat 預設拒絕實體膨脹（billion laughs）
+    for event, elem in ET.iterparse(stream, events=("start", "end")):  # noqa: S314
+        if event == "start":
+            name = _local_name(elem.tag)
+            if name == "row":
+                rows += 1
+                row_cells = 0
+                if rows > MAX_IMPORT_ROWS + _GRID_ROW_SLACK:
+                    raise _too_many_rows()
+            elif name == "c":
+                cells += 1
+                row_cells += 1
+                if row_cells > MAX_IMPORT_COLS:
+                    raise _invalid_file(
+                        f"Excel 欄位數超過上限 {MAX_IMPORT_COLS}，請確認檔案未含異常寬列"
+                    )
+                if cells > max_cells:
+                    raise _invalid_file("Excel 儲存格數量超過上限，請確認檔案內容")
+        else:
+            elem.clear()
 
 
 def assert_xlsx_within_limits(content: bytes) -> None:
-    """交給 openpyxl 之前：解壓後總大小與工作表格數上限（解壓炸彈 / 超寬表）。"""
+    """交給 openpyxl 之前：解壓後總大小與工作表格數上限（解壓炸彈 / 超寬表）；壞檔 422。"""
     try:
-        zf = zipfile.ZipFile(io.BytesIO(content))
-    except (zipfile.BadZipFile, OSError, ValueError):
+        with zipfile.ZipFile(io.BytesIO(content)) as zf:
+            total = 0
+            for info in zf.infolist():
+                total += info.file_size
+                if total > MAX_XLSX_UNCOMPRESSED_BYTES:
+                    raise _invalid_file("Excel 解壓後大小超過上限（疑似壓縮炸彈），請確認檔案內容")
+            for info in zf.infolist():
+                name = info.filename.replace("\\", "/").lower()
+                if "worksheets/" in name and name.endswith(".xml"):
+                    with zf.open(info) as stream:
+                        _scan_sheet_grid(stream)
+    except AppError:
+        raise
+    except _ZIP_ERRORS:
         raise _invalid_file("無法讀取 Excel 檔案") from None
-    with zf:
-        total = 0
-        for info in zf.infolist():
-            total += info.file_size
-            if total > MAX_XLSX_UNCOMPRESSED_BYTES:
-                raise _invalid_file("Excel 解壓後大小超過上限（疑似壓縮炸彈），請確認檔案內容")
-        for info in zf.infolist():
-            name = info.filename.replace("\\", "/").lower()
-            if "worksheets/" in name and name.endswith(".xml"):
-                _assert_sheet_grid_within_limits(zf.read(info))
 
 
 # --- 標題與讀列 ------------------------------------------------------------------------
@@ -187,43 +222,50 @@ def _read_rows(content: bytes) -> tuple[list[str], list[tuple[int, tuple[Any, ..
     except Exception:  # openpyxl 對壞檔會拋各種解析例外，一律視為無法讀取
         raise _invalid_file("無法讀取 Excel 檔案") from None
     try:
-        ws = wb.worksheets[0] if wb.worksheets else None
-        if ws is None:
-            raise AppError("import_empty", "Excel 沒有資料列", status=422)
-        # 丟棄可偽造的 dimension（否則 read_only 會依宣告的末列補出大量空白列），並以硬上限限制
-        # 迭代量
-        ws.reset_dimensions()
-        rows_iter = ws.iter_rows(values_only=True, max_row=MAX_IMPORT_ROWS + _GRID_ROW_SLACK + 1)
-        header_row = next(rows_iter, None)
-        if header_row is None or not any(_header_text(c) for c in header_row):
-            raise AppError("import_empty", "Excel 沒有資料列", status=422)
-        header = [_header_text(c) for c in header_row]
-        if len(header) > MAX_IMPORT_COLS:
-            raise _invalid_file(f"Excel 欄位數超過上限 {MAX_IMPORT_COLS}")
-        missing, unexpected = check_header(header)
-        if missing or unexpected:
-            raise AppError(
-                "import_invalid_header",
-                "Excel 標題列與匯入範本不符",
-                status=422,
-                details={"missing": missing, "unexpected": unexpected},
-            )
-        rows: list[tuple[int, tuple[Any, ...]]] = []
-        for row_number, raw in enumerate(rows_iter, start=2):
-            if raw is None or all(v is None or (isinstance(v, str) and not v.strip()) for v in raw):
-                continue
-            rows.append((row_number, tuple(raw)))
-            if len(rows) > MAX_IMPORT_ROWS:
-                raise AppError(
-                    "import_too_many_rows",
-                    f"匯入列數超過上限 {MAX_IMPORT_ROWS}，請分批匯入",
-                    status=422,
-                    details={"max_rows": MAX_IMPORT_ROWS},
-                )
+        header, rows = _iterate_rows(wb)
+    except _ZIP_ERRORS:
+        raise _invalid_file("無法讀取 Excel 檔案") from None
     finally:
         wb.close()
     if not rows:
         raise AppError("import_empty", "Excel 沒有資料列", status=422)
+    return header, rows
+
+
+def _iterate_rows(wb: Any) -> tuple[list[str], list[tuple[int, tuple[Any, ...]]]]:
+    """第一個工作表 → (標題, [(Excel 列號, 儲存格值...)])；整列空白略過。"""
+    ws = wb.worksheets[0] if wb.worksheets else None
+    if ws is None:
+        raise AppError("import_empty", "Excel 沒有資料列", status=422)
+    # 丟棄可偽造的 dimension（否則 read_only 會依宣告的末列補出大量空白列），並以硬上限限制
+    # 迭代量
+    ws.reset_dimensions()
+    rows_iter = ws.iter_rows(
+        values_only=True,
+        max_row=MAX_IMPORT_ROWS + _GRID_ROW_SLACK + 1,
+        max_col=MAX_IMPORT_COLS,  # read_only 會補到 max_col；超寬列已由 zip 層掃描擋下
+    )
+    header_row = next(rows_iter, None)
+    if header_row is None or not any(_header_text(c) for c in header_row):
+        raise AppError("import_empty", "Excel 沒有資料列", status=422)
+    header = [_header_text(c) for c in header_row]
+    if len(header) > MAX_IMPORT_COLS:
+        raise _invalid_file(f"Excel 欄位數超過上限 {MAX_IMPORT_COLS}")
+    missing, unexpected = check_header(header)
+    if missing or unexpected:
+        raise AppError(
+            "import_invalid_header",
+            "Excel 標題列與匯入範本不符",
+            status=422,
+            details={"missing": missing, "unexpected": unexpected},
+        )
+    rows: list[tuple[int, tuple[Any, ...]]] = []
+    for row_number, raw in enumerate(rows_iter, start=2):
+        if raw is None or all(v is None or (isinstance(v, str) and not v.strip()) for v in raw):
+            continue
+        rows.append((row_number, tuple(raw)))
+        if len(rows) > MAX_IMPORT_ROWS:
+            raise _too_many_rows()
     return header, rows
 
 
