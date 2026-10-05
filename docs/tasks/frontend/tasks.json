@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 104,
-  "last_updated": "2026-10-05T05:40:44Z",
+  "version": 105,
+  "last_updated": "2026-10-05T05:40:58Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1577,7 +1577,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/roles.ts",
       "source_ref": "FE:src/api/permissions_admin.ts::createRole",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-020",
@@ -1604,9 +1604,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "3 條 red_case 皆有對應測試且斷言具體（is_system / permissions ['*']、catalog code、POST / PATCH body 深等於、DELETE 204 resolve undefined 與 url、403 cannot_grant_permissions details 深等於），另補 409 role_in_use；實跑 tdd.run 4/4 綠、web-lint 乾淨；5d8eb9c(test) 先於 01e198a(impl)。對照 apps/api/app/schemas/roles.py 與 api/admin/roles.py：RoleOut（description: str | None）、PermissionCatalogOut、GET /roles 回陣列、DELETE 204、GET /permissions 皆一致；role_in_use / system_role_protected / last_role_manager / cannot_grant_permissions（details.permissions）為後端實際錯誤碼。殘留：RoleCreateBody.description 宣告為必填（string | null），後端 RoleCreateIn 預設 None 可省略，依 description 的 body 形狀，較嚴不影響行為。"
       }
     },
     {
@@ -2402,7 +2402,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/classes.ts",
       "source_ref": "FE:src/api/classrooms.ts::getClassrooms",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-020",
@@ -2430,9 +2430,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "3 條 red_case 皆有對應測試且斷言具體（params 深等於與 staff role、PUT body 深等於 {items} 與回傳 staff、409 class_has_students details.student_count），另補 get / create / update / archive 成功；實跑 tdd.run 4/4 綠、web-lint 乾淨；ce06644(test) 先於 9b45c41(impl)。對照 apps/api/app/schemas/classes.py 與 api/admin/classes.py：ClassOut / ClassStaffOut / ClassListQuery / ClassStaffPutIn 欄位一致，archive / staff 回 ClassOut；ClassStaffRole 共用型別 lead | assistant 與後端 models/classes.py Literal 一致；class_has_students details {student_count} 與 class_service 一致。殘留：無。"
       }
     },
     {
@@ -2491,7 +2491,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/guardians.ts",
       "source_ref": "FE:src/api/students.ts::createGuardianBindingCode",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r8",
       "depends_on": [
         "FRONTEND-020",
@@ -2519,9 +2519,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-fe",
+        "notes": "3 條 red_case 皆有對應測試且斷言具體（binding.status、POST body 深等於、binding-code 回傳深等於、409 guardian_already_bound、unbind 後 binding.status），另補 PATCH / DELETE 204；實跑 tdd.run 4/4 綠、web-lint 乾淨；d7d6808(test) 先於 b256923(impl)。對照 apps/api/app/schemas/guardians.py 與 api/admin/students.py / guardians.py：GuardianOut.phone 為 str | None、GuardianBindingOut.status Literal 與共用 BindingStatus 一致、GuardianRelation 與 models/parents.py 一致、BindingCodeOut 一致；list / create 在 /admin/students/{id}/guardians，其餘在 /admin/guardians/{id}。殘留：GuardianInput 的 is_primary / can_pickup / receives_notifications 依 description 宣告必填，後端有預設值可省略，較嚴不影響行為。"
       }
     },
     {
