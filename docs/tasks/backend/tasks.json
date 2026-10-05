@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 258,
-  "last_updated": "2026-10-05T02:53:48Z",
+  "version": 259,
+  "last_updated": "2026-10-05T02:54:21Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -6136,8 +6136,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/guardians.py",
       "source_ref": "BE:api/guardians_admin.py::create_binding_code",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-054",
         "BACKEND-073",
@@ -6685,8 +6685,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/notifications/service.py",
       "source_ref": "BE:services/notification/dispatch.py::enqueue",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-200",
         "BACKEND-202",
@@ -7016,8 +7016,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/notifications.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-212",
         "BACKEND-214"
@@ -7053,8 +7053,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/notifications.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-213",
         "BACKEND-214"
@@ -7128,8 +7128,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/notifications.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-212",
         "BACKEND-217"
@@ -7233,8 +7233,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/notifications.py",
       "source_ref": "BE:api/parent_portal/notifications.py::get_preferences",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-219",
         "BACKEND-217"
@@ -7425,8 +7425,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/ws/admin.py",
       "source_ref": "BE:api/dismissal_ws.py::admin_dismissal_ws",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-225",
         "BACKEND-224",
@@ -7467,8 +7467,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/ws/parent.py",
       "source_ref": "BE:api/inbox_ws.py::employee_inbox_ws",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-225",
         "BACKEND-224",
