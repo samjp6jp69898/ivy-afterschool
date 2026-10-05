@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 298,
-  "last_updated": "2026-10-05T03:27:44Z",
+  "version": 299,
+  "last_updated": "2026-10-05T03:29:15Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -7458,7 +7458,7 @@
       "review": {
         "status": "pass",
         "reviewer": "review-r8-a",
-        "notes": "通過。tdd.run 6 條全綠、collect-only 全選到；1ca4666（測試）先於 3dc8c80 / 42b3ca0（實作）。規格修正合理：revoked_permissions 與改 role.permissions 走同一個 load_current_staff 有效權限計算，且符合 committing 測試不寫 seed 表；哨兵比逾時更確定（broadcaster 依排程 FIFO 送出，突變驗證可轉紅）；混合訂閱先 error 再 subscribed 符合 description。測資以 app_backend engine 建立（monkeypatch core_db.get_engine 指向 db_engine，conftest 已驗證角色），owner 只用於反序刪列；跑完前後 staff_users / parent_accounts / students / guardians 筆數不變。突變：拿掉權限判斷、重驗不取消訂閱、unsubscribe 無作用皆轉紅；重驗不重載員工時測試卡住（見殘留）。lint / typecheck 乾淨；整合測試以 app_backend 連線。殘留（不擋）：WS 測試的 receive_json 沒有逾時，實作退化時測試會無限等待而不是失敗（並留下 committed 測資，review 突變時已發生並已清除），建議以 timeout 包 receive。"
+        "notes": "通過。tdd.run 6 條全綠、collect-only 全選到；1ca4666（測試）先於 3dc8c80 / 42b3ca0（實作）。規格修正合理：revoked_permissions 與改 role.permissions 走同一個 load_current_staff 有效權限計算，且符合 committing 測試不寫 seed 表；哨兵比逾時更確定（broadcaster 依排程 FIFO 送出，突變驗證可轉紅）；混合訂閱先 error 再 subscribed 符合 description。測資以 app_backend engine 建立（monkeypatch core_db.get_engine 指向 db_engine，conftest 已驗證角色），owner 只用於反序刪列；跑完前後 staff_users / parent_accounts / students / guardians 筆數不變。突變：拿掉權限判斷、重驗不取消訂閱、unsubscribe 無作用皆轉紅；重驗不重載員工時測試卡住（見殘留）。lint / typecheck 乾淨；整合測試以 app_backend 連線。殘留（不擋）：WS 測試的 receive_json 沒有逾時，實作退化時測試會無限等待而不是失敗；同檔的修正併入 BACKEND-227 打回 2。"
       }
     },
     {
@@ -7479,7 +7479,7 @@
         "BACKEND-023"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "同 BACKEND-226：測資需以 committing_db_session 建立。\nBACKEND-225 的 run_ws_loop 中 on_message 拋出的例外會以 ExceptionGroup（anyio task group）往外拋；要以 close code 回應業務錯誤須在 on_message 內自行 try / except（或用 except*）。run_ws_loop 不做 server 端 ping，閒置連線存活偵測交給 60 秒重驗；revalidate 由本 endpoint 提供（重新 load_current_*，token_version / 停用的實際檢查與測試在這裡）。握手驗證以 `await run_in_thread(ws_load_*, ws, clock=clock)` 取得身分，AppError 以 `close_code_for(exc)` 轉關閉碼。\n【review-r8-a 打回 1】description 流程 4 與本 task risk_notes 要求重驗時的 token / 帳號狀態檢查「實際檢查與測試在這裡」，但沒有任何測試涵蓋家長 WS 重驗失敗 → 4401：把 revalidate 內重新 ws_load_parent 那行拿掉（只重算小孩清單），test_ws_endpoints.py 的 test_ws_parent_ 6 條仍全綠。後果是家長帳號被停用或 token_version 遞增（全裝置登出）後，既有連線仍持續收到小孩的接送 / 作業 / 出勤事件。要求補 red_case 與測試：REVALIDATE_SECONDS=0.1，連線後把該家長 status 設 'disabled'（或 token_version + 1）並 commit → 收到 WebSocketDisconnect 4401，且之後 student channel 的訊息不再送達。",
+      "risk_notes": "同 BACKEND-226：測資需以 committing_db_session 建立。\nBACKEND-225 的 run_ws_loop 中 on_message 拋出的例外會以 ExceptionGroup（anyio task group）往外拋；要以 close code 回應業務錯誤須在 on_message 內自行 try / except（或用 except*）。run_ws_loop 不做 server 端 ping，閒置連線存活偵測交給 60 秒重驗；revalidate 由本 endpoint 提供（重新 load_current_*，token_version / 停用的實際檢查與測試在這裡）。握手驗證以 `await run_in_thread(ws_load_*, ws, clock=clock)` 取得身分，AppError 以 `close_code_for(exc)` 轉關閉碼。\n【review-r8-a 打回 1】description 流程 4 與本 task risk_notes 要求重驗時的 token / 帳號狀態檢查「實際檢查與測試在這裡」，但沒有任何測試涵蓋家長 WS 重驗失敗 → 4401：把 revalidate 內重新 ws_load_parent 那行拿掉（只重算小孩清單），test_ws_endpoints.py 的 test_ws_parent_ 6 條仍全綠。後果是家長帳號被停用或 token_version 遞增（全裝置登出）後，既有連線仍持續收到小孩的接送 / 作業 / 出勤事件。要求補 red_case 與測試：REVALIDATE_SECONDS=0.1，連線後把該家長 status 設 'disabled'（或 token_version + 1）並 commit → 收到 WebSocketDisconnect 4401，且之後 student channel 的訊息不再送達。\n【review-r8-a 打回 2】test_ws_endpoints.py 每個 ws.receive_json() 都沒有逾時：handler 退化成「不送某則訊息」時測試會無限等待，不會失敗，還會一直持有共用的 /tmp/afterschool_db.lock，committed 測資也因 teardown 沒跑而留下。review 期間的實例：把 admin revalidate 的 ws_load_staff 拿掉後，test_ws_admin_revalidate_revoked 停在第 291 行的 receive_json，佔住 DB 鎖 7 分鐘，擋住 6 位 agent（faulthandler 確認卡在測試端 starlette testclient.receive，不是 handler 不結束；未改動的實作在 timeout 120 下連跑 5 次，12 條都約 1.1 秒全綠）。要求：整個檔案（226 / 227 共用）的 receive 一律加逾時（例如以 helper 包 anyio.fail_after / 另開 thread 加 timeout，或 pytest-timeout marker），逾時以失敗結束並照常跑 teardown 清測資；並在 tdd.notes 註明。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/ws/test_ws_endpoints.py",
@@ -7500,7 +7500,7 @@
       "review": {
         "status": "concern",
         "reviewer": "review-r8-a",
-        "notes": "打回。tdd.run 6 條全綠、collect-only 全選到、1ca4666 先於 3dc8c80，lint / typecheck 乾淨；ready / 只收自己小孩 （IDOR 哨兵）/ 不可自選頻道 / 封存後取消與新綁定加入 / 4401 / 4403 / 家長裁切版原樣轉送皆有測試。receives_attendance 改以 broadcast_after_commit 驗證合理（305 不在 depends_on，且 305 自身有 test_check_in_parent_ws_payload）。打回項見 risk_notes：重驗時的 token / 帳號狀態檢查沒有任何測試。殘留（不擋）：解除綁定以 guardian 封存驗證，未覆蓋 parent_account_id 清空的解除路徑（同一個 get_parent_student_ids 查詢，風險低）；receive_json 無逾時同 226。"
+        "notes": "打回。tdd.run 6 條全綠、collect-only 全選到、1ca4666 先於 3dc8c80，lint / typecheck 乾淨；ready / 只收自己小孩 （IDOR 哨兵）/ 不可自選頻道 / 封存後取消與新綁定加入 / 4401 / 4403 / 家長裁切版原樣轉送皆有測試。receives_attendance 改以 broadcast_after_commit 驗證合理（305 不在 depends_on，且 305 自身有 test_check_in_parent_ws_payload）。打回項見 risk_notes：(1) 重驗時的 token / 帳號狀態檢查沒有任何測試；(2) ws 測試的 receive 沒有逾時，實作退化時測試會掛住並佔住共用 DB 鎖。殘留（不擋）：解除綁定以 guardian 封存驗證，未覆蓋 parent_account_id 清空的解除路徑（同一個 get_parent_student_ids 查詢，風險低）。"
       }
     },
     {
