@@ -895,6 +895,73 @@ def test_upload_photo_archived(db_session: Session) -> None:
     assert storage.objects == {}
 
 
+@pytest.mark.cleanup_tables("class_staff")
+def test_upload_photo_concurrent_uploads_leave_no_orphan(
+    owner_cleanup_rows: list[tuple[str, str, object]],
+    committing_db_session: Session,
+    db_engine: Engine,
+) -> None:
+    """A 上傳並 flush 未 commit → B 上傳必須等 A 的學生列鎖（0.5 秒內未結束）→ A commit → B 重讀到
+    A 的 path 當舊檔 → B commit 後 Storage 只剩 B 的物件（沒鎖時 B 讀到更舊的 path，A 的照片變
+    孤兒）。"""
+    install_tx_hooks()
+    storage = FakeStorage()
+    student = make_student(committing_db_session)
+    original = _seed_old_photo(committing_db_session, student, storage)
+    committing_db_session.commit()
+    owner_cleanup_rows.append(("students", "id", student.id))
+    student_id = student.id
+    a_locked = threading.Event()
+    release_a = threading.Event()
+    b_done = threading.Event()
+    outcome: dict[str, object] = {}
+
+    def worker_a() -> None:
+        sa = Session(bind=db_engine)
+        try:
+            upload_photo(sa, student_id, _upload(_JPEG), storage=storage)
+            a_locked.set()
+            release_a.wait(timeout=10)
+            sa.commit()
+        except BaseException as exc:
+            outcome["a_error"] = exc
+            a_locked.set()
+        finally:
+            sa.close()
+
+    def worker_b() -> None:
+        sb = Session(bind=db_engine)
+        try:
+            a_locked.wait(timeout=10)
+            upload_photo(sb, student_id, _upload(_JPEG), storage=storage)
+            sb.commit()
+        except BaseException as exc:
+            outcome["b_error"] = exc
+        finally:
+            sb.close()
+            b_done.set()
+
+    threads = [threading.Thread(target=worker_a), threading.Thread(target=worker_b)]
+    for t in threads:
+        t.start()
+    try:
+        assert a_locked.wait(timeout=10)
+        assert not b_done.wait(timeout=0.5), outcome  # A 尚未 commit：B 被學生列鎖擋住
+    finally:
+        release_a.set()
+        for t in threads:
+            t.join(timeout=10)
+
+    assert "a_error" not in outcome, outcome
+    assert "b_error" not in outcome, outcome
+    with Session(bind=db_engine) as check:
+        final_path = _stored(check, student_id).photo_path
+    assert final_path is not None
+    assert final_path != original
+    # 只剩最後一次上傳的物件：原檔與 A 的物件都已在各自 commit 後刪除
+    assert list(storage.objects) == [("student-photos", final_path)]
+
+
 # --- BACKEND-530：purge_student ------------------------------------------------------------------
 
 
