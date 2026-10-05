@@ -1,15 +1,18 @@
-"""BACKEND-452 / 464 / 465 / 466 / 453 / 454 / 455 / 457 / 458 / 459 / 462 / 463：exam_service。
+"""exam_service（BACKEND-452~466）。
 
-應考名單、歷次成績、家長端成績、考試列表與詳情、新增 / 刪除、科目設定、成績格、取消發布、各科統計。
+應考名單、歷次成績、家長端成績、考試列表與詳情、新增 / 修改 / 刪除、科目設定、成績格、登分、發布 /
+取消發布、各科統計。
 """
 
+import threading
+from collections.abc import Iterator
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import event, func, select, text
+from sqlalchemy import Engine, event, func, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentStaff
@@ -19,13 +22,18 @@ from app.core.request_meta import RequestMeta
 from app.models.account import StaffUser
 from app.models.audit import AuditLog
 from app.models.exams import Exam, ExamScore
+from app.models.notifications import Notification
 from app.models.reference import ExamType, Subject
+from app.notifications import outbox_jobs
 from app.schemas.exams import (
     ExamCreateIn,
     ExamListQuery,
     ExamOut,
     ExamSubjectIn,
     ExamSubjectsPutIn,
+    ExamUpdateIn,
+    ScoreCellIn,
+    ScoresPutIn,
 )
 from app.services.exam_service import (
     create_exam,
@@ -38,16 +46,22 @@ from app.services.exam_service import (
     get_student_exam_history,
     list_child_exams,
     list_exams,
+    publish_exam,
     resolve_exam_roster,
     set_exam_subjects,
     unpublish_exam,
+    update_exam,
+    upsert_scores,
 )
+from tests.integration.db.conftest import connect_owner
 from tests.support.factories import (
     ARCHIVED_AT,
     make_class,
     make_exam,
     make_exam_score,
     make_exam_subject,
+    make_guardian,
+    make_parent,
     make_staff,
     make_student,
 )
@@ -927,3 +941,528 @@ def test_exam_summary_empty_subject(db_session: Session) -> None:
 
     assert (row.scored_count, row.absent_count, row.missing_count) == (0, 0, 2)
     assert (row.average, row.max, row.min) == (None, None, None)
+
+
+# --- BACKEND-456 update_exam ---
+
+
+def test_update_exam_draft(db_session: Session, actor: CurrentStaff) -> None:
+    class_a = make_class(db_session, name="A班", grade_levels=(3, 4))
+    exam = make_exam(db_session, grade_level=3)
+
+    out = update_exam(db_session, exam.id, ExamUpdateIn(grade_level=4), actor=actor)
+    assert out.grade_level == 4
+    renamed = update_exam(db_session, exam.id, ExamUpdateIn(name="第一次段考（補考）"), actor=actor)
+    assert (renamed.name, renamed.grade_level) == ("第一次段考（補考）", 4)
+    small_quiz = _exam_type(db_session, "小考")
+    scoped = update_exam(
+        db_session,
+        exam.id,
+        ExamUpdateIn(class_id=class_a.id, exam_type_id=small_quiz.id, exam_date=date(2026, 10, 1)),
+        actor=actor,
+    )
+    assert scoped.class_ is not None
+    assert (scoped.class_.name, scoped.exam_type.name, scoped.exam_date) == (
+        "A班",
+        "小考",
+        date(2026, 10, 1),
+    )
+
+
+def test_update_exam_published_scope_locked(db_session: Session, actor: CurrentStaff) -> None:
+    class_a = make_class(db_session, name="A班")
+    class_b = make_class(db_session, name="B班")
+    exam = make_exam(db_session, grade_level=None, class_=class_a, status="published")
+
+    with pytest.raises(AppError) as locked:
+        update_exam(db_session, exam.id, ExamUpdateIn(class_id=class_b.id), actor=actor)
+    assert _error(locked) == (409, "exam_published")
+    db_class = db_session.execute(select(Exam.class_id).where(Exam.id == exam.id)).scalar_one()
+    assert db_class == class_a.id
+
+    out = update_exam(db_session, exam.id, ExamUpdateIn(note="延後一週"), actor=actor)
+    assert (out.note, out.status) == ("延後一週", "published")
+    # 送出與原值相同的範圍欄位不算修改
+    same = update_exam(
+        db_session, exam.id, ExamUpdateIn(class_id=class_a.id, name="改名"), actor=actor
+    )
+    assert same.name == "改名"
+
+
+def test_update_exam_scope_required(db_session: Session, actor: CurrentStaff) -> None:
+    exam = make_exam(db_session, grade_level=3)
+
+    with pytest.raises(AppError) as exc:
+        update_exam(db_session, exam.id, ExamUpdateIn(grade_level=None), actor=actor)
+
+    assert _error(exc) == (422, "exam_scope_required")
+
+
+def test_update_exam_validation(db_session: Session, actor: CurrentStaff) -> None:
+    exam = make_exam(db_session, grade_level=3)
+    archived = make_class(db_session, archived=True)
+    class_a = make_class(db_session, grade_levels=(1, 2))
+
+    for data, code in (
+        (ExamUpdateIn(exam_type_id=uuid4()), "invalid_exam_type"),
+        (ExamUpdateIn(class_id=archived.id), "invalid_class"),
+        (ExamUpdateIn(class_id=class_a.id), "grade_not_in_class"),  # 合併後 grade_level 3
+    ):
+        with pytest.raises(AppError) as exc:
+            update_exam(db_session, exam.id, data, actor=actor)
+        assert _error(exc) == (422, code)
+    with pytest.raises(AppError) as missing:
+        update_exam(db_session, uuid4(), ExamUpdateIn(name="x"), actor=actor)
+    assert _error(missing) == (404, "exam_not_found")
+
+
+# --- BACKEND-460 upsert_scores / BACKEND-461 publish_exam ---
+
+
+@pytest.fixture
+def kick_off() -> Iterator[None]:
+    """commit 後的 outbox kick 不實際派送（避免背景執行緒連 DB / LINE）。"""
+    outbox_jobs.set_kick_mode("off")
+    yield
+    outbox_jobs.set_kick_mode("thread")
+
+
+def _clock() -> FakeClock:
+    return FakeClock(datetime(2026, 10, 20, 2, 0, tzinfo=UTC))
+
+
+def _cell(student: Any, subject: Subject, **fields: Any) -> ScoreCellIn:
+    return ScoreCellIn(student_id=student.id, subject_id=subject.id, **fields)
+
+
+def _scores(db: Session, exam_id: UUID) -> dict[tuple[UUID, UUID], ExamScore]:
+    rows = db.execute(
+        select(ExamScore)
+        .where(ExamScore.exam_id == exam_id)
+        .execution_options(populate_existing=True)
+    ).scalars()
+    return {(row.student_id, row.subject_id): row for row in rows}
+
+
+def _score_logs(db: Session, exam_id: UUID) -> list[AuditLog]:
+    return list(
+        db.execute(
+            select(AuditLog).where(
+                AuditLog.action == "exam_score.update",
+                AuditLog.entity_id.startswith(f"{exam_id}:"),
+            )
+        ).scalars()
+    )
+
+
+def _exam_notifications(db: Session, exam_id: UUID) -> list[Notification]:
+    return list(
+        db.execute(
+            select(Notification).where(
+                Notification.event == "exam.published",
+                Notification.payload["exam_id"].astext == str(exam_id),
+            )
+        ).scalars()
+    )
+
+
+def test_upsert_scores_insert_and_update(db_session: Session, actor: CurrentStaff) -> None:
+    class_a = make_class(db_session, grade_levels=(3,))
+    exam = _exam_with_subjects(db_session, "國語", "數學", grade_level=None, class_=class_a)
+    chinese, math = _subject(db_session, "國語"), _subject(db_session, "數學")
+    ming = make_student(db_session, class_=class_a)
+
+    first = upsert_scores(
+        db_session,
+        exam.id,
+        ScoresPutIn(cells=[_cell(ming, chinese, score=Decimal("95"))]),
+        actor=actor,
+        meta=_META,
+        clock=_clock(),
+    )
+    second = upsert_scores(
+        db_session,
+        exam.id,
+        ScoresPutIn(
+            cells=[
+                _cell(ming, chinese, score=Decimal("98"), note="訂正後"),
+                _cell(ming, math, is_absent=True),
+            ]
+        ),
+        actor=actor,
+        meta=_META,
+        clock=_clock(),
+    )
+
+    assert (first.written, first.changed, first.renotified_students) == (1, 1, 0)
+    assert (second.written, second.changed) == (2, 2)
+    rows = _scores(db_session, exam.id)
+    assert len(rows) == 2
+    assert (rows[(ming.id, chinese.id)].score, rows[(ming.id, chinese.id)].note) == (
+        Decimal("98"),
+        "訂正後",
+    )
+    assert (rows[(ming.id, math.id)].score, rows[(ming.id, math.id)].is_absent) == (None, True)
+    assert rows[(ming.id, chinese.id)].updated_by == actor.id
+    assert _score_logs(db_session, exam.id) == []
+
+
+def test_upsert_scores_validation_batch(db_session: Session, actor: CurrentStaff) -> None:
+    class_a = make_class(db_session, grade_levels=(3,))
+    exam = _exam_with_subjects(db_session, "國語", grade_level=None, class_=class_a)
+    make_exam_subject(db_session, exam, _subject(db_session, "數學"), full_score=Decimal("50"))
+    chinese, math = _subject(db_session, "國語"), _subject(db_session, "數學")
+    english = _subject(db_session, "英語")
+    ming = make_student(db_session, class_=class_a)
+    hua = make_student(db_session, class_=class_a)
+    outsider = make_student(db_session, name="林小安")
+    make_exam_score(db_session, exam, hua, chinese, score=Decimal("80"))
+
+    with pytest.raises(AppError) as exc:
+        upsert_scores(
+            db_session,
+            exam.id,
+            ScoresPutIn(
+                cells=[
+                    _cell(ming, math, score=Decimal("51")),
+                    _cell(hua, math, score=Decimal("10"), is_absent=True),
+                    _cell(ming, english, score=Decimal("90")),
+                    _cell(outsider, chinese, score=Decimal("90")),
+                    _cell(ming, chinese, score=Decimal("90")),
+                    _cell(ming, chinese, score=Decimal("91")),
+                ]
+            ),
+            actor=actor,
+            meta=_META,
+            clock=_clock(),
+        )
+
+    assert _error(exc) == (422, "invalid_score_cells")
+    details = exc.value.details
+    assert {d["code"] for d in details} == {
+        "score_out_of_range",
+        "absent_with_score",
+        "subject_not_in_exam",
+        "student_not_in_exam",
+        "duplicate_cell",
+    }
+    assert {"student_id": ming.id, "subject_id": math.id, "code": "score_out_of_range"} in details
+    rows = _scores(db_session, exam.id)
+    assert list(rows) == [(hua.id, chinese.id)]
+    assert rows[(hua.id, chinese.id)].score == Decimal("80")
+
+
+def test_upsert_scores_existing_outsider_allowed(db_session: Session, actor: CurrentStaff) -> None:
+    """不在目前名單但已有成績的學生（例如考後退班）可以更正分數。"""
+    class_a = make_class(db_session, grade_levels=(3,))
+    exam = _exam_with_subjects(db_session, "國語", grade_level=None, class_=class_a)
+    chinese = _subject(db_session, "國語")
+    mei = make_student(db_session, class_=class_a)
+    make_exam_score(db_session, exam, mei, chinese, score=Decimal("70"))
+    mei.status = "withdrawn"
+    mei.withdrawn_on = date(2026, 10, 1)
+    db_session.flush()
+
+    out = upsert_scores(
+        db_session,
+        exam.id,
+        ScoresPutIn(cells=[_cell(mei, chinese, score=Decimal("75"))]),
+        actor=actor,
+        meta=_META,
+        clock=_clock(),
+    )
+
+    assert out.written == 1
+    assert _scores(db_session, exam.id)[(mei.id, chinese.id)].score == Decimal("75")
+
+
+def test_upsert_scores_published_audit(
+    db_session: Session, actor: CurrentStaff, kick_off: None
+) -> None:
+    class_a = make_class(db_session, grade_levels=(3,))
+    exam = _exam_with_subjects(
+        db_session, "國語", "數學", grade_level=None, class_=class_a, status="published"
+    )
+    chinese, math = _subject(db_session, "國語"), _subject(db_session, "數學")
+    ming = make_student(db_session, class_=class_a)
+    make_guardian(db_session, ming, parent=make_parent(db_session))
+    make_exam_score(db_session, exam, ming, chinese, score=Decimal("95"))
+    make_exam_score(db_session, exam, ming, math, score=Decimal("80"))
+
+    out = upsert_scores(
+        db_session,
+        exam.id,
+        ScoresPutIn(
+            cells=[
+                _cell(ming, chinese, score=Decimal("97")),
+                _cell(ming, math, score=Decimal("80")),
+            ]
+        ),
+        actor=actor,
+        meta=_META,
+        clock=_clock(),
+    )
+
+    assert (out.written, out.changed, out.renotified_students) == (2, 1, 0)
+    [log] = _score_logs(db_session, exam.id)
+    assert log.entity_id == f"{exam.id}:{ming.id}:{chinese.id}"
+    assert (log.entity_type, log.actor_id) == ("exam_score", actor.id)
+    assert log.before == {"score": "95.00", "is_absent": False, "note": None}
+    assert log.after == {"score": "97.00", "is_absent": False, "note": None}
+    assert _exam_notifications(db_session, exam.id) == []
+
+
+def test_upsert_scores_renotify(db_session: Session, actor: CurrentStaff, kick_off: None) -> None:
+    class_a = make_class(db_session, grade_levels=(3,))
+    exam = _exam_with_subjects(
+        db_session, "國語", grade_level=None, class_=class_a, status="published"
+    )
+    chinese = _subject(db_session, "國語")
+    students = [
+        make_student(db_session, name=n, class_=class_a) for n in ("王小明", "陳小華", "林小安")
+    ]
+    parents = [make_parent(db_session) for _ in students]
+    for student, parent in zip(students, parents, strict=True):
+        make_guardian(db_session, student, parent=parent)
+        make_exam_score(db_session, exam, student, chinese, score=Decimal("80"))
+
+    out = upsert_scores(
+        db_session,
+        exam.id,
+        ScoresPutIn(
+            cells=[
+                _cell(students[0], chinese, score=Decimal("81")),
+                _cell(students[1], chinese, score=Decimal("82")),
+                _cell(students[2], chinese, score=Decimal("80")),  # 未變動
+            ],
+            notify_parents=True,
+        ),
+        actor=actor,
+        meta=_META,
+        clock=_clock(),
+    )
+
+    assert (out.changed, out.renotified_students) == (2, 2)
+    rows = _exam_notifications(db_session, exam.id)
+    assert {row.recipient_id for row in rows} == {parents[0].id, parents[1].id}
+    assert {row.payload["student_name"] for row in rows} == {"王小明", "陳小華"}
+
+    quiet = upsert_scores(
+        db_session,
+        exam.id,
+        ScoresPutIn(cells=[_cell(students[2], chinese, score=Decimal("70"))]),
+        actor=actor,
+        meta=_META,
+        clock=_clock(),
+    )
+    assert (quiet.changed, quiet.renotified_students) == (1, 0)
+    assert len(_exam_notifications(db_session, exam.id)) == 2
+
+
+def test_upsert_scores_draft_ignores_notify(
+    db_session: Session, actor: CurrentStaff, kick_off: None
+) -> None:
+    class_a = make_class(db_session, grade_levels=(3,))
+    exam = _exam_with_subjects(db_session, "國語", grade_level=None, class_=class_a)
+    ming = make_student(db_session, class_=class_a)
+    make_guardian(db_session, ming, parent=make_parent(db_session))
+
+    out = upsert_scores(
+        db_session,
+        exam.id,
+        ScoresPutIn(
+            cells=[_cell(ming, _subject(db_session, "國語"), score=Decimal("90"))],
+            notify_parents=True,
+        ),
+        actor=actor,
+        meta=_META,
+        clock=_clock(),
+    )
+
+    assert (out.written, out.changed, out.renotified_students) == (1, 1, 0)
+    assert _exam_notifications(db_session, exam.id) == []
+    assert _score_logs(db_session, exam.id) == []
+
+
+@pytest.fixture
+def owner_cleanup() -> Iterator[list[tuple[str, UUID]]]:
+    """committing 測試建立的人員以 owner 連線刪除；排在 committing_db_session 之前（先 truncate
+    考試 / 通知 / 稽核表，再依 FK 順序刪監護人、學生、家長、員工、班級）。"""
+    rows: list[tuple[str, UUID]] = []
+    yield rows
+    order = {"guardians": 0, "students": 1, "parent_accounts": 2, "staff_users": 3, "classes": 4}
+    with connect_owner() as conn:
+        conn.execute("set lock_timeout = '5s'")
+        for table, row_id in sorted(rows, key=lambda r: order[r[0]]):
+            conn.execute(f"delete from public.{table} where id = %s", (row_id,))  # noqa: S608
+        conn.commit()
+
+
+def _committed_exam(
+    db: Session, owner_cleanup: list[tuple[str, UUID]], *, students: int
+) -> tuple[Exam, list[Any], CurrentStaff]:
+    """班級考試（國語）+ 各有綁定家長的學生 + seed tutor 角色員工，全部 commit。"""
+    class_a = make_class(db, grade_levels=(3,))
+    exam = _exam_with_subjects(db, "國語", grade_level=None, class_=class_a)
+    staff = make_staff(db, role_code="tutor")
+    people = []
+    for _ in range(students):
+        student = make_student(db, class_=class_a)
+        parent = make_parent(db)
+        guardian = make_guardian(db, student, parent=parent)
+        people.append(student)
+        owner_cleanup.extend(
+            [("guardians", guardian.id), ("students", student.id), ("parent_accounts", parent.id)]
+        )
+    db.commit()
+    owner_cleanup.extend([("staff_users", staff.id), ("classes", class_a.id)])
+    return exam, people, _current(staff)
+
+
+@pytest.mark.cleanup_tables("exams", "notification_outbox", "notifications", "audit_logs")
+def test_upsert_scores_concurrent_with_publish(
+    owner_cleanup: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    kick_off: None,
+) -> None:
+    exam, (ming,), staff = _committed_exam(committing_db_session, owner_cleanup, students=1)
+    chinese = _subject(committing_db_session, "國語")
+
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    s2_done = threading.Event()
+    outcome: dict[str, Any] = {}
+
+    def worker() -> None:
+        try:
+            outcome["s2"] = upsert_scores(
+                s2,
+                exam.id,
+                ScoresPutIn(
+                    cells=[
+                        ScoreCellIn(student_id=ming.id, subject_id=chinese.id, score=Decimal("90"))
+                    ]
+                ),
+                actor=staff,
+                meta=_META,
+                clock=_clock(),
+            )
+            s2.commit()
+        except BaseException as exc:
+            outcome["s2"] = exc
+            s2.rollback()
+        finally:
+            s2_done.set()
+
+    thread = threading.Thread(target=worker)
+    try:
+        publish_exam(s1, exam.id, actor=staff, clock=_clock())
+        thread.start()
+        assert not s2_done.wait(timeout=0.5)  # 發布尚未 commit：登分被 FOR SHARE 擋住
+        s1.commit()
+        thread.join(timeout=10)
+    finally:
+        s1.close()
+        if thread.is_alive():
+            thread.join(timeout=10)
+        s2.close()
+
+    assert outcome["s2"].written == 1
+    # 發布已生效：這次登分屬於發布後修改，寫了 audit
+    assert len(_score_logs(committing_db_session, exam.id)) == 1
+
+
+def test_publish_exam_success(db_session: Session, actor: CurrentStaff, kick_off: None) -> None:
+    class_a = make_class(db_session, grade_levels=(3,))
+    exam = _exam_with_subjects(db_session, "國語", grade_level=None, class_=class_a)
+    students = [make_student(db_session, name=n, class_=class_a) for n in ("王小明", "陳小華")]
+    parents = [make_parent(db_session) for _ in students]
+    for student, parent in zip(students, parents, strict=True):
+        make_guardian(db_session, student, parent=parent)
+    make_student(db_session, name="林小安", class_=class_a)  # 沒有家長：略過
+    # 已退班但有成績的學生也通知
+    mei = make_student(db_session, name="張小美", class_=class_a)
+    mei_parent = make_parent(db_session)
+    make_guardian(db_session, mei, parent=mei_parent)
+    make_exam_score(db_session, exam, mei, _subject(db_session, "國語"))
+    mei.status = "withdrawn"
+    mei.withdrawn_on = date(2026, 10, 1)
+    db_session.flush()
+    clock = _clock()
+
+    out = publish_exam(db_session, exam.id, actor=actor, clock=clock)
+
+    assert (out.status, out.published_at, out.published_by_name) == (
+        "published",
+        clock.now(),
+        "陳主任",
+    )
+    row = db_session.get(Exam, exam.id)
+    assert row is not None
+    assert row.published_by == actor.id
+    rows = _exam_notifications(db_session, exam.id)
+    assert {r.recipient_id for r in rows} == {parents[0].id, parents[1].id, mei_parent.id}
+    assert len(rows) == 3
+    assert {r.title for r in rows} == {"第一次段考 成績已公布"}
+    assert rows[0].payload["exam_name"] == "第一次段考"
+
+
+def test_publish_exam_errors(db_session: Session, actor: CurrentStaff, kick_off: None) -> None:
+    empty = make_exam(db_session)
+    published = _exam_with_subjects(db_session, "國語", status="published")
+
+    with pytest.raises(AppError) as no_subjects:
+        publish_exam(db_session, empty.id, actor=actor, clock=_clock())
+    with pytest.raises(AppError) as again:
+        publish_exam(db_session, published.id, actor=actor, clock=_clock())
+    with pytest.raises(AppError) as missing:
+        publish_exam(db_session, uuid4(), actor=actor, clock=_clock())
+
+    assert _error(no_subjects) == (422, "exam_has_no_subjects")
+    assert _error(again) == (409, "exam_already_published")
+    assert _error(missing) == (404, "exam_not_found")
+
+
+@pytest.mark.cleanup_tables("exams", "notification_outbox", "notifications")
+def test_publish_exam_concurrent(
+    owner_cleanup: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    kick_off: None,
+) -> None:
+    exam, students, staff = _committed_exam(committing_db_session, owner_cleanup, students=2)
+
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    s2_done = threading.Event()
+    outcome: dict[str, Any] = {}
+
+    def worker() -> None:
+        try:
+            outcome["s2"] = publish_exam(s2, exam.id, actor=staff, clock=_clock())
+            s2.commit()
+        except BaseException as exc:
+            outcome["s2"] = exc
+            s2.rollback()
+        finally:
+            s2_done.set()
+
+    thread = threading.Thread(target=worker)
+    try:
+        outcome["s1"] = publish_exam(s1, exam.id, actor=staff, clock=_clock())
+        thread.start()
+        assert not s2_done.wait(timeout=0.5)  # s1 尚未 commit：s2 被 FOR UPDATE 擋住
+        s1.commit()
+        thread.join(timeout=10)
+    finally:
+        s1.close()
+        if thread.is_alive():
+            thread.join(timeout=10)
+        s2.close()
+
+    assert outcome["s1"].status == "published"
+    error = outcome["s2"]
+    assert isinstance(error, AppError)
+    assert (error.status, error.code) == (409, "exam_already_published")
+    assert len(_exam_notifications(committing_db_session, exam.id)) == len(students)
