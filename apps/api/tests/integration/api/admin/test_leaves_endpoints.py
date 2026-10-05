@@ -1,17 +1,21 @@
 """BACKEND-351：GET /api/admin/leaves。
-BACKEND-354：GET /api/admin/leaves/{leave_id}/attachments/{attachment_id}（簽發短效 URL）。"""
+BACKEND-354：GET /api/admin/leaves/{leave_id}/attachments/{attachment_id}（簽發短效 URL）。
+BACKEND-352：POST /api/admin/leaves（員工代登記）。"""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import date
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.account import StaffUser
+from app.models.attendance import StudentAttendance
+from app.models.leaves import StudentLeave
 from tests.support.factories import (
     make_class,
     make_leave,
@@ -195,3 +199,111 @@ def test_admin_leave_attachment_url_404(
     assert_error(mismatched, 404, "attachment_not_found")
     assert_error(missing, 404, "attachment_not_found")
     assert mismatched.json() == missing.json()
+
+
+# --- BACKEND-352：POST /api/admin/leaves（員工代登記）---------------------------------------------
+
+
+def _leave_body(student_id: object, **overrides: object) -> dict[str, object]:
+    body: dict[str, object] = {
+        "student_id": str(student_id),
+        "leave_type": "sick",
+        "start_date": "2026-09-01",
+        "end_date": "2026-09-02",
+    }
+    body.update(overrides)
+    return body
+
+
+def test_admin_leaves_create_success(staff_client: StaffClientFactory, db_session: Session) -> None:
+    ming = make_student(db_session, name="王小明")
+    client, staff = staff_client(permissions=["leaves:write", "leaves:read"], display_name="陳行政")
+
+    resp = client.post(_URL, json=_leave_body(ming.id, reason="發燒"))
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["student"]["name"] == "王小明"
+    assert (body["leave_type"], body["leave_type_label"]) == ("sick", "病假")
+    assert (body["start_date"], body["end_date"]) == ("2026-09-01", "2026-09-02")
+    assert body["status"] == "active"
+    assert body["created_by_type"] == "staff"
+    assert body["created_by_name"] == staff.display_name == "陳行政"
+    assert body["reason"] == "發燒"
+    assert body["attachments"] == []
+    # 已 commit：重讀 DB、列表查得到、期間內出勤為 leave
+    db_session.expire_all()
+    leave = db_session.execute(
+        select(StudentLeave).where(StudentLeave.id == UUID(body["id"]))
+    ).scalar_one()
+    assert (leave.student_id, leave.created_by_type, leave.created_by_id) == (
+        ming.id,
+        "staff",
+        staff.id,
+    )
+    listed = client.get(_URL, params={"student_id": str(ming.id)}).json()
+    assert [i["id"] for i in listed["items"]] == [body["id"]]
+    attendance = db_session.execute(
+        select(StudentAttendance).where(
+            StudentAttendance.student_id == ming.id,
+            StudentAttendance.service_date == date(2026, 9, 1),
+        )
+    ).scalar_one()
+    assert (attendance.status, attendance.leave_id) == ("leave", leave.id)
+
+
+def test_admin_leaves_create_422(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming = make_student(db_session)
+    client, _ = staff_client(permissions=["leaves:write"])
+
+    reversed_range = client.post(
+        _URL, json=_leave_body(ming.id, start_date="2026-09-05", end_date="2026-09-01")
+    )
+    extra = client.post(_URL, json=_leave_body(ming.id, status="active"))
+    bad_type = client.post(_URL, json=_leave_body(ming.id, leave_type="vacation"))
+    missing = client.post(_URL, json={"student_id": str(ming.id)})
+
+    for resp in (reversed_range, extra, bad_type, missing):
+        assert_error(resp, 422, "validation_error")
+    assert (
+        db_session.execute(select(StudentLeave).where(StudentLeave.student_id == ming.id)).first()
+        is None
+    )
+
+
+def test_admin_leaves_create_401(api_client: TestClient, assert_error: AssertError) -> None:
+    assert_error(api_client.post(_URL, json=_leave_body(uuid4())), 401, "unauthenticated")
+
+
+def test_admin_leaves_create_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming = make_student(db_session)
+    client, _ = staff_client(permissions=["leaves:read"])
+
+    resp = client.post(_URL, json=_leave_body(ming.id))
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["leaves:write"]}
+
+
+def test_admin_leaves_create_409(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming = make_student(db_session)
+    make_leave(db_session, ming, start_date=date(2026, 9, 2), end_date=date(2026, 9, 3))
+    client, _ = staff_client(permissions=["leaves:write"])
+
+    resp = client.post(_URL, json=_leave_body(ming.id))
+
+    assert_error(resp, 409, "leave_overlap")
+    assert_error(client.post(_URL, json=_leave_body(uuid4())), 404, "student_not_found")
+    db_session.expire_all()
+    assert (
+        db_session.execute(
+            select(func.count()).select_from(StudentLeave).where(StudentLeave.student_id == ming.id)
+        ).scalar_one()
+        == 1
+    )
