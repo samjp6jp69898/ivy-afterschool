@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 252,
-  "last_updated": "2026-10-05T02:49:20Z",
+  "version": 253,
+  "last_updated": "2026-10-05T02:49:54Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -2693,11 +2693,11 @@
     {
       "id": "BACKEND-079",
       "title": "實作 RoleService.update_role：修改角色（admin 不可改、防提權、保留管理者、稽核）",
-      "description": "在 `apps/api/app/services/role_service.py` 實作：\n```python\ndef update_role(session: Session, role_id: UUID, data: RoleUpdateIn, *, actor: CurrentStaff, meta: RequestMeta) -> RoleOut: ...\n```\n- 角色不存在 → 404 `role_not_found`。\n- `code == 'admin'` → 409 `system_role_protected`（admin 角色任何欄位都不可改，domain_spec M1）。其他系統角色（director / clerk / tutor）可改 name / description / permissions。\n- permissions 有給：驗證碼；**新增的碼**（new − old）必須 ⊆ actor.permissions（移除不受限）→ 否則 403 `cannot_grant_permissions`。\n- 寫入後 `assert_admin_capabilities_retained`（BACKEND-075）（呼叫前先 `advisory_xact_lock(session, 'rbac:admin_retained', 'global')`（BACKEND-017 `app/core/locks.py`），讓所有可能減少管理者的異動序列化；否則兩筆交易各停用 / 降權一位管理者時都看得到對方仍有效而同時通過，commit 後系統沒有任何可管理角色與帳號的啟用員工）。\n- 稽核 `role.update`，before / after 只含有變動的欄位。\n- 權限每請求即時計算（BACKEND-047），不需要 bump token_version。\n\n**驗收標準**\n- 修改名稱與權限成功，audit 記錄 before/after。\n- admin 角色 409；不存在 404。\n- 新增超出自身的碼 403；移除自己沒有的碼允許。\n- 造成無人持有 roles:write → 409 last_role_manager，且變更未套用（交易回滾）。",
+      "description": "在 `apps/api/app/services/role_service.py` 實作：\n```python\ndef update_role(session: Session, role_id: UUID, data: RoleUpdateIn, *, actor: CurrentStaff, meta: RequestMeta) -> RoleOut: ...\n```\n- 先 `with_for_update()` 鎖角色列；角色不存在 → 404 `role_not_found`。\n- `code == 'admin'` → 409 `system_role_protected`（admin 角色任何欄位都不可改，domain_spec M1）。其他系統角色（director / clerk / tutor）可改 name / description / permissions。\n- permissions 有給：驗證碼（422 `unknown_permission`）；**新增的碼**（new - old）必須 ⊆ actor.permissions（移除不受限）→ 否則 403 `cannot_grant_permissions`。\n- 只套用實際有變動的欄位；permissions 有變動時寫入後先 `advisory_xact_lock(session, 'rbac:admin_retained', 'global')`（BACKEND-017 `app/core/locks.py`）再 `assert_admin_capabilities_retained`（BACKEND-075），讓所有可能減少管理者的異動序列化；否則兩筆交易各停用 / 降權一位管理者時都看得到對方仍有效而同時通過，commit 後系統沒有任何可管理角色與帳號的啟用員工。只改 name / description 不會減少管理者，不取鎖、不呼叫守衛。\n- 稽核 `role.update`，before / after 只含有變動的欄位；沒有任何欄位變動（送同值）不寫稽核。\n- 權限每請求即時計算（BACKEND-047），不需要 bump token_version。\n\n**驗收標準**\n- 修改名稱與權限成功，audit 記錄 before/after 只含變動欄位。\n- admin 角色 409；不存在 404。\n- 新增超出自身的碼 403；移除自己沒有的碼允許。\n- 造成無人持有 roles:write → 409 last_role_manager（無人持有 staff:write → 409 last_staff_manager），不寫稽核；endpoint 層 rollback 讓變更未套用。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/role_service.py",
       "source_ref": "BE:api/permissions_admin.py::update_role",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-077",
