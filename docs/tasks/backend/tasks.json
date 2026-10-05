@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 342,
-  "last_updated": "2026-10-05T05:36:34Z",
+  "version": 343,
+  "last_updated": "2026-10-05T05:36:46Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -3105,7 +3105,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": "BE:api/auth.py::update_user",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-088",
@@ -3133,9 +3133,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。檢查順序 404 → assert_can_manage_staff 403 → 改自己權限 409，符合 description；只對新增的碼 assert_can_grant；有權限欄位且有變動時才取 advisory lock + assert_admin_capabilities_retained（守衛內 populate_existing），拿掉守衛 → last_manager 轉紅；稽核只含變動欄位（改成全部欄位 → success 轉紅）。red_case cannot_grant 改為 tutor 權限 ∪ {staff:write} 合理：目標有效權限必須 ⊆ actor，否則先被 cannot_manage_staff 擋下。註：把 assert_can_grant 的參數改成完整新權限集合測試不會轉紅，但 can_manage 已保證原有權限 ⊆ actor，兩者等價，不是缺口。實作 commit 對測試的改動只有：守衛前置補一位啟用 admin、_as_staff 改用 resolve_effective_permissions（與正式環境的有效權限一致），斷言未放寬。review 在 scratchpad 複本突變：拿掉 token_version+1 或 revoke_all_for_subject → 091 / 092 成功案例轉紅。測試 485a6fd 先於實作 8b35443；跑前後比對 public 各表列數無殘列；lint / typecheck 乾淨。"
       }
     },
     {
@@ -3145,7 +3145,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": "BE:api/auth.py::reset_password",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-088",
@@ -3173,9 +3173,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 4 passed。404 → 自己 409 cannot_reset_self → 403；新臨時密碼、must_change_password、token_version+1、全部 refresh 撤銷；稽核不含密碼。實作 commit 對測試的改動只有：守衛前置補一位啟用 admin、_as_staff 改用 resolve_effective_permissions（與正式環境的有效權限一致），斷言未放寬。review 在 scratchpad 複本突變：拿掉 token_version+1 或 revoke_all_for_subject → 091 / 092 成功案例轉紅。測試 485a6fd 先於實作 8b35443；跑前後比對 public 各表列數無殘列；lint / typecheck 乾淨。"
       }
     },
     {
@@ -3185,7 +3185,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": "BE:api/auth.py::delete_user",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-088",
@@ -3214,9 +3214,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。404 → 自己 409 → 403；已停用冪等不重複寫稽核；flush 後先取 advisory lock 再跑守衛。拿掉 advisory lock → test_deactivate_concurrent_last_admins 轉紅。class_staff 保留。實作 commit 對測試的改動只有：守衛前置補一位啟用 admin、_as_staff 改用 resolve_effective_permissions（與正式環境的有效權限一致），斷言未放寬。review 在 scratchpad 複本突變：拿掉 token_version+1 或 revoke_all_for_subject → 091 / 092 成功案例轉紅。殘留：讀目標員工未上鎖，同一帳號兩個停用並發時兩邊都會通過 is_active 檢查，稽核寫兩筆、token_version 只 +1（帳號仍確實停用、登入確實失效）。測試 485a6fd 先於實作 8b35443；跑前後比對 public 各表列數無殘列；lint / typecheck 乾淨。"
       }
     },
     {
@@ -5520,7 +5520,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::create_student",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-151",
@@ -5545,9 +5545,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 6 passed。students:write 守衛，敏感欄位由 service 另檢 students:sensitive（403 sensitive_permission_required）；422 / 409 皆有測。review 在 scratchpad 複本拿掉 handler 的 db.commit() 後成功案例轉紅；route audit == []。測試 485a6fd 先於實作 8b35443；跑前後比對 public 各表列數無殘列；lint / typecheck 乾淨。"
       }
     },
     {
@@ -5631,7 +5631,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::delete_student",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-153",
@@ -5656,9 +5656,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。封存後家長 GET /api/parent/children 回 []。review 在 scratchpad 複本拿掉 handler 的 db.commit() 後成功案例轉紅；route audit == []。測試 485a6fd 先於實作 8b35443；跑前後比對 public 各表列數無殘列；lint / typecheck 乾淨。"
       }
     },
     {
@@ -6029,7 +6029,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::create_guardian",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-169",
@@ -6056,9 +6056,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。guardians:write 守衛，只有 students:write → 403；封存學生 409 student_archived。review 在 scratchpad 複本拿掉 handler 的 db.commit() 後成功案例轉紅；route audit == []。測試 485a6fd 先於實作 8b35443；跑前後比對 public 各表列數無殘列；lint / typecheck 乾淨。"
       }
     },
     {
@@ -6068,7 +6068,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/guardians.py",
       "source_ref": "BE:api/students.py::update_guardian",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-170",
@@ -6094,9 +6094,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。PATCH is_primary 後原主要聯絡人改 false；空 body 422；不存在 404。review 在 scratchpad 複本拿掉 handler 的 db.commit() 後成功案例轉紅；route audit == []。測試 485a6fd 先於實作 8b35443；跑前後比對 public 各表列數無殘列；lint / typecheck 乾淨。"
       }
     },
     {
@@ -6106,7 +6106,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/guardians.py",
       "source_ref": "BE:api/students.py::delete_guardian",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-171",
@@ -6132,9 +6132,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。DELETE 204 後清單不含該監護人；已封存 404。review 在 scratchpad 複本拿掉 handler 的 db.commit() 後成功案例轉紅；route audit == []。測試 485a6fd 先於實作 8b35443；跑前後比對 public 各表列數無殘列；lint / typecheck 乾淨。"
       }
     },
     {
@@ -6182,7 +6182,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/guardians.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-172",
@@ -6208,9 +6208,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。unbind 後家長看不到該生；未綁定 409 guardian_not_bound。review 在 scratchpad 複本拿掉 handler 的 db.commit() 後成功案例轉紅；route audit == []。測試 485a6fd 先於實作 8b35443；跑前後比對 public 各表列數無殘列；lint / typecheck 乾淨。"
       }
     },
     {
@@ -14332,7 +14332,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-131",
@@ -14346,7 +14346,7 @@
         "BACKEND-002"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "",
+      "risk_notes": "[review-r8-b] 未驗收：description 第 3～5 步的推播沒有任何測試涵蓋。review 在 scratchpad 複本分別把 attendance.bulk_updated 廣播、pickup.authorization_updated 廣播、逐筆 publish_request_change 拿掉，test_close_out_ 六條仍全綠。這三項若壞掉，後台接送 / 出勤畫面與家長端會停在舊狀態，現有測試看不出來。修法：在既有 red_case 補斷言（參照 BACKEND-374 / 206 測試記錄 broadcast 的寫法）——commit 後 admin:attendance 收到 attendance.bulk_updated 且 dates == 刪除的日期、admin:pickup 收到被取消授權的 pickup.authorization_updated 與被取消請求的推播；test_close_out_rollback_with_caller 補「rollback 後不推任何訊息」；拿掉任一推播要有測試轉紅。（順帶建議，非打回條件：from app.services.pickup.authorizations import _base_fields 依賴 r8c 模組的私有函式，宜請 r8c 提供公開的 PickupAuthorizationOut 組裝函式後改用。）",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_student_service.py",
@@ -14365,9 +14365,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r8-b",
+        "notes": "推播（attendance.bulk_updated、pickup.authorization_updated、publish_request_change）未被測試涵蓋，詳見 risk_notes。其餘：tdd.run 6 passed、請假 / 出勤 / 接送 / 授權 / 稽核行為與同交易 rollback 已核對，測試 485a6fd 先於實作 8b35443；跑前後比對 public 各表列數無殘列；lint / typecheck 乾淨。"
       }
     },
     {
@@ -14424,7 +14424,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-530",
@@ -14452,9 +14452,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 6 passed。students:purge 守衛（director 403），確認學號不符 422，在學 409、第二次 409 student_already_purged。review 在 scratchpad 複本拿掉 handler 的 db.commit() 後成功案例轉紅；route audit == []。測試 485a6fd 先於實作 8b35443；跑前後比對 public 各表列數無殘列；lint / typecheck 乾淨。"
       }
     },
     {
