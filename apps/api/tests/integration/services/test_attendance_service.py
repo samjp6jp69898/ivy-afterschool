@@ -2,6 +2,9 @@
 
 - BACKEND-302：``ensure_attendance_row``（取得或建立出勤列，冪等、並發安全）。
 - BACKEND-310：``amend_attendance``（改判，寫 audit、commit 後推播）。
+- BACKEND-311：``get_daily_attendance``（每日清單、虛擬列與統計）。
+
+營業時段讀 seed 預設（週一到週五營業、週六不營業、週日不列）；每個測試前後清空設定快取。
 """
 
 import threading
@@ -11,7 +14,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import Engine, func, select
+from sqlalchemy import Engine, event, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentStaff
@@ -24,16 +27,53 @@ from app.models.attendance import StudentAttendance
 from app.models.audit import AuditLog
 from app.realtime import publish as publish_module
 from app.realtime.publish import admin_topic_channel, student_channel
-from app.schemas.attendance import AttendanceAmendIn
-from app.services.attendance_service import amend_attendance, ensure_attendance_row
+from app.schemas.attendance import AttendanceAmendIn, DailyAttendanceQuery
+from app.services.attendance_service import (
+    amend_attendance,
+    ensure_attendance_row,
+    get_daily_attendance,
+)
+from app.services.settings_service import clear_settings_cache
 from tests.integration.db.conftest import connect_owner
-from tests.support.factories import make_attendance, make_leave, make_staff, make_student
+from tests.support.factories import (
+    make_attendance,
+    make_class,
+    make_leave,
+    make_staff,
+    make_student,
+)
 from tests.support.fake_clock import FakeClock
 
 _DAY = date(2026, 9, 1)
 _META = RequestMeta(ip="203.0.113.5", user_agent="pytest", request_id=None)
 
 Call = tuple[list[str], dict[str, Any]]
+
+
+@pytest.fixture(autouse=True)
+def _clear_settings_cache() -> Iterator[None]:
+    clear_settings_cache()
+    yield
+    clear_settings_cache()
+
+
+class _SqlCounter:
+    def __init__(self) -> None:
+        self.statements: list[str] = []
+
+    def __call__(self, conn: Any, cursor: Any, statement: str, *args: Any) -> None:
+        self.statements.append(statement)
+
+
+@pytest.fixture
+def count_sql(db_session: Session) -> Iterator[_SqlCounter]:
+    counter = _SqlCounter()
+    engine = db_session.get_bind()
+    event.listen(engine, "before_cursor_execute", counter)
+    try:
+        yield counter
+    finally:
+        event.remove(engine, "before_cursor_execute", counter)
 
 
 def _taipei(d: date, hour: int, minute: int = 0) -> datetime:
@@ -489,3 +529,196 @@ def test_amend_parent_ws_payload(
     assert admin["data"]["student_name"] == "王小明"
     assert admin["data"]["note"] == "內部備註"
     assert admin["data"]["status"] == out.status == "expected"
+
+
+# --- BACKEND-311 get_daily_attendance ---
+
+
+def test_daily_attendance_rows_and_summary(db_session: Session, fake_clock: FakeClock) -> None:
+    class_a = make_class(db_session, name="A班")
+    ming = make_student(db_session, name="王小明", student_no="A001", class_=class_a)
+    hua = make_student(db_session, name="陳小華", student_no="A002", class_=class_a)
+    an = make_student(db_session, name="林小安", student_no="A003", class_=class_a)
+    present = make_attendance(db_session, ming, service_date=_DAY, status="present")
+    leave = make_leave(db_session, hua, start_date=_DAY, end_date=date(2026, 9, 2))
+    make_attendance(db_session, hua, service_date=_DAY, status="leave", leave=leave)
+    # 別天的列不影響
+    make_attendance(db_session, an, service_date=date(2026, 9, 2), status="absent")
+
+    out = get_daily_attendance(
+        db_session, DailyAttendanceQuery(date=_DAY, class_id=class_a.id), clock=fake_clock
+    )
+
+    assert (out.date, out.is_service_day) == (_DAY, True)
+    assert [(r.student_name, r.status) for r in out.items] == [
+        ("王小明", "present"),
+        ("陳小華", "leave"),
+        ("林小安", "expected"),
+    ]
+    ming_row, hua_row, an_row = out.items
+    assert ming_row.id == present.id
+    assert ming_row.check_in_at == _taipei(_DAY, 15)
+    assert (ming_row.class_id, ming_row.class_name) == (class_a.id, "A班")
+    assert ming_row.leave is None
+    assert hua_row.leave is not None
+    assert (hua_row.leave.id, hua_row.leave.leave_type) == (leave.id, "sick")
+    assert hua_row.leave.leave_type_label == "病假"
+    assert (an_row.id, an_row.status, an_row.updated_at) == (None, "expected", None)
+    assert (an_row.student_no, an_row.class_name) == ("A003", "A班")
+    assert out.summary.model_dump() == {
+        "total": 3,
+        "expected": 1,
+        "present": 1,
+        "left": 0,
+        "absent": 0,
+        "leave": 1,
+    }
+
+
+def test_daily_attendance_defaults_to_today(db_session: Session, fake_clock: FakeClock) -> None:
+    """query.date 未給 → clock.today()（台北）；UTC 9/1 16:30 已是台北 9/2。"""
+    class_a = make_class(db_session)
+    make_student(db_session, class_=class_a)
+    fake_clock.set(datetime.fromisoformat("2026-09-01T16:30:00+00:00"))
+
+    out = get_daily_attendance(
+        db_session, DailyAttendanceQuery(class_id=class_a.id), clock=fake_clock
+    )
+
+    assert out.date == date(2026, 9, 2)
+    assert [r.service_date for r in out.items] == [date(2026, 9, 2)]
+
+
+def test_daily_attendance_filters(db_session: Session, fake_clock: FakeClock) -> None:
+    class_a = make_class(db_session, name="A班")
+    class_b = make_class(db_session, name="B班")
+    ming = make_student(db_session, name="王小明", class_=class_a)
+    hua = make_student(db_session, name="陳小華", class_=class_a)
+    make_student(db_session, name="林小安", class_=class_a)
+    mei = make_student(db_session, name="張小美", class_=class_b)
+    make_attendance(db_session, ming, service_date=_DAY, status="present")
+    make_attendance(db_session, hua, service_date=_DAY, status="absent")
+    make_attendance(db_session, mei, service_date=_DAY, status="present")
+
+    only_b = get_daily_attendance(
+        db_session, DailyAttendanceQuery(date=_DAY, class_id=class_b.id), clock=fake_clock
+    )
+    present_a = get_daily_attendance(
+        db_session,
+        DailyAttendanceQuery(date=_DAY, class_id=class_a.id, status="present"),
+        clock=fake_clock,
+    )
+    expected_a = get_daily_attendance(
+        db_session,
+        DailyAttendanceQuery(date=_DAY, class_id=class_a.id, status="expected"),
+        clock=fake_clock,
+    )
+
+    assert [r.student_name for r in only_b.items] == ["張小美"]
+    assert [r.student_name for r in present_a.items] == ["王小明"]
+    assert present_a.summary.total == 3
+    assert (present_a.summary.present, present_a.summary.absent) == (1, 1)
+    # 虛擬列也套用 status 篩選
+    assert [(r.student_name, r.id) for r in expected_a.items] == [("林小安", None)]
+
+
+def test_daily_attendance_sorted_by_class_then_student_no(
+    db_session: Session, fake_clock: FakeClock
+) -> None:
+    late = make_class(db_session, name="甲班")
+    early = make_class(db_session, name="乙班")
+    early.sort_order = -1
+    db_session.flush()
+    make_student(db_session, name="王小明", student_no="Z-002", class_=late)
+    make_student(db_session, name="陳小華", student_no="Z-001", class_=late)
+    make_student(db_session, name="林小安", student_no="Z-003", class_=early)
+    mine = {"王小明", "陳小華", "林小安"}
+
+    out = get_daily_attendance(db_session, DailyAttendanceQuery(date=_DAY), clock=fake_clock)
+
+    assert [r.student_name for r in out.items if r.student_name in mine] == [
+        "林小安",
+        "陳小華",
+        "王小明",
+    ]
+
+
+def test_daily_attendance_non_service_day(db_session: Session, fake_clock: FakeClock) -> None:
+    class_a = make_class(db_session)
+    make_student(db_session, class_=class_a)
+    sunday = date(2026, 9, 6)
+
+    out = get_daily_attendance(
+        db_session, DailyAttendanceQuery(date=sunday, class_id=class_a.id), clock=fake_clock
+    )
+
+    assert out.is_service_day is False
+    assert out.items == []
+    assert out.summary.total == 0
+
+
+def test_daily_attendance_non_service_day_keeps_actual_rows(
+    db_session: Session, fake_clock: FakeClock
+) -> None:
+    class_a = make_class(db_session)
+    ming = make_student(db_session, name="王小明", class_=class_a)
+    make_student(db_session, name="陳小華", class_=class_a)
+    saturday = date(2026, 9, 5)
+    make_attendance(db_session, ming, service_date=saturday, status="present")
+
+    out = get_daily_attendance(
+        db_session, DailyAttendanceQuery(date=saturday, class_id=class_a.id), clock=fake_clock
+    )
+
+    assert out.is_service_day is False
+    assert [(r.student_name, r.status) for r in out.items] == [("王小明", "present")]
+
+
+def test_daily_attendance_withdrawn_with_row(db_session: Session, fake_clock: FakeClock) -> None:
+    class_a = make_class(db_session)
+    mei = make_student(db_session, name="張小美", class_=class_a)
+    make_attendance(db_session, mei, service_date=_DAY, status="left")
+    mei.status = "withdrawn"
+    mei.withdrawn_on = _DAY
+    # 已退班且當天沒有列的學生不出現
+    gone = make_student(db_session, name="林小安", class_=class_a)
+    gone.status = "withdrawn"
+    gone.withdrawn_on = _DAY
+    archived = make_student(db_session, name="陳小華", class_=class_a, archived=True)
+    db_session.flush()
+
+    out = get_daily_attendance(
+        db_session, DailyAttendanceQuery(date=_DAY, class_id=class_a.id), clock=fake_clock
+    )
+
+    assert [(r.student_name, r.status) for r in out.items] == [("張小美", "left")]
+    assert archived.id not in {r.student_id for r in out.items}
+
+
+def test_daily_attendance_query_count(
+    db_session: Session, fake_clock: FakeClock, count_sql: _SqlCounter
+) -> None:
+    class_a = make_class(db_session)
+    for index in range(30):
+        student = make_student(db_session, name=f"學生{index}", class_=class_a)
+        if index % 3 == 0:
+            leave = make_leave(db_session, student, start_date=_DAY)
+            make_attendance(db_session, student, service_date=_DAY, status="leave", leave=leave)
+        elif index % 3 == 1:
+            make_attendance(db_session, student, service_date=_DAY, status="present")
+    count_sql.statements.clear()
+
+    out = get_daily_attendance(
+        db_session, DailyAttendanceQuery(date=_DAY, class_id=class_a.id), clock=fake_clock
+    )
+
+    assert len(out.items) == 30
+    assert out.summary.model_dump() == {
+        "total": 30,
+        "expected": 10,
+        "present": 10,
+        "left": 0,
+        "absent": 0,
+        "leave": 10,
+    }
+    assert len(count_sql.statements) <= 4
