@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 376,
-  "last_updated": "2026-10-05T05:52:03Z",
+  "version": 377,
+  "last_updated": "2026-10-05T05:52:45Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14294,7 +14294,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-527",
