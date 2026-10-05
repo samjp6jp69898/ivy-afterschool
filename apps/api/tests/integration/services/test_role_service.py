@@ -1,22 +1,23 @@
 """BACKEND-077：app/services/role_service.py（list_roles）。
 BACKEND-080：delete_role。
-BACKEND-078：create_role（權限驗證、防提權、code 重複 409 含競態、稽核）。"""
+BACKEND-078：create_role（權限驗證、防提權、code 重複 409 含競態、稽核）。
+BACKEND-079：update_role（admin 不可改、防提權、保留管理者、稽核只含變動欄位）。"""
 
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentStaff
 from app.core.errors import AppError
 from app.core.permissions import ALL_PERMISSIONS
 from app.core.request_meta import RequestMeta
-from app.models.account import Role
+from app.models.account import Role, StaffUser
 from app.models.audit import AuditLog
-from app.schemas.roles import RoleCreateIn, RoleOut
+from app.schemas.roles import RoleCreateIn, RoleOut, RoleUpdateIn
 from app.services import role_service
-from app.services.role_service import create_role, delete_role, list_roles
+from app.services.role_service import create_role, delete_role, list_roles, update_role
 from tests.support.factories import make_role, make_staff
 
 _META = RequestMeta(ip="203.0.113.5", user_agent="UA", request_id="r1")
@@ -266,3 +267,169 @@ def test_create_role_code_taken_race(db_session: Session, monkeypatch: pytest.Mo
         "課輔老師"
     )
     assert _create_logs(db_session) == []
+
+
+# --- BACKEND-079：update_role ------------------------------------------------------------------
+
+
+def _update_logs(db_session: Session) -> list[AuditLog]:
+    return list(
+        db_session.execute(select(AuditLog).where(AuditLog.action == "role.update")).scalars()
+    )
+
+
+def _role(db_session: Session, code: str) -> Role:
+    return db_session.execute(select(Role).where(Role.code == code)).scalar_one()
+
+
+def test_update_role_success(db_session: Session) -> None:
+    admin = make_staff(db_session, role_code="admin")
+    tutor = _role(db_session, "tutor")
+    original = list(tutor.permissions)
+    assert "leaves:write" not in original
+
+    out = update_role(
+        db_session,
+        tutor.id,
+        RoleUpdateIn(permissions=[*original, "leaves:write"]),
+        actor=_actor(admin.id),
+        meta=_META,
+    )
+
+    assert isinstance(out, RoleOut)
+    assert out.code == "tutor"
+    assert out.is_system is True
+    assert "leaves:write" in out.permissions
+    assert out.permissions == sorted(out.permissions)
+    assert "leaves:write" in out.effective_permissions
+    assert sorted(_role(db_session, "tutor").permissions) == sorted([*original, "leaves:write"])
+    logs = _update_logs(db_session)
+    assert len(logs) == 1
+    log = logs[0]
+    assert log.entity_type == "role"
+    assert log.entity_id == str(tutor.id)
+    assert log.actor_id == admin.id
+    assert log.ip == "203.0.113.5"
+    assert log.before is not None
+    assert log.after is not None
+    # before / after 只含有變動的欄位
+    assert set(log.before) == set(log.after) == {"permissions"}
+    assert "leaves:write" not in log.before["permissions"]
+    assert "leaves:write" in log.after["permissions"]
+
+    # 只改名稱（description 未給不動）；同值欄位不進 before / after
+    renamed = update_role(
+        db_session,
+        tutor.id,
+        RoleUpdateIn(name="課輔教師", permissions=[*original, "leaves:write"]),
+        actor=_actor(admin.id),
+        meta=_META,
+    )
+    assert renamed.name == "課輔教師"
+    assert renamed.description == tutor.description
+    logs = _update_logs(db_session)
+    assert len(logs) == 2
+    assert logs[1].before == {"name": "課輔老師"}
+    assert logs[1].after == {"name": "課輔教師"}
+
+    # description 可清為 null；完全沒有變動時不寫稽核
+    cleared = update_role(
+        db_session, tutor.id, RoleUpdateIn(description=None), actor=_actor(admin.id), meta=_META
+    )
+    assert cleared.description is None
+    assert len(_update_logs(db_session)) == 3
+    update_role(
+        db_session, tutor.id, RoleUpdateIn(name="課輔教師"), actor=_actor(admin.id), meta=_META
+    )
+    assert len(_update_logs(db_session)) == 3
+
+
+def test_update_role_admin_protected(db_session: Session) -> None:
+    admin = make_staff(db_session, role_code="admin")
+    admin_role = _role(db_session, "admin")
+
+    for data in (RoleUpdateIn(name="超管"), RoleUpdateIn(permissions=["roles:write"])):
+        with pytest.raises(AppError) as exc:
+            update_role(db_session, admin_role.id, data, actor=_actor(admin.id), meta=_META)
+        assert (exc.value.status, exc.value.code) == (409, "system_role_protected")
+
+    assert _role(db_session, "admin").name != "超管"
+    assert _role(db_session, "admin").permissions == ["*"]
+    assert _update_logs(db_session) == []
+    # 其他系統角色可改
+    director = _role(db_session, "director")
+    assert (
+        update_role(
+            db_session,
+            director.id,
+            RoleUpdateIn(name="園長"),
+            actor=_actor(admin.id),
+            meta=_META,
+        ).name
+        == "園長"
+    )
+
+
+def test_update_role_not_found(db_session: Session) -> None:
+    admin = make_staff(db_session, role_code="admin")
+
+    with pytest.raises(AppError) as exc:
+        update_role(db_session, uuid4(), RoleUpdateIn(name="x"), actor=_actor(admin.id), meta=_META)
+
+    assert (exc.value.status, exc.value.code) == (404, "role_not_found")
+
+
+def test_update_role_grant_limit(db_session: Session) -> None:
+    make_staff(db_session, role_code="admin")
+    director = make_staff(db_session)
+    actor = _limited_actor(director.id, "roles:write", "pickup:read")
+    role = make_role(db_session, code="custom_exam", permissions=["exams:publish"])
+
+    # 移除自己沒有的碼不受限
+    out = update_role(
+        db_session, role.id, RoleUpdateIn(permissions=["pickup:read"]), actor=actor, meta=_META
+    )
+    assert out.permissions == ["pickup:read"]
+
+    with pytest.raises(AppError) as exc:
+        update_role(
+            db_session,
+            role.id,
+            RoleUpdateIn(permissions=["pickup:read", "pickup:override"]),
+            actor=actor,
+            meta=_META,
+        )
+
+    assert (exc.value.status, exc.value.code) == (403, "cannot_grant_permissions")
+    assert exc.value.details == {"permissions": ["pickup:override"]}
+    assert _role(db_session, "custom_exam").permissions == ["pickup:read"]
+    assert len(_update_logs(db_session)) == 1
+    # 無效權限碼 422
+    with pytest.raises(AppError) as invalid:
+        update_role(
+            db_session, role.id, RoleUpdateIn(permissions=["pickup:fly"]), actor=actor, meta=_META
+        )
+    assert (invalid.value.status, invalid.value.code) == (422, "unknown_permission")
+
+
+def test_update_role_last_manager(db_session: Session) -> None:
+    db_session.execute(update(StaffUser).values(is_active=False))
+    mgr = make_role(db_session, code="mgr", permissions=["roles:write", "staff:write"])
+    staff = make_staff(db_session)
+    staff.role = mgr
+    db_session.flush()
+    actor = _limited_actor(staff.id, "roles:write", "staff:write")
+
+    with pytest.raises(AppError) as exc:
+        update_role(
+            db_session, mgr.id, RoleUpdateIn(permissions=["staff:write"]), actor=actor, meta=_META
+        )
+
+    assert (exc.value.status, exc.value.code) == (409, "last_role_manager")
+    assert _update_logs(db_session) == []
+    # 保留 roles:write、拿掉 staff:write 同樣被擋
+    with pytest.raises(AppError) as exc2:
+        update_role(
+            db_session, mgr.id, RoleUpdateIn(permissions=["roles:write"]), actor=actor, meta=_META
+        )
+    assert exc2.value.code == "last_staff_manager"
