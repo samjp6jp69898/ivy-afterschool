@@ -39,9 +39,10 @@ BACKEND-530 ``purge_student``（domain_spec M3 個資保存：對已封存且 wi
 ``student.purge`` 稽核判定 → 409 ``student_already_purged``。
 
 BACKEND-529 ``close_out_inactive_student``（domain_spec M3：學生改為 suspended / withdrawn 時同交易
-收尾，已發生的紀錄保留；由 BACKEND-152 / 158 呼叫，不 commit）：請假（未開始整筆 cancelled、已開始
-截到昨天，對應出勤還原）→ 刪除今天起 ``expected`` 出勤 → 非終態接送請求條件式改 cancelled 並
-``publish_request_change`` → 今天起 active 代理授權 cancelled 並廣播 → 有刪出勤時廣播
+收尾，已發生的紀錄保留；由 BACKEND-152 / 158 呼叫，不 commit）。處理順序即鎖序（BACKEND-548，與
+BACKEND-425 ``complete_via_authorization`` 的「授權列 → 請求列 → 出勤列」同向，避免 40P01）：今天起
+active 代理授權 cancelled 並廣播 → 非終態接送請求條件式改 cancelled 並 ``publish_request_change`` →
+請假（未開始整筆 cancelled、已開始截到昨天，對應出勤還原）→ 刪除今天起 ``expected`` 出勤並廣播
 ``attendance.bulk_updated`` → 稽核 ``student.close_out``（只記計數與新狀態）。不發通知。
 """
 
@@ -757,15 +758,19 @@ def _close_out_authorizations(session: Session, student: Student, *, clock: Cloc
 def close_out_inactive_student(
     session: Session, student: Student, *, actor: CurrentStaff, clock: Clock
 ) -> CloseOutResult:
-    """學生已改為 suspended / withdrawn 後呼叫；與呼叫端同交易，任何一步失敗整筆回滾。"""
+    """學生已改為 suspended / withdrawn 後呼叫；與呼叫端同交易，任何一步失敗整筆回滾。
+
+    鎖序固定為「授權列 → 請求列 → 請假 / 出勤列」（全專案約定：代理授權列 → 接送請求列 → 出勤列；
+    請假列 → 出勤列），與櫃台核銷同向；順序反過來會與 complete_via_authorization 互等死結。
+    """
     if student.status not in _CLOSE_OUT_REASONS:
         raise ValueError(f"close_out 只適用 suspended / withdrawn 學生：{student.status!r}")
+    cancelled_authorizations = _close_out_authorizations(session, student, clock=clock)
+    cancelled_requests = _close_out_pickup_requests(session, student, clock=clock)
     cancelled_leaves, truncated_leaves = _close_out_leaves(
         session, student, actor=actor, clock=clock
     )
     deleted_dates = _close_out_attendance(session, student, clock=clock)
-    cancelled_requests = _close_out_pickup_requests(session, student, clock=clock)
-    cancelled_authorizations = _close_out_authorizations(session, student, clock=clock)
     result = CloseOutResult(
         cancelled_pickup_requests=cancelled_requests,
         cancelled_authorizations=cancelled_authorizations,
