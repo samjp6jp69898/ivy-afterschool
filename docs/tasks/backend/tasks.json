@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 383,
-  "last_updated": "2026-10-05T06:06:06Z",
+  "version": 384,
+  "last_updated": "2026-10-05T06:06:36Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5335,7 +5335,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_import_service.py",
       "source_ref": "BE:utils/excel_io.py::parse_excel",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-151",
@@ -5344,7 +5344,7 @@
         "BACKEND-133"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "openpyxl 解析惡意檔案的記憶體風險：先過 BACKEND-016 的 XLSX 檢頭與 5 MB 上限，再套用 zip bomb 檢查。\n[review-r8-b] 不受信任 xlsx 的格數上限可被繞過（review 實測）：_assert_sheet_grid_within_limits 以位元組字面量 b'<row'、b'<c '、b'<c>'、b'<c/>' 計數，但 XML 允許 (1) 元素名後接換行 / tab（<c\\n/>）、(2) 命名空間前綴（<x:row>、<x:c/>，openpyxl 依命名空間解析照樣讀得到）。在標題列尾端塞 500～600 萬個 <c\\n/> 或 <x:c/>，上傳檔僅約 49 KB、解壓約 30 MB（< 32 MB 上限），格數檢查計為 0 而放行；openpyxl 解析該列耗時 6～7 秒、行程峰值記憶體增加約 1.3～1.5 GB，之後才被 len(header) > MAX_IMPORT_COLS 擋成 422。單一請求即可讓容器 OOM。另：宣告的 uncompressed size 被竄改（小於實際）時 zf.read 拋 zipfile.BadZipFile（Bad CRC-32），未被攔截 → 500 而非 422 import_invalid_file。修法：(a) 格數檢查改用不受前綴與空白影響的方式，例如以 xml.etree.ElementTree.iterparse 串流解析工作表、依 local name 計 row / c（每個元素處理完即 clear），或至少用 regex rb'<(?:[A-Za-z_][\\w.-]*:)?row[\\s/>]' / rb'<(?:[A-Za-z_][\\w.-]*:)?c[\\s/>]'；(b) zf.read 與 openpyxl 載入的 zipfile.BadZipFile、zlib.error、EOFError、NotImplementedError（不支援的壓縮法）一律轉 422 import_invalid_file；(c) iter_rows 一併帶 max_col。補 red_case：以換行分隔與命名空間前綴兩種寫法構造超寬列 → 422 import_invalid_file 且不進 openpyxl（可 monkeypatch load_workbook 斷言未被呼叫）；竄改 uncompressed size → 422。review 的重現腳本：/private/tmp/claude-502/-Users-user-personal-project-ivy-afterschool/ff657255-761d-4bc1-b661-1278c54f8545/scratchpad/r8b_xlsx/make.py（模式 wide_ws、ns_prefix、lying_size）。",
+      "risk_notes": "openpyxl 解析惡意檔案的記憶體風險：先過 BACKEND-016 的 XLSX 檢頭與 5 MB 上限，再套用 zip bomb 檢查。\n[review-r8-b] 複審：原打回的三個向量已修好（換行分隔 / 命名空間前綴超寬列、竄改 zip 大小皆 422，未進 openpyxl、記憶體不增；billion laughs 與外部實體亦 422），但記憶體放大仍有三個可構造的反例（review 以 make.py 實測，皆在 32 MB 解壓上限內）：(1) 工作表內塞 700 萬個非 row / c 的元素（如 <a/>，放在 sheetData 內或外皆可），上傳檔約 32 KB：_scan_sheet_grid 不計這些元素，且 elem.clear() 只清子節點、元素本身仍掛在父節點上，掃描階段即耗 6.7 秒、峰值 +600 MB；放行後 openpyxl 再 +550 MB。(2) 深層巢狀 <a> 200 萬層，約 19 KB：掃描 +570 MB、openpyxl +570 MB。(3) xl/styles.xml 的 cellXfs 塞 40 萬個 <xf/>，約 77 KB：掃描不看 styles，openpyxl 載入 +340 MB。單一請求即可讓容器 OOM。修法：改用 xml.parsers.expat（或 iterparse 但不建樹）只計數不保留節點，對工作表限制元素總數（任何 local name）與巢狀深度；styles.xml、sharedStrings.xml、workbook.xml 等其他 XML part 也在交給 openpyxl 前以同一掃描器套用元素總數 / 深度上限。補 red_case：大量非儲存格元素、深層巢狀、styles 大量 xf 三種檔案 → 422 import_invalid_file 且 load_workbook 未被呼叫。重現：/private/tmp/claude-502/-Users-user-personal-project-ivy-afterschool/ff657255-761d-4bc1-b661-1278c54f8545/scratchpad/r8b_xlsx/make.py 模式 many_other_elems、many_other_elems_root、deep、styles_bomb；split.py 可分開量掃描與 openpyxl 階段。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_student_import_service.py",
@@ -5365,7 +5365,7 @@
       "review": {
         "status": "concern",
         "reviewer": "review-r8-b",
-        "notes": "xlsx 格數防護可繞過（約 49 KB 檔讓解析吃 1.4 GB 記憶體）、竄改 zip 大小 → 500，詳見 risk_notes。其餘已核對：tdd.run 6 passed、測試 399892d 先於實作 302586d / 12cd684；誠實宣告大小的解壓炸彈 422、公式儲存格 data_only 不評估（實測只得快取值 None）、read_only + reset_dimensions + max_row 硬上限；逐列規則與 151 一致（國小比對啟用中、班級比對該學年未封存、學號與身分證 HMAC 查重含封存、檔內重複兩列都標、無 students:sensitive 帶敏感欄位為錯誤、身分證 display 遮罩、健康備註以固定文字取代）；只有 SELECT 不 flush；lint / typecheck 乾淨。殘留（不在打回條件）：標題列有重複欄名時 check_header 不報錯、_cells 取最後一欄；狀態「退班」而入學日在未來時 preview 判 valid，執行時 create_student 預設退班日為今天會撞 invalid_dates。"
+        "notes": "複審：原三個繞過已修好（49dca41 測試先於 3872335 修正、tdd.run 10 passed、lint / typecheck 乾淨），但非儲存格元素 / 深層巢狀 / styles.xml 仍可讓約 20～80 KB 的檔案耗用 340～600 MB 記憶體，詳見 risk_notes。"
       }
     },
     {
@@ -9065,7 +9065,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/leaves.py",
       "source_ref": "BE:api/parent_portal/leaves.py::create_leave",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-345",
@@ -9093,9 +9093,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。actor = Actor.parent，student_id 由 service 以 for_write 驗證；leave_type 非法 / 超出 future_days 422、重疊 409 leave_overlap、退班 409 student_not_active，失敗時筆數不變。測試 5899a2d 先於實作 df0d46e；IDOR 測試斷言他人資源與 uuid4() 的 404 body 完全相同且對方資料不變；401 含無 cookie 與員工 cookie；review 拿掉 handler 的 db.commit() 後成功案例轉紅；連跑 3 輪兩檔 55 passed、跑前後無殘列；lint / typecheck 乾淨。"
       }
     },
     {
@@ -11570,7 +11570,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/dismissal_calls.py::create_dismissal_notice",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-406",
@@ -11598,9 +11598,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代（業務上的 403 pickup_not_allowed 另測）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。作業已完成的自動回覆、arrived=true 捷徑直接 arrived；arrived 與 expected_arrival_at 並給 / 多帶 source / 時間格式錯 422；已有進行中請求 409 pickup_request_exists 且 details.request_id 為既有 id、can_pickup=false 403 pickup_not_allowed、時段外 409 pickup_window_closed，各案例筆數不變。實作 commit 把時段外案例改用可接送的小孩是因為原寫法會先被 403 擋下，斷言未放寬。測試 5899a2d 先於實作 df0d46e；IDOR 測試斷言他人資源與 uuid4() 的 404 body 完全相同且對方資料不變；401 含無 cookie 與員工 cookie；review 拿掉 handler 的 db.commit() 後成功案例轉紅；連跑 3 輪兩檔 55 passed、跑前後無殘列；lint / typecheck 乾淨。"
       }
     },
     {
@@ -11650,7 +11650,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/dismissal_calls.py::arrive_dismissal_notice",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-409",
@@ -11678,9 +11678,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代（業務上的 403 pickup_not_allowed 另測）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。他人小孩的請求 404 pickup_request_not_found 且仍為 pending；已 arrived 409 invalid_pickup_status（details.current_status）。測試 5899a2d 先於實作 df0d46e；IDOR 測試斷言他人資源與 uuid4() 的 404 body 完全相同且對方資料不變；401 含無 cookie 與員工 cookie；review 拿掉 handler 的 db.commit() 後成功案例轉紅；連跑 3 輪兩檔 55 passed、跑前後無殘列；lint / typecheck 乾淨。"
       }
     },
     {
@@ -11690,7 +11690,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/dismissal_calls.py::cancel_dismissal_notice",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-411",
@@ -11718,9 +11718,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代（業務上的 403 pickup_not_allowed 另測）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-b",
+        "notes": "tdd.run 5 passed。body 可省略；reason 超長 422；取消後有 pickup:operate 的員工收到 pickup.cancelled、無權限者沒有；他人請求 404 且狀態不變；completed 409。測試 5899a2d 先於實作 df0d46e；IDOR 測試斷言他人資源與 uuid4() 的 404 body 完全相同且對方資料不變；401 含無 cookie 與員工 cookie；review 拿掉 handler 的 db.commit() 後成功案例轉紅；連跑 3 輪兩檔 55 passed、跑前後無殘列；lint / typecheck 乾淨。"
       }
     },
     {
