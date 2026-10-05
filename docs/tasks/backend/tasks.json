@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 322,
-  "last_updated": "2026-10-05T04:15:36Z",
+  "version": 323,
+  "last_updated": "2026-10-05T04:15:58Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14093,7 +14093,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:api/parent_portal/pickup.py::regenerate_code",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-420",
