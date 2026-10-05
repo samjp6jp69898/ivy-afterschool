@@ -1,4 +1,5 @@
-"""BACKEND-081 / 084 / 085：roles 列表與刪除、permissions 目錄。"""
+"""BACKEND-081 / 084 / 085：roles 列表與刪除、permissions 目錄。
+BACKEND-082：POST /api/admin/roles。"""
 
 from __future__ import annotations
 
@@ -227,3 +228,117 @@ def test_admin_permissions_staff_read_allowed(staff_client: StaffClientFactory) 
 def test_admin_permissions_guard_registered(app: FastAPI) -> None:
     assert admin_routes_without_permission(app) == []
     assert "/api/admin/permissions" in app.openapi()["paths"]
+
+
+# --- BACKEND-082：POST /api/admin/roles ---------------------------------------------------------
+
+
+def _create_body(**overrides: object) -> dict[str, object]:
+    body: dict[str, object] = {
+        "code": "front_desk",
+        "name": "櫃台",
+        "permissions": ["pickup:read"],
+    }
+    body.update(overrides)
+    return body
+
+
+def test_admin_roles_create_success(
+    api_client: TestClient,
+    db_session: Session,
+    login_staff: Callable[[TestClient, StaffUser], None],
+) -> None:
+    admin = make_staff(db_session, role_code="admin")
+    db_session.commit()
+    login_staff(api_client, admin)
+
+    resp = api_client.post(_URL, json=_create_body())
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["code"] == "front_desk"
+    assert body["name"] == "櫃台"
+    assert body["description"] is None
+    assert body["is_system"] is False
+    assert body["permissions"] == ["pickup:read"]
+    assert body["effective_permissions"] == ["pickup:read"]
+    assert body["staff_count"] == 0
+    assert set(body) == {
+        "id",
+        "code",
+        "name",
+        "description",
+        "is_system",
+        "permissions",
+        "effective_permissions",
+        "staff_count",
+        "created_at",
+        "updated_at",
+    }
+    # 已 commit：列表查得到、audit 已寫
+    assert "front_desk" in {r["code"] for r in api_client.get(_URL).json()}
+    role = db_session.execute(select(Role).where(Role.code == "front_desk")).scalar_one()
+    assert str(role.id) == body["id"]
+    log = db_session.execute(
+        select(AuditLog).where(AuditLog.action == "role.create", AuditLog.entity_id == str(role.id))
+    ).scalar_one()
+    assert log.actor_id == admin.id
+
+
+def test_admin_roles_create_422(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=["roles:write", "pickup:read"])
+
+    bad_code = client.post(_URL, json=_create_body(code="Front Desk"))
+    missing = client.post(_URL, json={"code": "front_desk", "name": "櫃台"})
+    extra = client.post(_URL, json=_create_body(is_system=True))
+    unknown = client.post(_URL, json=_create_body(permissions=["pickup:fly"]))
+
+    assert_error(bad_code, 422, "validation_error")
+    assert_error(missing, 422, "validation_error")
+    assert_error(extra, 422, "validation_error")
+    assert_error(unknown, 422, "unknown_permission")
+    assert unknown.json()["error"]["details"] == {"invalid": ["pickup:fly"]}
+    assert db_session.execute(select(Role).where(Role.code == "front_desk")).first() is None
+
+
+def test_admin_roles_create_401(api_client: TestClient, assert_error: AssertError) -> None:
+    assert_error(api_client.post(_URL, json=_create_body()), 401, "unauthenticated")
+
+
+def test_admin_roles_create_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    reader, _ = staff_client(permissions=["roles:read"])
+    limited, _ = staff_client(permissions=["roles:write", "pickup:read"])
+
+    denied = reader.post(_URL, json=_create_body())
+    beyond = limited.post(_URL, json=_create_body(permissions=["pickup:override"]))
+
+    assert_error(denied, 403, "permission_denied")
+    assert denied.json()["error"]["details"] == {"required": ["roles:write"]}
+    assert_error(beyond, 403, "cannot_grant_permissions")
+    assert beyond.json()["error"]["details"] == {"permissions": ["pickup:override"]}
+    assert db_session.execute(select(Role).where(Role.code == "front_desk")).first() is None
+    # 子集合可以
+    assert limited.post(_URL, json=_create_body()).status_code == 201
+
+
+def test_admin_roles_create_409(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=["roles:write"])
+
+    resp = client.post(_URL, json=_create_body(code="clerk", name="另一個行政", permissions=[]))
+
+    assert_error(resp, 409, "role_code_taken")
+    assert resp.json()["error"]["details"] == {"code": "clerk"}
+    assert db_session.execute(select(Role).where(Role.code == "clerk")).scalar_one().name != (
+        "另一個行政"
+    )
+
+
+def test_admin_roles_create_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "post" in app.openapi()["paths"]["/api/admin/roles"]
