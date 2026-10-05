@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 312,
-  "last_updated": "2026-10-05T04:10:26Z",
+  "version": 313,
+  "last_updated": "2026-10-05T04:10:31Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14944,7 +14944,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/tx_hooks.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-006"
@@ -14968,9 +14968,9 @@
         "notes": "第 5 條放在 notifications 測試檔（需要 enqueue 的 fixture），tdd.run 同時列兩個檔案。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 11 條全綠（5 條新 red_case + test_tx_hooks 既有 6 條），collect-only 對照全選到；7207666（測試）先於 0b01e29（實作）。callback 以 (所在交易層, fn) 記錄，所在層為 get_nested_transaction() 或最外層；savepoint rollback 沿 SessionTransaction.parent 鏈只丟棄該層與內層（含已釋放的內層），外層保留；savepoint 釋放時 in_nested 跳過、併入外層；最外層 commit / rollback 與 006 相同。red_cases 的修改（suppress 包 begin_nested、補反向巢狀與 db_session 案例、tdd.run 列兩檔）皆為加嚴，合理；BACKEND-006 description 與 tx_hooks docstring 已同步。scratch 突變：savepoint rollback 不丟棄 / 一律記最外層 / 不沿 parent 鏈 / savepoint rollback 清空全部 / 釋放時即執行，各至少 1 條轉紅。tx_hooks、notifications 目錄、homework、pickup 整合測試 140 條綠；lint / typecheck 乾淨；本 task 測試跑前後 staff_users / roles 筆數不變。殘留（不擋，協調者已列）：374 / 404 的去重推播在 savepoint 回滾後最多一則冗餘快照。"
       }
     },
     {
