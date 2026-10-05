@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 88,
-  "last_updated": "2026-10-05T06:06:07Z",
+  "version": 89,
+  "last_updated": "2026-10-05T06:08:18Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -3287,7 +3287,7 @@
     {
       "id": "PARENT-178",
       "title": "移植 NotificationPrefsView：7 個事件的 LINE 推播開關",
-      "description": "建立 `apps/web/src/parent/views/NotificationPrefsView.vue`（路由 `/notifications/preferences`）。\n\n- 掛載時 `getNotificationPreferences()`（PARENT-171），依後端順序列出 7 項（`label` 為後端提供的中文名稱），每項右側 PARENT-175 M3Switch（`line_enabled`）。\n- 說明文字：「關閉後仍會在 App 的通知中看到，只是不會傳 LINE 訊息。」（載入失敗時隱藏）。\n- 每項左側 40px 圓形事件圖示（裝飾，aria-hidden）：取自 `apps/web/src/parent/utils/notificationEventIcon.ts` 的 `notificationEventIcon(event: string): string`（attendance. → how_to_reg、homework. → assignment、pickup. → directions_walk、exam. → grading、binding. → link、其他 → notifications）。本 task 把此對照表從 PARENT-176 `NotificationListItem.vue` 抽出成共用模組，176 只改為 import、行為不變。\n- 有資料時清單下方小字：「接送取消、綁定完成等重要通知不受此設定影響，一律會傳 LINE。」（domain_spec：pickup.cancelled、binding.completed 不可關閉）。\n- 切換：樂觀更新 → `updateNotificationPreferences([{ event, line_enabled }])`（只送該項）→ 成功以回應覆蓋全部項目；失敗回滾該項並 snackbar error「儲存失敗，請稍後再試」。同一項儲存中 `busy`、再點忽略；不同項可同時儲存。\n- 載入中 SkeletonBlock（row × 7）；載入失敗 → ParentEmptyState error「通知設定載入失敗」+ 重試。\n\n移植 ivy `FE:src/parent/views/NotificationPrefsView.vue::toggle` 的樂觀更新、失敗回滾與同 key 儲存鎖；**去掉** 前端寫死的事件名稱 / 說明對照（label 改由後端提供）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-notification-prefs.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：7 項開關（部分關閉）、某項儲存中、儲存失敗回滾提示、載入中、載入失敗。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `NotificationPrefsView.vue`。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/views/NotificationPrefsView.vue`（路由 `/notifications/preferences`）。\n\n- 掛載時 `getNotificationPreferences()`（PARENT-171），依後端順序列出 7 項（`label` 為後端提供的中文名稱），每項右側 PARENT-175 M3Switch（`line_enabled`）。\n- 說明文字：「關閉後仍會在 App 的通知中看到，只是不會傳 LINE 訊息。」（載入失敗時隱藏）。\n- 每項左側 40px 圓形事件圖示（裝飾，aria-hidden）：取自 `apps/web/src/parent/utils/notificationEventIcon.ts` 的 `notificationEventIcon(event: string): string`（attendance. → how_to_reg、homework. → assignment、pickup. → directions_walk、exam. → grading、binding. → link、其他 → notifications）。本 task 把此對照表從 PARENT-176 `NotificationListItem.vue` 抽出成共用模組，176 只改為 import、行為不變。\n- 有資料時清單下方小字：「接送取消、綁定完成等重要通知不受此設定影響，一律會傳 LINE。」（domain_spec：pickup.cancelled、binding.completed 不可關閉）。\n- 切換：樂觀更新 → `updateNotificationPreferences([{ event, line_enabled }])`（只送該項）→ 成功以回應覆蓋全部項目（但仍在儲存中的其他項保留本地樂觀值，避免較早送出的請求回應蓋掉尚未完成的切換）；失敗回滾該項並 snackbar error「儲存失敗，請稍後再試」。同一項儲存中 `busy`、再點忽略；不同項可同時儲存。\n- 載入中 SkeletonBlock（row × 7）；載入失敗 → ParentEmptyState error「通知設定載入失敗」+ 重試。\n\n移植 ivy `FE:src/parent/views/NotificationPrefsView.vue::toggle` 的樂觀更新、失敗回滾與同 key 儲存鎖；**去掉** 前端寫死的事件名稱 / 說明對照（label 改由後端提供）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-notification-prefs.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：7 項開關（部分關閉）、某項儲存中、儲存失敗回滾提示、載入中、載入失敗。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `NotificationPrefsView.vue`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/NotificationPrefsView.vue",
       "source_ref": "FE:src/parent/views/NotificationPrefsView.vue::toggle",
@@ -3315,7 +3315,8 @@
           "NotificationPrefsView rolls back on failure：PUT 回 500 → 該項 aria-checked 回到 'true'，snackbar「儲存失敗，請稍後再試」",
           "NotificationPrefsView per event lock：PUT 未回應時再點同一項 → PUT 只送出 1 次；同時點另一項 → 第二個 PUT 送出",
           "NotificationPrefsView load error：GET 回 500 → 含「通知設定載入失敗」與「重試」",
-          "NotificationPrefsView shows event icons and footnote：GET 回 7 項 → '作業完成' 那列的圖示文字為 'assignment'、'成績公布' 那列為 'grading'、'到班通知' 那列為 'how_to_reg'；畫面含「接送取消、綁定完成等重要通知不受此設定影響，一律會傳 LINE。」與「關閉後仍會在 App 的通知中看到，只是不會傳 LINE 訊息。」"
+          "NotificationPrefsView shows event icons and footnote：GET 回 7 項 → '作業完成' 那列的圖示文字為 'assignment'、'成績公布' 那列為 'grading'、'到班通知' 那列為 'how_to_reg'；畫面含「接送取消、綁定完成等重要通知不受此設定影響，一律會傳 LINE。」與「關閉後仍會在 App 的通知中看到，只是不會傳 LINE 訊息。」",
+          "NotificationPrefsView keeps in-flight items when another save returns：依序點 '作業完成' 與 '到班通知'（兩個 PUT 都未回應）→ 先讓作業完成的 PUT 回 200（內容中 attendance.checked_in 仍為 true）→ '到班通知' 的 aria-checked 仍為 'false' 且 aria-busy 'true'；之後到班通知的 PUT 回 200 → aria-checked 'false'、aria-busy 消失"
         ],
         "run": "just web-test src/parent/views/NotificationPrefsView.spec.ts -t \"NotificationPrefsView\"",
         "notes": ""

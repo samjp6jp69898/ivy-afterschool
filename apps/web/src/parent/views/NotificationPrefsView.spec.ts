@@ -157,6 +157,33 @@ describe('NotificationPrefsView', () => {
     expect(switchOf(wrapper, '到班通知').attributes('aria-checked')).toBe('true')
   })
 
+  it('NotificationPrefsView keeps in-flight items when another save returns', async () => {
+    mock.onGet(URL).reply(200, { items: PREFS })
+    const first = deferredReply()
+    const second = deferredReply()
+    mock.onPut(URL).replyOnce(first.reply).onPut(URL).replyOnce(second.reply)
+    const { wrapper } = await mountWithApp(NotificationPrefsView)
+
+    await switchOf(wrapper, '作業完成').trigger('click')
+    await switchOf(wrapper, '到班通知').trigger('click')
+    await flushPromises()
+
+    // 作業完成的回應先回來，內容還沒有到班通知的變更：到班通知仍在儲存中，保留本地值
+    first.resolve([200, { items: PREFS.map((p) => (p.event === 'homework.done' ? { ...p, line_enabled: false } : p)) }])
+    await flushPromises()
+    expect(switchOf(wrapper, '到班通知').attributes('aria-checked')).toBe('false')
+    expect(switchOf(wrapper, '到班通知').attributes('aria-busy')).toBe('true')
+    expect(switchOf(wrapper, '作業完成').attributes('aria-checked')).toBe('false')
+
+    second.resolve([
+      200,
+      { items: PREFS.map((p) => (p.event.startsWith('attendance.checked_in') || p.event === 'homework.done' ? { ...p, line_enabled: false } : p)) },
+    ])
+    await flushPromises()
+    expect(switchOf(wrapper, '到班通知').attributes('aria-checked')).toBe('false')
+    expect(switchOf(wrapper, '到班通知').attributes('aria-busy')).toBeUndefined()
+  })
+
   it('NotificationPrefsView load error', async () => {
     mock.onGet(URL).replyOnce(500, SERVER_ERROR).onGet(URL).replyOnce(200, { items: PREFS })
 
