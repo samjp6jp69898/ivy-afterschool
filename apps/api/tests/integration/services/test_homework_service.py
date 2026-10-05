@@ -1,8 +1,13 @@
-"""BACKEND-373 / 384：homework_service（進度列鎖定、家長端當日作業明細）。"""
+"""BACKEND-373 / 384 / 374：homework_service（進度列鎖定、家長端當日作業明細、ws 快照推播）。
+
+推播測試以 monkeypatch 記錄 publish_threadsafe；commit 走 db_session（savepoint 模式的 commit
+同樣觸發 before_commit / after_commit，見 BACKEND-006）。
+"""
 
 import threading
 from collections.abc import Iterator
-from datetime import date, time
+from datetime import UTC, date, datetime, time
+from typing import Any
 from uuid import UUID
 
 import pytest
@@ -10,15 +15,24 @@ from sqlalchemy import Engine, func, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+from app.core.tx_hooks import install_tx_hooks
 from app.models.homework import HomeworkDailyProgress
 from app.models.reference import Subject
-from app.services.homework_service import get_child_homework, lock_progress_row
+from app.realtime import publish as publish_module
+from app.realtime.publish import admin_topic_channel, student_channel
+from app.services.homework_service import (
+    broadcast_homework_snapshot,
+    get_child_homework,
+    lock_progress_row,
+)
 from tests.integration.db.conftest import connect_owner
 from tests.support.factories import (
     make_homework_item,
     make_homework_progress,
+    make_staff,
     make_student,
 )
+from tests.support.fake_clock import FakeClock
 
 _DAY = date(2026, 9, 1)
 # lock_timeout 一律 SET LOCAL：連線會回到 pool，session 級 SET 會污染之後借到該連線的測試
@@ -307,3 +321,141 @@ def test_child_homework_empty(db_session: Session) -> None:
         None,
         None,
     )
+
+
+# --- BACKEND-374 broadcast_homework_snapshot ---
+
+Call = tuple[list[str], dict[str, Any]]
+
+
+@pytest.fixture
+def published(monkeypatch: pytest.MonkeyPatch) -> list[Call]:
+    install_tx_hooks()
+    calls: list[Call] = []
+
+    def record(channels: list[str], message: dict[str, Any]) -> None:
+        calls.append((list(channels), dict(message)))
+
+    monkeypatch.setattr(publish_module, "publish_threadsafe", record)
+    return calls
+
+
+def _on(calls: list[Call], channel: str) -> list[dict[str, Any]]:
+    return [message for channels, message in calls if channels == [channel]]
+
+
+def test_broadcast_homework_snapshot_split(
+    db_session: Session, fake_clock: FakeClock, published: list[Call]
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    teacher = make_staff(db_session, display_name="林老師")
+    item = make_homework_item(
+        db_session, ming, service_date=_DAY, status="doing", subject=_subject(db_session, "數學")
+    )
+    progress = make_homework_progress(
+        db_session,
+        ming,
+        service_date=_DAY,
+        overall_status="in_progress",
+        ready_eta=time(17, 30),
+        note="剩訂正",
+    )
+    progress.eta_updated_by = teacher.id
+    db_session.flush()
+
+    broadcast_homework_snapshot(db_session, ming.id, _DAY, clock=fake_clock)
+    assert published == []
+    db_session.commit()
+
+    assert len(published) == 2
+    [admin] = _on(published, admin_topic_channel("homework"))
+    [parent] = _on(published, student_channel(ming.id))
+    assert admin["type"] == parent["type"] == "homework.progress_updated"
+    data = admin["data"]
+    assert (data["student_id"], data["service_date"]) == (str(ming.id), "2026-09-01")
+    assert data["items"][0]["title"] == "數學習作 p.12-13"
+    assert data["items"][0]["id"] == str(item.id)
+    assert data["items"][0]["subject_name"] == "數學"
+    assert data["progress"] == {
+        "student_id": str(ming.id),
+        "service_date": "2026-09-01",
+        "overall_status": "in_progress",
+        "ready_eta": "17:30",
+        "note": "剩訂正",
+        "eta_updated_at": datetime(2026, 8, 1, tzinfo=UTC).isoformat(),
+        "eta_updated_by_name": "林老師",
+    }
+    assert parent["data"] == {
+        "student_id": str(ming.id),
+        "date": "2026-09-01",
+        "items": [{"title": "數學習作 p.12-13", "subject_name": "數學", "status": "doing"}],
+        "overall_status": "in_progress",
+        "ready_eta": "17:30",
+        "note": "剩訂正",
+    }
+    assert "eta_updated_by_name" not in parent["data"]
+    assert "id" not in parent["data"]["items"][0]
+
+
+def test_broadcast_homework_snapshot_without_progress_row(
+    db_session: Session, fake_clock: FakeClock, published: list[Call]
+) -> None:
+    ming = make_student(db_session)
+
+    broadcast_homework_snapshot(db_session, ming.id, _DAY, clock=fake_clock)
+    db_session.commit()
+
+    [admin] = _on(published, admin_topic_channel("homework"))
+    assert admin["data"]["items"] == []
+    assert admin["data"]["progress"]["overall_status"] == "not_started"
+    assert admin["data"]["progress"]["eta_updated_by_name"] is None
+    [parent] = _on(published, student_channel(ming.id))
+    assert (parent["data"]["overall_status"], parent["data"]["ready_eta"]) == ("not_started", None)
+
+
+def test_broadcast_homework_snapshot_dedupe(
+    db_session: Session, fake_clock: FakeClock, published: list[Call]
+) -> None:
+    ming = make_student(db_session)
+    hua = make_student(db_session, name="陳小華")
+    item = make_homework_item(db_session, ming, service_date=_DAY)
+
+    broadcast_homework_snapshot(db_session, ming.id, _DAY, clock=fake_clock)
+    item.status = "done"
+    db_session.flush()
+    broadcast_homework_snapshot(db_session, ming.id, _DAY, clock=fake_clock)
+    # 不同學生 / 不同日期各自推送
+    broadcast_homework_snapshot(db_session, hua.id, _DAY, clock=fake_clock)
+    broadcast_homework_snapshot(db_session, ming.id, date(2026, 9, 2), clock=fake_clock)
+    db_session.commit()
+
+    admin = _on(published, admin_topic_channel("homework"))
+    assert len(admin) == 3
+    [ming_today] = [
+        m["data"]
+        for m in admin
+        if (m["data"]["student_id"], m["data"]["service_date"]) == (str(ming.id), "2026-09-01")
+    ]
+    assert [i["status"] for i in ming_today["items"]] == ["done"]
+    assert len(_on(published, student_channel(ming.id))) == 2
+
+    # 下一個交易重新計算，不沿用上一個交易的去重紀錄
+    published.clear()
+    broadcast_homework_snapshot(db_session, ming.id, _DAY, clock=fake_clock)
+    db_session.commit()
+    assert len(_on(published, admin_topic_channel("homework"))) == 1
+
+
+def test_broadcast_homework_snapshot_rollback(
+    db_session: Session, fake_clock: FakeClock, published: list[Call]
+) -> None:
+    ming = make_student(db_session)
+    db_session.commit()
+
+    broadcast_homework_snapshot(db_session, ming.id, _DAY, clock=fake_clock)
+    db_session.rollback()
+    assert published == []
+
+    # rollback 清掉的推播不會在下一次 commit 時補送
+    db_session.commit()
+    assert published == []
