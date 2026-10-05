@@ -240,7 +240,8 @@ def test_attachment_url_mismatch(db_session: Session) -> None:
 def test_list_child_leaves(db_session: Session, fake_clock: FakeClock) -> None:
     ming = make_student(db_session, name="王小明")
     hua = make_student(db_session, name="陳小華")
-    ended = make_leave(db_session, ming, start_date=date(2026, 9, 1))
+    # 同一學生的 active 請假不可重疊（ex_student_leaves_no_overlap）：已結束的那筆放在 8/28
+    ended = make_leave(db_session, ming, start_date=date(2026, 8, 28))
     ongoing = make_leave(db_session, ming, start_date=date(2026, 8, 31), end_date=date(2026, 9, 3))
     future = make_leave(db_session, ming, start_date=date(2026, 9, 10), leave_type="personal")
     make_leave(db_session, hua, start_date=date(2026, 9, 2))
@@ -248,7 +249,7 @@ def test_list_child_leaves(db_session: Session, fake_clock: FakeClock) -> None:
     page = list_child_leaves(db_session, ming.id, _PAGE, storage=FakeStorage(), clock=fake_clock)
 
     assert page.total == 3
-    assert [r.id for r in page.items] == [future.id, ended.id, ongoing.id]
+    assert [r.id for r in page.items] == [future.id, ongoing.id, ended.id]
     assert {r.id: r.can_cancel for r in page.items} == {
         future.id: True,
         ended.id: False,

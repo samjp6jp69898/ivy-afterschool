@@ -2,6 +2,7 @@
 
 - BACKEND-347：``list_leaves``（後台列表，篩選 + 分頁）。
 - BACKEND-350：``get_attachment_url``（後台簽發附件短效 URL）。
+- BACKEND-348：``list_child_leaves``（家長端小孩請假列表，附件短效 URL；呼叫端已驗證所有權）。
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from uuid import UUID
 from sqlalchemy import Select, literal, select
 from sqlalchemy.orm import Session
 
+from app.core.clock import Clock
 from app.core.errors import AppError, NotFoundError
 from app.core.pagination import Page, PageParams, paginate
 from app.core.storage import Storage, StorageError
@@ -27,6 +29,8 @@ from app.schemas.leaves import (
     LeaveListQuery,
     LeaveOut,
     LeaveStudentOut,
+    ParentLeaveAttachmentOut,
+    ParentLeaveOut,
 )
 
 logger = logging.getLogger(__name__)
@@ -158,3 +162,59 @@ def get_attachment_url(
             "storage_unavailable", "檔案儲存服務暫時無法使用，請稍後再試", status=502
         ) from exc
     return AttachmentUrlOut(url=url, expires_in=ATTACHMENT_URL_SECONDS)
+
+
+def _signed_url_or_none(storage: Storage, attachment: StudentLeaveAttachment) -> str | None:
+    """列表不因單一附件簽名失敗而 500：失敗回 None 並記 warning。"""
+    try:
+        return storage.create_signed_url(
+            "leave-attachments", attachment.storage_path, ATTACHMENT_URL_SECONDS
+        )
+    except StorageError:
+        logger.warning("請假附件簽名失敗 attachment_id=%s", attachment.id)
+        return None
+
+
+def list_child_leaves(
+    session: Session, student_id: UUID, page: PageParams, *, storage: Storage, clock: Clock
+) -> Page[ParentLeaveOut]:
+    """該學生的請假（含已取消），start_date desc、created_at desc；不回傳員工姓名。
+
+    can_cancel = active 且仍有今天或之後的日子（BACKEND-346 取消剩餘日子）。移植 ivy
+    ``api/parent_portal/leaves.py::list_leaves``。
+    """
+    today = clock.today()
+    stmt = (
+        select(StudentLeave)
+        .where(StudentLeave.student_id == student_id)
+        .order_by(StudentLeave.start_date.desc(), StudentLeave.created_at.desc(), StudentLeave.id)
+    )
+    leaves, total = paginate(session, stmt, page)
+    items = [
+        ParentLeaveOut(
+            id=leave.id,
+            student_id=leave.student_id,
+            leave_type=leave.leave_type,
+            leave_type_label=LEAVE_TYPE_LABELS[leave.leave_type],
+            start_date=leave.start_date,
+            end_date=leave.end_date,
+            reason=leave.reason,
+            status=leave.status,
+            created_by_type=leave.created_by_type,
+            created_at=leave.created_at,
+            cancelled_at=leave.cancelled_at,
+            can_cancel=leave.status == "active" and leave.end_date >= today,
+            attachments=[
+                ParentLeaveAttachmentOut(
+                    id=a.id,
+                    mime_type=a.mime_type,
+                    size_bytes=a.size_bytes,
+                    created_at=a.created_at,
+                    url=_signed_url_or_none(storage, a),
+                )
+                for a in leave.attachments
+            ],
+        )
+        for leave in leaves
+    ]
+    return Page(items=items, total=total)
