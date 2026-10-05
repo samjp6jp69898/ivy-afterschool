@@ -4,6 +4,11 @@
   失敗時 DB 無寫入（失敗計數在記憶體），不需 commit。回應 body 不含任何 token。
 - ``staff_auth_out``：login / refresh / change-password 共用的回應組裝（permissions 先排序，
   ``StaffMeOut`` 不自行排序）。
+
+BACKEND-044：``POST /refresh``：從 ``staff_refresh`` cookie（path 限 ``/api/admin/auth``）取 raw →
+``StaffAuthService.refresh`` → commit → 替換兩個 cookie → ``StaffAuthOut``。不需 access token、無
+request body。401 時回錯誤 envelope 並清除員工 cookie（family 撤銷已由 service 在 raise 前
+commit，這裡不再 commit）；409 ``refresh_in_progress`` 不清 cookie（併發重打即可）。
 """
 
 from __future__ import annotations
@@ -11,12 +16,14 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentStaff, get_current_staff
 from app.core.clock import Clock, get_clock
 from app.core.config import Settings, get_settings
 from app.core.db import get_db
+from app.core.errors import UnauthenticatedError, error_response
 from app.core.request_meta import RequestMeta, get_request_meta
 from app.core.security.cookies import (
     STAFF_REFRESH,
@@ -64,6 +71,35 @@ def login(
         throttles=throttles,
         clock=clock,
     )
+    out = staff_auth_out(result)
+    db.commit()
+    set_auth_cookies(
+        response,
+        subject_type="staff",
+        access_token=result.access_token,
+        refresh_token=result.refresh_token,
+        settings=settings,
+    )
+    return out
+
+
+@router.post("/refresh", response_model=StaffAuthOut)
+def refresh(
+    request: Request,
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+    clock: Annotated[Clock, Depends(get_clock)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> StaffAuthOut | JSONResponse:
+    try:
+        result = staff_auth.refresh(
+            db, raw_refresh=read_cookie(request, STAFF_REFRESH.name), clock=clock
+        )
+    except UnauthenticatedError as exc:
+        # exception handler 會另建回應，附在 ``response`` 上的 Set-Cookie 不會帶出去，這裡自組
+        error = error_response(exc)
+        clear_auth_cookies(error, subject_type="staff", settings=settings)
+        return error
     out = staff_auth_out(result)
     db.commit()
     set_auth_cookies(
