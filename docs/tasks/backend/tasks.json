@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 279,
-  "last_updated": "2026-10-05T03:02:30Z",
+  "version": 280,
+  "last_updated": "2026-10-05T03:03:00Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10493,8 +10493,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/jobs/pickup_jobs.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-401",
         "BACKEND-404",
@@ -10531,8 +10531,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-401",
         "BACKEND-403",
@@ -10570,8 +10570,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": "BE:api/dismissal_calls.py::list_dismissal_calls",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-404",
         "BACKEND-402"
@@ -10605,8 +10605,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": "BE:services/dismissal_pos.py::get_pos_status",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-404",
         "BACKEND-402",
@@ -10644,8 +10644,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/requests.py",
       "source_ref": "BE:api/parent_portal/dismissal_calls.py::list_dismissal_notices",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-404",
         "BACKEND-179"
@@ -12148,8 +12148,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-454",
         "BACKEND-100",
@@ -12217,8 +12217,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-454"
       ],
@@ -12250,8 +12250,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-454",
         "BACKEND-100"
@@ -12286,8 +12286,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-452",
         "BACKEND-454"
@@ -12399,8 +12399,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-454",
         "BACKEND-102"
@@ -12433,8 +12433,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/exam_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8c",
       "depends_on": [
         "BACKEND-454",
         "BACKEND-452"
