@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 337,
-  "last_updated": "2026-10-05T05:33:13Z",
+  "version": 338,
+  "last_updated": "2026-10-05T05:33:38Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -8402,8 +8402,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/attendance.py",
       "source_ref": "BE:api/parent_portal/attendance.py::get_monthly_attendance",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-314",
         "BACKEND-180",
@@ -14217,8 +14217,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/children.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r8b",
       "depends_on": [
         "BACKEND-525",
         "BACKEND-180",
