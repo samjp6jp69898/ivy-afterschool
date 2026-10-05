@@ -12,6 +12,7 @@ from collections.abc import Callable, Iterator, Sequence
 from datetime import date
 from uuid import uuid4
 
+import openpyxl.xml
 import pytest
 from openpyxl import Workbook
 from sqlalchemy import func, select
@@ -449,6 +450,39 @@ def _long_text(d: bytes) -> bytes:
     return d.replace(b"</sheetData>", cell + b"</t></is></c></row></sheetData>", 1)
 
 
+_WIDE_ROW = b"<c/>" * 2000
+
+
+def _no_decl(d: bytes) -> bytes:
+    return re.sub(rb"^<\?xml[^>]*\?>", b"", d)
+
+
+def _leading_ws(d: bytes) -> bytes:
+    """無 XML 宣告 + 200 個前置空白：不能靠「開頭是否為 <」判斷是不是 XML。"""
+    return b" " * 200 + _no_decl(d.replace(b"</row>", _WIDE_ROW + b"</row>", 1))
+
+
+def _bom_ws(d: bytes) -> bytes:
+    return b"\xef\xbb\xbf" + b"\n" * 100 + _no_decl(d.replace(b"</row>", _WIDE_ROW + b"</row>", 1))
+
+
+def _utf16_sheet(d: bytes) -> bytes:
+    x = d.replace(b"</row>", _WIDE_ROW + b"</row>", 1).decode("utf-8")
+    x = re.sub(r"^<\?xml[^>]*\?>", '<?xml version="1.0" encoding="UTF-16"?>', x)
+    return x.encode("utf-16")  # 含 BOM
+
+
+def _utf16_nobom(d: bytes) -> bytes:
+    x = d.replace(b"</row>", _WIDE_ROW + b"</row>", 1).decode("utf-8")
+    x = re.sub(r"^<\?xml[^>]*\?>", '<?xml version="1.0" encoding="UTF-16"?>', x)
+    return x.encode("utf-16-le")
+
+
+def _utf32_sheet(d: bytes) -> bytes:
+    x = re.sub(r"^<\?xml[^>]*\?>", '<?xml version="1.0" encoding="UTF-32"?>', d.decode("utf-8"))
+    return x.encode("utf-32")
+
+
 def _styles_bomb(parts: dict[str, bytes]) -> dict[str, bytes]:
     parts["xl/styles.xml"] = re.sub(
         rb'<cellXfs count="\d+">',
@@ -469,6 +503,35 @@ def _sst_many(parts: dict[str, bytes]) -> dict[str, bytes]:
         + b"</sst>"
     )
     return _with_sst(parts, sst)
+
+
+def _cap_styles(parts: dict[str, bytes]) -> dict[str, bytes]:
+    """styles.xml 逼近舊的單 part 上限（25 萬）：合法檔只有數百個元素，必須被共用總額擋下。"""
+    parts["xl/styles.xml"] = re.sub(
+        rb'<cellXfs count="\d+">',
+        b'<cellXfs count="1">'
+        + b'<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' * 249_000,
+        parts["xl/styles.xml"],
+        count=1,
+    )
+    return parts
+
+
+def _cap_sst(parts: dict[str, bytes]) -> dict[str, bytes]:
+    sst = (
+        b'<?xml version="1.0"?>'
+        b'<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        + b"<si><t>a</t></si>" * 124_000
+        + b"</sst>"
+    )
+    return _with_sst(parts, sst)
+
+
+def _combined_max(parts: dict[str, bytes]) -> dict[str, bytes]:
+    """sheet / styles / sharedStrings 各自低於舊的單 part 上限，合計卻遠超合法檔：共用總額要擋。"""
+    parts[_SHEET1] = parts[_SHEET1].replace(b"</sheetData>", b"</sheetData>" + b"<a/>" * 90_000, 1)
+    parts = _cap_styles(parts)
+    return _cap_sst(parts)
 
 
 def _path_bypass(parts: dict[str, bytes]) -> dict[str, bytes]:
@@ -565,6 +628,11 @@ _SHEET_ATTACKS: dict[str, Callable[[bytes], bytes]] = {
     "deep": _deep,
     "long_attr": _long_attr,
     "long_text": _long_text,
+    "leading_ws": _leading_ws,
+    "bom_ws": _bom_ws,
+    "utf16_sheet": _utf16_sheet,
+    "utf16_nobom": _utf16_nobom,
+    "utf32": _utf32_sheet,
 }
 _PARTS_ATTACKS: dict[str, Callable[[dict[str, bytes]], dict[str, bytes]]] = {
     "styles_bomb": _styles_bomb,
@@ -572,6 +640,9 @@ _PARTS_ATTACKS: dict[str, Callable[[dict[str, bytes]], dict[str, bytes]]] = {
     "path_bypass": _path_bypass,
     "many_entries": _many_entries,
     "big_other_part": _big_other_part,
+    "cap_styles": _cap_styles,
+    "cap_sst": _cap_sst,
+    "combined_max": _combined_max,
 }
 _ZIP_ATTACKS: dict[str, Callable[[ValidatedUpload], ValidatedUpload]] = {
     "lying_size": _lying_uncompressed_size,
@@ -612,6 +683,40 @@ def test_import_preview_rejects_before_openpyxl(
     assert exc.value.code == "import_invalid_file"
     assert forbid_openpyxl == []
     assert peak < 50 * 1024 * 1024, f"{name}: 掃描階段峰值 {peak / 1e6:.0f} MB"
+
+
+def test_import_preview_openpyxl_parser_is_builtin_expat() -> None:
+    """掃描器與 openpyxl 用同一個內建 expat 判斷「是不是 XML」；日後若安裝 lxml，接受範圍不同，
+    需重新評估。"""
+    assert openpyxl.xml.LXML is False
+
+
+def test_import_preview_worst_case_legit_file_within_budget(
+    db_session: Session, lookups: dict[str, object]
+) -> None:
+    """逼近業務上限的合法檔（500 列、13 欄、全部字串走 sharedStrings、每格都有樣式）仍被接受，
+    且整個 preview 的 tracemalloc 峰值 < 100 MB。"""
+    rows = [
+        _row(
+            student_no=f"S{n:06d}",
+            name=f"學生{n}",
+            school_class=f"二年{n % 9 + 1}班",
+            note=f"備註 {n} " + "x" * 200,
+        )
+        for n in range(MAX_IMPORT_ROWS)
+    ]
+    upload = _xlsx(rows, header=IMPORT_COLUMNS)
+    assert len(_parts(upload)) <= 12
+
+    tracemalloc.start()
+    try:
+        result = _preview(db_session, upload)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert (result.total, result.valid) == (MAX_IMPORT_ROWS, MAX_IMPORT_ROWS)
+    assert peak < 100 * 1024 * 1024, f"preview 峰值 {peak / 1e6:.0f} MB"
 
 
 def test_import_preview_rejects_too_many_rows_before_openpyxl(
