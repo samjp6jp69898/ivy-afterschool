@@ -205,6 +205,32 @@ describe('adminWs store', () => {
     expect(handler).toHaveBeenCalledTimes(2)
   })
 
+  it('adminWs store wildcard handler receives every event across restarts', () => {
+    const store = useAdminWsStore()
+    const all = vi.fn()
+    const typed = vi.fn()
+    const offAll = store.on('*', all)
+    store.on('homework.progress_updated', typed)
+    store.start()
+    lastSocket().serverOpen()
+
+    lastSocket().serverMessage({ type: 'pickup.request_updated', data: { id: 'p1' }, sent_at: '2026-10-02T08:00:00Z' })
+    lastSocket().serverMessage({ type: 'homework.progress_updated', data: { student_id: 's1' }, sent_at: '2026-10-02T08:00:01Z' })
+    expect(all.mock.calls.map((c) => c[0])).toEqual([{ id: 'p1' }, { student_id: 's1' }])
+    expect(typed).toHaveBeenCalledTimes(1)
+
+    store.stop()
+    store.start()
+    lastSocket().serverOpen()
+    lastSocket().serverMessage({ type: 'notification.created', data: { id: 'n1' }, sent_at: '2026-10-02T08:01:00Z' })
+    expect(all).toHaveBeenCalledTimes(3)
+    expect(all.mock.calls[2]?.[0]).toEqual({ id: 'n1' })
+
+    offAll()
+    lastSocket().serverMessage({ type: 'notification.created', data: { id: 'n2' }, sent_at: '2026-10-02T08:02:00Z' })
+    expect(all).toHaveBeenCalledTimes(3)
+  })
+
   it('adminWs store tracks denied and revoked topics', () => {
     const store = startOpen()
     store.subscribe('pickup')
