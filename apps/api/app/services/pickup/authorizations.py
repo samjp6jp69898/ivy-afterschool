@@ -4,6 +4,7 @@
 - BACKEND-420：``create_authorization``（家長建立單日代理授權，產生接送碼）。
 - BACKEND-424：``load_verifiable_authorization``（verify / confirm_visual_match / override 共用的
   鎖定與檢查）。
+- BACKEND-523：``regenerate_code``（家長重新產生接送碼：舊碼立即失效、重設連錯與鎖定、寫 audit）。
 
 列表只回 ``code_last4``，不回 ``code_hash``（單向 HMAC）；明碼只在建立時的回應出現一次，DB 與 log
 都不保存。``effective_status``：active 且 service_date 早於今天（台北）→ ``expired``，其餘同
@@ -16,16 +17,18 @@ from datetime import date, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentParent
 from app.core.clock import Clock
 from app.core.errors import AppError, ConflictError, NotFoundError
+from app.core.request_meta import RequestMeta
 from app.core.settings_registry import PICKUP_AUTHORIZATION
 from app.core.storage import Storage
 from app.models.account import StaffUser
 from app.models.pickup import PickupAuthorization, PickupPerson
+from app.models.students import Student
 from app.realtime.publish import broadcast_after_commit
 from app.repositories.students import get_student_or_404, student_brief_map
 from app.schemas.pickup import (
@@ -36,6 +39,8 @@ from app.schemas.pickup import (
     StaffAuthorizationListQuery,
     StaffAuthorizationOut,
 )
+from app.services.audit_service import Actor, record
+from app.services.parent_scope import get_parent_student_ids
 from app.services.pickup.codes import generate_pickup_code, hash_pickup_code, pickup_code_last4
 from app.services.pickup.persons import signed_photo_url
 from app.services.settings_service import get_setting
@@ -261,3 +266,79 @@ def load_verifiable_authorization(
     if auth.code_locked_at is not None and not allow_locked:
         raise ConflictError("pickup_code_locked", "接送碼錯誤次數過多已鎖定，請由老師確認後處理")
     return auth
+
+
+def regenerate_code(
+    session: Session,
+    auth_id: UUID,
+    *,
+    parent: CurrentParent,
+    meta: RequestMeta,
+    clock: Clock,
+) -> PickupAuthorizationCreatedOut:
+    """家長遺失接送碼時換新碼：舊碼立即失效，連錯次數與鎖定一併重設；新碼只在此回應出現一次。
+
+    先 FOR UPDATE 鎖授權列，與員工核銷序列化（已被核銷者在此得到 409）。他人小孩的授權與不存在
+    回同一個 404。移植 ivy ``api/parent_portal/pickup.py::regenerate_code``；去掉同批次多孩共碼與
+    可逆加密。
+    """
+    auth = session.execute(
+        select(PickupAuthorization)
+        .where(PickupAuthorization.id == auth_id)
+        .with_for_update(of=PickupAuthorization)
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if auth is None or auth.student_id not in get_parent_student_ids(session, parent.id):
+        raise NotFoundError("pickup_authorization_not_found", "找不到代理接送授權")
+    student_status = session.execute(
+        select(Student.status).where(Student.id == auth.student_id)
+    ).scalar_one()
+    if student_status == "withdrawn":
+        raise AppError("student_not_active", "此學生已退班，無法進行此操作", status=409)
+    if auth.status != "active":
+        raise ConflictError("authorization_not_active", "此代理接送授權已完成或已取消")
+    if auth.service_date < clock.today():
+        raise ConflictError("authorization_expired", "此代理接送授權已過期")
+
+    before = {
+        "code_last4": auth.code_last4,
+        "code_attempts": auth.code_attempts,
+        "locked": auth.code_locked_at is not None,
+    }
+    code = generate_pickup_code()
+    hit = session.execute(
+        update(PickupAuthorization)
+        .where(PickupAuthorization.id == auth_id, PickupAuthorization.status == "active")
+        .values(
+            code_hash=hash_pickup_code(code),
+            code_last4=pickup_code_last4(code),
+            code_attempts=0,
+            code_locked_at=None,
+        )
+        .returning(PickupAuthorization.id)
+    ).scalar_one_or_none()
+    if hit is None:
+        raise ConflictError("authorization_not_active", "此代理接送授權已完成或已取消")
+    # bulk update 不經 ORM：以 DB 現值刷新
+    session.refresh(auth)
+
+    # 稽核不含明碼與雜湊
+    record(
+        session,
+        actor=Actor.parent(parent),
+        action="pickup_authorization.regenerate_code",
+        entity_type="pickup_authorization",
+        entity_id=auth.id,
+        before=before,
+        after={"code_last4": auth.code_last4, "code_attempts": 0, "locked": False},
+        meta=meta,
+    )
+    out = PickupAuthorizationOut(**_base_fields(auth, clock.today()))
+    broadcast_after_commit(
+        session,
+        topic="pickup",
+        type="pickup.authorization_updated",
+        data=out.model_dump(),
+        clock=clock,
+    )
+    return PickupAuthorizationCreatedOut(authorization=out, code=code)
