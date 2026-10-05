@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 332,
-  "last_updated": "2026-10-05T04:34:44Z",
+  "version": 333,
+  "last_updated": "2026-10-05T05:31:49Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -9624,7 +9624,7 @@
     {
       "id": "BACKEND-382",
       "title": "實作 HomeworkService.set_ready_eta_and_note：設定預計可接送時間與說明（通知 homework.eta_updated）",
-      "description": "在 `apps/api/app/services/homework_service.py` 實作（domain_spec M6：ready_eta 被設定或變更時通知家長 `homework.eta_updated`）：\n```python\nUNSET: Final = object()\ndef set_ready_eta_and_note(session: Session, student_id: UUID, service_date: date, *, ready_eta: time | None | object = UNSET, note: str | None | object = UNSET, actor: CurrentStaff, clock: Clock) -> ProgressOut: ...\n```\n1. 學生存在（404）；service_date 範圍同 create_item；兩者皆 UNSET → ValueError（schema 已擋）。\n2. `lock_progress_row`。\n3. ready_eta 有給且與原值不同 → 更新 ready_eta、eta_updated_by=actor.id、eta_updated_at=now；給 None 代表清除（eta_updated_at 保留最後一次修改時間）。\n4. note 有給 → 更新。\n5. ready_eta 被設為新的非 null 值、overall_status != 'done'、且 service_date 為今天 → `enqueue(Event.HOMEWORK_ETA_UPDATED, payload={'student_id','student_name','ready_eta': 'HH:MM', 'note'(有值時)})`。只改 note 不通知；清除 ETA 不通知。\n6. ready_eta 有變動 → `sync_open_request_reply(session, student_id, service_date, clock=clock)`（BACKEND-413）。\n7. `broadcast_homework_snapshot`。\n\n**驗收標準**\n- 設定 / 變更 ETA → 家長收到 eta_updated（含 note）；同值重設不通知。\n- 只改 note 不通知；清除 ETA 不通知但同步接送回覆。\n- 作業已 done 時設定 ETA 不通知。\n- eta_updated_by / at 正確。",
+      "description": "在 `apps/api/app/services/homework_service.py` 實作（domain_spec M6：ready_eta 被設定或變更時通知家長 `homework.eta_updated`）：\n```python\nUNSET: Final = object()\ndef set_ready_eta_and_note(session: Session, student_id: UUID, service_date: date, *, ready_eta: time | None | object = UNSET, note: str | None | object = UNSET, actor: CurrentStaff, clock: Clock) -> ProgressOut: ...\n```\n1. 學生存在（404）；service_date 範圍同 create_item；兩者皆 UNSET → ValueError（schema 已擋）。\n2. `lock_progress_row`。\n3. ready_eta 有給且與原值不同 → 更新 ready_eta、eta_updated_by=actor.id、eta_updated_at=now；給 None 代表清除：ready_eta 設為 null，清除本身也算一次修改，eta_updated_by / eta_updated_at 同樣更新為本次操作（不清成 null，記錄最後一次修改的人與時間）。\n4. note 有給 → 更新。\n5. ready_eta 被設為新的非 null 值、overall_status != 'done'、且 service_date 為今天 → `enqueue(Event.HOMEWORK_ETA_UPDATED, payload={'student_id','student_name','ready_eta': 'HH:MM', 'note'(有值時)})`。只改 note 不通知；清除 ETA 不通知。\n6. ready_eta 有變動 → `sync_open_request_reply(session, student_id, service_date, clock=clock)`（BACKEND-413）。\n7. `broadcast_homework_snapshot`。\n\n**驗收標準**\n- 設定 / 變更 ETA → 家長收到 eta_updated（含 note）；同值重設不通知。\n- 只改 note 不通知；清除 ETA 不通知但同步接送回覆。\n- 作業已 done 時設定 ETA 不通知。\n- eta_updated_by / at 正確。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
