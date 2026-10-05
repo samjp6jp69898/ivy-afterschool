@@ -1,9 +1,12 @@
-"""BACKEND-155：app/services/student_import_service.py（preview：解析 Excel、逐列驗證、不寫入）。"""
+"""BACKEND-155：app/services/student_import_service.py（preview：解析 Excel、逐列驗證、不寫入；
+不受信任 xlsx 的格數 / 解壓防護在交給 openpyxl 之前生效）。"""
 
 from __future__ import annotations
 
 import io
-from collections.abc import Iterator, Sequence
+import re
+import zipfile
+from collections.abc import Callable, Iterator, Sequence
 from datetime import date
 from uuid import uuid4
 
@@ -19,6 +22,7 @@ from app.core.errors import AppError
 from app.core.uploads import ValidatedUpload
 from app.models.students import Student
 from app.schemas.students import StudentCreateIn
+from app.services import student_import_service
 from app.services.student_import_service import (
     IMPORT_COLUMNS,
     MAX_IMPORT_ROWS,
@@ -325,3 +329,122 @@ def test_import_preview_no_writes(db_session: Session, lookups: dict[str, object
     assert result.valid == 2
     assert not db_session.new
     assert db_session.execute(select(func.count()).select_from(Student)).scalar_one() == before
+
+
+# --- 不受信任 xlsx 的防護（review-r8-b 打回補強）---------------------------------------------
+
+
+def _rewrite_sheet(upload: ValidatedUpload, fn: Callable[[bytes], bytes]) -> ValidatedUpload:
+    """改寫 xlsx 內第一個工作表的 XML 後重新打包（高壓縮比，模擬小檔案解壓成大量儲存格）。"""
+    src = zipfile.ZipFile(io.BytesIO(upload.content))
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as dst:
+        for info in src.infolist():
+            data = src.read(info)
+            if info.filename == "xl/worksheets/sheet1.xml":
+                data = fn(data)
+            dst.writestr(info.filename, data)
+    content = out.getvalue()
+    return ValidatedUpload(
+        content=content, mime_type=upload.mime_type, ext="xlsx", size=len(content)
+    )
+
+
+@pytest.fixture
+def forbid_openpyxl(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """被拒絕的檔案不得進 openpyxl：load_workbook 被呼叫就記錄下來讓測試失敗。"""
+    calls: list[str] = []
+
+    def record(*args: object, **kwargs: object) -> None:
+        calls.append("load_workbook")
+        raise AssertionError("惡意檔案不應交給 openpyxl 解析")
+
+    monkeypatch.setattr(student_import_service, "load_workbook", record)
+    return calls
+
+
+def _wide_row_whitespace(data: bytes) -> bytes:
+    # 標題列尾端塞大量以換行 / tab 分隔的空儲存格：位元組字面量 b"<c " / b"<c/>" 都數不到
+    return data.replace(b"</row>", (b"<c\n/>" * 2000 + b'<c\tr="ZZ1"/>' * 100) + b"</row>", 1)
+
+
+def _wide_row_ns_prefix(data: bytes) -> bytes:
+    data = data.replace(
+        b'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"',
+        b'<x:worksheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"',
+    )
+    data = re.sub(
+        rb"<(/?)(sheetPr|outlinePr|pageSetUpPr|dimension|sheetViews|sheetView|selection|"
+        rb"sheetFormatPr|sheetData|row|c|v|is|t|pageMargins|worksheet)\b",
+        rb"<\1x:\2",
+        data,
+    )
+    return data.replace(b"</x:row>", b"<x:c/>" * 2000 + b"</x:row>", 1)
+
+
+def _lying_uncompressed_size(content: bytes) -> bytes:
+    """把 sheet1.xml 在 local header 與 central directory 宣告的解壓大小改小（CRC / 大小不符）。"""
+    c = bytearray(content)
+    name = b"xl/worksheets/sheet1.xml"
+    for sig, size_off, nlen_off, fname_off in (
+        (b"PK\x01\x02", 24, 28, 46),
+        (b"PK\x03\x04", 22, 26, 30),
+    ):
+        i = 0
+        while (i := c.find(sig, i)) >= 0:
+            nlen = int.from_bytes(c[i + nlen_off : i + nlen_off + 2], "little")
+            if bytes(c[i + fname_off : i + fname_off + nlen]) == name:
+                c[i + size_off : i + size_off + 4] = (1000).to_bytes(4, "little")
+            i += 4
+    return bytes(c)
+
+
+@pytest.mark.parametrize("mutate", [_wide_row_whitespace, _wide_row_ns_prefix])
+def test_import_preview_rejects_wide_row_before_openpyxl(
+    db_session: Session, forbid_openpyxl: list[str], mutate: Callable[[bytes], bytes]
+) -> None:
+    upload = _rewrite_sheet(_xlsx([_row()], header=IMPORT_COLUMNS), mutate)
+    assert upload.size < 20 * 1024  # 小檔案、解壓後大量儲存格
+
+    with pytest.raises(AppError) as exc:
+        _preview(db_session, upload)
+
+    assert (exc.value.status, exc.value.code) == (422, "import_invalid_file")
+    assert forbid_openpyxl == []
+
+
+def test_import_preview_rejects_too_many_rows_before_openpyxl(
+    db_session: Session, forbid_openpyxl: list[str]
+) -> None:
+    def many_rows(data: bytes) -> bytes:
+        rows = b"".join(b'<row r="%d"><c/></row>' % (n + 3) for n in range(MAX_IMPORT_ROWS + 20))
+        return data.replace(b"</sheetData>", rows + b"</sheetData>", 1)
+
+    upload = _rewrite_sheet(_xlsx([_row()], header=IMPORT_COLUMNS), many_rows)
+
+    with pytest.raises(AppError) as exc:
+        _preview(db_session, upload)
+
+    assert (exc.value.status, exc.value.code) == (422, "import_too_many_rows")
+    assert forbid_openpyxl == []
+
+
+def test_import_preview_rejects_corrupt_zip(
+    db_session: Session, forbid_openpyxl: list[str]
+) -> None:
+    good = _xlsx([_row()], header=IMPORT_COLUMNS)
+    lying = ValidatedUpload(
+        content=_lying_uncompressed_size(good.content),
+        mime_type=good.mime_type,
+        ext="xlsx",
+        size=good.size,
+    )
+    truncated = ValidatedUpload(
+        content=good.content[: len(good.content) // 2], mime_type=good.mime_type, ext="xlsx", size=1
+    )
+
+    for upload in (lying, truncated):
+        with pytest.raises(AppError) as exc:
+            _preview(db_session, upload)
+        assert (exc.value.status, exc.value.code) == (422, "import_invalid_file")
+    assert forbid_openpyxl == []
