@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 296,
-  "last_updated": "2026-10-05T03:13:05Z",
+  "version": 297,
+  "last_updated": "2026-10-05T03:27:00Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -6137,7 +6137,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/guardians.py",
       "source_ref": "BE:api/guardians_admin.py::create_binding_code",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-054",
@@ -6163,9 +6163,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 6 條全綠、collect-only 全選到；9f68b0e 先於 85feb45。red_cases 的修改（expires_at 以解析後datetime 比較、補 CODE_ALPHABET / hash / 稽核不含明碼 / 舊碼作廢 / student_archived / 404 碼）皆為加嚴，合理。require_permission(GUARDIANS_WRITE)、route audit 綠、201、DB 只存 hash。lint / typecheck 乾淨；整合測試以 app_backend 連線。殘留（不擋）：security middleware 已對所有 /api/ 加 Cache-Control: no-store，拿掉 handler 內的 header 測試仍綠（行為正確，但該斷言驗不到 handler 這一行）。"
       }
     },
     {
@@ -7017,7 +7017,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/notifications.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-212",
@@ -7042,9 +7042,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 6 條全綠（5 條 red_case + guard_registered），collect-only 對照全選到；50b190e（測試）先於 3b5fdcd（實作）。只需登入、強制改密碼 403、他人通知 / 同 id 的 parent 通知 / 不存在皆 404 且 body 相同、冪等；/api/admin/notifications 在 route audit 白名單內，route audit 綠。lint / typecheck 乾淨；整合測試以 app_backend 連線。"
       }
     },
     {
@@ -7054,7 +7054,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/notifications.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-213",
@@ -7079,9 +7079,9 @@
         "notes": "無 body，422 不適用。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 全選到；50b190e 先於 3b5fdcd。read-all 註冊在 /{id}/read 之前，updated 正確、再按為 0、不影響他人與同 id 的 parent 通知、外站 Origin 403 且未讀數不變。lint / typecheck 乾淨；整合測試以 app_backend 連線。"
       }
     },
     {
@@ -7129,7 +7129,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/notifications.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-212",
@@ -7154,9 +7154,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 全選到；2644857 先於 4c87f4b。IDOR：他人通知與 uuid4() 的 404 body 相同且不含標題、同 id 的 staff 通知也 404、B 的 read_at 不變；staff cookie 401。突變：recipient 類型改 staff → 2 條轉紅。lint / typecheck 乾淨；整合測試以 app_backend 連線。"
       }
     },
     {
@@ -7234,7 +7234,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/notifications.py",
       "source_ref": "BE:api/parent_portal/notifications.py::get_preferences",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-219",
@@ -7259,9 +7259,9 @@
         "notes": "GET 無輸入，422 不適用；家長端無權限碼，403 以隔離案例取代。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 5 條全綠、collect-only 全選到；2644857 先於 4c87f4b。7 項依 Event 順序、label 對照 EVENTS、家長 A / B 設定隔離、staff cookie 401。lint / typecheck 乾淨；整合測試以 app_backend 連線。"
       }
     },
     {
@@ -7426,7 +7426,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/ws/admin.py",
       "source_ref": "BE:api/dismissal_ws.py::admin_dismissal_ws",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-225",
@@ -7456,9 +7456,9 @@
         "notes": "測資以綁 db_engine 的真 commit session 建立、owner 連線逐筆刪除（只用 seed 系統角色）。「收不到」以哨兵驗證：先 publish 到不該收到的頻道，再 publish 哨兵到已訂閱的個人頻道，下一則收到的必須是哨兵。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r8-a",
+        "notes": "通過。tdd.run 6 條全綠、collect-only 全選到；1ca4666（測試）先於 3dc8c80 / 42b3ca0（實作）。規格修正合理：revoked_permissions 與改 role.permissions 走同一個 load_current_staff 有效權限計算，且符合 committing 測試不寫 seed 表；哨兵比逾時更確定（broadcaster 依排程 FIFO 送出，突變驗證可轉紅）；混合訂閱先 error 再 subscribed 符合 description。測資以 app_backend engine 建立（monkeypatch core_db.get_engine 指向 db_engine，conftest 已驗證角色），owner 只用於反序刪列；跑完前後 staff_users / parent_accounts / students / guardians 筆數不變。突變：拿掉權限判斷、重驗不取消訂閱、unsubscribe 無作用皆轉紅；重驗不重載員工時測試卡住（見殘留）。lint / typecheck 乾淨；整合測試以 app_backend 連線。殘留（不擋）：WS 測試的 receive_json 沒有逾時，實作退化時測試會無限等待而不是失敗（並留下 committed 測資，review 突變時已發生並已清除），建議以 timeout 包 receive。"
       }
     },
     {
@@ -7468,7 +7468,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/ws/parent.py",
       "source_ref": "BE:api/inbox_ws.py::employee_inbox_ws",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-backend-r8a",
       "depends_on": [
         "BACKEND-225",
@@ -7479,7 +7479,7 @@
         "BACKEND-023"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "同 BACKEND-226：測資需以 committing_db_session 建立。\nBACKEND-225 的 run_ws_loop 中 on_message 拋出的例外會以 ExceptionGroup（anyio task group）往外拋；要以 close code 回應業務錯誤須在 on_message 內自行 try / except（或用 except*）。run_ws_loop 不做 server 端 ping，閒置連線存活偵測交給 60 秒重驗；revalidate 由本 endpoint 提供（重新 load_current_*，token_version / 停用的實際檢查與測試在這裡）。握手驗證以 `await run_in_thread(ws_load_*, ws, clock=clock)` 取得身分，AppError 以 `close_code_for(exc)` 轉關閉碼。",
+      "risk_notes": "同 BACKEND-226：測資需以 committing_db_session 建立。\nBACKEND-225 的 run_ws_loop 中 on_message 拋出的例外會以 ExceptionGroup（anyio task group）往外拋；要以 close code 回應業務錯誤須在 on_message 內自行 try / except（或用 except*）。run_ws_loop 不做 server 端 ping，閒置連線存活偵測交給 60 秒重驗；revalidate 由本 endpoint 提供（重新 load_current_*，token_version / 停用的實際檢查與測試在這裡）。握手驗證以 `await run_in_thread(ws_load_*, ws, clock=clock)` 取得身分，AppError 以 `close_code_for(exc)` 轉關閉碼。\n【review-r8-a 打回 1】description 流程 4 與本 task risk_notes 要求重驗時的 token / 帳號狀態檢查「實際檢查與測試在這裡」，但沒有任何測試涵蓋家長 WS 重驗失敗 → 4401：把 revalidate 內重新 ws_load_parent 那行拿掉（只重算小孩清單），test_ws_endpoints.py 的 test_ws_parent_ 6 條仍全綠。後果是家長帳號被停用或 token_version 遞增（全裝置登出）後，既有連線仍持續收到小孩的接送 / 作業 / 出勤事件。要求補 red_case 與測試：REVALIDATE_SECONDS=0.1，連線後把該家長 status 設 'disabled'（或 token_version + 1）並 commit → 收到 WebSocketDisconnect 4401，且之後 student channel 的訊息不再送達。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/api/ws/test_ws_endpoints.py",
@@ -7498,9 +7498,9 @@
         "notes": "同 BACKEND-226 的測資與哨兵作法。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r8-a",
+        "notes": "打回。tdd.run 6 條全綠、collect-only 全選到、1ca4666 先於 3dc8c80，lint / typecheck 乾淨；ready / 只收自己小孩 （IDOR 哨兵）/ 不可自選頻道 / 封存後取消與新綁定加入 / 4401 / 4403 / 家長裁切版原樣轉送皆有測試。receives_attendance 改以 broadcast_after_commit 驗證合理（305 不在 depends_on，且 305 自身有 test_check_in_parent_ws_payload）。打回項見 risk_notes：重驗時的 token / 帳號狀態檢查沒有任何測試。殘留（不擋）：解除綁定以 guardian 封存驗證，未覆蓋 parent_account_id 清空的解除路徑（同一個 get_parent_student_ids 查詢，風險低）；receive_json 無逾時同 226。"
       }
     },
     {
