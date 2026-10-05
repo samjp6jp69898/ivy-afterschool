@@ -27,9 +27,10 @@ BACKEND-151 ``create_student``（移植 ivy ``api/students.py::create_student`` 
 BACKEND-153 ``archive_student``：封存（冪等）、刪除該生所有監護人的**未使用**綁定碼；封存後
 BACKEND-179 的家長可見範圍自動排除。不限制 status。
 
-BACKEND-154 ``upload_photo``：BACKEND-016 驗證 → ``build_object_path`` → upload（StorageError →
-502 ``storage_unavailable``）→ 更新 photo_path（flush 失敗刪掉剛上傳的物件）→ 舊檔以
-``run_after_commit`` 刪除（rollback 不刪、刪除失敗只記 log）→ 回傳短效 URL。
+BACKEND-154 ``upload_photo``：先 FOR UPDATE 鎖學生列（並發上傳序列化、重讀上鎖後的
+photo_path）→ BACKEND-016 驗證 → ``build_object_path`` → upload（StorageError → 502 ``storage_unavailable``）→ 更新
+photo_path（flush 失敗刪掉剛上傳的物件）→ 舊檔以 ``run_after_commit`` 刪除（rollback 不刪、刪除失敗
+只記 log）→ 回傳短效 URL。
 
 BACKEND-530 ``purge_student``（domain_spec M3 個資保存：對已封存且 withdrawn 的學生永久刪除 =
 匿名化）：學生 / 監護人 / 接送人 / 代理授權的個資欄位清除或改成固定文字、綁定碼與請假附件列刪除、
@@ -418,7 +419,9 @@ def _delete_quietly(storage: Storage, paths: Sequence[str], bucket: Bucket = PHO
 def upload_photo(
     session: Session, student_id: UUID, file: UploadFile, *, storage: Storage
 ) -> PhotoUploadOut:
-    student = get_student_or_404(session, student_id)  # 封存學生視同不存在
+    # 封存學生視同不存在；FOR UPDATE 鎖學生列後才讀 photo_path：並發上傳序列化，後到者會把前者的
+    # 物件當舊檔刪掉，不留孤兒
+    student = get_student_or_404(session, student_id, for_update=True)
     upload = read_validated_upload(file, allowed=IMAGE_TYPES, max_bytes=PHOTO_MAX_BYTES)
     path = build_object_path(student.id, upload.ext)
     try:
