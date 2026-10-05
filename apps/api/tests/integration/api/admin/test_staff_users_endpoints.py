@@ -2,7 +2,8 @@
 BACKEND-094：POST /api/admin/staff-users（staff:write；臨時密碼只回一次）。
 BACKEND-095：GET /api/admin/staff-users/{staff_id}（staff:read）。
 BACKEND-096 / 097 / 098：PATCH /{staff_id}、POST /{staff_id}/reset-password、
-POST /{staff_id}/deactivate（staff:write）。"""
+POST /{staff_id}/deactivate（staff:write）。
+BACKEND-528：GET /api/admin/staff-users/options（classes:write 或 staff:read）。"""
 
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.main import create_app
 from app.models.account import Role, StaffUser
 from app.models.audit import AuditLog
 from tests.support.factories import make_role, make_staff
@@ -530,3 +532,53 @@ def test_admin_staff_mutations_guard_registered(app: FastAPI) -> None:
     assert "patch" in paths[_URL + "/{staff_id}"]
     assert "post" in paths[_URL + "/{staff_id}/reset-password"]
     assert "post" in paths[_URL + "/{staff_id}/deactivate"]
+
+
+# --- BACKEND-528：GET /api/admin/staff-users/options ----------------------------------------------
+
+
+def test_admin_staff_options_success(staff_client: StaffClientFactory, db_session: Session) -> None:
+    active = make_staff(db_session, role_code="tutor", display_name="林老師")
+    inactive = make_staff(db_session, role_code="tutor", display_name="離職老師", is_active=False)
+    class_writer, _ = staff_client(permissions=["classes:write"])
+    reader, _ = staff_client(permissions=["staff:read"])
+
+    resp = class_writer.get(f"{_URL}/options")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert all(set(item) == {"id", "display_name"} for item in body)
+    ids = {item["id"] for item in body}
+    assert str(active.id) in ids
+    assert str(inactive.id) not in ids
+    assert {"id": str(active.id), "display_name": "林老師"} in body
+    assert reader.get(f"{_URL}/options").json() == body
+
+
+def test_admin_staff_options_route_order(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=["staff:read"])
+
+    assert client.get(f"{_URL}/options").status_code == 200
+    assert_error(client.get(f"{_URL}/abc"), 422, "validation_error")
+
+
+def test_admin_staff_options_401(api_client: TestClient, assert_error: AssertError) -> None:
+    assert_error(api_client.get(f"{_URL}/options"), 401, "unauthenticated")
+
+
+def test_admin_staff_options_403(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=["classes:read"])
+
+    resp = client.get(f"{_URL}/options")
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"]["required"] == ["classes:write", "staff:read"]
+
+
+def test_admin_staff_options_route_audit() -> None:
+    assert f"{_URL}/options" not in admin_routes_without_permission(create_app())
+    assert admin_routes_without_permission(create_app()) == []
