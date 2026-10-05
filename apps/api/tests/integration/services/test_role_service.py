@@ -6,11 +6,12 @@ BACKEND-079：update_role（admin 不可改、防提權、保留管理者、稽�
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentStaff
 from app.core.errors import AppError
+from app.core.locks import advisory_key
 from app.core.permissions import ALL_PERMISSIONS
 from app.core.request_meta import RequestMeta
 from app.models.account import Role, StaffUser
@@ -420,16 +421,133 @@ def test_update_role_last_manager(db_session: Session) -> None:
     db_session.flush()
     actor = _limited_actor(staff.id, "roles:write", "staff:write")
 
-    with pytest.raises(AppError) as exc:
+    # 每段包在 savepoint 內：失敗後回到原狀態，第二段不是建立在第一段殘留的 flush 上
+    with pytest.raises(AppError) as exc, db_session.begin_nested():
         update_role(
             db_session, mgr.id, RoleUpdateIn(permissions=["staff:write"]), actor=actor, meta=_META
         )
 
     assert (exc.value.status, exc.value.code) == (409, "last_role_manager")
     assert _update_logs(db_session) == []
-    # 保留 roles:write、拿掉 staff:write 同樣被擋
-    with pytest.raises(AppError) as exc2:
+    assert _role(db_session, "mgr").permissions == ["roles:write", "staff:write"]
+    # 原狀態下保留 roles:write、只拿掉 staff:write 同樣被擋
+    with pytest.raises(AppError) as exc2, db_session.begin_nested():
         update_role(
             db_session, mgr.id, RoleUpdateIn(permissions=["roles:write"]), actor=actor, meta=_META
         )
     assert exc2.value.code == "last_staff_manager"
+    assert _update_logs(db_session) == []
+
+
+def _simulate_committed_role_update(
+    db_session: Session, role: Role, permissions: list[str]
+) -> None:
+    """模擬另一交易已 commit 改掉角色權限：只改 DB 列，不同步 identity map（ORM 物件仍是舊值）。"""
+    db_session.execute(
+        update(Role)
+        .where(Role.id == role.id)
+        .values(permissions=permissions)
+        .execution_options(synchronize_session=False)
+    )
+
+
+def test_update_role_guard_reads_latest_values(db_session: Session) -> None:
+    """守衛取鎖後必須讀 DB 最新值：actor 的 session 已載入另一位管理者的角色（舊值），另一交易已把
+    該角色降權，本交易再降權最後一位 → 409，而不是看著 identity map 的舊值放行。"""
+    db_session.execute(update(StaffUser).values(is_active=False))
+    m1 = make_role(db_session, code="m1", permissions=["roles:write", "staff:write"])
+    m2 = make_role(db_session, code="m2", permissions=["roles:write", "staff:write"])
+    u1 = make_staff(db_session)
+    u1.role = m1
+    u2 = make_staff(db_session)
+    u2.role = m2
+    db_session.flush()
+    _simulate_committed_role_update(db_session, m2, ["staff:write"])
+    assert m2.permissions == ["roles:write", "staff:write"]  # identity map 仍是舊值
+    actor = _limited_actor(u2.id, "roles:write", "staff:write")
+
+    with pytest.raises(AppError) as exc:
+        update_role(
+            db_session, m1.id, RoleUpdateIn(permissions=["staff:write"]), actor=actor, meta=_META
+        )
+
+    assert (exc.value.status, exc.value.code) == (409, "last_role_manager")
+    assert _update_logs(db_session) == []
+    assert m2.permissions == ["staff:write"]  # 守衛查詢已把 identity map 更新為 DB 值
+
+
+def test_update_role_locked_row_reads_latest(db_session: Session) -> None:
+    """鎖列查詢必須讀最新值：要改的是 actor 自己的角色（已在 identity map），另一交易已 commit
+    拿掉 exams:publish；送出含 exams:publish 的清單要被視為「有變動」並寫回、寫稽核。"""
+    make_staff(db_session, role_code="admin")
+    role = make_role(
+        db_session, code="r_latest", permissions=["exams:publish", "roles:write", "staff:write"]
+    )
+    u = make_staff(db_session)
+    u.role = role
+    db_session.flush()
+    _simulate_committed_role_update(db_session, role, ["roles:write", "staff:write"])
+    actor = _limited_actor(u.id, "exams:publish", "roles:write", "staff:write")
+
+    out = update_role(
+        db_session,
+        role.id,
+        RoleUpdateIn(permissions=["exams:publish", "roles:write", "staff:write"]),
+        actor=actor,
+        meta=_META,
+    )
+
+    assert out.permissions == ["exams:publish", "roles:write", "staff:write"]
+    logs = _update_logs(db_session)
+    assert len(logs) == 1
+    assert logs[0].before == {"permissions": ["roles:write", "staff:write"]}
+    assert logs[0].after == {"permissions": ["exams:publish", "roles:write", "staff:write"]}
+    db_session.expire_all()
+    assert _role(db_session, "r_latest").permissions == [
+        "exams:publish",
+        "roles:write",
+        "staff:write",
+    ]
+
+
+def _holds_admin_retained_lock(db_session: Session) -> bool:
+    key = advisory_key("rbac:admin_retained", "global")
+    count = db_session.execute(
+        text(
+            "select count(*) from pg_locks where locktype = 'advisory' and granted "
+            "and pid = pg_backend_pid() and classid = :hi and objid = :lo"
+        ),
+        {"hi": key >> 32, "lo": key & 0xFFFFFFFF},
+    ).scalar_one()
+    return bool(count)
+
+
+def test_update_role_takes_admin_retained_lock(db_session: Session) -> None:
+    """權限有變動時本交易持有 rbac:admin_retained advisory lock（交易級，commit 前一直持有）；
+    只改 name / description 不取鎖。"""
+    admin = make_staff(db_session, role_code="admin")
+    role = make_role(db_session, code="lock_probe", permissions=["pickup:read"])
+    assert not _holds_admin_retained_lock(db_session)
+
+    update_role(
+        db_session, role.id, RoleUpdateIn(name="鎖探針"), actor=_actor(admin.id), meta=_META
+    )
+    assert not _holds_admin_retained_lock(db_session)
+    update_role(
+        db_session,
+        role.id,
+        RoleUpdateIn(permissions=["pickup:read"], description="同值權限"),
+        actor=_actor(admin.id),
+        meta=_META,
+    )
+    assert not _holds_admin_retained_lock(db_session)
+
+    update_role(
+        db_session,
+        role.id,
+        RoleUpdateIn(permissions=["pickup:read", "pickup:operate"]),
+        actor=_actor(admin.id),
+        meta=_META,
+    )
+
+    assert _holds_admin_retained_lock(db_session)
