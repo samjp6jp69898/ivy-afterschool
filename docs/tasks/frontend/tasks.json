@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 139,
-  "last_updated": "2026-10-07T08:46:48Z",
+  "version": 140,
+  "last_updated": "2026-10-07T08:48:16Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1014,7 +1014,7 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/useAdminWsTopic.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9a",
       "depends_on": [
         "FRONTEND-037"
@@ -1040,9 +1040,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r9-f",
-        "notes": "concern（打回）：4 條 red_case 對應 4 個測試，另有 connection status、resync 失敗不阻塞 2 條，tdd.run 6/6 全綠；commit aed4eaa / 3704af3（測試）→ a9c489e（實作）。引用計數（多元件共用 topic 只 subscribe 一次、最後一個卸載才 unsubscribe）、事件分派與卸載後不再回呼、denied 旗標都正確；突變「卸載時不 unsubscribe」→ shares subscription 轉紅。打回唯一原因：resync 併發策略「執行中再觸發就略過」可構造出畫面停在舊快照的反例（reviewer 以 fake timers 探針重現，未留檔）：resync 需 2000ms；t=0 斷線 → 輪詢立刻送出 R1（伺服器快照時間 t=0）；t=1000 重連成功 → onReconnect 的 resync 因 R1 仍在跑而被略過；t=2000 R1 完成後沒有任何補跑；之後 60 秒 status 仍 open、輪詢已在 onopen 時停止，resync 總次數停在 1。斷線期間（t=0~1000）發生、廣播已遺失的事件不在 R1 快照裡，畫面停在舊資料直到該列的下一個 ws 事件、下一次斷線或手動重新整理；R1 若在重連後才失敗（網路剛恢復時常見），則重連後連一次成功的補抓都沒有。既有 red_case 3 的 R1（500ms）在重連 open 前已完成，覆蓋不到這個交錯。修法與新 red_case 見 risk_notes。"
+        "notes": "pass（複審，只核對打回項）：規格 6bd0599 的 description / red_cases 為最終寫法（無歷史敘述），risk_notes 的打回紀錄原樣保留待協調者改寫；打回要求 (1) description 改為「記為待補、本輪結束後合併補跑一次、卸載後不補跑」(2) 新增「reruns resync once after overlapping triggers」「reruns resync after a rejected run」（另加「drops pending rerun after unmount」）(3) 既有 red_case 3 保留，三項都落實。commit a5287c1、4048470（測試）→ c902c36（實作：rerunPending 旗標，成功 / reject / 同步 throw 三條結束路徑共用 finishResync，onScopeDispose 清待補）。tdd.run 10/10 全綠，7 條 red_case 名稱逐條被 -t 選到（另 3 條額外測試）；lint 乾淨、vue-tsc exit 0。reviewer 以 fake timers 重現原反例已修好：resync 2000ms、t=0 斷線送出 R1、t=1000 重連 open 並 visibilitychange 再觸發、t=2000 R1 完成 → 恰補跑 1 次（總數 2）、60 秒後仍 2 且 status open；R1 在重連後才 reject → 仍補跑 1 次（總數 2）。新反例（皆通過，探針未留檔）：補跑 R2 期間再被觸發兩次 → 再合併成 1 次（總數 3），之後 60 秒不再補，無無限補跑；denied 旗標下斷線 / 重連仍各呼叫 resync 一次（resync 是頁面自己的 REST 重抓，與 ws topic 權限刻意不耦合，403 由頁面的 resync 自行處理；記錄為行為，不視為問題）；兩個元件共用同一 topic 時各自的 resyncing / rerunPending 獨立（慢的待補、快的立刻跑第二次，互不影響），subscribe 仍只送一次、最後一個卸載才 unsubscribe；補跑 R2 進行中卸載並再觸發 → R2 完成後不再有 R3，vi.getTimerCount() 為 0（補跑不建立計時器，輪詢計時器由 createWsClient 在 onopen 停止，不會殘留）；同步回傳 void 後同一 tick 再觸發 → 微任務後補跑 1 次；待補期間卸載、之後 R1 reject → 不補跑、console.error 1 次；斷線期間 resync（20s）慢於輪詢間隔（15s）且重連持續失敗 → 60 秒內 4 次、最大併發 1。突變（皆轉紅後還原、檔案與 HEAD 一致）：拿掉合併補跑（執行中只略過）→ overlapping / rejected / synchronous throw 三條紅；reject 不補跑 → rejected run 紅；同步 throw 不補跑 → synchronous throw 紅；卸載不清待補 → drops pending rerun 紅；補跑後不清待補 → overlapping triggers 紅（60 秒內持續補跑）。殘留（不打回）：若 resync 本身每次都同步再觸發輪詢並同步 throw，finishResync → runResync 會同步遞迴直到 stack overflow——理論上的病態情況，實際觸發源（輪詢計時器、重連 open、visibilitychange）都是非同步事件；denied 下仍 resync 屬刻意不耦合，頁面若想在 denied 時省略重抓可自行在 resync 內判斷。"
       }
     },
     {
