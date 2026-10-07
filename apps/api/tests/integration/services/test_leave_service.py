@@ -1,10 +1,11 @@
 """BACKEND-347 / 350 / 348 / 344 / 345 / 346 / 349：leave_service。
 
 後台請假列表、附件短效 URL、家長端小孩請假列表、請假建立 / 取消通知、建立請假、取消請假、
-家長上傳附件。
+家長上傳附件。BACKEND-357：家長端單筆請假組裝 ``parent_leave_out``（與列表共用）。
 """
 
 import io
+import logging
 import threading
 from collections.abc import Iterator
 from datetime import UTC, date, datetime
@@ -19,7 +20,7 @@ from starlette.datastructures import Headers, UploadFile
 from app.api.deps import CurrentParent
 from app.core.errors import AppError
 from app.core.pagination import PageParams
-from app.core.storage import StorageError
+from app.core.storage import Bucket, StorageError
 from app.models.attendance import StudentAttendance
 from app.models.audit import AuditLog
 from app.models.leaves import StudentLeave, StudentLeaveAttachment
@@ -33,6 +34,7 @@ from app.schemas.leaves import (
     LeaveListQuery,
     LeaveOut,
     ParentLeaveCreateIn,
+    ParentLeaveOut,
 )
 from app.services import leave_service
 from app.services.audit_service import Actor
@@ -1151,3 +1153,217 @@ def test_upload_leave_attachment_storage_error(db_session: Session, fresh_settin
 
     assert (exc.value.status, exc.value.code) == (502, "storage_unavailable")
     assert _attachment_count(db_session, leave.id) == 0
+
+
+# --- BACKEND-357 parent_leave_out（家長端單筆請假組裝；list_child_leaves 與取消 endpoint 共用）---
+
+
+class _SignFailsFor(FakeStorage):
+    """只有指定路徑的簽名失敗，其餘照常簽名。"""
+
+    def __init__(self, bad_paths: set[str]) -> None:
+        super().__init__()
+        self.bad_paths = bad_paths
+
+    def create_signed_url(self, bucket: Bucket, path: str, expires_in: int = 300) -> str:
+        if path in self.bad_paths:
+            raise StorageError("S3 generate_presigned_url 失敗")
+        return super().create_signed_url(bucket, path, expires_in)
+
+
+def _signed(path: str) -> str:
+    return f"https://storage.test/leave-attachments/{path}?exp=300"
+
+
+def test_parent_leave_out_fields(db_session: Session, fake_clock: FakeClock) -> None:
+    ming = make_student(db_session, name="王小明")
+    leave = make_leave(
+        db_session,
+        ming,
+        start_date=date(2026, 9, 1),
+        end_date=date(2026, 9, 3),
+        leave_type="personal",
+        reason="家裡有事",
+        created_by_type="parent",
+    )
+
+    out = leave_service.parent_leave_out(leave, storage=FakeStorage(), clock=fake_clock)
+
+    assert out == ParentLeaveOut(
+        id=leave.id,
+        student_id=ming.id,
+        leave_type="personal",
+        leave_type_label="事假",
+        start_date=date(2026, 9, 1),
+        end_date=date(2026, 9, 3),
+        reason="家裡有事",
+        status="active",
+        created_by_type="parent",
+        created_at=leave.created_at,
+        cancelled_at=None,
+        can_cancel=True,
+        attachments=[],
+    )
+    # 家長端不回傳員工姓名與取消者資訊
+    assert not {"created_by_name", "cancelled_by_name", "cancelled_by_type", "student"} & set(
+        out.model_dump()
+    )
+
+
+def test_parent_leave_out_attachment_urls(db_session: Session, fake_clock: FakeClock) -> None:
+    ming = make_student(db_session)
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 1))
+    jpg = make_leave_attachment(db_session, leave, ext="jpg")
+    pdf = make_leave_attachment(db_session, leave, ext="pdf")
+    db_session.expire_all()
+
+    out = leave_service.parent_leave_out(leave, storage=FakeStorage(), clock=fake_clock)
+
+    assert len(out.attachments) == 2
+    assert {a.id: (a.mime_type, a.size_bytes, a.url) for a in out.attachments} == {
+        jpg.id: ("image/jpeg", 1024, _signed(jpg.storage_path)),
+        pdf.id: ("application/pdf", 1024, _signed(pdf.storage_path)),
+    }
+    # 簽名 URL，不是 null 也不是空字串
+    assert all(a.url for a in out.attachments)
+    assert "storage_path" not in out.attachments[0].model_dump()
+
+
+def test_parent_leave_out_single_signing_failure(
+    db_session: Session, fake_clock: FakeClock, caplog: pytest.LogCaptureFixture
+) -> None:
+    ming = make_student(db_session)
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 1))
+    good = make_leave_attachment(db_session, leave, ext="jpg")
+    bad = make_leave_attachment(db_session, leave, ext="pdf")
+    db_session.expire_all()
+    storage = _SignFailsFor({bad.storage_path})
+
+    with caplog.at_level(logging.WARNING, logger="app.services.leave_service"):
+        out = leave_service.parent_leave_out(leave, storage=storage, clock=fake_clock)
+
+    # 單一附件簽名失敗：該附件 url 為 None，其餘附件與整體照常，不拋例外
+    assert {a.id: a.url for a in out.attachments} == {
+        good.id: _signed(good.storage_path),
+        bad.id: None,
+    }
+    assert (out.id, out.status, out.can_cancel) == (leave.id, "active", True)
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any(str(bad.id) in message for message in warnings)
+    assert not any(str(good.id) in message for message in warnings)
+    assert "generate_presigned_url" not in caplog.text  # 上游錯誤文字不進 log
+
+
+def test_parent_leave_out_can_cancel_boundaries(db_session: Session) -> None:
+    clock = FakeClock(datetime(2026, 9, 2, 2, 0, tzinfo=UTC))  # 台北 9/2 10:00
+    leaves = {
+        "ends_today": make_leave(
+            db_session,
+            make_student(db_session),
+            start_date=date(2026, 9, 1),
+            end_date=date(2026, 9, 2),
+        ),
+        "starts_today": make_leave(
+            db_session, make_student(db_session), start_date=date(2026, 9, 2)
+        ),
+        "future": make_leave(db_session, make_student(db_session), start_date=date(2026, 9, 10)),
+        "ended_yesterday": make_leave(
+            db_session, make_student(db_session), start_date=date(2026, 9, 1)
+        ),
+        "cancelled_future": make_leave(
+            db_session, make_student(db_session), start_date=date(2026, 9, 10), status="cancelled"
+        ),
+        "cancelled_ends_today": make_leave(
+            db_session,
+            make_student(db_session),
+            start_date=date(2026, 9, 1),
+            end_date=date(2026, 9, 2),
+            status="cancelled",
+        ),
+    }
+
+    got = {
+        name: leave_service.parent_leave_out(leave, storage=FakeStorage(), clock=clock).can_cancel
+        for name, leave in leaves.items()
+    }
+
+    assert got == {
+        "ends_today": True,  # 今天是最後一天仍可取消（取消今天）
+        "starts_today": True,
+        "future": True,
+        "ended_yesterday": False,
+        "cancelled_future": False,
+        "cancelled_ends_today": False,
+    }
+
+
+def test_parent_leave_out_can_cancel_flips_at_taipei_midnight(db_session: Session) -> None:
+    ming = make_student(db_session)
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 1))
+    clock = FakeClock(datetime(2026, 9, 1, 15, 30, tzinfo=UTC))  # 台北 9/1 23:30
+
+    before = leave_service.parent_leave_out(leave, storage=FakeStorage(), clock=clock)
+    clock.set(datetime(2026, 9, 1, 16, 30, tzinfo=UTC))  # 台北 9/2 00:30
+    after = leave_service.parent_leave_out(leave, storage=FakeStorage(), clock=clock)
+
+    assert (before.can_cancel, after.can_cancel) == (True, False)
+
+
+def test_parent_leave_out_matches_list_child_leaves(
+    db_session: Session, fake_clock: FakeClock
+) -> None:
+    """列表的每一筆就是單筆組裝的結果：兩邊不會各長各的。"""
+    storage = FakeStorage()
+    ming = make_student(db_session)
+    ended = make_leave(db_session, ming, start_date=date(2026, 8, 20), reason="感冒")
+    ongoing = make_leave(
+        db_session,
+        ming,
+        start_date=date(2026, 8, 31),
+        end_date=date(2026, 9, 2),
+        leave_type="other",
+    )
+    cancelled = make_leave(db_session, ming, start_date=date(2026, 9, 10), status="cancelled")
+    make_leave_attachment(db_session, ongoing, ext="jpg")
+    make_leave_attachment(db_session, ongoing, ext="pdf")
+    db_session.expire_all()
+
+    page = list_child_leaves(db_session, ming.id, _PAGE, storage=storage, clock=fake_clock)
+
+    assert [row.id for row in page.items] == [cancelled.id, ongoing.id, ended.id]
+    assert [len(row.attachments) for row in page.items] == [0, 2, 0]
+    leaves = {leave.id: leave for leave in (ended, ongoing, cancelled)}
+    for row in page.items:
+        single = leave_service.parent_leave_out(leaves[row.id], storage=storage, clock=fake_clock)
+        assert row == single
+
+
+def test_parent_leave_out_list_child_leaves_query_count(
+    db_session: Session, fake_clock: FakeClock
+) -> None:
+    """列表的 SQL 次數固定（count、請假、附件 selectin），不隨筆數與附件數增加。"""
+    ming = make_student(db_session)
+    for index in range(10):
+        leave = make_leave(db_session, ming, start_date=date(2026, 9, 1 + 2 * index))
+        make_leave_attachment(db_session, leave, ext="jpg")
+        make_leave_attachment(db_session, leave, ext="pdf")
+    student_id = ming.id
+    db_session.expire_all()
+    statements: list[str] = []
+
+    def record(_conn: object, _cur: object, statement: str, *_args: object) -> None:
+        statements.append(statement)
+
+    engine = db_session.get_bind()
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        page = list_child_leaves(
+            db_session, student_id, _PAGE, storage=FakeStorage(), clock=fake_clock
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+
+    assert page.total == 10
+    assert sum(len(row.attachments) for row in page.items) == 20
+    assert all(attachment.url for row in page.items for attachment in row.attachments)
+    assert len(statements) == 3
