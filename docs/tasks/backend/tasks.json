@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 407,
-  "last_updated": "2026-10-07T07:54:31Z",
+  "version": 408,
+  "last_updated": "2026-10-07T07:56:25Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -15092,6 +15092,113 @@
         "status": "pass",
         "reviewer": "review-r8-c",
         "notes": "通過。紅測 0646b1a（test_close_out_vs_authorization_complete_no_deadlock）先於修正 c474fa5；close_out 改為 授權列 → 請求列 → 請假 → 出勤，推播與稽核內容不變。突變（scratchpad 複本）：還原舊順序 → 新測試 40P01（locking tuple in pickup_authorizations）轉紅。red_case 2 依其文字沿用 529 既有斷言：test_close_out_pickup_requests / authorizations / attendance 各斷言 pickup.request_updated、pickup.authorization_updated、attendance.bulk_updated，keeps_history_and_audit / rollback_with_caller 斷言 student.close_out，529 原 6 條與新測試共 7 passed；test_student_service + services/pickup 共 144 passed（pickup 不退化）。並發測試兩條連線各 set local lock_timeout = '15s'、Event.wait 與 join 皆有 timeout，不會掛住共用 DB；跑前跑後與突變失敗路徑之後，owner 查人員、自訂 roles、出勤、通知、接送、請假等表皆 0 列（無殘列）。lint / typecheck 乾淨。529 description 寫明的全專案鎖序約定（作業進度列 → 接送請求列；代理授權列 → 接送請求列 → 出勤列；請假列 → 出勤列）與 review-r8-c 先前盤點一致。殘留：新測試以 make_staff(committing_db_session) 建員工，會連帶建立自訂 test_* 角色並 commit（kickoff 規定 committing 測試不得往 roles 寫列，應改 role_code='tutor'）；目前已登記 owner 清理、正常與失敗路徑實測都無殘列，但測試被中斷時會留下角色列。"
+      }
+    },
+    {
+      "id": "BACKEND-549",
+      "title": "補 GuardianService 170 / 171 / 172 的並發回歸測試（學生列鎖與 FOR UPDATE 重讀，拿掉任一道鎖要轉紅）",
+      "description": "補強 BACKEND-170 `update_guardian`、171 `archive_guardian`、172 `unbind_guardian` 的測試，實作不變。\n\n三個寫入方法共用 `guardian_service._lock_guardian_for_write`：先對學生列取 FOR UPDATE（`get_student_or_404(for_update=True)`）序列化同一學生的監護人異動，再以 `FOR UPDATE of Guardian` + `populate_existing` 重讀本列並判斷是否已封存。`apps/api/tests/integration/services/test_guardian_service.py` 目前只有單 session 測試，拿掉任一道鎖測試都不會轉紅。若寫測試時證明鎖有缺口，先依 README「實作中發現規格有錯」處理並回報，不要默默改實作。\n\n**測試寫法**（kickoff 實作慣例「鎖」一節）：兩條 `app_backend` 連線 + threading 阻塞模式；一條連線持鎖時另一條在 thread 呼叫 service，斷言「放鎖前未完成、放鎖後完成且結果正確」；每條連線 `SET LOCAL lock_timeout`，join / wait 都帶 timeout；驗 `populate_existing` 時後到的 session 要事先載入並持有該 Guardian 的 ORM 參照（identity map 弱參照驗不到）。committing 測資只用 seed 角色（`make_staff(role_code=\"tutor\")`）與 owner 清理 fixture（排在 `committing_db_session` 之前、設 `lock_timeout`），不得往 seed 表寫列；跑完以 owner 唯讀查 students、staff_users、非系統 roles 無殘列。\n\n**驗收標準**：每一條對應下列 red_case；每道鎖都要有突變證明（拿掉該鎖，對應測試轉紅），突變結果記在回報。",
+      "granularity_unit": "test",
+      "target_path": "apps/api/app/services/guardian_service.py",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9e",
+      "depends_on": [
+        "BACKEND-170",
+        "BACKEND-171",
+        "BACKEND-172"
+      ],
+      "suggested_model": "fable-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/services/test_guardian_service.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_guardian_concurrent_write_methods_block_on_student_row_lock：外部連線對該學生列 SELECT ... FOR UPDATE 持鎖，另一條連線在 thread 分別呼叫 update_guardian / archive_guardian / unbind_guardian（三個方法各一個案例）→ 放鎖前 thread 未完成，放鎖後完成且結果正確；拿掉 _lock_guardian_for_write 的學生列鎖 → 轉紅",
+          "test_guardian_concurrent_primary_switch_ends_with_single_primary：同一學生 G1（primary）與 G2，兩個 session 同時 update_guardian(G2, is_primary=True) 與 update_guardian(G1, is_primary=True) → 兩者先後序列化都成功，最後恰一位 is_primary 為 True，沒有 uq_guardians_one_primary 造成的 409 conflict；拿掉學生列鎖 → 轉紅",
+          "test_guardian_concurrent_update_after_archive_returns_404：A 的 archive_guardian(G) 取得鎖後暫停（未 commit），B（事先載入並持有 G 的 ORM 參照，顯示未封存）呼叫 update_guardian(G, is_primary=True) 被阻塞；A commit 後 B 完成 → 404 guardian_not_found，DB 中 G 仍 is_primary=False 且 archived_at 為 A 寫入的值；拿掉 FOR UPDATE 重讀的 populate_existing → 轉紅",
+          "test_guardian_concurrent_unbind_only_one_succeeds：已綁定的 G，兩個 session 同時 unbind_guardian(G) → 恰一個成功、另一個 409 guardian_not_bound；audit_logs 中該監護人的 guardian.unbind 恰 1 筆；拿掉鎖 → 轉紅（兩邊都成功、audit 兩筆）"
+        ],
+        "run": "just test-int apps/api/tests/integration/services/test_guardian_service.py -k \"test_guardian_concurrent_\"",
+        "notes": "新測試一律以 test_guardian_concurrent_ 為前綴，讓 tdd.run 選得到；既有單 session 測試不動。lock_timeout 寫法可能被 FK KEY SHARE 混淆，優先用阻塞模式（見 kickoff「鎖」一節）。整合測試包 flock /tmp/afterschool_db.lock 並在內層加 timeout。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-550",
+      "title": "補 StaffUserService.activate（521）的並發回歸測試（員工列 FOR UPDATE 與 populate_existing，拿掉要轉紅）",
+      "description": "補強 BACKEND-521 `activate` 的測試，實作不變。\n\n`activate` 先對目標員工列取 `FOR UPDATE of StaffUser` + `populate_existing` 再檢查 `is_active`，使兩位管理者同時啟用同一帳號時只有一個成功（另一個得到 409 `staff_already_active`），臨時密碼只會有一個贏家，也不會寫兩筆稽核。`apps/api/tests/integration/services/test_staff_user_service.py` 目前沒有這道鎖的並發測試，拿掉鎖測試不會轉紅。若寫測試時證明鎖有缺口，先依 README「實作中發現規格有錯」處理並回報，不要默默改實作。\n\n**測試寫法**同 BACKEND-549（兩條 `app_backend` 連線 + threading 阻塞模式、`SET LOCAL lock_timeout`、join / wait 帶 timeout、既有 `owner_cleanup_staff` 清理 fixture；同檔已有 `rbac:admin_retained` 的並發測試可參照）。committing 測資只用 seed 角色，不得往 seed 表寫列；跑完以 owner 唯讀查 staff_users 與非系統 roles 無殘列。\n\n**驗收標準**：每一條對應下列 red_case；每道鎖都要有突變證明（拿掉該鎖，對應測試轉紅），突變結果記在回報。",
+      "granularity_unit": "test",
+      "target_path": "apps/api/app/services/staff_user_service.py",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9e",
+      "depends_on": [
+        "BACKEND-521"
+      ],
+      "suggested_model": "fable-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/services/test_staff_user_service.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_activate_concurrent_only_one_succeeds：停用的員工 S，兩個 session 同時 activate(S) → 恰一個成功並回傳 temp_password，另一個 409 staff_already_active；最終 DB：is_active 為 True、must_change_password 為 True、password_hash 驗證通過「成功者」回傳的 temp_password；audit_logs 中 staff_user.activate 恰 1 筆；拿掉 FOR UPDATE → 轉紅（兩邊都成功、audit 兩筆）",
+          "test_activate_concurrent_blocks_on_staff_row_lock：外部連線對 S 的 staff_users 列 SELECT ... FOR UPDATE 持鎖，thread 呼叫 activate(S) → 放鎖前未完成，放鎖後完成；拿掉 FOR UPDATE → 轉紅",
+          "test_activate_concurrent_sees_commit_despite_loaded_instance：B 的 session 事先載入並持有 S（is_active 為 False）的 ORM 參照；A 先 activate(S) 並 commit；B 再 activate(S) → 409 staff_already_active，password_hash 維持 A 寫入的值；拿掉 populate_existing → 轉紅（B 讀到 identity map 舊值而再次覆寫密碼）"
+        ],
+        "run": "just test-int apps/api/tests/integration/services/test_staff_user_service.py -k \"test_activate_concurrent_\"",
+        "notes": "新測試一律以 test_activate_concurrent_ 為前綴，讓 tdd.run 選得到；既有 activate 測試不動。整合測試包 flock /tmp/afterschool_db.lock 並在內層加 timeout。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-551",
+      "title": "抽出共用時間格式化函式 format_hm / format_taipei_hm（取代 pickup/views、pickup/requests、parent_today_service 三份重複的私有 _hm / _taipei_hm）",
+      "description": "`apps/api/app/services/pickup/views.py`、`apps/api/app/services/pickup/requests.py`、`apps/api/app/services/parent_today_service.py` 各有一份逐字相同的私有函式 `_hm(time | None) -> str | None`（格式 `%H:%M`）與 `_taipei_hm(datetime | None) -> str | None`（先 `to_taipei` 再 `%H:%M`）。抽成 `apps/api/app/core/clock.py` 的公開函式 `format_hm` 與 `format_taipei_hm`（`clock.py` 已有 `TAIPEI`、`to_taipei`），三個模組改匯入公開函式並刪掉私有副本。純重構：行為完全不變（`None` 仍回 `None`、不補秒、aware datetime 一律先轉台北時間再格式化）；不改這三個模組的其他程式碼。\n\n**驗收標準**：每一條對應下列 red_case；三個模組既有整合測試（`test_pickup_views.py`、`test_pickup_requests.py`、`test_parent_today_service.py`，指定路徑執行）重構前後都全綠，結果記在回報。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/core/clock.py",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9e",
+      "depends_on": [
+        "BACKEND-404",
+        "BACKEND-406",
+        "BACKEND-525"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/unit/core/test_clock.py",
+        "markers": [
+          "unit"
+        ],
+        "red_cases": [
+          "test_format_hm_formats_time_and_none：time(9, 5) → '09:05'；time(0, 0) → '00:00'；time(23, 59) → '23:59'；None → None",
+          "test_format_taipei_hm_converts_utc_and_midnight：datetime(2026, 10, 7, 1, 30, tzinfo=UTC) → '09:30'；datetime(2026, 10, 6, 16, 0, tzinfo=UTC) → '00:00'（跨午夜）；None → None",
+          "test_no_private_hm_copies_remain：以 ast 解析 app/services/pickup/views.py、app/services/pickup/requests.py、app/services/parent_today_service.py，模組層級不再定義 _hm 與 _taipei_hm，且三者都從 app.core.clock 匯入公開函式（拿回任一份私有副本 → 轉紅）"
+        ],
+        "run": "just test apps/api/tests/unit/core/test_clock.py -k \"test_format_ or test_no_private_hm_copies\"",
+        "notes": "行為不變的證據：重構後 apps/api/tests/integration/services/pickup/test_pickup_views.py、test_pickup_requests.py 與 apps/api/tests/integration/services/test_parent_today_service.py（指定路徑，整合測試包 flock）全綠，結果記在回報。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
       }
     }
   ]
