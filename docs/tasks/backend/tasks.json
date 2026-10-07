@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 396,
-  "last_updated": "2026-10-07T07:40:17Z",
+  "version": 397,
+  "last_updated": "2026-10-07T07:43:26Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -9943,7 +9943,7 @@
     {
       "id": "BACKEND-390",
       "title": "實作 PUT /api/admin/homework/progress/{student_id} endpoint（overall / ready_eta / note）",
-      "description": "建立 / 沿用 `apps/api/app/api/admin/homework.py`（`router = APIRouter(prefix='/homework', tags=['admin-homework'])`，掛到 admin_router）。寫入型 handler 呼叫 service 後自行 `db.commit()`。\n- `PUT /api/admin/homework/progress/{student_id}`，`Depends(require_permission(Permission.HOMEWORK_WRITE))`，body `ProgressPutIn` → BACKEND-382 → commit → 200 `ProgressOut`。\n- handler：d = body.service_date or today；有給 overall → BACKEND-381 `set_overall_status`；有給 ready_eta / note → BACKEND-382（未給的欄位傳 UNSET）；兩者皆給時先處理 overall 再處理 ETA，同一交易 commit。\n\n**驗收標準**\n- 成功回應形狀如上；422；401；403（缺 homework:write）；業務錯誤碼如 red_cases。\n- 路由通過 BACKEND-073 route audit。",
+      "description": "建立 / 沿用 `apps/api/app/api/admin/homework.py`（`router = APIRouter(prefix='/homework', tags=['admin-homework'])`，掛到 admin_router）。寫入型 handler 呼叫 service 後自行 `db.commit()`。\n- `PUT /api/admin/homework/progress/{student_id}`，`Depends(require_permission(Permission.HOMEWORK_WRITE))`，body `ProgressPutIn` → BACKEND-382 → commit → 200 `ProgressOut`。\n- handler：d = body.service_date or today；有給 overall → BACKEND-381 `set_overall_status`；有給 ready_eta / note → BACKEND-382（未給的欄位傳 UNSET；ready_eta 由 `HH:MM` 轉 `time`）；兩者皆給時先處理 overall 再處理 ETA，同一交易 commit。\n- 回應：有給 ready_eta / note 時回傳 BACKEND-382 的 `ProgressOut`；只給 overall 時以 BACKEND-381 回傳的 `ProgressChange.progress` 組 `ProgressOut`（欄位規則同 BACKEND-382：ready_eta 為 `HH:MM`、eta_updated_by_name 為最後修改 ETA 的員工 display_name，未設定過為 null）。\n\n**驗收標準**\n- 成功回應形狀如上；422；401；403（缺 homework:write）；業務錯誤碼如 red_cases。\n- 路由通過 BACKEND-073 route audit。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/homework.py",
       "source_ref": null,
@@ -9965,11 +9965,12 @@
           "integration"
         ],
         "red_cases": [
-          "test_admin_homework_progress_success：PUT {'ready_eta':'17:30','note':'剩數學訂正'} → 200 ready_eta == '17:30'；PUT {'overall':'done'} → 200 overall_status == 'done'",
-          "test_admin_homework_progress_422：{} → 422；ready_eta='7:30' → 422",
+          "test_admin_homework_progress_success：PUT {'ready_eta':'17:30','note':'剩數學訂正'} → 200 ready_eta == '17:30'；PUT {'overall':'done'} → 200 overall_status == 'done'，且回應保留 ready_eta == '17:30'、eta_updated_by_name 為設定 ETA 的員工；兩次請求後重讀 DB 為 done / 17:30 / 剩數學訂正",
+          "test_admin_homework_progress_422：{} → 422；ready_eta='7:30' → 422；service_date 超出 homework.window → 422 invalid_service_date",
           "test_admin_homework_progress_401：無 cookie → 401",
           "test_admin_homework_progress_403：只有 homework:read → 403",
-          "test_admin_homework_progress_404：uuid4() 學生 → 404 student_not_found"
+          "test_admin_homework_progress_404：uuid4() 學生 → 404 student_not_found",
+          "test_admin_homework_progress_overall_then_eta：已綁定家長的學生 PUT {'overall':'done','ready_eta':'17:30'} → 200 overall_status == 'done'、ready_eta == '17:30'；家長收到 homework.done 一則、homework.eta_updated 零則（先處理 overall，BACKEND-382 看到已 done 不通知）"
         ],
         "run": "just test-int apps/api/tests/integration/api/admin/test_homework_endpoints.py -k \"test_admin_homework_progress_\"",
         "notes": ""
