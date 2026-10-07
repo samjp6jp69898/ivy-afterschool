@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 98,
-  "last_updated": "2026-10-07T07:53:25Z",
+  "version": 99,
+  "last_updated": "2026-10-07T07:54:52Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -2800,7 +2800,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/exams.ts",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-479",
@@ -2818,7 +2818,10 @@
         ],
         "red_cases": [
           "examsApi lists exams with paging：listChildExams('s1') → GET '/parent/children/s1/exams' params 深等於 {page:1, page_size:20}；回 {items:[{exam_id:'e1', name:'第一次段考'}], total:1} → 原樣 resolve",
-          "examsApi detail path and 404：getChildExam('s1','e1') → GET '/parent/children/s1/exams/e1'；回 404 {error:{code:'exam_not_found'}} → reject 且 code === 'exam_not_found'"
+          "examsApi detail path and 404：getChildExam('s1','e1') → GET '/parent/children/s1/exams/e1'；回 404 {error:{code:'exam_not_found'}} → reject 且 code === 'exam_not_found'",
+          "examsApi list passes explicit paging：listChildExams('s2', 2, 50) → GET '/parent/children/s2/exams' params 深等於 {page:2, page_size:50}；回 {items:[...], total:51} → 原樣 resolve",
+          "examsApi list propagates 422：回 422 {error:{code:'validation_error', details:[{loc:['query','page'], ...}]}} → reject 且 status === 422、code、details 原樣；page 不在前端夾限（listChildExams('s1', 0) 的 params 深等於 {page:0, page_size:20}）",
+          "examsApi detail keeps numeric scores and absent subjects as returned：subjects 含 score:92.5、缺考科目 {score:null, is_absent:true, note:'請病假'}、未登記科目 {score:null, is_absent:false} → 原樣 resolve（分數維持 number）"
         ],
         "run": "just web-test src/parent/api/exams.spec.ts -t \"examsApi\"",
         "notes": ""
