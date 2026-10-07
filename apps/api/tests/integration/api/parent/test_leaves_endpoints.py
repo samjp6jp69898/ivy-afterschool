@@ -1,10 +1,13 @@
 """BACKEND-355：GET /api/parent/children/{student_id}/leaves。
 BACKEND-356：POST /api/parent/leaves（家長申請請假；student_id 由 service 驗證所有權）。
 BACKEND-357：POST /api/parent/leaves/{id}/cancel（未開始整筆取消、已開始取消剩餘日子）。
-BACKEND-358：POST /api/parent/leaves/{id}/attachments（multipart 上傳附件）。"""
+BACKEND-358：POST /api/parent/leaves/{id}/attachments（multipart 上傳附件）。
+BACKEND-554：建立 / 取消請假的回應都由 leave_service.parent_leave_out 組裝（刪除私有複本）。"""
 
 from __future__ import annotations
 
+import ast
+import inspect
 from collections.abc import Callable, Iterator
 from datetime import UTC, date, datetime, timedelta
 from uuid import uuid4
@@ -15,11 +18,15 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from app.core.storage import StorageError
+from app.api.parent import leaves as leaves_module
+from app.core.clock import Clock
+from app.core.storage import Storage, StorageError
 from app.models.account import StaffUser
 from app.models.attendance import StudentAttendance
 from app.models.leaves import StudentLeave, StudentLeaveAttachment
 from app.models.parents import ParentAccount
+from app.schemas.leaves import ParentLeaveOut
+from app.services import leave_service
 from app.services.settings_service import clear_settings_cache
 from tests.support.factories import (
     make_attendance,
@@ -745,3 +752,77 @@ def test_parent_leave_attachment_storage_unavailable(
     assert fake_storage.objects == {}
     db_session.expire_all()
     assert _attachment_count(db_session, leave.id) == 0
+
+
+# --- BACKEND-554：建立 / 取消請假共用 leave_service.parent_leave_out ---------------------------
+
+
+def test_parent_leave_assembler_shared_create_response_unchanged(
+    parent_client: ParentClientFactory,
+    db_session: Session,
+    fake_storage: FakeStorage,
+    fake_clock: FakeClock,
+) -> None:
+    client, parent = parent_client()
+    ming = make_student(db_session, name="王小明")
+    make_guardian(db_session, ming, parent=parent)
+    db_session.commit()
+
+    resp = client.post(
+        _CREATE_URL,
+        json=_leave_body(ming.id, leave_type="personal", reason="家裡有事", end_date="2026-09-03"),
+    )
+
+    assert resp.status_code == 201
+    body = resp.json()
+    stored = _reload(db_session, body["id"])
+    expected = leave_service.parent_leave_out(stored, storage=fake_storage, clock=fake_clock)
+    # 逐欄等於共用組裝函式對同一筆請假的輸出；剛建立的請假沒有附件
+    assert body == expected.model_dump(mode="json")
+    assert (body["attachments"], body["can_cancel"], body["leave_type_label"]) == ([], True, "事假")
+    assert (body["start_date"], body["end_date"], body["reason"]) == (
+        "2026-09-01",
+        "2026-09-03",
+        "家裡有事",
+    )
+
+
+def test_parent_leave_assembler_shared_no_private_copy() -> None:
+    tree = ast.parse(inspect.getsource(leaves_module))
+    functions = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
+
+    assert "_parent_leave_out" not in functions
+    for handler in ("create_leave", "cancel_leave"):
+        called = {
+            ast.unparse(node.func)
+            for node in ast.walk(functions[handler])
+            if isinstance(node, ast.Call)
+        }
+        assert "leave_service.parent_leave_out" in called, handler
+
+
+def test_parent_leave_assembler_shared_create_and_cancel_use_it(
+    parent_client: ParentClientFactory, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """兩個 handler 的回應都出自共用組裝函式：把它換成會改欄位的版本，兩邊的回應都跟著變。"""
+    real = leave_service.parent_leave_out
+
+    def marked(leave: StudentLeave, *, storage: Storage, clock: Clock) -> ParentLeaveOut:
+        return real(leave, storage=storage, clock=clock).model_copy(
+            update={"reason": "共用組裝函式的輸出"}
+        )
+
+    monkeypatch.setattr(leave_service, "parent_leave_out", marked)
+    client, parent = parent_client()
+    ming = make_student(db_session, name="王小明")
+    make_guardian(db_session, ming, parent=parent)
+    db_session.commit()
+
+    created = client.post(_CREATE_URL, json=_leave_body(ming.id, reason="感冒"))
+    cancelled = client.post(_cancel_url(created.json()["id"]))
+
+    assert created.status_code == 201
+    assert created.json()["reason"] == "共用組裝函式的輸出"
+    assert cancelled.status_code == 200
+    assert cancelled.json()["reason"] == "共用組裝函式的輸出"
+    assert cancelled.json()["status"] == "cancelled"
