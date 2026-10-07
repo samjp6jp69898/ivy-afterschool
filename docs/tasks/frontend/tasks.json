@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 128,
-  "last_updated": "2026-10-07T08:10:15Z",
+  "version": 129,
+  "last_updated": "2026-10-07T08:11:13Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -3936,7 +3936,7 @@
     {
       "id": "FRONTEND-155",
       "title": "實作 components/homework/HomeworkItemDialog.vue：新增 / 編輯單一學生作業項目",
-      "description": "建立 `apps/web/src/components/homework/HomeworkItemDialog.vue`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-homework-board.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸、觸控目標 ≥ 44px。稿需呈現：班級 / 日期篩選與整體狀態摘要、逐生卡片（無作業 / 進行中 / 全部完成 / 手動標記完成 / 請假或缺席淡化）、作業項目四種狀態切換、新增單項與整班批次新增 dialog、預計可接送時間與家長說明 dialog（含上次設定者）、非今天日期的限制、即時連線中斷提示、只有 homework:read 時的唯讀樣式、空清單、載入中。\n\n**props / emits**：`modelValue`、`studentName: string`、`item?: HomeworkItem`（編輯）；emits `update:modelValue`、`submit(body: {subject_id: string | null; title: string})`（實際 API 由看板 composable 呼叫，dialog 依 `loading` prop 顯示）、props `loading: boolean`、`error: string | null`。\n- 欄位：科目（lookups subjectOptions，可不選）、內容（必填 ≤100，placeholder「例如：數學習作 p.12-13」）。最近使用過的 5 個內容（localStorage `homework.recentTitles`，try/catch）以 chip 快速填入。\n- 標題「新增作業：{studentName}」/「編輯作業：{studentName}」。\n- 送出 emit submit；`error` 顯示在表單上方。\n- 最近使用的記錄：通過驗證、emit submit 時把該內容移到最前（最多 5 筆）；讀取時略過非字串、空白與重複項目；localStorage 讀寫失敗一律忽略。科目清除時送 `null`；編輯中項目的科目已停用（不在 subjectOptions）時仍以原 subject_name 列為選項。\n\n**驗收標準**\n- 必填檢查；emit body；最近內容 chip 填入；編輯時帶入原值。",
+      "description": "建立 `apps/web/src/components/homework/HomeworkItemDialog.vue`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-homework-board.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸、觸控目標 ≥ 44px。稿需呈現：班級 / 日期篩選與整體狀態摘要、逐生卡片（無作業 / 進行中 / 全部完成 / 手動標記完成 / 請假或缺席淡化）、作業項目四種狀態切換、新增單項與整班批次新增 dialog、預計可接送時間與家長說明 dialog（含上次設定者）、非今天日期的限制、即時連線中斷提示、只有 homework:read 時的唯讀樣式、空清單、載入中。\n\n**props / emits**：`modelValue`、`studentName: string`、`item?: HomeworkItem`（編輯）；emits `update:modelValue`、`submit(body: {subject_id: string | null; title: string})`（實際 API 由看板 composable 呼叫，dialog 依 `loading` prop 顯示）、props `loading: boolean`、`error: string | null`。\n- 欄位：科目（lookups subjectOptions，可不選）、內容（必填 ≤100，placeholder「例如：數學習作 p.12-13」）。最近使用過的 5 個內容（localStorage `homework.recentTitles`，try/catch）以 chip 快速填入。\n- 標題「新增作業：{studentName}」/「編輯作業：{studentName}」。\n- 送出 emit submit；`error` 顯示在表單上方。\n- 最近使用由共用模組 `apps/web/src/components/homework/recentHomeworkTitles.ts`（與 FRONTEND-156 共用）讀寫 localStorage `homework.recentTitles`：讀取時 JSON 損毀或不是陣列回空陣列，略過非字串、空白、超過 100 字與重複項目，最多 5 筆；通過驗證、emit submit 時記錄（去頭尾空白、移到最前、最多 5 筆，不等 API 結果；空白或超過 100 字不記錄）；localStorage 存取失敗（含取得 localStorage 本身丟 SecurityError）一律不拋，讀取回空陣列。chip 以文字插值渲染，不可用 v-html。科目清除時送 `null`；編輯中項目的科目已停用（不在 subjectOptions）時仍以原 subject_name 列為選項。\n\n**驗收標準**\n- 必填檢查；emit body；最近內容 chip 填入；編輯時帶入原值。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/homework/HomeworkItemDialog.vue",
       "source_ref": null,
@@ -3958,10 +3958,15 @@
           "HomeworkItemDialog emits trimmed body：選科目 '數學'（sub2）、內容 ' 數學習作 p.12-13 ' → 點 '儲存' → emitted('submit')[0][0] 深等於 {subject_id:'sub2',title:'數學習作 p.12-13'}",
           "HomeworkItemDialog requires title：內容空白點 '儲存' → 文字含 '請輸入作業內容'，emitted('submit') 為 undefined",
           "HomeworkItemDialog quick fills recent titles：localStorage homework.recentTitles = '[\"國語第 5 課生字\"]' → 顯示 chip '國語第 5 課生字'，點擊後內容 input 值為該文字",
-          "HomeworkItemDialog prefills when editing：item {subject_id:'sub1',title:'圈詞'} → 標題含 '編輯作業：王小明'、內容 input 值 '圈詞'"
+          "HomeworkItemDialog prefills when editing：item {subject_id:'sub1',title:'圈詞'} → 標題含 '編輯作業：王小明'、內容 input 值 '圈詞'",
+          "HomeworkItemDialog remembers submitted titles most recent first：homework.recentTitles 既有 5 筆，送出 ' 英語單字抄寫 '（已存在）→ 存入陣列以 '英語單字抄寫' 開頭、其餘依原順序；再送出新內容 '數學習作 p.12-13' → 新內容在最前、最舊一筆被擠掉，仍為 5 筆",
+          "HomeworkItemDialog renders recent titles as plain text：homework.recentTitles 含 '<img src=x onerror=alert(1)>' → chip 文字為該字串原文，chip 內沒有 img 元素",
+          "recentHomeworkTitles reads valid titles only：homework.recentTitles 為損毀 JSON 或不是陣列 → loadRecentTitles() 深等於 []；陣列含數字、空白字串、101 字字串與重複項 → 只留有效項、去重、最多 5 筆",
+          "recentHomeworkTitles remembers trimmed title first：既有 5 筆時 rememberRecentTitle(' 圈詞 ')（已存在）→ localStorage homework.recentTitles 深等於 ['圈詞', 其餘依原順序]；記錄新內容 → 最舊一筆被擠掉、仍為 5 筆；rememberRecentTitle('   ') 與 101 字內容 → 儲存值不變",
+          "recentHomeworkTitles ignores storage failures：getItem / setItem 丟例外、存取 localStorage 本身丟 SecurityError → loadRecentTitles() 深等於 []，expect(() => rememberRecentTitle('圈詞')).not.toThrow()"
         ],
-        "run": "just web-test src/components/homework/HomeworkItemDialog.spec.ts -t \"HomeworkItemDialog\"",
-        "notes": ""
+        "run": "just web-test src/components/homework/HomeworkItemDialog.spec.ts src/components/homework/recentHomeworkTitles.spec.ts -t \"HomeworkItemDialog|recentHomeworkTitles\"",
+        "notes": "共用模組 recentHomeworkTitles.ts 的測試在 apps/web/src/components/homework/recentHomeworkTitles.spec.ts（describe recentHomeworkTitles），由同一個 tdd.run 選到。"
       },
       "review": {
         "status": "pending",
@@ -3972,7 +3977,7 @@
     {
       "id": "FRONTEND-156",
       "title": "實作 components/homework/HomeworkBatchAddDialog.vue：整班批次新增同一份作業",
-      "description": "建立 `apps/web/src/components/homework/HomeworkBatchAddDialog.vue`（domain_spec M6：員工可對整班批次新增同一份作業項目；BACKEND-387）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-homework-board.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸、觸控目標 ≥ 44px。稿需呈現：班級 / 日期篩選與整體狀態摘要、逐生卡片（無作業 / 進行中 / 全部完成 / 手動標記完成 / 請假或缺席淡化）、作業項目四種狀態切換、新增單項與整班批次新增 dialog、預計可接送時間與家長說明 dialog（含上次設定者）、非今天日期的限制、即時連線中斷提示、只有 homework:read 時的唯讀樣式、空清單、載入中。\n\n**props / emits**：`modelValue`、`className: string`、`students: BoardStudent[]`（看板上該班學生）、`loading: boolean`、`error: string | null`；emits `update:modelValue`、`submit(body: {subject_id: string | null; title: string; student_ids?: string[]})`。\n- 欄位：科目、內容（同 FRONTEND-155）。\n- 對象：radio「全班」（不送 student_ids，後端以班級在學學生為準）/「指定學生」→ checkbox 清單（預設勾選 attendance_status 不是 leave / absent 的學生），上方「全選」「只選今天到班的」。指定學生且一個都沒勾 → 「請至少選擇一位學生」。\n- 標題「整班新增作業：{className}」；送出按鈕「新增給 {N} 位學生」：全班時 N = students 全部人數（與後端 BACKEND-378 以班級在學學生為對象一致，含今天請假 / 缺席者），「全班」選項旁灰字「（含今天請假 / 缺席 {k} 位）」，k 為 0 時不顯示；指定學生時 N = 勾選人數。\n- error（例如 student_not_in_class / no_students 的後端 message）顯示在表單上方。\n- 指定學生送出的 `student_ids` 依 students 清單順序（與勾選順序無關）；「只選今天到班的」與預設勾選同一組（attendance_status 不是 leave / absent，含尚無出勤紀錄）。最近使用 chip 的讀取與記錄同 FRONTEND-155。\n\n**驗收標準**\n- 全班不送 student_ids；指定學生送勾選的 id；預設排除請假 / 缺席；至少一位檢查。\n- 送出按鈕人數：全班為全部學生數並標示請假 / 缺席人數，指定學生為勾選人數。",
+      "description": "建立 `apps/web/src/components/homework/HomeworkBatchAddDialog.vue`（domain_spec M6：員工可對整班批次新增同一份作業項目；BACKEND-387）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-homework-board.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。以 1024×768 平板為主要尺寸、觸控目標 ≥ 44px。稿需呈現：班級 / 日期篩選與整體狀態摘要、逐生卡片（無作業 / 進行中 / 全部完成 / 手動標記完成 / 請假或缺席淡化）、作業項目四種狀態切換、新增單項與整班批次新增 dialog、預計可接送時間與家長說明 dialog（含上次設定者）、非今天日期的限制、即時連線中斷提示、只有 homework:read 時的唯讀樣式、空清單、載入中。\n\n**props / emits**：`modelValue`、`className: string`、`students: BoardStudent[]`（看板上該班學生）、`loading: boolean`、`error: string | null`；emits `update:modelValue`、`submit(body: {subject_id: string | null; title: string; student_ids?: string[]})`。\n- 欄位：科目、內容（同 FRONTEND-155；內容欄含最近使用 chip，依已核可稿 decision，讀取與記錄共用 FRONTEND-155 的 `recentHomeworkTitles.ts`）。\n- 對象：radio「全班」（不送 student_ids，後端以班級在學學生為準）/「指定學生」→ checkbox 清單（預設勾選 attendance_status 不是 leave / absent 的學生），上方「全選」「只選今天到班的」。指定學生且一個都沒勾 → 「請至少選擇一位學生」。\n- 標題「整班新增作業：{className}」；送出按鈕「新增給 {N} 位學生」：全班時 N = students 全部人數（與後端 BACKEND-378 以班級在學學生為對象一致，含今天請假 / 缺席者），「全班」選項旁灰字「（含今天請假 / 缺席 {k} 位）」，k 為 0 時不顯示；指定學生時 N = 勾選人數。\n- error（例如 student_not_in_class / no_students 的後端 message）顯示在表單上方。\n- 指定學生送出的 `student_ids` 依 students 清單順序（與勾選順序無關）；「只選今天到班的」與預設勾選同一組（attendance_status 不是 leave / absent，含尚無出勤紀錄）。\n\n**驗收標準**\n- 全班不送 student_ids；指定學生送勾選的 id；預設排除請假 / 缺席；至少一位檢查。\n- 送出按鈕人數：全班為全部學生數並標示請假 / 缺席人數，指定學生為勾選人數。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/homework/HomeworkBatchAddDialog.vue",
       "source_ref": null,
@@ -3995,7 +4000,9 @@
           "HomeworkBatchAddDialog preselects present students：students 3 位（present、leave、absent）→ 選 '指定學生' 後只有 present 那位被勾選；送出 body.student_ids 深等於 ['s1']",
           "HomeworkBatchAddDialog requires at least one student：指定學生並取消全部勾選 → 點送出顯示 '請至少選擇一位學生'，無 emit",
           "HomeworkBatchAddDialog shows backend error：props error '此班級沒有可新增作業的學生' → 文字含該訊息",
-          "HomeworkBatchAddDialog counts whole class including leave and absent：students 3 位（present、leave、absent）→ 選 '全班' → 送出按鈕文字 '新增給 3 位學生'，文字含 '（含今天請假 / 缺席 2 位）'；選 '指定學生'（預設只勾 present）→ 按鈕文字 '新增給 1 位學生'；students 全部 present → 不含 '含今天請假'"
+          "HomeworkBatchAddDialog counts whole class including leave and absent：students 3 位（present、leave、absent）→ 選 '全班' → 送出按鈕文字 '新增給 3 位學生'，文字含 '（含今天請假 / 缺席 2 位）'；選 '指定學生'（預設只勾 present）→ 按鈕文字 '新增給 1 位學生'；students 全部 present → 不含 '含今天請假'",
+          "HomeworkBatchAddDialog quick fills recent titles：homework.recentTitles = '[\"數學習作 p.12-13\",\"圈詞\"]' → 顯示 chip '數學習作 p.12-13'、'圈詞'，點 '圈詞' 後內容 input 值為 '圈詞'",
+          "HomeworkBatchAddDialog remembers submitted title：homework.recentTitles 既有 ['數學習作 p.12-13','圈詞']，以內容 '圈詞' 送出全班 → localStorage homework.recentTitles 深等於 ['圈詞','數學習作 p.12-13']"
         ],
         "run": "just web-test src/components/homework/HomeworkBatchAddDialog.spec.ts -t \"HomeworkBatchAddDialog\"",
         "notes": ""
