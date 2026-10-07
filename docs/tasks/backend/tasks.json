@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 414,
-  "last_updated": "2026-10-07T08:15:31Z",
+  "version": 415,
+  "last_updated": "2026-10-07T08:18:19Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -15173,7 +15173,7 @@
     {
       "id": "BACKEND-550",
       "title": "補 StaffUserService.activate（521）的並發回歸測試（員工列 FOR UPDATE 與 populate_existing，拿掉要轉紅）",
-      "description": "補強 BACKEND-521 `activate` 的測試，實作不變。\n\n`activate` 先對目標員工列取 `FOR UPDATE of StaffUser` + `populate_existing` 再檢查 `is_active`，使兩位管理者同時啟用同一帳號時只有一個成功（另一個得到 409 `staff_already_active`），臨時密碼只會有一個贏家，也不會寫兩筆稽核。`apps/api/tests/integration/services/test_staff_user_service.py` 目前沒有這道鎖的並發測試，拿掉鎖測試不會轉紅。若寫測試時證明鎖有缺口，先依 README「實作中發現規格有錯」處理並回報，不要默默改實作。\n\n**測試寫法**同 BACKEND-549（兩條 `app_backend` 連線 + threading 阻塞模式、`SET LOCAL lock_timeout`、join / wait 帶 timeout、既有 `owner_cleanup_staff` 清理 fixture；同檔已有 `rbac:admin_retained` 的並發測試可參照）。committing 測資只用 seed 角色，不得往 seed 表寫列；跑完以 owner 唯讀查 staff_users 與非系統 roles 無殘列。\n\n**驗收標準**：每一條對應下列 red_case；每道鎖都要有突變證明（拿掉該鎖，對應測試轉紅），突變結果記在回報。",
+      "description": "補強 BACKEND-521 `activate` 的測試，並修正一處重讀缺口（見下）。\n\n`activate` 先對目標員工列取 `FOR UPDATE of StaffUser` + `populate_existing` 再檢查 `is_active`，使兩位管理者同時啟用同一帳號時只有一個成功（另一個得到 409 `staff_already_active`），臨時密碼只會有一個贏家，也不會寫兩筆稽核。`apps/api/tests/integration/services/test_staff_user_service.py` 目前沒有這道鎖的並發測試，拿掉鎖測試不會轉紅。若寫測試時證明鎖有缺口，先依 README「實作中發現規格有錯」處理並回報，不要默默改實作。\n\n**測試寫法**同 BACKEND-549（兩條 `app_backend` 連線 + threading 阻塞模式、`SET LOCAL lock_timeout`、join / wait 帶 timeout、既有 `owner_cleanup_staff` 清理 fixture；同檔已有 `rbac:admin_retained` 的並發測試可參照）。committing 測資只用 seed 角色，不得往 seed 表寫列；跑完以 owner 唯讀查 staff_users 與非系統 roles 無殘列。\n\n**驗收標準**：每一條對應下列 red_case；每道鎖都要有突變證明（拿掉該鎖，對應測試轉紅），突變結果記在回報。\n\n**實作修正（本 task 一併處理）**：原 `activate` 的 FOR UPDATE 查詢只呼叫 `session.execute(...)` 而未消費結果——SQLAlchemy 的 ORM 查詢要在取出列時才建立 / 覆蓋物件，所以列鎖有取到，但 `populate_existing=True` 從未生效；目標員工已在 identity map 時（red_case 3 事先載入並持有 S）`session.get` 仍回傳舊物件，B 讀到 is_active=False 而再次覆寫密碼並多寫一筆稽核（red_case 3 在原實作即紅）。修正為消費查詢結果（`.scalar_one_or_none()`），讓 populate_existing 以上鎖後的值覆蓋舊屬性；其餘流程不變。",
       "granularity_unit": "test",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": null,
@@ -15183,7 +15183,7 @@
         "BACKEND-521"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "",
+      "risk_notes": "`session.execute(select(...).with_for_update().execution_options(populate_existing=True))` 不消費結果時只取得列鎖、不會更新 identity map；要讓 populate_existing 生效必須取出列（`.scalar_one_or_none()` / `.scalars().all()`）。其他 service 若有同樣寫法要比照處理（本 task 只修 activate）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/api/tests/integration/services/test_staff_user_service.py",
