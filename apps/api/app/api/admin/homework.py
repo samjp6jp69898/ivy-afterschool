@@ -9,12 +9,14 @@
 - BACKEND-388 ``PATCH /homework/items/{item_id}``：homework:write；``HomeworkItemUpdateIn`` →
   BACKEND-379 ``update_item`` → commit → ``HomeworkMutationOut``（不存在 404
   ``homework_item_not_found``）。
-
-固定路徑 ``/items/batch`` 宣告在 ``/items/{item_id}`` 之前。
+- BACKEND-389 ``DELETE /homework/items/{item_id}``：homework:write → BACKEND-380 ``delete_item``
+  → commit → ``HomeworkMutationOut``（item 為 null，回傳重算後的進度讓看板更新）。
 - BACKEND-390 ``PUT /homework/progress/{student_id}``：homework:write；``ProgressPutIn``
   （service_date 預設今天）→ 有給 overall 先 BACKEND-381 ``set_overall_status``，有給
   ready_eta / note 再 BACKEND-382 ``set_ready_eta_and_note``（未給的欄位傳 UNSET）→ commit →
   ``ProgressOut``。只給 overall 時以 381 回傳的進度列組回應（規則同 382）。
+
+固定路徑 ``/items/batch`` 宣告在 ``/items/{item_id}`` 之前。
 """
 
 from __future__ import annotations
@@ -87,6 +89,15 @@ def update_item(
     item_id: UUID, body: HomeworkItemUpdateIn, staff: HomeworkWrite, db: Db, clock: ClockDep
 ) -> HomeworkMutationOut:
     out = homework_service.update_item(db, item_id, body, actor=staff, clock=clock)
+    db.commit()
+    return out
+
+
+@router.delete("/items/{item_id}", response_model=HomeworkMutationOut)
+def delete_item(
+    item_id: UUID, staff: HomeworkWrite, db: Db, clock: ClockDep
+) -> HomeworkMutationOut:
+    out = homework_service.delete_item(db, item_id, actor=staff, clock=clock)
     db.commit()
     return out
 
