@@ -46,10 +46,12 @@ function optionOf(name: string): DOMWrapper<Element> {
   return found
 }
 
-/** ?raw 原始碼中某選擇器（行首，可縮排）的所有樣式區塊內容，依出現順序 */
+/** ?raw 原始碼 <style> 中，選擇器清單含指定選擇器（可與其他選擇器群組）的所有樣式區塊內容，依出現順序 */
 function rulesOf(selector: string): string[] {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return Array.from(source.matchAll(new RegExp(`^\\s*${escaped}\\s*\\{([^}]*)\\}`, 'gm'))).map((m) => m[1] ?? '')
+  const css = source.slice(source.indexOf('>', source.indexOf('<style')) + 1).replace(/\/\*[\s\S]*?\*\//g, '')
+  return Array.from(css.matchAll(/([^{}]+)\{([^}]*)\}/g))
+    .filter((m) => (m[1] ?? '').split(',').some((s) => s.trim() === selector))
+    .map((m) => m[2] ?? '')
 }
 
 afterEach(() => {
