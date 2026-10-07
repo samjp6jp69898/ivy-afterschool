@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 418,
-  "last_updated": "2026-10-07T08:23:59Z",
+  "version": 419,
+  "last_updated": "2026-10-07T08:33:24Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -15146,7 +15146,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/app/services/guardian_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9e",
       "depends_on": [
         "BACKEND-170",
@@ -15172,9 +15172,9 @@
         "notes": "新測試一律以 test_guardian_concurrent_ 為前綴，讓 tdd.run 選得到；既有單 session 測試不動。lock_timeout 寫法可能被 FK KEY SHARE 混淆，優先用阻塞模式（見 kickoff「鎖」一節）。整合測試包 flock /tmp/afterschool_db.lock 並在內層加 timeout。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-d",
+        "notes": "通過。tdd.run 7 passed（--collect-only：5 條 red_cases 全部被 -k 選到，案例 1 為 update / archive / unbind 三個參數化）；整檔 test_guardian_service.py 27 passed；lint / typecheck 乾淨；純補測試（c3759dc），實作未動。red_cases 修改理由成立：案例 2 原「G1 與 G2 互換」兩邊都碰 G1 列，光靠列鎖就序列化，拿掉學生列鎖不會轉紅，改為 G0 primary、兩 session 分別升 G1 / G2 後，後到者的降級 UPDATE 快照看不到前者剛升上去的 G1 而撞 uq_guardians_one_primary；案例 4 補「B 事先載入並持有 ORM 參照」是因 identity map 為弱參照，不持有就會重新載入、驗不到 populate_existing；案例 5 成立：binding_code_service.claim 不鎖學生列、只對 G 列做條件式 UPDATE（已讀碼確認），guardian 列的 FOR UPDATE 只對這種寫入者有可觀測差異。獨立突變（單一 flock、備份→改壞→跑→trap 還原→cmp，實作檔與 HEAD 一致）：拿掉學生列鎖 → 案例 1 三個參數 + 案例 2 紅；拿掉 populate_existing → 案例 3、4 紅；只拿掉 guardian 列 with_for_update → 案例 5 紅；兩者都拿掉 → 案例 3、4、5 紅；與 description 的「鎖與突變對應」完全一致。測試沒有固定 sleep；0.5 秒「未完成」窗口是 done.wait(timeout=0.5) 斷言被鎖住的 thread 尚未結束：負載下不會誤判失敗（被阻塞的 thread 不可能提早完成），只有在 thread 0.5 秒內還沒送出查詢時可能對缺鎖實作誤判通過，且案例 2 ~ 5 另有結果斷言（恰一位 primary、404 / 409、稽核筆數）兜底，只有案例 1 單靠窗口。committing 測資只用 seed 角色 tutor，owner 清理 fixture 依 id 刪稽核 / 綁定碼 / 監護人 / 學生 / 家長 / 員工；跑完 owner 唯讀查 students / staff_users / 非系統 roles / parent_accounts / guardians / parent_binding_codes / audit_logs 全為 0。殘留（不擋）：(1) cleanup_tables(\"class_staff\") 只是為了滿足 committing_db_session 的 marker 要求，這些測試並不碰 class_staff，沿用同檔 / test_staff_user_service.py 的既有寫法，在 DB flock 下無害但語意誤導，可考慮讓 fixture 接受空 marker。(2) 案例 5 的反向交錯（archive 先 commit、claim 後到）claim 的條件式 UPDATE 會因 archived_at IS NULL 不命中而回 409 guardian_already_bound，錯誤碼語意不精確，屬 binding_code_service 既有行為、不在本 task 範圍。"
       }
     },
     {
@@ -15184,7 +15184,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9e",
       "depends_on": [
         "BACKEND-521"
@@ -15206,9 +15206,9 @@
         "notes": "新測試一律以 test_activate_concurrent_ 為前綴，讓 tdd.run 選得到；既有 activate 測試不動。整合測試包 flock /tmp/afterschool_db.lock 並在內層加 timeout。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-d",
+        "notes": "通過。tdd.run 3 passed（3 條 red_cases 全部被 -k 選到）；整檔 test_staff_user_service.py 33 passed；admin endpoint 檔 test_staff_users_endpoints.py 46 passed（BACKEND-522 的 activate endpoint 一般行為不變）；lint / typecheck 乾淨；測試 d93e3da 先於修正 fa330c7，修正後檔案未再變動。【缺口真實性】獨立驗證成立：以 git show fa330c7^ 取修正前的 staff_user_service.py 暫時還原（單一 flock、trap 還原、cmp 一致）後跑 tdd.run，只有 red_case 3（test_activate_concurrent_sees_commit_despite_loaded_instance）轉紅、案例 1 / 2 仍綠——證明原寫法的 FOR UPDATE 列鎖確實有取得，但 session.execute(select(...).with_for_update(...).execution_options(populate_existing=True)) 沒有取出列，ORM 不會覆蓋 identity map，而 _get_managed_staff 用 session.get 回傳既有物件，事先載入 S 的 session 讀到舊的 is_active=False 而再次覆寫密碼並多寫一筆稽核；還原修正後轉綠。BACKEND-521 宣稱的「populate_existing 重讀」在原實作中確實從未生效。【修正範圍】fa330c7 只動 activate 兩行（查詢尾接 .scalar_one_or_none() 消費結果）加兩行註解，其餘流程、錯誤碼、稽核內容不變，最小且正確。【全專案盤點】獨立 grep 全部 with_for_update 用法（repositories / services / jobs / notifications 共 25 處），其餘都接 scalar_one_or_none() / scalars() / all() / unique() 消費結果（refresh_tokens.revoke 的純鎖列查詢也接 .all()），不消費結果的只有 activate 這一處，與 r9e 回報一致。【red_case 2 的 FOR KEY SHARE】理由成立：外部若持 FOR UPDATE，沒先鎖列的實作也會在之後的 UPDATE 等鎖、分不出差別；改持 FOR KEY SHARE 後，明確的 FOR UPDATE 與之衝突而排隊，缺鎖實作只更新非鍵欄位（FOR NO KEY UPDATE）不衝突、立刻完成——突變「拿掉 FOR UPDATE 查詢」確實讓案例 2 轉紅。其他突變：拿掉 FOR UPDATE 查詢 → 三條全紅；只拿掉 populate_existing（仍消費結果）→ 案例 3 紅。跑完 owner 唯讀查 staff_users / 非系統 roles / audit_logs / refresh_tokens 全為 0。【對 BACKEND-521 的建議】產物仍在、只被本 task 部分改寫，依 README 保留 done，不必回頭改狀態；本 task 的 description 已寫明改寫範圍。建議協調者：在 kickoff 實作慣例「鎖」一節補一句「with_for_update + populate_existing 的查詢必須取出列（scalar_one_or_none / scalars），只 execute 不取列只拿到鎖」，並可選擇在 521 的 risk_notes 追加一行指向 550 的修正。殘留（不擋）：0.5 秒窗口與 cleanup_tables(\"class_staff\") placeholder 同 549 的說明；案例 2 單靠窗口、案例 1 / 3 另有稽核與密碼斷言兜底。"
       }
     },
     {
@@ -15218,7 +15218,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/clock.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9e",
       "depends_on": [
         "BACKEND-404",
@@ -15242,9 +15242,9 @@
         "notes": "行為不變的證據：重構後 apps/api/tests/integration/services/pickup/test_pickup_views.py、test_pickup_requests.py 與 apps/api/tests/integration/services/test_parent_today_service.py（指定路徑，整合測試包 flock）全綠，結果記在回報。 test_no_private_hm_copies_remain 以三個模組路徑參數化（三個案例），tdd.run 的 -k 仍選得到。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-d",
+        "notes": "通過。tdd.run 5 passed（3 條 red_cases 全部被 -k 選到，ast 守衛以三個模組路徑參數化）；lint / typecheck 乾淨；測試 ad1ee54 先於實作 27da4b2。diff 檢視：clock.py 只新增 format_hm / format_taipei_hm 與 docstring 一行；三個模組只刪逐字相同的私有 _hm / _taipei_hm、改匯入（views.py 移除不再使用的 datetime 與 to_taipei、parent_today_service 移除 datetime / time / to_taipei、requests.py 保留仍在用的 to_taipei）、替換呼叫點；grep 全 app 無殘留 _hm( / _taipei_hm( 呼叫（_parse_hm 是另一個函式）。行為不變：format_taipei_hm 沿用 to_taipei，naive 一律 ValueError，跨午夜（UTC 16:00 → 00:00）與 None 都有測試；三個既有整合測試檔 pickup/test_pickup_views.py、pickup/test_pickup_requests.py、test_parent_today_service.py（指定路徑、flock 內）重構後 70 passed。突變：在 pickup/views.py 放回一份模組層級 _hm → test_no_private_hm_copies_remain[services/pickup/views.py] 紅，還原後 cmp 一致。殘留：無。"
       }
     }
   ]
