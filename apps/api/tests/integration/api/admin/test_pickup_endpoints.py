@@ -5,6 +5,7 @@ BACKEND-430 / 432 / 434：POST /api/admin/pickup/requests、/{id}/acknowledge、
 BACKEND-431：POST /api/admin/pickup/requests/{id}/reply。
 BACKEND-433：POST /api/admin/pickup/requests/{id}/complete。
 BACKEND-437：POST /api/admin/pickup/authorizations/{id}/verify（錯碼累計先 commit）。
+BACKEND-438：POST /api/admin/pickup/authorizations/{id}/confirm-visual-match。
 
 fake_clock 預設 2026-09-01 01:00 UTC（台北 09:00）；接送請求 / 授權的 service_date 用台北「今天」。
 """
@@ -21,6 +22,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.storage import build_object_path
 from app.models.account import StaffUser
 from app.models.attendance import StudentAttendance
 from app.models.audit import AuditLog
@@ -39,6 +41,7 @@ from tests.support.factories import (
     make_leave,
     make_parent,
     make_pickup_authorization,
+    make_pickup_person,
     make_pickup_request,
     make_staff,
     make_student,
@@ -1070,3 +1073,148 @@ def test_admin_pickup_verify_after_regenerate(
         "code",
         1,
     )
+
+
+# --- BACKEND-438：POST /authorizations/{id}/confirm-visual-match ------------------------------
+
+
+def _audits(db: Session, action: str, entity_id: object) -> list[AuditLog]:
+    return list(
+        db.execute(
+            select(AuditLog).where(AuditLog.action == action, AuditLog.entity_id == str(entity_id))
+        ).scalars()
+    )
+
+
+def test_admin_pickup_visual_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "post" in app.openapi()["paths"][_AUTHS + "/{auth_id}/confirm-visual-match"]
+
+
+def test_admin_pickup_visual_success(
+    api_client: TestClient,
+    app: FastAPI,
+    db_session: Session,
+    login_staff: Callable[[TestClient, StaffUser], None],
+) -> None:
+    ming, mom = _family(db_session)
+    request = make_pickup_request(db_session, ming, service_date=_TODAY, requested_by=mom.id)
+    person = make_pickup_person(
+        db_session, ming, name="李阿姨", photo_path=build_object_path(uuid4(), "jpg")
+    )
+    with_photo = make_pickup_authorization(db_session, ming, service_date=_TODAY, person=person)
+    hua = make_student(db_session, name="陳小華")
+    # 一次性代理人（沒有常用接送人、沒有照片）
+    one_off = make_pickup_authorization(
+        db_session, hua, service_date=_TODAY, proxy_name="王叔叔", code="654321"
+    )
+    staff = make_staff(db_session, permissions=["pickup:operate"], display_name="林老師")
+    db_session.commit()
+    # 指定真實來源 IP 才能驗 request meta 有注入到 audit
+    client = TestClient(app, base_url="http://testserver", client=("203.0.113.5", 50000))
+    login_staff(client, staff)
+
+    # 有照片：body 可省略
+    resp = client.post(_auth_url(with_photo.id, "/confirm-visual-match"))
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert (body["authorization"]["id"], body["authorization"]["status"]) == (
+        str(with_photo.id),
+        "completed",
+    )
+    assert body["authorization"]["verification_method"] == "visual_match"
+    assert body["authorization"]["verified_by_name"] == "林老師"
+    assert (body["request"]["id"], body["request"]["completion_method"]) == (
+        str(request.id),
+        "visual_match",
+    )
+    assert body["request"]["picked_up_by_name"] == "李阿姨"
+
+    # 沒有照片：員工核對證件後確認
+    no_photo = client.post(
+        _auth_url(one_off.id, "/confirm-visual-match"), json={"note": "已核對身分證"}
+    )
+
+    assert no_photo.status_code == 200
+    assert (
+        no_photo.json()["authorization"]["status"],
+        no_photo.json()["authorization"]["verification_method"],
+    ) == ("completed", "visual_match")
+    assert (no_photo.json()["request"]["source"], no_photo.json()["request"]["status"]) == (
+        "proxy",
+        "completed",
+    )
+    # 已 commit：重讀 DB；兩筆都寫了 audit（記錄來源 IP、是否有照片、備註）
+    stored = [_reload_auth(db_session, a.id) for a in (with_photo, one_off)]
+    assert [(a.status, a.verified_by) for a in stored] == [("completed", staff.id)] * 2
+    [photo_log] = _audits(db_session, "pickup.visual_match", with_photo.id)
+    [id_log] = _audits(db_session, "pickup.visual_match", one_off.id)
+    assert (photo_log.actor_id, photo_log.ip, photo_log.after) == (
+        staff.id,
+        "203.0.113.5",
+        {"status": "completed", "has_photo": True, "note": None},
+    )
+    assert id_log.after == {"status": "completed", "has_photo": False, "note": "已核對身分證"}
+
+
+def test_admin_pickup_visual_422(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming, _ = _family(db_session)
+    auth = make_pickup_authorization(db_session, ming, service_date=_TODAY)
+    client, _ = staff_client(permissions=["pickup:operate"])
+
+    assert_error(client.post(_auth_url("abc", "/confirm-visual-match")), 422, "validation_error")
+    for body in ({"note": "x" * 201}, {"note": "已核對", "method": "visual_match"}):
+        assert_error(
+            client.post(_auth_url(auth.id, "/confirm-visual-match"), json=body),
+            422,
+            "validation_error",
+        )
+    assert _reload_auth(db_session, auth.id).status == "active"
+
+
+def test_admin_pickup_visual_401(api_client: TestClient, assert_error: AssertError) -> None:
+    resp = api_client.post(_auth_url(uuid4(), "/confirm-visual-match"))
+
+    assert_error(resp, 401, "unauthenticated")
+
+
+def test_admin_pickup_visual_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming, _ = _family(db_session)
+    auth = make_pickup_authorization(db_session, ming, service_date=_TODAY)
+    client, _ = staff_client(permissions=["pickup:read"])
+
+    resp = client.post(_auth_url(auth.id, "/confirm-visual-match"))
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["pickup:operate"]}
+    assert _reload_auth(db_session, auth.id).status == "active"
+    assert _audits(db_session, "pickup.visual_match", auth.id) == []
+
+
+def test_admin_pickup_visual_409(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming, _ = _family(db_session)
+    locked = make_pickup_authorization(db_session, ming, service_date=_TODAY, code_attempts=5)
+    completed = make_pickup_authorization(
+        db_session, ming, service_date=_TODAY, status="completed", code="654321"
+    )
+    client, _ = staff_client(permissions=["pickup:operate"])
+
+    locked_resp = client.post(_auth_url(locked.id, "/confirm-visual-match"))
+    completed_resp = client.post(_auth_url(completed.id, "/confirm-visual-match"))
+
+    assert_error(locked_resp, 409, "pickup_code_locked")
+    assert_error(completed_resp, 409, "authorization_not_active")
+    assert_error(
+        client.post(_auth_url(uuid4(), "/confirm-visual-match")),
+        404,
+        "pickup_authorization_not_found",
+    )
+    assert _reload_auth(db_session, locked.id).status == "active"
+    assert _audits(db_session, "pickup.visual_match", locked.id) == []
