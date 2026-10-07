@@ -5,6 +5,7 @@ import { nextTick } from 'vue'
 import { adminHttp } from '@/api/http'
 import { createApiMock, mountWithApp } from '@/test/helpers'
 import HomeworkBatchAddDialog from './HomeworkBatchAddDialog.vue'
+import batchDialogSource from './HomeworkBatchAddDialog.vue?raw'
 
 // GET /admin/subjects?active_only=true（lookups store）
 const SUBJECTS = [
@@ -272,6 +273,19 @@ describe('HomeworkBatchAddDialog', () => {
     expect(submitted(wrapper)).toStrictEqual([
       { subject_id: null, title: '圈詞', student_ids: ['s1', 's3', 's4', 's5'] },
     ])
+  })
+
+  it('HomeworkBatchAddDialog student list is a scrolling three-column touch grid', async () => {
+    await mountDialog()
+    await chooseTarget('指定學生')
+    expect(dialog().find('.el-checkbox-group.homework-batch__students').exists()).toBe(true)
+
+    // happy-dom 不算版面：鎖住稿的三欄、限高捲動與 44px 觸控高度
+    const style = (batchDialogSource.match(/<style scoped>([\s\S]*?)<\/style>/)?.[1] ?? '').replace(/\s+/g, ' ')
+    expect(style).toMatch(
+      /\.homework-batch__students \{[^}]*grid-template-columns: repeat\(3, 1fr\);[^}]*max-height: 220px;[^}]*overflow: auto;/,
+    )
+    expect(style).toMatch(/\.homework-batch__students :deep\(\.el-checkbox\) \{[^}]*height: 44px;/)
   })
 
   it('HomeworkBatchAddDialog quick fills and remembers recent titles', async () => {
