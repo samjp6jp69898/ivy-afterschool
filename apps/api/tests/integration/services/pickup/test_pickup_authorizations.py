@@ -5,13 +5,14 @@
 - BACKEND-424：load_verifiable_authorization（核銷前鎖定並檢查）。
 - BACKEND-523：regenerate_code（家長重新產生接送碼）。
 - BACKEND-425：complete_via_authorization（核銷後完成授權與接送請求）。
+- BACKEND-426：verify_code（核對接送碼，連錯 5 次鎖定、原子累計）。
 """
 
 import json
 import logging
 import re
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
@@ -44,12 +45,14 @@ from app.schemas.pickup import (
 )
 from app.services.pickup import authorizations as authorizations_module
 from app.services.pickup.authorizations import (
+    VerifyOutcome,
     complete_via_authorization,
     create_authorization,
     list_authorizations_for_staff,
     list_child_authorizations,
     load_verifiable_authorization,
     regenerate_code,
+    verify_code,
 )
 from app.services.pickup.codes import pickup_code_matches
 from app.services.settings_service import clear_settings_cache
@@ -908,3 +911,285 @@ def test_complete_via_authorization_notifies(db_session: Session, kick_off: None
         "代理人 李阿姨",
         "17:00",
     )
+
+
+# --- BACKEND-426 verify_code ---
+
+_WRONG_CODE = "000000"
+
+
+@pytest.fixture
+def owner_cleanup_rows() -> Iterator[list[tuple[str, UUID]]]:
+    """committing 測試建立的學生 / 員工以 owner 連線刪除；排在 committing_db_session 之前
+    （先 close session、truncate 授權表，再刪人）。員工一律用 seed 系統角色，不建自訂角色。"""
+    rows: list[tuple[str, UUID]] = []
+    yield rows
+    with connect_owner() as conn:
+        conn.execute("set lock_timeout = '5s'")
+        for table, row_id in rows:
+            conn.execute(f"delete from public.{table} where id = %s", (row_id,))  # noqa: S608
+        conn.commit()
+
+
+def _attendance_of(db: Session, student_id: UUID) -> StudentAttendance:
+    return db.execute(
+        select(StudentAttendance)
+        .where(StudentAttendance.student_id == student_id)
+        .execution_options(populate_existing=True)
+    ).scalar_one()
+
+
+def test_verify_code_success(db_session: Session, kick_off: None) -> None:
+    clock = FakeClock(datetime(2026, 9, 10, 9, 0, tzinfo=UTC))  # 台北 17:00
+    ming = make_student(db_session)
+    parent = _parent_of(db_session, ming)
+    staff = make_staff(db_session, permissions=["pickup:operate"], display_name="林老師")
+    make_attendance(db_session, ming, service_date=_TODAY, status="present")
+    auth = make_pickup_authorization(
+        db_session, ming, service_date=_TODAY, code="123456", proxy_name="李阿姨"
+    )
+
+    # 家長轉告時常帶空白：正規化後比對
+    outcome = verify_code(db_session, auth.id, "123 456", actor=_current_staff(staff), clock=clock)
+
+    assert (outcome.ok, outcome.locked, outcome.remaining_attempts) == (True, False, 5)
+    assert outcome.result is not None
+    result = outcome.result
+    assert (result.authorization.id, result.authorization.status) == (auth.id, "completed")
+    assert result.authorization.verification_method == "code"
+    assert result.authorization.verified_by_name == "林老師"
+    assert (result.request.status, result.request.completion_method, result.request.source) == (
+        "completed",
+        "code",
+        "proxy",
+    )
+    assert result.request.picked_up_by_name == "李阿姨"
+    row = _fresh(db_session, auth.id)
+    assert (row.status, row.verification_method, row.verified_by, row.verified_at) == (
+        "completed",
+        "code",
+        staff.id,
+        clock.now(),
+    )
+    assert (row.code_attempts, row.code_locked_at) == (0, None)
+    attendance = _attendance_of(db_session, ming.id)
+    assert (attendance.status, attendance.check_out_source, attendance.check_out_at) == (
+        "left",
+        "pickup",
+        clock.now(),
+    )
+    [notification] = db_session.execute(
+        select(Notification).where(
+            Notification.event == "pickup.completed",
+            Notification.payload["request_id"].astext == str(result.request.id),
+        )
+    ).scalars()
+    assert (notification.recipient_id, notification.payload["picked_up_by"]) == (
+        parent.id,
+        "代理人 李阿姨",
+    )
+
+
+def test_verify_code_mismatch_counts(db_session: Session, kick_off: None) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    _parent_of(db_session, ming)
+    staff = make_staff(db_session, permissions=["pickup:operate"])
+    make_attendance(db_session, ming, service_date=_TODAY, status="present")
+    auth = make_pickup_authorization(db_session, ming, service_date=_TODAY, code="123456")
+
+    outcome = verify_code(
+        db_session, auth.id, _WRONG_CODE, actor=_current_staff(staff), clock=clock
+    )
+
+    assert outcome == VerifyOutcome(ok=False, result=None, remaining_attempts=4, locked=False)
+    row = _fresh(db_session, auth.id)
+    assert (row.status, row.code_attempts, row.code_locked_at, row.verified_at) == (
+        "active",
+        1,
+        None,
+        None,
+    )
+    # 錯碼不核銷：沒有請求、出勤不動、沒有通知
+    assert _completed_requests(db_session, ming.id) == []
+    assert _attendance_of(db_session, ming.id).status == "present"
+    assert (
+        db_session.execute(
+            select(func.count())
+            .select_from(Notification)
+            .where(Notification.payload["student_id"].astext == str(ming.id))
+        ).scalar_one()
+        == 0
+    )
+
+
+def test_verify_code_locks_on_fifth(
+    db_session: Session, kick_off: None, caplog: pytest.LogCaptureFixture
+) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    staff = make_staff(db_session, permissions=["pickup:operate"])
+    auth = make_pickup_authorization(
+        db_session, ming, service_date=_TODAY, code="123456", code_attempts=4
+    )
+    caplog.set_level(logging.DEBUG)
+
+    outcome = verify_code(
+        db_session, auth.id, _WRONG_CODE, actor=_current_staff(staff), clock=clock
+    )
+
+    assert outcome == VerifyOutcome(ok=False, result=None, remaining_attempts=0, locked=True)
+    row = _fresh(db_session, auth.id)
+    assert (row.status, row.code_attempts, row.code_locked_at) == ("active", 5, clock.now())
+    [warning] = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert str(auth.id) in warning.getMessage()
+    # 明碼（輸入的與正確的）都不進 log
+    assert _WRONG_CODE not in caplog.text
+    assert "123456" not in caplog.text
+
+
+def test_verify_code_locked_rejects_correct(db_session: Session, kick_off: None) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    staff = make_staff(db_session, permissions=["pickup:operate"])
+    auth = make_pickup_authorization(
+        db_session, ming, service_date=_TODAY, code="123456", code_attempts=5
+    )
+
+    with pytest.raises(AppError) as exc:
+        verify_code(db_session, auth.id, "123456", actor=_current_staff(staff), clock=clock)
+
+    assert (exc.value.status, exc.value.code) == (409, "pickup_code_locked")
+    row = _fresh(db_session, auth.id)
+    assert (row.status, row.code_attempts, row.verified_at, row.verification_method) == (
+        "active",
+        5,
+        None,
+        None,
+    )
+    assert row.code_locked_at is not None
+    assert _completed_requests(db_session, ming.id) == []
+
+
+def _run_concurrently(workers: list[Callable[[], Any]], *, join_timeout: float) -> list[Any]:
+    """每個 worker 一條執行緒；回傳值或例外依 worker 順序收集。"""
+    results: list[Any] = [None] * len(workers)
+
+    def run(index: int) -> None:
+        try:
+            results[index] = workers[index]()
+        except BaseException as exc:  # 例外是測試要斷言的結果
+            results[index] = exc
+
+    threads = [threading.Thread(target=run, args=(i,)) for i in range(len(workers))]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=join_timeout)
+    assert not any(t.is_alive() for t in threads), "有 worker 在 join_timeout 內沒結束"
+    return results
+
+
+@pytest.mark.cleanup_tables("pickup_authorizations")
+def test_verify_code_concurrent_attempts(
+    owner_cleanup_rows: list[tuple[str, UUID]], committing_db_session: Session, db_engine: Engine
+) -> None:
+    """6 條連線同時錯碼：FOR UPDATE 序列化 → 累計 1..5、第 5 次鎖定，第 6 條看到鎖定得 409。"""
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(committing_db_session)
+    teacher = make_staff(committing_db_session, role_code="tutor")
+    auth = make_pickup_authorization(
+        committing_db_session, ming, service_date=_TODAY, code="123456"
+    )
+    committing_db_session.commit()
+    owner_cleanup_rows.extend([("students", ming.id), ("staff_users", teacher.id)])
+    actor = _current_staff(teacher)
+    count = 6
+    barrier = threading.Barrier(count)
+
+    def attempt() -> VerifyOutcome:
+        session = Session(bind=db_engine)
+        try:
+            session.execute(text("set local lock_timeout = '10s'"))
+            barrier.wait(timeout=10)
+            outcome = verify_code(session, auth.id, _WRONG_CODE, actor=actor, clock=clock)
+            session.commit()
+            return outcome
+        except BaseException:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    results = _run_concurrently([attempt] * count, join_timeout=30)
+
+    outcomes = [r for r in results if isinstance(r, VerifyOutcome)]
+    errors = [r for r in results if not isinstance(r, VerifyOutcome)]
+    assert len(outcomes) == 5
+    assert all((o.ok, o.result) == (False, None) for o in outcomes)
+    assert sorted(o.remaining_attempts for o in outcomes) == [0, 1, 2, 3, 4]
+    assert [o.remaining_attempts for o in outcomes if o.locked] == [0]  # 恰一次鎖定轉換
+    [error] = errors
+    assert isinstance(error, AppError)
+    assert (error.status, error.code) == (409, "pickup_code_locked")
+    row = _fresh(committing_db_session, auth.id)
+    assert (row.status, row.code_attempts, row.code_locked_at) == ("active", 5, clock.now())
+
+
+@pytest.mark.cleanup_tables("pickup_authorizations")
+def test_verify_code_concurrent_attempts_without_row_lock(
+    owner_cleanup_rows: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """模擬未來有路徑漏鎖（載入不帶 FOR UPDATE）：兩條連線都讀到 code_attempts=4 再同時錯碼，
+    單一語句的 WHERE code_locked_at IS NULL + 原子 +1 仍只讓一條鎖定，另一條 409，code_attempts
+    不超過 5。"""
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(committing_db_session)
+    teacher = make_staff(committing_db_session, role_code="tutor")
+    auth = make_pickup_authorization(
+        committing_db_session, ming, service_date=_TODAY, code="123456", code_attempts=4
+    )
+    committing_db_session.commit()
+    owner_cleanup_rows.extend([("students", ming.id), ("staff_users", teacher.id)])
+    actor = _current_staff(teacher)
+    barrier = threading.Barrier(2)
+
+    def load_without_lock(
+        session: Session, auth_id: UUID, *, clock: FakeClock, allow_locked: bool = False
+    ) -> PickupAuthorization:
+        loaded = session.execute(
+            select(PickupAuthorization)
+            .where(PickupAuthorization.id == auth_id)
+            .execution_options(populate_existing=True)
+        ).scalar_one()
+        barrier.wait(timeout=10)  # 兩邊都讀完舊值（4、未鎖定）才繼續
+        return loaded
+
+    monkeypatch.setattr(authorizations_module, "load_verifiable_authorization", load_without_lock)
+
+    def attempt() -> VerifyOutcome:
+        session = Session(bind=db_engine)
+        try:
+            session.execute(text("set local lock_timeout = '10s'"))
+            outcome = verify_code(session, auth.id, _WRONG_CODE, actor=actor, clock=clock)
+            session.commit()
+            return outcome
+        except BaseException:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    results = _run_concurrently([attempt, attempt], join_timeout=30)
+
+    outcomes = [r for r in results if isinstance(r, VerifyOutcome)]
+    errors = [r for r in results if not isinstance(r, VerifyOutcome)]
+    assert outcomes == [VerifyOutcome(ok=False, result=None, remaining_attempts=0, locked=True)]
+    [error] = errors
+    assert isinstance(error, AppError)
+    assert (error.status, error.code) == (409, "pickup_code_locked")
+    row = _fresh(committing_db_session, auth.id)
+    assert (row.status, row.code_attempts, row.code_locked_at) == ("active", 5, clock.now())
