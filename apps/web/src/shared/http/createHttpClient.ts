@@ -8,6 +8,7 @@
 //   - 其他請求第一次 401 → 共用同一個 refresh；成功（或 409 refresh_in_progress：另一個分頁已輪替）→ 重送一次；
 //     refresh 失敗 → onAuthFailure 並 reject 原 401。
 //   - 重送後仍 401 → onAuthFailure。onAuthFailure 以 refresh 那一輪為單位去重。
+// FormData（FRONTEND-294）：request interceptor 先移除預設的 JSON Content-Type，上傳的 api client 不必自己設定。
 import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 import { ApiError, isApiError } from '@/shared/types/api'
 
@@ -116,6 +117,9 @@ export function createHttpClient(opts: HttpClientOptions): AxiosInstance {
   instance.interceptors.request.use(
     (config) => {
       ;(config as ClientRequestConfig)._fromRefresh = callingRefresh
+      // instance 預設的 JSON Content-Type 會讓 axios 的 transformRequest 把 FormData 序列化成 JSON 字串（檔案遺失）；
+      // 在 transformRequest 之前移除，由瀏覽器自行帶 multipart boundary。401 重送同一個 config 時也會再經過這裡。
+      if (config.data instanceof FormData) config.headers.delete('Content-Type')
       return config
     },
     undefined,
