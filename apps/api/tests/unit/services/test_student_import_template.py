@@ -138,12 +138,15 @@ def test_import_template_validations_match_importer_rules() -> None:
     status = validations[f"{_letter('狀態')}2:{_letter('狀態')}{last_row}"]
     assert gender.formula1.strip('"').split(",") == list(_GENDERS)
     assert status.formula1.strip('"').split(",") == list(_STATUSES)
+    # 年級驗證的上下界必須剛好是 StudentCreateIn 接受的最小 / 最大值
+    grade = validations[f"{_letter('年級*')}2:{_letter('年級*')}{last_row}"]
+    low, high = int(grade.formula1), int(grade.formula2)
     base: dict[str, Any] = {"student_no": "S-001", "name": "王小明"}
-    for grade in (1, 6):
-        assert StudentCreateIn(**base, grade_level=grade).grade_level == grade
-    for grade in (0, 7):
+    for accepted in (low, high):
+        assert StudentCreateIn(**base, grade_level=accepted).grade_level == accepted
+    for rejected in (low - 1, high + 1):
         with pytest.raises(ValueError, match="grade_level"):
-            StudentCreateIn(**base, grade_level=grade)
+            StudentCreateIn(**base, grade_level=rejected)
 
 
 def test_import_template_help_sheet() -> None:
