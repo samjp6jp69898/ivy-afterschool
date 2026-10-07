@@ -26,6 +26,9 @@
 - BACKEND-438 ``POST /pickup/authorizations/{auth_id}/confirm-visual-match``：pickup:operate；
   ``VisualMatchIn`` 可省略 + request meta → BACKEND-427 ``confirm_visual_match``（照片只是輔助；
   寫 audit）→ commit → ``AuthorizationCompleteOut``。
+- BACKEND-439 ``POST /pickup/authorizations/{auth_id}/override-complete``：pickup:override；
+  ``OverrideCompleteIn`` + request meta → BACKEND-428 ``override_complete``（鎖定的授權也可；service
+  再檢查一次 pickup:override 作縱深防禦；寫 audit）→ commit → ``AuthorizationCompleteOut``。
 """
 
 from __future__ import annotations
@@ -46,6 +49,7 @@ from app.core.request_meta import RequestMeta, get_request_meta
 from app.core.storage import Storage, get_storage
 from app.schemas.pickup import (
     AuthorizationCompleteOut,
+    OverrideCompleteIn,
     PickupCancelIn,
     PickupCompleteIn,
     PickupQueueOut,
@@ -69,6 +73,7 @@ router = APIRouter(prefix="/pickup", tags=["admin-pickup"])
 
 PickupRead = Annotated[CurrentStaff, Depends(require_permission(Permission.PICKUP_READ))]
 PickupOperate = Annotated[CurrentStaff, Depends(require_permission(Permission.PICKUP_OPERATE))]
+PickupOverride = Annotated[CurrentStaff, Depends(require_permission(Permission.PICKUP_OVERRIDE))]
 Db = Annotated[Session, Depends(get_db)]
 ClockDep = Annotated[Clock, Depends(get_clock)]
 
@@ -203,6 +208,22 @@ def confirm_visual_match(
 ) -> AuthorizationCompleteOut:
     out = authorization_service.confirm_visual_match(
         db, auth_id, body, actor=staff, meta=meta, clock=clock
+    )
+    db.commit()
+    return out
+
+
+@router.post("/authorizations/{auth_id}/override-complete", response_model=AuthorizationCompleteOut)
+def override_complete(
+    auth_id: UUID,
+    body: OverrideCompleteIn,
+    staff: PickupOverride,
+    db: Db,
+    meta: Annotated[RequestMeta, Depends(get_request_meta)],
+    clock: ClockDep,
+) -> AuthorizationCompleteOut:
+    out = authorization_service.override_complete(
+        db, auth_id, body.note, actor=staff, meta=meta, clock=clock
     )
     db.commit()
     return out
