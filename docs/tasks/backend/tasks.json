@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 422,
-  "last_updated": "2026-10-07T08:39:18Z",
+  "version": 423,
+  "last_updated": "2026-10-07T08:45:56Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -8221,7 +8221,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-308",
@@ -8248,9 +8248,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-a",
+        "notes": "review-r9-a pass：tdd.run 6 passed（collect-only 比對：5 條 red_cases + guard_registered 全被 -k 選到）；整檔 42 passed。紅燈 commit 5937641 早於實作 3e879af，當下 attendance.py 尚無 /batch-check-in。handler 只做 require_permission(ATTENDANCE_OPERATE) → batch_check_in(db, ids, actor, clock) → commit，簽章與 BACKEND-308 一致；固定路徑宣告在 /{student_id}/... 之前。突變：拿掉 db.commit() → success 轉紅；守衛改 ATTENDANCE_READ → 403 等 4 條轉紅。反例探針：不存在 / 已封存 → skipped student_not_found、suspended → student_not_active、合法者成功且 DB 重讀 present；201 筆 → 422。lint / typecheck 乾淨；跑完無殘列。"
       }
     },
     {
@@ -8961,7 +8961,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/leaves.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-346",
@@ -8989,9 +8989,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-a",
+        "notes": "review-r9-a pass：tdd.run 7 passed（6 條 red_cases + guard_registered 全選到）；整檔 24 passed。紅燈 5eb2f50 早於實作 75e7948。body 可省略預設 scope=remaining、LeaveCancelIn extra 欄位 422；cancel_leave(actor=Actor.staff, scope, clock) → leave_out(db, result.leave)（公開組裝函式）→ commit。突變：拿掉 commit → success / ended_all 轉紅；預設 scope 改 all → success / 409 轉紅；守衛改 LEAVES_READ → 5 條轉紅。探針：今天開始的請假帶 {} → 整筆 cancelled 且三天出勤還原 expected，再取消 409 leave_not_active。lint / typecheck 乾淨；無殘列。"
       }
     },
     {
@@ -9989,7 +9989,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/homework.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-382",
@@ -10018,9 +10018,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-a",
+        "notes": "review-r9-a pass：tdd.run 10 passed（6 條 red_cases + guard_registered + 3 條補測試全選到）；整檔 16 passed。3c20b4c 補的規格（只給 overall 時以 381 回傳的進度列組 ProgressOut、HH:MM 轉 time、先 overall 後 ETA）與 domain_spec M6 一致；紅燈 3eea9aa / 1eeaebb 皆早於實作 b8382f7。UNSET 語意正確：未給欄位傳 UNSET、給 null 清除、overall=auto 由項目推導。突變：UNSET 改一律覆寫 → partial_update 轉紅；ETA 改在 overall 之前處理 → overall_then_eta 轉紅；拿掉 commit → 5 條轉紅；守衛改 HOMEWORK_READ → 8 條轉紅。探針：同一學生連續 PUT（ETA → done → note → ETA null → auto+ETA → done+note）家長通知數依序 eta_updated 1/1/1/1/2/2、done 0/1/1/1/1/2，證明處理順序與 UNSET；非今天不通知；invalid_service_date 422 不留進度列；endpoint 的 _progress_out 與 service 的 _progress_view 對有 / 無 ETA 的列 model_dump 完全相同。殘留（不打回）：endpoint 內自組 _progress_out 與 homework_service._progress_view 重複（欄位、HH:MM、設定者姓名規則相同，差別只在 db.get(StaffUser) vs select(display_name)、service 版另處理 progress=None），之後可把 service 的組裝函式公開共用；overall 與 ETA 皆給時 broadcast_homework_snapshot 登記兩次但同 key 只推一次。lint / typecheck 乾淨；無殘列。"
       }
     },
     {
@@ -11266,7 +11266,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-407",
@@ -11293,9 +11293,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-a",
+        "notes": "review-r9-a pass：tdd.run 6 passed（5 條 red_cases + guard_registered 全選到）；整檔 45 passed。紅燈 9e0033f 早於實作 0ecf854。reply_request(db, id, body, actor, clock) → build_request_views(db, [request])[0] → commit；ws 推播由 publish_request_change / broadcast_homework_snapshot 登記在 session before_commit，不在 handler commit 前送出。突變：拿掉 commit → success 轉紅；守衛改 PICKUP_READ → 4 條轉紅。探針：arrived 請求回覆後狀態不變、進度列不存在時由 reply 建立並寫回 ETA、家長收 pickup.replied 1 則且 homework.eta_updated 0 則；cancelled → 409 invalid_pickup_status 含 current_status。殘留（架構層，非本 task）：before_commit 推播在 commit 本身失敗時仍可能送出。lint / typecheck 乾淨；無殘列。"
       }
     },
     {
@@ -11344,7 +11344,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/portal/dismissal_calls.py::portal_complete",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-410",
@@ -11372,9 +11372,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-a",
+        "notes": "review-r9-a pass：tdd.run 7 passed（5 條 red_cases + guard_registered + override_audit 全選到）；整檔 45 passed。紅燈 e4b44fe 早於實作 6efbd65。pickup:operate 守衛 + get_request_meta 注入 → complete_request(db, id, body, actor, meta, clock) → build_request_views → commit；override 由 service 檢查 pickup:override。突變：守衛改 PICKUP_READ → 5 條轉紅；拿掉 commit → success / override_audit 轉紅。探針：只有 pickup:operate 的員工對 arrived 請求強制完成 → 403 permission_denied（required pickup:override）且請求 / 出勤 / audit / 通知皆無寫入；補 extra pickup:override 後 200、出勤 left（pickup）、audit 1 筆、家長通知 1 則。audit ip 以 TestClient(client=('203.0.113.5', 50000)) 驗證為真實來源 IP。lint / typecheck 乾淨；無殘列。"
       }
     },
     {
@@ -14110,7 +14110,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-521",
@@ -14138,9 +14138,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-a",
+        "notes": "review-r9-a pass：tdd.run 6 passed（5 條 red_cases + guard_registered 全選到）；整檔 46 passed。紅燈 7dda80f 早於實作 aa2ab4e。staff:write 守衛 → activate(db, id, actor, meta, clock) → commit → StaffUserCreatedOut；臨時密碼只在此回應出現（再次啟用 409 不含 temp_password；audit before / after 只有 is_active / must_change_password，不含密碼或雜湊；探針以 caplog DEBUG 確認不進 log）；Cache-Control: no-store 存在（middleware 對 /api/ 全域加，拿掉 handler 那行仍綠，已知殘留）。突變：拿掉 commit → success 轉紅；守衛改 STAFF_READ → 403 轉紅。探針：啟用 → 停用 → 再啟用，第一個臨時密碼登入 401 invalid_credentials、第二個 200 且 must_change_password；兩筆 staff_user.activate 稽核皆帶來源 IP；director+staff:write 啟用帶 extra students:purge 的停用 tutor → 403 cannot_manage_staff、目標仍停用、無稽核列。殘留（不打回）：handler 的 no-store 一行與 middleware 重複；staff_user_service.activate 的 clock 參數未使用（BACKEND-521 範圍）。lint / typecheck 乾淨；無殘列。"
       }
     },
     {
