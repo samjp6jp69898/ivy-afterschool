@@ -1,13 +1,15 @@
 """BACKEND-373 / 384 / 374 / 383 / 376 / 382：homework_service（進度列鎖定、家長端當日作業明細、
 ws 快照推播、作業進度看板、整體完成副作用、設定預計可接送時間、重算整體進度、手動標整體完成）。
+BACKEND-377：新增單一學生作業項目。
 
 推播測試以 monkeypatch 記錄 publish_threadsafe；commit 走 db_session（savepoint 模式的 commit
 同樣觸發 before_commit / after_commit，見 BACKEND-006）。
 """
 
+import json
 import threading
 from collections.abc import Iterator
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -27,10 +29,11 @@ from app.models.reference import Subject
 from app.notifications import outbox_jobs
 from app.realtime import publish as publish_module
 from app.realtime.publish import admin_topic_channel, student_channel
-from app.schemas.homework import BoardOut, BoardQuery, BoardStudentOut
+from app.schemas.homework import BoardOut, BoardQuery, BoardStudentOut, HomeworkItemCreateIn
 from app.services.homework_service import (
     ProgressChange,
     broadcast_homework_snapshot,
+    create_item,
     get_board,
     get_child_homework,
     handle_homework_done,
@@ -1099,3 +1102,331 @@ def test_set_overall_not_found(
 
     assert (missing.value.status, missing.value.code) == (404, "student_not_found")
     assert (too_far.value.status, too_far.value.code) == (422, "invalid_service_date")
+
+
+# --- BACKEND-377 create_item ---
+
+
+def _create_in(student_id: UUID, **overrides: Any) -> HomeworkItemCreateIn:
+    fields: dict[str, Any] = {"student_id": student_id, "title": "國語習作 p.5"}
+    fields.update(overrides)
+    return HomeworkItemCreateIn(**fields)
+
+
+def _stored_item(db: Session, item_id: UUID) -> HomeworkItem:
+    return db.execute(
+        select(HomeworkItem)
+        .where(HomeworkItem.id == item_id)
+        .execution_options(populate_existing=True)
+    ).scalar_one()
+
+
+def _item_count(db: Session, student_id: UUID) -> int:
+    return db.execute(
+        select(func.count()).select_from(HomeworkItem).where(HomeworkItem.student_id == student_id)
+    ).scalar_one()
+
+
+def _set_window(db: Session, *, past_days: int, future_days: int) -> None:
+    db.execute(
+        text(
+            "update public.system_settings set value = cast(:value as jsonb) "
+            "where key = 'homework.window'"
+        ),
+        {"value": json.dumps({"past_days": past_days, "future_days": future_days})},
+    )
+    clear_settings_cache()
+
+
+def test_create_homework_item_success(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    chinese = _subject(db_session, "國語")
+
+    out = create_item(
+        db_session, _create_in(ming.id, subject_id=chinese.id), actor=actor, clock=clock
+    )
+
+    assert out.item is not None
+    assert (out.item.title, out.item.status, out.item.subject_id, out.item.subject_name) == (
+        "國語習作 p.5",
+        "todo",
+        chinese.id,
+        "國語",
+    )
+    assert (out.item.student_id, out.item.service_date, out.item.sort_order) == (ming.id, _DAY, 0)
+    assert out.progress.overall_status == "not_started"
+    assert (out.progress.student_id, out.progress.service_date) == (ming.id, _DAY)
+    assert (out.progress.ready_eta, out.progress.note) == (None, None)
+    stored = _stored_item(db_session, out.item.id)
+    assert (stored.updated_by, stored.student_id, stored.service_date) == (actor.id, ming.id, _DAY)
+    assert _progress_row(db_session, ming.id).overall_status == "not_started"
+
+
+def test_create_homework_item_passes_status_and_sort_order(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session)
+
+    out = create_item(
+        db_session,
+        _create_in(ming.id, status="doing", sort_order=7, service_date=date(2026, 9, 2)),
+        actor=actor,
+        clock=clock,
+    )
+
+    assert out.item is not None
+    assert (out.item.status, out.item.sort_order, out.item.service_date) == (
+        "doing",
+        7,
+        date(2026, 9, 2),
+    )
+    assert out.item.subject_id is None
+    assert out.item.subject_name is None
+    assert (out.progress.service_date, out.progress.overall_status) == (
+        date(2026, 9, 2),
+        "in_progress",
+    )
+
+
+def test_create_homework_item_resets_done(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = _with_parent(db_session)
+    make_homework_item(db_session, ming, service_date=_DAY, status="done", title="國語生字")
+    make_homework_progress(db_session, ming, service_date=_DAY, overall_status="done")
+
+    out = create_item(db_session, _create_in(ming.id, title="數學習作"), actor=actor, clock=clock)
+
+    assert out.progress.overall_status == "in_progress"
+    assert _progress_row(db_session, ming.id).overall_status == "in_progress"
+    assert _notifications(db_session, "homework.done", ming.id) == []
+
+
+def test_create_homework_item_done_notifies_parent_once(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    """唯一的項目直接建成 done → 整體轉 done，今天的 done 通知家長一次。"""
+    ming = _with_parent(db_session)
+
+    out = create_item(db_session, _create_in(ming.id, status="done"), actor=actor, clock=clock)
+    create_item(
+        db_session, _create_in(ming.id, status="done", title="數學"), actor=actor, clock=clock
+    )
+
+    assert out.progress.overall_status == "done"
+    assert len(_notifications(db_session, "homework.done", ming.id)) == 1
+
+
+def test_create_homework_item_defaults_to_taipei_today(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    """跨午夜：UTC 9/1 16:30 已是台北 9/2，沒給 service_date 時建在 9/2。"""
+    ming = make_student(db_session)
+    clock.set(datetime(2026, 9, 1, 16, 30, tzinfo=UTC))
+
+    out = create_item(db_session, _create_in(ming.id), actor=actor, clock=clock)
+
+    assert out.item is not None
+    assert out.item.service_date == date(2026, 9, 2)
+    assert out.progress.service_date == date(2026, 9, 2)
+
+
+def test_create_homework_item_broadcasts_snapshot(
+    db_session: Session,
+    clock: FakeClock,
+    actor: CurrentStaff,
+    kick_off: None,
+    published: list[Call],
+) -> None:
+    ming = make_student(db_session)
+    make_guardian(db_session, ming, parent=make_parent(db_session))
+
+    out = create_item(db_session, _create_in(ming.id, title="數學習作"), actor=actor, clock=clock)
+    assert published == []
+    db_session.commit()
+
+    assert out.item is not None
+    [admin] = _on(published, admin_topic_channel("homework"))
+    assert [i["title"] for i in admin["data"]["items"]] == ["數學習作"]
+    assert admin["data"]["items"][0]["id"] == str(out.item.id)
+    [parent] = _on(published, student_channel(ming.id))
+    assert [i["title"] for i in parent["data"]["items"]] == ["數學習作"]
+
+
+def test_create_homework_item_validation(
+    db_session: Session,
+    clock: FakeClock,
+    actor: CurrentStaff,
+    kick_off: None,
+    fresh_settings: None,
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    gone = make_student(db_session, name="已退班")
+    gone.status = "withdrawn"
+    gone.withdrawn_on = date(2026, 8, 31)
+    paused = make_student(db_session, name="暫停中", status="suspended")
+    archived = make_student(db_session, name="已封存", archived=True)
+    inactive_subject = _subject(db_session, "自然")
+    inactive_subject.is_active = False
+    db_session.flush()
+    _set_window(db_session, past_days=30, future_days=7)
+
+    def fail(data: HomeworkItemCreateIn) -> AppError:
+        with pytest.raises(AppError) as excinfo:
+            create_item(db_session, data, actor=actor, clock=clock)
+        return excinfo.value
+
+    missing = fail(_create_in(uuid4()))
+    not_active = fail(_create_in(gone.id))
+    suspended = fail(_create_in(paused.id))
+    archived_error = fail(_create_in(archived.id))
+    stopped_subject = fail(_create_in(ming.id, subject_id=inactive_subject.id))
+    unknown_subject = fail(_create_in(ming.id, subject_id=uuid4()))
+    too_far = fail(_create_in(ming.id, service_date=_DAY + timedelta(days=8)))
+
+    assert (missing.status, missing.code) == (404, "student_not_found")
+    assert (not_active.status, not_active.code) == (409, "student_not_active")
+    assert (suspended.status, suspended.code) == (409, "student_not_active")
+    assert (archived_error.status, archived_error.code) == (404, "student_not_found")
+    assert (stopped_subject.status, stopped_subject.code) == (422, "invalid_subject")
+    assert (unknown_subject.status, unknown_subject.code) == (422, "invalid_subject")
+    assert (too_far.status, too_far.code) == (422, "invalid_service_date")
+    assert too_far.details == {"min_date": "2026-08-02", "max_date": "2026-09-08"}
+    # 驗證失敗不留下項目或進度列
+    for student in (ming, gone, paused, archived):
+        assert _item_count(db_session, student.id) == 0
+        assert _progress_count(db_session, student.id) == 0
+
+    # 調高 future_days 並讓快取失效後，同一天可以建立
+    _set_window(db_session, past_days=30, future_days=10)
+    out = create_item(
+        db_session,
+        _create_in(ming.id, service_date=_DAY + timedelta(days=8)),
+        actor=actor,
+        clock=clock,
+    )
+    assert out.item is not None
+    assert out.item.service_date == _DAY + timedelta(days=8)
+
+
+def test_create_homework_item_window_edges(
+    db_session: Session,
+    clock: FakeClock,
+    actor: CurrentStaff,
+    kick_off: None,
+    fresh_settings: None,
+) -> None:
+    """預設 30 / 7：今天 - 30 與今天 + 7 可以，再多一天不行。"""
+    ming = make_student(db_session)
+    _set_window(db_session, past_days=30, future_days=7)
+
+    oldest = create_item(
+        db_session,
+        _create_in(ming.id, service_date=_DAY - timedelta(days=30)),
+        actor=actor,
+        clock=clock,
+    )
+    latest = create_item(
+        db_session,
+        _create_in(ming.id, service_date=_DAY + timedelta(days=7)),
+        actor=actor,
+        clock=clock,
+    )
+    with pytest.raises(AppError) as too_old:
+        create_item(
+            db_session,
+            _create_in(ming.id, service_date=_DAY - timedelta(days=31)),
+            actor=actor,
+            clock=clock,
+        )
+
+    assert oldest.item is not None
+    assert oldest.item.service_date == date(2026, 8, 2)
+    assert latest.item is not None
+    assert latest.item.service_date == date(2026, 9, 8)
+    assert (too_old.value.status, too_old.value.code) == (422, "invalid_service_date")
+
+
+@pytest.mark.cleanup_tables(
+    "homework_items", "homework_daily_progress", "notification_outbox", "notifications"
+)
+def test_create_homework_item_holds_progress_lock_until_commit(
+    owner_cleanup_people: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    clock: FakeClock,
+    kick_off: None,
+) -> None:
+    """新增項目的交易在 commit 前一直持有進度列鎖。
+
+    另一位老師同時把最後一個未完成項目改成 done：他必須排在後面，等新增者 commit 後才看得到
+    新的 todo 項目，所以整體仍是 in_progress、不會誤發 homework.done。拿掉進度列鎖時他不用等，
+    只看到全部 done 而寫成 done（過期結果）。
+    """
+    ming = make_student(committing_db_session, name="王小明")
+    parent = make_parent(committing_db_session)
+    guardian = make_guardian(committing_db_session, ming, parent=parent)
+    staff = make_staff(committing_db_session, role_code="tutor")
+    make_homework_item(committing_db_session, ming, service_date=_DAY, status="done")
+    open_item = make_homework_item(
+        committing_db_session, ming, service_date=_DAY, title="數學習作", status="doing"
+    )
+    make_homework_progress(
+        committing_db_session, ming, service_date=_DAY, overall_status="in_progress"
+    )
+    committing_db_session.commit()
+    owner_cleanup_people.extend(
+        [
+            ("guardians", guardian.id),
+            ("students", ming.id),
+            ("parent_accounts", parent.id),
+            ("staff_users", staff.id),
+        ]
+    )
+    creator = _current(staff)
+
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    s2_done = threading.Event()
+    outcome: dict[str, Any] = {}
+
+    def finish_open_item() -> None:
+        try:
+            s2.execute(text("set local lock_timeout = '10s'"))
+            item = s2.get(HomeworkItem, open_item.id)
+            assert item is not None
+            item.status = "done"
+            s2.flush()
+            outcome["s2"] = recompute_progress(s2, ming.id, _DAY, clock=clock)
+            s2.commit()
+        except BaseException as exc:
+            outcome["s2"] = exc
+            s2.rollback()
+        finally:
+            s2_done.set()
+
+    thread = threading.Thread(target=finish_open_item)
+    try:
+        s1.execute(text("set local lock_timeout = '10s'"))
+        outcome["s1"] = create_item(
+            s1, _create_in(ming.id, title="國語第5課生字"), actor=creator, clock=clock
+        )
+        thread.start()
+        assert not s2_done.wait(timeout=0.5)  # s1 尚未 commit：s2 在進度列排隊
+        s1.commit()
+        thread.join(timeout=10)
+    finally:
+        s1.close()
+        if thread.is_alive():
+            thread.join(timeout=10)
+        s2.close()
+
+    assert outcome["s1"].progress.overall_status == "in_progress"
+    change = outcome["s2"]
+    assert isinstance(change, ProgressChange)
+    assert (change.old_status, change.new_status) == ("in_progress", "in_progress")
+    assert _progress_row(committing_db_session, ming.id).overall_status == "in_progress"
+    assert _item_count(committing_db_session, ming.id) == 3
+    assert _notifications(committing_db_session, "homework.done", ming.id) == []
