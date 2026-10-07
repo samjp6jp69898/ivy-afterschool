@@ -58,9 +58,9 @@ const TUTOR_PERMISSIONS = [
 
 const router = createRouter({ history: createMemoryHistory(), routes })
 
-/** 以真實路由表解析出守衛收到的 to（含 merged meta、fullPath、query） */
+/** 以真實路由表解析出守衛收到的 to（含 merged meta、fullPath、query）；resolve 結果只多了 href */
 function to(fullPath: string): RouteLocationNormalized {
-  return router.resolve(fullPath)
+  return router.resolve(fullPath) as unknown as RouteLocationNormalized
 }
 
 /** 不經路由表的 to：模擬漏設 meta 的路由 */
@@ -274,7 +274,7 @@ describe('authGuard', () => {
     const settle = async (start: RouteLocationNormalized) => {
       const first = await authGuard(start)
       if (first === true) return { hops: 0, path: start.fullPath }
-      const next = router.resolve(first)
+      const next = to(router.resolve(first).fullPath)
       expect(await authGuard(next), `${start.fullPath} → ${next.fullPath}`).toBe(true)
       return { hops: 1, path: next.fullPath }
     }
