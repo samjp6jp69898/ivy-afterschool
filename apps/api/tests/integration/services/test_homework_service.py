@@ -1,6 +1,6 @@
 """BACKEND-373 / 384 / 374 / 383 / 376 / 382：homework_service（進度列鎖定、家長端當日作業明細、
 ws 快照推播、作業進度看板、整體完成副作用、設定預計可接送時間、重算整體進度、手動標整體完成）。
-BACKEND-377：新增單一學生作業項目。
+BACKEND-377：新增單一學生作業項目。BACKEND-378：整班批次新增同一份作業。
 
 推播測試以 monkeypatch 記錄 publish_threadsafe；commit 走 db_session（savepoint 模式的 commit
 同樣觸發 before_commit / after_commit，見 BACKEND-006）。
@@ -29,9 +29,18 @@ from app.models.reference import Subject
 from app.notifications import outbox_jobs
 from app.realtime import publish as publish_module
 from app.realtime.publish import admin_topic_channel, student_channel
-from app.schemas.homework import BoardOut, BoardQuery, BoardStudentOut, HomeworkItemCreateIn
+from app.repositories.students import list_active_student_ids
+from app.schemas.homework import (
+    BoardOut,
+    BoardQuery,
+    BoardStudentOut,
+    HomeworkBatchCreateIn,
+    HomeworkItemCreateIn,
+)
+from app.services import homework_service
 from app.services.homework_service import (
     ProgressChange,
+    batch_create_items,
     broadcast_homework_snapshot,
     create_item,
     get_board,
@@ -1430,3 +1439,312 @@ def test_create_homework_item_holds_progress_lock_until_commit(
     assert _progress_row(committing_db_session, ming.id).overall_status == "in_progress"
     assert _item_count(committing_db_session, ming.id) == 3
     assert _notifications(committing_db_session, "homework.done", ming.id) == []
+
+
+# --- BACKEND-378 batch_create_items ---
+
+
+def _batch_in(class_id: UUID, **overrides: Any) -> HomeworkBatchCreateIn:
+    fields: dict[str, Any] = {"class_id": class_id, "title": "國語第5課生字"}
+    fields.update(overrides)
+    return HomeworkBatchCreateIn(**fields)
+
+
+def _titles(db: Session, student_id: UUID, service_date: date = _DAY) -> list[str]:
+    return list(
+        db.execute(
+            select(HomeworkItem.title)
+            .where(HomeworkItem.student_id == student_id, HomeworkItem.service_date == service_date)
+            .order_by(HomeworkItem.sort_order, HomeworkItem.id)
+        ).scalars()
+    )
+
+
+def test_batch_create_items_whole_class(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    class_a = make_class(db_session, name="A班")
+    class_b = make_class(db_session, name="B班")
+    active = [
+        make_student(db_session, name=name, class_=class_a)
+        for name in ("王小明", "陳小華", "林小安")
+    ]
+    paused = make_student(db_session, name="暫停中", class_=class_a, status="suspended")
+    archived = make_student(db_session, name="已封存", class_=class_a, archived=True)
+    gone = make_student(db_session, name="已退班", class_=class_a)
+    gone.status = "withdrawn"
+    gone.withdrawn_on = date(2026, 8, 31)
+    other_class = make_student(db_session, name="隔壁班", class_=class_b)
+    chinese = _subject(db_session, "國語")
+    db_session.flush()
+
+    out = batch_create_items(
+        db_session, _batch_in(class_a.id, subject_id=chinese.id), actor=actor, clock=clock
+    )
+
+    assert out.created == 3
+    assert {item.student_id for item in out.items} == {s.id for s in active}
+    assert len(out.items) == 3
+    for item in out.items:
+        assert (item.title, item.status, item.subject_name, item.service_date) == (
+            "國語第5課生字",
+            "todo",
+            "國語",
+            _DAY,
+        )
+        assert item.sort_order == 0
+    for student in active:
+        assert _titles(db_session, student.id) == ["國語第5課生字"]
+        assert _progress_row(db_session, student.id).overall_status == "not_started"
+    for excluded in (paused, archived, gone, other_class):
+        assert _item_count(db_session, excluded.id) == 0
+        assert _progress_count(db_session, excluded.id) == 0
+    stored = _stored_item(db_session, out.items[0].id)
+    assert stored.updated_by == actor.id
+
+
+def test_batch_create_items_subset_and_validation(
+    db_session: Session,
+    clock: FakeClock,
+    actor: CurrentStaff,
+    kick_off: None,
+    fresh_settings: None,
+) -> None:
+    class_a = make_class(db_session, name="A班")
+    class_b = make_class(db_session, name="B班")
+    ming = make_student(db_session, name="王小明", class_=class_a)
+    hua = make_student(db_session, name="陳小華", class_=class_a)
+    paused = make_student(db_session, name="暫停中", class_=class_a, status="suspended")
+    outsider = make_student(db_session, name="隔壁班", class_=class_b)
+    empty_class = make_class(db_session, name="空班")
+    archived_class = make_class(db_session, name="舊班", archived=True)
+    inactive_subject = _subject(db_session, "自然")
+    inactive_subject.is_active = False
+    db_session.flush()
+
+    def fail(data: HomeworkBatchCreateIn) -> AppError:
+        with pytest.raises(AppError) as excinfo:
+            batch_create_items(db_session, data, actor=actor, clock=clock)
+        return excinfo.value
+
+    not_in_class = fail(_batch_in(class_a.id, student_ids=[ming.id, outsider.id]))
+    not_active = fail(_batch_in(class_a.id, student_ids=[paused.id]))
+    unknown_student = fail(_batch_in(class_a.id, student_ids=[uuid4()]))
+    no_students = fail(_batch_in(empty_class.id))
+    archived = fail(_batch_in(archived_class.id))
+    missing_class = fail(_batch_in(uuid4()))
+    bad_subject = fail(_batch_in(class_a.id, subject_id=inactive_subject.id))
+    unknown_subject = fail(_batch_in(class_a.id, subject_id=uuid4()))
+    too_far = fail(_batch_in(class_a.id, service_date=_DAY + timedelta(days=8)))
+
+    assert (not_in_class.status, not_in_class.code) == (422, "student_not_in_class")
+    assert not_in_class.details == {"student_ids": [outsider.id]}
+    assert (not_active.status, not_active.code) == (422, "student_not_in_class")
+    assert not_active.details == {"student_ids": [paused.id]}
+    assert unknown_student.code == "student_not_in_class"
+    assert (no_students.status, no_students.code) == (422, "no_students")
+    assert (archived.status, archived.code) == (404, "class_not_found")
+    assert (missing_class.status, missing_class.code) == (404, "class_not_found")
+    assert (bad_subject.status, bad_subject.code) == (422, "invalid_subject")
+    assert (unknown_subject.status, unknown_subject.code) == (422, "invalid_subject")
+    assert (too_far.status, too_far.code) == (422, "invalid_service_date")
+    # 驗證失敗（含部分學生合法時）不留下任何項目或進度列
+    for student in (ming, hua, paused, outsider):
+        assert _item_count(db_session, student.id) == 0
+        assert _progress_count(db_session, student.id) == 0
+
+    out = batch_create_items(
+        db_session, _batch_in(class_a.id, student_ids=[ming.id]), actor=actor, clock=clock
+    )
+
+    assert out.created == 1
+    assert [item.student_id for item in out.items] == [ming.id]
+    assert _item_count(db_session, ming.id) == 1
+    assert _item_count(db_session, hua.id) == 0
+
+
+def test_batch_create_items_sort_order(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    class_a = make_class(db_session)
+    ming = make_student(db_session, name="王小明", class_=class_a)
+    hua = make_student(db_session, name="陳小華", class_=class_a)
+    an = make_student(db_session, name="林小安", class_=class_a)
+    make_homework_item(db_session, ming, service_date=_DAY, title="既有 0", sort_order=0)
+    make_homework_item(db_session, ming, service_date=_DAY, title="既有 1", sort_order=1)
+    make_homework_item(db_session, an, service_date=_DAY, title="既有 5", sort_order=5)
+    # 別天的項目不算
+    make_homework_item(db_session, hua, service_date=date(2026, 9, 2), title="隔天 9", sort_order=9)
+    db_session.flush()
+
+    out = batch_create_items(db_session, _batch_in(class_a.id), actor=actor, clock=clock)
+
+    by_student = {item.student_id: item for item in out.items}
+    assert by_student[ming.id].sort_order == 2
+    assert by_student[an.id].sort_order == 6
+    assert by_student[hua.id].sort_order == 0
+    assert _titles(db_session, ming.id) == ["既有 0", "既有 1", "國語第5課生字"]
+
+
+def test_batch_create_items_lock_order(
+    db_session: Session,
+    clock: FakeClock,
+    actor: CurrentStaff,
+    kick_off: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """進度列依 student_id 排序鎖定，與班級內的排列順序（學號）無關。"""
+    class_a = make_class(db_session)
+    students = [make_student(db_session, name=f"學生{n}", class_=class_a) for n in range(5)]
+    # 學號依 id 由大到小編號：班級順序（學號）剛好與 id 順序相反
+    for rank, student in enumerate(sorted(students, key=lambda s: s.id, reverse=True)):
+        student.student_no = f"LK-{rank:02d}"
+    db_session.flush()
+    natural_order = list_active_student_ids(db_session, class_id=class_a.id)
+    assert natural_order == sorted((s.id for s in students), reverse=True)
+
+    locked: list[UUID] = []
+    real_lock = homework_service.lock_progress_row
+
+    def record(session: Session, student_id: UUID, service_date: date) -> HomeworkDailyProgress:
+        locked.append(student_id)
+        return real_lock(session, student_id, service_date)
+
+    monkeypatch.setattr(homework_service, "lock_progress_row", record)
+
+    out = batch_create_items(db_session, _batch_in(class_a.id), actor=actor, clock=clock)
+
+    assert out.created == 5
+    assert locked == sorted(s.id for s in students)
+
+
+def test_batch_create_items_recomputes_progress_and_broadcasts(
+    db_session: Session,
+    clock: FakeClock,
+    actor: CurrentStaff,
+    kick_off: None,
+    published: list[Call],
+) -> None:
+    class_a = make_class(db_session)
+    ming = make_student(db_session, name="王小明", class_=class_a)
+    hua = make_student(db_session, name="陳小華", class_=class_a)
+    make_guardian(db_session, ming, parent=make_parent(db_session))
+    make_homework_item(db_session, ming, service_date=_DAY, status="done", title="國語生字")
+    make_homework_progress(db_session, ming, service_date=_DAY, overall_status="done")
+    db_session.flush()
+
+    batch_create_items(
+        db_session, _batch_in(class_a.id, title="數學習作"), actor=actor, clock=clock
+    )
+    db_session.commit()
+
+    # 全部 done 的學生新增 todo 後回到 in_progress；沒有項目的學生建立 not_started
+    assert _progress_row(db_session, ming.id).overall_status == "in_progress"
+    assert _progress_row(db_session, hua.id).overall_status == "not_started"
+    assert _notifications(db_session, "homework.done", ming.id) == []
+    # 每位學生各推一次快照，內容含新項目
+    snapshots = _on(published, admin_topic_channel("homework"))
+    assert len(snapshots) == 2
+    assert {s["data"]["student_id"] for s in snapshots} == {str(ming.id), str(hua.id)}
+    for snapshot in snapshots:
+        assert "數學習作" in [i["title"] for i in snapshot["data"]["items"]]
+
+
+def test_batch_create_items_defaults_to_taipei_today(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    """跨午夜：UTC 9/1 16:30 已是台北 9/2，沒給 service_date 時建在 9/2。"""
+    class_a = make_class(db_session)
+    ming = make_student(db_session, class_=class_a)
+    clock.set(datetime(2026, 9, 1, 16, 30, tzinfo=UTC))
+
+    out = batch_create_items(db_session, _batch_in(class_a.id), actor=actor, clock=clock)
+
+    assert [item.service_date for item in out.items] == [date(2026, 9, 2)]
+    assert _titles(db_session, ming.id, date(2026, 9, 2)) == ["國語第5課生字"]
+    assert _titles(db_session, ming.id, _DAY) == []
+
+
+@pytest.mark.cleanup_tables(
+    "homework_items", "homework_daily_progress", "notification_outbox", "notifications"
+)
+def test_batch_create_items_holds_progress_locks_until_commit(
+    owner_cleanup_people: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    clock: FakeClock,
+    kick_off: None,
+) -> None:
+    """批次新增的交易在 commit 前持有每位學生的進度列鎖。
+
+    同時把陳小華最後一個未完成項目改成 done 的老師必須排隊，等批次 commit 後才看得到新的 todo
+    項目，所以整體仍是 in_progress、不會誤發 homework.done。
+    """
+    class_a = make_class(committing_db_session)
+    ming = make_student(committing_db_session, name="王小明", class_=class_a)
+    hua = make_student(committing_db_session, name="陳小華", class_=class_a)
+    parent = make_parent(committing_db_session)
+    guardian = make_guardian(committing_db_session, hua, parent=parent)
+    staff = make_staff(committing_db_session, role_code="tutor")
+    make_homework_item(committing_db_session, hua, service_date=_DAY, status="done")
+    open_item = make_homework_item(
+        committing_db_session, hua, service_date=_DAY, title="數學習作", status="doing"
+    )
+    make_homework_progress(
+        committing_db_session, hua, service_date=_DAY, overall_status="in_progress"
+    )
+    committing_db_session.commit()
+    owner_cleanup_people.extend(
+        [
+            ("guardians", guardian.id),
+            ("students", ming.id),
+            ("students", hua.id),
+            ("classes", class_a.id),
+            ("parent_accounts", parent.id),
+            ("staff_users", staff.id),
+        ]
+    )
+    creator = _current(staff)
+
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    s2_done = threading.Event()
+    outcome: dict[str, Any] = {}
+
+    def finish_open_item() -> None:
+        try:
+            s2.execute(text("set local lock_timeout = '10s'"))
+            item = s2.get(HomeworkItem, open_item.id)
+            assert item is not None
+            item.status = "done"
+            s2.flush()
+            outcome["s2"] = recompute_progress(s2, hua.id, _DAY, clock=clock)
+            s2.commit()
+        except BaseException as exc:
+            outcome["s2"] = exc
+            s2.rollback()
+        finally:
+            s2_done.set()
+
+    thread = threading.Thread(target=finish_open_item)
+    try:
+        s1.execute(text("set local lock_timeout = '10s'"))
+        outcome["s1"] = batch_create_items(s1, _batch_in(class_a.id), actor=creator, clock=clock)
+        thread.start()
+        assert not s2_done.wait(timeout=0.5)  # 批次尚未 commit：s2 在陳小華的進度列排隊
+        s1.commit()
+        thread.join(timeout=10)
+    finally:
+        s1.close()
+        if thread.is_alive():
+            thread.join(timeout=10)
+        s2.close()
+
+    assert outcome["s1"].created == 2
+    change = outcome["s2"]
+    assert isinstance(change, ProgressChange)
+    assert (change.old_status, change.new_status) == ("in_progress", "in_progress")
+    assert _progress_row(committing_db_session, hua.id).overall_status == "in_progress"
+    assert _item_count(committing_db_session, hua.id) == 3
+    assert _item_count(committing_db_session, ming.id) == 1
+    assert _notifications(committing_db_session, "homework.done", hua.id) == []
