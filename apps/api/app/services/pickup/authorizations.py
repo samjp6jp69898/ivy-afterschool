@@ -10,6 +10,8 @@
 - BACKEND-426：``verify_code``（核對接送碼；錯碼以單一語句原子累計，連錯 5 次鎖定、不自動解鎖）。
 - BACKEND-427：``confirm_visual_match``（員工目視核對後核銷；照片只是輔助，寫 audit）。
 - BACKEND-428：``override_complete``（pickup:override 員工強制完成，鎖定的授權也可；寫 audit）。
+- BACKEND-555：``authorization_out`` / ``staff_authorization_out``（公開的輸出組裝函式；其他模組
+  —— 例如 student_service 的 close_out —— 組授權推播資料一律用它，不匯入本模組的私有名稱）。
 
 列表只回 ``code_last4``，不回 ``code_hash``（單向 HMAC）；明碼只在建立時的回應出現一次，DB、log
 與例外訊息都不保存。``effective_status``：active 且 service_date 早於今天（台北）→ ``expired``，
@@ -42,7 +44,7 @@ from app.notifications.events import Event
 from app.notifications.recipients import parent_recipients
 from app.notifications.service import enqueue
 from app.realtime.publish import broadcast_after_commit
-from app.repositories.students import get_student_or_404, student_brief_map
+from app.repositories.students import StudentBrief, get_student_or_404, student_brief_map
 from app.schemas.pickup import (
     AuthorizationCompleteOut,
     PickupAuthorizationCreatedOut,
@@ -91,6 +93,38 @@ def _base_fields(auth: PickupAuthorization, today: date) -> dict[str, Any]:
     }
 
 
+def authorization_out(auth: PickupAuthorization, today: date) -> PickupAuthorizationOut:
+    """家長端與 ``pickup.authorization_updated`` 推播共用的授權輸出（不含 code_hash / 連錯次數）；
+    ``today`` 決定 effective_status。"""
+    return PickupAuthorizationOut(**_base_fields(auth, today))
+
+
+def staff_authorization_out(
+    auth: PickupAuthorization,
+    today: date,
+    *,
+    student: StudentBrief,
+    photo_url: str | None,
+    verified_by_name: str | None,
+) -> StaffAuthorizationOut:
+    """後台核驗清單與核銷結果共用的授權輸出（多學生摘要、照片網址、連錯次數與鎖定旗標）。"""
+    return StaffAuthorizationOut(
+        **_base_fields(auth, today),
+        student=PickupStudentOut(
+            id=student.id,
+            student_no=student.student_no,
+            name=student.name,
+            grade_level=student.grade_level,
+            class_id=student.class_id,
+            class_name=student.class_name,
+        ),
+        photo_url=photo_url,
+        code_attempts=auth.code_attempts,
+        locked=auth.code_locked_at is not None,
+        verified_by_name=verified_by_name,
+    )
+
+
 def list_child_authorizations(
     session: Session, student_id: UUID, *, clock: Clock
 ) -> list[PickupAuthorizationOut]:
@@ -108,7 +142,7 @@ def list_child_authorizations(
             PickupAuthorization.id,
         )
     ).scalars()
-    return [PickupAuthorizationOut(**_base_fields(auth, today)) for auth in auths]
+    return [authorization_out(auth, today) for auth in auths]
 
 
 def list_authorizations_for_staff(
@@ -151,31 +185,20 @@ def list_authorizations_for_staff(
             a.id,
         )
     )
-    rows = []
-    for auth in auths:
-        brief = students[auth.student_id]
-        rows.append(
-            StaffAuthorizationOut(
-                **_base_fields(auth, today),
-                student=PickupStudentOut(
-                    id=brief.id,
-                    student_no=brief.student_no,
-                    name=brief.name,
-                    grade_level=brief.grade_level,
-                    class_id=brief.class_id,
-                    class_name=brief.class_name,
-                ),
-                photo_url=(
-                    signed_photo_url(storage, auth.pickup_person)
-                    if auth.pickup_person is not None
-                    else None
-                ),
-                code_attempts=auth.code_attempts,
-                locked=auth.code_locked_at is not None,
-                verified_by_name=verifier_names.get(auth.verified_by) if auth.verified_by else None,
-            )
+    return [
+        staff_authorization_out(
+            auth,
+            today,
+            student=students[auth.student_id],
+            photo_url=(
+                signed_photo_url(storage, auth.pickup_person)
+                if auth.pickup_person is not None
+                else None
+            ),
+            verified_by_name=verifier_names.get(auth.verified_by) if auth.verified_by else None,
         )
-    return rows
+        for auth in auths
+    ]
 
 
 def create_authorization(
@@ -251,7 +274,7 @@ def create_authorization(
     session.add(auth)
     session.flush()
 
-    out = PickupAuthorizationOut(**_base_fields(auth, today))
+    out = authorization_out(auth, today)
     broadcast_after_commit(
         session,
         topic="pickup",
@@ -358,7 +381,7 @@ def regenerate_code(
         after={"code_last4": auth.code_last4, "code_attempts": 0, "locked": False},
         meta=meta,
     )
-    out = PickupAuthorizationOut(**_base_fields(auth, clock.today()))
+    out = authorization_out(auth, clock.today())
     broadcast_after_commit(
         session,
         topic="pickup",
@@ -453,28 +476,19 @@ def complete_via_authorization(
     publish_request_change(session, request, clock=clock)
 
     today = clock.today()
-    brief = student_brief_map(session, [auth.student_id])[auth.student_id]
-    authorization = StaffAuthorizationOut(
-        **_base_fields(auth, today),
-        student=PickupStudentOut(
-            id=brief.id,
-            student_no=brief.student_no,
-            name=brief.name,
-            grade_level=brief.grade_level,
-            class_id=brief.class_id,
-            class_name=brief.class_name,
-        ),
+    authorization = staff_authorization_out(
+        auth,
+        today,
+        student=student_brief_map(session, [auth.student_id])[auth.student_id],
         # 沒有 storage 可簽照片網址：核銷結果不需要照片，前端要時重抓核驗清單
         photo_url=None,
-        code_attempts=auth.code_attempts,
-        locked=auth.code_locked_at is not None,
         verified_by_name=actor.display_name,
     )
     broadcast_after_commit(
         session,
         topic="pickup",
         type="pickup.authorization_updated",
-        data=PickupAuthorizationOut(**_base_fields(auth, today)).model_dump(),
+        data=authorization_out(auth, today).model_dump(),
         clock=clock,
     )
     [request_out] = build_request_views(session, [request])

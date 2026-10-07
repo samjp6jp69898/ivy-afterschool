@@ -101,7 +101,6 @@ from app.models.reference import School
 from app.models.students import Student, StudentStatus
 from app.realtime.publish import broadcast_after_commit
 from app.repositories.students import get_student_or_404
-from app.schemas.pickup import PickupAuthorizationOut
 from app.schemas.students import (
     PhotoUploadOut,
     StudentCreateIn,
@@ -118,7 +117,7 @@ from app.services.guardian_service import list_for_student
 from app.services.leave_attendance import revert_attendance_for_leave
 
 # 授權輸出欄位的組裝在 r8c 的 authorizations 模組（私有 helper），廣播資料形狀須與該模組一致
-from app.services.pickup.authorizations import _base_fields as authorization_fields
+from app.services.pickup.authorizations import authorization_out
 from app.services.pickup.views import publish_request_change
 from app.services.students.id_number import (
     id_number_hmac,
@@ -782,7 +781,7 @@ def _close_out_authorizations(session: Session, student: Student, *, clock: Cloc
             session,
             topic="pickup",
             type="pickup.authorization_updated",
-            data=PickupAuthorizationOut(**authorization_fields(auth, today)).model_dump(),
+            data=authorization_out(auth, today).model_dump(),
             clock=clock,
         )
     return len(ids)
