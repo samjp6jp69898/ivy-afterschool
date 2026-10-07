@@ -3,13 +3,14 @@
 // - 以 FormDialog md 呈現；送出只 emit submit，由看板呼叫 API、成功後關閉。
 // - 對象「全班」不送 student_ids（後端以班級在學學生為準，含今天請假 / 缺席者），送出鈕人數 = 看板上該班全部學生；
 //   「指定學生」預設勾選今天不是請假 / 缺席的學生，送出的 student_ids 依清單順序。
-// - 科目、內容與「最近使用」同 HomeworkItemDialog（FRONTEND-155）。
+// - 科目、內容與「最近使用」同 HomeworkItemDialog（FRONTEND-155），最近使用共用 recentHomeworkTitles。
 import { computed, reactive, ref, watch } from 'vue'
 import FormDialog from '@/components/common/FormDialog.vue'
 import { useFormDirty } from '@/composables/useFormDirty'
 import { ATTENDANCE_STATUS_META } from '@/shared/constants/statusLabels'
 import type { AttendanceStatus } from '@/shared/types/api'
 import { useLookupsStore } from '@/stores/lookups'
+import { loadRecentTitles, rememberRecentTitle } from './recentHomeworkTitles'
 
 /** 與 api/homework.ts 的 BoardStudent 相容的子集（本元件只用到這些欄位） */
 export interface HomeworkBatchStudent {
@@ -33,9 +34,6 @@ const emit = defineEmits<{
   submit: [body: { subject_id: string | null; title: string; student_ids?: string[] }]
 }>()
 
-const RECENT_KEY = 'homework.recentTitles'
-const RECENT_LIMIT = 5
-
 const lookups = useLookupsStore()
 
 const form = reactive<{ subject_id: string | null; title: string; target: Target; studentIds: string[] }>({
@@ -47,27 +45,6 @@ const form = reactive<{ subject_id: string | null; title: string; target: Target
 const errors = reactive({ title: '', target: '' })
 const recentTitles = ref<string[]>([])
 const { isDirty, markClean } = useFormDirty(form)
-
-/** 非字串、空字串與重複的項目略過 */
-function loadRecentTitles(): string[] {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]')
-    if (!Array.isArray(parsed)) return []
-    const titles = parsed.filter((t): t is string => typeof t === 'string' && t.trim() !== '')
-    return [...new Set(titles)].slice(0, RECENT_LIMIT)
-  } catch {
-    return []
-  }
-}
-
-function rememberRecentTitle(title: string): void {
-  try {
-    const next = [title, ...loadRecentTitles().filter((t) => t !== title)].slice(0, RECENT_LIMIT)
-    localStorage.setItem(RECENT_KEY, JSON.stringify(next))
-  } catch {
-    // 無痕模式或儲存空間已滿：不記錄
-  }
-}
 
 /** 今天請假 / 缺席以外（含尚無出勤紀錄）的學生 */
 function isPresentToday(s: HomeworkBatchStudent): boolean {

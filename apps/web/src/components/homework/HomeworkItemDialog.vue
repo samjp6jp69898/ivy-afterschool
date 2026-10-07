@@ -3,11 +3,12 @@
 // - 以 FormDialog sm 呈現；送出只 emit submit（內容去頭尾空白），由看板呼叫 API、成功後關閉；
 //   編輯時有沒有變更由看板比對原值決定，本元件照樣 emit。
 // - 科目可不選；編輯中的項目若科目已停用（不在 lookups 的啟用清單），仍以原名稱列為選項。
-// - 「最近使用」：localStorage homework.recentTitles，送出時記錄（最新在前、最多 5 筆）；存取失敗一律忽略。
+// - 「最近使用」由 recentHomeworkTitles 讀寫（與 HomeworkBatchAddDialog 共用），通過驗證、emit submit 時記錄。
 import { computed, reactive, ref, watch } from 'vue'
 import FormDialog from '@/components/common/FormDialog.vue'
 import { useFormDirty } from '@/composables/useFormDirty'
 import { useLookupsStore, type LookupOption } from '@/stores/lookups'
+import { loadRecentTitles, rememberRecentTitle } from './recentHomeworkTitles'
 
 /** 與 api/homework.ts 的 HomeworkItem 相容的子集（本元件只用到這些欄位） */
 export interface HomeworkItemDialogItem {
@@ -32,36 +33,12 @@ const emit = defineEmits<{
   submit: [body: { subject_id: string | null; title: string }]
 }>()
 
-const RECENT_KEY = 'homework.recentTitles'
-const RECENT_LIMIT = 5
-
 const lookups = useLookupsStore()
 
 const form = reactive<{ subject_id: string | null; title: string }>({ subject_id: null, title: '' })
 const titleError = ref('')
 const recentTitles = ref<string[]>([])
 const { isDirty, markClean } = useFormDirty(form)
-
-/** 非字串、空字串與重複的項目略過 */
-function loadRecentTitles(): string[] {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]')
-    if (!Array.isArray(parsed)) return []
-    const titles = parsed.filter((t): t is string => typeof t === 'string' && t.trim() !== '')
-    return [...new Set(titles)].slice(0, RECENT_LIMIT)
-  } catch {
-    return []
-  }
-}
-
-function rememberRecentTitle(title: string): void {
-  try {
-    const next = [title, ...loadRecentTitles().filter((t) => t !== title)].slice(0, RECENT_LIMIT)
-    localStorage.setItem(RECENT_KEY, JSON.stringify(next))
-  } catch {
-    // 無痕模式或儲存空間已滿：不記錄
-  }
-}
 
 watch(
   () => props.modelValue,
