@@ -321,10 +321,13 @@ describe('AttendanceCalendar', () => {
       expect(label(wrapper, 1), tz).toBe('10月1日 已到班')
       expect(cell(wrapper, 1).attributes('aria-current'), tz).toBe('date')
     }
-    // 原始碼只用 Date.UTC 與 UTC getter，不用 toISOString 取日期
-    const script = source.slice(0, source.indexOf('<template>'))
-    expect(script).toContain('Date.UTC')
-    expect(script).not.toContain('toISOString')
+    // 原始碼（去掉註解）只用 Date.UTC 與 UTC getter，不用 toISOString 取日期
+    const code = source
+      .slice(0, source.indexOf('<template>'))
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '')
+    expect(code).toContain('Date.UTC')
+    expect(code).not.toContain('toISOString')
   })
 
   it('AttendanceCalendar ignores days outside the month and keeps the grid whole', () => {
@@ -337,7 +340,8 @@ describe('AttendanceCalendar', () => {
     })
 
     expect(wrapper.findAll('.att-cal__grid button')).toHaveLength(31)
-    expect(wrapper.findAll('.att-day--absent')).toHaveLength(0)
+    // 圖例的色塊也帶 att-day--absent，只數日期格
+    expect(wrapper.findAll('.att-cal__grid .att-day--absent')).toHaveLength(0)
     expect(label(wrapper, 3)).toBe('10月3日 已到班')
   })
 
