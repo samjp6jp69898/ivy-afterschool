@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 405,
-  "last_updated": "2026-10-07T07:50:46Z",
+  "version": 406,
+  "last_updated": "2026-10-07T07:51:24Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -11306,7 +11306,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/portal/dismissal_calls.py::portal_complete",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-410",
