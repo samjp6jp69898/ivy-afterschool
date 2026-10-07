@@ -7,6 +7,7 @@ import { adminHttp } from '@/api/http'
 import { createApiMock, mountWithApp } from '@/test/helpers'
 import BindingCodeDialog from './BindingCodeDialog.vue'
 import GuardianManager from './GuardianManager.vue'
+import guardianManagerSource from './GuardianManager.vue?raw'
 
 const LIST_URL = '/admin/students/s1/guardians'
 
@@ -105,6 +106,10 @@ function lastMessageBox(): HTMLElement {
   return box
 }
 
+function messageBoxTitle(): string {
+  return lastMessageBox().querySelector('.el-message-box__title')?.textContent?.trim() ?? ''
+}
+
 async function clickInMessageBox(text: string): Promise<void> {
   const button = Array.from(lastMessageBox().querySelectorAll<HTMLButtonElement>('button')).find(
     (b) => b.textContent?.trim() === text,
@@ -193,6 +198,7 @@ describe('GuardianManager', () => {
     const wrapper = await mountManager()
 
     expect(wrapper.find('.guardian-toolbar').text()).toContain('主要聯絡人：王大明')
+    expect(wrapper.find('.guardian-toolbar .el-tag').classes()).toContain('el-tag--success')
     const father = card(wrapper, '王大明')
     expect(father.find('.guardian-card__relation').text()).toBe('父親')
     expect(father.find('.guardian-card__phone').text()).toBe('0912-000-111')
@@ -207,6 +213,7 @@ describe('GuardianManager', () => {
     mock.onGet(LIST_URL).reply(200, [CODE_ISSUED, UNBOUND])
     const noPrimary = await mountManager()
     expect(noPrimary.find('.guardian-toolbar').text()).toContain('尚未設定主要聯絡人')
+    expect(noPrimary.find('.guardian-toolbar .el-tag').classes()).toContain('el-tag--warning')
   })
 
   it('GuardianManager issues binding code and shows dialog', async () => {
@@ -232,6 +239,7 @@ describe('GuardianManager', () => {
     expect(buttonsText(card(wrapper, '林美麗'))).not.toContain('產生綁定碼')
 
     await clickIn(card(wrapper, '林美麗'), '重新產生綁定碼')
+    expect(messageBoxTitle()).toBe('重新產生綁定碼')
     expect(lastMessageBox().textContent).toContain('重新產生後舊的綁定碼會立即失效，確定嗎？')
     await clickInMessageBox('取消')
 
@@ -276,6 +284,7 @@ describe('GuardianManager', () => {
     const wrapper = await mountManager()
 
     await clickIn(card(wrapper, '王大明'), '解除綁定')
+    expect(messageBoxTitle()).toBe('解除綁定')
     expect(lastMessageBox().textContent).toContain('解除後 大明 將無法在家長端看到 王小明，確定要解除嗎？')
     await clickInMessageBox('解除綁定')
 
@@ -342,6 +351,7 @@ describe('GuardianManager', () => {
     await clickInMessageBox('取消')
 
     await clickIn(card(wrapper, '王大明'), '刪除')
+    expect(messageBoxTitle()).toBe('確認刪除')
     expect(lastMessageBox().textContent).toContain(
       '確定要刪除 王大明 嗎？此監護人已綁定家長帳號，刪除後家長將無法再看到此學生。',
     )
@@ -463,6 +473,33 @@ describe('GuardianManager', () => {
 
     expect(listRequests('/admin/students/s2/guardians')).toBe(1)
     expect(cards(wrapper).map((c) => c.find('.guardian-card__name').text())).toEqual(['林美麗'])
+  })
+
+  it('GuardianManager ignores stale list after switching student', async () => {
+    const { release } = deferredList([BOUND, UNBOUND])
+    mock.onGet('/admin/students/s2/guardians').reply(200, [{ ...CODE_ISSUED, student_id: 's2' }])
+    const wrapper = await mountManager()
+
+    await wrapper.setProps({ studentId: 's2', studentName: '陳小美' })
+    await settle()
+    expect(cards(wrapper).map((c) => c.find('.guardian-card__name').text())).toEqual(['林美麗'])
+
+    // s1 的回應比 s2 晚到：不可覆蓋
+    release()
+    await settle()
+    expect(cards(wrapper).map((c) => c.find('.guardian-card__name').text())).toEqual(['林美麗'])
+  })
+
+  it('GuardianManager card actions are link buttons under a dashed divider', async () => {
+    mock.onGet(LIST_URL).reply(200, [BOUND])
+    const wrapper = await mountManager()
+
+    const actions = card(wrapper, '王大明').findAll('.guardian-card__actions .el-button')
+    expect(actions.map((b) => b.text())).toEqual(['編輯', '解除綁定', '刪除'])
+    expect(actions.every((b) => b.classes().includes('is-link'))).toBe(true)
+    // happy-dom 不算版面：鎖住稿的虛線分隔
+    const style = (guardianManagerSource.match(/<style scoped>([\s\S]*?)<\/style>/)?.[1] ?? '').replace(/\s+/g, ' ')
+    expect(style).toMatch(/\.guardian-card__actions \{[^}]*border-top: 1px dashed var\(--el-border-color-lighter\);/)
   })
 
   it('GuardianManager disables actions while a request is pending', async () => {
