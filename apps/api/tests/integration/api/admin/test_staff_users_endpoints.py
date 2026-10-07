@@ -3,10 +3,12 @@ BACKEND-094：POST /api/admin/staff-users（staff:write；臨時密碼只回一�
 BACKEND-095：GET /api/admin/staff-users/{staff_id}（staff:read）。
 BACKEND-096 / 097 / 098：PATCH /{staff_id}、POST /{staff_id}/reset-password、
 POST /{staff_id}/deactivate（staff:write）。
-BACKEND-528：GET /api/admin/staff-users/options（classes:write 或 staff:read）。"""
+BACKEND-528：GET /api/admin/staff-users/options（classes:write 或 staff:read）。
+BACKEND-522：POST /api/admin/staff-users/{staff_id}/activate（staff:write；臨時密碼只回一次）。"""
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from typing import Any
 from uuid import uuid4
@@ -582,3 +584,143 @@ def test_admin_staff_options_403(
 def test_admin_staff_options_route_audit() -> None:
     assert f"{_URL}/options" not in admin_routes_without_permission(create_app())
     assert admin_routes_without_permission(create_app()) == []
+
+
+# --- BACKEND-522：POST /api/admin/staff-users/{staff_id}/activate --------------------------------
+
+
+def _activate_url(staff_id: object) -> str:
+    return f"{_URL}/{staff_id}/activate"
+
+
+def _deactivated(db_session: Session, **staff_kwargs: Any) -> StaffUser:
+    """停用中的帳號（停用時 token_version 已 +1）。"""
+    staff = make_staff(db_session, is_active=False, **staff_kwargs)
+    staff.token_version = 1
+    db_session.flush()
+    return staff
+
+
+def test_admin_staff_activate_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "post" in app.openapi()["paths"][_URL + "/{staff_id}/activate"]
+
+
+def test_admin_staff_activate_success(
+    api_client: TestClient,
+    app: FastAPI,
+    db_session: Session,
+    login_staff: Callable[[TestClient, StaffUser], None],
+    assert_error: AssertError,
+) -> None:
+    target = _deactivated(db_session, username="wang.back", role_code="tutor")
+    admin = make_staff(db_session, role_code="admin")
+    db_session.commit()
+    # 指定真實來源 IP 才能驗 request meta 有注入到 audit
+    client = TestClient(app, base_url="http://testserver", client=("203.0.113.5", 50000))
+    login_staff(client, admin)
+
+    resp = client.post(_activate_url(target.id))
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {"user", "temp_password"}
+    user = body["user"]
+    assert (user["id"], user["is_active"], user["must_change_password"]) == (
+        str(target.id),
+        True,
+        True,
+    )
+    assert user["role"]["code"] == "tutor"
+    assert len(body["temp_password"]) == 12
+    assert resp.headers["cache-control"] == "no-store"
+    assert "$argon2id$" not in resp.text
+    assert "password_hash" not in resp.text
+    # 已 commit：重讀 DB；token_version 維持停用時的值
+    reloaded = _reload(db_session, target.id)
+    assert (reloaded.is_active, reloaded.must_change_password, reloaded.token_version) == (
+        True,
+        True,
+        1,
+    )
+    # 稽核：記錄操作者與來源 IP，before / after 不含臨時密碼與雜湊
+    log = db_session.execute(
+        select(AuditLog).where(
+            AuditLog.action == "staff_user.activate", AuditLog.entity_id == str(target.id)
+        )
+    ).scalar_one()
+    assert (log.actor_id, log.ip) == (admin.id, "203.0.113.5")
+    assert (log.before, log.after) == (
+        {"is_active": False},
+        {"is_active": True, "must_change_password": True},
+    )
+    dumped = json.dumps([log.before, log.after])
+    assert body["temp_password"] not in dumped
+    assert reloaded.password_hash not in dumped
+    # 臨時密碼只回這一次：再次啟用 409，不會產生新密碼
+    again = client.post(_activate_url(target.id))
+    assert_error(again, 409, "staff_already_active")
+    assert "temp_password" not in again.text
+    # 臨時密碼可登入，登入後被要求先改密碼；舊密碼失效
+    fresh = TestClient(app, base_url="http://testserver")
+    login = fresh.post(
+        "/api/admin/auth/login", json={"username": "wang.back", "password": body["temp_password"]}
+    )
+    assert login.status_code == 200
+    assert login.json()["user"]["must_change_password"] is True
+    assert_error(fresh.get("/api/admin/students"), 403, "password_change_required")
+    old = TestClient(app, base_url="http://testserver").post(
+        "/api/admin/auth/login", json={"username": "wang.back", "password": "Passw0rd-Test1"}
+    )
+    assert_error(old, 401, "invalid_credentials")
+
+
+def test_admin_staff_activate_422(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    admin, _ = staff_client(role_code="admin")
+
+    assert_error(admin.post(_activate_url("abc")), 422, "validation_error")
+
+
+def test_admin_staff_activate_401(
+    api_client: TestClient, db_session: Session, assert_error: AssertError
+) -> None:
+    target = _deactivated(db_session, role_code="tutor")
+    db_session.commit()
+
+    assert_error(api_client.post(_activate_url(target.id)), 401, "unauthenticated")
+    assert _reload(db_session, target.id).is_active is False
+
+
+def test_admin_staff_activate_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    tutor = _deactivated(db_session, role_code="tutor")
+    admin_target = _deactivated(db_session, role_code="admin")
+    reader, _ = staff_client(permissions=["staff:read"])
+    lesser, _ = staff_client(permissions=_director_plus_staff_write(db_session))
+
+    denied = reader.post(_activate_url(tutor.id))
+    # 目標權限大於操作者（director + staff:write 不可啟用 admin）
+    cannot_manage = lesser.post(_activate_url(admin_target.id))
+
+    assert_error(denied, 403, "permission_denied")
+    assert denied.json()["error"]["details"] == {"required": ["staff:write"]}
+    assert_error(cannot_manage, 403, "cannot_manage_staff")
+    assert "temp_password" not in denied.text + cannot_manage.text
+    assert _reload(db_session, tutor.id).is_active is False
+    assert _reload(db_session, admin_target.id).is_active is False
+
+
+def test_admin_staff_activate_409(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    active = make_staff(db_session, role_code="tutor")
+    admin, me = staff_client(role_code="admin")
+
+    assert_error(admin.post(_activate_url(active.id)), 409, "staff_already_active")
+    assert_error(admin.post(_activate_url(me.id)), 409, "staff_already_active")
+    assert_error(admin.post(_activate_url(uuid4())), 404, "staff_user_not_found")
+    reloaded = _reload(db_session, active.id)
+    assert (reloaded.must_change_password, reloaded.token_version) == (False, 0)
