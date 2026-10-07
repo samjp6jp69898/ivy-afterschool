@@ -2,6 +2,8 @@
 
 - BACKEND-385 ``GET /homework/board``：homework:read；``BoardQuery``（date 預設今天、class_id）→
   BACKEND-383 ``get_board`` → ``BoardOut``。
+- BACKEND-386 ``POST /homework/items``：homework:write；``HomeworkItemCreateIn`` → BACKEND-377
+  ``create_item`` → commit → 201 ``HomeworkMutationOut``（項目與重算後的進度）。
 - BACKEND-390 ``PUT /homework/progress/{student_id}``：homework:write；``ProgressPutIn``
   （service_date 預設今天）→ 有給 overall 先 BACKEND-381 ``set_overall_status``，有給
   ready_eta / note 再 BACKEND-382 ``set_ready_eta_and_note``（未給的欄位傳 UNSET）→ commit →
@@ -24,7 +26,14 @@ from app.core.db import get_db
 from app.core.permissions import Permission
 from app.models.account import StaffUser
 from app.models.homework import HomeworkDailyProgress
-from app.schemas.homework import BoardOut, BoardQuery, ProgressOut, ProgressPutIn
+from app.schemas.homework import (
+    BoardOut,
+    BoardQuery,
+    HomeworkItemCreateIn,
+    HomeworkMutationOut,
+    ProgressOut,
+    ProgressPutIn,
+)
 from app.services import homework_service
 from app.services.homework_service import UNSET, ProgressChange
 
@@ -43,6 +52,15 @@ def get_board(
     clock: ClockDep,
 ) -> BoardOut:
     return homework_service.get_board(db, query, clock=clock)
+
+
+@router.post("/items", status_code=201, response_model=HomeworkMutationOut)
+def create_item(
+    body: HomeworkItemCreateIn, staff: HomeworkWrite, db: Db, clock: ClockDep
+) -> HomeworkMutationOut:
+    out = homework_service.create_item(db, body, actor=staff, clock=clock)
+    db.commit()
+    return out
 
 
 def _progress_out(db: Session, progress: HomeworkDailyProgress) -> ProgressOut:
