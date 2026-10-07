@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 105,
-  "last_updated": "2026-10-07T10:34:48Z",
+  "version": 106,
+  "last_updated": "2026-10-07T10:42:48Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -222,7 +222,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/auth.ts",
       "source_ref": "FE:src/parent/api/auth.ts::liffLogin",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-053",
@@ -241,7 +241,13 @@
         "red_cases": [
           "authApi liffLogin posts id_token：liffLogin('tok123') → POST /parent/auth/liff-login 的 body JSON 深等於 {id_token:'tok123'}；回 {status:'needs_binding', parent:null, name_hint:'王媽媽'} → resolve 的 name_hint === '王媽媽'",
           "authApi bind posts code：bind('ABCD2345') → body 深等於 {code:'ABCD2345'}；回 400 {error:{code:'binding_code_expired'}} → reject 且 error.code === 'binding_code_expired'",
-          "authApi logout posts to logout：logout() → POST /parent/auth/logout 被送出且 resolve 為 undefined"
+          "authApi logout posts to logout：logout() → POST /parent/auth/logout 被送出且 resolve 為 undefined",
+          "authApi liffLogin returns parent when already bound：回 {status:'ok', parent:{id:'p1', children:[{id:'s1', name:'王小明', ...}]}, name_hint:null} → 原樣 resolve，parent.children[0].name === '王小明'",
+          "authApi liffLogin 401 rejects without refresh：回 401 {error:{code:'invalid_id_token'}} → reject 且 status === 401、code === 'invalid_id_token'，parentRefreshHttp 沒有任何請求（路徑須與 parentHttp 的 noRefreshPaths 一致）",
+          "authApi bind returns parent with the latest children：回 200 {parent:{...}} → resolve 為同一物件",
+          "authApi bind 401 rejects without refresh：回 401 {error:{code:'unauthenticated'}} → reject 且 status === 401，parentRefreshHttp 沒有任何請求",
+          "authApi logout propagates failures：回 500 {error:{code:'internal_error'}} → reject 且 status === 500、code === 'internal_error'（不吞錯誤）",
+          "authApi logout 401 rejects without refresh：回 401 → reject 且 status === 401，parentRefreshHttp 沒有任何請求"
         ],
         "run": "just web-test src/parent/api/auth.spec.ts -t \"authApi\"",
         "notes": ""
