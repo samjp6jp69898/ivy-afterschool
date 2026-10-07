@@ -2,6 +2,7 @@
 BACKEND-435：GET /api/admin/pickup/roster（POS 學生卡）。
 BACKEND-436：GET /api/admin/pickup/authorizations（代理接送核驗清單）。
 BACKEND-430 / 432 / 434：POST /api/admin/pickup/requests、/{id}/acknowledge、/{id}/cancel。
+BACKEND-431：POST /api/admin/pickup/requests/{id}/reply。
 
 fake_clock 預設 2026-09-01 01:00 UTC（台北 09:00）；接送請求 / 授權的 service_date 用台北「今天」。
 """
@@ -9,7 +10,7 @@ fake_clock 預設 2026-09-01 01:00 UTC（台北 09:00）；接送請求 / 授權
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from datetime import date
+from datetime import date, time
 from uuid import UUID, uuid4
 
 import pytest
@@ -19,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.account import StaffUser
+from app.models.homework import HomeworkDailyProgress
 from app.models.notifications import Notification
 from app.models.parents import ParentAccount
 from app.models.pickup import PickupRequest
@@ -29,6 +31,7 @@ from tests.support.factories import (
     make_attendance,
     make_class,
     make_guardian,
+    make_homework_progress,
     make_leave,
     make_parent,
     make_pickup_authorization,
@@ -534,3 +537,139 @@ def test_admin_pickup_write_guard_registered(app: FastAPI) -> None:
     assert "post" in paths[_REQUESTS]
     assert "post" in paths[_REQUESTS + "/{request_id}/acknowledge"]
     assert "post" in paths[_REQUESTS + "/{request_id}/cancel"]
+
+
+# --- BACKEND-431：POST /requests/{id}/reply ---------------------------------------------------
+
+
+def _parent_events(db: Session, event: str, parent_id: UUID) -> list[Notification]:
+    return list(
+        db.execute(
+            select(Notification).where(
+                Notification.event == event,
+                Notification.recipient_type == "parent",
+                Notification.recipient_id == parent_id,
+            )
+        ).scalars()
+    )
+
+
+def test_admin_pickup_reply_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "post" in app.openapi()["paths"][_REQUESTS + "/{request_id}/reply"]
+
+
+def test_admin_pickup_reply_success(staff_client: StaffClientFactory, db_session: Session) -> None:
+    ming, parent = _family(db_session)
+    make_homework_progress(
+        db_session, ming, service_date=_TODAY, overall_status="in_progress", ready_eta=time(17, 0)
+    )
+    request = make_pickup_request(db_session, ming, service_date=_TODAY, requested_by=parent.id)
+    client, staff = staff_client(permissions=["pickup:operate"], display_name="林老師")
+
+    resp = client.post(_request_url(request.id, "/reply"), json={"reply_ready_eta": "18:00"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert (body["id"], body["status"]) == (str(request.id), "pending")
+    assert body["reply_message"] == "預計 18:00 可接送"
+    assert (body["reply_source"], body["reply_ready_eta"], body["replied_by_name"]) == (
+        "staff",
+        "18:00",
+        "林老師",
+    )
+    assert body["needs_reply"] is False
+    # 已 commit：重讀 DB；ETA 同交易寫回作業進度，發起的家長收到 pickup.replied
+    db_session.expire_all()
+    assert (request.reply_source, request.reply_ready_eta, request.replied_by) == (
+        "staff",
+        time(18, 0),
+        staff.id,
+    )
+    progress = db_session.execute(
+        select(HomeworkDailyProgress).where(
+            HomeworkDailyProgress.student_id == ming.id,
+            HomeworkDailyProgress.service_date == _TODAY,
+        )
+    ).scalar_one()
+    assert (progress.ready_eta, progress.eta_updated_by) == (time(18, 0), staff.id)
+    replied = _parent_events(db_session, "pickup.replied", parent.id)
+    assert [n.payload["reply_message"] for n in replied] == ["預計 18:00 可接送"]
+
+    # 只給訊息：ETA 清空、文案照給
+    message_only = client.post(
+        _request_url(request.id, "/reply"), json={"reply_message": "還在訂正，晚一點"}
+    )
+
+    assert message_only.status_code == 200
+    assert (message_only.json()["reply_message"], message_only.json()["reply_ready_eta"]) == (
+        "還在訂正，晚一點",
+        None,
+    )
+
+
+def test_admin_pickup_reply_422(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming, _ = _family(db_session)
+    request = make_pickup_request(db_session, ming, service_date=_TODAY)
+    client, _ = staff_client(permissions=["pickup:operate"])
+
+    for body in (
+        {},
+        {"reply_ready_eta": "25:00"},
+        {"reply_ready_eta": "6pm"},
+        {"reply_message": ""},
+        {"reply_message": "x" * 201},
+        {"reply_message": "好", "status": "acknowledged"},
+    ):
+        assert_error(
+            client.post(_request_url(request.id, "/reply"), json=body), 422, "validation_error"
+        )
+    assert_error(client.post(_request_url(request.id, "/reply")), 422, "validation_error")
+    assert_error(
+        client.post(_request_url("abc", "/reply"), json={"reply_message": "好"}),
+        422,
+        "validation_error",
+    )
+    db_session.expire_all()
+    assert (request.reply_source, request.reply_message) == (None, None)
+
+
+def test_admin_pickup_reply_401(api_client: TestClient, assert_error: AssertError) -> None:
+    resp = api_client.post(_request_url(uuid4(), "/reply"), json={"reply_message": "好"})
+
+    assert_error(resp, 401, "unauthenticated")
+
+
+def test_admin_pickup_reply_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming, _ = _family(db_session)
+    request = make_pickup_request(db_session, ming, service_date=_TODAY)
+    client, _ = staff_client(permissions=["pickup:read"])
+
+    resp = client.post(_request_url(request.id, "/reply"), json={"reply_ready_eta": "18:00"})
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["pickup:operate"]}
+    db_session.expire_all()
+    assert request.reply_source is None
+
+
+def test_admin_pickup_reply_409(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming, _ = _family(db_session)
+    completed = make_pickup_request(db_session, ming, service_date=_TODAY, status="completed")
+    client, _ = staff_client(permissions=["pickup:operate"])
+
+    resp = client.post(_request_url(completed.id, "/reply"), json={"reply_ready_eta": "18:00"})
+
+    assert_error(resp, 409, "invalid_pickup_status")
+    assert resp.json()["error"]["details"] == {"current_status": "completed"}
+    assert_error(
+        client.post(_request_url(uuid4(), "/reply"), json={"reply_ready_eta": "18:00"}),
+        404,
+        "pickup_request_not_found",
+    )
