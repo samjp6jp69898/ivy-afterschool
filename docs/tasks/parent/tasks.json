@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 101,
-  "last_updated": "2026-10-07T08:03:56Z",
+  "version": 102,
+  "last_updated": "2026-10-07T08:14:42Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -180,7 +180,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/children.ts",
       "source_ref": "FE:src/parent/api/profile.ts::getMe",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-064",
@@ -210,9 +210,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-p",
+        "notes": "6 條 red_case 皆有同名測試且斷言具體行為（請求 URL 序列恰為 /parent/me、/parent/children、/parent/children/s2、/parent/children/s2/today；回傳深等於 fixture；404 為 ApiError 且 status 404、code student_not_found；請假日的 leave 與 pickup_request null、非營業日 attendance.status null 原樣回傳）。實跑 tdd.run 6/6 綠，vitest JSON 報告的測試名稱與 red_cases 以腳本逐條比對一致、全部被 -t 選到。8ea3e45（只有 spec）先於 b18d726（只有實作）。web-lint 乾淨；web-typecheck 的錯誤只在 JsonSchemaFields.vue、AuditLogView.vue（FRONTEND-295），本批十個檔案沒有。型別以獨立腳本比對：後端 Pydantic model_json_schema 對 TS compiler API 攤平的 interface，逐欄比欄位名、nullable、必填、enum；比對腳本先以注入的缺欄、多欄、nullable、型別、enum 反例確認會報錯。ChildSummary、ChildDetail（含 my_guardian）、ParentMe（含 children[]）、ChildToday（含 attendance / leave / homework / pickup_request）與 parent_children.py 完全一致；status、relation、reply_source 使用 FRONTEND-002 的 StudentStatus、GuardianRelation、PickupReplySource，值域與 db014、db016、db025 的 CHECK 一致。突變：getChildToday 路徑拿掉 /today，2 條測試轉紅。殘留（不擋）：路徑 id 沒有 encodeURIComponent（後台 api client 全部有編碼），非 UUID 的 id 例如 '../me' 會被 URL 正規化成其他 endpoint，詳見 PARENT-150 notes；description 程式碼區塊的 status、reply_source 寫成字面聯集，與文字敘述指定的共用型別等價。"
       }
     },
     {
@@ -1751,7 +1751,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/pickupRequests.ts",
       "source_ref": "FE:src/parent/api/dismissalCalls.ts::createDismissalNotice",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-440",
@@ -1782,9 +1782,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-p",
+        "notes": "7 條 red_case 皆有同名測試且斷言具體行為：POST body 以 JSON.parse 深等於（未給、'17:40'、null 三種到達時間；arrived 捷徑為 {student_id, arrived:true}；型別被繞過時兩個欄位照送且 422 原樣 reject）；取消 body 為 {} 與 {reason}，空字串與純空白皆為 {}；我到了不帶 body；409 pickup_window_closed 的 message、pickup_request_exists 的 details 原樣；今日列表 URL 與兩筆內容。實跑 tdd.run 7/7 綠，名稱逐條比對一致。83f67d1（只有 spec）先於 e776140（只有實作）。web-lint 乾淨；spec 在 tsconfig.app.json 的 src/**/*.ts 範圍內，web-typecheck 沒有 unused @ts-expect-error，表示該行的型別錯誤確實存在。never 互斥另以 tsc 6.0.3 的 scratch 檔驗證：fresh literal、as const、寬型別變數、spread 後加 arrived、eta 為 string | undefined 的變數加 arrived、標註為 PickupRequestCreateInput 的變數，六種並存寫法都是型別錯誤；同樣寫法套在沒有 never 的單純聯集上四種都通過，證明 never 不是裝飾；合法的五種寫法皆無錯誤。ParentPickupRequest 17 欄與 ParentPickupRequestOut 一致；請求對照 ParentPickupRequestCreateIn、PickupCancelIn 與 BACKEND-442 / 443 的 handler（arrived 無 body、cancel 的 body 可省略）。突變：到達時間一律帶入、取消原因不 trim、arrived 時刪掉 eta，各自有測試轉紅。殘留（不擋）：型別上 {arrived:true, expected_arrival_at:null} 與 arrived:false 也是型別錯誤（後端可接受，呼叫端省略欄位即可）；expected_arrival_at 為空字串時照送、由後端 422；路徑 id 沒有編碼（同 PARENT-006）。"
       }
     },
     {
@@ -1794,7 +1794,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/pickupPersons.ts",
       "source_ref": "FE:src/parent/api/pickup.ts::createPickupPerson",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-444",
@@ -1824,9 +1824,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-p",
+        "notes": "8 條 red_case 皆有同名測試且斷言具體行為：請求 data 為 FormData、各欄位值、欄位集合恰為 name / phone / photo / relation、photo 的檔名與型別、Content-Type 不含 application/json；無照片時 has('photo') 為 false；第一次 401 → refresh 一次 → 兩次請求都是含檔案的 FormData 並回傳第二次結果；409、422 details、404 原樣；DELETE 204 resolve undefined；列表原樣。實跑 tdd.run 8/8 綠，名稱逐條比對一致。a3462b4（只有 spec）先於 0985ff3（只有實作）。web-lint 乾淨、typecheck 本檔無錯誤。實作者的 FormData 發現獨立驗證成立（axios 1.20.0）：lib/defaults/index.js:56-57 的 transformRequest 對 JSON Content-Type 的 FormData 回傳 JSON.stringify(formDataToJSON(data))，自訂 adapter 實驗 body 變成 {\"name\":\"李阿姨\",\"photo\":{}}；per-request multipart/form-data 時 body 保留 FormData 且 photo 仍是 File；lib/helpers/resolveConfig.js:65-78 在標準瀏覽器環境對 FormData 執行 headers.setContentType(undefined)，lib/adapters/xhr.js:19 先呼叫 resolveConfig、:205-208 只送出非空標頭（fetch adapter 同樣經 resolveConfig，並在 fetch.js:423-433 刪除缺 boundary 的 multipart）。真實 Chromium 實驗：覆蓋時伺服器收到 multipart/form-data; boundary=… 且含檔案 part（xhr 與 fetch adapter 皆然），不覆蓋時收到 application/json 與 {\"photo\":{}}。PickupPerson 7 欄與 PickupPersonOut 一致；multipart 欄位名對照 BACKEND-445 的 Form 欄位與 File photo。description 與 PARENT-133 的對應句為最終規格寫法。突變：拿掉 multipart 標頭 3 條轉紅、photo 欄位改名 2 條轉紅。殘留（不擋）：FRONTEND-294 落地後 per-request 覆蓋變成非必要（294 已保證此寫法行為不變），屆時 risk_notes 的「一律要 per-request 覆蓋」需由協調者改寫；depends_on 未列實際使用的 FRONTEND-006 buildFormData（已 done）；路徑 id 沒有編碼（同 PARENT-006）。"
       }
     },
     {
@@ -2426,7 +2426,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/attendance.ts",
       "source_ref": "FE:src/parent/api/attendance.ts::getMonthlyAttendance",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-323",
@@ -2450,9 +2450,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-p",
+        "notes": "3 條 red_case 皆有同名測試且斷言具體行為：URL 與 params 深等於 {month:'2026-10'}、stats 五欄原樣、month '2026-13' 原樣送出、422 details 與 404 的 status、code 原樣。實跑 tdd.run 3/3 綠，名稱逐條比對一致。8c154d6（只有 spec）先於 f3ec167（只有實作）。web-lint 乾淨、typecheck 本檔無錯誤。AttendanceDay、MonthlyAttendance（含 stats）與 ParentMonthlyAttendanceOut 逐欄一致；month 對照 BACKEND-323 的 Query(pattern=MONTH_PATTERN)，前端不改寫。突變：拿掉 params 2 條轉紅、前端先驗格式而不送 month 1 條轉紅。殘留（不擋）：後端 ParentAttendanceDayOut.leave_type 宣告為 str | None，前端依 description 用 LeaveType；值取自 student_leaves.leave_type，受 db018 CHECK 限定為 sick / personal / other，值域一致，後端可另改 Literal；路徑 id 沒有編碼（同 PARENT-006）。"
       }
     },
     {
@@ -2800,7 +2800,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/exams.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-479",
@@ -2827,9 +2827,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-p",
+        "notes": "5 條 red_case 皆有同名測試且斷言具體行為：預設 params {page:1, page_size:20}、自訂 {page:2, page_size:50}、page 0 原樣送出、422 details 原樣、詳情路徑與 404 exam_not_found、分數 92.5 維持 number、缺考與未登記科目 score null 原樣。實跑 tdd.run 5/5 綠，名稱逐條比對一致。592b862（只有 spec）先於 fd1005a（只有實作）。web-lint 乾淨、typecheck 本檔無錯誤。ParentExamSummary、ParentExamDetail（含 subjects）與 ParentExamListItemOut、ParentExamDetailOut 逐欄一致，分數經 JsonNumber（PlainSerializer float）輸出 number；分頁預設與 app/core/pagination.py 的 page_params（1 / 20、上限 200）一致；Page<T> 取自 FRONTEND-002。突變：page_size 預設改 10 有 2 條轉紅、page 夾限到 1 有 1 條轉紅。殘留（不擋，建議另開 task）：家長端 api client 的路徑 id 都沒有 encodeURIComponent（後台 api client 全部有）。PARENT-154 的路由 /exams/:examId 會把 route param 交給 getChildExam；examId 若為 '../../../me'，URL 正規化後請求會打到 /api/parent/me，'e1?page_size=500' 會夾帶 query。只限 GET、同源、本人權限，不越權；後端對非 UUID 的路徑參數回 422，編碼後就會落在這個錯誤路徑。建議另開一個 task 統一處理所有家長端 api client（含已 done 的 070、170）。"
       }
     },
     {
