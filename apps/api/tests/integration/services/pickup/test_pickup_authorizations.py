@@ -8,18 +8,24 @@
 - BACKEND-426：verify_code（核對接送碼，連錯 5 次鎖定、原子累計）。
 - BACKEND-427：confirm_visual_match（員工目視核對確認核銷，照片為輔助、寫 audit）。
 - BACKEND-428：override_complete（主管強制完成代理接送，寫 audit）。
+- BACKEND-555：authorization_out / staff_authorization_out（公開組裝函式；close_out 不再匯入
+  私有名稱）。
 """
 
+import ast
+import inspect
 import json
 import logging
 import re
 import threading
 from collections.abc import Callable, Iterator
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import Engine, func, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
@@ -40,15 +46,19 @@ from app.models.pickup import PickupAuthorization, PickupRequest
 from app.notifications import outbox_jobs
 from app.realtime import publish as publish_module
 from app.realtime.publish import admin_topic_channel
+from app.repositories.students import student_brief_map
 from app.schemas.pickup import (
     PickupAuthorizationCreateIn,
+    PickupAuthorizationOut,
     StaffAuthorizationListQuery,
     StaffAuthorizationOut,
     VisualMatchIn,
 )
+from app.services import student_service
 from app.services.pickup import authorizations as authorizations_module
 from app.services.pickup.authorizations import (
     VerifyOutcome,
+    authorization_out,
     complete_via_authorization,
     confirm_visual_match,
     create_authorization,
@@ -57,6 +67,7 @@ from app.services.pickup.authorizations import (
     load_verifiable_authorization,
     override_complete,
     regenerate_code,
+    staff_authorization_out,
     verify_code,
 )
 from app.services.pickup.codes import pickup_code_matches
@@ -1500,3 +1511,157 @@ def test_override_complete_not_today(db_session: Session, kick_off: None) -> Non
     assert (not_active.value.status, not_active.value.code) == (409, "authorization_not_active")
     assert _fresh(db_session, tomorrow.id).status == "active"
     assert _audit_logs(db_session, "pickup.override_complete", tomorrow.id) == []
+
+
+# --- BACKEND-555 公開組裝函式 ---
+
+
+def test_authorization_public_assembler_matches_out_fields(db_session: Session) -> None:
+    class_a = make_class(db_session, name="A班")
+    ming = make_student(db_session, name="王小明", grade_level=3, class_=class_a)
+    person = make_pickup_person(
+        db_session,
+        ming,
+        name="李阿姨",
+        phone="0912-000-202",
+        photo_path=build_object_path(uuid4(), "jpg"),
+    )
+    yesterday = _TODAY - timedelta(days=1)
+    locked = make_pickup_authorization(
+        db_session,
+        ming,
+        service_date=yesterday,
+        code="135790",
+        person=person,
+        proxy_name="李阿姨",
+        proxy_phone="0912-000-202",
+        code_attempts=5,
+    )
+    completed = make_pickup_authorization(
+        db_session, ming, service_date=_TODAY, code="246802", status="completed"
+    )
+
+    out = authorization_out(locked, _TODAY)
+
+    assert isinstance(out, PickupAuthorizationOut)
+    assert out.model_dump() == {
+        "id": locked.id,
+        "student_id": ming.id,
+        "service_date": yesterday,
+        "pickup_person_id": person.id,
+        "proxy_name": "李阿姨",
+        "proxy_phone": "0912-000-202",
+        "code_last4": "5790",
+        "status": "active",
+        "effective_status": "expired",  # active 且早於今天
+        "verified_at": None,
+        "verification_method": None,
+        "created_at": locked.created_at,
+    }
+    done = authorization_out(completed, _TODAY)
+    assert (done.status, done.effective_status, done.verification_method, done.verified_at) == (
+        "completed",
+        "completed",
+        "code",
+        completed.verified_at,
+    )
+    # 今天的 active 不算過期；明天視角下昨天那筆仍 expired
+    assert authorization_out(locked, yesterday).effective_status == "active"
+    for dumped in (out.model_dump(), done.model_dump()):
+        assert "code_hash" not in dumped
+        assert "code_attempts" not in dumped
+
+    brief = student_brief_map(db_session, [ming.id])[ming.id]
+    staff_out = staff_authorization_out(
+        locked, _TODAY, student=brief, photo_url=f"{_URL_PREFIX}x.jpg", verified_by_name=None
+    )
+
+    assert isinstance(staff_out, StaffAuthorizationOut)
+    assert staff_out.model_dump() == {
+        **out.model_dump(),
+        "student": {
+            "id": ming.id,
+            "student_no": ming.student_no,
+            "name": "王小明",
+            "grade_level": 3,
+            "class_id": class_a.id,
+            "class_name": "A班",
+        },
+        "photo_url": f"{_URL_PREFIX}x.jpg",
+        "code_attempts": 5,
+        "locked": True,
+        "verified_by_name": None,
+    }
+    teacher = make_staff(db_session, display_name="林老師")
+    completed.verified_by = teacher.id
+    db_session.flush()
+    staff_done = staff_authorization_out(
+        completed, _TODAY, student=brief, photo_url=None, verified_by_name="林老師"
+    )
+    assert (staff_done.locked, staff_done.code_attempts, staff_done.verified_by_name) == (
+        False,
+        0,
+        "林老師",
+    )
+    assert staff_done.photo_url is None
+
+
+def _pickup_imports(tree: ast.Module) -> tuple[list[str], dict[str, list[str]]]:
+    """回傳 (整個模組 import 的 pickup 模組清單, 各 from-import 的 pickup 模組 → 名稱)。"""
+    plain: list[str] = []
+    from_imports: dict[str, list[str]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            plain.extend(
+                alias.name for alias in node.names if alias.name.startswith("app.services.pickup")
+            )
+        elif isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
+            "app.services.pickup"
+        ):
+            from_imports.setdefault(node.module or "", []).extend(a.name for a in node.names)
+    return plain, from_imports
+
+
+def test_authorization_public_assembler_is_used_by_close_out(
+    db_session: Session, published: list[Call]
+) -> None:
+    source_file = inspect.getsourcefile(student_service)
+    assert source_file is not None
+    tree = ast.parse(Path(source_file).read_text(encoding="utf-8"), filename=source_file)
+    plain, from_imports = _pickup_imports(tree)
+
+    # 不再以任何形式拿到 pickup 模組的私有名稱：沒有 import 整個模組（避免 module._x），
+    # from-import 的名稱都不以底線開頭，且授權輸出改用公開的 authorization_out
+    assert plain == []
+    private = sorted(
+        f"{module}.{name}"
+        for module, names in from_imports.items()
+        for name in names
+        if name.startswith("_")
+    )
+    assert private == []
+    assert "authorization_out" in from_imports.get("app.services.pickup.authorizations", [])
+
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    ming.status = "withdrawn"
+    ming.withdrawn_on = _TODAY
+    db_session.flush()
+    staff = make_staff(db_session, permissions=["students:write"])
+    auth = make_pickup_authorization(db_session, ming, service_date=_TODAY + timedelta(days=1))
+
+    result = student_service.close_out_inactive_student(
+        db_session, ming, actor=_current_staff(staff), clock=clock
+    )
+
+    assert result.cancelled_authorizations == 1
+    db_session.commit()
+    [message] = [
+        m
+        for ch, m in published
+        if ch == [admin_topic_channel("pickup")] and m["type"] == "pickup.authorization_updated"
+    ]
+    row = _fresh(db_session, auth.id)
+    assert row.status == "cancelled"
+    assert message["data"] == jsonable_encoder(authorization_out(row, _TODAY).model_dump())
+    assert message["data"]["effective_status"] == "cancelled"
