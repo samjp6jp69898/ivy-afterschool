@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 135,
-  "last_updated": "2026-10-07T08:37:32Z",
+  "version": 136,
+  "last_updated": "2026-10-07T08:38:27Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -2252,7 +2252,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/RoleCreateDialog.vue",
       "source_ref": "FE:src/views/settings/SettingsRolesView.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-068",
@@ -2276,9 +2276,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-u",
+        "notes": "pass：稿 page-settings-roles.html（approved，preview-tasks 含本 task）decision 11 逐條對照：FormDialog lg 800、送出鈕「建立」、代碼與名稱並排（DOM + ?raw 斷言 1fr 1fr）、代碼下灰字「建立後不可修改」、「從既有角色複製權限」依角色卡順序列出名稱與權限數、只帶入自己持有的碼並以橘字（?raw）顯示「已略過 N 項你沒有的權限」、格式錯誤與 409 role_code_taken「代碼已被使用」顯示在代碼欄位下、代碼 2~32 字與名稱 50 字邊界、403 cannot_grant_permissions 以表單頂端可關閉的紅色 alert 列出權限中文名稱，皆有 DOM 斷言。送出中 FormDialog loading、el-form 與 PermissionPicker disabled；關閉由 FormDialog 在 before-close 自行 emit，重開會重設表單（有測試）。tdd.run 13 passed，4 條 red_case 全部選到；908433c 測試先於 b2e165e 實作；lint / typecheck 乾淨。突變：代碼上限放寬到 33 字、拿掉格式檢查、複製時不過濾不可授出的碼、409 改 ElMessage、403 改 ElMessage 均轉紅。待使用者確認的稿改動：7123e9c 把已核可稿中「新增角色遇 403 cannot_grant_permissions」的呈現由 ElMessage 改為表單頂端可關閉的紅色 alert（同 FRONTEND-069 與本 task description），decision 補一句、preview-updated 與 index 日期改 2026-10-07，preview-status 仍為 approved；已核對這是該稿核可後唯一一次改動、只涉及這個錯誤呈現，沒有擴大範圍，實作與目前的稿一致。殘留（不擋）：代碼先去頭尾空白再驗證（稿未去空白，後端 str_strip_whitespace 同樣會去）；名稱超過 50 字只靠 input maxlength，後端 422 會對應到名稱欄位（有測試）；複製下拉寬 280px 與代碼等寬字型未斷言（純外觀）。"
       }
     },
     {
@@ -2848,7 +2848,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/student/GuardianManager.vue",
       "source_ref": "FE:src/components/student/GuardianManager.vue::default",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-082",
@@ -2857,7 +2857,7 @@
         "FRONTEND-044"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "",
+      "risk_notes": "review-r9-u 打回：(1) 刪除監護人回 404（資料已被他人變更）時，要和產生 / 解除綁定一樣在顯示後端訊息後重新載入清單（description 已寫明寫入回 409 / 404 重新載入），並補測試；(2) 產生綁定碼的回應若在切換學生之後才到，綁定碼 dialog 不可以用新學生的姓名呈現（說明文字的學生必須是送出請求當下那位學生），補「請求進行中切換學生、回應晚到」的測試並斷言 dialog 文字；(3) 產生 / 解除綁定回 404 時重新載入的分支沒有測試（把 404 從條件拿掉測試仍全綠），補 404 的測試。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/components/student/GuardianManager.spec.ts",
@@ -2876,9 +2876,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r9-u",
+        "notes": "concern（打回）：兩項可構造反例的錯誤行為與一項未驗收的分支，見 risk_notes。其餘通過：稿 page-students.html decision 8（主要聯絡人摘要 tag、卡片欄位、綁定狀態 tag 顏色與效期格式、虛線分隔文字按鈕、缺 guardians:write 或封存時隱藏全部動作）與 decision 17（重新產生 / 解除綁定 / 刪除的確認框標題與文字）、三態（initial 先顯示、無 initial 時骨架、首次失敗 EmptyState error + 重試、空清單附新增鈕）、切換學生時舊清單回應不覆蓋、請求中停用動作鈕、綁定碼在 dialog 關閉當下清除（issued 清空 + BindingCodeDialog v-if），皆有 DOM 斷言；不寫 log / storage。tdd.run 21 passed，6 條 red_case 全部選到；a640258 / 4b2d6e1 測試先於 6187578 實作；lint / typecheck 乾淨。突變：拿掉 loadSeq、readonly 不影響動作、請求中不停用、關閉 dialog 但保留綁定碼均轉紅；把 404 從重新載入條件拿掉測試仍全綠。以暫時加在 spec 尾端的探針測試重現（已還原、cmp 一致）：(1) 刪除監護人回 404 guardian_not_found（已被他人刪除）只顯示後端訊息，清單沒有重新載入（GET 次數仍為 1），與 description「寫入回 409 / 404 顯示後端 message 並重新載入清單」不符；(2) 在王小明的面板按「產生綁定碼」、請求未回時切到陳小美，回應晚到後綁定碼 dialog 顯示「請 王阿嬤 … 輸入此綁定碼即可綁定 陳小美」，但這組碼綁的是王小明的監護人，違反「較早請求的回應晚到時不覆蓋」，且可能讓工作人員把 A 學生的綁定碼交給 B 學生的家長。殘留（不擋）：GuardianFormDialog（FRONTEND-092）新增 / 編輯回 409 / 404 時只在 dialog 內顯示訊息、不 emit 任何事件，本元件無從重新載入；若要涵蓋需改 092 介面或在表單關閉時重新載入，屬本 task 範圍外。"
       }
     },
     {
@@ -3943,7 +3943,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/homework/HomeworkItemDialog.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-083",
@@ -3972,9 +3972,9 @@
         "notes": "共用模組 recentHomeworkTitles.ts 的測試在 apps/web/src/components/homework/recentHomeworkTitles.spec.ts（describe recentHomeworkTitles），由同一個 tdd.run 選到。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-u",
+        "notes": "pass：稿 page-homework-board.html（approved，preview-tasks 含本 task）decision 13 逐條對照：FormDialog sm 420、標題「新增作業 / 編輯作業：{姓名}」、錯誤 alert 在表單上方、科目可不選（placeholder「不指定科目」，清除送 null，編輯中已停用科目仍以原名稱列為選項）、內容必填 ≤100 與字數計數、最近使用最多 5 個 chip 點擊填入，皆有 DOM 斷言；「編輯時沒有任何變更直接關閉、不送請求」由 FRONTEND-151 比對原值（151 red_case edit-item sends only changed fields 涵蓋），本元件照樣 emit，與 description 一致。共用模組 recentHomeworkTitles.ts：損毀 / 非陣列 / 非字串 / 空白 / 超過 100 字 / 重複、getItem 與 setItem 丟例外、取得 localStorage 本身丟 SecurityError、儲存空間已滿皆有測試；chip 以文字插值渲染，有「<img onerror> 原文顯示、不產生 img」測試。tdd.run（兩個 spec）19 passed，9 條 red_case 以 vitest verbose 名稱清單逐條比對全部選到；測試 commit 先於實作（f1e0a2c → e516cb1；64be509 → 03e6c83）；web-lint 乾淨、web-typecheck exit 0。突變驗證（皆已還原並 cmp 一致）：chip 改 v-html、拿掉送出時記錄、送出未去空白、LIMIT 5→6、不略過超過 100 字、把 localStorage 讀取移出 try 均轉紅。殘留（不擋）：送出中最近使用 chip 仍可點（會改內容欄，純外觀）；chip 32px 高與 pointer 未斷言（與稿 CSS 相同）；dialog 內 select / chip / footer 按鈕低於 description 的 44px 觸控下限，與已核可稿寫法一致，要改需改稿；長度以 UTF-16 計，與 input maxlength 一致，比後端以字元計嚴格，不會放行後端會拒絕的值。"
       }
     },
     {
@@ -3984,7 +3984,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/homework/HomeworkBatchAddDialog.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-083",
@@ -4011,9 +4011,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-u",
+        "notes": "pass：稿 decision 14 / 21 逐條對照：FormDialog md 560、標題「整班新增作業：{班級}」、科目 / 內容 / 最近使用 chip、對象 radio「全班 / 指定學生」、指定學生時「全選」「只選今天到班的」與三欄勾選清單（三欄、限高 220 捲動、44px 勾選高度以 ?raw 讀原始碼斷言）、非到班者名字後加（請假）等出勤標籤、預設勾選非請假 / 缺席（含 null 與 expected）、一個都沒勾時在「對象」欄位下顯示「請至少選擇一位學生」、送出鈕「新增給 N 位學生」（全班 N = students 全部人數含請假 / 缺席，與 BACKEND-378 / 383 都以班級 active 學生為準一致；指定學生 N = 勾選人數）、「全班」旁灰字 k 為 0 不顯示，皆有 DOM 斷言；student_ids 依清單順序。tdd.run 12 passed，7 條 red_case 全部選到；測試先於實作（6b9db6f → 15ba6c1；1474673、898c204、d669c58 為實作後補的版面 / 尺寸守衛測試，已以突變證明會紅）；lint / typecheck 乾淨。突變：全班 N 改只算到班者、預設全勾、student_ids 改勾選順序、k=0 仍顯示、清單限高改 320px 均轉紅。殘留（不擋）：(1) 本 spec 沒有 chip 純文字渲染測試，把本元件 chip 改 v-html 測試仍全綠（實作目前是文字插值、正確；155 的 spec 有同類測試）；(2) 出現「請至少選擇一位學生」後改選「全班」，訊息會留到下次送出（與稿的模擬行為相同，純外觀）；(3) dialog 開著時 students 變動，指定學生的 N 以勾選陣列長度計，可能含已不在清單的 id（送出時會被過濾）；(4) radio large 40px、「全選」等按鈕與 chip 32px 低於 44px 觸控下限，與已核可稿一致，要改需改稿；(5) FRONTEND-151 要傳入未經「隱藏請假 / 缺席 / 已離班」與搜尋過濾的該班全部看板學生，否則 N 與後端實際新增人數不一致（151 description 目前未寫明）。"
       }
     },
     {
