@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 97,
-  "last_updated": "2026-10-07T07:51:24Z",
+  "version": 98,
+  "last_updated": "2026-10-07T07:53:25Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -2426,7 +2426,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/attendance.ts",
       "source_ref": "FE:src/parent/api/attendance.ts::getMonthlyAttendance",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-323",
@@ -2443,7 +2443,8 @@
         ],
         "red_cases": [
           "attendanceApi requests month for child：getChildAttendance('s1', '2026-10') → GET URL '/parent/children/s1/attendance'、params 深等於 {month:'2026-10'}；回 stats {service_days:21, attended:15, absent:1, leave:2, unrecorded:3} → 原樣 resolve",
-          "attendanceApi propagates 422：回 422 {error:{code:'validation_error'}} → reject 且 code === 'validation_error'"
+          "attendanceApi propagates 422：回 422 {error:{code:'validation_error'}} → reject 且 code === 'validation_error'，month 原樣送出不在前端改寫（getChildAttendance('s1','2026-13') 的 params 深等於 {month:'2026-13'}）",
+          "attendanceApi propagates 404 for a child that is not yours：GET '/parent/children/s9/attendance' 回 404 {error:{code:'student_not_found'}} → reject 且 status === 404、code === 'student_not_found'"
         ],
         "run": "just web-test src/parent/api/attendance.spec.ts -t \"attendanceApi\"",
         "notes": ""
