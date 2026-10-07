@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 416,
-  "last_updated": "2026-10-07T08:19:40Z",
+  "version": 417,
+  "last_updated": "2026-10-07T08:20:57Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -15184,7 +15184,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/app/services/staff_user_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9e",
       "depends_on": [
         "BACKEND-521"
@@ -15199,8 +15199,8 @@
         ],
         "red_cases": [
           "test_activate_concurrent_only_one_succeeds：停用的員工 S，兩個 session 同時 activate(S) → 恰一個成功並回傳 temp_password，另一個 409 staff_already_active；最終 DB：is_active 為 True、must_change_password 為 True、password_hash 驗證通過「成功者」回傳的 temp_password；audit_logs 中 staff_user.activate 恰 1 筆；拿掉 FOR UPDATE → 轉紅（兩邊都成功、audit 兩筆）",
-          "test_activate_concurrent_blocks_on_staff_row_lock：外部連線對 S 的 staff_users 列 SELECT ... FOR UPDATE 持鎖，thread 呼叫 activate(S) → 放鎖前未完成，放鎖後完成；拿掉 FOR UPDATE → 轉紅",
-          "test_activate_concurrent_sees_commit_despite_loaded_instance：B 的 session 事先載入並持有 S（is_active 為 False）的 ORM 參照；A 先 activate(S) 並 commit；B 再 activate(S) → 409 staff_already_active，password_hash 維持 A 寫入的值；拿掉 populate_existing → 轉紅（B 讀到 identity map 舊值而再次覆寫密碼）"
+          "test_activate_concurrent_blocks_on_staff_row_lock：外部連線對 S 的 staff_users 列 SELECT ... FOR KEY SHARE 持鎖（等同另一交易正在插入參照這位員工的 class_staff 列、尚未 commit），thread 呼叫 activate(S) → 放鎖前未完成，放鎖後完成並回傳臨時密碼；拿掉 FOR UPDATE → 轉紅（activate 只更新非鍵欄位，與 KEY SHARE 不衝突、立刻完成）。外部不可改持 FOR UPDATE：沒有先鎖列的實作也會在之後的 UPDATE 等鎖，分不出差別",
+          "test_activate_concurrent_sees_commit_despite_loaded_instance：B 的 session 事先載入並持有 S（is_active 為 False）的 ORM 參照；A 先 activate(S) 並 commit；B 再 activate(S) → 409 staff_already_active，password_hash 維持 A 寫入的值、稽核仍只有 A 的一筆；拿掉 populate_existing（或 FOR UPDATE 查詢不消費結果）→ 轉紅（B 讀到 identity map 舊值而再次覆寫密碼）"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_staff_user_service.py -k \"test_activate_concurrent_\"",
         "notes": "新測試一律以 test_activate_concurrent_ 為前綴，讓 tdd.run 選得到；既有 activate 測試不動。整合測試包 flock /tmp/afterschool_db.lock 並在內層加 timeout。"
