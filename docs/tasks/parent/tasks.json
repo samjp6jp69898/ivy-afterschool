@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 96,
-  "last_updated": "2026-10-07T07:48:14Z",
+  "version": 97,
+  "last_updated": "2026-10-07T07:51:24Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -1790,11 +1790,11 @@
     {
       "id": "PARENT-091",
       "title": "實作家長端 api client parent/api/pickupPersons.ts（常用接送人列表、新增含照片、刪除）",
-      "description": "建立 `apps/web/src/parent/api/pickupPersons.ts`：\n```ts\nexport interface PickupPerson { id: string; student_id: string; name: string; relation: string; phone: string; photo_url: string | null; created_at: string }\nexport function listPickupPersons(childId: string): Promise<PickupPerson[]>   // GET /parent/children/{id}/pickup-persons（BACKEND-444）\nexport function createPickupPerson(childId: string, input: { name: string; relation: string; phone: string; photo?: File | null }): Promise<PickupPerson> // POST multipart（BACKEND-445）\nexport function deletePickupPerson(id: string): Promise<void>                  // DELETE /parent/pickup-persons/{id}（BACKEND-446，204）\n```\ncreate 以 `FormData` 送出欄位 `name`、`relation`、`phone`，有照片才 append `photo`；不手動設定 Content-Type（交給瀏覽器帶 boundary）。\n\n移植 ivy `FE:src/parent/api/pickup.ts::createPickupPerson` 的 multipart 做法；路徑改為以小孩為範圍，欄位名改為本專案（ivy 的 `person_name` 等不沿用）；**去掉** update（本專案只有新增與刪除）。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/api/pickupPersons.ts`：\n```ts\nexport interface PickupPerson { id: string; student_id: string; name: string; relation: string; phone: string; photo_url: string | null; created_at: string }\nexport function listPickupPersons(childId: string): Promise<PickupPerson[]>   // GET /parent/children/{id}/pickup-persons（BACKEND-444）\nexport function createPickupPerson(childId: string, input: { name: string; relation: string; phone: string; photo?: File | null }): Promise<PickupPerson> // POST multipart（BACKEND-445）\nexport function deletePickupPerson(id: string): Promise<void>                  // DELETE /parent/pickup-persons/{id}（BACKEND-446，204）\n```\ncreate 以 `FormData` 送出欄位 `name`、`relation`、`phone`，有照片才 append `photo`；請求以 `headers: { 'Content-Type': 'multipart/form-data' }` 覆蓋 parentHttp 預設的 `application/json`（axios 遇到 FormData 加 JSON Content-Type 會把 FormData 轉成 JSON 字串、檔案遺失，已實測）；瀏覽器端 axios 送出前會清掉此標頭，由瀏覽器帶 boundary，不會送出缺 boundary 的 multipart。\n\n移植 ivy `FE:src/parent/api/pickup.ts::createPickupPerson` 的 multipart 做法；路徑改為以小孩為範圍，欄位名改為本專案（ivy 的 `person_name` 等不沿用）；**去掉** update（本專案只有新增與刪除）。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/pickupPersons.ts",
       "source_ref": "FE:src/parent/api/pickup.ts::createPickupPerson",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-444",
@@ -1803,7 +1803,7 @@
         "PARENT-004"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "經 parentHttp 或後台 http（instance 預設 Content-Type 為 application/json）送 FormData 的 api client，一律要 per-request 覆蓋成 multipart/form-data，否則 axios 把 FormData 轉成 JSON 字串、檔案遺失；拿掉 createPickupPerson 的標頭覆蓋 pickupPersons.spec.ts 會轉紅。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/api/pickupPersons.spec.ts",
@@ -1811,10 +1811,14 @@
           "vitest"
         ],
         "red_cases": [
-          "pickupPersonsApi create sends multipart with photo：createPickupPerson('s1', {name:'李阿姨', relation:'保母', phone:'0912000123', photo: new File(['x'], 'a.jpg', {type:'image/jpeg'})}) → POST '/parent/children/s1/pickup-persons'，請求 data 為 FormData，get('name') === '李阿姨'、get('photo').name === 'a.jpg'",
+          "pickupPersonsApi create sends multipart with photo：createPickupPerson('s1', {name:'李阿姨', relation:'保母', phone:'0912000123', photo: new File(['x'], 'a.jpg', {type:'image/jpeg'})}) → POST '/parent/children/s1/pickup-persons'，請求 data 為 FormData，get('name') === '李阿姨'、get('photo').name === 'a.jpg'，欄位集合恰為 name / relation / phone / photo，Content-Type 不含 application/json（parentHttp 預設的 JSON 標頭不可讓 FormData 變成 JSON 字串）",
           "pickupPersonsApi create without photo omits field：photo=null → FormData.has('photo') === false",
           "pickupPersonsApi limit error：回 409 {error:{code:'pickup_person_limit_reached'}} → reject 且 code 相同",
-          "pickupPersonsApi delete path：deletePickupPerson('pp1') → DELETE '/parent/pickup-persons/pp1'，回 204 → resolve undefined"
+          "pickupPersonsApi delete path：deletePickupPerson('pp1') → DELETE '/parent/pickup-persons/pp1'，回 204 → resolve undefined",
+          "pickupPersonsApi list path：listPickupPersons('s1') → GET '/parent/children/s1/pickup-persons'，回兩筆（第二筆 photo_url:null）→ 原樣 resolve",
+          "pickupPersonsApi create resends multipart after session refresh：第一次回 401、refresh 成功後重送 → 兩次請求的 data 都是 FormData 且含 name 與 photo，回傳第二次的 201 結果",
+          "pickupPersonsApi create surfaces validation details：回 422 {error:{code:'validation_error', details:[{loc:['body','phone'], ...}]}} → reject 且 status、code、details 原樣",
+          "pickupPersonsApi delete propagates 404：DELETE '/parent/pickup-persons/pp9' 回 404 {error:{code:'pickup_person_not_found'}} → reject 且 code 相同（不吞錯誤）"
         ],
         "run": "just web-test src/parent/api/pickupPersons.spec.ts -t \"pickupPersonsApi\"",
         "notes": ""
@@ -2537,7 +2541,7 @@
     {
       "id": "PARENT-133",
       "title": "實作家長端 api client parent/api/leaves.ts（請假列表、申請、取消、上傳附件）",
-      "description": "建立 `apps/web/src/parent/api/leaves.ts`（型別依 `docs/tasks/api_index.md` §14）：\n```ts\n// LeaveType / LeaveStatus 與 Page<T> 由 FRONTEND-002 import\nexport interface LeaveAttachment { id: string; mime_type: string; size_bytes: number; created_at: string; url: string }\nexport interface ParentLeave { id: string; student_id: string; leave_type: LeaveType; leave_type_label: string; start_date: string; end_date: string; reason: string | null; status: 'active' | 'cancelled'; created_by_type: 'parent' | 'staff'; created_at: string; cancelled_at: string | null; can_cancel: boolean; attachments: LeaveAttachment[] }\nexport function listChildLeaves(childId: string, page = 1, pageSize = 20): Promise<Page<ParentLeave>> // GET /parent/children/{id}/leaves（BACKEND-355）\nexport function createLeave(body: { student_id: string; leave_type: LeaveType; start_date: string; end_date: string; reason?: string }): Promise<ParentLeave> // POST /parent/leaves（BACKEND-356）\nexport function cancelLeave(id: string): Promise<ParentLeave>                 // POST /parent/leaves/{id}/cancel（BACKEND-357）\nexport function uploadLeaveAttachment(leaveId: string, file: File): Promise<LeaveAttachment> // POST multipart file（BACKEND-358）\n```\n`Page<T>` 取自 FRONTEND-002。reason 為空字串時 body 不帶。附件以 FormData 欄位 `file` 送出，不手動設 Content-Type。走 PARENT-004 `parentHttp`。\n\n移植 ivy `FE:src/parent/api/leaves.ts::uploadLeaveAttachment` 的 multipart 做法；路徑改為本專案；**去掉** getLeave 單筆、deleteLeaveAttachment（本專案無此 endpoint）。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/api/leaves.ts`（型別依 `docs/tasks/api_index.md` §14）：\n```ts\n// LeaveType / LeaveStatus 與 Page<T> 由 FRONTEND-002 import\nexport interface LeaveAttachment { id: string; mime_type: string; size_bytes: number; created_at: string; url: string }\nexport interface ParentLeave { id: string; student_id: string; leave_type: LeaveType; leave_type_label: string; start_date: string; end_date: string; reason: string | null; status: 'active' | 'cancelled'; created_by_type: 'parent' | 'staff'; created_at: string; cancelled_at: string | null; can_cancel: boolean; attachments: LeaveAttachment[] }\nexport function listChildLeaves(childId: string, page = 1, pageSize = 20): Promise<Page<ParentLeave>> // GET /parent/children/{id}/leaves（BACKEND-355）\nexport function createLeave(body: { student_id: string; leave_type: LeaveType; start_date: string; end_date: string; reason?: string }): Promise<ParentLeave> // POST /parent/leaves（BACKEND-356）\nexport function cancelLeave(id: string): Promise<ParentLeave>                 // POST /parent/leaves/{id}/cancel（BACKEND-357）\nexport function uploadLeaveAttachment(leaveId: string, file: File): Promise<LeaveAttachment> // POST multipart file（BACKEND-358）\n```\n`Page<T>` 取自 FRONTEND-002。reason 為空字串時 body 不帶。附件以 FormData 欄位 `file` 送出，請求以 `headers: { 'Content-Type': 'multipart/form-data' }` 覆蓋 parentHttp 預設的 `application/json`（否則 axios 會把 FormData 轉成 JSON 字串、檔案遺失，做法同 PARENT-091）；瀏覽器端 axios 送出前會清掉此標頭，由瀏覽器帶 boundary。走 PARENT-004 `parentHttp`。\n\n移植 ivy `FE:src/parent/api/leaves.ts::uploadLeaveAttachment` 的 multipart 做法；路徑改為本專案；**去掉** getLeave 單筆、deleteLeaveAttachment（本專案無此 endpoint）。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/leaves.ts",
       "source_ref": "FE:src/parent/api/leaves.ts::uploadLeaveAttachment",
