@@ -165,6 +165,13 @@ function onSelect(path: string): void {
 </template>
 
 <style scoped>
+/* 寬高含邊框（220 / 64、品牌列 56、收合列 44），App 沒有全域 border-box */
+.admin-sidebar,
+.sidebar__brand,
+.sidebar__collapse {
+  box-sizing: border-box;
+}
+
 .admin-sidebar {
   display: flex;
   flex-direction: column;
