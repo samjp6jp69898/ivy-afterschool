@@ -1,6 +1,6 @@
 """BACKEND-373 / 384 / 374 / 383 / 376 / 382：homework_service（進度列鎖定、家長端當日作業明細、
 ws 快照推播、作業進度看板、整體完成副作用、設定預計可接送時間、重算整體進度、手動標整體完成）。
-BACKEND-377：新增單一學生作業項目。BACKEND-378：整班批次新增同一份作業。BACKEND-379：修改作業項目。
+BACKEND-377：新增單一學生作業項目。BACKEND-378：整班批次新增同一份作業。BACKEND-379：修改作業項目。BACKEND-380：刪除作業項目。
 
 推播測試以 monkeypatch 記錄 publish_threadsafe；commit 走 db_session（savepoint 模式的 commit
 同樣觸發 before_commit / after_commit，見 BACKEND-006）。
@@ -44,6 +44,7 @@ from app.services.homework_service import (
     batch_create_items,
     broadcast_homework_snapshot,
     create_item,
+    delete_item,
     get_board,
     get_child_homework,
     handle_homework_done,
@@ -2090,6 +2091,253 @@ def test_update_homework_item_waits_for_concurrent_delete_then_404(
             thread.join(timeout=10)
         s2.close()
 
+    error = outcome["s2"]
+    assert isinstance(error, AppError), repr(error)
+    assert (error.status, error.code) == (404, "homework_item_not_found")
+    assert _item_count(committing_db_session, ming.id) == 0
+
+
+# --- BACKEND-380 delete_item ---
+
+
+def test_delete_homework_item_to_done(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = _with_parent(db_session)
+    make_homework_item(db_session, ming, service_date=_DAY, status="done", title="國語生字")
+    todo = make_homework_item(db_session, ming, service_date=_DAY, title="數學習作")
+    make_homework_progress(db_session, ming, service_date=_DAY, overall_status="in_progress")
+
+    out = delete_item(db_session, todo.id, actor=actor, clock=clock)
+
+    assert out.item is None
+    assert out.progress.overall_status == "done"
+    assert (out.progress.student_id, out.progress.service_date) == (ming.id, _DAY)
+    assert _progress_row(db_session, ming.id).overall_status == "done"
+    assert _titles(db_session, ming.id) == ["國語生字"]
+    [notification] = _notifications(db_session, "homework.done", ming.id)
+    assert notification.title == "王小明 作業已完成"
+
+
+def test_delete_homework_item_all(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = _with_parent(db_session)
+    only = make_homework_item(db_session, ming, service_date=_DAY, status="doing")
+    make_homework_progress(db_session, ming, service_date=_DAY, overall_status="in_progress")
+
+    out = delete_item(db_session, only.id, actor=actor, clock=clock)
+
+    assert out.item is None
+    assert out.progress.overall_status == "not_started"
+    assert _progress_row(db_session, ming.id).overall_status == "not_started"
+    assert _item_count(db_session, ming.id) == 0
+    assert _notifications(db_session, "homework.done", ming.id) == []
+
+
+def test_delete_homework_item_not_found(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session)
+    item = make_homework_item(db_session, ming, service_date=_DAY)
+
+    with pytest.raises(AppError) as missing:
+        delete_item(db_session, uuid4(), actor=actor, clock=clock)
+
+    assert (missing.value.status, missing.value.code) == (404, "homework_item_not_found")
+    assert _item_count(db_session, ming.id) == 1
+    assert _stored_item(db_session, item.id).title == "數學習作 p.12-13"
+
+
+def test_delete_homework_item_recomputes_remaining(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    hua = make_student(db_session, name="陳小華")
+    done = make_homework_item(db_session, ming, service_date=_DAY, status="done", title="國語")
+    make_homework_item(db_session, ming, service_date=_DAY, status="todo", title="數學")
+    make_homework_progress(db_session, ming, service_date=_DAY, overall_status="in_progress")
+    doing = make_homework_item(db_session, hua, service_date=_DAY, status="doing", title="自然")
+    social = make_homework_item(db_session, hua, service_date=_DAY, status="done", title="社會")
+    make_homework_progress(db_session, hua, service_date=_DAY, overall_status="in_progress")
+
+    # 只剩 todo → 整體回到 not_started；仍有 doing / done 混合 → 維持 in_progress
+    only_todo = delete_item(db_session, done.id, actor=actor, clock=clock)
+    mixed = delete_item(db_session, social.id, actor=actor, clock=clock)
+
+    assert only_todo.progress.overall_status == "not_started"
+    assert _titles(db_session, ming.id) == ["數學"]
+    assert mixed.progress.overall_status == "in_progress"
+    assert _titles(db_session, hua.id) == ["自然"]
+    assert _stored_item(db_session, doing.id).status == "doing"
+
+
+def test_delete_homework_item_past_date_no_notification(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = _with_parent(db_session)
+    past = date(2026, 8, 31)
+    make_homework_item(db_session, ming, service_date=past, status="done", title="國語生字")
+    todo = make_homework_item(db_session, ming, service_date=past, title="數學習作")
+
+    out = delete_item(db_session, todo.id, actor=actor, clock=clock)
+
+    assert (out.progress.service_date, out.progress.overall_status) == (past, "done")
+    assert _notifications(db_session, "homework.done", ming.id) == []
+
+
+def test_delete_homework_item_publishes_snapshot_without_item(
+    db_session: Session,
+    clock: FakeClock,
+    actor: CurrentStaff,
+    kick_off: None,
+    published: list[Call],
+) -> None:
+    ming = make_student(db_session)
+    make_guardian(db_session, ming, parent=make_parent(db_session))
+    make_homework_item(db_session, ming, service_date=_DAY, title="國語生字", status="doing")
+    doomed = make_homework_item(db_session, ming, service_date=_DAY, title="數學習作")
+
+    delete_item(db_session, doomed.id, actor=actor, clock=clock)
+    db_session.commit()
+
+    [admin] = _on(published, admin_topic_channel("homework"))
+    assert [i["title"] for i in admin["data"]["items"]] == ["國語生字"]
+    [parent] = _on(published, student_channel(ming.id))
+    assert [i["title"] for i in parent["data"]["items"]] == ["國語生字"]
+
+
+@pytest.mark.cleanup_tables(
+    "homework_items", "homework_daily_progress", "notification_outbox", "notifications"
+)
+def test_delete_homework_item_holds_progress_lock_until_commit(
+    owner_cleanup_people: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    clock: FakeClock,
+    kick_off: None,
+) -> None:
+    """刪除項目的交易在 commit 前持有進度列鎖。
+
+    三個項目 [done, doing, doing]：A 刪掉第三個、B 同時把第二個改成 done。B 必須等 A commit，
+    才看得到第三個已刪除而算出整體 done 並通知一次。拿掉進度列鎖時 B 還看得到第三個項目，
+    算出 in_progress 後先 commit，最終項目全 done 但整體停在 in_progress、沒有通知。
+    """
+    ming = make_student(committing_db_session, name="王小明")
+    parent = make_parent(committing_db_session)
+    guardian = make_guardian(committing_db_session, ming, parent=parent)
+    staff = make_staff(committing_db_session, role_code="tutor")
+    make_homework_item(committing_db_session, ming, service_date=_DAY, status="done", title="國語")
+    second = make_homework_item(
+        committing_db_session, ming, service_date=_DAY, status="doing", title="數學"
+    )
+    third = make_homework_item(
+        committing_db_session, ming, service_date=_DAY, status="doing", title="自然"
+    )
+    make_homework_progress(
+        committing_db_session, ming, service_date=_DAY, overall_status="in_progress"
+    )
+    committing_db_session.commit()
+    owner_cleanup_people.extend(
+        [
+            ("guardians", guardian.id),
+            ("students", ming.id),
+            ("parent_accounts", parent.id),
+            ("staff_users", staff.id),
+        ]
+    )
+    teacher = _current(staff)
+
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    s2_done = threading.Event()
+    outcome: dict[str, Any] = {}
+
+    def finish_second() -> None:
+        try:
+            s2.execute(text("set local lock_timeout = '10s'"))
+            outcome["s2"] = update_item(
+                s2, second.id, _update_in(status="done"), actor=teacher, clock=clock
+            )
+            s2.commit()
+        except BaseException as exc:
+            outcome["s2"] = exc
+            s2.rollback()
+        finally:
+            s2_done.set()
+
+    thread = threading.Thread(target=finish_second)
+    try:
+        s1.execute(text("set local lock_timeout = '10s'"))
+        outcome["s1"] = delete_item(s1, third.id, actor=teacher, clock=clock)
+        thread.start()
+        assert not s2_done.wait(timeout=0.5)  # s1 尚未 commit：s2 在進度列排隊
+        s1.commit()
+        thread.join(timeout=10)
+    finally:
+        s1.close()
+        if thread.is_alive():
+            thread.join(timeout=10)
+        s2.close()
+
+    assert outcome["s1"].progress.overall_status == "in_progress"
+    assert outcome["s2"].progress.overall_status == "done"
+    assert _progress_row(committing_db_session, ming.id).overall_status == "done"
+    assert _item_count(committing_db_session, ming.id) == 2
+    assert len(_notifications(committing_db_session, "homework.done", ming.id)) == 1
+
+
+@pytest.mark.cleanup_tables(
+    "homework_items", "homework_daily_progress", "notification_outbox", "notifications"
+)
+def test_delete_homework_item_waits_for_concurrent_delete_then_404(
+    owner_cleanup_people: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    clock: FakeClock,
+    kick_off: None,
+) -> None:
+    """同一個項目被兩個交易同時刪除：後到的鎖項目列排隊，前者 commit 後回 404（不是刪 0 列後
+    照常重算、回傳成功）。"""
+    ming = make_student(committing_db_session, name="王小明")
+    staff = make_staff(committing_db_session, role_code="tutor")
+    item = make_homework_item(committing_db_session, ming, service_date=_DAY, status="doing")
+    committing_db_session.commit()
+    owner_cleanup_people.extend([("students", ming.id), ("staff_users", staff.id)])
+    teacher = _current(staff)
+    item_id = item.id
+
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    s2_done = threading.Event()
+    outcome: dict[str, Any] = {}
+
+    def delete_again() -> None:
+        try:
+            s2.execute(text("set local lock_timeout = '10s'"))
+            outcome["s2"] = delete_item(s2, item_id, actor=teacher, clock=clock)
+            s2.commit()
+        except BaseException as exc:
+            outcome["s2"] = exc
+            s2.rollback()
+        finally:
+            s2_done.set()
+
+    thread = threading.Thread(target=delete_again)
+    try:
+        s1.execute(text("set local lock_timeout = '10s'"))
+        outcome["s1"] = delete_item(s1, item_id, actor=teacher, clock=clock)
+        thread.start()
+        assert not s2_done.wait(timeout=0.5)  # s1 尚未 commit：s2 排隊
+        s1.commit()
+        thread.join(timeout=10)
+    finally:
+        s1.close()
+        if thread.is_alive():
+            thread.join(timeout=10)
+        s2.close()
+
+    assert outcome["s1"].item is None
     error = outcome["s2"]
     assert isinstance(error, AppError), repr(error)
     assert (error.status, error.code) == (404, "homework_item_not_found")
