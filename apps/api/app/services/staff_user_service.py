@@ -386,13 +386,14 @@ def activate(
     撤銷）。
     啟用只增加可用帳號，不需 assert_admin_capabilities_retained。
     """
-    # 先鎖列再檢查（role 為 joined 載入：只鎖 staff_users）
+    # 先鎖列再檢查（role 為 joined 載入：只鎖 staff_users）。要取出列 ORM 才會以 populate_existing
+    # 覆蓋 identity map 裡的舊值；只 execute 不取列的話只拿到列鎖，已載入的舊物件仍是停用狀態
     session.execute(
         select(StaffUser)
         .where(StaffUser.id == staff_id)
         .with_for_update(of=StaffUser)
         .execution_options(populate_existing=True)
-    )
+    ).scalar_one_or_none()
     staff = _get_managed_staff(session, staff_id, actor=actor, self_error=None)
     if staff.is_active:
         raise ConflictError("staff_already_active", "此帳號已是啟用狀態")
