@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 436,
-  "last_updated": "2026-10-07T10:49:05Z",
+  "version": 437,
+  "last_updated": "2026-10-07T10:50:42Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -15262,7 +15262,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/app/services/leave_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9e",
       "depends_on": [
         "BACKEND-346",
@@ -15277,10 +15277,10 @@
           "integration"
         ],
         "red_cases": [
-          "test_leave_concurrent_cancel_blocks_on_leave_row_lock：外部連線對請假列 SELECT ... FOR KEY SHARE 持鎖，thread 呼叫 cancel_leave → 放鎖前未完成，放鎖後完成；拿掉 _leave_for_update 的 FOR UPDATE → 轉紅",
-          "test_leave_concurrent_cancel_twice_only_one_succeeds：同一筆 active 請假兩個 session 同時 cancel_leave（scope=all）→ 恰一個成功、另一個 409 leave_not_active；出勤還原與 leave.cancelled 通知各只發生一次；拿掉鎖 → 轉紅",
-          "test_leave_concurrent_attachment_limit_not_exceeded：leave.window 的 max_attachments=3、已有 2 個附件，兩個 session 同時 upload_leave_attachment → 恰一個成功、另一個 409 attachment_limit_reached，附件總數為 3；拿掉鎖 → 轉紅（出現 4 個）",
-          "test_leave_concurrent_cancel_sees_commit_despite_loaded_instance：B 的 session 事先載入並持有該請假（status active）的 ORM 參照；A 先 cancel_leave 並 commit；B 再 cancel_leave → 409 leave_not_active；拿掉 populate_existing → 轉紅"
+          "test_leave_concurrent_cancel_blocks_on_leave_row_lock：外部連線對請假列 SELECT ... FOR KEY SHARE 持鎖（等同另一交易正在插入參照這筆請假的出勤 / 附件列），thread 以員工 scope=all 呼叫 cancel_leave → 放鎖前未完成，放鎖後完成：請假 cancelled、兩天出勤還原、leave.cancelled 通知一筆；拿掉 _leave_for_update 的 FOR UPDATE → 轉紅（cancel 只更新非鍵欄位，與 KEY SHARE 不衝突、立刻完成）",
+          "test_leave_concurrent_cancel_twice_only_one_succeeds：同一筆 active 請假，B 事先載入並持有該請假的 ORM 參照，兩個 session 同時 cancel_leave（scope=all）→ 恰一個成功、另一個 409 leave_not_active；出勤還原與 leave.cancelled 通知各只發生一次；拿掉 FOR UPDATE 或拿掉 populate_existing → 轉紅（兩邊都成功、通知兩筆）",
+          "test_leave_concurrent_attachment_limit_not_exceeded：leave.window 預設 max_attachments=3、已有 2 個附件，兩個 session 同時 upload_leave_attachment → 恰一個成功、另一個 409 attachment_limit_reached，附件總數為 3、Storage 只有成功者的物件；拿掉 FOR UPDATE → 轉紅（出現 4 個）",
+          "test_leave_concurrent_cancel_sees_commit_despite_loaded_instance：B 的 session 事先載入並持有該請假（status active）的 ORM 參照；A 先 cancel_leave 並 commit；B 再 cancel_leave → 409 leave_not_active，出勤還原與通知仍只有 A 的一次；拿掉 populate_existing → 轉紅"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_leave_service.py -k \"test_leave_concurrent_\"",
         "notes": "新測試一律以 test_leave_concurrent_ 為前綴；既有測試不動。整合測試包 flock /tmp/afterschool_db.lock 並在內層加 timeout。"
@@ -15298,7 +15298,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/app/services/grade_promotion_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9e",
       "depends_on": [
         "BACKEND-158"
@@ -15312,9 +15312,9 @@
           "integration"
         ],
         "red_cases": [
-          "test_promotion_execute_lock_blocks_on_target_student_row：外部連線對一位對象學生列 SELECT ... FOR KEY SHARE 持鎖，thread 呼叫 execute → 放鎖前未完成，放鎖後完成且該生升級；拿掉對象列 FOR UPDATE → 轉紅",
-          "test_promotion_execute_lock_update_student_waits_and_sees_promoted_grade：A execute 取得對象列鎖後暫停（未 commit），B 在 thread 呼叫 update_student(同一位對象學生，status=withdrawn) 被阻塞；A commit 後 B 完成，該生最終 grade_level 為升級後的值且 status 為 withdrawn；拿掉對象列 FOR UPDATE → 轉紅",
-          "test_promotion_execute_lock_stale_preview_409：B 持有一位對象學生的列鎖並在 commit 前把該生改為 withdrawn，A 的 execute 被阻塞；B commit 後 A 重算 preview 的總數與 expected_total 不符 → 409 preview_stale，整批不動；拿掉對象列 FOR UPDATE → 轉紅"
+          "test_promotion_execute_lock_blocks_on_target_student_row：外部連線對一位對象學生列 SELECT ... FOR KEY SHARE 持鎖，thread 呼叫 execute → 放鎖前未完成，放鎖後完成且兩位對象都升級、升級稽核一筆；拿掉對象列 FOR UPDATE → 轉紅（bulk update 只改非鍵欄位 grade_level，與 KEY SHARE 不衝突、立刻完成）",
+          "test_promotion_execute_lock_update_student_waits_and_sees_promoted_grade：A execute 鎖住對象列、重算 preview 後暫停（以 monkeypatch 包住 grade_promotion_service.preview 注入停頓；尚未 bulk update、未 commit），B 在 thread 呼叫 update_student(同一位對象學生，status=withdrawn) 被阻塞；A 放行並 commit 後 B 完成，該生最終 grade_level 為升級後的值、status 為 withdrawn、withdrawn_on 為當天，另一位照常升級；拿掉對象列 FOR UPDATE → 轉紅（A 停頓期間不持任何列鎖，B 立刻完成）",
+          "test_promotion_execute_lock_stale_preview_409：B 以 update_student(status=withdrawn) 持有一位對象學生的列鎖未 commit，A 的 execute 被阻塞；B commit 後 A 的 FOR UPDATE 重新評估、該生已非對象，重算 preview 的總數與 expected_total 不符 → 409 preview_stale（details 含 expected_total 與 total），整批不動、沒有升級稽核；拿掉對象列 FOR UPDATE → 轉紅（A 以舊名單通過檢查，連已退班的學生一起升級）"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_grade_promotion_service.py -k \"test_promotion_execute_lock_\"",
         "notes": "新測試一律以 test_promotion_execute_lock_ 為前綴；既有測試不動。整合測試包 flock /tmp/afterschool_db.lock 並在內層加 timeout。"
@@ -15400,7 +15400,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9e",
       "depends_on": [
         "BACKEND-548"
@@ -15418,7 +15418,7 @@
           "test_close_out_committing_tests_leave_no_people_residue：跑 test_student_service.py 的 -k test_close_out_ 全部測試後，staff_users 與非系統 roles 筆數與跑前相同"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_student_service.py -k \"test_close_out_\"",
-        "notes": "殘列筆數檢查可用測試外的手動比對（前後各以 owner 查一次）記錄在回報；若改寫成自動檢查，放在同一測試的 teardown 斷言。"
+        "notes": "殘列筆數檢查可用測試外的手動比對（前後各以 owner 查一次）記錄在回報；若改寫成自動檢查，放在同一測試的 teardown 斷言。 殘列筆數以 owner 唯讀連線在測試外前後各查一次（staff_users、非系統 roles）記錄在回報；改用 seed 角色後測試不再往 roles 寫列，owner 清理清單也移除了會誤刪 seed 角色的 roles 項目。"
       },
       "review": {
         "status": "pending",
