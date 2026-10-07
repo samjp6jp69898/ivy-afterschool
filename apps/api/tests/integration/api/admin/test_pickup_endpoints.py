@@ -4,6 +4,7 @@ BACKEND-436：GET /api/admin/pickup/authorizations（代理接送核驗清單）
 BACKEND-430 / 432 / 434：POST /api/admin/pickup/requests、/{id}/acknowledge、/{id}/cancel。
 BACKEND-431：POST /api/admin/pickup/requests/{id}/reply。
 BACKEND-433：POST /api/admin/pickup/requests/{id}/complete。
+BACKEND-437：POST /api/admin/pickup/authorizations/{id}/verify（錯碼累計先 commit）。
 
 fake_clock 預設 2026-09-01 01:00 UTC（台北 09:00）；接送請求 / 授權的 service_date 用台北「今天」。
 """
@@ -26,7 +27,7 @@ from app.models.audit import AuditLog
 from app.models.homework import HomeworkDailyProgress
 from app.models.notifications import Notification
 from app.models.parents import ParentAccount
-from app.models.pickup import PickupRequest
+from app.models.pickup import PickupAuthorization, PickupRequest
 from app.models.students import Student
 from app.notifications import outbox_jobs
 from app.services.settings_service import clear_settings_cache
@@ -42,11 +43,13 @@ from tests.support.factories import (
     make_staff,
     make_student,
 )
+from tests.support.fake_clock import FakeClock
 from tests.support.route_audit import admin_routes_without_permission
 
 _URL = "/api/admin/pickup"
 _TODAY = date(2026, 9, 1)
 StaffClientFactory = Callable[..., tuple[TestClient, StaffUser]]
+ParentClientFactory = Callable[..., tuple[TestClient, ParentAccount]]
 AssertError = Callable[..., None]
 
 
@@ -869,3 +872,201 @@ def test_admin_pickup_complete_409(
     )
     db_session.expire_all()
     assert pending.status == "pending"
+
+
+# --- BACKEND-437：POST /authorizations/{id}/verify --------------------------------------------
+
+_AUTHS = f"{_URL}/authorizations"
+# generate_pickup_code 的範圍是 100000~999999：重新產生的新碼不可能與舊碼相同
+_OLD_CODE = "000000"
+
+
+def _auth_url(auth_id: object, suffix: str) -> str:
+    return f"{_AUTHS}/{auth_id}{suffix}"
+
+
+def _reload_auth(db: Session, auth_id: object) -> PickupAuthorization:
+    """跳過 identity map 重讀 DB 現值（handler 沒 commit 時，請求結束的 rollback 會退回）。"""
+    return db.execute(
+        select(PickupAuthorization)
+        .where(PickupAuthorization.id == auth_id)
+        .execution_options(populate_existing=True)
+    ).scalar_one()
+
+
+def test_admin_pickup_verify_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "post" in app.openapi()["paths"][_AUTHS + "/{auth_id}/verify"]
+
+
+def test_admin_pickup_verify_success(staff_client: StaffClientFactory, db_session: Session) -> None:
+    ming, mom = _family(db_session)
+    # 到班時間早於「現在」（台北 09:00），核銷後出勤才會改 left
+    make_attendance(
+        db_session,
+        ming,
+        service_date=_TODAY,
+        status="present",
+        check_in_at=datetime(2026, 9, 1, 0, 30, tzinfo=UTC),
+    )
+    request = make_pickup_request(db_session, ming, service_date=_TODAY, requested_by=mom.id)
+    auth = make_pickup_authorization(db_session, ming, service_date=_TODAY, code="135790")
+    client, staff = staff_client(permissions=["pickup:operate"], display_name="林老師")
+
+    resp = client.post(_auth_url(auth.id, "/verify"), json={"code": "135790"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {"authorization", "request"}
+    authorization = body["authorization"]
+    assert (authorization["id"], authorization["status"], authorization["verification_method"]) == (
+        str(auth.id),
+        "completed",
+        "code",
+    )
+    assert authorization["verified_by_name"] == "林老師"
+    assert (body["request"]["id"], body["request"]["status"]) == (str(request.id), "completed")
+    assert body["request"]["completion_method"] == "code"
+    assert "code_hash" not in resp.text
+    assert "135790" not in resp.text
+    # 已 commit：重讀 DB；授權與請求都完成、出勤改 left
+    stored = _reload_auth(db_session, auth.id)
+    assert (stored.status, stored.verification_method, stored.verified_by) == (
+        "completed",
+        "code",
+        staff.id,
+    )
+    db_session.expire_all()
+    assert (request.status, request.picked_up_by_authorization_id) == ("completed", auth.id)
+    attendance = db_session.execute(
+        select(StudentAttendance).where(
+            StudentAttendance.student_id == ming.id, StudentAttendance.service_date == _TODAY
+        )
+    ).scalar_one()
+    assert (attendance.status, attendance.check_out_source) == ("left", "pickup")
+
+
+def test_admin_pickup_verify_422(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming, _ = _family(db_session)
+    auth = make_pickup_authorization(db_session, ming, service_date=_TODAY)
+    client, _ = staff_client(permissions=["pickup:operate"])
+
+    for body in ({"code": ""}, {}, {"code": "1" * 21}, {"code": "123456", "method": "code"}):
+        assert_error(client.post(_auth_url(auth.id, "/verify"), json=body), 422, "validation_error")
+    assert_error(
+        client.post(_auth_url("abc", "/verify"), json={"code": "123456"}),
+        422,
+        "validation_error",
+    )
+    # 格式錯誤不計入連錯
+    assert (_reload_auth(db_session, auth.id).code_attempts, auth.status) == (0, "active")
+
+
+def test_admin_pickup_verify_401(api_client: TestClient, assert_error: AssertError) -> None:
+    resp = api_client.post(_auth_url(uuid4(), "/verify"), json={"code": "123456"})
+
+    assert_error(resp, 401, "unauthenticated")
+
+
+def test_admin_pickup_verify_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming, _ = _family(db_session)
+    auth = make_pickup_authorization(db_session, ming, service_date=_TODAY, code="135790")
+    client, _ = staff_client(permissions=["pickup:read"])
+
+    resp = client.post(_auth_url(auth.id, "/verify"), json={"code": "246802"})
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["pickup:operate"]}
+    stored = _reload_auth(db_session, auth.id)
+    assert (stored.status, stored.code_attempts) == ("active", 0)
+
+
+def test_admin_pickup_verify_mismatch_persists(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming, _ = _family(db_session)
+    auth = make_pickup_authorization(db_session, ming, service_date=_TODAY, code="135790")
+    client, _ = staff_client(permissions=["pickup:operate", "pickup:read"])
+
+    resp = client.post(_auth_url(auth.id, "/verify"), json={"code": "246802"})
+
+    assert_error(resp, 400, "pickup_code_mismatch")
+    assert resp.json()["error"]["details"] == {"remaining_attempts": 4}
+    # 錯碼累計在回 400 之前已 commit：請求結束的 rollback 不會把它退回
+    stored = _reload_auth(db_session, auth.id)
+    assert (stored.code_attempts, stored.code_locked_at, stored.status) == (1, None, "active")
+    # 新的請求（核驗清單）也看得到累計
+    listed = client.get(_AUTHS).json()
+    assert [(a["id"], a["code_attempts"], a["locked"]) for a in listed] == [
+        (str(auth.id), 1, False)
+    ]
+
+
+def test_admin_pickup_verify_lock_on_fifth(
+    staff_client: StaffClientFactory,
+    db_session: Session,
+    assert_error: AssertError,
+    fake_clock: FakeClock,
+) -> None:
+    ming, _ = _family(db_session)
+    auth = make_pickup_authorization(db_session, ming, service_date=_TODAY, code="135790")
+    client, _ = staff_client(permissions=["pickup:operate"])
+
+    remaining = []
+    for _ in range(4):
+        resp = client.post(_auth_url(auth.id, "/verify"), json={"code": "246802"})
+        assert_error(resp, 400, "pickup_code_mismatch")
+        remaining.append(resp.json()["error"]["details"]["remaining_attempts"])
+    fifth = client.post(_auth_url(auth.id, "/verify"), json={"code": "246802"})
+    # 鎖定後即使正確碼也拒絕（不自動解鎖）
+    sixth = client.post(_auth_url(auth.id, "/verify"), json={"code": "135790"})
+
+    assert remaining == [4, 3, 2, 1]
+    assert_error(fifth, 409, "pickup_code_locked")
+    assert_error(sixth, 409, "pickup_code_locked")
+    stored = _reload_auth(db_session, auth.id)
+    assert (stored.code_attempts, stored.code_locked_at, stored.status) == (
+        5,
+        fake_clock.now(),
+        "active",
+    )
+
+
+def test_admin_pickup_verify_after_regenerate(
+    staff_client: StaffClientFactory,
+    parent_client: ParentClientFactory,
+    db_session: Session,
+    assert_error: AssertError,
+) -> None:
+    parent_api, parent = parent_client()
+    ming = make_student(db_session, name="王小明")
+    make_guardian(db_session, ming, parent=parent)
+    # 已錯 3 次：重新產生會把連錯次數歸零
+    auth = make_pickup_authorization(
+        db_session, ming, service_date=_TODAY, code=_OLD_CODE, code_attempts=3
+    )
+    client, _ = staff_client(permissions=["pickup:operate"])
+
+    regenerated = parent_api.post(f"/api/parent/pickup-authorizations/{auth.id}/regenerate-code")
+    assert regenerated.status_code == 200
+    new_code = regenerated.json()["code"]
+
+    old = client.post(_auth_url(auth.id, "/verify"), json={"code": _OLD_CODE})
+
+    assert_error(old, 400, "pickup_code_mismatch")
+    assert old.json()["error"]["details"] == {"remaining_attempts": 4}
+
+    new = client.post(_auth_url(auth.id, "/verify"), json={"code": new_code})
+
+    assert new.status_code == 200
+    assert new.json()["authorization"]["status"] == "completed"
+    stored = _reload_auth(db_session, auth.id)
+    assert (stored.status, stored.verification_method, stored.code_attempts) == (
+        "completed",
+        "code",
+        1,
+    )
