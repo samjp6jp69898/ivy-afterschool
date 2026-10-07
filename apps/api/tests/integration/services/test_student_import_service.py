@@ -1,5 +1,8 @@
 """BACKEND-155：app/services/student_import_service.py（preview：解析 Excel、逐列驗證、不寫入；
-不受信任 xlsx 的格數 / 解壓防護在交給 openpyxl 之前生效）。"""
+不受信任 xlsx 的格數 / 解壓防護在交給 openpyxl 之前生效）。
+BACKEND-156：execute（重跑 preview、有錯誤列 409 import_has_errors 且不寫入、全部合法以 151 的寫入
+邏輯逐列新增（密文 + HMAC）、競態衝突整批回滾 409 import_conflict、稽核 student.import、
+不 commit）。"""
 
 from __future__ import annotations
 
@@ -15,14 +18,16 @@ from uuid import uuid4
 import openpyxl.xml
 import pytest
 from openpyxl import Workbook
-from sqlalchemy import func, select
+from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentStaff
 from app.core.config import get_settings
-from app.core.crypto import derive_key, encrypt_bytes
+from app.core.crypto import decrypt_bytes, derive_key, encrypt_bytes
 from app.core.errors import AppError
+from app.core.request_meta import RequestMeta
 from app.core.uploads import ValidatedUpload
+from app.models.audit import AuditLog
 from app.models.students import Student
 from app.schemas.students import StudentCreateIn
 from app.services import student_import_service
@@ -32,15 +37,19 @@ from app.services.student_import_service import (
     MAX_XML_ELEMENTS,
     MAX_ZIP_ENTRIES,
     ImportPreview,
+    ImportResult,
     ImportRowResult,
     check_header,
+    execute,
     preview,
 )
 from app.services.students.id_number import id_number_hmac
 from tests.support.factories import make_class, make_school, make_student
+from tests.support.fake_clock import FakeClock
 
 _ID_A = "A123456789"
 _ID_B = "B123456708"
+_META = RequestMeta(ip="127.0.0.1", user_agent="pytest", request_id="req-1")
 
 
 @pytest.fixture(autouse=True)
@@ -831,3 +840,232 @@ def test_import_preview_accepts_normal_shared_strings_and_styles(
     assert escaped_result.rows[2].data is not None
     assert escaped_result.rows[2].data.name == "王_x0000_明"
     assert "\x00" not in escaped_result.rows[2].data.name
+
+
+# --- BACKEND-156：execute -------------------------------------------------------------------------
+
+
+def _execute(
+    db: Session, upload: ValidatedUpload, clock: FakeClock, actor: CurrentStaff = _SENSITIVE
+) -> ImportResult:
+    return execute(db, upload, academic_year=115, actor=actor, meta=_META, clock=clock)
+
+
+def _by_student_no(db: Session, *student_nos: str) -> list[Student]:
+    return list(
+        db.execute(
+            select(Student).where(Student.student_no.in_(student_nos)).order_by(Student.student_no)
+        ).scalars()
+    )
+
+
+def _import_audits(db: Session) -> list[AuditLog]:
+    return list(db.execute(select(AuditLog).where(AuditLog.action == "student.import")).scalars())
+
+
+def _sensitive_audits(db: Session, student_id: object) -> list[AuditLog]:
+    return list(
+        db.execute(
+            select(AuditLog).where(
+                AuditLog.action == "student.sensitive_update",
+                AuditLog.entity_id == str(student_id),
+            )
+        ).scalars()
+    )
+
+
+def test_import_execute_success(
+    db_session: Session,
+    db_engine: Engine,
+    lookups: dict[str, object],
+    fake_clock: FakeClock,
+) -> None:
+    upload = _xlsx(
+        [
+            _row(),
+            _row(student_no="S115102", name="陳小華", gender="女", status="暫停"),
+            _row(student_no="S115103", name="黃小美", school=None, klass=None, status="退班"),
+        ],
+        header=IMPORT_COLUMNS,
+    )
+    actor = _SENSITIVE
+
+    result = _execute(db_session, upload, fake_clock, actor=actor)
+
+    assert isinstance(result, ImportResult)
+    assert result.created == 3
+    assert len(result.student_ids) == 3
+    students = _by_student_no(db_session, "S115101", "S115102", "S115103")
+    assert [s.student_no for s in students] == ["S115101", "S115102", "S115103"]
+    assert sorted(result.student_ids) == sorted(s.id for s in students)
+    first, second, third = students
+    assert (first.name, first.gender, first.grade_level, first.status) == (
+        "林小安",
+        "male",
+        2,
+        "active",
+    )
+    assert first.class_id == lookups["class"].id  # type: ignore[attr-defined]
+    assert first.school_id == lookups["school"].id  # type: ignore[attr-defined]
+    assert (first.school_class, first.enrolled_on) == ("二年三班", date(2026, 9, 1))
+    assert (first.id_number_enc, first.id_number_hmac, first.health_note_enc) == (None, None, None)
+    assert (second.gender, second.status) == ("female", "suspended")
+    # 退班未給退班日 → 以 clock 的今天補（同 create_student）
+    assert (third.status, third.withdrawn_on, third.class_id) == (
+        "withdrawn",
+        fake_clock.today(),
+        None,
+    )
+    audits = _import_audits(db_session)
+    assert len(audits) == 1
+    assert audits[0].after == {"created": 3, "academic_year": 115}
+    assert audits[0].entity_type == "student_import"
+    assert (audits[0].actor_type, audits[0].actor_id, audits[0].ip) == (
+        "staff",
+        actor.id,
+        "127.0.0.1",
+    )
+    # 不 commit：另一條連線看不到
+    with Session(bind=db_engine) as other:
+        assert (
+            other.execute(
+                select(func.count())
+                .select_from(Student)
+                .where(Student.student_no.in_(["S115101", "S115102", "S115103"]))
+            ).scalar_one()
+            == 0
+        )
+
+
+def test_import_execute_has_errors(
+    db_session: Session, lookups: dict[str, object], fake_clock: FakeClock
+) -> None:
+    before = db_session.execute(select(func.count()).select_from(Student)).scalar_one()
+    upload = _xlsx(
+        [
+            _row(),
+            _row(student_no="S115102", name="陳小華", school="不存在國小"),
+            _row(student_no="S115103", name="黃小美"),
+        ],
+        header=IMPORT_COLUMNS,
+    )
+
+    with pytest.raises(AppError) as exc:
+        _execute(db_session, upload, fake_clock)
+
+    assert (exc.value.status, exc.value.code) == (409, "import_has_errors")
+    details = exc.value.details
+    assert (details["total"], details["valid"], details["invalid"]) == (3, 2, 1)
+    assert len(details["rows"]) == 1  # 只含有錯誤的列
+    bad = details["rows"][0]
+    assert bad["row_number"] == 3
+    assert bad["errors"] == ["找不到國小：不存在國小"]
+    assert bad["display"]["學號*"] == "S115102"
+    assert bad["display"]["就讀國小"] == "不存在國小"
+    assert "data" not in bad  # 正規化資料（可能含敏感明文）不回給前端
+    assert db_session.execute(select(func.count()).select_from(Student)).scalar_one() == before
+    assert _by_student_no(db_session, "S115101", "S115103") == []
+    assert _import_audits(db_session) == []
+    # 檔案層錯誤原樣往上拋、不寫入
+    with pytest.raises(AppError) as empty:
+        _execute(db_session, _xlsx([], header=IMPORT_COLUMNS), fake_clock)
+    assert (empty.value.status, empty.value.code) == (422, "import_empty")
+    assert db_session.execute(select(func.count()).select_from(Student)).scalar_one() == before
+
+
+def test_import_execute_encrypts(
+    db_session: Session, lookups: dict[str, object], fake_clock: FakeClock
+) -> None:
+    upload = _xlsx(
+        [
+            _row(id_number=f" {_ID_A.lower()} ", health_note="氣喘"),
+            _row(student_no="S115102", name="陳小華"),
+        ],
+        header=IMPORT_COLUMNS,
+    )
+
+    result = _execute(db_session, upload, fake_clock)
+
+    assert result.created == 2
+    first, second = _by_student_no(db_session, "S115101", "S115102")
+    assert first.id_number_enc is not None
+    assert _ID_A.encode() not in first.id_number_enc
+    assert decrypt_bytes(first.id_number_enc) == _ID_A
+    assert first.id_number_hmac == id_number_hmac(_ID_A)
+    assert first.health_note_enc is not None
+    assert "氣喘".encode() not in first.health_note_enc
+    assert decrypt_bytes(first.health_note_enc) == "氣喘"
+    assert (second.id_number_enc, second.id_number_hmac, second.health_note_enc) == (
+        None,
+        None,
+        None,
+    )
+    # 與 create_student 相同：每位有敏感欄位的學生各一筆 sensitive_update 稽核（只記欄位名）
+    assert [a.after for a in _sensitive_audits(db_session, first.id)] == [
+        {"set": ["health_note", "id_number"]}
+    ]
+    assert _sensitive_audits(db_session, second.id) == []
+    # 無 students:sensitive 的匯入者：preview 就把帶敏感欄位的列標成錯誤 → 409、不寫入
+    with pytest.raises(AppError) as exc:
+        _execute(
+            db_session,
+            _xlsx([_row(student_no="S115103", id_number=_ID_B)], header=IMPORT_COLUMNS),
+            fake_clock,
+            actor=_WRITER,
+        )
+    assert exc.value.code == "import_has_errors"
+    assert "沒有權限匯入敏感欄位" in exc.value.details["rows"][0]["errors"]
+    assert _by_student_no(db_session, "S115103") == []
+
+
+def test_import_execute_conflict_rolls_back_all(
+    db_session: Session,
+    lookups: dict[str, object],
+    fake_clock: FakeClock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """preview 全部合法，寫入前另一筆同學號被人插入（競態）→ 第 2 列撞 unique → 整批回滾、
+    409 import_conflict，第 1 / 3 列也不存在，session 仍可用。"""
+    real_preview = student_import_service.preview
+
+    def preview_then_race(*args: object, **kwargs: object) -> ImportPreview:
+        result = real_preview(*args, **kwargs)  # type: ignore[arg-type]
+        make_student(db_session, name="搶先者", student_no="S115102")
+        return result
+
+    monkeypatch.setattr(student_import_service, "preview", preview_then_race)
+    upload = _xlsx(
+        [
+            _row(id_number=_ID_A),
+            _row(student_no="S115102", name="陳小華"),
+            _row(student_no="S115103", name="黃小美"),
+        ],
+        header=IMPORT_COLUMNS,
+    )
+
+    with pytest.raises(AppError) as exc:
+        _execute(db_session, upload, fake_clock)
+
+    assert (exc.value.status, exc.value.code) == (409, "import_conflict")
+    assert exc.value.details == {
+        "row_number": 3,
+        "code": "student_no_taken",
+        "message": "學號已被使用",
+    }
+    students = _by_student_no(db_session, "S115101", "S115102", "S115103")
+    assert [(s.student_no, s.name) for s in students] == [("S115102", "搶先者")]
+    assert _import_audits(db_session) == []
+    assert (
+        db_session.execute(
+            select(func.count())
+            .select_from(AuditLog)
+            .where(AuditLog.action == "student.sensitive_update")
+        ).scalar_one()
+        == 0
+    )
+    # savepoint 已回滾：同一 session 修掉衝突列後可以成功匯入
+    monkeypatch.setattr(student_import_service, "preview", real_preview)
+    fixed = _xlsx(
+        [_row(id_number=_ID_A), _row(student_no="S115103", name="黃小美")], header=IMPORT_COLUMNS
+    )
+    assert _execute(db_session, fixed, fake_clock).created == 2
