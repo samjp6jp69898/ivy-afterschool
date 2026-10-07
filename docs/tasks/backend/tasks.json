@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 410,
-  "last_updated": "2026-10-07T08:04:43Z",
+  "version": 411,
+  "last_updated": "2026-10-07T08:08:23Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -11041,7 +11041,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:services/pickup_verification.py::verify_pickup_code",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9d",
       "depends_on": [
         "BACKEND-424",
@@ -11068,9 +11068,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-d",
+        "notes": "通過。tdd.run 6 passed；--collect-only 比對 6 條 red_cases 全部被 -k 選到；整檔 39 passed；lint / typecheck 乾淨；紅燈 commit b901d1d 的父 commit 沒有 verify_code / VerifyOutcome（ImportError 型紅燈），實作 b39155b 在後。介面與 BACKEND-437 description 一致：錯碼回 VerifyOutcome 不拋例外；已鎖定（load 階段）與競態 0 列（UPDATE 階段）才拋 409 pickup_code_locked / authorization_not_active，拋出前沒有任何寫入，get_db rollback 無害。原子累計為單一 UPDATE ... WHERE id AND code_locked_at IS NULL AND status='active' RETURNING，第 5 次以 CASE 寫 code_locked_at；bulk UPDATE 後 session.expire(auth) 避免 stale 屬性；pickup_code_matches 走 constant_time_equals；logger.warning 只帶 auth_id 與次數，明碼不進 log / audit / 例外 / 回傳。突變驗證（各自轉紅）：拿掉 WHERE code_locked_at IS NULL 守衛、改 ORM 讀改寫 → test_verify_code_concurrent_attempts_without_row_lock；verify 放行鎖定授權 → test_verify_code_locked_rejects_correct；鎖定條件 >= 改 > → locks_on_fifth 與兩個並發測試。兩 session 真實函式探針：同 session 先載入舊 code_hash、另一 session regenerate_code 並 commit 後，verify 舊碼被拒（attempts 1）、新碼通過（FOR UPDATE + populate_existing 確實覆蓋 identity map）；verify_code 與 complete_request(guardian) 同時搶同一請求列無 40P01，恰一個完成、另一個 409 invalid_pickup_status。殘留（不擋）：(1) 同一學生兩張 active 授權、同一筆進行中請求同時以正確碼核銷時，第二個得到 409 invalid_pickup_status（BACKEND-425 complete_via_authorization 內 transition_request 的既有行為）而不是循序時的「另建 source=proxy 已完成請求」，第二張授權維持 active，重試即成功；非死結、窗口極窄。(2) 靜態盤點全專案沒有「請求列 / 出勤列 → 授權列」的反向鎖序（attendance_service 不碰接送表、close_out 為授權 → 請求 → 出勤、作業為進度 → 請求），本批沿 424 → 425 的既定順序。risk_notes 原文保留：BACKEND-437 必須先 commit 再 raise。"
       }
     },
     {
@@ -11080,7 +11080,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:services/pickup_verification.py::confirm_visual_match",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9d",
       "depends_on": [
         "BACKEND-424",
@@ -11106,9 +11106,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-d",
+        "notes": "通過。tdd.run 4 passed；4 條 red_cases 全部被 -k 選到；紅燈 commit f711758 的父 commit 沒有 confirm_visual_match，實作 b7860ed 在後。有照片 / 一次性代理人 / 接送人無照片三種都可核銷，audit pickup.visual_match 同交易、before {status:active}、after {status, has_photo, note}、含 ip；data 為 None 時 note 記 None；鎖定 → 409 pickup_code_locked 且無 audit、無請求；非今天 / 非 active → 409。audit 寫在 complete_via_authorization 之前，後者失敗時同交易一併回滾；通知 / 廣播經 run_after_commit，不在 savepoint 內。無範圍擴張。突變驗證（各自轉紅）：load 放行鎖定 → test_confirm_visual_match_locked；拿掉 record → with_photo / without_photo。兩 session 真實函式探針：兩位員工同時目視核銷同一張授權 → 恰一個成功、另一個 409 authorization_not_active，audit / 請求 / pickup.completed 通知各恰 1 筆，無 40P01。殘留：無。"
       }
     },
     {
@@ -11118,7 +11118,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:services/pickup_verification.py::override_complete",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9d",
       "depends_on": [
         "BACKEND-424",
@@ -11143,9 +11143,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-d",
+        "notes": "通過。tdd.run 4 passed（3 條 red_cases 全部被 -k 選到，另有 test_override_complete_active_unlocked）；紅燈 commit 8b020e1 的父 commit 沒有 override_complete，實作 d2e201d 在後。actor.has(PICKUP_OVERRIDE) 檢查在鎖列之前，無權限 → 403 permission_denied details.required=['pickup:override']，不鎖列、不寫入；allow_locked=True 載入，鎖定授權可完成且 code_attempts / code_locked_at 不變（不解鎖、不重設）；audit pickup.override_complete before {status, code_attempts, locked}、after {status, note}、含 ip；非今天 / 非 active → 409。突變驗證（各自轉紅）：拿掉權限檢查 → test_override_complete_forbidden；拿掉 allow_locked → test_override_complete_locked。殘留：無。"
       }
     },
     {
