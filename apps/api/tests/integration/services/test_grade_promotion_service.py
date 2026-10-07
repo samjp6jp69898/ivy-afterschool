@@ -12,7 +12,7 @@ close_out、稽核 student.promote_grade；入班日晚於退班日的六年級 
 from __future__ import annotations
 
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import date, timedelta
 from uuid import UUID, uuid4
 
@@ -27,7 +27,8 @@ from app.core.errors import AppError
 from app.core.request_meta import RequestMeta
 from app.models.audit import AuditLog
 from app.models.students import Student
-from app.services import audit_service
+from app.schemas.students import StudentUpdateIn
+from app.services import audit_service, grade_promotion_service
 from app.services.grade_promotion_service import (
     PromotionItem,
     PromotionPreview,
@@ -36,6 +37,7 @@ from app.services.grade_promotion_service import (
     is_already_promoted,
     preview,
 )
+from app.services.student_service import update_student
 from tests.integration.db.conftest import connect_owner
 from tests.support.factories import (
     make_class,
@@ -466,3 +468,259 @@ def test_promotion_execute_concurrent_second_run_waits_then_409(
             (fifth_id, 6, "active"),
         }
         assert len(_promote_audits(check, _CONCURRENT_YEAR)) == 1
+
+
+# --- BACKEND-553：execute 對象列 FOR UPDATE 的並發回歸 -------------------------------------------
+# 兩條 app_backend 連線 + threading 阻塞模式；lock_timeout 一律 SET LOCAL（連線會回 pool）。
+# 每個測試各用一個學年度：owner 清理 audit_logs 不會誤刪別人的列，也不會互相撞 already_promoted。
+
+_LOCK_TIMEOUT = "set local lock_timeout = '15s'"
+_ROW_LOCK_YEAR = 151
+_WAITS_YEAR = 152
+_STALE_YEAR = 153
+
+
+def _call_in_thread(
+    sb: Session, call: Callable[[Session], object]
+) -> tuple[threading.Thread, threading.Event, dict[str, object]]:
+    """在 thread 以 ``sb`` 執行 ``call``：成功 → commit 並記回傳值；AppError → 記 (status, code) 與
+    details，交易留給呼叫端關閉；其他例外原樣記在 ``error``。"""
+    done = threading.Event()
+    outcome: dict[str, object] = {}
+
+    def worker() -> None:
+        try:
+            try:
+                outcome["result"] = call(sb)
+                sb.commit()
+            except AppError as exc:
+                outcome["result"] = (exc.status, exc.code)
+                outcome["details"] = exc.details
+        except BaseException as exc:
+            outcome["error"] = exc
+        finally:
+            done.set()
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    return thread, done, outcome
+
+
+def _committed_targets(
+    db: Session, cleanup: list[tuple[str, str, object]], year: int, grades: tuple[int, ...]
+) -> list[UUID]:
+    """對象學生（1~5 年級，沒有畢業生）commit 後登記 owner 清理：學生列、該學年度的升級稽核、
+    各學生的 student.update / student.close_out 稽核。"""
+    students = [
+        make_student(db, name=f"王小明{index}", grade_level=grade)
+        for index, grade in enumerate(grades, start=1)
+    ]
+    db.commit()
+    ids = [student.id for student in students]
+    cleanup.extend(("students", "id", sid) for sid in ids)
+    cleanup.append(("audit_logs", "entity_id", str(year)))
+    cleanup.extend(("audit_logs", "entity_id", str(sid)) for sid in ids)
+    return ids
+
+
+def _withdraw(db: Session, student_id: UUID, clock: FakeClock) -> None:
+    update_student(
+        db,
+        student_id,
+        StudentUpdateIn(status="withdrawn"),
+        actor=_actor("students:write"),
+        meta=_META,
+        clock=clock,
+    )
+
+
+def _grades(db: Session, ids: list[UUID]) -> dict[UUID, tuple[int, str, date | None]]:
+    rows = db.execute(
+        select(Student.id, Student.grade_level, Student.status, Student.withdrawn_on).where(
+            Student.id.in_(ids)
+        )
+    )
+    return {sid: (grade, status, withdrawn_on) for sid, grade, status, withdrawn_on in rows}
+
+
+@pytest.mark.cleanup_tables("class_staff")
+def test_promotion_execute_lock_blocks_on_target_student_row(
+    owner_cleanup_rows: list[tuple[str, str, object]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    fake_clock: FakeClock,
+) -> None:
+    """外部交易對一位對象學生列持 FOR KEY SHARE（等同另一交易正在插入參照該生的出勤 / 接送列、
+    尚未 commit）：execute 鎖對象列的 FOR UPDATE 必須排隊——放鎖前 0.5 秒內未完成，放鎖後完成
+    且兩位都升級。（沒有對象列 FOR UPDATE 時 bulk update 只改非鍵欄位 grade_level，與 KEY SHARE
+    不衝突、立刻完成；外部若改持 FOR UPDATE，沒先鎖列的實作也會在 UPDATE 等鎖，分不出差別。）"""
+    ming_id, hua_id = _committed_targets(
+        committing_db_session, owner_cleanup_rows, _ROW_LOCK_YEAR, (3, 1)
+    )
+    total = preview(committing_db_session, from_academic_year=_ROW_LOCK_YEAR).total
+    committing_db_session.rollback()
+
+    holder = Session(bind=db_engine)
+    sb = Session(bind=db_engine)
+    try:
+        holder.execute(text(_LOCK_TIMEOUT))
+        holder.execute(
+            text("select id from students where id = :id for key share"), {"id": ming_id}
+        )
+        sb.execute(text(_LOCK_TIMEOUT))
+        thread, done, outcome = _call_in_thread(
+            sb,
+            lambda s: _execute(
+                s, fake_clock, from_academic_year=_ROW_LOCK_YEAR, expected_total=total
+            ),
+        )
+        try:
+            assert not done.wait(timeout=0.5), outcome  # 對象列被鎖住：execute 必須排隊
+        finally:
+            holder.rollback()  # 放鎖
+        thread.join(timeout=15)
+        assert done.is_set(), "放鎖後 thread 仍未完成"
+    finally:
+        holder.close()
+        sb.close()
+
+    assert "error" not in outcome, outcome
+    assert outcome["result"] == PromotionResult(promoted=total, graduated=0)
+    with Session(bind=db_engine) as check:
+        assert _grades(check, [ming_id, hua_id]) == {
+            ming_id: (4, "active", None),
+            hua_id: (2, "active", None),
+        }
+        assert len(_promote_audits(check, _ROW_LOCK_YEAR)) == 1
+
+
+@pytest.mark.cleanup_tables("class_staff")
+def test_promotion_execute_lock_update_student_waits_and_sees_promoted_grade(
+    owner_cleanup_rows: list[tuple[str, str, object]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    fake_clock: FakeClock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 的 execute 鎖住對象列、重算 preview 後暫停（以 monkeypatch 包住 preview 注入停頓；
+    尚未 bulk update、未 commit）；B 對同一位對象學生 update_student(status=withdrawn) 在
+    學生列鎖排隊（0.5 秒內未完成）→ A 放行並 commit → B 以 FOR UPDATE 重讀到升級後的年級再退班：
+    最終 grade_level 為升級後的值且 status=withdrawn，另一位照常升級。（沒有對象列 FOR UPDATE
+    時 A 停頓期間不持任何列鎖，B 立刻完成。）"""
+    ming_id, hua_id = _committed_targets(
+        committing_db_session, owner_cleanup_rows, _WAITS_YEAR, (3, 1)
+    )
+    total = preview(committing_db_session, from_academic_year=_WAITS_YEAR).total
+    committing_db_session.rollback()
+    original_preview = grade_promotion_service.preview
+    a_locked = threading.Event()
+    release_a = threading.Event()
+    b_done = threading.Event()
+    outcome: dict[str, object] = {}
+
+    def paused_preview(session: Session, *, from_academic_year: int) -> PromotionPreview:
+        result = original_preview(session, from_academic_year=from_academic_year)
+        a_locked.set()  # 對象列已鎖、名單已算：在寫入前停住
+        release_a.wait(timeout=15)
+        return result
+
+    monkeypatch.setattr(grade_promotion_service, "preview", paused_preview)
+
+    def worker_a() -> None:
+        sa = Session(bind=db_engine)
+        try:
+            sa.execute(text(_LOCK_TIMEOUT))
+            outcome["a"] = _execute(
+                sa, fake_clock, from_academic_year=_WAITS_YEAR, expected_total=total
+            )
+            sa.commit()
+        except BaseException as exc:
+            sa.rollback()
+            outcome["a"] = exc
+            a_locked.set()
+        finally:
+            sa.close()
+
+    def worker_b() -> None:
+        sb = Session(bind=db_engine)
+        try:
+            a_locked.wait(timeout=15)
+            sb.execute(text(_LOCK_TIMEOUT))
+            _withdraw(sb, ming_id, fake_clock)
+            sb.commit()
+            outcome["b"] = "ok"
+        except BaseException as exc:
+            sb.rollback()
+            outcome["b"] = exc
+        finally:
+            sb.close()
+            b_done.set()
+
+    threads = [threading.Thread(target=worker_a), threading.Thread(target=worker_b)]
+    for t in threads:
+        t.start()
+    try:
+        assert a_locked.wait(timeout=15)
+        assert not b_done.wait(timeout=0.5), outcome  # A 持對象列鎖未 commit：B 必須排隊
+    finally:
+        release_a.set()
+        for t in threads:
+            t.join(timeout=30)
+
+    assert outcome.get("a") == PromotionResult(promoted=total, graduated=0), outcome
+    assert outcome.get("b") == "ok", outcome
+    with Session(bind=db_engine) as check:
+        assert _grades(check, [ming_id, hua_id]) == {
+            ming_id: (4, "withdrawn", fake_clock.today()),  # 升級後才退班
+            hua_id: (2, "active", None),
+        }
+        assert len(_promote_audits(check, _WAITS_YEAR)) == 1
+        assert _close_out_audits(check, ming_id) == 1
+
+
+@pytest.mark.cleanup_tables("class_staff")
+def test_promotion_execute_lock_stale_preview_409(
+    owner_cleanup_rows: list[tuple[str, str, object]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    fake_clock: FakeClock,
+) -> None:
+    """B 的 update_student(status=withdrawn) 持有一位對象學生的列鎖、尚未 commit；A 的 execute
+    在鎖對象列時排隊（0.5 秒內未完成）→ B commit → A 的 FOR UPDATE 重新評估、該生已非對象，重算
+    preview 的總數與 expected_total 不符 → 409 preview_stale，整批不動、沒有升級稽核。（沒有對象列
+    FOR UPDATE 時 A 以舊名單通過檢查，bulk update 等到 B commit 後連已退班的學生一起升級。）"""
+    ming_id, hua_id = _committed_targets(
+        committing_db_session, owner_cleanup_rows, _STALE_YEAR, (3, 1)
+    )
+    total = preview(committing_db_session, from_academic_year=_STALE_YEAR).total
+    committing_db_session.rollback()
+
+    sb = Session(bind=db_engine)
+    sa = Session(bind=db_engine)
+    try:
+        sb.execute(text(_LOCK_TIMEOUT))
+        _withdraw(sb, ming_id, fake_clock)  # 持學生列鎖、未 commit
+        sa.execute(text(_LOCK_TIMEOUT))
+        thread, done, outcome = _call_in_thread(
+            sa,
+            lambda s: _execute(s, fake_clock, from_academic_year=_STALE_YEAR, expected_total=total),
+        )
+        try:
+            assert not done.wait(timeout=0.5), outcome  # B 持對象列鎖未 commit：A 必須排隊
+        finally:
+            sb.commit()
+        thread.join(timeout=15)
+        assert done.is_set(), "B commit 後 thread 仍未完成"
+    finally:
+        sb.close()
+        sa.close()
+
+    assert "error" not in outcome, outcome
+    assert outcome["result"] == (409, "preview_stale")
+    assert outcome["details"] == {"expected_total": total, "total": total - 1}
+    with Session(bind=db_engine) as check:
+        assert _grades(check, [ming_id, hua_id]) == {
+            ming_id: (3, "withdrawn", fake_clock.today()),  # 退班、沒被升級
+            hua_id: (1, "active", None),  # 整批不動
+        }
+        assert _promote_audits(check, _STALE_YEAR) == []
