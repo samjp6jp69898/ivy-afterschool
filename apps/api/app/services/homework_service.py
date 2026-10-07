@@ -11,6 +11,7 @@
 - BACKEND-381：``set_overall_status``（員工手動標整體完成 / 改回由項目推導）。
 - BACKEND-377：``create_item``（新增單一學生作業項目並重算進度）。
 - BACKEND-378：``batch_create_items``（整班批次新增同一份作業，依 student_id 排序鎖進度列）。
+- BACKEND-379：``update_item``（修改作業項目；先鎖項目列再重算進度）。
 
 鎖序一律「進度列 → 請求列」：寫入方法先 ``lock_progress_row``，之後才可能由 sync_open_request_reply
 鎖接送請求（與 BACKEND-407 / 413 一致）。項目寫入（新增 / 修改 / 刪除）是先寫項目列、再由
@@ -30,7 +31,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session, SessionTransaction
 
 from app.core.clock import Clock
-from app.core.errors import AppError, ConflictError
+from app.core.errors import AppError, ConflictError, NotFoundError
 from app.core.settings_registry import HOMEWORK_WINDOW
 from app.models.account import StaffUser
 from app.models.attendance import AttendanceStatus, StudentAttendance
@@ -57,6 +58,7 @@ from app.schemas.homework import (
     HomeworkBatchOut,
     HomeworkItemCreateIn,
     HomeworkItemOut,
+    HomeworkItemUpdateIn,
     HomeworkMutationOut,
     ParentHomeworkItemOut,
     ParentHomeworkOut,
@@ -626,3 +628,58 @@ def batch_create_items(
     for student_id in sorted(targets):
         recompute_progress(session, student_id, service_date, clock=clock)
     return HomeworkBatchOut(created=len(items), items=[_item_out(item) for item in items])
+
+
+def _lock_item_or_404(session: Session, item_id: UUID) -> HomeworkItem:
+    """FOR UPDATE 鎖住項目列並回傳 DB 現值；不存在（含剛被別的交易刪除）→ 404。
+
+    ``subject`` 是 joined（outer join），只鎖項目列（``of=HomeworkItem``）。同一項目的修改與刪除在
+    此序列化：排隊的人等前一個 commit 後重新判定，被刪掉就是 404，不會在 UPDATE 時撞上 0 列。
+    """
+    item = session.execute(
+        select(HomeworkItem)
+        .where(HomeworkItem.id == item_id)
+        .with_for_update(of=HomeworkItem)
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if item is None:
+        raise NotFoundError("homework_item_not_found", "找不到作業項目")
+    return item
+
+
+def update_item(
+    session: Session,
+    item_id: UUID,
+    data: HomeworkItemUpdateIn,
+    *,
+    actor: CurrentStaff,
+    clock: Clock,
+) -> HomeworkMutationOut:
+    """只更新請求有給的欄位並記錄 updated_by，之後一律重算整體進度（status 沒變也重算，讓看板
+    收到最新快照；``homework.done`` 只在整體轉為 done 時發出）。
+
+    先鎖項目列、驗證科目（失敗時整筆都不改），再由 ``recompute_progress`` 鎖進度列：鎖序為
+    項目列 → 進度列 → 請求列。
+    """
+    item = _lock_item_or_404(session, item_id)
+    fields = data.model_fields_set
+    new_subject = (
+        _require_active_subject(session, data.subject_id) if "subject_id" in fields else None
+    )
+
+    if "subject_id" in fields:
+        item.subject = new_subject  # subject_id 給 null 代表清除
+    # UpdateModel 保證請求給了的非 nullable 欄位不為 null
+    if data.title is not None:
+        item.title = data.title
+    if data.status is not None:
+        item.status = data.status
+    if data.sort_order is not None:
+        item.sort_order = data.sort_order
+    item.updated_by = actor.id
+    session.flush()
+
+    change = recompute_progress(session, item.student_id, item.service_date, clock=clock)
+    return HomeworkMutationOut(
+        item=_item_out(item), progress=_progress_view(session, change.progress)
+    )
