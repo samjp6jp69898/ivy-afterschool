@@ -6,6 +6,7 @@
 - BACKEND-523：regenerate_code（家長重新產生接送碼）。
 - BACKEND-425：complete_via_authorization（核銷後完成授權與接送請求）。
 - BACKEND-426：verify_code（核對接送碼，連錯 5 次鎖定、原子累計）。
+- BACKEND-427：confirm_visual_match（員工目視核對確認核銷，照片為輔助、寫 audit）。
 """
 
 import json
@@ -42,11 +43,13 @@ from app.schemas.pickup import (
     PickupAuthorizationCreateIn,
     StaffAuthorizationListQuery,
     StaffAuthorizationOut,
+    VisualMatchIn,
 )
 from app.services.pickup import authorizations as authorizations_module
 from app.services.pickup.authorizations import (
     VerifyOutcome,
     complete_via_authorization,
+    confirm_visual_match,
     create_authorization,
     list_authorizations_for_staff,
     list_child_authorizations,
@@ -1193,3 +1196,161 @@ def test_verify_code_concurrent_attempts_without_row_lock(
     assert (error.status, error.code) == (409, "pickup_code_locked")
     row = _fresh(committing_db_session, auth.id)
     assert (row.status, row.code_attempts, row.code_locked_at) == ("active", 5, clock.now())
+
+
+# --- BACKEND-427 confirm_visual_match ---
+
+
+def _audit_logs(db: Session, action: str, entity_id: UUID) -> list[AuditLog]:
+    return list(
+        db.execute(
+            select(AuditLog).where(AuditLog.action == action, AuditLog.entity_id == str(entity_id))
+        ).scalars()
+    )
+
+
+def test_confirm_visual_match_with_photo(db_session: Session, kick_off: None) -> None:
+    clock = FakeClock(datetime(2026, 9, 10, 9, 0, tzinfo=UTC))  # 台北 17:00
+    ming = make_student(db_session)
+    _parent_of(db_session, ming)
+    staff = make_staff(db_session, permissions=["pickup:operate"], display_name="林老師")
+    make_attendance(db_session, ming, service_date=_TODAY, status="present")
+    request = make_pickup_request(db_session, ming, service_date=_TODAY, status="arrived")
+    person = make_pickup_person(
+        db_session, ming, name="李阿姨", photo_path=build_object_path(uuid4(), "jpg")
+    )
+    auth = make_pickup_authorization(db_session, ming, service_date=_TODAY, person=person)
+
+    result = confirm_visual_match(
+        db_session, auth.id, None, actor=_current_staff(staff), meta=_META, clock=clock
+    )
+
+    assert (result.authorization.id, result.authorization.status) == (auth.id, "completed")
+    assert result.authorization.verification_method == "visual_match"
+    assert result.authorization.verified_by_name == "林老師"
+    assert (result.request.id, result.request.status, result.request.completion_method) == (
+        request.id,
+        "completed",
+        "visual_match",
+    )
+    assert result.request.picked_up_by_name == "李阿姨"
+    row = _fresh(db_session, auth.id)
+    assert (row.status, row.verification_method, row.verified_by, row.verified_at) == (
+        "completed",
+        "visual_match",
+        staff.id,
+        clock.now(),
+    )
+    assert _attendance_of(db_session, ming.id).status == "left"
+    [log] = _audit_logs(db_session, "pickup.visual_match", auth.id)
+    assert (log.actor_type, log.actor_id, log.entity_type, log.ip) == (
+        "staff",
+        staff.id,
+        "pickup_authorization",
+        "203.0.113.5",
+    )
+    assert log.before == {"status": "active"}
+    assert log.after == {"status": "completed", "has_photo": True, "note": None}
+    assert log.after["has_photo"] is True
+
+
+def test_confirm_visual_match_without_photo(db_session: Session, kick_off: None) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    an = make_student(db_session, name="林小安")
+    staff = make_staff(db_session, permissions=["pickup:operate"])
+    # 一次性代理人（沒有常用接送人）
+    one_off = make_pickup_authorization(db_session, ming, service_date=_TODAY, proxy_name="王叔叔")
+    # 常用接送人但未上傳照片
+    no_photo_person = make_pickup_person(db_session, an, photo_path=None)
+    no_photo = make_pickup_authorization(
+        db_session, an, service_date=_TODAY, person=no_photo_person, code="654321"
+    )
+
+    first = confirm_visual_match(
+        db_session,
+        one_off.id,
+        VisualMatchIn(note="已核對身分證"),
+        actor=_current_staff(staff),
+        meta=_META,
+        clock=clock,
+    )
+    second = confirm_visual_match(
+        db_session,
+        no_photo.id,
+        VisualMatchIn(),
+        actor=_current_staff(staff),
+        meta=_META,
+        clock=clock,
+    )
+
+    assert (first.authorization.status, first.authorization.verification_method) == (
+        "completed",
+        "visual_match",
+    )
+    assert (first.request.status, first.request.source, first.request.picked_up_by_name) == (
+        "completed",
+        "proxy",
+        "王叔叔",
+    )
+    [log] = _audit_logs(db_session, "pickup.visual_match", one_off.id)
+    assert log.after == {"status": "completed", "has_photo": False, "note": "已核對身分證"}
+    assert log.before == {"status": "active"}
+    assert (second.authorization.status, second.authorization.pickup_person_id) == (
+        "completed",
+        no_photo_person.id,
+    )
+    [log2] = _audit_logs(db_session, "pickup.visual_match", no_photo.id)
+    assert log2.after == {"status": "completed", "has_photo": False, "note": None}
+
+
+def test_confirm_visual_match_locked(db_session: Session, kick_off: None) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    staff = make_staff(db_session, permissions=["pickup:operate", "pickup:override"])
+    auth = make_pickup_authorization(db_session, ming, service_date=_TODAY, code_attempts=5)
+
+    with pytest.raises(AppError) as exc:
+        confirm_visual_match(
+            db_session,
+            auth.id,
+            VisualMatchIn(note="已核對身分證"),
+            actor=_current_staff(staff),
+            meta=_META,
+            clock=clock,
+        )
+
+    assert (exc.value.status, exc.value.code) == (409, "pickup_code_locked")
+    row = _fresh(db_session, auth.id)
+    assert (row.status, row.verified_at, row.verification_method, row.code_attempts) == (
+        "active",
+        None,
+        None,
+        5,
+    )
+    assert _audit_logs(db_session, "pickup.visual_match", auth.id) == []
+    assert _completed_requests(db_session, ming.id) == []
+
+
+def test_confirm_visual_match_not_today(db_session: Session, kick_off: None) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    staff = make_staff(db_session, permissions=["pickup:operate"])
+    tomorrow = make_pickup_authorization(db_session, ming, service_date=_TODAY + timedelta(days=1))
+    completed = make_pickup_authorization(
+        db_session, ming, service_date=_TODAY, status="completed", code="654321"
+    )
+
+    with pytest.raises(AppError) as not_today:
+        confirm_visual_match(
+            db_session, tomorrow.id, None, actor=_current_staff(staff), meta=_META, clock=clock
+        )
+    with pytest.raises(AppError) as not_active:
+        confirm_visual_match(
+            db_session, completed.id, None, actor=_current_staff(staff), meta=_META, clock=clock
+        )
+
+    assert (not_today.value.status, not_today.value.code) == (409, "authorization_not_today")
+    assert (not_active.value.status, not_active.value.code) == (409, "authorization_not_active")
+    assert _fresh(db_session, tomorrow.id).status == "active"
+    assert _audit_logs(db_session, "pickup.visual_match", tomorrow.id) == []
