@@ -6,6 +6,7 @@ BACKEND-431：POST /api/admin/pickup/requests/{id}/reply。
 BACKEND-433：POST /api/admin/pickup/requests/{id}/complete。
 BACKEND-437：POST /api/admin/pickup/authorizations/{id}/verify（錯碼累計先 commit）。
 BACKEND-438：POST /api/admin/pickup/authorizations/{id}/confirm-visual-match。
+BACKEND-439：POST /api/admin/pickup/authorizations/{id}/override-complete。
 
 fake_clock 預設 2026-09-01 01:00 UTC（台北 09:00）；接送請求 / 授權的 service_date 用台北「今天」。
 """
@@ -1218,3 +1219,144 @@ def test_admin_pickup_visual_409(
     )
     assert _reload_auth(db_session, locked.id).status == "active"
     assert _audits(db_session, "pickup.visual_match", locked.id) == []
+
+
+# --- BACKEND-439：POST /authorizations/{id}/override-complete ---------------------------------
+
+
+def test_admin_pickup_override_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "post" in app.openapi()["paths"][_AUTHS + "/{auth_id}/override-complete"]
+
+
+def test_admin_pickup_override_success(
+    api_client: TestClient,
+    app: FastAPI,
+    db_session: Session,
+    login_staff: Callable[[TestClient, StaffUser], None],
+    staff_client: StaffClientFactory,
+) -> None:
+    ming, mom = _family(db_session)
+    request = make_pickup_request(db_session, ming, service_date=_TODAY, requested_by=mom.id)
+    # 接送碼連錯 5 次已鎖定：強制完成是唯一的處理路徑
+    locked = make_pickup_authorization(db_session, ming, service_date=_TODAY, code_attempts=5)
+    supervisor = make_staff(
+        db_session, permissions=["pickup:override", "pickup:operate"], display_name="陳主任"
+    )
+    db_session.commit()
+    # 指定真實來源 IP 才能驗 request meta 有注入到 audit
+    client = TestClient(app, base_url="http://testserver", client=("203.0.113.5", 50000))
+    login_staff(client, supervisor)
+
+    resp = client.post(
+        _auth_url(locked.id, "/override-complete"), json={"note": "家長來電確認由阿姨接"}
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert (body["authorization"]["id"], body["authorization"]["status"]) == (
+        str(locked.id),
+        "completed",
+    )
+    assert body["authorization"]["verification_method"] == "override"
+    assert body["authorization"]["verified_by_name"] == "陳主任"
+    # 不解鎖也不重設連錯次數
+    assert (body["authorization"]["locked"], body["authorization"]["code_attempts"]) == (True, 5)
+    assert (body["request"]["id"], body["request"]["completion_method"]) == (
+        str(request.id),
+        "override",
+    )
+    # 已 commit：重讀 DB；audit 記錄操作者、來源 IP、鎖定狀態與備註
+    stored = _reload_auth(db_session, locked.id)
+    assert (stored.status, stored.verification_method, stored.verified_by) == (
+        "completed",
+        "override",
+        supervisor.id,
+    )
+    [log] = _audits(db_session, "pickup.override_complete", locked.id)
+    assert (log.actor_id, log.ip, log.entity_type) == (
+        supervisor.id,
+        "203.0.113.5",
+        "pickup_authorization",
+    )
+    assert log.before == {"status": "active", "code_attempts": 5, "locked": True}
+    assert log.after == {"status": "completed", "note": "家長來電確認由阿姨接"}
+
+    # 路由守衛是 pickup:override（不需另有 pickup:operate）
+    hua = make_student(db_session, name="陳小華")
+    other = make_pickup_authorization(db_session, hua, service_date=_TODAY, code="654321")
+    override_only, _ = staff_client(permissions=["pickup:override"])
+    assert (
+        override_only.post(
+            _auth_url(other.id, "/override-complete"), json={"note": "核對證件後交付"}
+        ).status_code
+        == 200
+    )
+
+
+def test_admin_pickup_override_422(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming, _ = _family(db_session)
+    auth = make_pickup_authorization(db_session, ming, service_date=_TODAY, code_attempts=5)
+    client, _ = staff_client(permissions=["pickup:override", "pickup:operate"])
+
+    for body in (
+        {"note": ""},
+        {"note": "   "},
+        {},
+        {"note": "x" * 201},
+        {"note": "x", "code": "1"},
+    ):
+        assert_error(
+            client.post(_auth_url(auth.id, "/override-complete"), json=body),
+            422,
+            "validation_error",
+        )
+    assert_error(
+        client.post(_auth_url("abc", "/override-complete"), json={"note": "x"}),
+        422,
+        "validation_error",
+    )
+    assert _reload_auth(db_session, auth.id).status == "active"
+
+
+def test_admin_pickup_override_401(api_client: TestClient, assert_error: AssertError) -> None:
+    resp = api_client.post(_auth_url(uuid4(), "/override-complete"), json={"note": "x"})
+
+    assert_error(resp, 401, "unauthenticated")
+
+
+def test_admin_pickup_override_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming, _ = _family(db_session)
+    locked = make_pickup_authorization(db_session, ming, service_date=_TODAY, code_attempts=5)
+    client, _ = staff_client(permissions=["pickup:operate"])
+
+    resp = client.post(_auth_url(locked.id, "/override-complete"), json={"note": "家長來電確認"})
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["pickup:override"]}
+    # 零寫入：授權維持鎖定、沒有稽核
+    stored = _reload_auth(db_session, locked.id)
+    assert (stored.status, stored.code_attempts, stored.verified_by) == ("active", 5, None)
+    assert _audits(db_session, "pickup.override_complete", locked.id) == []
+
+
+def test_admin_pickup_override_409(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming, _ = _family(db_session)
+    completed = make_pickup_authorization(db_session, ming, service_date=_TODAY, status="completed")
+    client, _ = staff_client(permissions=["pickup:override", "pickup:operate"])
+
+    resp = client.post(_auth_url(completed.id, "/override-complete"), json={"note": "x"})
+
+    assert_error(resp, 409, "authorization_not_active")
+    assert_error(
+        client.post(_auth_url(uuid4(), "/override-complete"), json={"note": "x"}),
+        404,
+        "pickup_authorization_not_found",
+    )
+    assert _audits(db_session, "pickup.override_complete", completed.id) == []
