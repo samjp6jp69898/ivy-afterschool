@@ -3,6 +3,7 @@ BACKEND-390：PUT /api/admin/homework/progress/{student_id}。
 BACKEND-386：POST /api/admin/homework/items。
 BACKEND-387：POST /api/admin/homework/items/batch（整班）。
 BACKEND-388：PATCH /api/admin/homework/items/{item_id}。
+BACKEND-389：DELETE /api/admin/homework/items/{item_id}。
 
 fake_clock 預設 2026-09-01 01:00 UTC（台北 09:00）。"""
 
@@ -751,3 +752,69 @@ def test_admin_homework_item_update_404(
     resp = client.patch(_item_url(uuid4()), json={"status": "done"})
 
     assert_error(resp, 404, "homework_item_not_found")
+
+
+# --- BACKEND-389：DELETE /api/admin/homework/items/{item_id} -------------------------------------
+
+
+def test_admin_homework_item_delete_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "delete" in app.openapi()["paths"][_ITEMS + "/{item_id}"]
+
+
+def test_admin_homework_item_delete_success(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    item = make_homework_item(db_session, ming, service_date=_DAY, status="done")
+    make_homework_progress(db_session, ming, service_date=_DAY, overall_status="done")
+    client, _ = staff_client(permissions=["homework:write"])
+
+    resp = client.delete(_item_url(item.id))
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {"item", "progress"}
+    assert body["item"] is None
+    # 刪光全部項目 → 重算為 not_started，回傳最新進度讓看板更新
+    assert (body["progress"]["student_id"], body["progress"]["overall_status"]) == (
+        str(ming.id),
+        "not_started",
+    )
+    # 已 commit：重讀 DB
+    assert _items_of(db_session, ming.id) == []
+    assert _progress_rows(db_session, ming.id)[_DAY].overall_status == "not_started"
+
+
+def test_admin_homework_item_delete_422(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=["homework:write"])
+
+    assert_error(client.delete(_item_url("abc")), 422, "validation_error")
+
+
+def test_admin_homework_item_delete_401(api_client: TestClient, assert_error: AssertError) -> None:
+    assert_error(api_client.delete(_item_url(uuid4())), 401, "unauthenticated")
+
+
+def test_admin_homework_item_delete_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming = make_student(db_session)
+    item = make_homework_item(db_session, ming, service_date=_DAY)
+    client, _ = staff_client(permissions=["homework:read"])
+
+    resp = client.delete(_item_url(item.id))
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["homework:write"]}
+    assert [i.id for i in _items_of(db_session, ming.id)] == [item.id]
+
+
+def test_admin_homework_item_delete_404(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=["homework:write"])
+
+    assert_error(client.delete(_item_url(uuid4())), 404, "homework_item_not_found")
