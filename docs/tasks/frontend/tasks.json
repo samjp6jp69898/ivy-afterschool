@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 118,
-  "last_updated": "2026-10-07T07:42:15Z",
+  "version": 119,
+  "last_updated": "2026-10-07T07:46:12Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -535,7 +535,7 @@
     {
       "id": "FRONTEND-025",
       "title": "實作 router/authGuard.ts：預設拒絕、未登入導向、強制改密碼導向、無權限導向",
-      "description": "建立 `apps/web/src/router/authGuard.ts`。移植 ivy `FE:src/router/index.ts::authGuard` 的 return-style guard（回傳 `true` 放行或路由目標）、「`/` 無權限時導到第一個有權限的頁」、「指名頁面無權限導 403 頁」；**去掉** portal / teacher / platform 分支、Sentry、409 refresh race 特例。\n\n**介面**：`export async function authGuard(to: RouteLocationNormalized): Promise<true | RouteLocationRaw>`；`export function firstAllowedPath(perms: ReadonlySet<string>): string | null`（依 FRONTEND-024 `routes` 順序找第一個 meta.permission 有持有的 path，跳過含 `:` 參數的路徑）；`export function safeRedirect(raw: unknown): string | null`（只接受以 `/` 開頭、不以 `//` 開頭、不含 `://` 的字串，防 open redirect）。\n\n**判斷順序**\n1. `await useAuthStore().restore()`（FRONTEND-022）。\n2. `meta.public`：若是 `/login` 且已登入 → `safeRedirect(to.query.redirect)`（且該路徑有權限）否則 `firstAllowedPath`（都沒有 → `/forbidden`）；其他 public 放行。\n3. 未登入 → `{ path: '/login', query: { redirect: to.fullPath } }`（to 為 `/` 時不帶 query）。\n4. `mustChangePassword` 且目標無 `allowWhenMustChangePassword` → `/change-password`。\n5. `meta.authOnly` → 放行。\n6. 沒有 `meta.permission`（漏設）→ 預設拒絕：`{ path: '/forbidden', query: { from: to.fullPath } }`。\n7. 無該權限：目標是 `/` → `firstAllowedPath() ?? '/forbidden'`；其他 → `/forbidden?from=...`。\n8. 放行。\n- 測試策略：本 task 的測試一律 `vi.mock('@/router/viewLoaders')` 回傳 stub 元件（不載入真實 view），因此不需等 view task 完成即可轉綠，view 完成後也不受其內部依賴影響。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/router/authGuard.ts`。移植 ivy `FE:src/router/index.ts::authGuard` 的 return-style guard（回傳 `true` 放行或路由目標）、「`/` 無權限時導到第一個有權限的頁」、「指名頁面無權限導 403 頁」；**去掉** portal / teacher / platform 分支、Sentry、409 refresh race 特例。\n\n**介面**：`export async function authGuard(to: RouteLocationNormalized): Promise<true | RouteLocationRaw>`；`export function firstAllowedPath(perms: ReadonlySet<string>): string | null`（依 FRONTEND-024 `routes` 順序找第一個 meta.permission 有持有的 path，跳過含 `:` 參數的路徑）；`export function safeRedirect(raw: unknown): string | null`（只接受以 `/` 開頭、不以 `//` 或 `/\\\\` 開頭、不含 `://` 的字串，防 open redirect）；`export function landingPath(redirectRaw: unknown, perms: ReadonlySet<string>): string`（`safeRedirect(redirectRaw)` 且該路徑解析到一條持有 `meta.permission` 的路由 → 該路徑；public / authOnly / 漏設 meta 的目標不算；否則 `firstAllowedPath`；都沒有 → `/forbidden`。登入頁 FRONTEND-047 登入成功後共用）。\n\n**判斷順序**\n1. `await useAuthStore().restore()`（FRONTEND-022）。\n2. `meta.public`：若是 `/login` 且已登入 → `mustChangePassword` 時直接 `/change-password`，否則 `landingPath(to.query.redirect)`；其他 public 放行。\n3. 未登入 → `{ path: '/login', query: { redirect: to.fullPath } }`（to 為 `/` 時不帶 query）。\n4. `mustChangePassword` 且目標無 `allowWhenMustChangePassword` → `/change-password`。\n5. `meta.authOnly` → 放行。\n6. 沒有 `meta.permission`（漏設）→ 預設拒絕：`{ path: '/forbidden', query: { from: to.fullPath } }`。\n7. 無該權限：目標是 `/` → `firstAllowedPath() ?? '/forbidden'`；其他 → `/forbidden?from=...`。\n8. 放行。\n- 測試策略：本 task 的測試一律 `vi.mock('@/router/viewLoaders')` 回傳 stub 元件（不載入真實 view），因此不需等 view task 完成即可轉綠，view 完成後也不受其內部依賴影響。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "composable",
       "target_path": "apps/web/src/router/authGuard.ts",
       "source_ref": "FE:src/router/index.ts::authGuard",
