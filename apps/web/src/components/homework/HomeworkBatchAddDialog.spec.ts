@@ -145,6 +145,8 @@ describe('HomeworkBatchAddDialog', () => {
   it('HomeworkBatchAddDialog whole class omits student ids', async () => {
     const wrapper = await mountDialog()
     expect(dialog().find('.el-dialog__title').text()).toBe('整班新增作業：中年級班')
+    // FormDialog md（560px）
+    expect(dialog().attributes('style')).toContain('560px')
     expect(titleInput().attributes('placeholder')).toBe('例如：國語第 5 課生字')
     expect(titleInput().attributes('maxlength')).toBe('100')
 

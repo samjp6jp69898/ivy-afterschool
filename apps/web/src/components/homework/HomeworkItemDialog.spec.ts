@@ -111,6 +111,8 @@ describe('HomeworkItemDialog', () => {
   it('HomeworkItemDialog emits trimmed body', async () => {
     const wrapper = await mountDialog()
     expect(dialogTitle()).toBe('新增作業：王小明')
+    // FormDialog sm（420px）
+    expect(dialog().attributes('style')).toContain('420px')
     expect(titleInput().attributes('placeholder')).toBe('例如：數學習作 p.12-13')
     expect(titleInput().attributes('maxlength')).toBe('100')
 
