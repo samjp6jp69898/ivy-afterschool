@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 130,
-  "last_updated": "2026-10-07T08:15:41Z",
+  "version": 131,
+  "last_updated": "2026-10-07T08:17:10Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -470,7 +470,7 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/utils/permission.ts",
       "source_ref": "FE:src/utils/auth.ts::hasPermission",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9a",
       "depends_on": [
         "FRONTEND-022"
@@ -492,9 +492,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-f",
+        "notes": "pass：3 條 red_case 對應 3 個測試（vitest verbose 清單逐條核對），tdd.run 全綠；commit 0c64ec2（測試）→ b44a3dd（實作）。hasPermission / hasAnyPermission 以 `auth.user !== null && permissions.has(code)` 精確比對（Set.has，不做大小寫 / 前綴模糊比對），空陣列的 any 為 false、reset 後一律 false；usePermission 回傳讀 store reactive 狀態的 closure，setUser / reset 後 v-if 即時重繪（含 canAny）。測試使用的權限碼全部存在於 constants/permissions.ts，無自創碼。lint 乾淨、vue-tsc 無本檔錯誤。殘留（不打回）：auth store（FRONTEND-022）本身也有 hasPermission / hasAnyPermission，語意與本檔一致（reset 會清 user，結果相同），頁內統一走本檔即可。"
       }
     },
     {
@@ -539,7 +539,7 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/router/authGuard.ts",
       "source_ref": "FE:src/router/index.ts::authGuard",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9a",
       "depends_on": [
         "FRONTEND-022",
@@ -567,9 +567,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-f",
+        "notes": "pass：8 條 red_case 對應 8 個測試，另有「redirect targets are stable and never loop」1 條，tdd.run 9/9 全綠；commit e8f58a5（測試）→ 28a5c2b（實作）；24f1e2e 補的 description（landingPath 介面、safeRedirect 拒絕 `/\\` 開頭、已登入進 /login 且須改密碼直接 /change-password）是最終規格寫法、無歷史敘述，與 architecture_decisions §6（meta.permission + 預設拒絕）、domain_spec §4 路由權限表無矛盾。reviewer 獨立驗證：(1) 突變「漏設 meta 改放行」→ denies routes without permission meta 轉紅；突變「safeRedirect 放寬 //」「放寬 /\\」→ safeRedirect 測試各自轉紅；突變「landingPath 拿掉權限檢查」→ redirects logged-in user away from login 與 never loop 兩條轉紅。(2) open redirect 變形探針（未留檔）：`//`、`///`、`/\\`、`/\\/`、`/\\\\`、`\\\\`、`\\/`、`https://`、`HTTPS://`、`/http://`、`http:evil.com`、`javascript:`、空白前綴、以及 `%2F%2F` / `%5C` / `%252F` 經 vue-router query 解碼後的值，全部被 safeRedirect 拒絕；`/ /`、`/\\t/`、`/\\n//`、`/\\u0000//`、全形斜線等「斜線後接空白 / 控制字元」會通過 safeRedirect（仍是站內相對路徑，hash router 下無法離站），但 landingPath 解析到 catch-all（public）而回退 firstAllowedPath；`/attendance#//evil.com`、`/attendance?next=//evil.com` 原樣回傳（同源站內路徑帶 fragment / query）。(3) restore 取 /admin/auth/me 回 500 或 network error → status anonymous → 導 /login 帶 redirect（不放行）；未登入 + 漏設 meta → 導 /login。(4) hash router 下 to.fullPath=`/students?class_id=c1&page=2#sec` → redirect query 編碼為 `/students?class_id=c1%26page=2%23sec`，解回原字串，登入後 landingPath 回傳同一 fullPath。(5) redirect=/login、/forbidden、/change-password、不存在路徑、/exams/e1（無 exams:read）都回退 firstAllowedPath；無任何權限 → /forbidden（authOnly）→ 放行，不迴圈；mustChangePassword 時 /、/students、/forbidden、/login 都導 /change-password，/change-password 放行。殘留（不打回）：vue-router 預設不分大小寫、不嚴格尾斜線，已登入者進 `/login/`、`/LOGIN` 時 to.path !== '/login'，守衛走「其他 public 放行」而顯示登入頁，沒有導到落點（須改密碼時也沒導 /change-password）；無安全影響（登入頁不含受保護資料），建議之後改以 `to.name === 'login'` 判斷並補一條測試。"
       }
     },
     {
@@ -867,7 +867,7 @@
       "granularity_unit": "store",
       "target_path": "apps/web/src/stores/notifications.ts",
       "source_ref": "FE:src/stores/notification.ts::useNotificationStore",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9a",
       "depends_on": [
         "FRONTEND-033",
@@ -893,9 +893,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-f",
+        "notes": "pass：6 條 red_case 對應 6 個測試，另有 fetch 失敗、未讀不為負、50 筆上限 3 條，tdd.run 9/9 全綠；commit e533dd4 / ea07002（測試）→ 0de17f5（實作）。reviewer 獨立驗證：突變「bindWs 拿掉 `if (unbindWs) return unbindWs`」→ binds ws once 轉紅（transient 被呼叫 2 次，證明該測試不被 id 去重掩蓋）。探針（未留檔）：markRead 對不在 items 的 id 仍送 POST /admin/notifications/{id}/read 且不動本地狀態；fetch() 與 fetch({unreadOnly:true}) 併發各送一次（2 個 GET）、先回的舊結果不覆蓋後發出的那次、loading 最終 false；先 bindWs 再 adminWs.start 仍收得到 notification.created（handler 存在 store，不隨 client 重建失效）；畸形 transient（data null / 缺 title / body 非字串 / payload null）只有合法那筆進 listener 且 body / payload 被正規化。fetch 去重以 unreadOnly 為 key、失敗 reject 且 loaded 維持 false、markRead 樂觀更新與失敗還原、receive 去重 + 50 筆上限、ElNotification 顯示文字都有具體斷言。lint 乾淨、vue-tsc 無本檔錯誤。殘留（不打回）：(1) markRead 對不在 items（超出 50 筆視窗）的 id 不調整 unreadCount，鈴鐺未讀數要等下一次 fetch 才正確——store 無法得知該筆原本是否未讀，刻意不猜；收件匣頁標已讀後若要即時修正徽章可再 fetch({unreadOnly:true})。(2) store 頂層 `import { ElNotification } from 'element-plus'` 與 stores/adminWs.ts 的 ElMessage 寫法一致；vitest（happy-dom）可渲染到 document.body，專案無 SSR；顯式 import 不經 unplugin-auto-import 的 ElementPlusResolver 注入樣式，依賴全域樣式載入，整合鈴鐺時在瀏覽器確認一次即可（屬專案層級，不是本 task 問題）。"
       }
     },
     {
@@ -1014,13 +1014,13 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/useAdminWsTopic.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-frontend-r9a",
       "depends_on": [
         "FRONTEND-037"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "review-r9-f 打回：resync 進行中再被觸發（輪詢 / 重連）時不可只略過，要「記為待補，本輪結束（成功或失敗）後立刻再補跑一次，多次觸發合併為一次」；否則重連落在輪詢 resync 進行中時，之後不會再有任何補抓，畫面停在斷線前的快照（reviewer 以 fake timers 重現：resync 2000ms、t=0 斷線、t=1000 重連 open、t=2000 R1 完成後 resync 總數仍為 1，60 秒後亦然；R1 reject 的版本亦同）。請同步：(1) description 的「`resync` 執行中再次觸發時略過（不併發）」改成「執行中再次觸發時不併發，但記為待補，本輪結束後立刻補跑一次，多次觸發合併為一次」；(2) 新增 red_case「useAdminWsTopic reruns resync once after overlapping triggers：resync 回傳 2000ms 後 resolve 的 promise；斷線 → 1 次；1000ms 後重連 open（上一輪仍在跑）→ 仍 1 次；再 1000ms 上一輪完成 → 立刻 2 次；期間 visibilitychange 再觸發一次輪詢也只合併成這 1 次補跑；補跑完成後再等 60000ms 仍為 2 次」與「上一輪 reject 後仍補跑一次」，並確認 tdd.run 選得到；(3) 既有 red_case 3 維持。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/composables/useAdminWsTopic.spec.ts",
@@ -1037,9 +1037,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r9-f",
+        "notes": "concern（打回）：4 條 red_case 對應 4 個測試，另有 connection status、resync 失敗不阻塞 2 條，tdd.run 6/6 全綠；commit aed4eaa / 3704af3（測試）→ a9c489e（實作）。引用計數（多元件共用 topic 只 subscribe 一次、最後一個卸載才 unsubscribe）、事件分派與卸載後不再回呼、denied 旗標都正確；突變「卸載時不 unsubscribe」→ shares subscription 轉紅。打回唯一原因：resync 併發策略「執行中再觸發就略過」可構造出畫面停在舊快照的反例（reviewer 以 fake timers 探針重現，未留檔）：resync 需 2000ms；t=0 斷線 → 輪詢立刻送出 R1（伺服器快照時間 t=0）；t=1000 重連成功 → onReconnect 的 resync 因 R1 仍在跑而被略過；t=2000 R1 完成後沒有任何補跑；之後 60 秒 status 仍 open、輪詢已在 onopen 時停止，resync 總次數停在 1。斷線期間（t=0~1000）發生、廣播已遺失的事件不在 R1 快照裡，畫面停在舊資料直到該列的下一個 ws 事件、下一次斷線或手動重新整理；R1 若在重連後才失敗（網路剛恢復時常見），則重連後連一次成功的補抓都沒有。既有 red_case 3 的 R1（500ms）在重連 open 前已完成，覆蓋不到這個交錯。修法與新 red_case 見 risk_notes。"
       }
     },
     {
@@ -4945,7 +4945,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/exams.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9a",
       "depends_on": [
         "FRONTEND-020",
@@ -4980,9 +4980,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-f",
+        "notes": "pass：4 條 red_case 對應 4 個測試，另有完整 filter、查改刪與 409 exam_published、成績格、摘要、publish / unpublish / subjects 衝突碼、路徑編碼 6 條，tdd.run 10/10 全綠；commit 4159aee（測試）→ 893e04e（實作）。對照 BACKEND-467~478 與 api_index §11：12 支函式的 method / 路徑 / query / body 一致（listExams 9 個 query 參數、PUT subjects body `{items}`、PUT scores body `{cells, notify_parents}`、publish / unpublish 無 body、DELETE 204 回 void、exam-history 掛在 /admin/students/{id}/）；路徑參數經 encodeURIComponent（測試以 `e/1`、`s 1` 驗證）。型別逐欄位對照 apps/api/app/schemas/exams.py：ExamOut（`class_` alias 'class' → `class: {id,name}|null`，grade_level / published_at / published_by_name / note 皆 nullable，exam_date 為 YYYY-MM-DD 字串，created_at ISO datetime）、ExamSubjectOut / ScoreCellOut（JsonNumber 以 float 序列化 → number，score nullable）、SubjectSummaryOut（average / max / min 為 nullable number）、GridStudentOut（class_name nullable、in_roster）、StudentExamHistoryItemOut / HistoryScoreOut 全部一致；ExamCreate 的 grade_level / class_id / note 可為 null 對應 ExamCreateIn，ExamUpdate = Partial<ExamCreate> 對應 ExamUpdateIn 的 nullable_fields；ScoreCellInput 的 score / is_absent 必填（比後端預設嚴格，合理）。422 invalid_score_cells 的 details 以 InvalidScoreCell[] 匯出並有逐欄位斷言；錯誤由 adminHttp 轉成 ApiError 原樣 reject（status / code / message / details 皆有斷言）。lint 乾淨、vue-tsc 無本檔錯誤。殘留（不打回）：ExamListParams.grade_level 未在型別層限制 1~6（後端 422 把關）。"
       }
     },
     {
