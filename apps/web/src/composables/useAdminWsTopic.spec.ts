@@ -86,6 +86,11 @@ function startOpen() {
   return store
 }
 
+/** 讓 promise 鏈（catch → finally → 補跑）跑完；fake timers 下不能用 setTimeout 等 */
+async function flushMicrotasks(): Promise<void> {
+  for (let i = 0; i < 10; i += 1) await Promise.resolve()
+}
+
 describe('useAdminWsTopic', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -180,7 +185,7 @@ describe('useAdminWsTopic', () => {
     lastSocket().serverClose(1006)
     expect(resync).toHaveBeenCalledTimes(1)
 
-    // 200ms 內再觸發輪詢（分頁切回前景）：上一輪還在跑，略過
+    // 200ms 內再觸發輪詢（分頁切回前景）：上一輪還在跑，不併發
     vi.advanceTimersByTime(100)
     document.dispatchEvent(new Event('visibilitychange'))
     expect(resync).toHaveBeenCalledTimes(1)
@@ -190,6 +195,86 @@ describe('useAdminWsTopic', () => {
     expect(sockets).toHaveLength(2)
     lastSocket().serverOpen()
     expect(resync).toHaveBeenCalledTimes(2)
+  })
+
+  it('useAdminWsTopic reruns resync once after overlapping triggers', async () => {
+    startOpen()
+    const resync = vi.fn(() => new Promise<void>((resolve) => setTimeout(resolve, 2000)))
+    mountTopic('attendance', {}, resync)
+
+    // t=0 斷線：輪詢立刻送出 R1（伺服器快照停在 t=0）
+    lastSocket().serverClose(1006)
+    expect(resync).toHaveBeenCalledTimes(1)
+
+    // t=1000 重連成功：R1 仍在跑，不併發，記為待補
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(sockets).toHaveLength(2)
+    lastSocket().serverOpen()
+    expect(resync).toHaveBeenCalledTimes(1)
+
+    // 分頁重新可見再觸發一次輪詢：合併進同一次待補
+    document.dispatchEvent(new Event('visibilitychange'))
+    expect(resync).toHaveBeenCalledTimes(1)
+
+    // t=2000 R1 完成：立刻補跑恰好一次（斷線期間遺失的事件靠這次補回）
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushMicrotasks()
+    expect(resync).toHaveBeenCalledTimes(2)
+
+    // 補跑完成後沒有新觸發，就不再補
+    await vi.advanceTimersByTimeAsync(2000)
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(resync).toHaveBeenCalledTimes(2)
+  })
+
+  it('useAdminWsTopic reruns resync after a rejected run', async () => {
+    startOpen()
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    let rejectFirst: (err: Error) => void = () => undefined
+    const resync = vi
+      .fn<() => Promise<void>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((_, reject) => {
+            rejectFirst = reject
+          }),
+      )
+      .mockImplementation(() => Promise.resolve())
+    mountTopic('attendance', {}, resync)
+
+    lastSocket().serverClose(1006)
+    expect(resync).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1000)
+    lastSocket().serverOpen()
+    expect(resync).toHaveBeenCalledTimes(1)
+
+    // R1 在重連成功之後才失敗（網路剛恢復時常見）：仍要補跑一次，重連後至少有一次成功的補抓
+    rejectFirst(new Error('網路剛恢復'))
+    await flushMicrotasks()
+    expect(resync).toHaveBeenCalledTimes(2)
+    expect(console.error).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(resync).toHaveBeenCalledTimes(2)
+  })
+
+  it('useAdminWsTopic drops pending rerun after unmount', async () => {
+    startOpen()
+    const resync = vi.fn(() => new Promise<void>((resolve) => setTimeout(resolve, 2000)))
+    const { wrapper } = mountTopic('attendance', {}, resync)
+
+    lastSocket().serverClose(1006)
+    expect(resync).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1000)
+    lastSocket().serverOpen()
+    expect(resync).toHaveBeenCalledTimes(1)
+
+    // 待補期間離開頁面：上一輪完成後不再補跑
+    wrapper.unmount()
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushMicrotasks()
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(resync).toHaveBeenCalledTimes(1)
   })
 
   it('useAdminWsTopic resync failure does not block the next run', async () => {
