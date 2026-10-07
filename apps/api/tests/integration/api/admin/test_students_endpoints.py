@@ -5,16 +5,23 @@ BACKEND-160：POST /api/admin/students（students:write；敏感欄位另需 stu
 BACKEND-163：POST /api/admin/students/{student_id}/archive（封存後家長端看不到）。
 BACKEND-531：POST /api/admin/students/{student_id}/purge（students:purge，永久刪除 = 匿名化）。
 BACKEND-164：POST /api/admin/students/{student_id}/photo（multipart file，students:write）。
+BACKEND-162：PATCH /api/admin/students/{student_id}（students:write；回應以 get_student 重組、簽
+photo_url；改狀態同交易收尾並 commit）。
+BACKEND-533：GET /api/admin/students/import-template（students:write；xlsx 範本、固定檔名、
+no-store、路由在 /{student_id} 之前）。
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, date, datetime
+from io import BytesIO
+from urllib.parse import unquote
 from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from openpyxl import load_workbook
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -22,9 +29,18 @@ from app.core.crypto import decrypt_bytes, encrypt_bytes
 from app.models.account import StaffUser
 from app.models.audit import AuditLog
 from app.models.parents import ParentAccount
+from app.models.pickup import PickupRequest
 from app.models.students import Student
+from app.services.student_import_service import IMPORT_COLUMNS
 from app.services.students.id_number import id_number_hmac
-from tests.support.factories import make_class, make_guardian, make_school, make_student
+from tests.support.factories import (
+    make_class,
+    make_guardian,
+    make_pickup_request,
+    make_school,
+    make_student,
+)
+from tests.support.fake_clock import FakeClock
 from tests.support.fake_storage import FakeStorage
 from tests.support.route_audit import admin_routes_without_permission
 
@@ -622,3 +638,250 @@ def test_admin_students_photo_415(
 def test_admin_students_photo_guard_registered(app: FastAPI) -> None:
     assert admin_routes_without_permission(app) == []
     assert "post" in app.openapi()["paths"]["/api/admin/students/{student_id}/photo"]
+
+
+# --- BACKEND-162：PATCH /api/admin/students/{id} ------------------------------------
+
+
+def _student_url(student_id: object) -> str:
+    return f"{_URL}/{student_id}"
+
+
+def _stored(db: Session, student_id: object) -> Student:
+    db.expire_all()
+    return db.execute(select(Student).where(Student.id == student_id)).scalar_one()
+
+
+def _audits(db: Session, action: str, entity_id: object) -> list[AuditLog]:
+    return list(
+        db.execute(
+            select(AuditLog).where(AuditLog.action == action, AuditLog.entity_id == str(entity_id))
+        ).scalars()
+    )
+
+
+def test_admin_students_update_success(
+    staff_client: StaffClientFactory, db_session: Session, fake_clock: FakeClock
+) -> None:
+    student = make_student(db_session, name="王小明", grade_level=3)
+    pending = make_pickup_request(db_session, student, service_date=fake_clock.today())
+    db_session.commit()
+    client, staff = staff_client(permissions=["students:write"])
+
+    resp = client.patch(_student_url(student.id), json={"status": "withdrawn"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == str(student.id)
+    assert (body["status"], body["withdrawn_on"]) == ("withdrawn", fake_clock.today().isoformat())
+    assert (body["name"], body["grade_level"]) == ("王小明", 3)  # 只動給定欄位
+    assert body["sensitive"] is None
+    assert body["photo_url"] is None
+    # 已 commit：重讀 DB 看得到狀態、529 收尾（接送請求取消）與稽核
+    stored = _stored(db_session, student.id)
+    assert (stored.status, stored.withdrawn_on) == ("withdrawn", fake_clock.today())
+    assert db_session.get(PickupRequest, pending.id).status == "cancelled"  # type: ignore[union-attr]
+    close_outs = _audits(db_session, "student.close_out", student.id)
+    assert len(close_outs) == 1
+    assert close_outs[0].actor_id == staff.id
+    # 部分更新：改回 active 清除退班日，再只改 note 其他欄位不動
+    reactivated = client.patch(_student_url(student.id), json={"status": "active"})
+    assert (reactivated.json()["status"], reactivated.json()["withdrawn_on"]) == ("active", None)
+    noted = client.patch(_student_url(student.id), json={"note": "喜歡數學"})
+    assert (noted.json()["note"], noted.json()["status"]) == ("喜歡數學", "active")
+    assert _stored(db_session, student.id).note == "喜歡數學"
+    assert len(_audits(db_session, "student.close_out", student.id)) == 1
+
+
+def test_admin_students_update_photo_url(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    with_photo = make_student(db_session, name="王小明")
+    with_photo.photo_path = f"{with_photo.id}/{'ab' * 16}.jpg"
+    without_photo = make_student(db_session, name="陳小華")
+    db_session.commit()
+    client, _ = staff_client(permissions=["students:write", "students:read"])
+
+    resp = client.patch(_student_url(with_photo.id), json={"note": "x"})
+    plain = client.patch(_student_url(without_photo.id), json={"note": "y"})
+
+    assert resp.status_code == 200
+    assert resp.json()["photo_url"] == (
+        f"https://storage.test/student-photos/{with_photo.id}/{'ab' * 16}.jpg?exp=300"
+    )
+    # 與 GET 詳情同一個組裝函式：兩者 photo_url 一致
+    assert resp.json()["photo_url"] == client.get(_student_url(with_photo.id)).json()["photo_url"]
+    assert plain.status_code == 200
+    assert plain.json()["photo_url"] is None
+    assert set(resp.json()) == set(client.get(_student_url(with_photo.id)).json())
+
+
+def test_admin_students_update_sensitive(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    student = _with_sensitive(db_session)
+    client, staff = staff_client(permissions=["students:write", "students:sensitive"])
+
+    resp = client.patch(_student_url(student.id), json={"id_number": None, "health_note": "氣喘"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["sensitive"] == {"id_number": None, "health_note": "氣喘"}
+    assert (body["has_id_number"], body["has_health_note"]) == (False, True)
+    stored = _stored(db_session, student.id)
+    assert (stored.id_number_enc, stored.id_number_hmac) == (None, None)
+    assert stored.health_note_enc is not None
+    assert decrypt_bytes(stored.health_note_enc) == "氣喘"
+    audits = _audits(db_session, "student.sensitive_update", student.id)
+    assert [a.after for a in audits] == [{"cleared": ["id_number"], "set": ["health_note"]}]
+    assert audits[0].actor_id == staff.id
+    # 只有 students:write：回應 sensitive 為 None、本文不含明文（has_* 仍回）
+    writer, _ = staff_client(permissions=["students:write"])
+    hidden = writer.patch(_student_url(student.id), json={"note": "x"})
+    assert hidden.status_code == 200
+    assert hidden.json()["sensitive"] is None
+    assert hidden.json()["has_health_note"] is True
+    for leaked in ("氣喘", _ID_NUMBER, "_enc", "hmac"):
+        assert leaked not in hidden.text
+
+
+def test_admin_students_update_422(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    student = make_student(db_session)
+    db_session.commit()
+    client, _ = staff_client(permissions=["students:write", "students:sensitive"])
+
+    for body in ({}, {"status": "graduated"}, {"foo": 1}, {"name": None}, {"grade_level": 7}):
+        assert_error(client.patch(_student_url(student.id), json=body), 422, "validation_error")
+    assert_error(client.patch(_student_url("abc"), json={"note": "x"}), 422, "validation_error")
+    assert_error(
+        client.patch(_student_url(student.id), json={"id_number": "A123"}), 422, "invalid_id_number"
+    )
+    assert_error(
+        client.patch(
+            _student_url(student.id),
+            json={"status": "withdrawn", "enrolled_on": "2026-09-01", "withdrawn_on": "2026-08-31"},
+        ),
+        422,
+        "invalid_dates",
+    )
+    assert _stored(db_session, student.id).status == "active"
+
+
+def test_admin_students_update_401(api_client: TestClient, assert_error: AssertError) -> None:
+    assert_error(
+        api_client.patch(_student_url(uuid4()), json={"note": "x"}), 401, "unauthenticated"
+    )
+
+
+def test_admin_students_update_403(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    student = make_student(db_session, name="王小明")
+    db_session.commit()
+    reader, _ = staff_client(permissions=["students:read"])
+    writer, _ = staff_client(permissions=["students:write"])
+
+    denied = reader.patch(_student_url(student.id), json={"note": "x"})
+    sensitive = writer.patch(_student_url(student.id), json={"health_note": "氣喘"})
+    cleared = writer.patch(_student_url(student.id), json={"id_number": None})
+
+    assert_error(denied, 403, "permission_denied")
+    assert denied.json()["error"]["details"] == {"required": ["students:write"]}
+    assert_error(sensitive, 403, "sensitive_permission_required")
+    assert_error(cleared, 403, "sensitive_permission_required")
+    stored = _stored(db_session, student.id)
+    assert (stored.note, stored.health_note_enc) == (None, None)
+
+
+def test_admin_students_update_404_409(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    archived = make_student(db_session, name="王小明", archived=True)
+    make_student(db_session, student_no="S115001")
+    student = make_student(db_session, student_no="S115002")
+    db_session.commit()
+    client, _ = staff_client(permissions=["students:write"])
+
+    assert_error(
+        client.patch(_student_url(archived.id), json={"note": "x"}), 404, "student_not_found"
+    )
+    assert_error(client.patch(_student_url(uuid4()), json={"note": "x"}), 404, "student_not_found")
+    assert_error(
+        client.patch(_student_url(student.id), json={"student_no": "S115001"}),
+        409,
+        "student_no_taken",
+    )
+    assert _stored(db_session, archived.id).note is None
+    assert _stored(db_session, student.id).student_no == "S115002"
+
+
+def test_admin_students_update_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "patch" in app.openapi()["paths"]["/api/admin/students/{student_id}"]
+
+
+# --- BACKEND-533：GET /api/admin/students/import-template -------------------------
+
+_TEMPLATE_URL = f"{_URL}/import-template"
+_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def test_admin_students_import_template_success(staff_client: StaffClientFactory) -> None:
+    client, _ = staff_client(permissions=["students:write"])
+
+    resp = client.get(_TEMPLATE_URL)
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == _XLSX
+    disposition = resp.headers["content-disposition"]
+    assert disposition.startswith("attachment; filename*=UTF-8''")
+    assert unquote(disposition.split("''", 1)[1]) == "學生匯入範本.xlsx"
+    assert resp.headers["cache-control"] == "no-store"
+    wb = load_workbook(BytesIO(resp.content))
+    visible = [ws for ws in wb.worksheets if ws.sheet_state == "visible"]
+    assert visible[0].title == "學生資料"
+    assert [c.value for c in visible[0][1]] == IMPORT_COLUMNS
+    assert visible[0].max_row == 1
+    assert "說明" in wb.sheetnames
+
+
+def test_admin_students_import_template_route_order(staff_client: StaffClientFactory) -> None:
+    client, _ = staff_client(permissions=["students:write"])
+
+    resp = client.get(_TEMPLATE_URL)
+
+    # 沒被 /{student_id} 的 UUID 驗證攔截成 422
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == _XLSX
+
+
+def test_admin_students_import_template_401(
+    api_client: TestClient, assert_error: AssertError
+) -> None:
+    assert_error(api_client.get(_TEMPLATE_URL), 401, "unauthenticated")
+
+
+def test_admin_students_import_template_403(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=["students:read"])
+
+    resp = client.get(_TEMPLATE_URL)
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["students:write"]}
+
+
+def test_admin_students_import_template_method(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=["students:write"])
+
+    assert_error(client.post(_TEMPLATE_URL), 405, "method_not_allowed")
+
+
+def test_admin_students_import_template_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "get" in app.openapi()["paths"]["/api/admin/students/import-template"]
