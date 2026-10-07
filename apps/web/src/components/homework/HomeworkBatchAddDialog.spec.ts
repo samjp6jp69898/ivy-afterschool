@@ -291,16 +291,25 @@ describe('HomeworkBatchAddDialog', () => {
     expect(style).toMatch(/\.homework-batch__students :deep\(\.el-checkbox\) \{[^}]*height: 44px;/)
   })
 
-  it('HomeworkBatchAddDialog quick fills and remembers recent titles', async () => {
+  it('HomeworkBatchAddDialog quick fills recent titles', async () => {
+    localStorage.setItem(RECENT_KEY, '["數學習作 p.12-13","圈詞"]')
+    await mountDialog()
+
+    const chips = formItem('內容').findAll('.homework-recent .el-tag')
+    expect(formItem('內容').find('.homework-recent').text()).toContain('最近使用')
+    expect(chips.map((c) => c.text())).toEqual(['數學習作 p.12-13', '圈詞'])
+    await chips[1]!.trigger('click')
+
+    expect(titleInput().element.value).toBe('圈詞')
+  })
+
+  it('HomeworkBatchAddDialog remembers submitted title', async () => {
     localStorage.setItem(RECENT_KEY, '["數學習作 p.12-13","圈詞"]')
     const wrapper = await mountDialog()
 
-    const chips = formItem('內容').findAll('.homework-recent .el-tag')
-    expect(chips.map((c) => c.text())).toEqual(['數學習作 p.12-13', '圈詞'])
-    await chips[1]!.trigger('click')
-    expect(titleInput().element.value).toBe('圈詞')
-
+    await titleInput().setValue('圈詞')
     await submit()
+
     expect(submitted(wrapper)).toStrictEqual([{ subject_id: null, title: '圈詞' }])
     expect(JSON.parse(localStorage.getItem(RECENT_KEY) ?? 'null')).toEqual(['圈詞', '數學習作 p.12-13'])
   })

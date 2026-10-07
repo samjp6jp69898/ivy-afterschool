@@ -175,6 +175,15 @@ describe('HomeworkItemDialog', () => {
     expect(titleInput().element.value).toBe('國語第 5 課生字')
   })
 
+  it('HomeworkItemDialog renders recent titles as plain text', async () => {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(['<img src=x onerror=alert(1)>']))
+    await mountDialog()
+
+    const chip = recentChips()[0]!
+    expect(chip.text()).toBe('<img src=x onerror=alert(1)>')
+    expect(chip.find('img').exists()).toBe(false)
+  })
+
   it('HomeworkItemDialog recent title chips work with keyboard', async () => {
     localStorage.setItem(RECENT_KEY, '["國語第 5 課生字","圈詞"]')
     await mountDialog()
