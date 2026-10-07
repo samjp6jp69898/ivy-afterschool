@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 111,
-  "last_updated": "2026-10-07T10:50:53Z",
+  "version": 112,
+  "last_updated": "2026-10-07T10:53:00Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -2869,7 +2869,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/exams/ExamListItem.vue",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r9b",
       "depends_on": [
         "FRONTEND-003",
