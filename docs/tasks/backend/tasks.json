@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 424,
-  "last_updated": "2026-10-07T10:34:48Z",
+  "version": 425,
+  "last_updated": "2026-10-07T10:39:37Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -15324,7 +15324,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/api/parent/leaves.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-357"
@@ -15339,7 +15339,8 @@
         ],
         "red_cases": [
           "test_parent_leave_assembler_shared_create_response_unchanged：POST /api/parent/leaves 建立請假的 201 回應逐欄等於 leave_service.parent_leave_out 對同一筆請假的輸出（含 can_cancel、attachments 為 []、leave_type_label）",
-          "test_parent_leave_assembler_shared_no_private_copy：以 ast 解析 app/api/parent/leaves.py，模組層級不再定義 _parent_leave_out，且 create_leave handler 呼叫 leave_service.parent_leave_out（把私有版放回去 → 轉紅）"
+          "test_parent_leave_assembler_shared_no_private_copy：以 ast 解析 app/api/parent/leaves.py，模組層級不再定義 _parent_leave_out，且 create_leave handler 呼叫 leave_service.parent_leave_out（把私有版放回去 → 轉紅）",
+          "test_parent_leave_assembler_shared_create_and_cancel_use_it：把 leave_service.parent_leave_out 換成會改 reason 的版本 → 建立（201）與取消（200）的回應 reason 都是改過的值（兩個 handler 的回應都出自共用組裝函式；建立走私有複本時轉紅）"
         ],
         "run": "just test-int apps/api/tests/integration/api/parent/test_leaves_endpoints.py -k \"test_parent_leave_assembler_shared_\"",
         "notes": "新測試一律以 test_parent_leave_assembler_shared_ 為前綴。行為不變的證據：重構前後 test_leaves_endpoints.py 與 test_leave_service.py 整檔結果記在回報。"
