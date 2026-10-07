@@ -17,14 +17,21 @@ BACKEND-169 → 201。
 BACKEND-530 → 200。
 ``POST /api/admin/students/{student_id}/photo``（BACKEND-164）：multipart 欄位 ``file``、
 students:write → BACKEND-154 ``upload_photo`` → 200 ``PhotoUploadOut``（短效 URL）。
+``PATCH /api/admin/students/{student_id}``（BACKEND-162）：students:write → BACKEND-152
+``update_student``（改狀態時同交易收尾）→ 回應以 BACKEND-150 ``get_student`` 重組（同一個組裝函式簽
+photo_url；update_student 沒有 storage 參數）→ commit → 200 ``StudentDetailOut``。
+``GET /api/admin/students/import-template``（BACKEND-533）：students:write → BACKEND-532
+``build_import_template``（常數內容、不含使用者輸入）→ 200 xlsx，固定檔名「學生匯入範本.xlsx」、
+``Cache-Control: no-store``。
 """
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Final
+from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.admin._query import query_model
@@ -44,10 +51,15 @@ from app.schemas.students import (
     StudentListQuery,
     StudentPurgeIn,
     StudentPurgeOut,
+    StudentUpdateIn,
 )
 from app.services import guardian_service, student_service
+from app.services.student_import_template import build_import_template
 
 router = APIRouter(prefix="/students", tags=["admin-students"])
+
+XLSX_MEDIA_TYPE: Final = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+_TEMPLATE_FILENAME: Final = quote("學生匯入範本.xlsx")
 
 
 @router.get("", response_model=Page[StudentListItemOut])
@@ -71,6 +83,24 @@ def create_student(
     out = student_service.create_student(db, body, actor=staff, meta=meta, clock=clock)
     db.commit()
     return out
+
+
+# --- 固定路徑：一律宣告在 /{student_id} 相關 handler 之前 ----------------------------------------
+
+
+@router.get("/import-template", response_class=Response)
+def download_import_template(
+    _: Annotated[CurrentStaff, Depends(require_permission(Permission.STUDENTS_WRITE))],
+) -> Response:
+    return Response(
+        content=build_import_template(),
+        media_type=XLSX_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{_TEMPLATE_FILENAME}",
+            # SecurityMiddleware 已對 /api/ 全域加 no-store；這裡照 description 與出勤匯出明寫
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.post("/{student_id}/archive", response_model=StudentDetailOut)
@@ -149,3 +179,20 @@ def get_student(
     storage: Annotated[Storage, Depends(get_storage)],
 ) -> StudentDetailOut:
     return student_service.get_student(db, student_id, actor=staff, storage=storage, clock=clock)
+
+
+@router.patch("/{student_id}", response_model=StudentDetailOut)
+def update_student(
+    student_id: UUID,
+    body: StudentUpdateIn,
+    staff: Annotated[CurrentStaff, Depends(require_permission(Permission.STUDENTS_WRITE))],
+    db: Annotated[Session, Depends(get_db)],
+    meta: Annotated[RequestMeta, Depends(get_request_meta)],
+    clock: Annotated[Clock, Depends(get_clock)],
+    storage: Annotated[Storage, Depends(get_storage)],
+) -> StudentDetailOut:
+    student_service.update_student(db, student_id, body, actor=staff, meta=meta, clock=clock)
+    # update_student 沒有 storage、自己回的 photo_url 恆 None：以 GET 詳情同一個組裝函式重組（簽名）
+    out = student_service.get_student(db, student_id, actor=staff, storage=storage, clock=clock)
+    db.commit()
+    return out
