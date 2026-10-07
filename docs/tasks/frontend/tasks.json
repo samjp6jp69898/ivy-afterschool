@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 158,
-  "last_updated": "2026-10-07T11:26:12Z",
+  "version": 159,
+  "last_updated": "2026-10-07T11:27:38Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -776,7 +776,8 @@
           "AdminSidebar highlights longest matching prefix：initialRoute '/exams/e1' → 'is-active' 的項目文字為 '考試'；initialRoute '/pickup/authorizations' → 'is-active' 項目為 '代理接送核驗'（'接送' 不為 active）",
           "AdminSidebar navigates and emits on click：點 '學生工作台' → router.currentRoute.value.path === '/students'，emitted('navigate')[0] 深等於 ['/students']",
           "AdminSidebar empty permissions shows hint：permissions [] → wrapper.text() 含 '沒有可使用的功能，請聯絡管理員'",
-          "AdminSidebar collapse button emits toggle：props {collapsed:false} → [aria-label=收合側欄] 文字 '收合'，點擊後 emitted('toggle').length === 1；props {collapsed:true} → 根元素 class 含 is-collapsed、.el-menu 含 el-menu--collapse、[aria-label=展開側欄] 存在",
+          "AdminSidebar collapse button emits toggle：props {collapsed:false} → [aria-label=收合側欄] 文字 '收合'，點擊後 emitted('toggle').length === 1，且沒有 emit navigate",
+          "AdminSidebar collapsed shows icons only with tooltips：props {collapsed:true} → 根元素 class 含 is-collapsed、.el-menu 含 el-menu--collapse、每個項目都有 .el-menu-tooltip__trigger、品牌文字隱藏；[aria-label=展開側欄] 沒有文字，點擊後 emitted('toggle').length === 1；setProps collapsed false 後恢復展開",
           "AdminSidebar drawer mode hides collapse button and ignores collapsed：props {collapsed:true, drawer:true} → 根元素 class 含 is-drawer、不含 is-collapsed，沒有 [aria-label=收合側欄] 與 [aria-label=展開側欄]；點 '請假' → emitted('navigate')[0] 深等於 ['/leaves']"
         ],
         "run": "just web-test src/components/layout/AdminSidebar.spec.ts -t \"AdminSidebar\"",
