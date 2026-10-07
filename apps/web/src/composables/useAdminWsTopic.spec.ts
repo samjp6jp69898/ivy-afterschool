@@ -258,6 +258,28 @@ describe('useAdminWsTopic', () => {
     expect(resync).toHaveBeenCalledTimes(2)
   })
 
+  it('useAdminWsTopic reruns once after a synchronous throw with pending trigger', async () => {
+    startOpen()
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const resync = vi
+      .fn<() => void | Promise<void>>()
+      .mockImplementationOnce(() => {
+        // 第一輪執行中（同步）又被觸發一次輪詢，然後同步失敗
+        document.dispatchEvent(new Event('visibilitychange'))
+        throw new Error('同步失敗')
+      })
+      .mockImplementation(() => Promise.resolve())
+    mountTopic('attendance', {}, resync)
+
+    lastSocket().serverClose(1006)
+
+    // 失敗後立刻補跑恰好一次
+    expect(resync).toHaveBeenCalledTimes(2)
+    await flushMicrotasks()
+    expect(resync).toHaveBeenCalledTimes(2)
+    expect(console.error).toHaveBeenCalledTimes(1)
+  })
+
   it('useAdminWsTopic drops pending rerun after unmount', async () => {
     startOpen()
     const resync = vi.fn(() => new Promise<void>((resolve) => setTimeout(resolve, 2000)))
