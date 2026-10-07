@@ -313,3 +313,44 @@ def test_admin_homework_progress_overall_then_eta(
     # 先處理 overall：轉 done 通知一次；之後設定 ETA 時作業已完成，不發 eta_updated
     assert _parent_notifications(db_session, parent.id, "homework.done") == 1
     assert _parent_notifications(db_session, parent.id, "homework.eta_updated") == 0
+
+
+def test_admin_homework_progress_partial_update(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    ming = make_student(db_session)
+    make_homework_progress(
+        db_session, ming, service_date=_DAY, ready_eta=time(17, 30), note="剩數學訂正"
+    )
+    client, _ = staff_client(permissions=["homework:write"])
+
+    # 只給 note：ready_eta 未給 → 不動
+    resp = client.put(_progress_url(ming.id), json={"note": "剩國語"})
+
+    assert resp.status_code == 200
+    assert (resp.json()["ready_eta"], resp.json()["note"]) == ("17:30", "剩國語")
+
+    # ready_eta 給 null → 清除；note 未給 → 不動
+    cleared = client.put(_progress_url(ming.id), json={"ready_eta": None})
+
+    assert cleared.status_code == 200
+    assert (cleared.json()["ready_eta"], cleared.json()["note"]) == (None, "剩國語")
+    row = _progress_rows(db_session, ming.id)[_DAY]
+    assert (row.ready_eta, row.note) == (None, "剩國語")
+
+
+def test_admin_homework_progress_overall_auto(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    ming = make_student(db_session)
+    make_homework_item(db_session, ming, service_date=_DAY, status="done")
+    make_homework_item(db_session, ming, service_date=_DAY, status="doing")
+    make_homework_progress(db_session, ming, service_date=_DAY, overall_status="done")
+    client, _ = staff_client(permissions=["homework:write"])
+
+    # auto：改回由項目推導（一項 done、一項 doing → in_progress）
+    resp = client.put(_progress_url(ming.id), json={"overall": "auto"})
+
+    assert resp.status_code == 200
+    assert resp.json()["overall_status"] == "in_progress"
+    assert _progress_rows(db_session, ming.id)[_DAY].overall_status == "in_progress"
