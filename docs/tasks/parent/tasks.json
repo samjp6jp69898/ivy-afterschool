@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 99,
-  "last_updated": "2026-10-07T07:54:52Z",
+  "version": 100,
+  "last_updated": "2026-10-07T08:02:06Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -3377,6 +3377,36 @@
         ],
         "run": "just e2e e2e/parent/login-bind-pickup.spec.ts -g \"parent flow\"",
         "notes": "執行前 `just up`（或 `just web`）讓 5341 提供 vite dev 服務；production build 會忽略 LIFF 替身，因此不可對 vite preview / docker 映像執行。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "PARENT-191",
+      "title": "修正 PickupPersonForm.spec.ts 的 vue-tsc 型別錯誤（field() 輔助函式的回傳型別）",
+      "description": "修正 `apps/web/src/parent/components/pickup/PickupPersonForm.spec.ts`（PARENT-099 的測試）第 32 行的 vue-tsc 錯誤（TS2740）：`field()` 輔助函式回傳 `Omit<DOMWrapper<HTMLInputElement>, \"exists\">`，卻宣告為 `DOMWrapper<HTMLInputElement>`。只改測試的型別標註（例如把回傳型別改成與實際回傳值一致，或改用不會丟掉成員的取得方式），測試行為與斷言完全不變，不改 `PickupPersonForm.vue`。不得用 `@ts-ignore` / `@ts-expect-error` / `any` 掩蓋。\n\n**驗收標準**：見 tdd.notes 的可執行指令。",
+      "granularity_unit": "test",
+      "target_path": "apps/web/src/parent/components/pickup/PickupPersonForm.spec.ts",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r9",
+      "depends_on": [
+        "PARENT-099"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": null,
+        "markers": [
+          "vitest"
+        ],
+        "red_cases": [],
+        "run": "just web-typecheck",
+        "notes": "純型別修正，驗收以指令為準：①修正前 `just web-typecheck` 輸出含 PickupPersonForm.spec.ts(32,3) 的 TS2740（紅）；②修正後輸出不再含這個檔案的 error（綠；全專案歸零以 FRONTEND-295 也完成為準）；③`just web-test src/parent/components/pickup/PickupPersonForm.spec.ts -t \"PickupPersonForm\"` 全綠、測試數量與斷言與修正前相同；④`just web-lint src/parent/components/pickup/PickupPersonForm.spec.ts` 乾淨。"
       },
       "review": {
         "status": "pending",

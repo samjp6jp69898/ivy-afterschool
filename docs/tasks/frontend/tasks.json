@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 124,
-  "last_updated": "2026-10-07T07:59:26Z",
+  "version": 125,
+  "last_updated": "2026-10-07T08:02:06Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -2456,7 +2456,8 @@
         "BACKEND-165",
         "BACKEND-166",
         "BACKEND-531",
-        "BACKEND-533"
+        "BACKEND-533",
+        "FRONTEND-294"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -5859,6 +5860,72 @@
         ],
         "run": "just e2e e2e/admin/exams.spec.ts -g \"exams flow\"",
         "notes": "執行前：`just up` 啟動本機 DB / SeaweedFS + API + Web（INFRA-016），並以 `uv run python -m app.cli create-admin`（BACKEND-065）建立 e2e 專用 admin，帳密放在 `E2E_ADMIN_USERNAME` / `E2E_ADMIN_PASSWORD` 環境變數。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "FRONTEND-294",
+      "title": "createHttpClient：FormData 請求不得被預設的 JSON Content-Type 轉成 JSON（後台與家長端共用）",
+      "description": "改寫 FRONTEND-001 `shared/http/createHttpClient.ts` 的 instance 設定（後台 `http` 與家長端 `parentHttp` 共用同一個工廠）。\n\n**問題**：instance 預設 `headers['Content-Type'] = 'application/json'`；axios 1.x 的 `transformRequest` 在 Content-Type 為 JSON 時會把 `FormData` 序列化成 JSON 字串（實測 axios 1.20.0：body 變成 `{\"file\":{},\"name\":\"王小明\"}`，檔案遺失），學生照片、Excel 匯入、請假附件、常用接送人照片的 multipart 上傳都會壞掉。\n\n**行為**：在 request interceptor（執行時機早於 axios 的 transformRequest）對 body 為 `FormData` 的請求移除 Content-Type（`config.headers.setContentType(undefined)` 或等價作法），讓瀏覽器自行帶 multipart boundary；body 不是 FormData 的請求維持 `application/json`；呼叫端已明確指定 `multipart/form-data`（家長端 PARENT-091 / 133 的 per-request 寫法）的行為不變；401 refresh 成功後重試同一個 FormData 請求，檔案仍在 body 內。\n\n**驗收標準**：每一條對應下列 red_case；`apps/web/src/shared/http/createHttpClient.spec.ts` 既有測試全綠；FRONTEND-081 等上傳 api client 直接依賴本行為，不需自行設定 Content-Type。",
+      "granularity_unit": "api_client",
+      "target_path": "apps/web/src/shared/http/createHttpClient.ts",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "FRONTEND-001"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/web/src/shared/http/createHttpClient.spec.ts",
+        "markers": [
+          "vitest"
+        ],
+        "red_cases": [
+          "createHttpClient FormData body 保持 FormData：以自訂 adapter 擷取 transformRequest 後的 config.data，POST 含 File（a.png、內容 abc）與文字欄位 name=王小明 的 FormData → data instanceof FormData、file 的檔名與內容、name 的值都不變，Content-Type 不是 application/json；拿掉修正 → data 變成 JSON 字串 → 轉紅",
+          "createHttpClient FormData 一般 JSON body 不受影響：POST {a: 1} → data 為 '{\"a\":1}'、Content-Type 為 application/json",
+          "createHttpClient FormData 明確指定 multipart/form-data 仍保留 FormData：per-request headers['Content-Type'] = 'multipart/form-data' 的 FormData → data instanceof FormData",
+          "createHttpClient FormData 401 refresh 重試後檔案仍在：FormData 請求第一次 401、refresh 成功後重試 → 第二次請求的 data 仍是含 File 的 FormData，不是 JSON 字串"
+        ],
+        "run": "just web-test src/shared/http/createHttpClient.spec.ts -t \"createHttpClient FormData\"",
+        "notes": "斷言用自訂 adapter 擷取 transformRequest 後的 config（instance.defaults.adapter），不依賴 axios-mock-adapter 的內部實作；判斷 FormData 用 instanceof FormData。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "FRONTEND-295",
+      "title": "修正 web-typecheck 在 main 上的既有型別錯誤：AuditLogView.vue 的 el-table 欄位 slot 型別與 JsonSchemaFields.vue 的 prop 型別",
+      "description": "修正 `just web-typecheck`（vue-tsc 全專案）在 main 上的既有型別錯誤，共 8 個，皆為已 done 的 task 留下：\n- `apps/web/src/views/settings/AuditLogView.vue`（FRONTEND-072）7 個：第 307、315、333、350、361、370 行 el-table-column 預設 slot 的參數型別 `(_: { row: AuditLog }) => any` 不相容於 Element Plus 的 `(props: { row: DefaultRow; column: TableColumnCtx<DefaultRow>; $index: number }) => any`（TS2345）；第 375 行 `DefaultRow` 不可指派給 `AuditLog`（TS2345）。\n- `apps/web/src/components/settings/JsonSchemaFields.vue`（FRONTEND-055）1 個：第 151 行 `unknown` 不可指派給 Element Plus 的 prop 型別（TS2322）。\n\n純型別層修正：不改任何畫面、class、文字與互動，不改既有 spec 的斷言（已核可稿 page-settings-audit.html、page-settings-system.html 仍是權威，所以不需新稿）。做法由實作者決定（例如對 slot 的 row 以型別斷言或型別守衛處理、避免 any 擴散）；不得用 `@ts-ignore` / `@ts-expect-error` / `any` 擴散或放寬 tsconfig 來掩蓋。\n\n**驗收標準**：見 tdd.notes 的可執行指令。",
+      "granularity_unit": "view",
+      "target_path": "apps/web/src/views/settings/AuditLogView.vue",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "FRONTEND-072",
+        "FRONTEND-055"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": null,
+        "markers": [
+          "vitest"
+        ],
+        "red_cases": [],
+        "run": "just web-typecheck",
+        "notes": "純型別修正，驗收以指令為準：①修正前 `just web-typecheck` 輸出含 AuditLogView.vue 7 個與 JsonSchemaFields.vue 1 個 error（紅）；②修正後輸出不再含這兩個檔案的任何 error（綠；PARENT 區的 PickupPersonForm.spec.ts 由 PARENT-191 處理，全專案歸零以兩者皆完成為準）；③`just web-test src/views/settings/AuditLogView.spec.ts -t \"AuditLogView\"` 與 `just web-test src/components/settings/JsonSchemaForm.spec.ts -t \"JsonSchemaForm\"` 全綠且斷言不變；④`git diff` 只有型別層改動（沒有 template 結構、class、文字的變動），並用 `just web-lint <兩個檔>` 確認乾淨。"
       },
       "review": {
         "status": "pending",
