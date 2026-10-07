@@ -1,4 +1,4 @@
-"""BACKEND-315 / 316 / 319 / 320 / 321 / 322：後台出勤 endpoint（app/api/admin/attendance.py）。
+"""BACKEND-315 ~ 322：後台出勤 endpoint（app/api/admin/attendance.py）。
 
 fake_clock 預設 2026-09-01 01:00 UTC（台北 09:00，週二，營業日）。check-in 會 enqueue 通知：kick
 設為 off，避免背景執行緒連 DB。
@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.models.account import StaffUser
 from app.models.attendance import StudentAttendance
 from app.models.audit import AuditLog
+from app.models.reference import ClosedDay
 from app.notifications import outbox_jobs
 from app.services.settings_service import clear_settings_cache
 from tests.support.factories import (
@@ -605,3 +606,112 @@ def test_admin_check_out_409(
     assert_error(client.post(_check_out_url(expected.id)), 409, "not_checked_in")
     assert_error(client.post(_check_out_url(no_row.id)), 409, "not_checked_in")
     assert_error(client.post(_check_out_url(uuid4())), 404, "student_not_found")
+
+
+# --- BACKEND-318：POST /batch-check-in ------------------------------------------------------------
+
+_BATCH_URL = f"{_URL}/batch-check-in"
+
+
+def _attendance_of(db_session: Session, *student_ids: object) -> dict[object, tuple[str, object]]:
+    db_session.expire_all()
+    rows = db_session.execute(
+        select(StudentAttendance).where(
+            StudentAttendance.service_date == _DAY, StudentAttendance.student_id.in_(student_ids)
+        )
+    ).scalars()
+    return {row.student_id: (row.status, row.updated_by) for row in rows}
+
+
+def test_admin_batch_check_in_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "post" in app.openapi()["paths"][_BATCH_URL]
+
+
+def test_admin_batch_check_in_success(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    hua = make_student(db_session, name="陳小華")
+    an = make_student(db_session, name="林小安")
+    make_attendance(db_session, ming, service_date=_DAY)
+    make_attendance(db_session, hua, service_date=_DAY)
+    make_attendance(db_session, an, service_date=_DAY, status="present")
+    client, staff = staff_client(permissions=["attendance:operate"])
+
+    resp = client.post(_BATCH_URL, json={"student_ids": [str(ming.id), str(an.id), str(hua.id)]})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["succeeded"]) == 2
+    # succeeded / skipped 依輸入順序
+    assert [(r["student_name"], r["status"], r["check_in_source"]) for r in body["succeeded"]] == [
+        ("王小明", "present", "manual"),
+        ("陳小華", "present", "manual"),
+    ]
+    assert body["skipped"][0]["code"] == "already_checked_in"
+    assert body["skipped"] == [
+        {"student_id": str(an.id), "code": "already_checked_in", "message": "學生今天已登記到班"}
+    ]
+    # 已 commit：請求結束 rollback 到 savepoint 後重讀仍是 present；被略過的列不動
+    assert _attendance_of(db_session, ming.id, hua.id, an.id) == {
+        ming.id: ("present", staff.id),
+        hua.id: ("present", staff.id),
+        an.id: ("present", None),
+    }
+
+
+def test_admin_batch_check_in_422(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming = make_student(db_session)
+    make_attendance(db_session, ming, service_date=_DAY)
+    client, _ = staff_client(permissions=["attendance:operate"])
+
+    assert_error(client.post(_BATCH_URL, json={"student_ids": []}), 422, "validation_error")
+    assert_error(
+        client.post(_BATCH_URL, json={"student_ids": [str(ming.id), str(ming.id)]}),
+        422,
+        "validation_error",
+    )
+    assert_error(client.post(_BATCH_URL, json={"student_ids": ["abc"]}), 422, "validation_error")
+    assert_error(
+        client.post(_BATCH_URL, json={"student_ids": [str(ming.id)], "note": "x"}),
+        422,
+        "validation_error",
+    )
+    assert_error(client.post(_BATCH_URL), 422, "validation_error")
+    assert _attendance_of(db_session, ming.id) == {ming.id: ("expected", None)}
+
+
+def test_admin_batch_check_in_401(api_client: TestClient, assert_error: AssertError) -> None:
+    resp = api_client.post(_BATCH_URL, json={"student_ids": [str(uuid4())]})
+
+    assert_error(resp, 401, "unauthenticated")
+
+
+def test_admin_batch_check_in_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming = make_student(db_session)
+    make_attendance(db_session, ming, service_date=_DAY)
+    client, _ = staff_client(permissions=["attendance:read"])
+
+    resp = client.post(_BATCH_URL, json={"student_ids": [str(ming.id)]})
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["attendance:operate"]}
+    assert _attendance_of(db_session, ming.id) == {ming.id: ("expected", None)}
+
+
+def test_admin_batch_check_in_409(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming = make_student(db_session)
+    db_session.add(ClosedDay(date=_DAY, reason="颱風假"))
+    client, _ = staff_client(permissions=["attendance:operate"])
+
+    resp = client.post(_BATCH_URL, json={"student_ids": [str(ming.id)]})
+
+    assert_error(resp, 409, "not_service_day")
+    assert _attendance_of(db_session, ming.id) == {}
