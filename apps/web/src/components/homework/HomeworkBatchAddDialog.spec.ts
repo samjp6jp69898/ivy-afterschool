@@ -223,6 +223,20 @@ describe('HomeworkBatchAddDialog', () => {
     expect(formItem('對象').text()).not.toContain('含今天請假')
   })
 
+  it('HomeworkBatchAddDialog sends null subject after clearing', async () => {
+    const wrapper = await mountDialog()
+    await chooseSubject('數學')
+
+    // 清除 icon 要對根元素 .el-select 觸發 mouseenter 才會出現
+    await formItem('科目').find('.el-select').trigger('mouseenter')
+    await formItem('科目').find('.el-select__clear').trigger('click')
+    await settle()
+    await titleInput().setValue('圈詞')
+    await submit()
+
+    expect(submitted(wrapper)).toStrictEqual([{ subject_id: null, title: '圈詞' }])
+  })
+
   it('HomeworkBatchAddDialog requires title', async () => {
     const wrapper = await mountDialog()
 
