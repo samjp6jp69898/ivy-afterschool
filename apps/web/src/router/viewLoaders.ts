@@ -27,7 +27,7 @@ const placeholder = () => import('@/router/PlaceholderView.vue')
 
 export const VIEW_LOADERS: Record<ViewName, () => Promise<Component>> = {
   LoginView: () => import('@/views/LoginView.vue'),
-  ChangePasswordView: placeholder,
+  ChangePasswordView: () => import('@/views/ChangePasswordView.vue'),
   ErrorView: () => import('@/views/ErrorView.vue'),
   DashboardView: placeholder,
   StudentWorkbenchView: placeholder,

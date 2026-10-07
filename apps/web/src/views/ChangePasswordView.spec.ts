@@ -42,6 +42,8 @@ async function mountView(user: Partial<StaffMe> = {}, initialRoute = '/change-pa
     initialRoute,
     piniaInitialState: { auth: { user: makeUser(user), status: 'authenticated' } },
   })
+  // 沒接在 document 上的 form 不會送出（HTML 規範），click 送出鈕前先把元件根元素移進 document
+  document.body.appendChild(mounted.wrapper.element)
   await settle()
   return mounted
 }
@@ -130,6 +132,12 @@ describe('ChangePasswordView', () => {
     expect(letterRule?.text()).toContain('（未符合）')
     const lengthRule = wrapper.findAll('.pw-rule').find((r) => r.text().startsWith('至少 10 碼'))
     expect(lengthRule?.text()).toContain('（已符合）')
+
+    // 長度邊界：9 碼不符、10 碼符合
+    await input(wrapper, 'next').setValue('abcd12345')
+    expect(ruleState(wrapper, '至少 10 碼')).toBe('fail')
+    await input(wrapper, 'next').setValue('abcd123456')
+    expect(ruleState(wrapper, '至少 10 碼')).toBe('ok')
   })
 
   it('ChangePasswordView compares the confirmation only after blur', async () => {
@@ -278,6 +286,9 @@ describe('ChangePasswordView', () => {
     }
     expect(buttonByText(wrapper, '返回')?.attributes('disabled')).toBeDefined()
     await submit(wrapper)
+    // 送出鈕已停用；直接對表單派發 submit 也不會重送
+    wrapper.find('form').element.dispatchEvent(new Event('submit', { cancelable: true }))
+    await settle()
     expect(mock.history.post.length).toBe(1)
   })
 
