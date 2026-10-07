@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 402,
-  "last_updated": "2026-10-07T07:48:05Z",
+  "version": 403,
+  "last_updated": "2026-10-07T07:49:19Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5217,11 +5217,11 @@
     {
       "id": "BACKEND-152",
       "title": "實作 StudentService.update_student：部分更新（狀態、班級、敏感欄位）",
-      "description": "在 `apps/api/app/services/student_service.py` 實作：\n```python\ndef update_student(session: Session, student_id: UUID, data: StudentUpdateIn, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> StudentDetailOut: ...\n```\n- 不存在或已封存 → 404（封存學生不可編輯）；`get_student_or_404(for_update=True)`。\n- 只處理 `model_fields_set` 中的欄位；敏感欄位規則同 BACKEND-151（含 403、422、409：沒有 students:sensitive 不可寫入或清除身分證與健康備註）；給 null → 同時清除 enc 與 hmac。\n- 狀態轉換：→ withdrawn 未給 withdrawn_on 時預設 today；withdrawn → active / suspended 時清除 withdrawn_on。\n- student_no 改為既有值 → 409；class_id 改為封存班 → 422。\n- 敏感欄位有變動時稽核 `student.sensitive_update`（after 只記欄位名：`{\"set\": [...], \"cleared\": [...]}`，只放有變動的 key、欄位名排序；格式同 BACKEND-151，不以欄位名當 key——BACKEND-102 會把 key 含 id_number / health_note 的值遮罩成 `***`）。\n- **停讀 / 退班自動收尾**：status 由其他值改為 `suspended` 或 `withdrawn` 時，同一交易內呼叫 `close_out_inactive_student(session, student, actor=actor, clock=clock)`（BACKEND-529：取消進行中接送請求與 active 代理授權、刪除今天起 expected 出勤、取消未來請假 / 已開始的截到昨天）。\n\n**驗收標準**\n- 部分更新只動給定欄位。\n- 狀態轉換的 withdrawn_on 處理。\n- 敏感欄位清除 / 修改與權限檢查。\n- 封存學生 404；學號衝突 409。\n- 改為 suspended / withdrawn 時觸發 BACKEND-529 收尾；改回 active 或其他欄位變更不觸發。",
+      "description": "在 `apps/api/app/services/student_service.py` 實作：\n```python\ndef update_student(session: Session, student_id: UUID, data: StudentUpdateIn, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> StudentDetailOut: ...\n```\n- 不存在或已封存 → 404（封存學生不可編輯）；`get_student_or_404(for_update=True)`。\n- 只處理 `model_fields_set` 中的欄位；敏感欄位規則同 BACKEND-151（含 403、422、409：沒有 students:sensitive 不可寫入或清除身分證與健康備註）；給 null → 同時清除 enc 與 hmac。\n- 狀態轉換：→ withdrawn 未給 withdrawn_on 時預設 today；withdrawn → active / suspended 時清除 withdrawn_on。\n- student_no 改為既有值 → 409；class_id 改為封存班 → 422。\n- 敏感欄位有變動時稽核 `student.sensitive_update`（after 只記欄位名：`{\"set\": [...], \"cleared\": [...]}`，只放有變動的 key、欄位名排序；格式同 BACKEND-151，不以欄位名當 key——BACKEND-102 會把 key 含 id_number / health_note 的值遮罩成 `***`）。\n- **停讀 / 退班自動收尾**：status 由其他值改為 `suspended` 或 `withdrawn` 時，同一交易內呼叫 `close_out_inactive_student(session, student, actor=actor, clock=clock)`（BACKEND-529：取消進行中接送請求與 active 代理授權、刪除今天起 expected 出勤、取消未來請假 / 已開始的截到昨天）。\n- **邊界的最終決定**：退班學生（含同一請求把 status 改為 withdrawn）明確給 `withdrawn_on: null` → 422 `invalid_dates`（退班學生必須有退班日）；withdrawn → active / suspended 時若同一請求明確給 withdrawn_on 則以給的為準，未給才清除；只填空白的 id_number / health_note 視同給 null（清除），school_class 只填空白寫入 null；敏感欄位改成與現值相同（身分證同 HMAC、健康備註同明文）不算變動、不寫稽核，沒有變動的 key 不出現在 after。\n- **班級列 FOR SHARE 的時機**（risk_notes）：明確給非 null 的 class_id（同 create），或 status 有變且改後為 active / suspended 而學生仍有班級時，經 `_check_class` 對班級列取 FOR SHARE 再判斷 archived_at → 422 `invalid_class`（退班學生要改回在學，須先改班或同一請求把 class_id 清成 null）。改為 withdrawn 或不改狀態的欄位更新不取班級鎖。所有檢查都在改動 ORM 物件之前完成。\n\n**驗收標準**\n- 部分更新只動給定欄位。\n- 狀態轉換的 withdrawn_on 處理。\n- 敏感欄位清除 / 修改與權限檢查。\n- 封存學生 404；學號衝突 409。\n- 改為 suspended / withdrawn 時觸發 BACKEND-529 收尾；改回 active 或其他欄位變更不觸發。\n- 復學 / 改班與並發封存班：兩條連線的阻塞並發測試（拿掉 FOR SHARE 轉紅）。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": "BE:api/students.py::update_student",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-151",
@@ -5241,7 +5241,11 @@
           "test_update_student_clear_sensitive：actor 有 sensitive，StudentUpdateIn.model_validate({'id_number': None}) → id_number_enc 與 id_number_hmac 皆 None；audit after == {'cleared': ['id_number']}",
           "test_update_student_sensitive_forbidden：actor 無 sensitive 改 health_note → 403 'sensitive_permission_required'",
           "test_update_student_archived_404_and_conflict：封存學生 → 404 'student_not_found'；student_no 改為他人學號 → 409 'student_no_taken'",
-          "test_update_student_triggers_close_out：王小明今日有 pending 接送請求 → update status='withdrawn' → 請求 status 'cancelled'；另一位學生只改 note → close_out 未被呼叫（monkeypatch 計數 0）"
+          "test_update_student_triggers_close_out：王小明今日有 pending 接送請求 → update status='withdrawn' → 請求 status 'cancelled'；另一位學生只改 note → close_out 未被呼叫（monkeypatch 計數 0）",
+          "test_update_student_set_sensitive_and_duplicate：設定 id_number → audit after == {'set': ['id_number']}、DB 只有密文與 HMAC；同值再送不寫稽核；他人身分證 → 409 'id_number_duplicate' 且 details 指出既有學生；'A123' → 422 'invalid_id_number'；同一請求清一欄設一欄 → after == {'cleared': ['id_number'], 'set': ['health_note']}",
+          "test_update_student_invalid_refs_and_dates：封存班 / 不存在班 → 422 'invalid_class'；停用 / 不存在國小 → 422 'invalid_school'；withdrawn_on 早於 enrolled_on、enrolled_on 改到 withdrawn_on 之後、退班中 withdrawn_on=null → 皆 422 'invalid_dates' 且 DB 未變；enrolled_on 清 null 後退班日可任意、改到未封存班成功",
+          "test_update_student_status_requires_open_class：退班學生所在班級封存後，status 改 active / suspended → 422 'invalid_class'（仍 withdrawn）；只改 note 不受影響；status='active' 同時 class_id=null 成功",
+          "test_update_student_reactivate_blocked_by_concurrent_class_archive：committing、兩條連線——退班學生留在班上；A archive_class 持 FOR UPDATE 未 commit → B update_student(status='active') 不改 class_id，必須在班級列 FOR SHARE 等待（0.5 秒內未結束）→ A commit → B 重讀 archived_at → 422 'invalid_class'，學生仍 withdrawn、班級已封存（拿掉 FOR SHARE 時 B 立即 commit 成 active，轉紅）"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_student_service.py -k \"test_update_student_\"",
         "notes": ""
