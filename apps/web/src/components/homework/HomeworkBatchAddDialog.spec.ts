@@ -150,6 +150,9 @@ describe('HomeworkBatchAddDialog', () => {
     expect(dialog().attributes('style')).toContain('560px')
     expect(titleInput().attributes('placeholder')).toBe('例如：國語第 5 課生字')
     expect(titleInput().attributes('maxlength')).toBe('100')
+    // 內容必填且有字數計數
+    expect(formItem('內容').classes()).toContain('is-required')
+    expect(formItem('內容').find('.el-input__count').exists()).toBe(true)
 
     await chooseTarget('全班')
     await chooseSubject('國語')

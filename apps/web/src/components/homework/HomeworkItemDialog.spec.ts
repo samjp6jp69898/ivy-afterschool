@@ -115,6 +115,9 @@ describe('HomeworkItemDialog', () => {
     expect(dialog().attributes('style')).toContain('420px')
     expect(titleInput().attributes('placeholder')).toBe('例如：數學習作 p.12-13')
     expect(titleInput().attributes('maxlength')).toBe('100')
+    // 內容必填且有字數計數
+    expect(formItem('內容').classes()).toContain('is-required')
+    expect(formItem('內容').find('.el-input__count').exists()).toBe(true)
 
     await chooseSubject('數學')
     await titleInput().setValue(' 數學習作 p.12-13 ')
