@@ -228,6 +228,9 @@ describe('LoginView', () => {
     expect(passwordInput(wrapper).attributes('disabled')).toBeDefined()
 
     await submit(wrapper)
+    // 送出鈕已停用；直接對表單派發 submit 也不會重送
+    wrapper.find('form').element.dispatchEvent(new Event('submit', { cancelable: true }))
+    await settle()
     expect(mock.history.post.length).toBe(1)
   })
 
