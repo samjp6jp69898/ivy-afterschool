@@ -3,6 +3,8 @@
 - BACKEND-347：``list_leaves``（後台列表，篩選 + 分頁）。
 - BACKEND-350：``get_attachment_url``（後台簽發附件短效 URL）。
 - BACKEND-348：``list_child_leaves``（家長端小孩請假列表，附件短效 URL；呼叫端已驗證所有權）。
+- BACKEND-357：``parent_leave_out``（家長端單筆請假組裝；``list_child_leaves`` 與家長取消 endpoint
+  共用）。
 - BACKEND-344：``notify_leave_event``（請假建立 / 取消通知班級負責員工與 leaves:read 員工）。
 - BACKEND-345：``create_leave``（家長 / 員工建立請假；重疊 409、套用出勤、通知）。
 - BACKEND-346：``cancel_leave``（未開始整筆取消、已開始取消剩餘日子；還原出勤、通知）。
@@ -216,48 +218,54 @@ def _signed_url_or_none(storage: Storage, attachment: StudentLeaveAttachment) ->
         return None
 
 
+def parent_leave_out(leave: StudentLeave, *, storage: Storage, clock: Clock) -> ParentLeaveOut:
+    """家長端的單筆請假（不回傳員工姓名），``list_child_leaves`` 與家長取消 endpoint 共用。
+
+    can_cancel = active 且仍有今天或之後的日子（BACKEND-346 取消剩餘日子）。附件各帶短效簽名 URL，
+    單一附件簽名失敗時該筆 url 為 None 並記 warning，不讓整個回應失敗。``leave.attachments`` 是
+    selectin 關聯，這裡不再發 SQL。
+    """
+    today = clock.today()
+    return ParentLeaveOut(
+        id=leave.id,
+        student_id=leave.student_id,
+        leave_type=leave.leave_type,
+        leave_type_label=LEAVE_TYPE_LABELS[leave.leave_type],
+        start_date=leave.start_date,
+        end_date=leave.end_date,
+        reason=leave.reason,
+        status=leave.status,
+        created_by_type=leave.created_by_type,
+        created_at=leave.created_at,
+        cancelled_at=leave.cancelled_at,
+        can_cancel=leave.status == "active" and leave.end_date >= today,
+        attachments=[
+            ParentLeaveAttachmentOut(
+                id=a.id,
+                mime_type=a.mime_type,
+                size_bytes=a.size_bytes,
+                created_at=a.created_at,
+                url=_signed_url_or_none(storage, a),
+            )
+            for a in leave.attachments
+        ],
+    )
+
+
 def list_child_leaves(
     session: Session, student_id: UUID, page: PageParams, *, storage: Storage, clock: Clock
 ) -> Page[ParentLeaveOut]:
     """該學生的請假（含已取消），start_date desc、created_at desc；不回傳員工姓名。
 
-    can_cancel = active 且仍有今天或之後的日子（BACKEND-346 取消剩餘日子）。移植 ivy
-    ``api/parent_portal/leaves.py::list_leaves``。
+    每一筆由 ``parent_leave_out`` 組裝。移植 ivy ``api/parent_portal/leaves.py::list_leaves``。
     """
-    today = clock.today()
     stmt = (
         select(StudentLeave)
         .where(StudentLeave.student_id == student_id)
         .order_by(StudentLeave.start_date.desc(), StudentLeave.created_at.desc(), StudentLeave.id)
     )
     leaves, total = paginate(session, stmt, page)
-    items = [
-        ParentLeaveOut(
-            id=leave.id,
-            student_id=leave.student_id,
-            leave_type=leave.leave_type,
-            leave_type_label=LEAVE_TYPE_LABELS[leave.leave_type],
-            start_date=leave.start_date,
-            end_date=leave.end_date,
-            reason=leave.reason,
-            status=leave.status,
-            created_by_type=leave.created_by_type,
-            created_at=leave.created_at,
-            cancelled_at=leave.cancelled_at,
-            can_cancel=leave.status == "active" and leave.end_date >= today,
-            attachments=[
-                ParentLeaveAttachmentOut(
-                    id=a.id,
-                    mime_type=a.mime_type,
-                    size_bytes=a.size_bytes,
-                    created_at=a.created_at,
-                    url=_signed_url_or_none(storage, a),
-                )
-                for a in leave.attachments
-            ],
-        )
-        for leave in leaves
-    ]
+    items = [parent_leave_out(leave, storage=storage, clock=clock) for leave in leaves]
     return Page(items=items, total=total)
 
 
