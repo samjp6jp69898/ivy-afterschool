@@ -18,6 +18,9 @@
   同一 404）→ 200。
 - BACKEND-443 ``POST /pickup/requests/{request_id}/cancel``：body ``PickupCancelIn`` 可省略 →
   BACKEND-411 → 200。
+- BACKEND-524 ``POST /pickup-authorizations/{auth_id}/regenerate-code``：BACKEND-523（舊碼立即失效、
+  重設連錯與鎖定；他人的授權與不存在同一 404）→ 200，新接送碼只在此回應出現一次，回應帶
+  ``Cache-Control: no-store``。
 """
 
 from __future__ import annotations
@@ -38,6 +41,7 @@ from app.api.deps import (
 )
 from app.core.clock import Clock, get_clock
 from app.core.db import get_db
+from app.core.request_meta import RequestMeta, get_request_meta
 from app.core.storage import Storage, get_storage
 from app.models.students import Student
 from app.schemas.pickup import (
@@ -149,6 +153,24 @@ def create_authorization(
     out = authorizations.create_authorization(db, student.id, body, parent=parent, clock=clock)
     db.commit()
     # 接送碼明碼只回一次：禁止任何快取
+    response.headers["Cache-Control"] = "no-store"
+    return out
+
+
+@router.post(
+    "/pickup-authorizations/{auth_id}/regenerate-code", response_model=PickupAuthorizationCreatedOut
+)
+def regenerate_authorization_code(
+    auth_id: UUID,
+    response: Response,
+    parent: Annotated[CurrentParent, Depends(get_current_parent)],
+    meta: Annotated[RequestMeta, Depends(get_request_meta)],
+    db: Annotated[Session, Depends(get_db)],
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> PickupAuthorizationCreatedOut:
+    out = authorizations.regenerate_code(db, auth_id, parent=parent, meta=meta, clock=clock)
+    db.commit()
+    # 新接送碼明碼只回一次：禁止任何快取
     response.headers["Cache-Control"] = "no-store"
     return out
 
