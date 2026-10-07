@@ -148,7 +148,7 @@ function isSecret(f: FieldNode): boolean {
       <el-select
         v-else-if="f.node.kind === 'enum'"
         class="sf-input"
-        :model-value="valueOf(f)"
+        :model-value="(valueOf(f) as string | number | boolean | undefined)"
         :disabled="readonly"
         @update:model-value="(v) => emit('input', f, v)"
       >

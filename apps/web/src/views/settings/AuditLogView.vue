@@ -4,6 +4,8 @@
 // 篩選列沿用 AdminListToolbar 的版面樣式但不用該元件（本頁沒有關鍵字搜尋）。
 // 下拉的「全部」用哨兵值（EP 的 el-select 把 '' 當成未選而顯示 placeholder），寫入 filters 時轉成 ''，
 // usePagedList 送出前會去掉空值。日期區間一定有值（不可清空），避免一次撈全部。
+// el-table-column 是泛型元件，slot 的 row 預設型別是 Record<PropertyKey, any>；
+// 每欄前的 `@vue-generic {AuditLog}` 註解指定泛型，讓 row 是 AuditLog（vue-tsc 專用，不影響執行）。
 import { computed, ref } from 'vue'
 import { listAuditLogs, type AuditActorType, type AuditLog, type AuditLogQuery } from '@/api/auditLogs'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -300,6 +302,7 @@ const showCount = computed(() => !error.value && !(loading.value && !items.value
           row-key="id"
           @row-click="openDiff"
         >
+          <!-- @vue-generic {AuditLog} -->
           <el-table-column
             label="時間"
             width="150"
@@ -308,6 +311,7 @@ const showCount = computed(() => !error.value && !(loading.value && !items.value
               <span class="audit-time">{{ formatDateTime(row.created_at) }}</span>
             </template>
           </el-table-column>
+          <!-- @vue-generic {AuditLog} -->
           <el-table-column
             label="操作者"
             min-width="150"
@@ -326,6 +330,7 @@ const showCount = computed(() => !error.value && !(loading.value && !items.value
               </div>
             </template>
           </el-table-column>
+          <!-- @vue-generic {AuditLog} -->
           <el-table-column
             label="動作"
             min-width="190"
@@ -343,6 +348,7 @@ const showCount = computed(() => !error.value && !(loading.value && !items.value
               </div>
             </template>
           </el-table-column>
+          <!-- @vue-generic {AuditLog} -->
           <el-table-column
             label="對象"
             min-width="170"
@@ -354,6 +360,7 @@ const showCount = computed(() => !error.value && !(loading.value && !items.value
               </div>
             </template>
           </el-table-column>
+          <!-- @vue-generic {AuditLog} -->
           <el-table-column
             label="IP"
             width="130"
@@ -362,6 +369,7 @@ const showCount = computed(() => !error.value && !(loading.value && !items.value
               <span class="audit-ip audit-mono">{{ row.ip || '—' }}</span>
             </template>
           </el-table-column>
+          <!-- @vue-generic {AuditLog} -->
           <el-table-column
             label=""
             width="72"
