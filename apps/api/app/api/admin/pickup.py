@@ -19,6 +19,10 @@
   pickup:override，由 service 檢查回 403；override 寫 audit）→ commit → ``PickupRequestOut``。
 - BACKEND-434 ``POST /pickup/requests/{request_id}/cancel``：pickup:operate；``PickupCancelIn`` 可
   省略 → BACKEND-411（終態 409；家長發起者通知該家長）→ commit → ``PickupRequestOut``。
+- BACKEND-437 ``POST /pickup/authorizations/{auth_id}/verify``：pickup:operate；``VerifyCodeIn`` →
+  BACKEND-426 ``verify_code`` → **一律先 commit**（錯碼累計與鎖定要落地）→ 正確碼 200
+  ``AuthorizationCompleteOut``；錯碼 400 ``pickup_code_mismatch``（details remaining_attempts）、
+  第 5 次錯碼 409 ``pickup_code_locked``。已鎖定 / 非 active / 非今天由 service 在寫入前拋 409。
 """
 
 from __future__ import annotations
@@ -33,10 +37,12 @@ from app.api.admin._query import query_model
 from app.api.deps import CurrentStaff, require_permission
 from app.core.clock import Clock, get_clock
 from app.core.db import get_db
+from app.core.errors import AppError, ConflictError
 from app.core.permissions import Permission
 from app.core.request_meta import RequestMeta, get_request_meta
 from app.core.storage import Storage, get_storage
 from app.schemas.pickup import (
+    AuthorizationCompleteOut,
     PickupCancelIn,
     PickupCompleteIn,
     PickupQueueOut,
@@ -48,6 +54,7 @@ from app.schemas.pickup import (
     StaffAuthorizationListQuery,
     StaffAuthorizationOut,
     StaffPickupRequestCreateIn,
+    VerifyCodeIn,
 )
 from app.services.audit_service import Actor
 from app.services.pickup import authorizations as authorization_service
@@ -158,3 +165,22 @@ def cancel_request(
     out = build_request_views(db, [request])[0]
     db.commit()
     return out
+
+
+@router.post("/authorizations/{auth_id}/verify", response_model=AuthorizationCompleteOut)
+def verify_authorization_code(
+    auth_id: UUID, body: VerifyCodeIn, staff: PickupOperate, db: Db, clock: ClockDep
+) -> AuthorizationCompleteOut:
+    outcome = authorization_service.verify_code(db, auth_id, body.code, actor=staff, clock=clock)
+    # 錯碼也先 commit 再回錯誤：例外會讓 get_db rollback，連錯累計與鎖定就不會落地
+    db.commit()
+    if outcome.result is not None:
+        return outcome.result
+    if outcome.locked:
+        raise ConflictError("pickup_code_locked", "接送碼錯誤次數過多已鎖定，請由老師確認後處理")
+    raise AppError(
+        "pickup_code_mismatch",
+        "接送碼不正確",
+        status=400,
+        details={"remaining_attempts": outcome.remaining_attempts},
+    )
