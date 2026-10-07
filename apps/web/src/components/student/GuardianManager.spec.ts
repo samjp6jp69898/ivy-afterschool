@@ -45,6 +45,8 @@ const UNBOUND: Guardian = {
   binding: { status: 'unbound', parent_display_name: null, code_expires_at: null },
 }
 const ISSUED = { guardian_id: 'g3', code: 'K7M2Q9XP', expires_at: '2026-10-09T08:00:00Z' }
+/** 監護人已被他人刪除（BACKEND guardian_not_found） */
+const NOT_FOUND = { error: { code: 'guardian_not_found', message: '找不到監護人', details: null } }
 
 const WRITER = ['students:read', 'guardians:write']
 const READER = ['students:read']
@@ -431,6 +433,72 @@ describe('GuardianManager', () => {
     expect(document.body.textContent).toContain('此監護人尚未綁定家長帳號')
     expect(wrapper.emitted('change')).toBeUndefined()
     expect(listRequests()).toBe(2)
+  })
+
+  it('GuardianManager reloads after delete conflict', async () => {
+    mock.onGet(LIST_URL).reply(200, [BOUND, UNBOUND])
+    mock.onDelete('/admin/guardians/g1').reply(404, NOT_FOUND)
+    const wrapper = await mountManager()
+
+    await clickIn(card(wrapper, '王大明'), '刪除')
+    await clickInMessageBox('刪除')
+
+    expect(mock.history.delete.map((c) => c.url)).toEqual(['/admin/guardians/g1'])
+    expect(document.body.textContent).toContain('找不到監護人')
+    expect(listRequests()).toBe(2)
+    expect(wrapper.emitted('change')).toBeUndefined()
+  })
+
+  it('GuardianManager reloads after binding code 404', async () => {
+    mock.onGet(LIST_URL).reply(200, [BOUND, UNBOUND])
+    mock.onPost('/admin/guardians/g3/binding-code').reply(404, NOT_FOUND)
+    const wrapper = await mountManager()
+
+    await clickIn(card(wrapper, '王阿嬤'), '產生綁定碼')
+
+    expect(document.body.textContent).toContain('找不到監護人')
+    expect(document.body.querySelector('[data-test=binding-code]')).toBeNull()
+    expect(listRequests()).toBe(2)
+    expect(wrapper.emitted('change')).toBeUndefined()
+  })
+
+  it('GuardianManager reloads after unbind 404', async () => {
+    mock.onGet(LIST_URL).reply(200, [BOUND])
+    mock.onPost('/admin/guardians/g1/unbind').reply(404, NOT_FOUND)
+    const wrapper = await mountManager()
+
+    await clickIn(card(wrapper, '王大明'), '解除綁定')
+    await clickInMessageBox('解除綁定')
+
+    expect(mock.history.post.map((c) => c.url)).toEqual(['/admin/guardians/g1/unbind'])
+    expect(document.body.textContent).toContain('找不到監護人')
+    expect(listRequests()).toBe(2)
+    expect(wrapper.emitted('change')).toBeUndefined()
+  })
+
+  it('GuardianManager keeps requesting student in late binding code dialog', async () => {
+    mock.onGet(LIST_URL).reply(200, [BOUND, UNBOUND])
+    mock.onGet('/admin/students/s2/guardians').reply(200, [{ ...CODE_ISSUED, student_id: 's2' }])
+    let release: () => void = () => undefined
+    mock.onPost('/admin/guardians/g3/binding-code').reply(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve([200, ISSUED])
+        }),
+    )
+    const wrapper = await mountManager()
+
+    await clickIn(card(wrapper, '王阿嬤'), '產生綁定碼')
+    // 請求還沒回來就切到另一位學生
+    await wrapper.setProps({ studentId: 's2', studentName: '陳小美' })
+    await settle()
+    release()
+    await settle()
+
+    const dialog = dialogByTitle('家長綁定碼')
+    expect(dialog.find('[data-test=binding-code]').text()).toBe('K7M2-Q9XP')
+    expect(dialog.text()).toContain('請 王阿嬤 在 LINE 開啟家長端，輸入此綁定碼即可綁定 王小明。')
+    expect(dialog.text()).not.toContain('陳小美')
   })
 
   it('GuardianManager shows initial guardians before loading latest', async () => {
