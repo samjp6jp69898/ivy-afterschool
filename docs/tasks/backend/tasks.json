@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 397,
-  "last_updated": "2026-10-07T07:43:26Z",
+  "version": 398,
+  "last_updated": "2026-10-07T07:45:46Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -11032,7 +11032,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:services/pickup_verification.py::verify_pickup_code",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9d",
       "depends_on": [
         "BACKEND-424",
@@ -11052,7 +11052,8 @@
           "test_verify_code_mismatch_counts：輸入 '000000' → ok False、remaining_attempts == 4、locked False；DB code_attempts == 1",
           "test_verify_code_locks_on_fifth：code_attempts=4 再錯一次 → locked True、remaining 0、code_locked_at == fake_clock.now()",
           "test_verify_code_locked_rejects_correct：code_attempts=5 → 輸入正確碼 → AppError 409 'pickup_code_locked'，授權仍 active",
-          "test_verify_code_concurrent_attempts：committing session 6 條連線同時以錯碼 verify 並各自 commit → 最終 code_attempts == 5、code_locked_at 非 null，回傳 locked=True 的 outcome 恰 1 個、其餘為 locked False 或 409 pickup_code_locked"
+          "test_verify_code_concurrent_attempts：committing session 6 條連線同時以錯碼 verify 並各自 commit → 最終 code_attempts == 5、code_locked_at 非 null，回傳 locked=True 的 outcome 恰 1 個、其餘為 locked False 或 409 pickup_code_locked",
+          "test_verify_code_concurrent_attempts_without_row_lock：monkeypatch load_verifiable_authorization 為不帶 FOR UPDATE 的載入（模擬未來路徑漏鎖），code_attempts=4 的授權、兩條 committing 連線都讀到舊值後同時錯碼 → 恰一個 locked=True 的 outcome、另一個 409 pickup_code_locked；DB code_attempts == 5、code_locked_at == fake_clock.now()（單一語句 WHERE code_locked_at IS NULL 守衛；改成 ORM 讀改寫或拿掉 WHERE 守衛必須轉紅）"
         ],
         "run": "just test-int apps/api/tests/integration/services/pickup/test_pickup_authorizations.py -k \"test_verify_code_\"",
         "notes": ""
