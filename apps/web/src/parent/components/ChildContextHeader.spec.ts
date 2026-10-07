@@ -211,6 +211,19 @@ describe('ChildContextHeader', () => {
     expect(dialog()).toBeNull()
   })
 
+  it('ChildContextHeader closes the sheet when it no longer has several children', async () => {
+    const wrapper = mountHeader([MING, HUA], 's1')
+    await wrapper.get('.cch').trigger('click')
+    expect(dialog()).not.toBeNull()
+
+    // 解除綁定後只剩一位：sheet 隨之關閉，之後清單變多也不會自己重新打開
+    await wrapper.setProps({ children: [MING] })
+    expect(dialog()).toBeNull()
+    await wrapper.setProps({ children: [MING, HUA] })
+    expect(dialog()).toBeNull()
+    expect(wrapper.get('.cch').element.tagName).toBe('BUTTON')
+  })
+
   it('ChildContextHeader card follows selectedId', async () => {
     const wrapper = mountHeader([MING, HUA], 's1')
 
