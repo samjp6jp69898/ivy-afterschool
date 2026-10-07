@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 153,
-  "last_updated": "2026-10-07T10:58:07Z",
+  "version": 154,
+  "last_updated": "2026-10-07T11:02:54Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -907,7 +907,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/layout/NotificationBell.vue",
       "source_ref": "FE:src/components/layout/AdminNotificationBell.vue::default",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r9d",
       "depends_on": [
         "FRONTEND-034",
