@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 432,
-  "last_updated": "2026-10-07T10:45:01Z",
+  "version": 433,
+  "last_updated": "2026-10-07T10:45:42Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10930,7 +10930,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:api/parent_portal/pickup.py::cancel_authorization",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9d",
       "depends_on": [
         "BACKEND-401",
@@ -10951,7 +10951,8 @@
           "test_cancel_authorization：active → status 'cancelled'",
           "test_cancel_authorization_not_active：completed → 409 'authorization_not_active'",
           "test_cancel_authorization_idor：家長 A 取消家長 B 的授權 → 404 'pickup_authorization_not_found'；uuid4() → 相同",
-          "test_cancel_authorization_race_with_verify：committing session，連線 1 以 verify_code 核銷（未 commit）、連線 2 取消 → 連線 1 commit 後連線 2 得到 409 'authorization_not_active'"
+          "test_cancel_authorization_race_with_verify：committing session，連線 1 以 verify_code 核銷（未 commit）、連線 2 取消 → 連線 1 commit 後連線 2 得到 409 'authorization_not_active'",
+          "test_cancel_authorization_race_with_verify_reverse：committing session，連線 1 取消（未 commit）、連線 2 以正確碼 verify_code → 連線 2 在 FOR UPDATE 等待，連線 1 commit 後得到 409 authorization_not_active；授權 cancelled、verified_at None、沒有建立請求與通知（拿掉 load_verifiable_authorization 的 FOR UPDATE 必須轉紅）"
         ],
         "run": "just test-int apps/api/tests/integration/services/pickup/test_pickup_authorizations.py -k \"test_cancel_authorization\"",
         "notes": ""
