@@ -1,7 +1,7 @@
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, nextTick } from 'vue'
 import { useAdminWsStore, type Topic } from '@/stores/adminWs'
 import { useAdminWsTopic } from './useAdminWsTopic'
 
@@ -122,14 +122,16 @@ describe('useAdminWsTopic', () => {
     expect(socket.sent).toHaveLength(2)
   })
 
-  it('useAdminWsTopic exposes connection status', () => {
+  it('useAdminWsTopic exposes connection status', async () => {
     const store = useAdminWsStore()
     store.start()
     const { wrapper, result } = mountTopic('pickup')
 
     expect(result.status.value).toBe('connecting')
+    expect(wrapper.text()).toBe('connecting')
     lastSocket().serverOpen()
     expect(result.status.value).toBe('open')
+    await nextTick()
     expect(wrapper.text()).toBe('open')
     // 尚未 open 時送不出去，open 時由 store 補送
     expect(sentMessages(lastSocket())).toEqual([{ action: 'subscribe', topics: ['pickup'] }])
@@ -216,7 +218,7 @@ describe('useAdminWsTopic', () => {
     expect(resync).toHaveBeenCalledTimes(3)
   })
 
-  it('useAdminWsTopic exposes denied flag', () => {
+  it('useAdminWsTopic exposes denied flag', async () => {
     startOpen()
     const attendance = mountTopic('attendance')
     const pickup = mountTopic('pickup')
@@ -225,6 +227,7 @@ describe('useAdminWsTopic', () => {
     lastSocket().serverMessage({ type: 'error', code: 'permission_denied', topics: ['attendance'] })
 
     expect(attendance.result.denied.value).toBe(true)
+    await nextTick()
     expect(attendance.wrapper.text()).toBe('denied')
     expect(pickup.result.denied.value).toBe(false)
     expect(pickup.wrapper.text()).toBe('open')
