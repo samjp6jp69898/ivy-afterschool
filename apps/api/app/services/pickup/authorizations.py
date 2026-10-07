@@ -7,19 +7,22 @@
 - BACKEND-523：``regenerate_code``（家長重新產生接送碼：舊碼立即失效、重設連錯與鎖定、寫 audit）。
 - BACKEND-425：``complete_via_authorization``（核銷後完成授權與接送請求、出勤改 left、通知家長）。
   鎖序：授權列（BACKEND-424 已鎖）→ 請求列 → 出勤列。
+- BACKEND-426：``verify_code``（核對接送碼；錯碼以單一語句原子累計，連錯 5 次鎖定、不自動解鎖）。
 
-列表只回 ``code_last4``，不回 ``code_hash``（單向 HMAC）；明碼只在建立時的回應出現一次，DB 與 log
-都不保存。``effective_status``：active 且 service_date 早於今天（台北）→ ``expired``，其餘同
-status。
+列表只回 ``code_last4``，不回 ``code_hash``（單向 HMAC）；明碼只在建立時的回應出現一次，DB、log
+與例外訊息都不保存。``effective_status``：active 且 service_date 早於今天（台北）→ ``expired``，
+其餘同 status。
 """
 
 from __future__ import annotations
 
+import logging
+from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Literal
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentParent, CurrentStaff
@@ -49,11 +52,19 @@ from app.schemas.pickup import (
 from app.services.attendance_service import mark_left_by_pickup
 from app.services.audit_service import Actor, record
 from app.services.parent_scope import get_parent_student_ids
-from app.services.pickup.codes import generate_pickup_code, hash_pickup_code, pickup_code_last4
+from app.services.pickup.codes import (
+    PICKUP_CODE_MAX_ATTEMPTS,
+    generate_pickup_code,
+    hash_pickup_code,
+    pickup_code_last4,
+    pickup_code_matches,
+)
 from app.services.pickup.persons import signed_photo_url
 from app.services.pickup.transitions import transition_request
 from app.services.pickup.views import build_request_views, publish_request_change
 from app.services.settings_service import get_setting
+
+logger = logging.getLogger(__name__)
 
 CHILD_LIST_WINDOW_DAYS = 30
 
@@ -464,3 +475,73 @@ def complete_via_authorization(
     )
     [request_out] = build_request_views(session, [request])
     return AuthorizationCompleteOut(authorization=authorization, request=request_out)
+
+
+@dataclass(frozen=True)
+class VerifyOutcome:
+    """``verify_code`` 的結果。錯碼不拋例外：endpoint（BACKEND-437）先 commit 讓累計落地再回
+    400 / 409，否則 get_db 的 rollback 會讓連錯上限形同失效。"""
+
+    ok: bool
+    result: AuthorizationCompleteOut | None
+    remaining_attempts: int
+    locked: bool
+
+
+def verify_code(
+    session: Session, auth_id: UUID, raw_code: str, *, actor: CurrentStaff, clock: Clock
+) -> VerifyOutcome:
+    """核對接送碼：正確 → 以 'code' 核銷；錯誤 → 單一語句原子累計 code_attempts，第 5 次寫入
+    code_locked_at（之後即使正確碼也 409 pickup_code_locked，不自動解鎖）。
+
+    移植 ivy ``services/pickup_verification.py::verify_pickup_code``；ivy 的 ORM 讀改寫累計改為
+    ``UPDATE ... SET code_attempts = code_attempts + 1 WHERE code_locked_at IS NULL``：授權列已被
+    BACKEND-424 FOR UPDATE 序列化，即使未來有路徑漏鎖，WHERE 守衛也保證 code_attempts 不超過 5、
+    鎖定後不會再被核銷。明碼不進 log 與例外訊息。
+    """
+    auth = load_verifiable_authorization(session, auth_id, clock=clock)
+    if pickup_code_matches(raw_code, auth.code_hash):
+        result = complete_via_authorization(session, auth, "code", actor=actor, clock=clock)
+        return VerifyOutcome(
+            ok=True,
+            result=result,
+            remaining_attempts=PICKUP_CODE_MAX_ATTEMPTS - auth.code_attempts,
+            locked=False,
+        )
+
+    next_attempts = PickupAuthorization.code_attempts + 1
+    attempts = session.execute(
+        update(PickupAuthorization)
+        .where(
+            PickupAuthorization.id == auth.id,
+            PickupAuthorization.code_locked_at.is_(None),
+            PickupAuthorization.status == "active",
+        )
+        .values(
+            code_attempts=next_attempts,
+            code_locked_at=case((next_attempts >= PICKUP_CODE_MAX_ATTEMPTS, clock.now())),
+        )
+        .returning(PickupAuthorization.code_attempts)
+        .execution_options(synchronize_session=False)
+    ).scalar_one_or_none()
+    # bulk update 不經 ORM：同 session 之後讀到的授權屬性以 DB 現值為準
+    session.expire(auth)
+    if attempts is None:
+        # 持有 FOR UPDATE 時不會發生：授權在載入後被另一個交易鎖定或結束
+        if auth.status != "active":
+            raise ConflictError(
+                "authorization_not_active",
+                "此代理接送授權已完成或已取消",
+                details={"status": auth.status},
+            )
+        raise ConflictError("pickup_code_locked", "接送碼錯誤次數過多已鎖定，請由老師確認後處理")
+
+    locked = attempts >= PICKUP_CODE_MAX_ATTEMPTS
+    if locked:
+        logger.warning("代理接送授權 %s 接送碼連錯 %d 次，已鎖定", auth_id, attempts)
+    return VerifyOutcome(
+        ok=False,
+        result=None,
+        remaining_attempts=PICKUP_CODE_MAX_ATTEMPTS - attempts,
+        locked=locked,
+    )
