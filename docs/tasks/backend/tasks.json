@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 437,
-  "last_updated": "2026-10-07T10:50:42Z",
+  "version": 438,
+  "last_updated": "2026-10-07T10:51:07Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5723,7 +5723,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::bulk_graduate_students",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-157",
@@ -5740,15 +5740,16 @@
         ],
         "red_cases": [
           "test_admin_promote_preview：POST {'from_academic_year':114} → 200，total == 3，學生 grade 未變",
-          "test_admin_promote_execute：POST {'from_academic_year':114,'dry_run':false,'expected_total':3} → 200 promoted == 2、graduated == 1",
+          "test_admin_promote_execute：POST {'from_academic_year':114,'dry_run':false,'expected_total':3} → 200 {'promoted': 2, 'graduated': 1}；重讀 DB：一年級 2、五年級 6 仍 active、六年級 withdrawn 且 withdrawn_on == 今天、六年級當日 pending 接送請求 cancelled（529 收尾一起 commit）、audit student.promote_grade 1 筆；之後預覽 already_promoted == true",
           "test_admin_promote_422：{'from_academic_year':114,'dry_run':false} → 422",
           "test_admin_promote_401_403：無 cookie → 401；staff_client(permissions=['students:read']) → 403",
           "test_admin_promote_409：執行兩次 → 第二次 409 already_promoted",
           "test_admin_promote_stale：{'from_academic_year':114,'dry_run':false,'expected_total':5}（實際 3）→ 409 preview_stale，error.details == {'expected_total': 5, 'total': 3}，學生 grade 未變、無稽核",
-          "test_admin_promote_invalid_dates：六年級 enrolled_on 晚於今天、withdrawn_on 未給 → 422 invalid_dates，details.students[0].student_no 為該生、details.withdrawn_on == 今天；所有學生未變、無稽核"
+          "test_admin_promote_invalid_dates：六年級 enrolled_on 晚於今天、withdrawn_on 未給 → 422 invalid_dates，details.students[0].student_no 為該生、details.withdrawn_on == 今天；所有學生未變、無稽核",
+          "test_admin_promote_explicit_withdrawn_on：dry_run=false 帶 withdrawn_on=2026-07-31 → 200，六年級 withdrawn_on == 2026-07-31"
         ],
         "run": "just test-int apps/api/tests/integration/api/admin/test_students_endpoints.py -k \"test_admin_promote_\"",
-        "notes": ""
+        "notes": "PromoteGradeIn 的 model_validator 在 dry_run=false 缺 expected_total 時拋 ValueError → 422 validation_error；response_model 為 PromotionPreviewOut | PromotionResultOut 的 union，依 dry_run 回其一。"
       },
       "review": {
         "status": "pending",
@@ -5763,7 +5764,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:utils/excel_io.py::parse_excel",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-155",
@@ -5789,7 +5790,7 @@
           "test_admin_import_413：超過 5 MiB 的上傳 → 413 file_too_large，students 筆數不變"
         ],
         "run": "just test-int apps/api/tests/integration/api/admin/test_students_endpoints.py -k \"test_admin_import_\"",
-        "notes": ""
+        "notes": "multipart：file 經 File()、academic_year 經 Form(ge=100, le=200)、dry_run 經 Form() 預設 true；缺欄位 / 型別錯由 FastAPI 轉成 422 validation_error。read_validated_upload 分塊讀取並在超過 5 MiB 當下 413，之後才交給 service（突變：繞過它直接讀整檔 → PNG 變 422 import_invalid_file、413 案例轉紅）。"
       },
       "review": {
         "status": "pending",
