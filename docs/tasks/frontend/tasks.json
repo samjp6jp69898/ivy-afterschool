@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 134,
-  "last_updated": "2026-10-07T08:28:55Z",
+  "version": 135,
+  "last_updated": "2026-10-07T08:37:32Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -5884,7 +5884,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/shared/http/createHttpClient.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9c",
       "depends_on": [
         "FRONTEND-001"
@@ -5908,9 +5908,9 @@
         "notes": "斷言用自訂 adapter 擷取 transformRequest 後的 config（instance.defaults.adapter），不依賴 axios-mock-adapter 的內部實作；判斷 FormData 用 instanceof FormData。「一般 JSON body」「明確指定 multipart/form-data」「一般 JSON body 401 重試」三條是不變行為的守衛（修正前就綠），靠突變證明有效：FormData 無條件移除 Content-Type → 明確指定那條轉紅；沒有 FormData 判斷（對所有請求移除 JSON Content-Type）→ JSON 重試那條轉紅。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-f",
+        "notes": "pass：5 條 red_case 對應 5 個測試（vitest verbose 清單逐條核對，tdd.run 選到 5 條、略過 19 條），createHttpClient.spec.ts 整檔 24/24 全綠；api/http.spec 9、parent/api/http.spec 6、parent/api/pickupPersons.spec 8、shared/http/upload.spec 6 全綠；lint 乾淨、vue-tsc 無本檔錯誤。commit e1bbbee（測試）→ 22fa46c（第一版）→ a5a6efa（強化測試，對第一版轉紅）→ c440b35（只移除 JSON 標頭）；3cb6313 的 description / red_cases 是最終規格寫法。reviewer 以本專案 axios 1.20.0 實驗 `AxiosHeaders.delete('Content-Type', 'application/json')`：只在標頭「值」含子字串時才刪（`application/json`、`application/json; charset=utf-8` 刪；`multipart/form-data`、`multipart/form-data; boundary=xyz`、`application/x-www-form-urlencoded` 不刪；鍵名不分大小寫：`content-type` / `CONTENT-TYPE` 都刪；值分大小寫：`Application/JSON` 不刪，而 axios transformRequest 判斷 JSON 同樣是 `indexOf('application/json')`，所以 `Application/JSON` 也不會被序列化成 JSON，兩邊條件一致；`Accept: application/json` 不受影響）。不用 `setContentType(undefined)` 的理由成立：index.d.ts 的 `ContentType = AxiosHeaderValue | 字面值聯集`，`AxiosHeaderValue = AxiosHeaders | string | string[] | number | boolean | null`，無 undefined。完整管線（node）：攔截器移除後 transformRequest 保留 FormData；dispatchRequest 對 post / put / patch 補上 `application/x-www-form-urlencoded` 預設（這是測試用擷取 adapter 看到的值），瀏覽器 xhr / fetch adapter 的 resolveConfig 在 hasStandardBrowserEnv 下對 FormData 一律 `setContentType(undefined)`，由瀏覽器帶 multipart boundary；明確指定的 `multipart/form-data` 被攔截器原樣保留、再由 resolveConfig 清掉（與 parent/api/pickupPersons.ts 的註解一致）；GET blob 不帶 body、標頭不動；FormData + responseType blob 仍是 FormData。adminHttp（api/http.ts）與 parentHttp（parent/api/http.ts）都經 createHttpClient 建立。突變（皆轉紅後還原）：拿掉修正 → 「保持 FormData」「401 重試後檔案仍在」紅；拿掉 FormData 判斷（對所有請求移除）→ 「JSON body 401 重試後仍是 JSON」紅；移除錯的標頭（Accept）→ 兩條 FormData 測試紅；無條件 `delete('Content-Type')` → 「明確指定 multipart/form-data」紅。殘留（不打回）：測試 adapter 看到 FormData 請求的 Content-Type 是 `application/x-www-form-urlencoded`（dispatchRequest 預設、瀏覽器 adapter 會清掉），測試只斷言「不是 application/json」是正確的寫法；shared/http/upload.ts 的 buildFormData 不自設 Content-Type，直接依賴本行為。"
       }
     },
     {
@@ -5920,7 +5920,7 @@
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/settings/AuditLogView.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9c",
       "depends_on": [
         "FRONTEND-072",
@@ -5939,9 +5939,9 @@
         "notes": "純型別修正，驗收以指令為準：①修正前 `just web-typecheck` 輸出含 AuditLogView.vue 7 個與 JsonSchemaFields.vue 1 個 error（紅）；②修正後輸出不再含這兩個檔案的任何 error（綠；PARENT 區的 PickupPersonForm.spec.ts 由 PARENT-191 處理，全專案歸零以兩者皆完成為準）；③`just web-test src/views/settings/AuditLogView.spec.ts -t \"AuditLogView\"` 與 `just web-test src/components/settings/JsonSchemaForm.spec.ts -t \"JsonSchemaForm\"` 全綠且斷言不變；④`git diff` 只有型別層改動（沒有 template 結構、class、文字的變動），並用 `just web-lint <兩個檔>` 確認乾淨。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-f",
+        "notes": "pass：tdd.notes 四條逐一實跑——① 修正前基準（reviewer 在 1930ea5 自跑）`just web-typecheck` 8 個 error（AuditLogView 7、JsonSchemaFields 1）；修正後 exit 0、error 0 行；② AuditLogView.spec 16/16、JsonSchemaForm.spec 19/19 全綠，2a3475a 未動任何 spec 檔，測試名稱與斷言與修正前完全相同；③ 兩檔 `just web-lint` 乾淨；④ `git diff 2a3475a^ 2a3475a` 只有 AuditLogView.vue 的 2 行 script 註解 + 6 個 `<!-- @vue-generic {AuditLog} -->` 與 JsonSchemaFields.vue 的一處括號型別斷言，沒有 template 結構 / class / 文字變動，沒有 @ts-ignore / @ts-expect-error / any。反例（scratchpad 複本 + symlink node_modules，未動 repo）：保留 `@vue-generic` 但拿掉 slot 參數型別註記、改用 `row.no_such_prop_r9f` → vue-tsc 報 TS2339 Property 'no_such_prop_r9f' does not exist on type 'AuditLog'；再拿掉 `@vue-generic` → 零錯誤（row 退回 Record<PropertyKey, any>），證明註解確實讓 row 成為 AuditLog。DOM 探針（vitest，未留檔）：`.hidden-columns` 有 8 個 childNodes = 6 個欄位元素 + 2 個 fragment 文字錨點、comment node 0 個；表頭順序 ['時間','操作者','動作','對象','IP','']、首列 6 格內容正確。以 vue/compiler-sfc 在 NODE_ENV 未設 / test / development / production、isProd true / false 編譯本檔模板：輸出都不含 `@vue-generic`（HTML 註解在各模式都被 SFC 編譯器移除），所以 risk_notes 所說「開發模式（含 vitest）每個註解會在 .hidden-columns 多一個 comment node」實測不成立，無任何 DOM 影響；即使日後開啟 compilerOptions.comments，Element Plus 2.14.7 以 `Array.prototype.indexOf.call(hiddenColumns.children, el)`（HTMLCollection 不含 comment）計算欄位索引，順序仍不受影響。殘留（不打回）：risk_notes 那句 comment node 敘述與實測不符，下次編輯該 task 時可刪去；`(valueOf(f) as string | number | boolean | undefined)` 是對 unknown 的純型別斷言、無執行期守衛，對 el-select 的 model-value 綁定足夠。"
       }
     }
   ]
