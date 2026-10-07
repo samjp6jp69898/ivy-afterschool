@@ -3,8 +3,9 @@
 // 移植 ivy FE:src/components/student/GuardianManager.vue 的清單 + 新增 / 編輯 dialog + 刪除確認 + 綁定碼 dialog + 主要聯絡人標示；
 // 去掉 device setup code、revoke devices、custody note、緊急聯絡人、sort_order。窄面板改用卡片列。
 // - initial 有值先顯示，掛載後（與切換學生時）仍向後端取最新清單；任一寫入成功後 emit change 並重新載入
-//   （主要聯絡人互斥由後端處理，以重新載入反映）。409 / 404 表示畫面過時，顯示後端訊息後也重新載入。
+//   （主要聯絡人互斥由後端處理，以重新載入反映）。產生、解除綁定、刪除回 409 / 404 表示畫面過時，顯示後端訊息後也重新載入。
 // - 綁定碼只在 dialog 開著時保留；dialog 一關就清掉，BindingCodeDialog 同時以 v-if 移除內容。
+//   dialog 的監護人與學生姓名取送出請求當下的值：請求中切換學生、回應晚到時，碼仍屬於原學生。
 import { Phone, Plus, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, ref, watch } from 'vue'
@@ -43,6 +44,7 @@ interface IssuedCode {
   code: string
   expiresAt: string
   guardianName: string
+  studentName: string
 }
 
 const auth = useAuthStore()
@@ -98,10 +100,14 @@ function afterWrite(): void {
   void load()
 }
 
-/** 409 / 404：資料已被別人改過，顯示後端訊息並重新載入 */
+/** 409 / 404：資料已被別人改過，畫面需要重新載入 */
+function isStale(err: unknown): boolean {
+  return isApiError(err) && (err.status === 409 || err.status === 404)
+}
+
 function onWriteError(err: unknown, fallback: string): void {
   ElMessage.error(errorMessage(err, fallback))
-  if (isApiError(err) && (err.status === 409 || err.status === 404)) void load()
+  if (isStale(err)) void load()
 }
 
 function openForm(g?: Guardian): void {
@@ -121,10 +127,11 @@ async function issueCode(g: Guardian): Promise<void> {
       return
     }
   }
+  const studentName = props.studentName
   busy.value = true
   try {
     const result = await issueBindingCode(g.id)
-    issued.value = { code: result.code, expiresAt: result.expires_at, guardianName: g.name }
+    issued.value = { code: result.code, expiresAt: result.expires_at, guardianName: g.name, studentName }
     afterWrite()
   } catch (err) {
     onWriteError(err, '產生綁定碼失敗，請稍後再試')
@@ -161,7 +168,12 @@ async function unbind(g: Guardian): Promise<void> {
 }
 
 const { confirmDelete, deleting } = useConfirmDelete<Guardian>({
-  request: (g) => deleteGuardian(g.id),
+  // 失敗訊息由 useConfirmDelete 顯示；409 / 404 另外重新載入
+  request: (g) =>
+    deleteGuardian(g.id).catch((err: unknown) => {
+      if (isStale(err)) void load()
+      throw err
+    }),
   confirmMessage: (g) =>
     `確定要刪除 ${g.name} 嗎？${
       g.binding.status === 'bound' ? '此監護人已綁定家長帳號，刪除後家長將無法再看到此學生。' : ''
@@ -322,7 +334,7 @@ const { confirmDelete, deleting } = useConfirmDelete<Guardian>({
       :code="issued?.code ?? ''"
       :expires-at="issued?.expiresAt ?? ''"
       :guardian-name="issued?.guardianName ?? ''"
-      :student-name="studentName"
+      :student-name="issued?.studentName ?? ''"
       @update:model-value="onBindingDialog"
     />
   </div>
