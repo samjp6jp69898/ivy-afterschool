@@ -10,6 +10,7 @@
 - BACKEND-375：``recompute_progress``（項目異動後重算整體進度；轉 done 觸發 handle_homework_done）。
 - BACKEND-381：``set_overall_status``（員工手動標整體完成 / 改回由項目推導）。
 - BACKEND-377：``create_item``（新增單一學生作業項目並重算進度）。
+- BACKEND-378：``batch_create_items``（整班批次新增同一份作業，依 student_id 排序鎖進度列）。
 
 鎖序一律「進度列 → 請求列」：寫入方法先 ``lock_progress_row``，之後才可能由 sync_open_request_reply
 鎖接送請求（與 BACKEND-407 / 413 一致）。項目寫入（新增 / 修改 / 刪除）是先寫項目列、再由
@@ -24,7 +25,7 @@ from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any, Final, Literal
 from uuid import UUID
 
-from sqlalchemy import event, select
+from sqlalchemy import event, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session, SessionTransaction
 
@@ -41,13 +42,19 @@ from app.notifications.events import Event
 from app.notifications.recipients import parent_recipients
 from app.notifications.service import enqueue
 from app.realtime.publish import broadcast_after_commit
-from app.repositories.students import get_student_or_404
+from app.repositories.students import (
+    get_class_or_404,
+    get_student_or_404,
+    list_active_student_ids,
+)
 from app.schemas.homework import (
     BoardOut,
     BoardQuery,
     BoardStudentOut,
     BoardSummaryOut,
     BoardWindowOut,
+    HomeworkBatchCreateIn,
+    HomeworkBatchOut,
     HomeworkItemCreateIn,
     HomeworkItemOut,
     HomeworkMutationOut,
@@ -558,3 +565,64 @@ def create_item(
     return HomeworkMutationOut(
         item=_item_out(item), progress=_progress_view(session, change.progress)
     )
+
+
+def batch_create_items(
+    session: Session, data: HomeworkBatchCreateIn, *, actor: CurrentStaff, clock: Clock
+) -> HomeworkBatchOut:
+    """整班（或班內指定的學生）各新增一個相同的作業項目，逐生重算整體進度。
+
+    對象是班級內在學（active、未封存）的學生；給了 student_ids 時，任何一個不是該班在學學生
+    （含他班、暫停、退班、不存在）都整批拒絕，不會默默略過。每位學生的 sort_order 接在該生當天
+    現有項目之後（一次查詢取得各生最大值）。項目全部寫入後，依 student_id 排序逐一
+    ``recompute_progress``：批次鎖進度列一律依主鍵排序，與其他批次交易不會互等成環。回傳的
+    items 依班級內的學號順序。
+    """
+    get_class_or_404(session, data.class_id)
+    subject = _require_active_subject(session, data.subject_id)
+    service_date = data.service_date or clock.today()
+    check_service_date(session, service_date, clock=clock)
+
+    in_class = list_active_student_ids(session, class_id=data.class_id)
+    if data.student_ids is None:
+        targets = in_class
+    else:
+        active = set(in_class)
+        outside = [student_id for student_id in data.student_ids if student_id not in active]
+        if outside:
+            raise AppError(
+                "student_not_in_class",
+                "指定的學生不是這個班級的在學學生",
+                status=422,
+                details={"student_ids": outside},
+            )
+        wanted = set(data.student_ids)
+        targets = [student_id for student_id in in_class if student_id in wanted]
+    if not targets:
+        raise AppError("no_students", "這個班級沒有可新增作業的在學學生", status=422)
+
+    top_sort_order = {
+        student_id: top
+        for student_id, top in session.execute(
+            select(HomeworkItem.student_id, func.max(HomeworkItem.sort_order))
+            .where(HomeworkItem.student_id.in_(targets), HomeworkItem.service_date == service_date)
+            .group_by(HomeworkItem.student_id)
+        )
+    }
+    items = [
+        HomeworkItem(
+            student_id=student_id,
+            service_date=service_date,
+            subject=subject,
+            title=data.title,
+            status="todo",
+            sort_order=top_sort_order[student_id] + 1 if student_id in top_sort_order else 0,
+            updated_by=actor.id,
+        )
+        for student_id in targets
+    ]
+    session.add_all(items)
+    session.flush()
+    for student_id in sorted(targets):
+        recompute_progress(session, student_id, service_date, clock=clock)
+    return HomeworkBatchOut(created=len(items), items=[_item_out(item) for item in items])
