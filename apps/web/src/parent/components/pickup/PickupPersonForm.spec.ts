@@ -26,7 +26,8 @@ function mountForm(props: { submitting?: boolean } = {}): VueWrapper {
   return wrapper
 }
 
-function field(w: VueWrapper, label: string): DOMWrapper<HTMLInputElement> {
+// get() 找不到會直接 throw，test-utils 的回傳型別不含 exists()
+function field(w: VueWrapper, label: string): Omit<DOMWrapper<HTMLInputElement>, 'exists'> {
   const lab = w.findAll('label').find((l) => l.text() === label)
   if (!lab) throw new Error(`找不到欄位 ${label}`)
   return w.get<HTMLInputElement>(`#${lab.attributes('for')}`)
