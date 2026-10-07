@@ -12,6 +12,7 @@
 - BACKEND-377：``create_item``（新增單一學生作業項目並重算進度）。
 - BACKEND-378：``batch_create_items``（整班批次新增同一份作業，依 student_id 排序鎖進度列）。
 - BACKEND-379：``update_item``（修改作業項目；先鎖項目列再重算進度）。
+- BACKEND-380：``delete_item``（硬刪除作業項目並重算進度）。
 
 鎖序一律「進度列 → 請求列」：寫入方法先 ``lock_progress_row``，之後才可能由 sync_open_request_reply
 鎖接送請求（與 BACKEND-407 / 413 一致）。項目寫入（新增 / 修改 / 刪除）是先寫項目列、再由
@@ -683,3 +684,20 @@ def update_item(
     return HomeworkMutationOut(
         item=_item_out(item), progress=_progress_view(session, change.progress)
     )
+
+
+def delete_item(
+    session: Session, item_id: UUID, *, actor: CurrentStaff, clock: Clock
+) -> HomeworkMutationOut:
+    """硬刪除作業項目（當日工作資料，不屬於交易紀錄，不留稽核），重算整體進度後回傳最新進度。
+
+    刪掉最後一個未完成項目使其餘全部 done → 轉 done 並通知家長；刪光全部項目 → not_started。
+    與 ``update_item`` 一樣先鎖項目列（同一項目同時被刪除 / 修改時後到者回 404）、再由
+    ``recompute_progress`` 鎖進度列。``actor`` 與其他寫入方法保持相同簽名。
+    """
+    item = _lock_item_or_404(session, item_id)
+    student_id, service_date = item.student_id, item.service_date
+    session.delete(item)
+    session.flush()
+    change = recompute_progress(session, student_id, service_date, clock=clock)
+    return HomeworkMutationOut(item=None, progress=_progress_view(session, change.progress))
