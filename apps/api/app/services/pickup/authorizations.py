@@ -9,6 +9,7 @@
   鎖序：授權列（BACKEND-424 已鎖）→ 請求列 → 出勤列。
 - BACKEND-426：``verify_code``（核對接送碼；錯碼以單一語句原子累計，連錯 5 次鎖定、不自動解鎖）。
 - BACKEND-427：``confirm_visual_match``（員工目視核對後核銷；照片只是輔助，寫 audit）。
+- BACKEND-428：``override_complete``（pickup:override 員工強制完成，鎖定的授權也可；寫 audit）。
 
 列表只回 ``code_last4``，不回 ``code_hash``（單向 HMAC）；明碼只在建立時的回應出現一次，DB、log
 與例外訊息都不保存。``effective_status``：active 且 service_date 早於今天（台北）→ ``expired``，
@@ -28,7 +29,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentParent, CurrentStaff
 from app.core.clock import Clock, to_taipei
-from app.core.errors import AppError, ConflictError, NotFoundError
+from app.core.errors import AppError, ConflictError, ForbiddenError, NotFoundError
+from app.core.permissions import Permission
 from app.core.request_meta import RequestMeta
 from app.core.settings_registry import PICKUP_AUTHORIZATION
 from app.core.storage import Storage
@@ -582,3 +584,39 @@ def confirm_visual_match(
         meta=meta,
     )
     return complete_via_authorization(session, auth, "visual_match", actor=actor, clock=clock)
+
+
+def override_complete(
+    session: Session,
+    auth_id: UUID,
+    note: str,
+    *,
+    actor: CurrentStaff,
+    meta: RequestMeta,
+    clock: Clock,
+) -> AuthorizationCompleteOut:
+    """主管強制完成代理接送（verification_method='override'）：接送碼鎖定後唯一的處理路徑。
+
+    endpoint 已掛 pickup:override 守衛，service 再檢查一次作縱深防禦（無權限時不鎖列、不寫入）。
+    不解鎖也不重設連錯次數，稽核 before 記下當時的 code_attempts / locked。移植 ivy
+    ``services/pickup_verification.py::override_complete``；ivy 存在授權表的 override_note 改存
+    audit。
+    """
+    if not actor.has(Permission.PICKUP_OVERRIDE):
+        raise ForbiddenError(details={"required": [str(Permission.PICKUP_OVERRIDE)]})
+    auth = load_verifiable_authorization(session, auth_id, clock=clock, allow_locked=True)
+    record(
+        session,
+        actor=Actor.staff(actor),
+        action="pickup.override_complete",
+        entity_type="pickup_authorization",
+        entity_id=auth.id,
+        before={
+            "status": "active",
+            "code_attempts": auth.code_attempts,
+            "locked": auth.code_locked_at is not None,
+        },
+        after={"status": "completed", "note": note},
+        meta=meta,
+    )
+    return complete_via_authorization(session, auth, "override", actor=actor, clock=clock)
