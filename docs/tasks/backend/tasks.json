@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 406,
-  "last_updated": "2026-10-07T07:51:24Z",
+  "version": 407,
+  "last_updated": "2026-10-07T07:54:31Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -14072,7 +14072,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-521",
@@ -14090,10 +14090,10 @@
           "integration"
         ],
         "red_cases": [
-          "test_admin_staff_activate_success：停用的 tutor → admin POST activate → 200 user.is_active True、user.must_change_password True、cache-control == 'no-store'；以 temp_password 呼叫 /api/admin/auth/login → 200 且之後 GET /api/admin/students → 403 password_change_required",
+          "test_admin_staff_activate_success：停用的 tutor → admin POST activate → 200 user.is_active True、user.must_change_password True、cache-control == 'no-store'；以 temp_password 呼叫 /api/admin/auth/login → 200 且之後 GET /api/admin/students → 403 password_change_required；重讀 DB token_version 不變；audit staff_user.activate 記錄操作者與來源 IP，before / after 不含臨時密碼與雜湊；再次 POST → 409 staff_already_active 且不含 temp_password；舊密碼登入 401 invalid_credentials",
           "test_admin_staff_activate_422：path 'abc' → 422",
           "test_admin_staff_activate_401：無 cookie → 401",
-          "test_admin_staff_activate_403：staff_client(permissions=['staff:read']) → 403 permission_denied",
+          "test_admin_staff_activate_403：staff_client(permissions=['staff:read']) → 403 permission_denied；director 權限 + staff:write 啟用停用中的 admin → 403 cannot_manage_staff，目標仍停用",
           "test_admin_staff_activate_409：啟用中的帳號 → 409 staff_already_active；uuid4() → 404 staff_user_not_found"
         ],
         "run": "just test-int apps/api/tests/integration/api/admin/test_staff_users_endpoints.py -k \"test_admin_staff_activate_\"",
