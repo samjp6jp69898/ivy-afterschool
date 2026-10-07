@@ -9,6 +9,9 @@
 - BACKEND-430 ``POST /pickup/requests``：pickup:operate；``StaffPickupRequestCreateIn`` →
   BACKEND-406 ``create_request``（actor = ``Actor.staff``、source=staff；同日已有進行中 409
   ``pickup_request_exists``、請假 / 缺席 / 已離班 409 ``student_not_available``）→ commit → 201。
+- BACKEND-431 ``POST /pickup/requests/{request_id}/reply``：pickup:operate；``PickupReplyIn`` →
+  BACKEND-407 ``reply_request``（reply_source=staff，ETA 同交易寫回作業進度；終態 409
+  ``invalid_pickup_status``）→ commit → ``PickupRequestOut``。
 - BACKEND-432 ``POST /pickup/requests/{request_id}/acknowledge``：pickup:operate；無 body →
   BACKEND-408（非 pending 409 ``invalid_pickup_status``）→ commit → ``PickupRequestOut``。
 - BACKEND-434 ``POST /pickup/requests/{request_id}/cancel``：pickup:operate；``PickupCancelIn`` 可
@@ -33,6 +36,7 @@ from app.schemas.pickup import (
     PickupCancelIn,
     PickupQueueOut,
     PickupQueueQuery,
+    PickupReplyIn,
     PickupRequestOut,
     RosterOut,
     RosterQuery,
@@ -93,6 +97,16 @@ def create_request(
     body: StaffPickupRequestCreateIn, staff: PickupOperate, db: Db, clock: ClockDep
 ) -> PickupRequestOut:
     request = request_service.create_request(db, body, actor=Actor.staff(staff), clock=clock)
+    out = build_request_views(db, [request])[0]
+    db.commit()
+    return out
+
+
+@router.post("/requests/{request_id}/reply", response_model=PickupRequestOut)
+def reply_request(
+    request_id: UUID, body: PickupReplyIn, staff: PickupOperate, db: Db, clock: ClockDep
+) -> PickupRequestOut:
+    request = request_service.reply_request(db, request_id, body, actor=staff, clock=clock)
     out = build_request_views(db, [request])[0]
     db.commit()
     return out
