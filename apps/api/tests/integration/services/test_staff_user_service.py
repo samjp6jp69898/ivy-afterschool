@@ -8,15 +8,17 @@ BACKEND-091：reset_password（臨時密碼、token_version +1、撤銷 refresh�
 BACKEND-092：deactivate（停用、token 失效、冪等、最後一位管理者 409、兩 session 並發各停一位
 admin）。
 BACKEND-521：activate（重新啟用、臨時密碼只回一次、強制改密碼、token_version 不變、稽核不含
-密碼）。"""
+密碼）。
+BACKEND-550：activate 的並發回歸（員工列 FOR UPDATE 先鎖再檢查、populate_existing 覆蓋 identity map
+舊值）。"""
 
 import json
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import Engine, func, select, update
+from sqlalchemy import Engine, func, select, text, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentStaff
@@ -942,3 +944,175 @@ def test_activate_audit_no_password(db_session: Session, fake_clock: FakeClock) 
     db_session.refresh(target)
     for secret in (out.temp_password, old_hash, target.password_hash):
         assert secret not in dumped
+
+
+# --- BACKEND-550：activate 並發回歸（員工列 FOR UPDATE 與 populate_existing） -------------------
+# 兩條 app_backend 連線 + threading 阻塞模式；lock_timeout 一律 SET LOCAL（連線會回 pool）。
+
+_LOCK_TIMEOUT = "set local lock_timeout = '15s'"
+
+
+def _call_in_thread(
+    sb: Session, call: Callable[[Session], object]
+) -> tuple[threading.Thread, threading.Event, dict[str, object]]:
+    """在 thread 以 ``sb`` 執行 ``call``：成功 → commit 並記回傳值；AppError → 記 (status, code)，
+    交易留給呼叫端關閉；其他例外原樣記在 ``error``。"""
+    done = threading.Event()
+    outcome: dict[str, object] = {}
+
+    def worker() -> None:
+        try:
+            try:
+                outcome["result"] = call(sb)
+                sb.commit()
+            except AppError as exc:
+                outcome["result"] = (exc.status, exc.code)
+        except BaseException as exc:
+            outcome["error"] = exc
+        finally:
+            done.set()
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    return thread, done, outcome
+
+
+def _committed_inactive_staff(db: Session, cleanup: list[UUID]) -> UUID:
+    """停用中的 tutor（seed 角色，不往 roles 寫列），commit 後登記給 owner 清理。"""
+    staff = make_staff(db, role_code="tutor", is_active=False)
+    staff.token_version = 1
+    db.commit()
+    cleanup.append(staff.id)
+    return staff.id
+
+
+@pytest.mark.cleanup_tables("class_staff")
+def test_activate_concurrent_only_one_succeeds(
+    owner_cleanup_staff: list[UUID],
+    committing_db_session: Session,
+    db_engine: Engine,
+    fake_clock: FakeClock,
+) -> None:
+    """兩位管理者同時啟用同一停用帳號：B 在員工列 FOR UPDATE 排隊（0.5 秒內未完成），A commit 後
+    B 重讀到 is_active → 409 staff_already_active；最終密碼是 A 回傳的臨時密碼、稽核恰 1 筆。
+    （沒有 FOR UPDATE 時 B 先讀到停用、UPDATE 才等鎖，A commit 後 B 覆寫密碼並再寫一筆稽核。）"""
+    sid = _committed_inactive_staff(committing_db_session, owner_cleanup_staff)
+    sa = Session(bind=db_engine)
+    sb = Session(bind=db_engine)
+    try:
+        sa.execute(text(_LOCK_TIMEOUT))
+        out_a = activate(sa, sid, actor=_admin(), meta=_META, clock=fake_clock)
+        sb.execute(text(_LOCK_TIMEOUT))
+        thread, done, outcome = _call_in_thread(
+            sb, lambda s: activate(s, sid, actor=_admin(), meta=_META, clock=fake_clock)
+        )
+        try:
+            assert not done.wait(timeout=0.5), outcome  # A 未 commit：B 在員工列鎖排隊
+        finally:
+            sa.commit()
+        thread.join(timeout=15)
+        assert done.is_set(), "A commit 後 thread 仍未完成"
+    finally:
+        sa.close()
+        sb.close()
+
+    assert isinstance(out_a, StaffUserCreatedOut)
+    assert outcome.get("result") == (409, "staff_already_active"), outcome
+    with Session(bind=db_engine) as check:
+        stored = check.get(StaffUser, sid)
+        assert stored is not None
+        assert (stored.is_active, stored.must_change_password, stored.token_version) == (
+            True,
+            True,
+            1,
+        )
+        assert verify_password(out_a.temp_password, stored.password_hash) is True
+        assert len(_audits(check, "staff_user.activate", sid)) == 1
+
+
+@pytest.mark.cleanup_tables("class_staff")
+def test_activate_concurrent_blocks_on_staff_row_lock(
+    owner_cleanup_staff: list[UUID],
+    committing_db_session: Session,
+    db_engine: Engine,
+    fake_clock: FakeClock,
+) -> None:
+    """外部交易對該員工列持 FOR KEY SHARE（等同另一交易正在插入參照這位員工的 class_staff 列、尚未
+    commit）：activate 的 FOR UPDATE 必須排隊——放鎖前 0.5 秒內未完成，放鎖後完成並回傳臨時密碼。
+    （沒有 FOR UPDATE 時 activate 只更新非鍵欄位，與 KEY SHARE 不衝突、立刻完成；外部若改持
+    FOR UPDATE，沒有先鎖列的實作也會在 UPDATE 等鎖，分不出差別。）"""
+    sid = _committed_inactive_staff(committing_db_session, owner_cleanup_staff)
+    holder = Session(bind=db_engine)
+    sb = Session(bind=db_engine)
+    try:
+        holder.execute(text(_LOCK_TIMEOUT))
+        holder.execute(text("select id from staff_users where id = :id for key share"), {"id": sid})
+        sb.execute(text(_LOCK_TIMEOUT))
+        thread, done, outcome = _call_in_thread(
+            sb, lambda s: activate(s, sid, actor=_admin(), meta=_META, clock=fake_clock)
+        )
+        try:
+            assert not done.wait(timeout=0.5), outcome  # 員工列被鎖住：activate 必須排隊
+        finally:
+            holder.rollback()  # 放鎖
+        thread.join(timeout=15)
+        assert done.is_set(), "放鎖後 thread 仍未完成"
+    finally:
+        holder.close()
+        sb.close()
+
+    assert "error" not in outcome, outcome
+    result = outcome["result"]
+    assert isinstance(result, StaffUserCreatedOut), result
+    assert (result.user.id, result.user.is_active, result.user.must_change_password) == (
+        sid,
+        True,
+        True,
+    )
+    with Session(bind=db_engine) as check:
+        stored = check.get(StaffUser, sid)
+        assert stored is not None
+        assert stored.is_active is True
+        assert verify_password(result.temp_password, stored.password_hash) is True
+        assert len(_audits(check, "staff_user.activate", sid)) == 1
+
+
+@pytest.mark.cleanup_tables("class_staff")
+def test_activate_concurrent_sees_commit_despite_loaded_instance(
+    owner_cleanup_staff: list[UUID],
+    committing_db_session: Session,
+    db_engine: Engine,
+    fake_clock: FakeClock,
+) -> None:
+    """B 事先載入並持有 S（is_active False）的 ORM 物件；A activate 並 commit；B activate →
+    FOR UPDATE 重讀以 populate_existing 覆蓋 identity map 舊值 → 409 staff_already_active，密碼維持
+    A 寫入的值、稽核仍只有 A 的一筆。（沒有 populate_existing、或 FOR UPDATE 查詢沒有消費結果時，B
+    讀到舊的 is_active=False，再次覆寫密碼。）"""
+    sid = _committed_inactive_staff(committing_db_session, owner_cleanup_staff)
+    sa = Session(bind=db_engine)
+    sb = Session(bind=db_engine)
+    try:
+        sb.execute(text(_LOCK_TIMEOUT))
+        loaded = sb.get(StaffUser, sid)  # 持有參照：identity map 是弱參照，沒人持有就會重新載入
+        assert loaded is not None
+        assert loaded.is_active is False
+        sa.execute(text(_LOCK_TIMEOUT))
+        out_a = activate(sa, sid, actor=_admin(), meta=_META, clock=fake_clock)
+        sa.commit()
+
+        with pytest.raises(AppError) as exc:
+            activate(sb, sid, actor=_admin(), meta=_META, clock=fake_clock)
+
+        assert (exc.value.status, exc.value.code) == (409, "staff_already_active")
+        assert loaded.is_active is True  # populate_existing 把上鎖後的值寫回同一物件
+        sb.rollback()
+    finally:
+        sa.close()
+        sb.close()
+
+    with Session(bind=db_engine) as check:
+        stored = check.get(StaffUser, sid)
+        assert stored is not None
+        assert verify_password(out_a.temp_password, stored.password_hash) is True
+        assert (stored.is_active, stored.must_change_password) == (True, True)
+        assert len(_audits(check, "staff_user.activate", sid)) == 1
