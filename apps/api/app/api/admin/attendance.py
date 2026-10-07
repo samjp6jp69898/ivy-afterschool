@@ -11,13 +11,15 @@
   BACKEND-305 → ``AttendanceRowOut``。
 - BACKEND-317 ``POST /attendance/{student_id}/check-out``：attendance:operate；``CheckOutIn`` 可省略
   → BACKEND-306（present → left；未到班 409 ``not_checked_in``）。
+- BACKEND-318 ``POST /attendance/batch-check-in``：attendance:operate；``BatchCheckInIn`` →
+  BACKEND-308 → ``BatchCheckInOut``（部分學生被略過仍 200；非營業日整批 409 ``not_service_day``）。
 - BACKEND-319 ``POST /attendance/{student_id}/mark-absent``：attendance:operate（一般點名動作）；
   ``MarkAbsentIn`` 可省略 → BACKEND-309。
 - BACKEND-320 ``PATCH /attendance/{attendance_id}``：attendance:amend；``AttendanceAmendIn`` +
   request meta → BACKEND-310（寫 audit）。
 
-固定路徑（/daily、/monthly、/monthly/export）宣告在 ``/{student_id}/...`` 與 ``/{attendance_id}``
-之前。
+固定路徑（/daily、/monthly、/monthly/export、/batch-check-in）宣告在 ``/{student_id}/...`` 與
+``/{attendance_id}`` 之前。
 """
 
 from __future__ import annotations
@@ -39,6 +41,8 @@ from app.repositories.students import get_class_or_404
 from app.schemas.attendance import (
     AttendanceAmendIn,
     AttendanceRowOut,
+    BatchCheckInIn,
+    BatchCheckInOut,
     CheckInIn,
     CheckOutIn,
     DailyAttendanceOut,
@@ -105,6 +109,15 @@ def export_monthly(
             "Cache-Control": "no-store",
         },
     )
+
+
+@router.post("/batch-check-in", response_model=BatchCheckInOut)
+def batch_check_in(
+    body: BatchCheckInIn, staff: AttendanceOperate, db: Db, clock: ClockDep
+) -> BatchCheckInOut:
+    out = attendance_service.batch_check_in(db, body.student_ids, actor=staff, clock=clock)
+    db.commit()
+    return out
 
 
 @router.post("/{student_id}/check-in", response_model=AttendanceRowOut)
