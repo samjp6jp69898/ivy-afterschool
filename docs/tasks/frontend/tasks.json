@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 120,
-  "last_updated": "2026-10-07T07:47:44Z",
+  "version": 121,
+  "last_updated": "2026-10-07T07:51:53Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -867,7 +867,7 @@
       "granularity_unit": "store",
       "target_path": "apps/web/src/stores/notifications.ts",
       "source_ref": "FE:src/stores/notification.ts::useNotificationStore",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r9a",
       "depends_on": [
         "FRONTEND-033",
