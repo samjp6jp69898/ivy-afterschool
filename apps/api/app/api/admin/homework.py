@@ -6,6 +6,9 @@
   ``create_item`` → commit → 201 ``HomeworkMutationOut``（項目與重算後的進度）。
 - BACKEND-387 ``POST /homework/items/batch``：homework:write；``HomeworkBatchCreateIn`` →
   BACKEND-378 ``batch_create_items``（整班或班內指定學生）→ commit → 201 ``HomeworkBatchOut``。
+- BACKEND-388 ``PATCH /homework/items/{item_id}``：homework:write；``HomeworkItemUpdateIn`` →
+  BACKEND-379 ``update_item`` → commit → ``HomeworkMutationOut``（不存在 404
+  ``homework_item_not_found``）。
 
 固定路徑 ``/items/batch`` 宣告在 ``/items/{item_id}`` 之前。
 - BACKEND-390 ``PUT /homework/progress/{student_id}``：homework:write；``ProgressPutIn``
@@ -36,6 +39,7 @@ from app.schemas.homework import (
     HomeworkBatchCreateIn,
     HomeworkBatchOut,
     HomeworkItemCreateIn,
+    HomeworkItemUpdateIn,
     HomeworkMutationOut,
     ProgressOut,
     ProgressPutIn,
@@ -74,6 +78,15 @@ def batch_create_items(
     body: HomeworkBatchCreateIn, staff: HomeworkWrite, db: Db, clock: ClockDep
 ) -> HomeworkBatchOut:
     out = homework_service.batch_create_items(db, body, actor=staff, clock=clock)
+    db.commit()
+    return out
+
+
+@router.patch("/items/{item_id}", response_model=HomeworkMutationOut)
+def update_item(
+    item_id: UUID, body: HomeworkItemUpdateIn, staff: HomeworkWrite, db: Db, clock: ClockDep
+) -> HomeworkMutationOut:
+    out = homework_service.update_item(db, item_id, body, actor=staff, clock=clock)
     db.commit()
     return out
 
