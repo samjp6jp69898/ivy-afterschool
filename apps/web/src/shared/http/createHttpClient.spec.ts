@@ -427,7 +427,8 @@ describe('createHttpClient', () => {
 
     expect(sent).toHaveLength(1)
     await expectPhotoForm(sent[0]!.data)
-    expect(String(sent[0]!.contentType)).not.toContain('application/json')
+    // 呼叫端明確指定的標頭原樣交給 adapter（只有預設的 JSON Content-Type 會被移除）
+    expect(sent[0]!.contentType).toBe('multipart/form-data')
   })
 
   it('createHttpClient FormData 401 refresh 重試後檔案仍在', async () => {
