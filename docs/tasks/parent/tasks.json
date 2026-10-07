@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 95,
-  "last_updated": "2026-10-07T07:45:29Z",
+  "version": 96,
+  "last_updated": "2026-10-07T07:48:14Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -1747,11 +1747,11 @@
     {
       "id": "PARENT-090",
       "title": "實作家長端 api client parent/api/pickupRequests.ts（我要來接、今日請求、我到了、取消）",
-      "description": "建立 `apps/web/src/parent/api/pickupRequests.ts`（型別依 `docs/tasks/api_index.md` §14）：\n```ts\n// PickupRequestStatus / HHMM / ISODateTime 由 FRONTEND-002 import\nexport interface ParentPickupRequest { id: string; student_id: string; student_name: string; service_date: string; status: PickupRequestStatus; expected_arrival_at: string | null; reply_ready_eta: string | null; reply_message: string | null; reply_source: 'auto' | 'staff' | null; replied_at: string | null; arrived_at: string | null; completed_at: string | null; picked_up_by_name: string | null; cancelled_at: string | null; created_at: string; can_cancel: boolean; can_mark_arrived: boolean }\nexport type PickupRequestCreateInput = { student_id: string; expected_arrival_at?: string } | { student_id: string; arrived: true }\nexport function createPickupRequest(body: PickupRequestCreateInput): Promise<ParentPickupRequest> // POST /parent/pickup/requests（BACKEND-440）；arrived: true 為「我已經到了」捷徑，直接建立 arrived 狀態的請求\nexport function listTodayPickupRequests(): Promise<ParentPickupRequest[]>  // GET /parent/pickup/requests/today（BACKEND-441）\nexport function markPickupArrived(id: string): Promise<ParentPickupRequest> // POST /parent/pickup/requests/{id}/arrived（BACKEND-442）\nexport function cancelPickupRequest(id: string, reason?: string): Promise<ParentPickupRequest> // POST /parent/pickup/requests/{id}/cancel（BACKEND-443）\n```\n`expected_arrival_at` 為 null / undefined 時 body 不帶此欄位；`arrived` 與 `expected_arrival_at` 不可同時出現（型別層以聯集保證）；409 `pickup_request_exists` 的 `error.details.request_id` 為既有進行中請求 id；cancel 無 reason 時 body 為 `{}`。走 PARENT-004 `parentHttp`。\n\n參考 ivy `FE:src/parent/api/dismissalCalls.ts::createDismissalNotice` 的用途；**去掉** `eta_minutes`、`note`、`client_request_id`（本專案以 DB partial unique index 防重複，見 BACKEND-406）。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/api/pickupRequests.ts`（型別依 `docs/tasks/api_index.md` §14）：\n```ts\n// PickupRequestStatus / PickupReplySource / HHMM / ISODate / ISODateTime 由 FRONTEND-002 import（欄位逐欄對照 `apps/api/app/schemas/pickup.py` 的 ParentPickupRequestOut）\nexport interface ParentPickupRequest { id: string; student_id: string; student_name: string; service_date: string; status: PickupRequestStatus; expected_arrival_at: string | null; reply_ready_eta: string | null; reply_message: string | null; reply_source: 'auto' | 'staff' | null; replied_at: string | null; arrived_at: string | null; completed_at: string | null; picked_up_by_name: string | null; cancelled_at: string | null; created_at: string; can_cancel: boolean; can_mark_arrived: boolean }\nexport type PickupRequestCreateInput = { student_id: string; expected_arrival_at?: HHMM | null; arrived?: never } | { student_id: string; arrived: true; expected_arrival_at?: never }\nexport function createPickupRequest(body: PickupRequestCreateInput): Promise<ParentPickupRequest> // POST /parent/pickup/requests（BACKEND-440）；arrived: true 為「我已經到了」捷徑，直接建立 arrived 狀態的請求\nexport function listTodayPickupRequests(): Promise<ParentPickupRequest[]>  // GET /parent/pickup/requests/today（BACKEND-441）\nexport function markPickupArrived(id: string): Promise<ParentPickupRequest> // POST /parent/pickup/requests/{id}/arrived（BACKEND-442）\nexport function cancelPickupRequest(id: string, reason?: string): Promise<ParentPickupRequest> // POST /parent/pickup/requests/{id}/cancel（BACKEND-443）\n```\n`expected_arrival_at` 為 null / undefined 時 body 不帶此欄位；`arrived` 與 `expected_arrival_at` 不可同時出現（型別層以 `never` 互斥欄位保證，單純的聯集擋不住同時給兩者；繞過型別時兩者照送、由後端回 422，client 不自行丟掉其中一個）；409 `pickup_request_exists` 的 `error.details.request_id` 為既有進行中請求 id；cancel 無 reason（undefined、空字串、純空白）時 body 為 `{}`。走 PARENT-004 `parentHttp`。\n\n參考 ivy `FE:src/parent/api/dismissalCalls.ts::createDismissalNotice` 的用途；**去掉** `eta_minutes`、`note`、`client_request_id`（本專案以 DB partial unique index 防重複，見 BACKEND-406）。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/pickupRequests.ts",
       "source_ref": "FE:src/parent/api/dismissalCalls.ts::createDismissalNotice",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-440",
@@ -1770,11 +1770,13 @@
           "vitest"
         ],
         "red_cases": [
-          "pickupRequestsApi create omits empty arrival：createPickupRequest({student_id:'s1'}) → body 深等於 {student_id:'s1'}；createPickupRequest({student_id:'s1', expected_arrival_at:'17:40'}) → body 深等於 {student_id:'s1', expected_arrival_at:'17:40'}",
+          "pickupRequestsApi create omits empty arrival：createPickupRequest({student_id:'s1'}) → body 深等於 {student_id:'s1'}；createPickupRequest({student_id:'s1', expected_arrival_at:'17:40'}) → body 深等於 {student_id:'s1', expected_arrival_at:'17:40'}；createPickupRequest({student_id:'s1', expected_arrival_at:null}) → body 深等於 {student_id:'s1'}",
           "pickupRequestsApi create surfaces business error：回 409 {error:{code:'pickup_window_closed', message:'目前不在可發起接送的時段'}} → reject，code === 'pickup_window_closed'、message 原樣",
           "pickupRequestsApi arrived and cancel paths：markPickupArrived('r1') → POST '/parent/pickup/requests/r1/arrived'；cancelPickupRequest('r1') → POST '/parent/pickup/requests/r1/cancel' body 深等於 {}；cancelPickupRequest('r1','臨時有事') → body {reason:'臨時有事'}",
           "pickupRequestsApi lists today：GET '/parent/pickup/requests/today' 回兩筆 → resolve 長度 2",
-          "pickupRequestsApi arrive now body：createPickupRequest({student_id:'s1', arrived:true}) → body 深等於 {student_id:'s1', arrived:true}；回 409 {error:{code:'pickup_request_exists', details:{request_id:'r7', status:'pending'}}} → reject 且 error.details.request_id === 'r7'"
+          "pickupRequestsApi arrive now body：createPickupRequest({student_id:'s1', arrived:true}) → body 深等於 {student_id:'s1', arrived:true}；回 409 {error:{code:'pickup_request_exists', details:{request_id:'r7', status:'pending'}}} → reject 且 error.details.request_id === 'r7'",
+          "pickupRequestsApi cancel omits blank reason：cancelPickupRequest('r1','') 與 cancelPickupRequest('r1','   ') → body 皆深等於 {}",
+          "pickupRequestsApi create forwards both fields when the type is bypassed：以 as const 物件加 @ts-expect-error 同時給 arrived:true 與 expected_arrival_at:'17:40' → body 兩個欄位都在、後端 422 validation_error 原樣 reject；@ts-expect-error 同時由 just web-typecheck 驗證型別層互斥"
         ],
         "run": "just web-test src/parent/api/pickupRequests.spec.ts -t \"pickupRequestsApi\"",
         "notes": ""
