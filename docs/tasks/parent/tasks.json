@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 116,
-  "last_updated": "2026-10-07T11:00:45Z",
+  "version": 117,
+  "last_updated": "2026-10-07T11:02:48Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -3465,11 +3465,11 @@
     {
       "id": "PARENT-192",
       "title": "家長端 api client 的路徑 id 一律 encodeURIComponent（與後台 api client 一致）",
-      "description": "後台 api client 把路徑中的 id 都以 `encodeURIComponent` 編碼，家長端 `apps/web/src/parent/api/` 的 client 沒有（review-r9-p 發現）。例如 `getChildExam(childId, examId)` 的 `examId` 來自路由參數，傳入 `'../../../me'` 時請求會打到 `/api/parent/me`（只限 GET、本人權限，不越權，但行為不正確）。已完成的 `children.ts`、`pickupRequests.ts`、`pickupPersons.ts`、`attendance.ts`、`exams.ts`、`homework.ts`、`notifications.ts` 中所有把變數放進路徑的位置，都改為先 `encodeURIComponent`（做法比照後台 `apps/web/src/api/` 的 `xxxPath(id)` 小函式）。純修正：對一般 UUID 的請求 URL 完全不變。\n\n**驗收標準**：每一條對應下列 red_case；各 client 既有 spec 全綠且斷言不變。",
+      "description": "後台 api client 把路徑中的 id 都以 `encodeURIComponent` 編碼，家長端 `apps/web/src/parent/api/` 的 client 沒有（review-r9-p 發現）。例如 `getChildExam(childId, examId)` 的 `examId` 來自路由參數，傳入 `'../../../me'` 時請求會打到 `/api/parent/me`（只限 GET、本人權限，不越權，但行為不正確）。已完成的 `children.ts`、`pickupRequests.ts`、`pickupPersons.ts`、`attendance.ts`、`exams.ts`、`homework.ts`、`notifications.ts` 中所有把變數放進路徑的位置，都改為先 `encodeURIComponent`（做法比照後台 `apps/web/src/api/` 的 `xxxPath(id)` 小函式）。純修正：對一般 UUID 的請求 URL 完全不變。pathEncoding.spec.ts 另以 `import.meta.glob` 掃描 `parent/api/*.ts` 原始碼：template literal 的每個插值都必須是 `encodeURIComponent(...)` 或 `*Path(...)`，之後新增的家長端 client 漏編碼會被這條擋下；leaves.ts（PARENT-133，從一開始就編碼）一併納入行為測試。\n\n**驗收標準**：每一條對應下列 red_case；各 client 既有 spec 全綠且斷言不變。",
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/exams.ts",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "PARENT-006",
@@ -3487,11 +3487,13 @@
           "vitest"
         ],
         "red_cases": [
-          "parent api path encoding encodes unsafe ids：對 children / pickupRequests / pickupPersons / attendance / exams / homework / notifications 每個把 id 放進路徑的函式，傳入 '../../me?x=1#y' → 實際請求 URL 的該段為 encodeURIComponent 後的值（含 %2E%2E 或 ..%2F 形式，不含未編碼的 '/'、'?'、'#'），不會改變路徑結構",
-          "parent api path encoding keeps normal uuid urls unchanged：傳入一般 UUID → 請求 URL 與現況完全相同（逐函式斷言）"
+          "parent api path encoding encodes unsafe ids：對 children / pickupRequests / pickupPersons / attendance / exams / homework / notifications（另含 leaves）每個把 id 放進路徑的函式，傳入 '../../me?x=1#y' → 實際請求 URL 的該段為 encodeURIComponent 後的值（含 %2E%2E 或 ..%2F 形式，不含未編碼的 '/'、'?'、'#'），不會改變路徑結構",
+          "parent api path encoding keeps normal uuid urls unchanged：傳入一般 UUID → 請求 URL 與現況完全相同（逐函式斷言）",
+          "parent api path encoding has no raw interpolation in api paths：掃描 parent/api 下每個非 spec 的 .ts 原始碼（先去掉註解），template literal 的每個 `${...}` 都必須是 encodeURIComponent(...) 或 *Path(...)；同時確認 attendance / children / exams / homework / leaves / notifications / pickupPersons / pickupRequests 八個檔案都被掃到",
+          "parent api path encoding checker flags raw interpolation：掃描函式對 '`/parent/x/${id}`' 回 ['id']、對 '`/parent/x/${encodeURIComponent(a)}/${b}`' 回 ['b']、對 '`${leavePath(id)}/cancel`' 回 []、對註解裡的反引號與插值回 []"
         ],
         "run": "just web-test src/parent/api/pathEncoding.spec.ts -t \"parent api path encoding\"",
-        "notes": "新增 pathEncoding.spec.ts 一個檔案集中驗證所有函式；各 client 既有 spec 不改。新建立的 client（PARENT-007 / 133）由各自 task 的實作者從一開始就編碼，不在本 task 範圍。"
+        "notes": "新增 pathEncoding.spec.ts 一個檔案集中驗證所有函式；各 client 既有 spec 不改。新建立的 client（PARENT-007 / 133）由各自 task 的實作者從一開始就編碼，不在本 task 的修改範圍；007 沒有路徑 id，133 的函式納入本檔的行為測試與掃描。"
       },
       "review": {
         "status": "pending",
