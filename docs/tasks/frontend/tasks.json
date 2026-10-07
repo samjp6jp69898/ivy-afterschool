@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 151,
-  "last_updated": "2026-10-07T10:55:09Z",
+  "version": 152,
+  "last_updated": "2026-10-07T10:57:50Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1865,7 +1865,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/reference/ExamTypeTable.vue",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-051",
@@ -1943,7 +1943,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/reference/ClosedDayTable.vue",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-051",
