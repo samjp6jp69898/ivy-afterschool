@@ -7,6 +7,7 @@
 - BACKEND-425：complete_via_authorization（核銷後完成授權與接送請求）。
 - BACKEND-426：verify_code（核對接送碼，連錯 5 次鎖定、原子累計）。
 - BACKEND-427：confirm_visual_match（員工目視核對確認核銷，照片為輔助、寫 audit）。
+- BACKEND-428：override_complete（主管強制完成代理接送，寫 audit）。
 """
 
 import json
@@ -54,6 +55,7 @@ from app.services.pickup.authorizations import (
     list_authorizations_for_staff,
     list_child_authorizations,
     load_verifiable_authorization,
+    override_complete,
     regenerate_code,
     verify_code,
 )
@@ -1354,3 +1356,147 @@ def test_confirm_visual_match_not_today(db_session: Session, kick_off: None) -> 
     assert (not_active.value.status, not_active.value.code) == (409, "authorization_not_active")
     assert _fresh(db_session, tomorrow.id).status == "active"
     assert _audit_logs(db_session, "pickup.visual_match", tomorrow.id) == []
+
+
+# --- BACKEND-428 override_complete ---
+
+
+def test_override_complete_locked(db_session: Session, kick_off: None) -> None:
+    clock = FakeClock(datetime(2026, 9, 10, 9, 0, tzinfo=UTC))  # 台北 17:00
+    ming = make_student(db_session)
+    _parent_of(db_session, ming)
+    supervisor = make_staff(
+        db_session, permissions=["pickup:operate", "pickup:override"], display_name="陳主任"
+    )
+    make_attendance(db_session, ming, service_date=_TODAY, status="present")
+    auth = make_pickup_authorization(
+        db_session, ming, service_date=_TODAY, code_attempts=5, proxy_name="李阿姨"
+    )
+
+    result = override_complete(
+        db_session,
+        auth.id,
+        "已核對身分證",
+        actor=_current_staff(supervisor),
+        meta=_META,
+        clock=clock,
+    )
+
+    assert (result.authorization.id, result.authorization.status) == (auth.id, "completed")
+    assert result.authorization.verification_method == "override"
+    assert (result.authorization.locked, result.authorization.code_attempts) == (True, 5)
+    assert result.authorization.verified_by_name == "陳主任"
+    assert (result.request.status, result.request.completion_method, result.request.source) == (
+        "completed",
+        "override",
+        "proxy",
+    )
+    assert result.request.picked_up_by_name == "李阿姨"
+    row = _fresh(db_session, auth.id)
+    assert (row.status, row.verification_method, row.verified_by, row.verified_at) == (
+        "completed",
+        "override",
+        supervisor.id,
+        clock.now(),
+    )
+    # 強制完成不解鎖、不重設連錯次數
+    assert row.code_attempts == 5
+    assert row.code_locked_at is not None
+    assert _attendance_of(db_session, ming.id).status == "left"
+    [log] = _audit_logs(db_session, "pickup.override_complete", auth.id)
+    assert (log.actor_type, log.actor_id, log.entity_type, log.ip) == (
+        "staff",
+        supervisor.id,
+        "pickup_authorization",
+        "203.0.113.5",
+    )
+    assert log.before == {"status": "active", "code_attempts": 5, "locked": True}
+    assert log.before["locked"] is True
+    assert log.after == {"status": "completed", "note": "已核對身分證"}
+
+
+def test_override_complete_active_unlocked(db_session: Session, kick_off: None) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    supervisor = make_staff(db_session, permissions=["pickup:override"])
+    auth = make_pickup_authorization(db_session, ming, service_date=_TODAY, code_attempts=2)
+
+    result = override_complete(
+        db_session,
+        auth.id,
+        "家長來電確認",
+        actor=_current_staff(supervisor),
+        meta=_META,
+        clock=clock,
+    )
+
+    assert (result.authorization.status, result.authorization.verification_method) == (
+        "completed",
+        "override",
+    )
+    [log] = _audit_logs(db_session, "pickup.override_complete", auth.id)
+    assert log.before == {"status": "active", "code_attempts": 2, "locked": False}
+    assert log.after == {"status": "completed", "note": "家長來電確認"}
+
+
+def test_override_complete_forbidden(db_session: Session, kick_off: None) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    operator = make_staff(db_session, permissions=["pickup:operate"])
+    auth = make_pickup_authorization(db_session, ming, service_date=_TODAY, code_attempts=5)
+
+    with pytest.raises(AppError) as exc:
+        override_complete(
+            db_session,
+            auth.id,
+            "已核對身分證",
+            actor=_current_staff(operator),
+            meta=_META,
+            clock=clock,
+        )
+
+    assert (exc.value.status, exc.value.code) == (403, "permission_denied")
+    assert exc.value.details == {"required": ["pickup:override"]}
+    row = _fresh(db_session, auth.id)
+    assert (row.status, row.verified_at, row.verification_method, row.code_attempts) == (
+        "active",
+        None,
+        None,
+        5,
+    )
+    assert _audit_logs(db_session, "pickup.override_complete", auth.id) == []
+    assert _completed_requests(db_session, ming.id) == []
+
+
+def test_override_complete_not_today(db_session: Session, kick_off: None) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    supervisor = make_staff(db_session, permissions=["pickup:operate", "pickup:override"])
+    tomorrow = make_pickup_authorization(db_session, ming, service_date=_TODAY + timedelta(days=1))
+    cancelled = make_pickup_authorization(
+        db_session, ming, service_date=_TODAY, status="cancelled", code="654321"
+    )
+
+    with pytest.raises(AppError) as not_today:
+        override_complete(
+            db_session,
+            tomorrow.id,
+            "備註",
+            actor=_current_staff(supervisor),
+            meta=_META,
+            clock=clock,
+        )
+    with pytest.raises(AppError) as not_active:
+        override_complete(
+            db_session,
+            cancelled.id,
+            "備註",
+            actor=_current_staff(supervisor),
+            meta=_META,
+            clock=clock,
+        )
+
+    assert (not_today.value.status, not_today.value.code) == (409, "authorization_not_today")
+    assert (not_active.value.status, not_active.value.code) == (409, "authorization_not_active")
+    assert _fresh(db_session, tomorrow.id).status == "active"
+    assert _audit_logs(db_session, "pickup.override_complete", tomorrow.id) == []
