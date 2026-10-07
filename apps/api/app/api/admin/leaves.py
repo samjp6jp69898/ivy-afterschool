@@ -5,6 +5,9 @@
 - BACKEND-352 ``POST /leaves``：leaves:write；``LeaveCreateIn`` → BACKEND-345 ``create_leave``
   （actor = ``Actor.staff``；重疊 409 ``leave_overlap``）→ ``leave_service.leave_out`` 組新建那筆 →
   commit → 201 ``LeaveOut``。
+- BACKEND-353 ``POST /leaves/{leave_id}/cancel``：leaves:write；``LeaveCancelIn`` 可省略（預設
+  scope=remaining）→ BACKEND-346 ``cancel_leave``（actor = ``Actor.staff``）→ ``leave_out`` 組更新後
+  的請假 → commit → ``LeaveOut``。
 - BACKEND-354 ``GET /leaves/{leave_id}/attachments/{attachment_id}``：leaves:read；BACKEND-350 簽發
   短效 URL → ``AttachmentUrlOut``，``Cache-Control: no-store``；附件不屬於該請假與不存在皆 404
   ``attachment_not_found``。
@@ -25,7 +28,13 @@ from app.core.db import get_db
 from app.core.pagination import Page, PageParams, page_params
 from app.core.permissions import Permission
 from app.core.storage import Storage, get_storage
-from app.schemas.leaves import AttachmentUrlOut, LeaveCreateIn, LeaveListQuery, LeaveOut
+from app.schemas.leaves import (
+    AttachmentUrlOut,
+    LeaveCancelIn,
+    LeaveCreateIn,
+    LeaveListQuery,
+    LeaveOut,
+)
 from app.services import leave_service
 from app.services.audit_service import Actor
 
@@ -55,6 +64,26 @@ def create_leave(
 ) -> LeaveOut:
     leave = leave_service.create_leave(db, body, actor=Actor.staff(staff), clock=clock)
     out = leave_service.leave_out(db, leave)
+    db.commit()
+    return out
+
+
+@router.post("/{leave_id}/cancel", response_model=LeaveOut)
+def cancel_leave(
+    leave_id: UUID,
+    staff: LeavesWrite,
+    db: Db,
+    clock: Annotated[Clock, Depends(get_clock)],
+    body: LeaveCancelIn | None = None,
+) -> LeaveOut:
+    result = leave_service.cancel_leave(
+        db,
+        leave_id,
+        actor=Actor.staff(staff),
+        scope=body.scope if body else "remaining",
+        clock=clock,
+    )
+    out = leave_service.leave_out(db, result.leave)
     db.commit()
     return out
 
