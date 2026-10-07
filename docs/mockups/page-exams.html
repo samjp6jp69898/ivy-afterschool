@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+
+<meta name="preview-status" content="draft">
+<meta name="preview-tasks" content="FRONTEND-231,FRONTEND-232">
+<meta name="preview-route" content="/exams">
+<meta name="preview-updated" content="2026-10-07">
+
+<title>設計稿：考試列表</title>
+
+<!-- 版號對齊 apps/web/pnpm-lock.yaml 的實際安裝版本 -->
+<link rel="stylesheet" href="https://unpkg.com/element-plus@2.14.7/dist/index.css">
+<script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/locale/zh-tw.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue@2.3.2/dist/index.iife.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+#app { display: flex; flex-direction: column; height: 100%; }
+body { font-family: var(--el-font-family); background: var(--el-fill-color); color: var(--el-text-color-primary); }
+
+.preview-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 6px 16px; font-size: 12px;
+  color: var(--el-color-info-dark-2);
+  background: var(--el-color-info-light-9);
+  border-bottom: 1px dashed var(--el-border-color);
+}
+.preview-bar__spacer { flex: 1; }
+.preview-bar code { font-size: 12px; }
+.text-secondary { color: var(--el-text-color-secondary); font-size: 13px; }
+.el-button > span > .el-icon { margin-right: 4px; }
+.stage { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+.control-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; font-size: 12px; color: var(--el-text-color-secondary); background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-lighter); }
+.control-bar .el-button + .el-button { margin-left: 0; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.last-request { font-size: 12px; color: var(--el-text-color-secondary); word-break: break-all; }
+
+/* ==================== ADMIN SHELL CSS START（各頁稿逐字複製這一段） ==================== */
+/* 裝置框：只存在於設計稿，模擬桌機 / 平板 1024×768 / 手機 390×844 */
+.device-frame { position: relative; margin: 0 auto; overflow: hidden; background: var(--el-bg-color-page); border: 1px solid var(--el-border-color); border-radius: 10px; box-shadow: var(--el-box-shadow-light); }
+.device-frame.is-desktop { width: 1200px; height: 760px; }
+.device-frame.is-tablet { width: 1024px; height: 768px; }
+.device-frame.is-mobile { width: 390px; height: 844px; border-radius: 24px; }
+
+.shell { display: flex; height: 100%; }
+.shell__aside { display: flex; flex-direction: column; flex-shrink: 0; width: 220px; background: var(--el-bg-color); border-right: 1px solid var(--el-border-color-light); transition: width 0.2s ease; }
+.shell__aside.is-collapsed { width: 64px; }
+.shell__brand { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 22px; flex-shrink: 0; white-space: nowrap; overflow: hidden; font-weight: 600; color: var(--el-text-color-primary); border-bottom: 1px solid var(--el-border-color-lighter); }
+.shell__brand .el-icon { font-size: 20px; color: var(--el-color-primary); flex-shrink: 0; }
+.shell__menu { flex: 1; min-height: 0; overflow: hidden auto; }
+.shell__menu .el-menu { border-right: none; }
+.shell__menu .el-menu-item-group__title { padding-top: 14px; font-size: 12px; }
+.shell__menu .el-menu--collapse .el-menu-item-group__title { height: 1px; padding: 0; margin: 8px 12px; background: var(--el-border-color-lighter); overflow: hidden; }
+.shell__menu .el-menu-item { height: 44px; line-height: 44px; }
+.shell__empty { padding: 24px 16px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.shell__collapse { flex-shrink: 0; height: 44px; border-top: 1px solid var(--el-border-color-lighter); display: flex; align-items: center; justify-content: center; }
+.shell__body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.shell__header { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 12px 0 8px; flex-shrink: 0; background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-light); }
+.shell__toggle { width: 44px; height: 44px; }
+.shell__title { margin: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shell__spacer { flex: 1; }
+.ws-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-info-light-3); margin: 0 6px; }
+.ws-dot.is-open { background: var(--el-color-success); }
+.ws-dot.is-reconnecting { background: var(--el-color-warning); }
+.shell__bell { width: 44px; height: 44px; font-size: 18px; }
+.shell__bell .el-badge__content { top: 10px; right: 12px; }
+.shell__user { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 8px; cursor: pointer; border-radius: 6px; color: var(--el-text-color-regular); font-size: 14px; }
+.shell__user:hover { background: var(--el-fill-color-light); }
+.shell__banner { flex-shrink: 0; border-radius: 0; }
+.shell__main { flex: 1; min-height: 0; overflow: auto; padding: 20px; }
+.device-frame.is-tablet .shell__main { padding: 16px; }
+.device-frame.is-mobile .shell__main { padding: 12px; }
+/* 手機：側欄改抽屜（實作用 el-drawer，稿裡在裝置框內模擬） */
+.shell__scrim { position: absolute; inset: 0; z-index: 20; background: var(--el-overlay-color-lighter); }
+.shell__drawer { position: absolute; top: 0; bottom: 0; left: 0; z-index: 21; width: 240px; display: flex; flex-direction: column; background: var(--el-bg-color); box-shadow: var(--el-box-shadow-dark); }
+
+/* 通知面板（FRONTEND-036） */
+.notif { width: 360px; margin: -12px; }
+.notif__head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 10px 16px; border-bottom: 1px solid var(--el-border-color-lighter); }
+.notif__title { font-size: 15px; font-weight: 600; }
+.notif__list { max-height: 420px; overflow: auto; }
+.notif__row { position: relative; display: block; width: 100%; padding: 12px 16px 12px 28px; text-align: left; cursor: pointer; border: none; border-bottom: 1px solid var(--el-border-color-extra-light); background: var(--el-bg-color); font-family: inherit; color: inherit; }
+.notif__row:hover, .notif__row:focus-visible { background: var(--el-fill-color-light); outline: none; }
+.notif__row.is-unread { background: var(--el-color-primary-light-9); }
+.notif__row.is-unread:hover { background: var(--el-color-primary-light-8); }
+.notif__dot { position: absolute; left: 12px; top: 18px; width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-primary); }
+.notif__row-title { font-size: 14px; font-weight: 600; color: var(--el-text-color-primary); }
+.notif__row-body { margin-top: 2px; font-size: 13px; line-height: 1.5; color: var(--el-text-color-regular); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+.notif__row-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--el-text-color-secondary); }
+.notif__empty { padding: 40px 16px; text-align: center; font-size: 13px; color: var(--el-text-color-secondary); }
+.notif__skeleton { padding: 12px 16px; }
+/* ==================== ADMIN SHELL CSS END ==================== */
+
+/* ==== 以下逐字複製自 component-common.html（已核可） ==== */
+/* ---------- PageHeader（FRONTEND-039） ---------- */
+.page-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+.page-header__body { flex: 1; min-width: 0; }
+.page-header__title { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; color: var(--el-text-color-primary); }
+.page-header__subtitle { margin: 4px 0 0; font-size: 13px; color: var(--el-text-color-secondary); }
+.page-header__extra { margin-top: 8px; }
+.page-header__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+.page-header__actions .el-button + .el-button { margin-left: 0; }
+/* 實作用 @media (max-width: 767.98px)；稿裡用 .is-narrow 在 375px 框內示意 */
+.is-narrow .page-header { flex-wrap: wrap; }
+.is-narrow .page-header__body { flex-basis: 100%; }
+.is-narrow .page-header__actions { width: 100%; }
+
+/* ---------- AdminListToolbar（FRONTEND-041） ---------- */
+.list-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.list-toolbar__search { width: 240px; }
+.list-toolbar__filter { display: flex; align-items: center; gap: 6px; }
+.list-toolbar__filter-label { font-size: 13px; color: var(--el-text-color-secondary); white-space: nowrap; }
+.list-toolbar__spacer { flex: 1 1 auto; }
+.list-toolbar__count { font-size: 13px; color: var(--el-text-color-secondary); white-space: nowrap; }
+.list-toolbar__actions { display: flex; gap: 8px; }
+.list-toolbar__actions .el-button + .el-button { margin-left: 0; }
+.is-narrow .list-toolbar__search { width: 100%; }
+.is-narrow .list-toolbar__filter { flex: 1 1 calc(50% - 6px); }
+.is-narrow .list-toolbar__filter .el-select { flex: 1; }
+
+/* ---------- EmptyState（FRONTEND-042） ---------- */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 16px; }
+.empty-state__icon { font-size: 48px; color: var(--el-text-color-placeholder); margin-bottom: 16px; }
+.empty-state__title { margin: 0 0 6px; font-size: 16px; font-weight: 500; color: var(--el-text-color-regular); }
+.empty-state__desc { margin: 0; max-width: 360px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.empty-state__action { margin-top: 16px; display: flex; gap: 8px; }
+.empty-state.is-error .empty-state__icon { color: var(--el-color-danger); }
+.empty-state.is-inline { padding: 16px 8px; }
+.empty-state.is-inline .empty-state__title { font-size: 14px; margin-bottom: 2px; }
+.empty-state.is-inline .empty-state__action { margin-top: 8px; }
+
+/* ==== 以下逐字複製自 component-common-extra.html（已核可） ==== */
+/* ---------- FormDialog（FRONTEND-040） ---------- */
+.form-dialog__footer { display: flex; justify-content: flex-end; gap: 8px; }
+.form-dialog__footer .el-button + .el-button { margin-left: 0; }
+
+/* ==================== EXAM SHARED CSS START（page-exam-detail.html 逐字複製這一段） ==================== */
+/* 觸控：頁面層級的主要按鈕撐到 44px（平板） */
+.touch.el-button { min-height: 44px; }
+.form-hint { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); }
+.form-warn { margin-top: 4px; font-size: 12px; line-height: 1.6; color: var(--el-color-warning-dark-2); }
+.form-error { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--el-color-danger); }
+
+/* ExamFormDialog（FRONTEND-232） */
+.ef-alert { margin-bottom: 16px; }
+.ef-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 0 16px; }
+.ef-grid--2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.ef-grid .el-select { width: 100%; }
+.ef-section { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 14px; font-weight: 600; color: var(--el-text-color-regular); }
+.ef-section__required { color: var(--el-color-danger); }
+.ef-section__hint { margin-left: 4px; font-size: 12px; font-weight: normal; color: var(--el-text-color-secondary); }
+.ef-section__spacer { flex: 1; }
+.ef-scope.is-error .el-select__wrapper { box-shadow: 0 0 0 1px var(--el-color-danger) inset; }
+.ef-scope-msg { margin: -12px 0 14px; }
+.ef-subjects { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 16px; margin-bottom: 4px; }
+.ef-subject { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 0 8px 0 12px; border: 1px solid var(--el-border-color-lighter); border-radius: 6px; background: var(--el-bg-color); }
+.ef-subject.is-off { background: var(--el-fill-color-lighter); }
+.ef-subject.is-off .el-checkbox__label { color: var(--el-text-color-secondary); }
+.ef-subject__full { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--el-text-color-secondary); }
+.ef-subject__full .el-input-number { width: 120px; }
+/* ==================== EXAM SHARED CSS END ==================== */
+
+/* ==================== 考試列表（FRONTEND-231） ==================== */
+.panel { background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter); border-radius: 8px; padding: 16px; }
+.list-pager { display: flex; justify-content: flex-end; margin-top: 12px; }
+.date-filter .el-date-editor { width: 250px; }
+.exam-table .exam-row { cursor: pointer; }
+/* 列高 ≥ 48px：平板上點整列進入考試 */
+.exam-table .el-table__body .el-table__cell { padding: 12px 0; }
+.exam-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.exam-date__year { margin-right: 4px; font-size: 12px; color: var(--el-text-color-secondary); }
+.exam-name { color: var(--el-color-primary); font-weight: 500; text-decoration: none; }
+.exam-name:hover { text-decoration: underline; }
+.exam-name:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; border-radius: 2px; }
+.exam-num { font-variant-numeric: tabular-nums; }
+.exam-warn { color: var(--el-color-warning-dark-2); }
+.exam-status { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.exam-status__time { font-size: 12px; color: var(--el-text-color-secondary); font-variant-numeric: tabular-nums; }
+.exam-more.el-button { width: 44px; height: 44px; margin: -8px 0; }
+.el-dropdown-menu__item.danger-item, .el-dropdown-menu__item.danger-item:not(.is-disabled):hover { color: var(--el-color-danger); }
+</style>
+</head>
+
+<body>
+<div id="app">
+  <div class="preview-bar">
+    <el-tag :type="meta.status === 'approved' ? 'success' : 'warning'" size="small" effect="dark" disable-transitions>
+      {{ meta.status === 'approved' ? '已核可' : '待核可' }}
+    </el-tag>
+    <span>{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span>以身分檢視</span>
+    <el-select v-model="viewAs" size="small" style="width: 280px">
+      <el-option v-for="(r, key) in roles" :key="key" :label="r.label" :value="key"></el-option>
+    </el-select>
+    <span>裝置</span>
+    <el-radio-group v-model="device" size="small">
+      <el-radio-button value="desktop">桌機 1200</el-radio-button>
+      <el-radio-button value="tablet">平板 1024</el-radio-button>
+    </el-radio-group>
+    <span class="preview-bar__spacer"></span>
+    <span>更新 {{ meta.updated }}</span>
+    <el-button size="small" text type="primary" @click="notesOpen = true">
+      設計說明 / 待裁定（{{ openQuestions.length }}）
+    </el-button>
+  </div>
+  <div class="control-bar">
+    <span>稿件控制：</span>
+    <span>列表</span>
+    <el-radio-group v-model="listState" size="small">
+      <el-radio-button value="data">有資料</el-radio-button>
+      <el-radio-button value="none">完全沒有考試</el-radio-button>
+      <el-radio-button value="loading">載入中</el-radio-button>
+      <el-radio-button value="error">載入失敗</el-radio-button>
+    </el-radio-group>
+    <span>建立 / 編輯送出</span>
+    <el-select v-model="formSim" size="small" style="width: 260px">
+      <el-option label="成功" value="ok"></el-option>
+      <el-option label="422 grade_not_in_class" value="grade_not_in_class"></el-option>
+      <el-option label="422 invalid_class" value="invalid_class"></el-option>
+      <el-option label="422 invalid_exam_type" value="invalid_exam_type"></el-option>
+      <el-option label="建立：科目設定失敗（PUT subjects 500）" value="subjects_fail"></el-option>
+      <el-option label="編輯：409 exam_published（改了類型 / 範圍）" value="exam_published"></el-option>
+    </el-select>
+    <span>刪除</span>
+    <el-select v-model="deleteSim" size="small" style="width: 180px">
+      <el-option label="成功" value="ok"></el-option>
+      <el-option label="409 exam_published" value="exam_published"></el-option>
+    </el-select>
+    <template v-if="can('exams:write')">
+      <span>開啟編輯 dialog（實際入口是考試頁的「編輯資訊」）</span>
+      <el-button size="small" @click="openEdit('e1')">草稿：第一次段考</el-button>
+      <el-button size="small" @click="openEdit('e2')">已發布：十月單元測驗</el-button>
+    </template>
+    <span class="last-request">網址：<span class="mono">/exams{{ queryString }}</span></span>
+    <span class="last-request">列表請求：<span class="mono">{{ listRequest }}</span></span>
+    <span v-if="lastRequest" class="last-request">最後送出：<span class="mono">{{ lastRequest }}</span></span>
+  </div>
+
+  <div class="stage">
+    <admin-shell :key="device + viewAs" :device="device" :perms="perms" :user="user" active-path="/exams" @navigate="onNavigate">
+      <page-header title="考試" subtitle="建立考試、輸入各科成績；發布後家長才看得到成績">
+        <template #actions v-if="can('exams:write')">
+          <el-button type="primary" class="touch" :disabled="listState === 'loading' || listState === 'error'" @click="openCreate">
+            <el-icon><icon-plus></icon-plus></el-icon>建立考試
+          </el-button>
+        </template>
+      </page-header>
+
+      <section class="panel">
+        <admin-list-toolbar v-model:search="filters.q" v-model:filter-values="filterValues" search-placeholder="搜尋考試名稱"
+                            :filters="toolbarFilters" :total="listState === 'data' || listState === 'none' ? filteredRows.length : undefined">
+          <template #extra-filters>
+            <div class="list-toolbar__filter date-filter">
+              <span class="list-toolbar__filter-label">日期</span>
+              <el-date-picker v-model="filters.range" type="daterange" range-separator="～" start-placeholder="開始日期"
+                              end-placeholder="結束日期" format="YYYY/MM/DD" value-format="YYYY-MM-DD"
+                              :shortcuts="dateShortcuts" aria-label="考試日期區間"></el-date-picker>
+            </div>
+          </template>
+        </admin-list-toolbar>
+
+        <empty-state v-if="listState === 'error'" variant="error" title="無法載入考試" description="網路連線中斷，請確認網路後再試一次">
+          <template #action><el-button @click="retry">重試</el-button></template>
+        </empty-state>
+        <template v-else>
+          <el-table v-loading="listState === 'loading'" :data="tableRows" class="exam-table" row-class-name="exam-row"
+                    style="width: 100%" @row-click="openDetail">
+            <el-table-column label="考試日期" width="122">
+              <template #default="{ row }">
+                <span class="exam-date"><span v-if="row.exam_date.slice(0, 4) !== todayYear" class="exam-date__year">{{ row.exam_date.slice(0, 4) }}</span>{{ formatDateWithWeekday(row.exam_date) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="名稱" min-width="160" show-overflow-tooltip>
+              <template #default="{ row }">
+                <a class="exam-name" :href="'#/exams/' + row.id" @click.prevent.stop="openDetail(row)">{{ row.name }}</a>
+              </template>
+            </el-table-column>
+            <el-table-column label="類型" width="80">
+              <template #default="{ row }">{{ row.exam_type.name }}</template>
+            </el-table-column>
+            <el-table-column label="對象" min-width="140" show-overflow-tooltip>
+              <template #default="{ row }">{{ targetLabel(row) }}</template>
+            </el-table-column>
+            <el-table-column label="科目數" width="78" align="right">
+              <template #default="{ row }">
+                <span v-if="row.subjects.length" class="exam-num">{{ row.subjects.length }}</span>
+                <span v-else class="exam-warn">未設定</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="應考人數" width="90" align="right">
+              <template #default="{ row }">
+                <span class="exam-num" :class="{ 'exam-warn': row.roster_count === 0 }">{{ row.roster_count }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="狀態" width="140">
+              <template #default="{ row }">
+                <div class="exam-status">
+                  <el-tag :type="statusMeta(row.status).tone" size="small" disable-transitions>{{ statusMeta(row.status).label }}</el-tag>
+                  <span v-if="row.status === 'published'" class="exam-status__time">{{ formatDateTime(row.published_at) }}</span>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column v-if="can('exams:write')" label="" width="64" align="center" fixed="right">
+              <template #default="{ row }">
+                <span v-if="row.status === 'draft'" @click.stop>
+                  <el-dropdown trigger="click" @command="(cmd) => onCommand(cmd, row)">
+                    <el-button class="exam-more" text :aria-label="'更多操作：' + row.name">
+                      <el-icon :size="18"><icon-more-filled></icon-more-filled></el-icon>
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="delete" class="danger-item"><el-icon><icon-delete></icon-delete></el-icon>刪除</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </span>
+              </template>
+            </el-table-column>
+            <template #empty>
+              <template v-if="listState !== 'loading'">
+                <empty-state v-if="isDefaultFilters" title="還沒有考試紀錄"
+                             description="預設只顯示近 90 天到未來 30 天的考試，更早的考試請調整日期區間">
+                  <template v-if="can('exams:write')" #action>
+                    <el-button type="primary" class="touch" @click="openCreate"><el-icon><icon-plus></icon-plus></el-icon>建立考試</el-button>
+                  </template>
+                </empty-state>
+                <empty-state v-else variant="inline" title="沒有符合條件的考試" description="試著調整搜尋文字、篩選條件或日期區間"></empty-state>
+              </template>
+              <span v-else></span>
+            </template>
+          </el-table>
+          <div v-if="(listState === 'data' || listState === 'none') && filteredRows.length" class="list-pager">
+            <el-pagination v-model:current-page="page" :page-size="20" layout="prev, pager, next" :total="filteredRows.length" background></el-pagination>
+          </div>
+        </template>
+      </section>
+
+      <exam-form-dialog v-model="formOpen" :exam="editing" :sim="formSim" @saved="onSaved" @request="(r) => lastRequest = r"></exam-form-dialog>
+    </admin-shell>
+  </div>
+
+  <el-drawer v-model="notesOpen" title="設計說明 / 待裁定" size="560px">
+    <el-alert v-if="openQuestions.length" title="以下項目需要你裁定，未回覆前這張稿不會進入實作"
+              type="warning" :closable="false" show-icon style="margin-bottom: 16px"></el-alert>
+    <h4>設計決策</h4>
+    <ol>
+      <li v-for="(d, i) in decisions" :key="i" style="margin-bottom: 6px">{{ d }}</li>
+    </ol>
+    <h4 v-if="openQuestions.length">待裁定</h4>
+    <ol>
+      <li v-for="(q, i) in openQuestions" :key="i" style="margin-bottom: 8px">
+        <div>{{ q.question }}</div>
+        <div style="color: var(--el-text-color-secondary); font-size: 13px">
+          A. {{ q.optionA }}<br>B. {{ q.optionB }}
+        </div>
+      </li>
+    </ol>
+  </el-drawer>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch, onBeforeUnmount, nextTick } = Vue
+const { ElMessage, ElMessageBox } = ElementPlus
+
+/* ==================== ADMIN SHELL JS START（各頁稿逐字複製這一段） ==================== */
+/** 各角色預設權限碼，與 docs/domain_spec.md §3「預設授予」一致；admin 擁有全部。 */
+const ALL_STAFF = [
+  'dashboard:read', 'classes:read', 'students:read',
+  'attendance:read', 'attendance:operate', 'leaves:read',
+  'homework:read', 'homework:write', 'pickup:read', 'pickup:operate', 'exams:read',
+]
+const DIRECTOR = [...ALL_STAFF,
+  'staff:read', 'roles:read', 'settings:read', 'settings:write', 'audit:read',
+  'classes:write', 'students:write', 'students:sensitive', 'guardians:write',
+  'attendance:amend', 'leaves:write', 'pickup:override', 'exams:write', 'exams:publish']
+const CLERK = [...ALL_STAFF, 'settings:read', 'classes:write', 'students:write', 'guardians:write',
+  'leaves:write', 'exams:write', 'exams:publish']
+const TUTOR = [...ALL_STAFF, 'exams:write']
+const ADMIN = [...DIRECTOR, 'staff:write', 'roles:write', 'students:purge']
+const SHELL_USERS = {
+  admin: { display_name: '系統管理員', role: '系統管理員' },
+  director: { display_name: '張主任', role: '主任' },
+  clerk: { display_name: '林行政', role: '行政' },
+  tutor: { display_name: '陳老師', role: '課輔老師' },
+}
+
+/** 與 apps/web/src/constants/navigation.ts 的 NAVIGATION 逐項一致（原檔是權威） */
+const NAVIGATION = [
+  { key: 'home', label: '首頁', items: [{ label: '今日儀表板', path: '/', icon: 'icon-odometer', permission: 'dashboard:read' }] },
+  { key: 'daily', label: '日常營運', items: [
+    { label: '今日出勤', path: '/attendance', icon: 'icon-calendar', permission: 'attendance:read' },
+    { label: '作業進度', path: '/homework', icon: 'icon-edit-pen', permission: 'homework:read' },
+    { label: '接送', path: '/pickup', icon: 'icon-van', permission: 'pickup:read' },
+    { label: '代理接送核驗', path: '/pickup/authorizations', icon: 'icon-stamp', permission: 'pickup:read' },
+    { label: '請假', path: '/leaves', icon: 'icon-tickets', permission: 'leaves:read' },
+  ] },
+  { key: 'students', label: '學生與班級', items: [
+    { label: '學生工作台', path: '/students', icon: 'icon-user', permission: 'students:read' },
+    { label: '班級管理', path: '/classes', icon: 'icon-school', permission: 'classes:read' },
+    { label: '月出勤報表', path: '/attendance/monthly', icon: 'icon-data-line', permission: 'attendance:read' },
+  ] },
+  { key: 'exams', label: '成績', items: [{ label: '考試', path: '/exams', icon: 'icon-trophy', permission: 'exams:read' }] },
+  { key: 'settings', label: '設定', items: [
+    { label: '系統設定', path: '/settings/system', icon: 'icon-setting', permission: 'settings:read' },
+    { label: '參考資料', path: '/settings/reference', icon: 'icon-collection', permission: 'settings:read' },
+    { label: '員工帳號', path: '/settings/accounts', icon: 'icon-user-filled', permission: 'staff:read' },
+    { label: '角色權限', path: '/settings/roles', icon: 'icon-lock', permission: 'roles:read' },
+    { label: '稽核紀錄', path: '/settings/audit', icon: 'icon-list', permission: 'audit:read' },
+  ] },
+]
+/** 與 apps/web/src/router/routes.ts 的 meta.title / meta.tablet 一致 */
+const ROUTE_META = {
+  '/': { title: '今日儀表板' }, '/students': { title: '學生工作台' }, '/classes': { title: '班級管理' },
+  '/attendance': { title: '今日出勤', tablet: true }, '/attendance/monthly': { title: '月出勤報表' }, '/leaves': { title: '請假' },
+  '/homework': { title: '作業進度', tablet: true }, '/pickup': { title: '接送', tablet: true },
+  '/pickup/authorizations': { title: '代理接送核驗', tablet: true }, '/exams': { title: '考試' }, '/exams/e1': { title: '考試成績' },
+  '/settings/system': { title: '系統設定' }, '/settings/reference': { title: '參考資料' }, '/settings/accounts': { title: '員工帳號' },
+  '/settings/roles': { title: '角色權限' }, '/settings/audit': { title: '稽核紀錄' },
+}
+/** 與 apps/web/src/shared/constants/statusLabels.ts 的 NOTIFICATION_EVENT_LABELS 一致 */
+const NOTIFICATION_EVENT_LABELS = {
+  'attendance.checked_in': '到班通知', 'attendance.checked_out': '離班通知', 'leave.created': '學生請假',
+  'leave.cancelled': '學生取消請假', 'homework.eta_updated': '預計可接送時間', 'homework.done': '作業完成',
+  'pickup.requested': '家長發起接送', 'pickup.replied': '老師回覆接送', 'pickup.arrived': '家長已抵達',
+  'pickup.completed': '接送完成', 'pickup.cancelled': '接送取消', 'exam.published': '成績公布', 'binding.completed': '綁定完成',
+}
+/** 員工收得到的站內通知（domain_spec M9）；文案依 BACKEND-203 templates */
+const SAMPLE_NOTIFICATIONS = () => [
+  { id: 'n1', event: 'pickup.requested', title: '王小明 家長要來接', body: '家長預計 17:30 抵達。', deep_link: '/pickup', created_at: '2026/10/02 17:05', read_at: null },
+  { id: 'n2', event: 'leave.created', title: '陳小美 請假', body: '陳小美 2026-10-05～2026-10-06 病假。', deep_link: '/leaves', created_at: '2026/10/02 16:40', read_at: null },
+  { id: 'n3', event: 'pickup.cancelled', title: '李承恩 接送已取消', body: '家長已取消今天的接送請求。\n原因：改由爺爺來接', deep_link: '/pickup', created_at: '2026/10/02 16:12', read_at: null },
+  { id: 'n4', event: 'leave.cancelled', title: '林小華 取消請假', body: '林小華 2026-10-02～2026-10-02 的請假已取消。', deep_link: '/leaves', created_at: '2026/10/01 20:31', read_at: '2026/10/01 21:00' },
+  { id: 'n5', event: 'pickup.requested', title: '張語晴 家長要來接', body: '家長已發起接送。', deep_link: '/pickup', created_at: '2026/10/01 17:48', read_at: '2026/10/01 17:50' },
+]
+
+const NotificationPanel = {
+  props: { items: Array, unreadCount: Number, loading: Boolean, unreadOnly: Boolean },
+  emits: ['open', 'read-all', 'filter'],
+  setup() { return { LABELS: NOTIFICATION_EVENT_LABELS } },
+  template: `
+    <div class="notif">
+      <div class="notif__head">
+        <span class="notif__title">通知</span>
+        <el-segmented :model-value="unreadOnly ? 'unread' : 'all'" size="small"
+                      :options="[{ label: '全部', value: 'all' }, { label: '未讀', value: 'unread' }]"
+                      @change="(v) => $emit('filter', v === 'unread')"></el-segmented>
+        <span style="flex: 1"></span>
+        <el-button link type="primary" :disabled="unreadCount === 0" @click="$emit('read-all')">全部標為已讀</el-button>
+      </div>
+      <div class="notif__list">
+        <template v-if="loading">
+          <div v-for="i in 3" :key="i" class="notif__skeleton"><el-skeleton :rows="1" animated></el-skeleton></div>
+        </template>
+        <div v-else-if="!items.length" class="notif__empty">{{ unreadOnly ? '沒有未讀通知' : '目前沒有通知' }}</div>
+        <template v-else>
+          <button v-for="n in items" :key="n.id" type="button" class="notif__row" :class="{ 'is-unread': !n.read_at }" @click="$emit('open', n)">
+            <span v-if="!n.read_at" class="notif__dot" data-test="unread-dot" aria-label="未讀"></span>
+            <div class="notif__row-title">{{ n.title }}</div>
+            <div class="notif__row-body">{{ n.body }}</div>
+            <div class="notif__row-meta">
+              <el-tag size="small" type="info" disable-transitions>{{ LABELS[n.event] || n.event }}</el-tag>
+              <span>{{ n.created_at }}</span>
+            </div>
+          </button>
+        </template>
+      </div>
+    </div>`,
+}
+
+/**
+ * AdminShell：AdminLayout + AdminSidebar + AdminHeader + NotificationBell 的稿內合體。
+ * props 只有 device / perms / user / activePath 是各頁需要傳的；wsStatus / notifState 只有外框稿用來切狀態。
+ * emits navigate(path)：點側欄項目或通知 deep_link 時發出，各頁稿可以忽略或顯示提示。
+ */
+const AdminShell = {
+  components: { NotificationPanel },
+  props: {
+    device: { type: String, default: 'desktop' },
+    perms: { type: Array, required: true },
+    user: { type: Object, required: true },
+    activePath: { type: String, required: true },
+    wsStatus: { type: String, default: 'open' },
+    notifState: { type: String, default: 'data' },
+  },
+  emits: ['navigate'],
+  setup(props, { emit }) {
+    const isMobile = computed(() => props.device === 'mobile')
+    // 模擬 localStorage['admin.sidebarCollapsed']：使用者沒切過（remembered = null）時，依路由 meta.tablet 決定預設
+    const remembered = ref(null)
+    const collapsed = computed({
+      get: () => remembered.value ?? !!ROUTE_META[props.activePath]?.tablet,
+      set: (v) => { remembered.value = v },
+    })
+    const drawerOpen = ref(false)
+    const groups = computed(() => NAVIGATION
+      .map((g) => ({ ...g, items: g.items.filter((i) => props.perms.includes(i.permission)) }))
+      .filter((g) => g.items.length))
+    const activeItem = computed(() => {
+      const segs = (p) => p.split('/').filter(Boolean)
+      const route = segs(props.activePath)
+      let best = null
+      for (const g of groups.value) for (const it of g.items) {
+        const s = segs(it.path)
+        const match = it.path === '/' ? props.activePath === '/' : s.every((x, i) => route[i] === x)
+        if (match && (!best || s.length > segs(best).length)) best = it.path
+      }
+      return best ?? ''
+    })
+    const title = computed(() => ROUTE_META[props.activePath]?.title ?? '')
+    const go = (path) => { drawerOpen.value = false; emit('navigate', path) }
+    const toggle = () => { if (isMobile.value) drawerOpen.value = !drawerOpen.value; else collapsed.value = !collapsed.value }
+
+    // 通知（NotificationBell + store 的稿內模擬）
+    const items = ref(SAMPLE_NOTIFICATIONS())
+    const unreadOnly = ref(false)
+    const popoverOpen = ref(false)
+    const unreadCount = computed(() => {
+      if (props.notifState === 'many') return 120
+      if (props.notifState === 'empty') return 0
+      return items.value.filter((n) => !n.read_at).length
+    })
+    const shownItems = computed(() => {
+      if (props.notifState === 'empty' || props.notifState === 'loading') return []
+      return unreadOnly.value ? items.value.filter((n) => !n.read_at) : items.value
+    })
+    const openNotif = (n) => {
+      if (!n.read_at) n.read_at = '剛剛'
+      popoverOpen.value = false
+      if (n.deep_link) go(n.deep_link)
+    }
+    const readAll = () => { items.value.forEach((n) => { if (!n.read_at) n.read_at = '剛剛' }) }
+    const loggingOut = ref(false)
+    const onUserCommand = (cmd) => {
+      if (cmd === 'password') { ElMessage.info('（稿）導頁至 /change-password'); return }
+      loggingOut.value = true
+      setTimeout(() => { loggingOut.value = false; ElMessage.success('（稿）已登出，導回 /login') }, 800)
+    }
+    const wsTip = computed(() => ({ open: '即時連線正常', reconnecting: '即時連線重試中' }[props.wsStatus] ?? '即時連線未建立'))
+    return {
+      isMobile, collapsed, drawerOpen, groups, activeItem, title, go, toggle,
+      shownItems, unreadCount, unreadOnly, popoverOpen, openNotif, readAll, loggingOut, onUserCommand, wsTip,
+    }
+  },
+  template: `
+    <div class="device-frame" :class="'is-' + device">
+      <div class="shell">
+        <aside v-if="!isMobile" class="shell__aside" :class="{ 'is-collapsed': collapsed }" data-test="admin-sidebar">
+          <div class="shell__brand"><el-icon><icon-school></icon-school></el-icon><span v-show="!collapsed">安親班管理系統</span></div>
+          <div class="shell__menu">
+            <div v-if="!groups.length" class="shell__empty" v-show="!collapsed">沒有可使用的功能，請聯絡管理員</div>
+            <el-menu v-else :default-active="activeItem" :collapse="collapsed" :collapse-transition="false" @select="go">
+              <el-menu-item-group v-for="g in groups" :key="g.key" :title="g.label">
+                <el-menu-item v-for="it in g.items" :key="it.path" :index="it.path">
+                  <el-icon><component :is="it.icon"></component></el-icon>
+                  <template #title>{{ it.label }}</template>
+                </el-menu-item>
+              </el-menu-item-group>
+            </el-menu>
+          </div>
+          <div class="shell__collapse">
+            <el-button text :aria-label="collapsed ? '展開側欄' : '收合側欄'" @click="collapsed = !collapsed">
+              <el-icon><icon-arrow-right v-if="collapsed"></icon-arrow-right><icon-arrow-left v-else></icon-arrow-left></el-icon>
+              <span v-if="!collapsed">收合</span>
+            </el-button>
+          </div>
+        </aside>
+
+        <div class="shell__body">
+          <header class="shell__header">
+            <el-button class="shell__toggle" text aria-label="切換側欄" @click="toggle">
+              <el-icon :size="18"><icon-expand v-if="isMobile || collapsed"></icon-expand><icon-fold v-else></icon-fold></el-icon>
+            </el-button>
+            <h1 class="shell__title">{{ title }}</h1>
+            <span class="shell__spacer"></span>
+            <el-tooltip :content="wsTip" placement="bottom">
+              <span class="ws-dot" :class="'is-' + wsStatus" data-test="ws-dot" :aria-label="wsTip" role="img"></span>
+            </el-tooltip>
+            <el-popover v-model:visible="popoverOpen" trigger="click" placement="bottom-end" :width="360" :show-arrow="false">
+              <template #reference>
+                <el-button class="shell__bell" text aria-label="通知">
+                  <el-badge :value="unreadCount" :max="99" :hidden="unreadCount === 0">
+                    <el-icon :size="18"><icon-bell></icon-bell></el-icon>
+                  </el-badge>
+                </el-button>
+              </template>
+              <notification-panel :items="shownItems" :unread-count="unreadCount" :loading="notifState === 'loading'"
+                                  :unread-only="unreadOnly" @open="openNotif" @read-all="readAll"
+                                  @filter="(v) => unreadOnly = v"></notification-panel>
+            </el-popover>
+            <el-dropdown trigger="click" @command="onUserCommand">
+              <span class="shell__user">
+                <el-icon><icon-avatar></icon-avatar></el-icon>
+                <span v-if="!isMobile">{{ user.display_name }}</span>
+                <el-tag v-if="!isMobile" size="small" type="info" disable-transitions>{{ user.role }}</el-tag>
+                <el-icon><icon-arrow-down></icon-arrow-down></el-icon>
+              </span>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-if="isMobile" disabled>{{ user.display_name }}（{{ user.role }}）</el-dropdown-item>
+                  <el-dropdown-item command="password"><el-icon><icon-key></icon-key></el-icon>修改密碼</el-dropdown-item>
+                  <el-dropdown-item command="logout" divided :disabled="loggingOut">
+                    <el-icon><icon-loading v-if="loggingOut" class="is-loading"></icon-loading><icon-switch-button v-else></icon-switch-button></el-icon>
+                    {{ loggingOut ? '登出中…' : '登出' }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </header>
+          <el-alert v-if="wsStatus === 'reconnecting'" class="shell__banner" type="warning" :closable="false" show-icon
+                    title="即時連線中斷，畫面每 15 秒自動更新"></el-alert>
+          <main class="shell__main"><slot></slot></main>
+        </div>
+
+        <template v-if="isMobile && drawerOpen">
+          <div class="shell__scrim" @click="drawerOpen = false"></div>
+          <aside class="shell__drawer" data-test="admin-sidebar">
+            <div class="shell__brand"><el-icon><icon-school></icon-school></el-icon><span>安親班管理系統</span></div>
+            <div class="shell__menu">
+              <div v-if="!groups.length" class="shell__empty">沒有可使用的功能，請聯絡管理員</div>
+              <el-menu v-else :default-active="activeItem" @select="go">
+                <el-menu-item-group v-for="g in groups" :key="g.key" :title="g.label">
+                  <el-menu-item v-for="it in g.items" :key="it.path" :index="it.path">
+                    <el-icon><component :is="it.icon"></component></el-icon><span>{{ it.label }}</span>
+                  </el-menu-item>
+                </el-menu-item-group>
+              </el-menu>
+            </div>
+          </aside>
+        </template>
+      </div>
+    </div>`,
+}
+/* ==================== ADMIN SHELL JS END ==================== */
+
+/* ==== 以下逐字複製自 component-common.html（已核可） ==== */
+/* ---------- PageHeader ---------- */
+const PageHeader = {
+  props: { title: { type: String, required: true }, subtitle: { type: String, default: '' } },
+  template: `
+    <div class="page-header">
+      <div class="page-header__body">
+        <h1 class="page-header__title">{{ title }}</h1>
+        <p v-if="subtitle" class="page-header__subtitle" data-test="page-subtitle">{{ subtitle }}</p>
+        <div v-if="$slots.default" class="page-header__extra"><slot></slot></div>
+      </div>
+      <div v-if="$slots.actions" class="page-header__actions"><slot name="actions"></slot></div>
+    </div>`,
+}
+
+/* ---------- AdminListToolbar ---------- */
+const ALL = '__all__'
+const AdminListToolbar = {
+  props: {
+    search: { type: String, default: '' },
+    searchPlaceholder: { type: String, default: '搜尋' },
+    filters: { type: Array, default: () => [] },
+    filterValues: { type: Object, default: () => ({}) },
+    total: { type: Number, default: undefined },
+  },
+  emits: ['update:search', 'update:filterValues'],
+  setup(props, { emit }) {
+    const text = ref(props.search)
+    watch(() => props.search, (v) => { if (v !== text.value.trim()) text.value = v })
+    let timer = null
+    const flush = () => { clearTimeout(timer); timer = null; emit('update:search', text.value.trim()) }
+    const onInput = (v) => { text.value = v; clearTimeout(timer); timer = setTimeout(flush, 300) }
+    onBeforeUnmount(() => clearTimeout(timer))
+    const clearable = (g) => g.clearable !== false
+    const current = (g) => {
+      const v = props.filterValues[g.key]
+      return v === undefined && clearable(g) ? ALL : v
+    }
+    const onSelect = (g, v) => {
+      emit('update:filterValues', { ...props.filterValues, [g.key]: v === ALL || v === '' ? undefined : v })
+    }
+    return { text, onInput, flush, clearable, current, onSelect, ALL }
+  },
+  template: `
+    <div class="list-toolbar">
+      <el-input class="list-toolbar__search" :model-value="text" :placeholder="searchPlaceholder"
+                :aria-label="searchPlaceholder" clearable
+                @update:model-value="onInput" @keyup.enter="flush" @clear="flush">
+        <template #prefix><el-icon><icon-search></icon-search></el-icon></template>
+      </el-input>
+      <div v-for="g in filters" :key="g.key" class="list-toolbar__filter">
+        <span class="list-toolbar__filter-label">{{ g.label }}</span>
+        <el-select :model-value="current(g)" :clearable="clearable(g) && current(g) !== ALL"
+                   style="width: 130px" @update:model-value="(v) => onSelect(g, v)">
+          <el-option v-if="clearable(g)" label="全部" :value="ALL"></el-option>
+          <el-option v-for="o in g.options" :key="String(o.value)" :label="o.label" :value="o.value"></el-option>
+        </el-select>
+      </div>
+      <slot name="extra-filters"></slot>
+      <span class="list-toolbar__spacer"></span>
+      <span v-if="total !== undefined" class="list-toolbar__count">共 {{ total }} 筆</span>
+      <div v-if="$slots.actions" class="list-toolbar__actions"><slot name="actions"></slot></div>
+    </div>`,
+}
+
+/* ---------- EmptyState ---------- */
+const EmptyState = {
+  props: {
+    title: { type: String, required: true },
+    description: { type: String, default: '' },
+    variant: { type: String, default: 'default' },
+    icon: { type: String, default: '' },
+  },
+  computed: {
+    iconName() { return this.icon || (this.variant === 'error' ? 'icon-warning-filled' : 'icon-folder-opened') },
+  },
+  template: `
+    <div class="empty-state" :class="{ 'is-error': variant === 'error', 'is-inline': variant === 'inline' }" role="status">
+      <el-icon v-if="variant !== 'inline'" class="empty-state__icon" data-test="empty-icon">
+        <component :is="iconName"></component>
+      </el-icon>
+      <p class="empty-state__title">{{ title }}</p>
+      <p v-if="description" class="empty-state__desc">{{ description }}</p>
+      <div v-if="$slots.action" class="empty-state__action"><slot name="action"></slot></div>
+    </div>`,
+}
+
+/* ==== 以下逐字複製自 component-common-extra.html（已核可） ==== */
+/** 與 apps/web/src/composables/useFormDirty.ts 的 confirmDiscardChanges 一致 */
+const confirmDiscardChanges = () => ElMessageBox.confirm('尚未儲存的變更將會遺失，確定要關閉嗎？', '未儲存的變更', {
+  confirmButtonText: '放棄變更', cancelButtonText: '繼續編輯',
+}).then(() => true).catch(() => false)
+
+/* ---------- FormDialog ----------
+   fullscreen prop 只用於稿裡模擬視窗寬 < 768；實作依視窗寬自動判斷。 */
+const WIDTH = { sm: '420px', md: '560px', lg: '800px' }
+const FormDialog = {
+  props: {
+    modelValue: Boolean, title: { type: String, required: true }, size: { type: String, default: 'md' },
+    loading: Boolean, submitText: { type: String, default: '儲存' }, cancelText: { type: String, default: '取消' },
+    submitDisabled: Boolean, dirty: Boolean, hideFooter: Boolean, autofocus: { type: Boolean, default: true },
+    fullscreen: Boolean,
+  },
+  emits: ['update:modelValue', 'submit', 'closed'],
+  setup(props, { emit }) {
+    const body = ref(null)
+    const canClose = async () => !props.loading && (!props.dirty || await confirmDiscardChanges())
+    const beforeClose = async (done) => { if (await canClose()) done() }
+    const cancel = async () => { if (await canClose()) emit('update:modelValue', false) }
+    const onOpened = () => {
+      if (!props.autofocus) return
+      const PICKERS = '.el-select, .el-date-editor, .el-time-picker, .el-cascader, .el-autocomplete'
+      const el = [...(body.value?.querySelectorAll('input:not([disabled]):not([readonly]):not([type=checkbox]):not([type=radio]), textarea:not([disabled]):not([readonly])') ?? [])]
+        .find((x) => !x.closest(PICKERS))
+      el?.focus()
+    }
+    return { body, width: computed(() => WIDTH[props.size]), beforeClose, cancel, onOpened }
+  },
+  template: `
+    <el-dialog :model-value="modelValue" :title="title" :width="width" :fullscreen="fullscreen"
+               :show-close="!loading" :before-close="beforeClose" append-to-body
+               @update:model-value="(v) => $emit('update:modelValue', v)" @opened="onOpened" @closed="$emit('closed')">
+      <div ref="body"><slot></slot></div>
+      <template v-if="!hideFooter" #footer>
+        <div class="form-dialog__footer">
+          <el-button :disabled="loading" @click="cancel">{{ cancelText }}</el-button>
+          <el-button type="primary" :loading="loading" :disabled="loading || submitDisabled" @click="$emit('submit')">{{ submitText }}</el-button>
+        </div>
+      </template>
+    </el-dialog>`,
+}
+
+/* ==================== EXAM SHARED JS START（page-exam-detail.html 逐字複製這一段） ==================== */
+/* 日期與年級：對照 shared/utils/datetime.ts（formatDateWithWeekday / formatDateTime）與 utils/academicYear.ts（GRADE_OPTIONS） */
+const TODAY = '2026-10-07'   // 稿內固定的「今天」（台北），115 學年度
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
+const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+const formatDateWithWeekday = (iso) => `${iso.slice(5, 7)}/${iso.slice(8, 10)}（${WEEKDAYS[new Date(iso + 'T00:00:00Z').getUTCDay()]}）`
+const formatDateTime = (iso) => {
+  if (!iso) return '—'
+  const d = new Date(new Date(iso).getTime() + 8 * 3600 * 1000)
+  return d.toISOString().slice(0, 16).replace('T', ' ').replaceAll('-', '/')
+}
+const GRADE_TEXT = ['一', '二', '三', '四', '五', '六']
+const GRADE_OPTIONS = GRADE_TEXT.map((t, i) => ({ label: `${t}年級`, value: i + 1 }))
+const gradeLabel = (g) => (g ? `${GRADE_TEXT[g - 1]}年級` : '')
+const fmtNum = (n) => (n === null || n === undefined ? '—' : String(n))
+/** 與 shared/constants/statusLabels.ts 的 EXAM_STATUS_META 一致（tone 直接當 el-tag type） */
+const EXAM_STATUS_META = { draft: { label: '草稿', tone: 'info' }, published: { label: '已發布', tone: 'success' } }
+const statusMeta = (s) => EXAM_STATUS_META[s] ?? { label: s ?? '—', tone: 'info' }
+/** 對象：「三年級」「低年級A班」「低年級A班・二年級」 */
+const targetLabel = (exam) => [exam.class ? exam.class.name : '', gradeLabel(exam.grade_level)].filter(Boolean).join('・')
+
+/* 參考資料（stores/lookups.ts 的 examTypeOptions / classOptions(115) / subjectOptions，只含啟用中的項目） */
+const EXAM_TYPES = [{ id: 't1', name: '段考' }, { id: 't2', name: '小考' }, { id: 't3', name: '複習考' }]
+const CLASSES = [
+  { id: 'c1', name: '低年級A班', grade_levels: [1, 2], student_count: 18 },
+  { id: 'c2', name: '低年級B班', grade_levels: [1, 2], student_count: 15 },
+  { id: 'c3', name: '中年級A班', grade_levels: [3, 4], student_count: 31 },
+  { id: 'c4', name: '中年級B班', grade_levels: [3, 4], student_count: 29 },
+  { id: 'c5', name: '高年級班', grade_levels: [5, 6], student_count: 22 },
+]
+const SUBJECTS = [
+  { id: 'sub1', name: '國語' }, { id: 'sub2', name: '數學' }, { id: 'sub3', name: '英語' }, { id: 'sub4', name: '自然' }, { id: 'sub5', name: '社會' },
+]
+const GRADE_COUNTS = { 1: 17, 2: 16, 3: 32, 4: 28, 5: 12, 6: 10 }
+const typeOf = (id) => EXAM_TYPES.find((t) => t.id === id) ?? { id, name: '—' }
+const classBrief = (id) => { const c = CLASSES.find((x) => x.id === id); return c ? { id: c.id, name: c.name } : null }
+/** 稿用：新建考試的應考人數（實際由後端 resolve_exam_roster 計算） */
+const estimateRoster = (grade, classId) => {
+  const c = CLASSES.find((x) => x.id === classId)
+  if (c && grade) return Math.round(c.student_count / c.grade_levels.length)
+  return c ? c.student_count : (GRADE_COUNTS[grade] ?? 0)
+}
+
+/* ==================== ExamFormDialog（FRONTEND-232） ==================== */
+const SCOPE_FIELDS = ['exam_type_id', 'grade_level', 'class_id']
+/** 後端 422 錯誤碼 → 顯示在哪個欄位（訊息用後端 message） */
+const EXAM_FORM_ERRORS = {
+  invalid_exam_type: { field: 'exam_type_id', message: '考試類型不存在或已停用' },
+  invalid_class: { field: 'class_id', message: '班級不存在或已封存' },
+  grade_not_in_class: { field: 'grade_level', message: '班級不包含指定的年級' },
+}
+let examSeq = 20
+const ExamFormDialog = {
+  props: { modelValue: Boolean, exam: { type: Object, default: null }, sim: { type: String, default: 'ok' } },
+  emits: ['update:modelValue', 'saved', 'request'],
+  setup(props, { emit }) {
+    const isEdit = computed(() => !!props.exam)
+    const isPublished = computed(() => props.exam?.status === 'published')
+    const blank = () => ({
+      name: props.exam?.name ?? '',
+      exam_type_id: props.exam?.exam_type.id ?? '',
+      exam_date: props.exam?.exam_date ?? '',
+      grade_level: props.exam?.grade_level ?? null,
+      class_id: props.exam?.class?.id ?? null,
+      note: props.exam?.note ?? '',
+    })
+    const form = reactive(blank())
+    const subjects = ref([])
+    const baseline = ref('')
+    const errors = reactive({ name: '', exam_type_id: '', exam_date: '', grade_level: '', class_id: '', scope: '', subjects: '' })
+    const alertMsg = ref('')
+    const loading = ref(false)
+    const snapshot = () => JSON.stringify({ form, subjects: subjects.value })
+    const dirty = computed(() => snapshot() !== baseline.value)
+    const clearErrors = () => { Object.keys(errors).forEach((k) => { errors[k] = '' }); alertMsg.value = '' }
+    watch(() => props.modelValue, (open) => {
+      if (!open) return
+      Object.assign(form, blank())
+      subjects.value = isEdit.value ? [] : SUBJECTS.map((s) => ({ subject_id: s.id, name: s.name, on: true, full_score: 100 }))
+      baseline.value = snapshot()
+      clearErrors()
+    })
+
+    const examTypeOptions = EXAM_TYPES.map((t) => ({ label: t.name, value: t.id }))
+    const gradeOptions = GRADE_OPTIONS
+    // 編輯舊考試時班級可能不在目前學年度的清單：仍以原班級名稱顯示
+    const classOptions = computed(() => {
+      const opts = CLASSES.map((c) => ({ label: c.name, value: c.id }))
+      const cur = props.exam?.class
+      if (cur && !opts.some((o) => o.value === cur.id)) opts.push({ label: cur.name, value: cur.id })
+      return opts
+    })
+    const scopeChanged = computed(() => isEdit.value && !isPublished.value
+      && (form.grade_level !== (props.exam.grade_level ?? null) || form.class_id !== (props.exam.class?.id ?? null)))
+    const allOn = computed(() => subjects.value.length > 0 && subjects.value.every((s) => s.on))
+    const someOn = computed(() => subjects.value.some((s) => s.on))
+    const toggleAll = (v) => { subjects.value.forEach((s) => { s.on = v }); errors.subjects = '' }
+    const onScopeChange = () => { errors.scope = ''; errors.grade_level = ''; errors.class_id = '' }
+
+    const validate = () => {
+      clearErrors()
+      if (!form.name.trim()) errors.name = '請輸入考試名稱'
+      if (!form.exam_type_id) errors.exam_type_id = '請選擇考試類型'
+      if (!form.exam_date) errors.exam_date = '請選擇考試日期'
+      if (!form.grade_level && !form.class_id) errors.scope = '請選擇年級或班級'
+      if (subjects.value.some((s) => s.on && !(s.full_score > 0))) errors.subjects = '請輸入勾選科目的滿分'
+      return !Object.values(errors).some(Boolean)
+    }
+    const createBody = () => {
+      const b = { name: form.name.trim(), exam_type_id: form.exam_type_id, exam_date: form.exam_date }
+      if (form.grade_level) b.grade_level = form.grade_level
+      if (form.class_id) b.class_id = form.class_id
+      if (form.note.trim()) b.note = form.note.trim()
+      return b
+    }
+    // 編輯只送有變更的欄位；年級 / 班級清除時送 null
+    const patchBody = () => {
+      const base = blank()
+      const now = { ...form, name: form.name.trim(), note: form.note.trim() }
+      const b = {}
+      for (const k of Object.keys(base)) {
+        if (now[k] === base[k]) continue
+        b[k] = now[k] === '' ? null : now[k]
+      }
+      return b
+    }
+    const toExam = (src, patch) => {
+      const merged = { ...src, ...patch }
+      return {
+        ...merged,
+        exam_type: typeOf(merged.exam_type_id),
+        class: merged.class_id ? (classBrief(merged.class_id) ?? props.exam?.class ?? null) : null,
+        roster_count: estimateRoster(merged.grade_level, merged.class_id),
+      }
+    }
+    const finish = (exam) => { loading.value = false; emit('saved', exam); emit('update:modelValue', false) }
+
+    const submit = () => {
+      if (!validate()) return
+      loading.value = true
+      if (!isEdit.value) {
+        const body = createBody()
+        emit('request', `POST /admin/exams ${JSON.stringify(body)}`)
+        setTimeout(() => {
+          const err = EXAM_FORM_ERRORS[props.sim]
+          if (err && (props.sim !== 'invalid_class' || body.class_id) && (props.sim !== 'grade_not_in_class' || (body.class_id && body.grade_level))) {
+            loading.value = false
+            errors[err.field] = err.message
+            return
+          }
+          const id = 'e' + (examSeq += 1)
+          const created = toExam({ id, status: 'draft', published_at: null, published_by_name: null, note: null, subjects: [], created_at: new Date().toISOString(),
+            exam_type_id: body.exam_type_id, grade_level: body.grade_level ?? null, class_id: body.class_id ?? null }, body)
+          delete created.exam_type_id
+          delete created.class_id
+          const picked = subjects.value.filter((s) => s.on)
+          if (!picked.length) { ElMessage.success('已建立考試'); finish(created); return }
+          const items = picked.map((s, i) => ({ subject_id: s.subject_id, full_score: s.full_score, sort_order: i + 1 }))
+          emit('request', `PUT /admin/exams/${id}/subjects ${JSON.stringify({ items })}`)
+          setTimeout(() => {
+            if (props.sim === 'subjects_fail') {
+              ElMessage.warning('考試已建立，但科目設定失敗，請到「科目設定」分頁重試')
+              finish(created)
+              return
+            }
+            created.subjects = picked.map((s, i) => ({ subject_id: s.subject_id, subject_name: s.name, full_score: s.full_score, sort_order: i + 1 }))
+            ElMessage.success('已建立考試')
+            finish(created)
+          }, 500)
+        }, 600)
+        return
+      }
+      const body = patchBody()
+      emit('request', `PATCH /admin/exams/${props.exam.id} ${JSON.stringify(body)}`)
+      setTimeout(() => {
+        if (props.sim === 'exam_published' && SCOPE_FIELDS.some((k) => k in body)) {
+          loading.value = false
+          alertMsg.value = '考試已發布，名單與類型不可修改，請先取消發布'
+          return
+        }
+        const err = EXAM_FORM_ERRORS[props.sim]
+        const touched = { invalid_exam_type: 'exam_type_id' in body, invalid_class: 'class_id' in body && body.class_id,
+          grade_not_in_class: ('grade_level' in body || 'class_id' in body) && form.grade_level && form.class_id }
+        if (err && touched[props.sim]) { loading.value = false; errors[err.field] = err.message; return }
+        const src = { ...props.exam, exam_type_id: props.exam.exam_type.id, class_id: props.exam.class?.id ?? null }
+        const updated = toExam(src, body)
+        delete updated.exam_type_id
+        delete updated.class_id
+        ElMessage.success('已更新')
+        finish(updated)
+      }, 600)
+    }
+    return {
+      isEdit, isPublished, form, subjects, errors, alertMsg, loading, dirty, examTypeOptions, gradeOptions, classOptions,
+      scopeChanged, allOn, someOn, toggleAll, onScopeChange, submit,
+    }
+  },
+  template: `
+    <form-dialog :model-value="modelValue" :title="isEdit ? '編輯考試' : '建立考試'" size="lg"
+                 :submit-text="isEdit ? '儲存' : '建立'" :loading="loading" :dirty="dirty" :submit-disabled="isEdit && !dirty"
+                 @update:model-value="(v) => $emit('update:modelValue', v)" @submit="submit">
+      <el-alert v-if="isPublished" class="ef-alert" type="info" :closable="false" show-icon
+                title="已發布的考試只能修改名稱、日期與備註"></el-alert>
+      <el-alert v-if="alertMsg" class="ef-alert" type="error" show-icon :title="alertMsg" @close="alertMsg = ''"></el-alert>
+      <el-form label-position="top" @submit.prevent>
+        <div class="ef-grid">
+          <el-form-item label="名稱" required :error="errors.name">
+            <el-input v-model="form.name" maxlength="50" show-word-limit placeholder="例如：第一次段考"
+                      :disabled="loading" @input="errors.name = ''"></el-input>
+          </el-form-item>
+          <el-form-item label="考試類型" required :error="errors.exam_type_id">
+            <el-select v-model="form.exam_type_id" placeholder="選擇類型" :disabled="loading || isPublished"
+                       @change="errors.exam_type_id = ''">
+              <el-option v-for="t in examTypeOptions" :key="t.value" :label="t.label" :value="t.value"></el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item label="考試日期" required :error="errors.exam_date">
+            <el-date-picker v-model="form.exam_date" type="date" value-format="YYYY-MM-DD" format="YYYY/MM/DD"
+                            placeholder="選擇日期" :disabled="loading" style="width: 100%"
+                            @change="errors.exam_date = ''"></el-date-picker>
+          </el-form-item>
+        </div>
+
+        <div class="ef-section">
+          <span>應考對象</span><span class="ef-section__required">*</span>
+          <span class="ef-section__hint">年級與班級至少選一項，決定應考學生名單</span>
+        </div>
+        <div class="ef-grid ef-grid--2 ef-scope" :class="{ 'is-error': !!errors.scope }">
+          <el-form-item label="年級" :error="errors.grade_level">
+            <el-select v-model="form.grade_level" clearable placeholder="不限" :disabled="loading || isPublished"
+                       @change="onScopeChange">
+              <el-option v-for="g in gradeOptions" :key="g.value" :label="g.label" :value="g.value"></el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item label="班級" :error="errors.class_id">
+            <el-select v-model="form.class_id" clearable placeholder="不限" :disabled="loading || isPublished"
+                       @change="onScopeChange">
+              <el-option v-for="c in classOptions" :key="c.value" :label="c.label" :value="c.value"></el-option>
+            </el-select>
+          </el-form-item>
+        </div>
+        <div v-if="errors.scope" class="ef-scope-msg form-error">{{ errors.scope }}</div>
+        <div v-else-if="form.grade_level && form.class_id && !errors.grade_level && !errors.class_id" class="ef-scope-msg form-hint">只包含該班中該年級的學生</div>
+        <div v-if="scopeChanged" class="ef-scope-msg form-warn">變更應考對象後，已有成績但不在新名單的學生，成績會保留並標示「已不在名單」。</div>
+
+        <el-form-item label="備註">
+          <el-input v-model="form.note" type="textarea" :rows="2" maxlength="200" show-word-limit
+                    placeholder="例如：範圍 國語第 1~4 課" :disabled="loading"></el-input>
+        </el-form-item>
+
+        <template v-if="!isEdit">
+          <div class="ef-section">
+            <span>科目與滿分</span>
+            <span class="ef-section__hint">建立後可在考試頁的「科目設定」分頁調整科目、滿分與順序</span>
+            <span class="ef-section__spacer"></span>
+            <el-checkbox v-if="subjects.length" :model-value="allOn" :indeterminate="someOn && !allOn" :disabled="loading"
+                         @update:model-value="toggleAll">全選</el-checkbox>
+          </div>
+          <div v-if="subjects.length" class="ef-subjects">
+            <div v-for="s in subjects" :key="s.subject_id" class="ef-subject" :class="{ 'is-off': !s.on }">
+              <el-checkbox v-model="s.on" :disabled="loading" @change="errors.subjects = ''">{{ s.name }}</el-checkbox>
+              <span class="ef-subject__full">滿分
+                <el-input-number v-model="s.full_score" :min="0.1" :max="1000" :step="1" controls-position="right"
+                                 :disabled="!s.on || loading" :aria-label="s.name + ' 滿分'"
+                                 @change="errors.subjects = ''"></el-input-number>
+              </span>
+            </div>
+          </div>
+          <p v-else class="form-hint">尚未建立任何科目。可以先建立考試，之後再到考試頁的「科目設定」新增。</p>
+          <div v-if="errors.subjects" class="form-error">{{ errors.subjects }}</div>
+        </template>
+        <p v-else-if="!isPublished" class="form-hint">科目與滿分請在考試頁的「科目設定」分頁調整。</p>
+      </el-form>
+    </form-dialog>`,
+}
+/* ==================== EXAM SHARED JS END ==================== */
+
+/* ==================== 考試列表（FRONTEND-231） ==================== */
+const subj = (ids, full = {}) => ids.map((id, i) => ({
+  subject_id: id, subject_name: SUBJECTS.find((s) => s.id === id).name, full_score: full[id] ?? 100, sort_order: i + 1,
+}))
+const EX = (o) => ({ grade_level: null, class: null, status: 'draft', published_at: null, published_by_name: null, note: null, subjects: [], ...o })
+/** GET /admin/exams 的 items（ExamOut）；後端依 exam_date desc、created_at desc 排序，稿裡在前端模擬篩選與排序 */
+const EXAM_FIXTURE = () => [
+  EX({ id: 'e1', name: '第一次段考', exam_type: typeOf('t1'), exam_date: '2026-10-01', grade_level: 3,
+    note: '範圍：國語第 1~4 課、數學第 1~3 單元', subjects: subj(['sub1', 'sub2', 'sub3', 'sub4', 'sub5'], { sub3: 50 }),
+    roster_count: 32, created_at: '2026-09-20T02:00:00Z' }),
+  EX({ id: 'e4', name: '第一次段考', exam_type: typeOf('t1'), exam_date: '2026-10-01', grade_level: 4, status: 'published',
+    published_at: '2026-10-05T09:00:00Z', published_by_name: '張主任', subjects: subj(['sub1', 'sub2', 'sub3', 'sub4', 'sub5'], { sub3: 50 }),
+    roster_count: 28, created_at: '2026-09-20T01:00:00Z' }),
+  EX({ id: 'e2', name: '十月單元測驗（數學）', exam_type: typeOf('t2'), exam_date: '2026-10-06', class: classBrief('c3'), status: 'published',
+    published_at: '2026-10-06T10:20:00Z', published_by_name: '林行政', subjects: subj(['sub2']), roster_count: 31, created_at: '2026-10-05T03:00:00Z' }),
+  EX({ id: 'e3', name: '國語第四課小考', exam_type: typeOf('t2'), exam_date: '2026-10-13', grade_level: 2, class: classBrief('c1'),
+    subjects: subj(['sub1']), roster_count: 9, created_at: '2026-10-06T06:00:00Z' }),
+  EX({ id: 'e7', name: '期中複習考', exam_type: typeOf('t3'), exam_date: '2026-11-05', grade_level: 5, roster_count: 12, created_at: '2026-10-07T01:00:00Z' }),
+  EX({ id: 'e5', name: '英語單字複習考', exam_type: typeOf('t3'), exam_date: '2026-09-25', class: classBrief('c5'), status: 'published',
+    published_at: '2026-09-26T03:30:00Z', published_by_name: '張主任', subjects: subj(['sub3'], { sub3: 50 }), roster_count: 22, created_at: '2026-09-22T02:00:00Z' }),
+  EX({ id: 'e6', name: '九月單元測驗', exam_type: typeOf('t2'), exam_date: '2026-09-16', class: classBrief('c2'), status: 'published',
+    published_at: '2026-09-17T08:45:00Z', published_by_name: '林行政', subjects: subj(['sub1', 'sub2']), roster_count: 15, created_at: '2026-09-14T02:00:00Z' }),
+  EX({ id: 'e8', name: '暑期銜接測驗', exam_type: typeOf('t3'), exam_date: '2026-08-28', grade_level: 3, status: 'published',
+    published_at: '2026-08-29T02:10:00Z', published_by_name: '張主任', subjects: subj(['sub1', 'sub2', 'sub3'], { sub3: 50 }), roster_count: 31, created_at: '2026-08-25T02:00:00Z' }),
+  EX({ id: 'e9', name: '自然小考', exam_type: typeOf('t2'), exam_date: '2026-07-15', grade_level: 4, class: classBrief('c4'), status: 'published',
+    published_at: '2026-07-16T07:00:00Z', published_by_name: '林行政', subjects: subj(['sub4']), roster_count: 13, created_at: '2026-07-13T02:00:00Z' }),
+  // 預設日期區間以外（清除日期或選「上學年度」才看得到）
+  EX({ id: 'e10', name: '期末考', exam_type: typeOf('t1'), exam_date: '2025-12-18', grade_level: 2, status: 'published',
+    published_at: '2025-12-22T05:00:00Z', published_by_name: '張主任', subjects: subj(['sub1', 'sub2', 'sub3']), roster_count: 26, created_at: '2025-12-10T02:00:00Z' }),
+  EX({ id: 'e11', name: '第一次段考', exam_type: typeOf('t1'), exam_date: '2025-10-16', grade_level: 2, status: 'published',
+    published_at: '2025-10-20T05:00:00Z', published_by_name: '張主任', subjects: subj(['sub1', 'sub2', 'sub3']), roster_count: 25, created_at: '2025-10-06T02:00:00Z' }),
+]
+const DEFAULT_RANGE = [addDays(TODAY, -90), addDays(TODAY, 30)]   // 2026-07-09 ～ 2026-11-06
+const localDate = (iso) => new Date(`${iso}T00:00:00`)
+const DATE_SHORTCUTS = [
+  { text: '預設區間', value: () => DEFAULT_RANGE.map(localDate) },
+  { text: '本學年度', value: () => ['2026-08-01', '2027-07-31'].map(localDate) },
+  { text: '上學年度', value: () => ['2025-08-01', '2026-07-31'].map(localDate) },
+]
+const toQuery = (o) => Object.entries(o).map(([k, v]) => `${k}=${v}`).join('&')
+
+const ROLES = {
+  director: { label: '主任（exams:write + exams:publish）', permissions: DIRECTOR },
+  tutor: { label: '課輔老師（exams:write，沒有 exams:publish）', permissions: TUTOR },
+  viewer: { label: '自訂角色（只有 exams:read）', permissions: ALL_STAFF },
+}
+
+const app = createApp({
+  components: { AdminShell, PageHeader, AdminListToolbar, ExamFormDialog },
+  setup() {
+    const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
+    const meta = {
+      status: readMeta('preview-status'), tasks: readMeta('preview-tasks'),
+      route: readMeta('preview-route'), updated: readMeta('preview-updated'),
+    }
+    const viewAs = ref('director')
+    const perms = computed(() => ROLES[viewAs.value].permissions)
+    const can = (code) => perms.value.includes(code)
+    const user = computed(() => SHELL_USERS[viewAs.value] ?? { display_name: '周老師', role: '自訂角色' })
+    const device = ref('desktop')
+    const onNavigate = (p) => { if (p !== '/exams') ElMessage.info(`（稿）導頁至 ${p}`) }
+
+    const listState = ref('data')
+    const formSim = ref('ok')
+    const deleteSim = ref('ok')
+    const lastRequest = ref('')
+    const all = ref(EXAM_FIXTURE())
+
+    // 篩選：搜尋 + 下拉（AdminListToolbar）+ 日期區間（extra-filters slot）；usePagedList syncQuery 同步到網址
+    const filters = reactive({ q: '', range: [...DEFAULT_RANGE] })
+    const filterValues = ref({})
+    const toolbarFilters = [
+      { key: 'status', label: '狀態', options: [{ label: '草稿', value: 'draft' }, { label: '已發布', value: 'published' }] },
+      { key: 'exam_type_id', label: '考試類型', options: EXAM_TYPES.map((t) => ({ label: t.name, value: t.id })) },
+      { key: 'class_id', label: '班級', options: CLASSES.map((c) => ({ label: c.name, value: c.id })) },
+      { key: 'grade_level', label: '年級', options: GRADE_OPTIONS },
+    ]
+    const page = ref(1)
+    watch([() => filters.q, () => filters.range, filterValues], () => { page.value = 1 })
+    const params = computed(() => {
+      const p = {}
+      if (filters.q) p.q = filters.q
+      for (const [k, v] of Object.entries(filterValues.value)) if (v !== undefined) p[k] = v
+      if (Array.isArray(filters.range) && filters.range.length === 2) { p.date_from = filters.range[0]; p.date_to = filters.range[1] }
+      return p
+    })
+    const queryString = computed(() => '?' + toQuery({ ...params.value, page: page.value }))
+    const listRequest = computed(() => 'GET /admin/exams?' + toQuery({ ...params.value, page: page.value, page_size: 20 }))
+    const isDefaultFilters = computed(() => !filters.q
+      && Object.values(filterValues.value).every((v) => v === undefined)
+      && Array.isArray(filters.range) && filters.range[0] === DEFAULT_RANGE[0] && filters.range[1] === DEFAULT_RANGE[1])
+    const filteredRows = computed(() => {
+      if (listState.value === 'none') return []
+      const p = params.value
+      return all.value
+        .filter((e) => (!p.q || e.name.toLowerCase().includes(p.q.toLowerCase()))
+          && (!p.status || e.status === p.status)
+          && (!p.exam_type_id || e.exam_type.id === p.exam_type_id)
+          && (!p.class_id || (e.class && e.class.id === p.class_id))
+          && (!p.grade_level || e.grade_level === p.grade_level)
+          && (!p.date_from || e.exam_date >= p.date_from)
+          && (!p.date_to || e.exam_date <= p.date_to))
+        .sort((a, b) => b.exam_date.localeCompare(a.exam_date) || b.created_at.localeCompare(a.created_at))
+    })
+    const tableRows = computed(() => (listState.value === 'data' || listState.value === 'none'
+      ? filteredRows.value.slice((page.value - 1) * 20, page.value * 20) : []))
+    const retry = () => { listState.value = 'loading'; setTimeout(() => { listState.value = 'data' }, 900) }
+
+    const openDetail = (row) => ElMessage.info(`（稿）導頁至 /exams/${row.id}`)
+    const formOpen = ref(false)
+    const editing = ref(null)
+    const openCreate = () => { editing.value = null; formOpen.value = true }
+    const openEdit = (id) => { editing.value = all.value.find((e) => e.id === id) ?? null; formOpen.value = !!editing.value }
+    const onSaved = (exam) => {
+      const exists = all.value.some((e) => e.id === exam.id)
+      all.value = exists ? all.value.map((e) => (e.id === exam.id ? exam : e)) : [exam, ...all.value]
+      if (!exists) setTimeout(() => ElMessage.info(`（稿）導頁至 /exams/${exam.id}?tab=scores`), 300)
+    }
+    // useConfirmDelete（FRONTEND-044）：確認框標題「確認刪除」、按鈕「刪除」/「取消」，成功「已刪除」
+    const onCommand = (cmd, row) => {
+      if (cmd !== 'delete') return
+      ElMessageBox.confirm(`刪除後已輸入的成績會一併刪除，確定要刪除「${row.name}」嗎？`, '確認刪除', {
+        type: 'warning', confirmButtonText: '刪除', cancelButtonText: '取消',
+      }).then(() => {
+        lastRequest.value = `DELETE /admin/exams/${row.id}`
+        setTimeout(() => {
+          if (deleteSim.value === 'exam_published') { ElMessage.error('考試已發布，請先取消發布再修改'); return }
+          all.value = all.value.filter((e) => e.id !== row.id)
+          ElMessage.success('已刪除')
+        }, 500)
+      }).catch(() => {})
+    }
+
+    const decisions = [
+      '版面：PageHeader「考試」+ 副標「建立考試、輸入各科成績；發布後家長才看得到成績」，右側「建立考試」（只有 exams:write，44px 高）。下方白底面板：AdminListToolbar → 表格 → 分頁（每頁 20 筆，usePagedList syncQuery：篩選與頁碼同步到網址，改篩選回第 1 頁）。',
+      '篩選：搜尋「考試名稱」、狀態（草稿 / 已發布）、考試類型（examTypeOptions）、班級（目前學年度 classOptions）、年級（一~六年級）；日期區間放 extra-filters slot（顯示 YYYY/MM/DD，預設近 90 天到未來 30 天，今天 10/07 時為 2026/07/09～2026/11/06；快捷「預設區間」「本學年度」「上學年度」；可清除，清除 = 不限日期）。班級篩選只比對考試設定的班級，以年級為對象的考試不會出現在班級篩選結果。',
+      '表格欄位：考試日期（formatDateWithWeekday「10/15（四）」；不是今年的考試前面加灰色小字年份「2025」）、名稱（主色連結，過長 tooltip）、類型、對象（「三年級」「低年級A班」「低年級A班・二年級」，過長 tooltip）、科目數（0 顯示橘字「未設定」）、應考人數（roster_count，0 為橘字）、狀態（草稿灰 tag / 已發布綠 tag，已發布下一行灰字發布時間「2026/10/06 18:20」）、⋮。依考試日期新到舊（後端排序），不提供欄位排序。',
+      '整列可點 → /exams/{id}；名稱是 router-link（鍵盤 Tab 聚焦後 Enter 進入、可在新分頁開）。列高 ≥ 48px，平板可直接點列。',
+      '⋮（44×44，只有 exams:write 且草稿列才有）→「刪除」（紅字）→ useConfirmDelete「刪除後已輸入的成績會一併刪除，確定要刪除「{name}」嗎？」→「已刪除」並重新載入；409 exam_published（期間被別人發布）→ ElMessage.error 顯示後端訊息。已發布列不顯示 ⋮（要先到考試頁取消發布）。點 ⋮ 不會觸發整列導頁。',
+      '空清單：篩選維持預設時 EmptyState「還沒有考試紀錄」+ 說明「預設只顯示近 90 天到未來 30 天的考試，更早的考試請調整日期區間」+（exams:write）「建立考試」；改過篩選時表格內 inline「沒有符合條件的考試」+「試著調整搜尋文字、篩選條件或日期區間」。載入中：表格 v-loading；載入失敗：EmptyState error「無法載入考試」+「重試」取代表格。',
+      '只有 exams:read：沒有「建立考試」、整個 ⋮ 欄移除、空清單不附建立按鈕，其他照常（仍可點進考試頁看成績）。課輔老師（exams:write，無 exams:publish）在本頁與主任相同，差別只在考試頁的發布按鈕。',
+      'ExamFormDialog（FormDialog lg 800，標題「建立考試」/「編輯考試」，送出鈕「建立」/「儲存」，編輯沒有變更時停用）：第一列 名稱（必填 ≤50 字計數）、考試類型（必填）、考試日期（必填，YYYY/MM/DD）；「應考對象 *」小標 + 灰字「年級與班級至少選一項，決定應考學生名單」，下面年級、班級兩個可清除下拉（placeholder「不限」），兩者皆空送出時兩框紅色並在下方顯示「請選擇年級或班級」，兩者皆選時灰字「只包含該班中該年級的學生」；備註（≤200 字計數）。',
+      '建立時另有「科目與滿分」：每科一個 48px 高的框（勾選框 + 科目名，右側「滿分」數字框），預設全部勾選、滿分 100（>0、≤1000、最多一位小數），取消勾選的科目滿分停用；小標右側「全選」（部分勾選時為半選）；小標旁灰字「建立後可在考試頁的「科目設定」分頁調整科目、滿分與順序」。沒有任何啟用科目時改顯示「尚未建立任何科目。可以先建立考試，之後再到考試頁的「科目設定」新增。」。',
+      '建立流程：POST /admin/exams（只送有值的欄位）→ 有勾選科目才 PUT subjects（sort_order 依科目順序 1..n）→ ElMessage.success「已建立考試」→ 導到 /exams/{id}?tab=scores。科目那步失敗：考試仍算建立成功，改顯示 warning「考試已建立，但科目設定失敗，請到「科目設定」分頁重試」並照樣導頁（成績分頁會引導去設定科目）。',
+      '編輯（入口在考試頁 header「編輯資訊」，本稿用控制列開啟）：沒有科目區，草稿底部灰字「科目與滿分請在考試頁的「科目設定」分頁調整」；只送有變更的欄位，年級 / 班級清除時送 null。已發布：頂端 info「已發布的考試只能修改名稱、日期與備註」，類型、年級、班級 disabled。草稿改了年級或班級：橘字「變更應考對象後，已有成績但不在新名單的學生，成績會保留並標示「已不在名單」。」。考試的班級不在目前學年度清單時仍顯示原班級名稱。',
+      '錯誤：422 invalid_exam_type / invalid_class / grade_not_in_class → 分別在類型 / 班級 / 年級欄下方顯示後端 message；409 exam_published（編輯草稿時被別人發布，且改了類型或範圍）→ dialog 頂端紅色 alert 顯示後端 message，dialog 不關。前端驗證：名稱「請輸入考試名稱」、類型「請選擇考試類型」、日期「請選擇考試日期」。',
+      '觸控：「建立考試」、⋮、表格列都 ≥ 44px；AdminListToolbar 與 dialog 內控制項沿用已核可元件的尺寸（與其他列表頁一致）。',
+    ]
+    const openQuestions = []
+
+    return {
+      meta, decisions, openQuestions, roles: ROLES, viewAs, perms, can, user, device, onNavigate, notesOpen: ref(false),
+      listState, formSim, deleteSim, lastRequest, filters, filterValues, toolbarFilters, dateShortcuts: DATE_SHORTCUTS,
+      page, queryString, listRequest, isDefaultFilters, filteredRows, tableRows, retry,
+      todayYear: TODAY.slice(0, 4), formatDateWithWeekday, formatDateTime, targetLabel, statusMeta,
+      openDetail, formOpen, editing, openCreate, openEdit, onSaved, onCommand,
+    }
+  },
+})
+
+app.use(ElementPlus, { locale: ElementPlusLocaleZhTw })
+app.component('EmptyState', EmptyState)
+app.component('FormDialog', FormDialog)
+const toKebab = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+for (const [name, component] of Object.entries(ElementPlusIconsVue)) {
+  app.component(`icon-${toKebab(name)}`, component)
+}
+app.mount('#app')
+</script>
+</body>
+</html>
