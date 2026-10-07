@@ -7,7 +7,7 @@
 import io
 import logging
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -39,6 +39,7 @@ from app.schemas.leaves import (
 from app.services import leave_service
 from app.services.audit_service import Actor
 from app.services.leave_service import (
+    LeaveCancelResult,
     cancel_leave,
     create_leave,
     get_attachment_url,
@@ -1367,3 +1368,277 @@ def test_parent_leave_out_list_child_leaves_query_count(
     assert sum(len(row.attachments) for row in page.items) == 20
     assert all(attachment.url for row in page.items for attachment in row.attachments)
     assert len(statements) == 3
+
+
+# --- BACKEND-552：cancel_leave / upload_leave_attachment 並發回歸 ------------------------------
+# 兩者共用 _leave_for_update（請假列 FOR UPDATE + populate_existing）。兩條 app_backend 連線 +
+# threading 阻塞模式；lock_timeout 一律 SET LOCAL（連線會回 pool）。
+
+_LOCK_TIMEOUT = "set local lock_timeout = '15s'"
+_LEAVE_TABLES = ("student_attendances", "student_leaves", "notification_outbox", "notifications")
+_LEAVE_START = date(2026, 9, 7)
+_LEAVE_END = date(2026, 9, 8)
+
+
+def _call_in_thread(
+    sb: Session, call: Callable[[Session], object]
+) -> tuple[threading.Thread, threading.Event, dict[str, object]]:
+    """在 thread 以 ``sb`` 執行 ``call``：成功 → commit 並記回傳值；AppError → 記 (status, code)，
+    交易留給呼叫端檢視 ORM 狀態後再關閉；其他例外原樣記在 ``error``。"""
+    done = threading.Event()
+    outcome: dict[str, object] = {}
+
+    def worker() -> None:
+        try:
+            try:
+                outcome["result"] = call(sb)
+                sb.commit()
+            except AppError as exc:
+                outcome["result"] = (exc.status, exc.code)
+        except BaseException as exc:
+            outcome["error"] = exc
+        finally:
+            done.set()
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    return thread, done, outcome
+
+
+def _committed_leave(
+    db: Session, cleanup: list[tuple[str, UUID]]
+) -> tuple[StudentLeave, ParentAccount, UUID]:
+    """學生 + 綁定家長 + 一位 tutor（seed 角色；有 leaves:read，是取消通知的收件人）+ 9/7~9/8 的
+    active 請假（兩天出勤列為 leave）。commit 後登記 owner 清理（監護人 → 學生 → 家長 → 員工；請假 /
+    出勤 / 通知表由 cleanup_tables 清）。回傳 (請假, 家長, 員工 id)。"""
+    ming = make_student(db, name="王小明")
+    parent = make_parent(db)
+    guardian = make_guardian(db, ming, parent=parent)
+    staff = make_staff(db, role_code="tutor")
+    leave = make_leave(db, ming, start_date=_LEAVE_START, end_date=_LEAVE_END)
+    _leave_rows(db, ming, leave, range(7, 9))
+    db.commit()
+    cleanup.extend(
+        [
+            ("guardians", guardian.id),
+            ("students", ming.id),
+            ("parent_accounts", parent.id),
+            ("staff_users", staff.id),
+        ]
+    )
+    return leave, parent, staff.id
+
+
+def _attendance_state(db: Session, student_id: UUID) -> dict[date, tuple[str, UUID | None]]:
+    return {d: (row.status, row.leave_id) for d, row in _rows_by_date(db, student_id).items()}
+
+
+_REVERTED = {_LEAVE_START: ("expected", None), _LEAVE_END: ("expected", None)}
+
+
+@pytest.mark.cleanup_tables(*_LEAVE_TABLES)
+def test_leave_concurrent_cancel_blocks_on_leave_row_lock(
+    owner_cleanup: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    kick_off: None,
+) -> None:
+    """外部交易對請假列持 FOR KEY SHARE（等同另一交易正在插入參照這筆請假的出勤 / 附件列、
+    尚未 commit）：cancel_leave 的 FOR UPDATE 必須排隊——放鎖前 0.5 秒內未完成，放鎖後完成：
+    請假取消、兩天出勤還原、leave.cancelled 通知一筆。（沒有 FOR UPDATE 時 cancel 只更新非鍵
+    欄位，與 KEY SHARE 不衝突、立刻完成；外部若改持 FOR UPDATE，沒先鎖列的實作也會在之後的
+    UPDATE 等鎖，分不出差別。）"""
+    leave, _parent, staff_id = _committed_leave(committing_db_session, owner_cleanup)
+    leave_id, student_id = leave.id, leave.student_id
+    clock = _clock_on(date(2026, 9, 1))
+    actor = Actor(type="staff", id=staff_id)
+
+    holder = Session(bind=db_engine)
+    sb = Session(bind=db_engine)
+    try:
+        holder.execute(text(_LOCK_TIMEOUT))
+        holder.execute(
+            text("select id from student_leaves where id = :id for key share"), {"id": leave_id}
+        )
+        sb.execute(text(_LOCK_TIMEOUT))
+        thread, done, outcome = _call_in_thread(
+            sb, lambda s: cancel_leave(s, leave_id, actor=actor, scope="all", clock=clock)
+        )
+        try:
+            assert not done.wait(timeout=0.5), outcome  # 請假列被鎖住：cancel 必須排隊
+        finally:
+            holder.rollback()  # 放鎖
+        thread.join(timeout=15)
+        assert done.is_set(), "放鎖後 thread 仍未完成"
+    finally:
+        holder.close()
+        sb.close()
+
+    assert "error" not in outcome, outcome
+    result = outcome["result"]
+    assert isinstance(result, LeaveCancelResult), result
+    assert (result.mode, result.reverted_dates) == ("cancelled", [_LEAVE_START, _LEAVE_END])
+    with Session(bind=db_engine) as check:
+        stored = check.get(StudentLeave, leave_id)
+        assert stored is not None
+        assert (stored.status, stored.cancelled_by_type, stored.cancelled_by_id) == (
+            "cancelled",
+            "staff",
+            staff_id,
+        )
+        assert _attendance_state(check, student_id) == _REVERTED
+        assert len(_leave_notifications(check, "leave.cancelled", leave_id)) == 1
+
+
+@pytest.mark.cleanup_tables(*_LEAVE_TABLES)
+def test_leave_concurrent_cancel_twice_only_one_succeeds(
+    owner_cleanup: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    kick_off: None,
+) -> None:
+    """同一筆 active 請假兩位員工同時取消（scope=all）：B（事先載入並持有該請假，顯示 active）
+    在請假列 FOR UPDATE 排隊，A commit 後 B 重讀到 status=cancelled → 409 leave_not_active；
+    兩天出勤還原與 leave.cancelled 通知各只發生一次。（沒有鎖 / 沒有 populate_existing 時兩邊
+    都成功、通知兩筆。）"""
+    leave, _parent, staff_id = _committed_leave(committing_db_session, owner_cleanup)
+    leave_id, student_id = leave.id, leave.student_id
+    clock = _clock_on(date(2026, 9, 1))
+    actor = Actor(type="staff", id=staff_id)
+
+    sa = Session(bind=db_engine)
+    sb = Session(bind=db_engine)
+    try:
+        sb.execute(text(_LOCK_TIMEOUT))
+        loaded = sb.get(StudentLeave, leave_id)  # 持有參照：identity map 是弱參照
+        assert loaded is not None
+        assert (loaded.status, loaded.cancelled_at) == ("active", None)
+        sa.execute(text(_LOCK_TIMEOUT))
+        out_a = cancel_leave(sa, leave_id, actor=actor, scope="all", clock=clock)
+        thread, done, outcome = _call_in_thread(
+            sb, lambda s: cancel_leave(s, leave_id, actor=actor, scope="all", clock=clock)
+        )
+        try:
+            assert not done.wait(timeout=0.5), outcome  # A 未 commit：B 在請假列鎖排隊
+        finally:
+            sa.commit()
+        thread.join(timeout=15)
+        assert done.is_set(), "A commit 後 thread 仍未完成"
+        assert outcome.get("result") == (409, "leave_not_active"), outcome
+        # populate_existing 把上鎖後的值寫回同一物件
+        assert (loaded.status, loaded.cancelled_by_id) == ("cancelled", staff_id)
+    finally:
+        sa.close()
+        sb.close()
+
+    assert (out_a.mode, out_a.reverted_dates) == ("cancelled", [_LEAVE_START, _LEAVE_END])
+    with Session(bind=db_engine) as check:
+        stored = check.get(StudentLeave, leave_id)
+        assert stored is not None
+        assert stored.status == "cancelled"
+        assert _attendance_state(check, student_id) == _REVERTED
+        assert len(_leave_notifications(check, "leave.cancelled", leave_id)) == 1
+
+
+@pytest.mark.cleanup_tables(*_LEAVE_TABLES)
+def test_leave_concurrent_attachment_limit_not_exceeded(
+    owner_cleanup: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    fresh_settings: None,
+) -> None:
+    """leave.window 預設 max_attachments=3、已有 2 個附件：家長在兩個 session 同時上傳 → B 在請假列
+    FOR UPDATE 排隊，A commit 後 B 數到 3 → 409 attachment_limit_reached；附件總數 3、Storage 只有 A
+    的物件（B 在上傳前就被擋下，不留孤兒檔）。（沒有鎖時 B 讀到 2 也寫入 → 4 個。）"""
+    leave, parent, _staff_id = _committed_leave(committing_db_session, owner_cleanup)
+    make_leave_attachment(committing_db_session, leave)
+    make_leave_attachment(committing_db_session, leave, ext="jpg")
+    committing_db_session.commit()
+    leave_id = leave.id
+    clock = _clock_on(date(2026, 9, 1))
+    current = _current_parent(parent)
+    storage = FakeStorage()
+
+    sa = Session(bind=db_engine)
+    sb = Session(bind=db_engine)
+    try:
+        sa.execute(text(_LOCK_TIMEOUT))
+        out_a = upload_leave_attachment(
+            sa, leave_id, _upload(_PDF), parent=current, storage=storage, clock=clock
+        )
+        sb.execute(text(_LOCK_TIMEOUT))
+        thread, done, outcome = _call_in_thread(
+            sb,
+            lambda s: upload_leave_attachment(
+                s,
+                leave_id,
+                _upload(_JPEG, "照片.jpg", "image/jpeg"),
+                parent=current,
+                storage=storage,
+                clock=clock,
+            ),
+        )
+        try:
+            assert not done.wait(timeout=0.5), outcome  # A 未 commit：B 在請假列鎖排隊
+        finally:
+            sa.commit()
+        thread.join(timeout=15)
+        assert done.is_set(), "A commit 後 thread 仍未完成"
+    finally:
+        sa.close()
+        sb.close()
+
+    assert outcome.get("result") == (409, "attachment_limit_reached"), outcome
+    assert out_a.mime_type == "application/pdf"
+    with Session(bind=db_engine) as check:
+        assert _attachment_count(check, leave_id) == 3
+        stored = check.get(StudentLeaveAttachment, out_a.id)
+        assert stored is not None
+        assert list(storage.objects) == [("leave-attachments", stored.storage_path)]
+
+
+@pytest.mark.cleanup_tables(*_LEAVE_TABLES)
+def test_leave_concurrent_cancel_sees_commit_despite_loaded_instance(
+    owner_cleanup: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    kick_off: None,
+) -> None:
+    """B 事先載入並持有該請假（status active）的 ORM 物件；A cancel_leave 並 commit；B 再
+    cancel_leave → FOR UPDATE 重讀以 populate_existing 覆蓋 identity map 舊值 → 409
+    leave_not_active，出勤還原與通知仍只有 A 的一次。（沒有 populate_existing 時 B 讀到舊的
+    active，再取消一次、再通知一次。）"""
+    leave, _parent, staff_id = _committed_leave(committing_db_session, owner_cleanup)
+    leave_id, student_id = leave.id, leave.student_id
+    clock = _clock_on(date(2026, 9, 1))
+    actor = Actor(type="staff", id=staff_id)
+
+    sa = Session(bind=db_engine)
+    sb = Session(bind=db_engine)
+    try:
+        sb.execute(text(_LOCK_TIMEOUT))
+        loaded = sb.get(StudentLeave, leave_id)  # 持有參照：identity map 是弱參照
+        assert loaded is not None
+        assert (loaded.status, loaded.cancelled_at) == ("active", None)
+        sa.execute(text(_LOCK_TIMEOUT))
+        out_a = cancel_leave(sa, leave_id, actor=actor, scope="all", clock=clock)
+        sa.commit()
+
+        with pytest.raises(AppError) as exc:
+            cancel_leave(sb, leave_id, actor=actor, scope="all", clock=clock)
+
+        assert (exc.value.status, exc.value.code) == (409, "leave_not_active")
+        # populate_existing 把上鎖後的值寫回同一物件
+        assert (loaded.status, loaded.cancelled_by_id) == ("cancelled", staff_id)
+        sb.rollback()
+    finally:
+        sa.close()
+        sb.close()
+
+    assert out_a.reverted_dates == [_LEAVE_START, _LEAVE_END]
+    with Session(bind=db_engine) as check:
+        stored = check.get(StudentLeave, leave_id)
+        assert stored is not None
+        assert (stored.status, stored.cancelled_by_id) == ("cancelled", staff_id)
+        assert _attendance_state(check, student_id) == _REVERTED
+        assert len(_leave_notifications(check, "leave.cancelled", leave_id)) == 1
