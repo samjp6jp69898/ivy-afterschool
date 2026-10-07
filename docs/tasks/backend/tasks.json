@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 412,
-  "last_updated": "2026-10-07T08:09:36Z",
+  "version": 413,
+  "last_updated": "2026-10-07T08:11:12Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -9122,7 +9122,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/leaves.py",
       "source_ref": "BE:api/parent_portal/leaves.py::cancel_leave",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-346",
@@ -9466,7 +9466,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-375",
@@ -9510,7 +9510,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-375",
@@ -9551,7 +9551,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-375",
@@ -9594,7 +9594,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-375",
@@ -14513,7 +14513,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_import_template.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-155"
