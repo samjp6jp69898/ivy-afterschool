@@ -1620,7 +1620,8 @@ def test_close_out_vs_authorization_complete_no_deadlock(
     close_out 必須先鎖授權列再鎖請求列（與 425 同向）；舊順序（請求列 → 授權列）會互等死結。
     最終授權與請求各只有一個終態（s1 核銷成功 → completed，s2 的取消因條件式更新 0 列而略過）。
     """
-    staff = make_staff(committing_db_session)
+    # seed 角色：committing 測試不往 roles 寫列（被中斷也不會在共用 DB 留殘角色）
+    staff = make_staff(committing_db_session, role_code="tutor")
     ming = make_student(committing_db_session, name="王小明")
     auth = make_pickup_authorization(committing_db_session, ming, service_date=_D, code="123456")
     request = make_pickup_request(committing_db_session, ming, service_date=_D)
@@ -1628,7 +1629,6 @@ def test_close_out_vs_authorization_complete_no_deadlock(
     sid, auth_id, request_id = ming.id, auth.id, request.id
     owner_cleanup_rows.extend(
         [
-            ("roles", "id", staff.role_id),
             ("staff_users", "id", staff.id),
             ("students", "id", sid),
             ("pickup_authorizations", "student_id", sid),
