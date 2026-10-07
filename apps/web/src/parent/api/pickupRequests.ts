@@ -60,15 +60,17 @@ export async function listTodayPickupRequests(): Promise<ParentPickupRequest[]> 
   return res.data
 }
 
+const requestPath = (id: string) => `/parent/pickup/requests/${encodeURIComponent(id)}`
+
 /** 我到了 */
 export async function markPickupArrived(id: string): Promise<ParentPickupRequest> {
-  const res = await parentHttp.post<ParentPickupRequest>(`/parent/pickup/requests/${id}/arrived`)
+  const res = await parentHttp.post<ParentPickupRequest>(`${requestPath(id)}/arrived`)
   return res.data
 }
 
 /** 沒有取消原因（含空白）時送空 body，後端 cancel_reason 維持 NULL */
 export async function cancelPickupRequest(id: string, reason?: string): Promise<ParentPickupRequest> {
   const body = reason !== undefined && reason.trim() !== '' ? { reason } : {}
-  const res = await parentHttp.post<ParentPickupRequest>(`/parent/pickup/requests/${id}/cancel`, body)
+  const res = await parentHttp.post<ParentPickupRequest>(`${requestPath(id)}/cancel`, body)
   return res.data
 }

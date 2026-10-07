@@ -29,19 +29,21 @@ export interface ParentExamDetail {
   }[]
 }
 
+const childExamsPath = (childId: string) => `/parent/children/${encodeURIComponent(childId)}/exams`
+
 /** 依後端順序（考試日期新到舊）；page ≥ 1、1 ≤ pageSize ≤ 200 由後端驗證 */
 export async function listChildExams(
   childId: string,
   page = 1,
   pageSize = 20,
 ): Promise<Page<ParentExamSummary>> {
-  const res = await parentHttp.get<Page<ParentExamSummary>>(`/parent/children/${childId}/exams`, {
+  const res = await parentHttp.get<Page<ParentExamSummary>>(childExamsPath(childId), {
     params: { page, page_size: pageSize },
   })
   return res.data
 }
 
 export async function getChildExam(childId: string, examId: string): Promise<ParentExamDetail> {
-  const res = await parentHttp.get<ParentExamDetail>(`/parent/children/${childId}/exams/${examId}`)
+  const res = await parentHttp.get<ParentExamDetail>(`${childExamsPath(childId)}/${encodeURIComponent(examId)}`)
   return res.data
 }

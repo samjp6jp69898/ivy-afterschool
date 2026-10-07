@@ -28,9 +28,11 @@ export interface MonthlyAttendance {
   }
 }
 
+const childAttendancePath = (childId: string) => `/parent/children/${encodeURIComponent(childId)}/attendance`
+
 /** month 為 YYYY-MM，格式由後端驗證（錯誤回 422） */
 export async function getChildAttendance(childId: string, month: string): Promise<MonthlyAttendance> {
-  const res = await parentHttp.get<MonthlyAttendance>(`/parent/children/${childId}/attendance`, {
+  const res = await parentHttp.get<MonthlyAttendance>(childAttendancePath(childId), {
     params: { month },
   })
   return res.data

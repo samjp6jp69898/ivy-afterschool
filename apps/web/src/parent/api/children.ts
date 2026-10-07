@@ -95,13 +95,15 @@ export async function listChildren(): Promise<ChildSummary[]> {
   return res.data
 }
 
+const childPath = (id: string) => `/parent/children/${encodeURIComponent(id)}`
+
 export async function getChild(id: string): Promise<ChildDetail> {
-  const res = await parentHttp.get<ChildDetail>(`/parent/children/${id}`)
+  const res = await parentHttp.get<ChildDetail>(childPath(id))
   return res.data
 }
 
 /** 首頁今日狀態卡：出勤、請假、作業進度與今日接送請求的聚合 */
 export async function getChildToday(id: string): Promise<ChildToday> {
-  const res = await parentHttp.get<ChildToday>(`/parent/children/${id}/today`)
+  const res = await parentHttp.get<ChildToday>(`${childPath(id)}/today`)
   return res.data
 }

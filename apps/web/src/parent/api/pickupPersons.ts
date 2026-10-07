@@ -15,8 +15,10 @@ export interface PickupPerson {
   created_at: ISODateTime
 }
 
+const childPersonsPath = (childId: string) => `/parent/children/${encodeURIComponent(childId)}/pickup-persons`
+
 export async function listPickupPersons(childId: string): Promise<PickupPerson[]> {
-  const res = await parentHttp.get<PickupPerson[]>(`/parent/children/${childId}/pickup-persons`)
+  const res = await parentHttp.get<PickupPerson[]>(childPersonsPath(childId))
   return res.data
 }
 
@@ -31,7 +33,7 @@ export async function createPickupPerson(
     phone: input.phone,
     photo: input.photo,
   })
-  const res = await parentHttp.post<PickupPerson>(`/parent/children/${childId}/pickup-persons`, form, {
+  const res = await parentHttp.post<PickupPerson>(childPersonsPath(childId), form, {
     // parentHttp 預設 Content-Type 為 application/json，axios 遇到 FormData 會把它轉成 JSON 字串（檔案遺失）；
     // 這裡改成 multipart/form-data 讓 FormData 原樣送出。瀏覽器端 axios 送出前會清掉此標頭，由瀏覽器帶 boundary。
     headers: { 'Content-Type': 'multipart/form-data' },
@@ -41,5 +43,5 @@ export async function createPickupPerson(
 
 /** 軟刪除，後端回 204 */
 export async function deletePickupPerson(id: string): Promise<void> {
-  await parentHttp.delete(`/parent/pickup-persons/${id}`)
+  await parentHttp.delete(`/parent/pickup-persons/${encodeURIComponent(id)}`)
 }

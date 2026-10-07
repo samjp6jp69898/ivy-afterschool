@@ -16,7 +16,7 @@ export async function listNotifications(
 }
 
 export async function markNotificationRead(id: string): Promise<Notification> {
-  const res = await parentHttp.post<Notification>(`/parent/notifications/${id}/read`)
+  const res = await parentHttp.post<Notification>(`/parent/notifications/${encodeURIComponent(id)}/read`)
   return res.data
 }
 

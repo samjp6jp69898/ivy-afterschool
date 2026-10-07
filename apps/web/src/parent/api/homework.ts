@@ -15,7 +15,7 @@ export interface HomeworkToday {
 /** date 省略時不帶 query（後端以台北今日為準） */
 export async function getChildHomework(childId: string, date?: ISODate): Promise<HomeworkToday> {
   const res = await parentHttp.get<HomeworkToday>(
-    `/parent/children/${childId}/homework`,
+    `/parent/children/${encodeURIComponent(childId)}/homework`,
     date === undefined ? undefined : { params: { date } },
   )
   return res.data
