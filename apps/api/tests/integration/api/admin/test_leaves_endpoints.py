@@ -1,13 +1,15 @@
 """BACKEND-351：GET /api/admin/leaves。
 BACKEND-354：GET /api/admin/leaves/{leave_id}/attachments/{attachment_id}（簽發短效 URL）。
-BACKEND-352：POST /api/admin/leaves（員工代登記）。"""
+BACKEND-352：POST /api/admin/leaves（員工代登記）。
+BACKEND-353：POST /api/admin/leaves/{leave_id}/cancel。"""
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
@@ -16,13 +18,16 @@ from sqlalchemy.orm import Session
 from app.models.account import StaffUser
 from app.models.attendance import StudentAttendance
 from app.models.leaves import StudentLeave
+from app.models.students import Student
 from tests.support.factories import (
+    make_attendance,
     make_class,
     make_leave,
     make_leave_attachment,
     make_parent,
     make_student,
 )
+from tests.support.fake_clock import FakeClock
 from tests.support.route_audit import admin_routes_without_permission
 
 _URL = "/api/admin/leaves"
@@ -339,3 +344,158 @@ def test_admin_leaves_create_many_prior_leaves(
         date(2026, 9, 1),
         "active",
     )
+
+
+# --- BACKEND-353：POST /api/admin/leaves/{leave_id}/cancel ----------------------------------------
+
+
+def _cancel_url(leave_id: object) -> str:
+    return f"{_URL}/{leave_id}/cancel"
+
+
+def _leave_rows(db_session: Session, student: Student, leave: StudentLeave, days: range) -> None:
+    for day in days:
+        make_attendance(
+            db_session, student, service_date=date(2026, 9, day), status="leave", leave=leave
+        )
+
+
+def _attendance_by_day(db_session: Session, student_id: UUID) -> dict[int, tuple[str, UUID | None]]:
+    db_session.expire_all()
+    rows = db_session.execute(
+        select(StudentAttendance).where(StudentAttendance.student_id == student_id)
+    ).scalars()
+    return {row.service_date.day: (row.status, row.leave_id) for row in rows}
+
+
+def test_admin_leaves_cancel_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "post" in app.openapi()["paths"][_URL + "/{leave_id}/cancel"]
+
+
+@pytest.mark.clock("2026-09-09T10:00:00+08:00")
+def test_admin_leaves_cancel_success(
+    staff_client: StaffClientFactory, db_session: Session, fake_clock: FakeClock
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    hua = make_student(db_session, name="陳小華")
+    remaining = make_leave(
+        db_session, ming, start_date=date(2026, 9, 7), end_date=date(2026, 9, 11)
+    )
+    whole = make_leave(db_session, hua, start_date=date(2026, 9, 7), end_date=date(2026, 9, 11))
+    _leave_rows(db_session, ming, remaining, range(7, 12))
+    _leave_rows(db_session, hua, whole, range(7, 12))
+    client, staff = staff_client(permissions=["leaves:write"], display_name="陳行政")
+
+    # 不帶 body → scope=remaining：已開始的請假縮短為昨天，仍是 active
+    resp = client.post(_cancel_url(remaining.id))
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert (body["id"], body["status"], body["start_date"], body["end_date"]) == (
+        str(remaining.id),
+        "active",
+        "2026-09-07",
+        "2026-09-08",
+    )
+    assert (body["cancelled_at"], body["cancelled_by_type"]) == (None, None)
+    assert body["student"]["name"] == "王小明"
+
+    # scope=all：整筆取消
+    resp_all = client.post(_cancel_url(whole.id), json={"scope": "all"})
+
+    assert resp_all.status_code == 200
+    body_all = resp_all.json()
+    assert (body_all["id"], body_all["status"], body_all["end_date"]) == (
+        str(whole.id),
+        "cancelled",
+        "2026-09-11",
+    )
+    assert (body_all["cancelled_by_type"], body_all["cancelled_by_name"]) == ("staff", "陳行政")
+    assert datetime.fromisoformat(body_all["cancelled_at"]) == fake_clock.now()
+    # 已 commit：重讀 DB；出勤只還原被取消的日子
+    db_session.expire_all()
+    assert (remaining.status, remaining.end_date) == ("active", date(2026, 9, 8))
+    assert (whole.status, whole.cancelled_by_type, whole.cancelled_by_id) == (
+        "cancelled",
+        "staff",
+        staff.id,
+    )
+    assert _attendance_by_day(db_session, ming.id) == {
+        7: ("leave", remaining.id),
+        8: ("leave", remaining.id),
+        9: ("expected", None),
+        10: ("expected", None),
+        11: ("expected", None),
+    }
+    assert _attendance_by_day(db_session, hua.id) == {d: ("expected", None) for d in range(7, 12)}
+
+
+def test_admin_leaves_cancel_422(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    leave = make_leave(db_session, make_student(db_session), start_date=date(2026, 9, 7))
+    client, _ = staff_client(permissions=["leaves:write"])
+
+    assert_error(client.post(_cancel_url("abc")), 422, "validation_error")
+    assert_error(
+        client.post(_cancel_url(leave.id), json={"scope": "past"}), 422, "validation_error"
+    )
+    assert_error(
+        client.post(_cancel_url(leave.id), json={"scope": "all", "reason": "x"}),
+        422,
+        "validation_error",
+    )
+    db_session.expire_all()
+    assert leave.status == "active"
+
+
+def test_admin_leaves_cancel_401(api_client: TestClient, assert_error: AssertError) -> None:
+    assert_error(api_client.post(_cancel_url(uuid4())), 401, "unauthenticated")
+
+
+def test_admin_leaves_cancel_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    leave = make_leave(db_session, make_student(db_session), start_date=date(2026, 9, 7))
+    client, _ = staff_client(permissions=["leaves:read"])
+
+    resp = client.post(_cancel_url(leave.id), json={"scope": "all"})
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["leaves:write"]}
+    db_session.expire_all()
+    assert leave.status == "active"
+
+
+@pytest.mark.clock("2026-09-10T10:00:00+08:00")
+def test_admin_leaves_cancel_409(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming = make_student(db_session)
+    cancelled = make_leave(db_session, ming, start_date=date(2026, 9, 14), status="cancelled")
+    ended = make_leave(db_session, ming, start_date=date(2026, 9, 7), end_date=date(2026, 9, 8))
+    client, _ = staff_client(permissions=["leaves:write"])
+
+    assert_error(client.post(_cancel_url(cancelled.id)), 409, "leave_not_active")
+    assert_error(client.post(_cancel_url(ended.id)), 409, "leave_already_ended")
+    assert_error(client.post(_cancel_url(uuid4())), 404, "leave_not_found")
+    db_session.expire_all()
+    assert (ended.status, ended.end_date) == ("active", date(2026, 9, 8))
+
+
+@pytest.mark.clock("2026-09-10T10:00:00+08:00")
+def test_admin_leaves_cancel_ended_all(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    leave = make_leave(db_session, ming, start_date=date(2026, 9, 7), end_date=date(2026, 9, 8))
+    _leave_rows(db_session, ming, leave, range(7, 9))
+    client, staff = staff_client(permissions=["leaves:write"])
+
+    resp = client.post(_cancel_url(leave.id), json={"scope": "all"})
+
+    assert resp.status_code == 200
+    assert (resp.json()["status"], resp.json()["end_date"]) == ("cancelled", "2026-09-08")
+    assert _attendance_by_day(db_session, ming.id) == {7: ("expected", None), 8: ("expected", None)}
+    assert (leave.status, leave.cancelled_by_id) == ("cancelled", staff.id)
