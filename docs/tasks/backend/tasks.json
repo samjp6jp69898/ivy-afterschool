@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 423,
-  "last_updated": "2026-10-07T08:45:56Z",
+  "version": 424,
+  "last_updated": "2026-10-07T10:34:48Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5610,8 +5610,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::update_student",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-152",
         "BACKEND-159"
@@ -5721,8 +5721,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::bulk_graduate_students",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-157",
         "BACKEND-158",
@@ -5759,8 +5759,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:utils/excel_io.py::parse_excel",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-155",
         "BACKEND-156",
@@ -9833,8 +9833,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/homework.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-377",
         "BACKEND-371",
@@ -9872,8 +9872,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/homework.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-378",
         "BACKEND-371",
@@ -9911,8 +9911,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/homework.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-379",
         "BACKEND-371",
@@ -9950,8 +9950,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/homework.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-380",
         "BACKEND-371",
@@ -10923,8 +10923,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:api/parent_portal/pickup.py::cancel_authorization",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9d",
       "depends_on": [
         "BACKEND-401",
         "BACKEND-402",
@@ -11502,8 +11502,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/pickup_authorizations.py::admin_verify",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-426",
         "BACKEND-402",
@@ -11544,8 +11544,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/pickup_authorizations.py::admin_confirm_visual_match",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-011",
         "BACKEND-023",
@@ -11584,8 +11584,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/pickup_authorizations.py::admin_override",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-428",
         "BACKEND-402",
@@ -14562,8 +14562,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-532",
         "BACKEND-159",
@@ -15245,6 +15245,176 @@
         "status": "pass",
         "reviewer": "review-r9-d",
         "notes": "通過。tdd.run 5 passed（3 條 red_cases 全部被 -k 選到，ast 守衛以三個模組路徑參數化）；lint / typecheck 乾淨；測試 ad1ee54 先於實作 27da4b2。diff 檢視：clock.py 只新增 format_hm / format_taipei_hm 與 docstring 一行；三個模組只刪逐字相同的私有 _hm / _taipei_hm、改匯入（views.py 移除不再使用的 datetime 與 to_taipei、parent_today_service 移除 datetime / time / to_taipei、requests.py 保留仍在用的 to_taipei）、替換呼叫點；grep 全 app 無殘留 _hm( / _taipei_hm( 呼叫（_parse_hm 是另一個函式）。行為不變：format_taipei_hm 沿用 to_taipei，naive 一律 ValueError，跨午夜（UTC 16:00 → 00:00）與 None 都有測試；三個既有整合測試檔 pickup/test_pickup_views.py、pickup/test_pickup_requests.py、test_parent_today_service.py（指定路徑、flock 內）重構後 70 passed。突變：在 pickup/views.py 放回一份模組層級 _hm → test_no_private_hm_copies_remain[services/pickup/views.py] 紅，還原後 cmp 一致。殘留：無。"
+      }
+    },
+    {
+      "id": "BACKEND-552",
+      "title": "補 LeaveService 346 / 349 的並發回歸測試（請假列 FOR UPDATE 與 populate_existing，拿掉要轉紅）",
+      "description": "補強 BACKEND-346 `cancel_leave` 與 BACKEND-349 `upload_leave_attachment` 的測試，實作不變。\n\n兩者共用 `leave_service._leave_for_update`：對請假列取 `FOR UPDATE` + `populate_existing` 後才判斷狀態與附件數。`apps/api/tests/integration/services/test_leave_service.py` 目前沒有這道鎖的並發測試，拿掉鎖測試不會轉紅。\n\n**測試寫法**（kickoff 實作慣例「鎖」一節與 BACKEND-549 / 550）：兩條 `app_backend` 連線 + threading 阻塞模式；外部連線用 `FOR KEY SHARE` 持鎖才分得出實作「有沒有先鎖列」（外部 `FOR UPDATE` 會讓沒先鎖列的實作也在之後的 UPDATE 等鎖）；每條連線 `SET LOCAL lock_timeout`，join / wait 都帶 timeout；驗 `populate_existing` 要事先載入並持有 ORM 參照；committing 測資只用 seed 角色（`make_staff(role_code=\"tutor\")`）與 owner 清理 fixture（排在 `committing_db_session` 之前、設 `lock_timeout`），不得往 seed 表寫列；跑完以 owner 唯讀查無殘列。每道鎖都要有突變證明（拿掉該鎖，對應測試轉紅），突變結果記在回報；若寫測試時證明鎖有缺口，先依 README「實作中發現規格有錯」處理並回報，不要默默改實作。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "granularity_unit": "test",
+      "target_path": "apps/api/app/services/leave_service.py",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9e",
+      "depends_on": [
+        "BACKEND-346",
+        "BACKEND-349"
+      ],
+      "suggested_model": "fable-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/services/test_leave_service.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_leave_concurrent_cancel_blocks_on_leave_row_lock：外部連線對請假列 SELECT ... FOR KEY SHARE 持鎖，thread 呼叫 cancel_leave → 放鎖前未完成，放鎖後完成；拿掉 _leave_for_update 的 FOR UPDATE → 轉紅",
+          "test_leave_concurrent_cancel_twice_only_one_succeeds：同一筆 active 請假兩個 session 同時 cancel_leave（scope=all）→ 恰一個成功、另一個 409 leave_not_active；出勤還原與 leave.cancelled 通知各只發生一次；拿掉鎖 → 轉紅",
+          "test_leave_concurrent_attachment_limit_not_exceeded：leave.window 的 max_attachments=3、已有 2 個附件，兩個 session 同時 upload_leave_attachment → 恰一個成功、另一個 409 attachment_limit_reached，附件總數為 3；拿掉鎖 → 轉紅（出現 4 個）",
+          "test_leave_concurrent_cancel_sees_commit_despite_loaded_instance：B 的 session 事先載入並持有該請假（status active）的 ORM 參照；A 先 cancel_leave 並 commit；B 再 cancel_leave → 409 leave_not_active；拿掉 populate_existing → 轉紅"
+        ],
+        "run": "just test-int apps/api/tests/integration/services/test_leave_service.py -k \"test_leave_concurrent_\"",
+        "notes": "新測試一律以 test_leave_concurrent_ 為前綴；既有測試不動。整合測試包 flock /tmp/afterschool_db.lock 並在內層加 timeout。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-553",
+      "title": "補 GradePromotionService.execute（158）對象列 FOR UPDATE 的並發回歸測試（拿掉要轉紅）",
+      "description": "補強 BACKEND-158 `execute` 的測試，實作不變。\n\n`execute` 步驟 3 先以 `FOR UPDATE`（依主鍵排序）鎖全部對象學生列，再重算 preview，bulk update 只對鎖住的 id；review-r9-c 指出拿掉對象列 `FOR UPDATE` 時 `test_grade_promotion_service.py` 的 8 條測試仍全綠，沒有回歸測試保護。補兩個 session 的阻塞測試。\n\n**測試寫法**（kickoff 實作慣例「鎖」一節與 BACKEND-549 / 550）：兩條 `app_backend` 連線 + threading 阻塞模式；外部連線用 `FOR KEY SHARE` 持鎖才分得出實作「有沒有先鎖列」（外部 `FOR UPDATE` 會讓沒先鎖列的實作也在之後的 UPDATE 等鎖）；每條連線 `SET LOCAL lock_timeout`，join / wait 都帶 timeout；驗 `populate_existing` 要事先載入並持有 ORM 參照；committing 測資只用 seed 角色（`make_staff(role_code=\"tutor\")`）與 owner 清理 fixture（排在 `committing_db_session` 之前、設 `lock_timeout`），不得往 seed 表寫列；跑完以 owner 唯讀查無殘列。每道鎖都要有突變證明（拿掉該鎖，對應測試轉紅），突變結果記在回報；若寫測試時證明鎖有缺口，先依 README「實作中發現規格有錯」處理並回報，不要默默改實作。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "granularity_unit": "test",
+      "target_path": "apps/api/app/services/grade_promotion_service.py",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9e",
+      "depends_on": [
+        "BACKEND-158"
+      ],
+      "suggested_model": "fable-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/services/test_grade_promotion_service.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_promotion_execute_lock_blocks_on_target_student_row：外部連線對一位對象學生列 SELECT ... FOR KEY SHARE 持鎖，thread 呼叫 execute → 放鎖前未完成，放鎖後完成且該生升級；拿掉對象列 FOR UPDATE → 轉紅",
+          "test_promotion_execute_lock_update_student_waits_and_sees_promoted_grade：A execute 取得對象列鎖後暫停（未 commit），B 在 thread 呼叫 update_student(同一位對象學生，status=withdrawn) 被阻塞；A commit 後 B 完成，該生最終 grade_level 為升級後的值且 status 為 withdrawn；拿掉對象列 FOR UPDATE → 轉紅",
+          "test_promotion_execute_lock_stale_preview_409：B 持有一位對象學生的列鎖並在 commit 前把該生改為 withdrawn，A 的 execute 被阻塞；B commit 後 A 重算 preview 的總數與 expected_total 不符 → 409 preview_stale，整批不動；拿掉對象列 FOR UPDATE → 轉紅"
+        ],
+        "run": "just test-int apps/api/tests/integration/services/test_grade_promotion_service.py -k \"test_promotion_execute_lock_\"",
+        "notes": "新測試一律以 test_promotion_execute_lock_ 為前綴；既有測試不動。整合測試包 flock /tmp/afterschool_db.lock 並在內層加 timeout。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-554",
+      "title": "家長端建立請假 endpoint 改用 leave_service.parent_leave_out（刪除 leaves.py 內重複的私有組裝函式）",
+      "description": "`apps/api/app/api/parent/leaves.py` 內給 `create_leave` handler 用的私有 `_parent_leave_out(leave, *, today)`（無附件版）與 `leave_service.parent_leave_out(leave, *, storage, clock)`（BACKEND-357 抽出）並存。刪除私有版，`create_leave` handler 注入 `get_storage`，改用 `leave_service.parent_leave_out` 組裝回應（剛建立的請假沒有附件，輸出與現況完全相同）。純重構，不改其他行為。\n\n**驗收標準**：每一條對應下列 red_case；`test_leaves_endpoints.py` 與 `test_leave_service.py` 整檔（指定路徑）重構前後都全綠。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/api/parent/leaves.py",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9b",
+      "depends_on": [
+        "BACKEND-357"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/api/parent/test_leaves_endpoints.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_parent_leave_assembler_shared_create_response_unchanged：POST /api/parent/leaves 建立請假的 201 回應逐欄等於 leave_service.parent_leave_out 對同一筆請假的輸出（含 can_cancel、attachments 為 []、leave_type_label）",
+          "test_parent_leave_assembler_shared_no_private_copy：以 ast 解析 app/api/parent/leaves.py，模組層級不再定義 _parent_leave_out，且 create_leave handler 呼叫 leave_service.parent_leave_out（把私有版放回去 → 轉紅）"
+        ],
+        "run": "just test-int apps/api/tests/integration/api/parent/test_leaves_endpoints.py -k \"test_parent_leave_assembler_shared_\"",
+        "notes": "新測試一律以 test_parent_leave_assembler_shared_ 為前綴。行為不變的證據：重構前後 test_leaves_endpoints.py 與 test_leave_service.py 整檔結果記在回報。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-555",
+      "title": "close_out_inactive_student（529）改用 pickup/authorizations 公開的組裝函式，移除跨模組匯入私有 _base_fields",
+      "description": "`apps/api/app/services/student_service.py` 以 alias 匯入 `app.services.pickup.authorizations` 私有的 `_base_fields`，組授權推播資料（BACKEND-529 risk_notes）；pickup 模組重構時會被拖累。在 `authorizations.py` 提供公開函式（名稱由實作者定，例如回傳 `PickupAuthorizationOut` 或其欄位 dict），`authorizations.py` 內部各呼叫點與 `student_service.py` 都改用它，移除跨模組的私有名稱匯入。純重構，行為不變。\n\n**驗收標準**：每一條對應下列 red_case；`test_pickup_authorizations.py` 與 `test_student_service.py` 整檔（指定路徑）重構前後都全綠。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/services/pickup/authorizations.py",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9d",
+      "depends_on": [
+        "BACKEND-529",
+        "BACKEND-426"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/services/pickup/test_pickup_authorizations.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_authorization_public_assembler_matches_out_fields：公開組裝函式對同一筆授權的輸出，逐欄等於 PickupAuthorizationOut 的欄位值（含 status、code_last4、locked 旗標、日期）",
+          "test_authorization_public_assembler_is_used_by_close_out：以 ast 解析 app/services/student_service.py，不再 import 任何底線開頭的 app.services.pickup.* 名稱，且 close_out 推播資料由公開函式產生（把私有匯入放回去 → 轉紅）"
+        ],
+        "run": "just test-int apps/api/tests/integration/services/pickup/test_pickup_authorizations.py -k \"test_authorization_public_assembler_\"",
+        "notes": "新測試一律以 test_authorization_public_assembler_ 為前綴。行為不變的證據：重構前後 test_pickup_authorizations.py 與 test_student_service.py 整檔結果記在回報。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-556",
+      "title": "BACKEND-548 的 close_out 死結測試改用 seed 角色建員工（committing 測試不得往 roles 寫列）",
+      "description": "`apps/api/tests/integration/services/test_student_service.py` 中 BACKEND-548 的 close_out 死結測試（約第 1623 行）以 `make_staff(committing_db_session)` 建員工：預設會建自訂 `test_*` 角色並隨測試 commit，測試被中斷就在共用 DB 留殘列。改為 `make_staff(committing_db_session, role_code=\"tutor\")`，並確認員工登記進 owner 清理；測試行為與斷言完全不變。同檔其他 committing 測試若有同類寫法一併修正。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "granularity_unit": "test",
+      "target_path": "apps/api/app/services/student_service.py",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9e",
+      "depends_on": [
+        "BACKEND-548"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/services/test_student_service.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_close_out_deadlock_leaves_no_people_residue：以 owner 連線記錄跑前 staff_users 與非系統 roles（is_system=false）筆數 → 跑 548 的死結測試 → 兩者筆數與跑前相同；原死結斷言不變（拿掉 548 修正的鎖序仍轉紅）",
+          "test_close_out_committing_tests_leave_no_people_residue：跑 test_student_service.py 的 -k test_close_out_ 全部測試後，staff_users 與非系統 roles 筆數與跑前相同"
+        ],
+        "run": "just test-int apps/api/tests/integration/services/test_student_service.py -k \"test_close_out_\"",
+        "notes": "殘列筆數檢查可用測試外的手動比對（前後各以 owner 查一次）記錄在回報；若改寫成自動檢查，放在同一測試的 teardown 斷言。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
       }
     }
   ]

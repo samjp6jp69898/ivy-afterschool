@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 140,
-  "last_updated": "2026-10-07T08:48:16Z",
+  "version": 141,
+  "last_updated": "2026-10-07T10:34:48Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -579,8 +579,8 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/router/index.ts",
       "source_ref": "FE:src/router/index.ts::router",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9a",
       "depends_on": [
         "FRONTEND-025"
       ],
@@ -756,8 +756,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/layout/AdminSidebar.vue",
       "source_ref": "FE:src/components/layout/AdminSidebar.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9d",
       "depends_on": [
         "FRONTEND-030",
         "FRONTEND-023"
@@ -905,8 +905,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/layout/NotificationBell.vue",
       "source_ref": "FE:src/components/layout/AdminNotificationBell.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9d",
       "depends_on": [
         "FRONTEND-034",
         "FRONTEND-036"
@@ -1020,7 +1020,7 @@
         "FRONTEND-037"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "review-r9-f 打回：resync 進行中再被觸發（輪詢 / 重連）時不可只略過，要「記為待補，本輪結束（成功或失敗）後立刻再補跑一次，多次觸發合併為一次」；否則重連落在輪詢 resync 進行中時，之後不會再有任何補抓，畫面停在斷線前的快照（reviewer 以 fake timers 重現：resync 2000ms、t=0 斷線、t=1000 重連 open、t=2000 R1 完成後 resync 總數仍為 1，60 秒後亦然；R1 reject 的版本亦同）。請同步：(1) description 的「`resync` 執行中再次觸發時略過（不併發）」改成「執行中再次觸發時不併發，但記為待補，本輪結束後立刻補跑一次，多次觸發合併為一次」；(2) 新增 red_case「useAdminWsTopic reruns resync once after overlapping triggers：resync 回傳 2000ms 後 resolve 的 promise；斷線 → 1 次；1000ms 後重連 open（上一輪仍在跑）→ 仍 1 次；再 1000ms 上一輪完成 → 立刻 2 次；期間 visibilitychange 再觸發一次輪詢也只合併成這 1 次補跑；補跑完成後再等 60000ms 仍為 2 次」與「上一輪 reject 後仍補跑一次」，並確認 tdd.run 選得到；(3) 既有 red_case 3 維持。",
+      "risk_notes": "resync 若本身每次都同步再觸發輪詢並同步 throw，`finishResync → runResync` 會同步遞迴（理論上的病態情況，實際觸發源都是非同步事件）。denied 旗標下斷線 / 重連仍各 resync 一次（REST 重抓與 ws topic 權限刻意不耦合）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/composables/useAdminWsTopic.spec.ts",
@@ -1349,8 +1349,8 @@
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/LoginView.vue",
       "source_ref": "FE:src/views/LoginView.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9d",
       "depends_on": [
         "FRONTEND-022",
         "FRONTEND-025",
@@ -1390,8 +1390,8 @@
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/ChangePasswordView.vue",
       "source_ref": "FE:src/views/ChangePasswordView.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9d",
       "depends_on": [
         "FRONTEND-022",
         "FRONTEND-025",
@@ -1428,8 +1428,8 @@
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/ErrorView.vue",
       "source_ref": "FE:src/views/ErrorStateView.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9d",
       "depends_on": [
         "FRONTEND-025",
         "FRONTEND-024"
@@ -1537,8 +1537,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/staffUsers.ts",
       "source_ref": "FE:src/api/auth.ts::createUser",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9a",
       "depends_on": [
         "FRONTEND-020",
         "BACKEND-093",
@@ -1742,8 +1742,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/SettingCard.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-055",
         "FRONTEND-046",
@@ -1823,8 +1823,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/reference/SubjectTable.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-051",
         "FRONTEND-040",
@@ -1863,8 +1863,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/reference/ExamTypeTable.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-051",
         "FRONTEND-040",
@@ -1902,8 +1902,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/reference/SchoolTable.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-051",
         "FRONTEND-040",
@@ -1941,8 +1941,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/reference/ClosedDayTable.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-051",
         "FRONTEND-040",
@@ -2214,8 +2214,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/RoleDetailPanel.vue",
       "source_ref": "FE:src/components/settings/roles/RoleDetailPanel.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-068",
         "FRONTEND-044",
@@ -3233,8 +3233,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/attendance.ts",
       "source_ref": "FE:src/api/studentAttendance.ts::getDailyAttendance",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9c",
       "depends_on": [
         "FRONTEND-020",
         "BACKEND-315",
@@ -3277,8 +3277,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/leaves.ts",
       "source_ref": "FE:src/api/studentLeaves.ts::listStudentLeaves",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9c",
       "depends_on": [
         "FRONTEND-020",
         "BACKEND-351",
@@ -4064,8 +4064,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/pickupRequests.ts",
       "source_ref": "FE:src/api/dismissalCalls.ts::createDismissalCall",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9c",
       "depends_on": [
         "FRONTEND-020",
         "BACKEND-429",
@@ -5355,8 +5355,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/student/StudentExamHistoryTab.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9d",
       "depends_on": [
         "FRONTEND-230",
         "FRONTEND-042"

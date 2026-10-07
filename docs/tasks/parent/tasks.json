@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 104,
-  "last_updated": "2026-10-07T08:45:01Z",
+  "version": 105,
+  "last_updated": "2026-10-07T10:34:48Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -222,8 +222,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/auth.ts",
       "source_ref": "FE:src/parent/api/auth.ts::liffLogin",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-053",
         "BACKEND-057",
@@ -336,8 +336,8 @@
       "granularity_unit": "store",
       "target_path": "apps/web/src/parent/stores/children.ts",
       "source_ref": "FE:src/parent/stores/children.ts::useChildrenStore",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r9",
       "depends_on": [
         "PARENT-006",
         "INFRA-013"
@@ -1374,8 +1374,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/ChildContextHeader.vue",
       "source_ref": "FE:src/parent/components/ChildContextHeader.vue::variant",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r9",
       "depends_on": [
         "PARENT-006",
         "PARENT-014",
@@ -1921,8 +1921,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/PickupReplyMessage.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r9b",
       "depends_on": [
         "FRONTEND-003",
         "INFRA-012",
@@ -1961,8 +1961,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/PickupProgressSteps.vue",
       "source_ref": "FE:src/parent/views/PickupNoticeView.vue::steps",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r9b",
       "depends_on": [
         "FRONTEND-003",
         "PARENT-014",
@@ -2175,8 +2175,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/PickupPersonListItem.vue",
       "source_ref": "FE:src/parent/views/PickupView.vue::openEditPerson",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r9",
       "depends_on": [
         "PARENT-016",
         "PARENT-091",
@@ -2463,8 +2463,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/attendance/AttendanceCalendar.vue",
       "source_ref": "FE:src/parent/views/AttendanceView.vue::calendarDays",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r9b",
       "depends_on": [
         "FRONTEND-005",
         "PARENT-001",
@@ -2547,8 +2547,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/leaves.ts",
       "source_ref": "FE:src/parent/api/leaves.ts::uploadLeaveAttachment",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-355",
         "BACKEND-356",
@@ -2840,8 +2840,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/exams/ExamListItem.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r9b",
       "depends_on": [
         "FRONTEND-003",
         "PARENT-014",
@@ -2876,8 +2876,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/exams/ExamScoreTable.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r9b",
       "depends_on": [
         "PARENT-001",
         "PARENT-150",
@@ -3413,6 +3413,43 @@
         "status": "pass",
         "reviewer": "review-r9-p",
         "notes": "tdd.notes 四條逐條實跑。①修正前後對照：以 extends tsconfig.app.json 的 scratch tsconfig，對 1930ea5^ 與 1930ea5 兩版 spec 各跑一次 vue-tsc（不動 repo）。修正前恰為 (32,3) TS2740（Omit<DOMWrapper<HTMLInputElement>, \"exists\"> 缺 subTree / setChecked / setSelected / wrapperElem），修正後 0 個錯誤；just web-typecheck 在 e8121e3 全專案 exit 0，輸出不含此檔。②just web-test 該檔 -t \"PickupPersonForm\" 14/14 綠；修正前後以靜態擷取的 it() 名稱 14 條逐字相同，且與 vitest JSON 報告的實跑名稱一致；45 行 expect 逐字相同，斷言沒有改弱。③just web-lint 該檔乾淨。④git diff 1930ea5^ 1930ea5 只動 spec：第 29 行的回傳型別標註與新增的一行註解，沒有 @ts-ignore / @ts-expect-error / @ts-nocheck / any / as unknown as；PickupPersonForm.vue 在 PARENT-099（1f0c27f）之後沒有任何 commit。新標註與 @vue/test-utils 2.5.1 dist/src/baseWrapper.d.ts:55 的 get() 回傳型別一致，註解描述正確；field() 的呼叫端只用 setValue / attributes，不需要 exists()。殘留：無。"
+      }
+    },
+    {
+      "id": "PARENT-192",
+      "title": "家長端 api client 的路徑 id 一律 encodeURIComponent（與後台 api client 一致）",
+      "description": "後台 api client 把路徑中的 id 都以 `encodeURIComponent` 編碼，家長端 `apps/web/src/parent/api/` 的 client 沒有（review-r9-p 發現）。例如 `getChildExam(childId, examId)` 的 `examId` 來自路由參數，傳入 `'../../../me'` 時請求會打到 `/api/parent/me`（只限 GET、本人權限，不越權，但行為不正確）。已完成的 `children.ts`、`pickupRequests.ts`、`pickupPersons.ts`、`attendance.ts`、`exams.ts`、`homework.ts`、`notifications.ts` 中所有把變數放進路徑的位置，都改為先 `encodeURIComponent`（做法比照後台 `apps/web/src/api/` 的 `xxxPath(id)` 小函式）。純修正：對一般 UUID 的請求 URL 完全不變。\n\n**驗收標準**：每一條對應下列 red_case；各 client 既有 spec 全綠且斷言不變。",
+      "granularity_unit": "api_client",
+      "target_path": "apps/web/src/parent/api/exams.ts",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r9",
+      "depends_on": [
+        "PARENT-006",
+        "PARENT-090",
+        "PARENT-091",
+        "PARENT-130",
+        "PARENT-150"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/web/src/parent/api/pathEncoding.spec.ts",
+        "markers": [
+          "vitest"
+        ],
+        "red_cases": [
+          "parent api path encoding encodes unsafe ids：對 children / pickupRequests / pickupPersons / attendance / exams / homework / notifications 每個把 id 放進路徑的函式，傳入 '../../me?x=1#y' → 實際請求 URL 的該段為 encodeURIComponent 後的值（含 %2E%2E 或 ..%2F 形式，不含未編碼的 '/'、'?'、'#'），不會改變路徑結構",
+          "parent api path encoding keeps normal uuid urls unchanged：傳入一般 UUID → 請求 URL 與現況完全相同（逐函式斷言）"
+        ],
+        "run": "just web-test src/parent/api/pathEncoding.spec.ts -t \"parent api path encoding\"",
+        "notes": "新增 pathEncoding.spec.ts 一個檔案集中驗證所有函式；各 client 既有 spec 不改。新建立的 client（PARENT-007 / 133）由各自 task 的實作者從一開始就編碼，不在本 task 範圍。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
       }
     }
   ]
