@@ -23,6 +23,16 @@ photo_url；update_student 沒有 storage 參數）→ commit → 200 ``StudentD
 ``GET /api/admin/students/import-template``（BACKEND-533）：students:write → BACKEND-532
 ``build_import_template``（常數內容、不含使用者輸入）→ 200 xlsx，固定檔名「學生匯入範本.xlsx」、
 ``Cache-Control: no-store``。
+``POST /api/admin/students/promote-grade``（BACKEND-165）：students:write；``PromoteGradeIn``
+dry_run=true → BACKEND-157 ``preview``（不寫入）→ ``PromotionPreviewOut``；dry_run=false →
+BACKEND-158 ``execute`` → commit → ``PromotionResultOut``。409 already_promoted / preview_stale、
+422 invalid_dates 由 service 拋出（不 commit）。
+``POST /api/admin/students/import``（BACKEND-166）：students:write；multipart ``file`` /
+``academic_year`` / ``dry_run``。上傳檔先經 BACKEND-016 ``read_validated_upload``（分塊讀、5 MiB
+上限 413、空檔 422、非 xlsx 415）才交給 service（zip / XML 深度防護在 BACKEND-155 內）：
+dry_run=true → ``preview`` → ``ImportPreviewOut``（每列只回 row_number / display / errors，不回
+正規化資料）；dry_run=false → BACKEND-156 ``execute`` → commit → ``ImportResultOut``。
+409 import_has_errors / import_conflict 由 service 拋出（不 commit）。
 """
 
 from __future__ import annotations
@@ -31,7 +41,7 @@ from typing import Annotated, Final
 from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.admin._query import query_model
@@ -42,9 +52,15 @@ from app.core.pagination import Page, PageParams, page_params
 from app.core.permissions import Permission
 from app.core.request_meta import RequestMeta, get_request_meta
 from app.core.storage import Storage, get_storage
+from app.core.uploads import XLSX_MAX_BYTES, XLSX_TYPES, read_validated_upload
 from app.schemas.guardians import GuardianCreateIn, GuardianOut
 from app.schemas.students import (
+    ImportPreviewOut,
+    ImportResultOut,
     PhotoUploadOut,
+    PromoteGradeIn,
+    PromotionPreviewOut,
+    PromotionResultOut,
     StudentCreateIn,
     StudentDetailOut,
     StudentListItemOut,
@@ -53,7 +69,12 @@ from app.schemas.students import (
     StudentPurgeOut,
     StudentUpdateIn,
 )
-from app.services import guardian_service, student_service
+from app.services import (
+    grade_promotion_service,
+    guardian_service,
+    student_import_service,
+    student_service,
+)
 from app.services.student_import_template import build_import_template
 
 router = APIRouter(prefix="/students", tags=["admin-students"])
@@ -101,6 +122,55 @@ def download_import_template(
             "Cache-Control": "no-store",
         },
     )
+
+
+@router.post("/promote-grade", response_model=PromotionPreviewOut | PromotionResultOut)
+def promote_grade(
+    body: PromoteGradeIn,
+    staff: Annotated[CurrentStaff, Depends(require_permission(Permission.STUDENTS_WRITE))],
+    db: Annotated[Session, Depends(get_db)],
+    meta: Annotated[RequestMeta, Depends(get_request_meta)],
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> PromotionPreviewOut | PromotionResultOut:
+    if body.dry_run:
+        preview = grade_promotion_service.preview(db, from_academic_year=body.from_academic_year)
+        return PromotionPreviewOut.model_validate(preview)
+    assert body.expected_total is not None  # noqa: S101  PromoteGradeIn 已保證執行時必填
+    result = grade_promotion_service.execute(
+        db,
+        from_academic_year=body.from_academic_year,
+        expected_total=body.expected_total,
+        withdrawn_on=body.withdrawn_on,
+        actor=staff,
+        meta=meta,
+        clock=clock,
+    )
+    db.commit()
+    return PromotionResultOut(promoted=result.promoted, graduated=result.graduated)
+
+
+@router.post("/import", response_model=ImportPreviewOut | ImportResultOut)
+def import_students(
+    file: Annotated[UploadFile, File()],
+    academic_year: Annotated[int, Form(ge=100, le=200)],
+    staff: Annotated[CurrentStaff, Depends(require_permission(Permission.STUDENTS_WRITE))],
+    db: Annotated[Session, Depends(get_db)],
+    meta: Annotated[RequestMeta, Depends(get_request_meta)],
+    clock: Annotated[Clock, Depends(get_clock)],
+    dry_run: Annotated[bool, Form()] = True,
+) -> ImportPreviewOut | ImportResultOut:
+    # 不受信任的上傳檔：分塊讀、超過上限即 413、檔頭非 xlsx 415；之後的 zip / XML 防護在 service 內
+    upload = read_validated_upload(file, allowed=XLSX_TYPES, max_bytes=XLSX_MAX_BYTES)
+    if dry_run:
+        preview = student_import_service.preview(
+            db, upload, academic_year=academic_year, actor=staff
+        )
+        return ImportPreviewOut.model_validate(preview)
+    result = student_import_service.execute(
+        db, upload, academic_year=academic_year, actor=staff, meta=meta, clock=clock
+    )
+    db.commit()
+    return ImportResultOut(created=result.created, student_ids=result.student_ids)
 
 
 @router.post("/{student_id}/archive", response_model=StudentDetailOut)

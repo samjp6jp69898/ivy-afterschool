@@ -7,9 +7,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Self
 from uuid import UUID
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, model_validator
 
 from app.models.students import Gender, StudentStatus
 from app.schemas.classes import ClassBriefOut
@@ -131,3 +132,67 @@ class StudentPurgeOut(OutModel):
     student_id: UUID
     purged_at: datetime
     anonymized_student_no: str
+
+
+# --- BACKEND-165：學年升級 ------------------------------------------------------------------------
+
+
+class PromoteGradeIn(RequestModel):
+    """``dry_run=true`` 只預覽；執行（``dry_run=false``）必須帶預覽當時的 ``expected_total``。"""
+
+    from_academic_year: int = Field(ge=100, le=200)
+    dry_run: bool = True
+    expected_total: int | None = Field(default=None, ge=0, le=100_000)
+    withdrawn_on: date | None = None
+
+    @model_validator(mode="after")
+    def _require_expected_total_for_execute(self) -> Self:
+        if not self.dry_run and self.expected_total is None:
+            raise ValueError("執行升級必須提供 expected_total（預覽當時的人數）")
+        return self
+
+
+class PromotionItemOut(OutModel):
+    id: UUID
+    student_no: str
+    name: str
+    grade_from: int
+    grade_to: int | None  # 六年級畢業（轉 withdrawn）為 None
+    class_name: str | None
+
+
+class PromotionPreviewOut(OutModel):
+    from_academic_year: int
+    to_academic_year: int
+    promote: list[PromotionItemOut]
+    graduate: list[PromotionItemOut]
+    total: int
+    already_promoted: bool
+
+
+class PromotionResultOut(OutModel):
+    promoted: int
+    graduated: int
+
+
+# --- BACKEND-166：Excel 匯入 ----------------------------------------------------------------------
+
+
+class ImportRowOut(OutModel):
+    """只回原始儲存格字串（敏感欄位已遮罩）與錯誤；不含正規化資料（可能帶身分證明文）。"""
+
+    row_number: int
+    display: dict[str, str]
+    errors: list[str]
+
+
+class ImportPreviewOut(OutModel):
+    rows: list[ImportRowOut]
+    total: int
+    valid: int
+    invalid: int
+
+
+class ImportResultOut(OutModel):
+    created: int
+    student_ids: list[UUID]
