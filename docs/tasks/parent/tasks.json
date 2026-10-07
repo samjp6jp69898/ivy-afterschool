@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 115,
-  "last_updated": "2026-10-07T10:59:35Z",
+  "version": 116,
+  "last_updated": "2026-10-07T11:00:45Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -2501,7 +2501,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/attendance/AttendanceCalendar.vue",
       "source_ref": "FE:src/parent/views/AttendanceView.vue::calendarDays",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r9b",
       "depends_on": [
         "FRONTEND-005",
