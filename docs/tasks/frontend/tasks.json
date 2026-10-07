@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 143,
-  "last_updated": "2026-10-07T10:41:10Z",
+  "version": 144,
+  "last_updated": "2026-10-07T10:41:29Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -2849,7 +2849,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/student/GuardianManager.vue",
       "source_ref": "FE:src/components/student/GuardianManager.vue::default",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-082",
@@ -2858,7 +2858,7 @@
         "FRONTEND-044"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "review-r9-u 打回：(1) 刪除監護人回 404（資料已被他人變更）時，要和產生 / 解除綁定一樣在顯示後端訊息後重新載入清單（description 已寫明寫入回 409 / 404 重新載入），並補測試；(2) 產生綁定碼的回應若在切換學生之後才到，綁定碼 dialog 不可以用新學生的姓名呈現（說明文字的學生必須是送出請求當下那位學生），補「請求進行中切換學生、回應晚到」的測試並斷言 dialog 文字；(3) 產生 / 解除綁定回 404 時重新載入的分支沒有測試（把 404 從條件拿掉測試仍全綠），補 404 的測試。",
+      "risk_notes": "review-r9-u 打回：(1) 刪除監護人回 404（資料已被他人變更）時，要和產生 / 解除綁定一樣在顯示後端訊息後重新載入清單（description 已寫明寫入回 409 / 404 重新載入），並補測試；(2) 產生綁定碼的回應若在切換學生之後才到，綁定碼 dialog 不可以用新學生的姓名呈現（說明文字的學生必須是送出請求當下那位學生），補「請求進行中切換學生、回應晚到」的測試並斷言 dialog 文字；(3) 產生 / 解除綁定回 404 時重新載入的分支沒有測試（把 404 從條件拿掉測試仍全綠），補 404 的測試。\nreview-r9-u 複審打回：(4) 「重新產生綁定碼」的確認框開著時學生被切換（例如瀏覽器上一頁改了 query.student），按「重新產生」後綁定碼 dialog 不可顯示切換後的學生。學生姓名要在使用者點擊該監護人按鈕當下（確認框之前）就固定，或在學生已切換時不送出請求；description 的「取送出產生請求當下的值」要同步改寫。補測試：code_issued 列點「重新產生綁定碼」→ 確認框開著時切到 s2 / 陳小美 → 按「重新產生」→ dialog 文字含「即可綁定 王小明」且不含「陳小美」。其餘攻擊面已驗證通過，修正後只需複核這一項。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/components/student/GuardianManager.spec.ts",
@@ -2883,7 +2883,7 @@
       "review": {
         "status": "concern",
         "reviewer": "review-r9-u",
-        "notes": "concern（打回）：兩項可構造反例的錯誤行為與一項未驗收的分支，見 risk_notes。其餘通過：稿 page-students.html decision 8（主要聯絡人摘要 tag、卡片欄位、綁定狀態 tag 顏色與效期格式、虛線分隔文字按鈕、缺 guardians:write 或封存時隱藏全部動作）與 decision 17（重新產生 / 解除綁定 / 刪除的確認框標題與文字）、三態（initial 先顯示、無 initial 時骨架、首次失敗 EmptyState error + 重試、空清單附新增鈕）、切換學生時舊清單回應不覆蓋、請求中停用動作鈕、綁定碼在 dialog 關閉當下清除（issued 清空 + BindingCodeDialog v-if），皆有 DOM 斷言；不寫 log / storage。tdd.run 21 passed，6 條 red_case 全部選到；a640258 / 4b2d6e1 測試先於 6187578 實作；lint / typecheck 乾淨。突變：拿掉 loadSeq、readonly 不影響動作、請求中不停用、關閉 dialog 但保留綁定碼均轉紅；把 404 從重新載入條件拿掉測試仍全綠。以暫時加在 spec 尾端的探針測試重現（已還原、cmp 一致）：(1) 刪除監護人回 404 guardian_not_found（已被他人刪除）只顯示後端訊息，清單沒有重新載入（GET 次數仍為 1），與 description「寫入回 409 / 404 顯示後端 message 並重新載入清單」不符；(2) 在王小明的面板按「產生綁定碼」、請求未回時切到陳小美，回應晚到後綁定碼 dialog 顯示「請 王阿嬤 … 輸入此綁定碼即可綁定 陳小美」，但這組碼綁的是王小明的監護人，違反「較早請求的回應晚到時不覆蓋」，且可能讓工作人員把 A 學生的綁定碼交給 B 學生的家長。殘留（不擋）：GuardianFormDialog（FRONTEND-092）新增 / 編輯回 409 / 404 時只在 dialog 內顯示訊息、不 emit 任何事件，本元件無從重新載入；若要涵蓋需改 092 介面或在表單關閉時重新載入，屬本 task 範圍外。"
+        "notes": "concern（複審打回）：原三個打回項已修正：刪除回 404 / 409 會重新載入（暫時探針驗證 404、409 都重新載入，500 不重新載入）；產生綁定碼請求進行中切換學生、回應晚到時以原學生呈現（原探針通過，切換兩次亦同）；產生 / 解除綁定的 404 分支已有測試。description / red_cases 為最終規格寫法，新增 4 條 red_case 以 verbose 名稱清單比對皆被 tdd.run 選到，tdd.run 25 passed；risk_notes 的原打回紀錄未被改動。突變：刪除不重新載入、只認 409、只認 404、dialog 改用目前 props 的學生、等請求回來才記學生姓名、產生 / 解除綁定錯誤不重新載入，均轉紅（「刪除遇任何錯誤都重新載入」測試仍全綠，只是多一次 GET，不擋）。web-lint 兩檔乾淨；web-typecheck 的 2 個錯誤都在其他 agent 未提交的 SettingCard.spec.ts、router/index.ts，本 task 檔案無錯誤。打回原因（新反例，與原第 2 項同類）：code_issued 列點「重新產生綁定碼」後，確認框開著時學生被切換（例如瀏覽器上一頁或觸控板滑動改了 query.student），再按「重新產生」，綁定碼 dialog 顯示「請 林美麗 … 輸入此綁定碼即可綁定 陳小美」，但這組碼屬於王小明的監護人林美麗。原因是學生姓名在確認框之後才取值。其他已驗證通過的反例：連點兩次只送 1 次 POST；切換兩次讓三個清單回應倒序到達，只顯示最後一位；請求中切換兩次後晚到的回應仍顯示原學生，清單是最後一位；dialog 開著時切換學生會清掉綁定碼；刪除 404 後重新載入失敗，保留原清單並顯示兩則錯誤；解除綁定確認框開著時切換學生，仍解除確認框所指的監護人（確認文字已寫明原學生）。"
       }
     },
     {
