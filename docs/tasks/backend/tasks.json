@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 425,
-  "last_updated": "2026-10-07T10:39:37Z",
+  "version": 426,
+  "last_updated": "2026-10-07T10:39:54Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -11502,7 +11502,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/pickup_authorizations.py::admin_verify",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-426",
