@@ -14,7 +14,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import Engine, event, func, select, text
+from sqlalchemy import Engine, event, func, select, text, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
@@ -1878,6 +1878,28 @@ def test_update_homework_item_errors(
     # 驗證失敗時整筆都不改（含同一請求裡本來合法的 title）
     stored = _stored_item(db_session, item.id)
     assert (stored.title, stored.subject_id, stored.updated_by) == ("國語生字", None, None)
+
+
+def test_update_homework_item_reads_current_row_after_locking(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    """同一 session 已載入過該項目、DB 裡的值之後被別人改掉：鎖列後讀到的是 DB 現值。"""
+    ming = make_student(db_session)
+    item = make_homework_item(db_session, ming, service_date=_DAY, status="doing", title="國語生字")
+    db_session.flush()
+    assert item.status == "doing"  # identity map 內是 doing
+    db_session.execute(
+        update(HomeworkItem)
+        .where(HomeworkItem.id == item.id)
+        .values(status="done", title="別人改的標題"),
+        execution_options={"synchronize_session": False},
+    )
+
+    out = update_item(db_session, item.id, _update_in(sort_order=4), actor=actor, clock=clock)
+
+    assert out.item is not None
+    assert (out.item.status, out.item.title, out.item.sort_order) == ("done", "別人改的標題", 4)
+    assert out.progress.overall_status == "done"
 
 
 def test_update_homework_item_back_to_open_resets_done(
