@@ -96,6 +96,13 @@ function itemByLabel(wrapper: VueWrapper, label: string) {
   return item
 }
 
+/** v-show 以 inline style 隱藏；元件未 attach 到 document 時 isVisible() 讀不到，直接看 style.display */
+function brandTextShown(wrapper: VueWrapper): boolean {
+  const el = wrapper.find('[data-test=sidebar-brand-text]')
+  if (!el.exists()) throw new Error('找不到品牌文字')
+  return (el.element as HTMLElement).style.display !== 'none'
+}
+
 describe('AdminSidebar', () => {
   it('AdminSidebar hides groups without permission', async () => {
     const { wrapper } = await mountSidebar({ permissions: TUTOR })
@@ -238,7 +245,7 @@ describe('AdminSidebar', () => {
     expect(wrapper.find('.el-menu').classes()).toContain('el-menu--collapse')
     // 收合時 el-menu-item 以 tooltip 包住 icon（hover 顯示名稱）
     expect(wrapper.findAll('.el-menu-tooltip__trigger')).toHaveLength(wrapper.findAll('.el-menu-item').length)
-    expect(wrapper.find('[data-test=sidebar-brand-text]').isVisible()).toBe(false)
+    expect(brandTextShown(wrapper)).toBe(false)
 
     const button = wrapper.find('[aria-label=展開側欄]')
     expect(button.exists()).toBe(true)
@@ -249,7 +256,7 @@ describe('AdminSidebar', () => {
     await wrapper.setProps({ collapsed: false })
     expect(root.classes()).not.toContain('is-collapsed')
     expect(wrapper.find('.el-menu').classes()).not.toContain('el-menu--collapse')
-    expect(wrapper.find('[data-test=sidebar-brand-text]').isVisible()).toBe(true)
+    expect(brandTextShown(wrapper)).toBe(true)
   })
 
   it('AdminSidebar drawer mode hides collapse button and ignores collapsed', async () => {
@@ -261,7 +268,7 @@ describe('AdminSidebar', () => {
     expect(wrapper.find('.el-menu').classes()).not.toContain('el-menu--collapse')
     expect(wrapper.find('[aria-label=收合側欄]').exists()).toBe(false)
     expect(wrapper.find('[aria-label=展開側欄]').exists()).toBe(false)
-    expect(wrapper.find('[data-test=sidebar-brand-text]').isVisible()).toBe(true)
+    expect(brandTextShown(wrapper)).toBe(true)
 
     await itemByLabel(wrapper, '請假').trigger('click')
     expect(wrapper.emitted('navigate')?.[0]).toEqual(['/leaves'])
