@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 419,
-  "last_updated": "2026-10-07T08:33:24Z",
+  "version": 420,
+  "last_updated": "2026-10-07T08:37:53Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -9473,7 +9473,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-375",
@@ -9505,9 +9505,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-b1",
+        "notes": "pass。9 條 red_cases 對應 9 條測試，tdd.run 9 passed；測試 8c4b0b9 先於實作 637adae。實作符合 description：學生 404 / 非在學 409（withdrawn、suspended）/ 封存 404 → 科目 422 → 日期 422（details 帶 min_date / max_date），window 以 get_setting(HOMEWORK_WINDOW) 讀取、台北今天為基準（UTC 16:30 跨午夜案例）、驗證失敗不留項目與進度列；寫入後由 recompute_progress 鎖進度列重算並回傳項目與最新進度（done 重置為 in_progress、唯一項目建成 done 只通知一次）。突變：拿掉 window 檢查 → test_create_homework_item_validation 與 _window_edges 轉紅；拿掉進度列 FOR UPDATE → _holds_progress_lock_until_commit 轉紅（s2 不再排隊）。整檔 test_homework_service.py 70 passed；--collect-only 帶 / 不帶 -k 比對，四組 -k 共選到 34 條 = 本批 red_cases 總數，名稱逐條一致；lint / typecheck（兩檔）乾淨；committing 測試跑完以 owner 唯讀查 students / staff_users / 非系統 roles / homework_items / homework_daily_progress / notifications / notification_outbox / audit_logs / guardians / parent_accounts / classes / pickup_requests 皆 0；committing 測試建員工用 make_staff(role_code='tutor')，不寫 seed 表。通知走 enqueue → run_after_commit、快照走 before_commit 去重 → run_after_commit，新增程式碼沒有 savepoint。 殘留（不擋）：學生在學狀態的檢查不在學生列鎖下，與同時退班的異動有競態，最壞結果是多出一筆項目（description 未要求 FOR SHARE，退班收尾也不處理作業項目）。"
       }
     },
     {
@@ -9517,7 +9517,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-375",
@@ -9546,9 +9546,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-b1",
+        "notes": "pass。7 條 red_cases 對應 7 條測試，tdd.run 7 passed；測試 e2cd3b9 先於實作 ca28760。實作符合 description：封存班 / 不存在 404、科目與日期驗證同 create_item；對象只含班內 active 未封存學生，student_ids 內任何非該班在學學生（他班、暫停、不存在）整批 422 student_not_in_class 且 details.student_ids 列出不合格 id，對象為空 422 no_students，驗證失敗不留殘列；sort_order 以一次 group by 查詢取各生當天最大值 + 1（別天不計）；項目全部寫入後依 student_id 排序逐一 recompute_progress（lock_order 測試讓學號順序與 id 順序相反才驗證）；回傳 items 依班級內學號順序，每位學生各推一次快照。突變：放寬子集合檢查（默默取交集）→ test_batch_create_items_subset_and_validation 轉紅；拿掉進度列 FOR UPDATE → _holds_progress_locks_until_commit 轉紅。整檔 test_homework_service.py 70 passed；--collect-only 帶 / 不帶 -k 比對，四組 -k 共選到 34 條 = 本批 red_cases 總數，名稱逐條一致；lint / typecheck（兩檔）乾淨；committing 測試跑完以 owner 唯讀查 students / staff_users / 非系統 roles / homework_items / homework_daily_progress / notifications / notification_outbox / audit_logs / guardians / parent_accounts / classes / pickup_requests 皆 0；committing 測試建員工用 make_staff(role_code='tutor')，不寫 seed 表。通知走 enqueue → run_after_commit、快照走 before_commit 去重 → run_after_commit，新增程式碼沒有 savepoint。 殘留（不擋）：description 的「現有最大 sort_order + 1」在既有項目 sort_order 已是 2147483647（SortOrder 上限）時會 integer out of range → 500，屬極端輸入與規格邊界，可在之後的 task 擇一處理（schema 上限留餘裕或 service 夾住）。"
       }
     },
     {
@@ -9558,7 +9558,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-375",
@@ -9589,9 +9589,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-b1",
+        "notes": "pass。10 條 red_cases 對應 10 條測試，tdd.run 10 passed；測試 046c081、63b7808 先於實作 1982f62。實作符合 description：_lock_item_or_404 以 SELECT ... FOR UPDATE OF homework_items + populate_existing 鎖項目列並讀 DB 現值（subject 為 joined outer join，of= 必要），不存在或剛被刪除 → 404 homework_item_not_found；科目驗證在改任何欄位之前，失敗時 title / updated_by 都不改；只更新 model_fields_set 的欄位（subject_id 給 null 清除），一律寫 updated_by 並 recompute_progress（只改 title 仍推快照；最後一個未完成項目改 done → 整體 done 並通知一次；今天以外或重複存 done 不通知；done 改回 correcting 重置 in_progress）。突變：拿掉項目列 FOR UPDATE → test_update_homework_item_waits_for_concurrent_delete_then_404 以 StaleDataError 轉紅；拿掉 populate_existing → _reads_current_row_after_locking 轉紅（讀到 identity map 的 doing）；拿掉進度列 FOR UPDATE → _concurrent_updates_single_notification 轉紅。鎖序盤點（全專案）：鎖進度列後讀項目的流程（375 recompute_progress 的 _derived_status、381 set_overall_status、374 _publish_snapshot）都是不加鎖 SELECT；homework_service 以外沒有程式碼寫 homework_items；pickup reply_request（413）先 lock_progress_row 再條件式 UPDATE 請求列，sync_open_request_reply 只在持有進度列後被呼叫。因此本批「項目列 → 進度列 → 請求列」是既有「進度列 → 請求列」的前綴延伸，沒有任何反向流程。reviewer 以兩個 app_backend session 跑真實函式 7 組組合（update_item vs set_overall_status、batch vs delete_item、update_item 轉 done 與 reply_request 兩種先後、同班兩個 batch、set_ready_eta_and_note vs delete_item、create_item vs reply_request）皆為後到者排隊、無 40P01；假想「請求列 → 進度列」反向流程的陽性對照確實出現 40P01，證明探針有效。整檔 test_homework_service.py 70 passed；--collect-only 帶 / 不帶 -k 比對，四組 -k 共選到 34 條 = 本批 red_cases 總數，名稱逐條一致；lint / typecheck（兩檔）乾淨；committing 測試跑完以 owner 唯讀查 students / staff_users / 非系統 roles / homework_items / homework_daily_progress / notifications / notification_outbox / audit_logs / guardians / parent_accounts / classes / pickup_requests 皆 0；committing 測試建員工用 make_staff(role_code='tutor')，不寫 seed 表。通知走 enqueue → run_after_commit、快照走 before_commit 去重 → run_after_commit，新增程式碼沒有 savepoint。homework.window 客觀紀錄（待使用者裁定，不影響本次判決）：目前 update_item / delete_item 不呼叫 check_service_date，與 task description 一致；同檔 381 set_overall_status 與 382 set_ready_eta_and_note 會檢查，所以「進度」的編輯受 window 限制、「項目」的修改 / 刪除不受限（domain_spec M2 寫「作業可新增 / 編輯的日期範圍」）。若要改成檢查：在 _lock_item_or_404 之後加 check_service_date(session, item.service_date, clock=clock)（錯誤順序變成 404 → 422 invalid_service_date → 422 invalid_subject），影響函式 update_item、delete_item；既有 379 / 380 共 18 條測試使用的日期（9/1 今天、9/2、8/31）都在預設 30 / 7 內不會轉紅，但會開始依賴 homework.window 的設定快取（需加 fresh_settings）；需新增 red_cases：過期項目（今天 - 31）修改 → 422 且整筆不改、刪除 → 422 且項目仍在；endpoint task BACKEND-388 / 389 需同步補 422 案例。業務面影響：超出範圍的舊項目將無法經 API 修改或刪除。"
       }
     },
     {
@@ -9601,7 +9601,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-375",
@@ -9629,9 +9629,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-b1",
+        "notes": "pass。8 條 red_cases 對應 8 條測試，tdd.run 8 passed；測試 e0c204e 先於實作 8cd609c。實作符合 description：與 379 共用 _lock_item_or_404 鎖項目列後 session.delete 硬刪除（不留稽核，description 明定為當日工作資料）、recompute_progress 重算：刪掉最後一個未完成項目轉 done 並通知一次、刪光回 not_started、只剩 todo 回 not_started、過去日期不通知、只刪指定項目；回傳 item=None 與最新進度；commit 後 admin 與家長頻道的快照不含已刪除項目。突變：拿掉項目列鎖 → test_delete_homework_item_waits_for_concurrent_delete_then_404 轉紅（後到者刪 0 列後仍回成功，而不是 404）；拿掉進度列 FOR UPDATE → _holds_progress_lock_until_commit 轉紅。探針 batch vs delete_item、set_ready_eta_and_note vs delete_item 皆排隊無死結。整檔 test_homework_service.py 70 passed；--collect-only 帶 / 不帶 -k 比對，四組 -k 共選到 34 條 = 本批 red_cases 總數，名稱逐條一致；lint / typecheck（兩檔）乾淨；committing 測試跑完以 owner 唯讀查 students / staff_users / 非系統 roles / homework_items / homework_daily_progress / notifications / notification_outbox / audit_logs / guardians / parent_accounts / classes / pickup_requests 皆 0；committing 測試建員工用 make_staff(role_code='tutor')，不寫 seed 表。通知走 enqueue → run_after_commit、快照走 before_commit 去重 → run_after_commit，新增程式碼沒有 savepoint。homework.window 客觀紀錄（待使用者裁定，不影響本次判決）：目前 update_item / delete_item 不呼叫 check_service_date，與 task description 一致；同檔 381 set_overall_status 與 382 set_ready_eta_and_note 會檢查，所以「進度」的編輯受 window 限制、「項目」的修改 / 刪除不受限（domain_spec M2 寫「作業可新增 / 編輯的日期範圍」）。若要改成檢查：在 _lock_item_or_404 之後加 check_service_date(session, item.service_date, clock=clock)（錯誤順序變成 404 → 422 invalid_service_date → 422 invalid_subject），影響函式 update_item、delete_item；既有 379 / 380 共 18 條測試使用的日期（9/1 今天、9/2、8/31）都在預設 30 / 7 內不會轉紅，但會開始依賴 homework.window 的設定快取（需加 fresh_settings）；需新增 red_cases：過期項目（今天 - 31）修改 → 422 且整筆不改、刪除 → 422 且項目仍在；endpoint task BACKEND-388 / 389 需同步補 422 案例。業務面影響：超出範圍的舊項目將無法經 API 修改或刪除。"
       }
     },
     {
