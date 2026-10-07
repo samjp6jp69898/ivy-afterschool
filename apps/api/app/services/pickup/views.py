@@ -15,14 +15,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, time
 from typing import Any, Final
 from uuid import UUID
 
 from sqlalchemy import ColumnElement, Select, and_, event, literal, or_, select
 from sqlalchemy.orm import Session, SessionTransaction
 
-from app.core.clock import Clock, to_taipei
+from app.core.clock import Clock, format_hm, format_taipei_hm
 from app.models.account import StaffUser
 from app.models.homework import HomeworkDailyProgress
 from app.models.parents import Guardian, ParentAccount
@@ -35,14 +35,6 @@ OVERRIDE_PICKER_NAME: Final = "老師確認交付"
 CAN_MARK_ARRIVED_STATUSES: Final = frozenset({"pending", "acknowledged"})
 PUBLISH_KEYS: Final = "pickup_publish_request_ids"
 _PUBLISH_HOOKED: Final = "pickup_publish_hooked"
-
-
-def _hm(value: time | None) -> str | None:
-    return value.strftime("%H:%M") if value is not None else None
-
-
-def _taipei_hm(value: datetime | None) -> str | None:
-    return to_taipei(value).strftime("%H:%M") if value is not None else None
 
 
 def needs_reply(request: PickupRequest) -> bool:
@@ -216,12 +208,12 @@ def _admin_view(request: PickupRequest, lookups: _Lookups) -> PickupRequestOut:
         source=request.source,
         requested_by_type=request.requested_by_type,
         requested_by_name=_requested_by_name(request, lookups),
-        expected_arrival_at=_taipei_hm(request.expected_arrival_at),
+        expected_arrival_at=format_taipei_hm(request.expected_arrival_at),
         status=request.status,
         homework_status_at_request=request.homework_status_at_request,
         current_homework_status=overall,
-        current_ready_eta=_hm(eta),
-        reply_ready_eta=_hm(request.reply_ready_eta),
+        current_ready_eta=format_hm(eta),
+        reply_ready_eta=format_hm(request.reply_ready_eta),
         reply_message=request.reply_message,
         reply_source=request.reply_source,
         replied_at=request.replied_at,
@@ -247,8 +239,8 @@ def _parent_view(request: PickupRequest, lookups: _Lookups) -> ParentPickupReque
         student_name=lookups.students[request.student_id].name,
         service_date=request.service_date,
         status=request.status,
-        expected_arrival_at=_taipei_hm(request.expected_arrival_at),
-        reply_ready_eta=_hm(request.reply_ready_eta),
+        expected_arrival_at=format_taipei_hm(request.expected_arrival_at),
+        reply_ready_eta=format_hm(request.reply_ready_eta),
         reply_message=request.reply_message,
         reply_source=request.reply_source,
         replied_at=request.replied_at,

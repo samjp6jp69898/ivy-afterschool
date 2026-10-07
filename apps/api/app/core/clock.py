@@ -4,6 +4,8 @@
 - ruff banned-api 禁止其他檔案呼叫 ``datetime.now`` / ``date.today``，本檔以 per-file-ignores 豁免。
 - service 方法一律以參數接收 ``clock: Clock``，不得自行建立 SystemClock；app 層測試以
   ``app.dependency_overrides[get_clock] = lambda: fake_clock`` 注入（FakeClock 見 tests/support）。
+- ``format_hm`` / ``format_taipei_hm``（BACKEND-551）：接送 / 作業 ETA 的 ``HH:MM`` 輸出格式，
+  取代各 service 自行定義的私有副本。
 """
 
 from __future__ import annotations
@@ -46,6 +48,16 @@ def to_taipei(dt: datetime) -> datetime:
     if dt.tzinfo is None or dt.utcoffset() is None:
         raise ValueError("to_taipei 不接受 naive datetime")
     return dt.astimezone(TAIPEI)
+
+
+def format_hm(value: time | None) -> str | None:
+    """``time`` → ``HH:MM``（不補秒）；``None`` 原樣回傳。"""
+    return value.strftime("%H:%M") if value is not None else None
+
+
+def format_taipei_hm(value: datetime | None) -> str | None:
+    """aware datetime 先轉台北時間再取 ``HH:MM``；``None`` 原樣回傳（naive 由 to_taipei 拒絕）。"""
+    return to_taipei(value).strftime("%H:%M") if value is not None else None
 
 
 def combine_taipei(d: date, t: time) -> datetime:

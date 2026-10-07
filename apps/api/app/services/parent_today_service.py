@@ -7,13 +7,12 @@ updated_by 等）。SQL 固定（≤ 6）：營業日判斷（設定快取未命
 
 from __future__ import annotations
 
-from datetime import datetime, time
 from uuid import UUID
 
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
-from app.core.clock import Clock, to_taipei
+from app.core.clock import Clock, format_hm, format_taipei_hm
 from app.models.attendance import StudentAttendance
 from app.models.homework import HomeworkDailyProgress, HomeworkItem
 from app.models.leaves import LEAVE_TYPE_LABELS, StudentLeave
@@ -28,14 +27,6 @@ from app.schemas.parent_children import (
 )
 from app.services.pickup.views import CAN_MARK_ARRIVED_STATUSES, OVERRIDE_PICKER_NAME
 from app.services.service_calendar import is_service_day
-
-
-def _hm(value: time | None) -> str | None:
-    return value.strftime("%H:%M") if value is not None else None
-
-
-def _taipei_hm(value: datetime | None) -> str | None:
-    return to_taipei(value).strftime("%H:%M") if value is not None else None
 
 
 def get_child_today(session: Session, student_id: UUID, *, clock: Clock) -> ChildTodayOut:
@@ -126,7 +117,7 @@ def get_child_today(session: Session, student_id: UUID, *, clock: Clock) -> Chil
             item_count=item_count,
             done_count=done_count,
             overall_status=overall or "not_started",
-            ready_eta=_hm(eta),
+            ready_eta=format_hm(eta),
             note=note,
         ),
         pickup_request=_pickup_out(*pickup) if pickup is not None else None,
@@ -143,8 +134,8 @@ def _pickup_out(
     return TodayPickupRequestOut(
         id=request.id,
         status=request.status,
-        expected_arrival_at=_taipei_hm(request.expected_arrival_at),
-        reply_ready_eta=_hm(request.reply_ready_eta),
+        expected_arrival_at=format_taipei_hm(request.expected_arrival_at),
+        reply_ready_eta=format_hm(request.reply_ready_eta),
         reply_message=request.reply_message,
         reply_source=request.reply_source,
         completed_at=request.completed_at,

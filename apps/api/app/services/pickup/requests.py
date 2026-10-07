@@ -28,7 +28,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.clock import Clock, combine_taipei, to_taipei
+from app.core.clock import Clock, combine_taipei, format_hm, format_taipei_hm, to_taipei
 from app.core.errors import AppError, ConflictError, ForbiddenError, NotFoundError
 from app.core.permissions import Permission
 from app.core.settings_registry import HOMEWORK_DEFAULTS, PICKUP_WINDOW
@@ -85,14 +85,6 @@ ARRIVAL_PAST_TOLERANCE: Final = timedelta(minutes=5)
 UNAVAILABLE_ATTENDANCE: Final = frozenset({"leave", "absent", "left"})
 # open 佇列的狀態順序：已抵達最優先
 _OPEN_ORDER: Final = {"arrived": 0, "pending": 1, "acknowledged": 2}
-
-
-def _hm(value: time | None) -> str | None:
-    return value.strftime("%H:%M") if value is not None else None
-
-
-def _taipei_hm(value: datetime | None) -> str | None:
-    return to_taipei(value).strftime("%H:%M") if value is not None else None
 
 
 def _open_key(request: PickupRequest) -> tuple[int, bool, datetime, datetime, UUID]:
@@ -251,12 +243,12 @@ def get_roster(session: Session, query: RosterQuery, *, clock: Clock) -> RosterO
                 check_out_at=check_out_at,
                 leave_type=leave_type if status == "leave" else None,
                 homework_status=overall,
-                ready_eta=_hm(eta),
+                ready_eta=format_hm(eta),
                 open_request=(
                     RosterOpenRequestOut(
                         id=request.id,
                         status=request.status,
-                        expected_arrival_at=_taipei_hm(request.expected_arrival_at),
+                        expected_arrival_at=format_taipei_hm(request.expected_arrival_at),
                         needs_reply=needs_reply(request),
                     )
                     if request is not None
@@ -501,7 +493,7 @@ def create_request(
         "request_id": request.id,
     }
     if expected_arrival_at is not None:
-        requested["expected_arrival_at"] = _taipei_hm(expected_arrival_at)
+        requested["expected_arrival_at"] = format_taipei_hm(expected_arrival_at)
     enqueue(session, Event.PICKUP_REQUESTED, recipients=operators, payload=requested, clock=clock)
     if arrived:
         enqueue(
@@ -772,7 +764,7 @@ def complete_request(
             "student_id": request.student_id,
             "student_name": _student_name(session, request.student_id),
             "request_id": request.id,
-            "time": _taipei_hm(now),
+            "time": format_taipei_hm(now),
             "picked_up_by": guardian.name if guardian is not None else OVERRIDE_PICKER_NAME,
         },
         clock=clock,
