@@ -1,0 +1,2251 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+
+<!-- ============================================================
+     設計稿中繼資料（gate 用，四個都必填，值不可猜）
+     preview-status : draft | approved | superseded
+     preview-tasks  : 這張稿涵蓋的 PARENT task id，逗號分隔
+     preview-route  : 對應的家長端路由 path；元件稿寫 component:<相對路徑>
+     preview-updated: 最後更新日期 YYYY-MM-DD
+     ============================================================ -->
+<meta name="preview-status" content="draft">
+<meta name="preview-tasks" content="PARENT-097">
+<meta name="preview-route" content="/pickup">
+<meta name="preview-updated" content="2026-10-07">
+
+<title>設計稿：家長端 接送（PickupView）</title>
+<script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&display=block">
+
+<style>
+/* ===== 以下 token、框架、M3 元件與 ParentBottomSheet 樣式複製自 parent-component-bottom-sheet.html（改那兩張稿時一起同步） ===== */
+/* ============================================================
+   色票：複本，權威為 apps/web/src/parent/styles/m3-tokens.css（含 dark）。
+   --preview-* 只給稿件框架用。手機框內一律用 --m3-*。
+   ============================================================ */
+:root {
+  --m3-primary: #006d3d;
+  --m3-on-primary: #ffffff;
+  --m3-primary-container: #89f9b1;
+  --m3-on-primary-container: #00210f;
+  --m3-secondary: #4f6353;
+  --m3-on-secondary: #ffffff;
+  --m3-secondary-container: #d2e8d4;
+  --m3-on-secondary-container: #0d1f13;
+  --m3-tertiary: #3a646f;
+  --m3-on-tertiary: #ffffff;
+  --m3-tertiary-container: #beeaf7;
+  --m3-on-tertiary-container: #001f26;
+  --m3-error: #ba1a1a;
+  --m3-on-error: #ffffff;
+  --m3-error-container: #ffdad6;
+  --m3-on-error-container: #410002;
+  --m3-background: #fbfdf8;
+  --m3-on-background: #191c19;
+  --m3-surface: #fbfdf8;
+  --m3-on-surface: #191c19;
+  --m3-surface-variant: #dce5db;
+  --m3-on-surface-variant: #414942;
+  --m3-outline: #717971;
+  --m3-outline-variant: #c0c9bf;
+  --m3-shadow: #000000;
+  --m3-scrim: #000000;
+  --m3-inverse-surface: #2e312e;
+  --m3-inverse-on-surface: #f0f1ec;
+  --m3-inverse-primary: #6ddc97;
+  --m3-surface-container-lowest: #ffffff;
+  --m3-surface-container-low: #f3f4ef;
+  --m3-surface-container: #edeee9;
+  --m3-surface-container-high: #e7e9e4;
+  --m3-surface-container-highest: #e1e3de;
+}
+:root[data-theme='dark'] {
+  --m3-primary: #6ddc97;
+  --m3-on-primary: #00391d;
+  --m3-primary-container: #00522c;
+  --m3-on-primary-container: #89f9b1;
+  --m3-secondary: #b6ccb9;
+  --m3-on-secondary: #223527;
+  --m3-secondary-container: #384b3d;
+  --m3-on-secondary-container: #d2e8d4;
+  --m3-tertiary: #a2cdda;
+  --m3-on-tertiary: #023640;
+  --m3-tertiary-container: #214c57;
+  --m3-on-tertiary-container: #beeaf7;
+  --m3-error: #ffb4ab;
+  --m3-on-error: #690005;
+  --m3-error-container: #93000a;
+  --m3-on-error-container: #ffb4ab;
+  --m3-background: #191c19;
+  --m3-on-background: #e1e3de;
+  --m3-surface: #191c19;
+  --m3-on-surface: #e1e3de;
+  --m3-surface-variant: #414942;
+  --m3-on-surface-variant: #c0c9bf;
+  --m3-outline: #8b938a;
+  --m3-outline-variant: #414942;
+  --m3-shadow: #000000;
+  --m3-scrim: #000000;
+  --m3-inverse-surface: #e1e3de;
+  --m3-inverse-on-surface: #2e312e;
+  --m3-inverse-primary: #006d3d;
+  --m3-surface-container-lowest: #0c0f0c;
+  --m3-surface-container-low: #191c19;
+  --m3-surface-container: #1d201d;
+  --m3-surface-container-high: #282b28;
+  --m3-surface-container-highest: #333532;
+}
+:root {
+  --m3-state-hover: 0.08;
+  --m3-state-focus: 0.12;
+  --m3-state-pressed: 0.12;
+  --m3-state-dragged: 0.16;
+  --m3-shape-extra-small: 4px;
+  --m3-shape-small: 8px;
+  --m3-shape-medium: 12px;
+  --m3-shape-large: 16px;
+  --m3-shape-extra-large: 28px;
+  --m3-shape-full: 9999px;
+  --m3-elev-1: 0px 1px 2px 0px rgba(0, 0, 0, 0.3), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --m3-elev-2: 0px 1px 2px 0px rgba(0, 0, 0, 0.3), 0px 2px 6px 2px rgba(0, 0, 0, 0.15);
+  --m3-elev-3: 0px 1px 3px 0px rgba(0, 0, 0, 0.3), 0px 4px 8px 3px rgba(0, 0, 0, 0.15);
+  --m3-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --m3-easing-standard-accel: cubic-bezier(0.3, 0, 1, 1);
+  --m3-easing-standard-decel: cubic-bezier(0, 0, 0, 1);
+  --m3-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --m3-easing-emphasized-accel: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --m3-easing-emphasized-decel: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --m3-dur-short-1: 50ms;
+  --m3-dur-short-2: 100ms;
+  --m3-dur-short-3: 150ms;
+  --m3-dur-short-4: 200ms;
+  --m3-dur-medium-1: 250ms;
+  --m3-dur-medium-2: 300ms;
+  --m3-dur-medium-3: 350ms;
+  --m3-dur-medium-4: 400ms;
+  --m3-font: 'Roboto', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Helvetica Neue', sans-serif;
+
+  /* 稿件框架專用 */
+  --preview-page-bg: #f2f3f5;
+  --preview-panel-bg: #ffffff;
+  --preview-bar-bg: #f4f4f5;
+  --preview-bar-text: #73767a;
+  --preview-border: #dcdfe6;
+  --preview-text: #303133;
+  --preview-text-secondary: #909399;
+  --preview-primary: #409eff;
+  --preview-on-primary: #ffffff;
+  --preview-warning: #e6a23c;
+  --preview-warning-bg: #fdf6ec;
+  --preview-warning-border: #f3d19e;
+  --preview-success: #67c23a;
+  --preview-device: #1f1f1f;
+  --preview-hit: #f56c6c;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { font-family: var(--m3-font); background: var(--preview-page-bg); color: var(--preview-text); }
+#app { display: flex; flex-direction: column; min-height: 100%; }
+button { font: inherit; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+/* ---- 稿件框架 ---- */
+.preview-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 6px 16px; font-size: 12px; color: var(--preview-bar-text); background: var(--preview-bar-bg); border-bottom: 1px dashed var(--preview-border); }
+.preview-bar__spacer { flex: 1; }
+.preview-tag { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 4px; font-size: 12px; color: var(--preview-on-primary); background: var(--preview-warning); }
+.preview-tag.is-approved { background: var(--preview-success); }
+.stage { flex: 1; display: flex; align-items: flex-start; justify-content: center; gap: 32px; flex-wrap: wrap; padding: 32px 16px; }
+.device { flex: none; width: 390px; height: 844px; border-radius: 44px; overflow: hidden; outline: 10px solid var(--preview-device); box-shadow: var(--m3-elev-3); margin: 10px; }
+.screen { position: relative; display: flex; flex-direction: column; height: 100%; overflow: hidden; background: var(--m3-surface); color: var(--m3-on-surface); }
+.screen__content { flex: 1; overflow-y: auto; padding: 0 16px 24px; }
+.notes { flex: 0 1 420px; min-width: 300px; max-width: 100%; padding: 20px; border-radius: 8px; background: var(--preview-panel-bg); border: 1px solid var(--preview-border); font-size: 14px; line-height: 1.6; }
+.notes h3 { margin: 0 0 12px; font-size: 16px; }
+.notes h4 { margin: 20px 0 8px; font-size: 14px; }
+.notes ol { margin: 0; padding-left: 20px; }
+.notes__alert { padding: 8px 12px; margin-bottom: 16px; border-radius: 4px; font-size: 13px; color: var(--preview-warning); background: var(--preview-warning-bg); border: 1px solid var(--preview-warning-border); }
+.notes__option { color: var(--preview-text-secondary); font-size: 13px; }
+.notes__group { margin: 12px 0 4px; font-weight: 600; font-size: 13px; }
+.notes__row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; font-size: 13px; }
+.state-switch { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--preview-border); border-radius: 4px; overflow: hidden; }
+.state-switch button { padding: 4px 10px; font-size: 12px; border: none; cursor: pointer; background: var(--preview-panel-bg); color: var(--preview-text); border-right: 1px solid var(--preview-border); }
+.state-switch button:last-child { border-right: none; }
+.state-switch button.is-active { background: var(--preview-primary); color: var(--preview-on-primary); }
+.state-switch--wrap { display: flex; border: none; gap: 4px; }
+.state-switch--wrap button { border: 1px solid var(--preview-border); border-radius: 4px; }
+.state-switch--wrap button:last-child { border-right: 1px solid var(--preview-border); }
+
+/* ---- 稿內示範排版（只存在於稿，不是元件） ---- */
+.kit-head { padding: 8px 0 4px; }
+.kit-head__task { color: var(--m3-on-surface-variant); }
+.demo__caption { margin: 20px 0 8px; color: var(--m3-on-surface-variant); }
+.demo-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.demo-col { display: flex; flex-direction: column; gap: 12px; }
+.demo-code { margin-top: 6px; padding: 6px 8px; border-radius: var(--m3-shape-extra-small); background: var(--m3-surface-container); color: var(--m3-on-surface-variant); font: 11px/16px ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+.demo-legend { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 64px; color: var(--m3-on-surface-variant); }
+.bleed { margin-left: -16px; margin-right: -16px; }
+.bleed + .bleed { margin-top: 8px; }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.show-hit .hit-target::after,
+.show-hit .m3-chip::after,
+.show-hit .m3-icon-button,
+.show-hit .m3-switch,
+.show-hit .m3-snackbar__action { outline: 1px dashed var(--preview-hit); }
+
+/* ============================================================
+   M3 元件樣式
+   ============================================================ */
+/* Typography（同 m3-tokens.css） */
+.m3-title-large { font-size: 22px; line-height: 28px; font-weight: 400; }
+.m3-title-medium { font-size: 16px; line-height: 24px; font-weight: 500; letter-spacing: 0.15px; }
+.m3-title-small { font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: 0.1px; }
+.m3-body-large { font-size: 16px; line-height: 24px; letter-spacing: 0.5px; }
+.m3-body-medium { font-size: 14px; line-height: 20px; letter-spacing: 0.25px; }
+.m3-body-small { font-size: 12px; line-height: 16px; letter-spacing: 0.4px; }
+.m3-label-large { font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: 0.1px; }
+.m3-label-medium { font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: 0.5px; }
+.m3-label-small { font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: 0.5px; }
+
+/* M3Icon（PARENT-014）：1em 夾盒，字型未就緒時 ligature 原文被裁在盒內 */
+.material-symbols-rounded {
+  font-family: 'Material Symbols Rounded'; font-weight: normal; font-style: normal;
+  line-height: 1; letter-spacing: normal; text-transform: none; white-space: nowrap;
+  direction: ltr; font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1em; height: 1em; overflow: hidden; flex-shrink: 0; vertical-align: middle; user-select: none;
+}
+.icon-fallback-demo { font-family: 'NoSuchFont-preview', sans-serif !important; }
+.icon-fallback-demo--unclamped { width: auto !important; overflow: visible !important; }
+.icon-frame { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border: 1px dashed var(--m3-outline-variant); border-radius: var(--m3-shape-extra-small); }
+
+/* State layer：hover 0.08 / focus 0.12 / pressed 0.12，顏色取 currentColor */
+.m3-state { position: relative; }
+.m3-state::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; background: currentColor;
+  opacity: 0; pointer-events: none; transition: opacity var(--m3-dur-short-2) var(--m3-easing-standard);
+}
+.m3-state:hover::before, .m3-state.force-hover::before { opacity: var(--m3-state-hover); }
+.m3-state:focus-visible::before, .m3-state.force-focus::before { opacity: var(--m3-state-focus); }
+.m3-state:active::before, .m3-state.force-pressed::before { opacity: var(--m3-state-pressed); }
+.m3-state:disabled::before, .m3-state[aria-disabled='true']::before { opacity: 0 !important; }
+
+/* 轉圈（Button loading / Switch busy 共用） */
+.m3-spinner { width: 18px; height: 18px; flex: none; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: m3-spin 0.8s linear infinite; }
+@keyframes m3-spin { to { transform: rotate(360deg); } }
+
+/* M3Button（PARENT-015） */
+.m3-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 48px; min-width: 48px; padding: 0 24px; border: none; border-radius: var(--m3-shape-full);
+  cursor: pointer; white-space: nowrap; -webkit-tap-highlight-color: transparent;
+}
+.m3-button.has-icon { padding-left: 16px; }
+.m3-button--filled { background: var(--m3-primary); color: var(--m3-on-primary); }
+.m3-button--tonal { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.m3-button--outlined { background: transparent; color: var(--m3-primary); box-shadow: inset 0 0 0 1px var(--m3-outline); }
+.m3-button--text { background: transparent; color: var(--m3-primary); padding: 0 12px; }
+.m3-button--text.has-icon { padding-left: 12px; }
+.m3-button.is-block { display: flex; width: 100%; }
+.m3-button:disabled { opacity: 0.38; cursor: not-allowed; }
+.m3-button.is-loading { cursor: progress; }
+.m3-button:focus-visible, .m3-button.force-focus { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+
+/* M3IconButton（PARENT-016）：48 點擊區、40 視覺 */
+.m3-icon-button {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 48px; height: 48px; padding: 0; border: none; border-radius: var(--m3-shape-full);
+  background: transparent; color: var(--m3-on-surface-variant); cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.m3-icon-button__container { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: var(--m3-shape-full); }
+.m3-icon-button__container::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: currentColor; opacity: 0; pointer-events: none; transition: opacity var(--m3-dur-short-2) var(--m3-easing-standard); }
+.m3-icon-button:hover .m3-icon-button__container::before, .m3-icon-button.force-hover .m3-icon-button__container::before { opacity: var(--m3-state-hover); }
+.m3-icon-button:focus-visible .m3-icon-button__container::before, .m3-icon-button.force-focus .m3-icon-button__container::before { opacity: var(--m3-state-focus); }
+.m3-icon-button:active .m3-icon-button__container::before, .m3-icon-button.force-pressed .m3-icon-button__container::before { opacity: var(--m3-state-pressed); }
+.m3-icon-button--filled .m3-icon-button__container { background: var(--m3-primary); color: var(--m3-on-primary); }
+.m3-icon-button--tonal .m3-icon-button__container { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.m3-icon-button:focus-visible, .m3-icon-button.force-focus { outline: 2px solid var(--m3-primary); outline-offset: -2px; }
+.m3-icon-button:disabled { opacity: 0.38; cursor: not-allowed; }
+.m3-icon-button:disabled .m3-icon-button__container::before { opacity: 0; }
+
+/* M3Card（PARENT-017）：底色照 M3 / ivy */
+.m3-card { position: relative; display: block; border-radius: var(--m3-shape-medium); color: var(--m3-on-surface); }
+.m3-card--pad-none { padding: 0; }
+.m3-card--pad-sm { padding: 12px; }
+.m3-card--pad-md { padding: 16px; }
+.m3-card--filled { background: var(--m3-surface-container-highest); }
+.m3-card--elevated { background: var(--m3-surface-container-low); box-shadow: var(--m3-elev-1); }
+.m3-card--outlined { background: var(--m3-surface); border: 1px solid var(--m3-outline-variant); }
+.m3-card.is-clickable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.m3-card.is-clickable::before { background: var(--m3-on-surface); }
+.m3-card.is-clickable:focus-visible, .m3-card.force-focus { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+.m3-card__header { margin-bottom: 8px; }
+.m3-card__actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.m3-card p { margin: 0; }
+
+/* M3TextField（PARENT-018）：outlined、fieldset/legend 挖缺口 */
+.m3-tf { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+.m3-tf__control { position: relative; display: flex; align-items: center; min-height: 56px; }
+.m3-tf__input {
+  position: relative; z-index: 1; width: 100%; height: 56px; margin: 0; padding: 0 16px;
+  border: none; outline: none; background: transparent; color: var(--m3-on-surface);
+  font: 400 16px/24px var(--m3-font); letter-spacing: 0.5px; caret-color: var(--m3-primary);
+  -webkit-appearance: none; appearance: none;
+}
+.m3-tf.has-trailing .m3-tf__input { padding-right: 48px; }
+.m3-tf.is-textarea .m3-tf__control { align-items: stretch; }
+textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: none; }
+.m3-tf__input::placeholder { color: var(--m3-on-surface-variant); opacity: 0; }
+.m3-tf.is-focused .m3-tf__input::placeholder { opacity: 1; }
+.m3-tf.is-error .m3-tf__input { caret-color: var(--m3-error); }
+.m3-tf__label {
+  position: absolute; z-index: 2; left: 16px; top: 28px; transform: translateY(-50%);
+  max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--m3-on-surface-variant); font: 400 16px/24px var(--m3-font); pointer-events: none;
+  transition: top var(--m3-dur-short-3) var(--m3-easing-standard), font-size var(--m3-dur-short-3) var(--m3-easing-standard), line-height var(--m3-dur-short-3) var(--m3-easing-standard);
+}
+.m3-tf.is-floating .m3-tf__label { top: 0; font-size: 12px; line-height: 16px; }
+.m3-tf.is-focused .m3-tf__label { color: var(--m3-primary); }
+.m3-tf.is-error .m3-tf__label { color: var(--m3-error); }
+.m3-tf__outline {
+  position: absolute; inset: -5px 0 0; z-index: 0; margin: 0; padding: 0 12px; min-width: 0;
+  border: 1px solid var(--m3-outline); border-radius: var(--m3-shape-extra-small); pointer-events: none; text-align: left;
+}
+.m3-tf__outline legend { display: block; float: none; width: auto; max-width: 0.01px; height: 11px; padding: 0; font-size: 12px; visibility: hidden; white-space: nowrap; overflow: hidden; }
+.m3-tf__outline legend span { display: inline-block; padding: 0 4px; opacity: 0; }
+.m3-tf.is-floating .m3-tf__outline legend { max-width: 100%; }
+.m3-tf__control:hover .m3-tf__outline { border-color: var(--m3-on-surface); }
+.m3-tf.is-focused .m3-tf__outline { border-width: 2px; border-color: var(--m3-primary); padding: 0 11px; }
+.m3-tf.is-error .m3-tf__outline { border-color: var(--m3-error); }
+.m3-tf__trailing { position: absolute; z-index: 1; right: 12px; top: 16px; color: var(--m3-error); }
+.m3-tf__supporting { display: flex; gap: 16px; padding: 0 16px; color: var(--m3-on-surface-variant); }
+.m3-tf__supporting-text { flex: 1; }
+.m3-tf.is-error .m3-tf__supporting-text { color: var(--m3-error); }
+.m3-tf__counter { margin-left: auto; flex: none; }
+.m3-tf.is-disabled { opacity: 0.38; }
+.m3-tf.is-disabled .m3-tf__control { pointer-events: none; }
+
+/* M3Chip（PARENT-019）：32 視覺、透明延伸到 48 點擊高 */
+.m3-chip {
+  display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 16px;
+  border: 1px solid var(--m3-outline); border-radius: var(--m3-shape-small);
+  background: transparent; color: var(--m3-on-surface-variant); cursor: pointer; white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+.m3-chip--assist { color: var(--m3-on-surface); }
+.m3-chip--assist .m3-chip__icon { color: var(--m3-primary); }
+.m3-chip.has-icon { padding-left: 8px; }
+.m3-chip.is-selected { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); border-color: transparent; }
+.m3-chip::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 48px; transform: translateY(-50%); }
+.m3-chip:focus-visible, .m3-chip.force-focus { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+.m3-chip:disabled { opacity: 0.38; cursor: not-allowed; }
+
+/* M3ListItem（PARENT-020） */
+.m3-list { list-style: none; margin: 0; padding: 0; }
+.m3-list-item { list-style: none; }
+.m3-list-item__inner {
+  position: relative; display: flex; align-items: center; gap: 16px; min-height: 56px; padding: 8px 16px;
+  color: inherit; text-decoration: none; outline: none; -webkit-tap-highlight-color: transparent;
+}
+.m3-list-item.is-two-line .m3-list-item__inner { min-height: 72px; }
+.m3-list-item__inner.is-interactive { cursor: pointer; }
+.m3-list-item__inner.is-interactive::before { background: var(--m3-on-surface); }
+.m3-list-item__inner.is-interactive:focus-visible, .force-focus > .m3-list-item__inner { outline: 2px solid var(--m3-primary); outline-offset: -2px; }
+.force-hover > .m3-list-item__inner::before { opacity: var(--m3-state-hover); }
+.force-pressed > .m3-list-item__inner::before { opacity: var(--m3-state-pressed); }
+.force-focus > .m3-list-item__inner::before { opacity: var(--m3-state-focus); }
+.m3-list-item__leading { display: inline-flex; align-items: center; justify-content: center; flex: none; color: var(--m3-on-surface-variant); }
+.m3-list-item__leading.is-icon { width: 40px; height: 40px; border-radius: var(--m3-shape-full); background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.m3-list-item__content { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.m3-list-item__headline { color: var(--m3-on-surface); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m3-list-item__supporting { color: var(--m3-on-surface-variant); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.m3-list-item__trailing { display: inline-flex; align-items: center; flex: none; color: var(--m3-on-surface-variant); }
+.m3-list-item.is-disabled { opacity: 0.38; }
+.m3-list-item.is-disabled .m3-list-item__inner { cursor: not-allowed; }
+.m3-list-item.is-disabled .m3-list-item__inner::before { opacity: 0 !important; }
+
+/* M3TopAppBar（PARENT-021）：small，標題靠左 */
+.m3-top-app-bar {
+  position: sticky; top: 0; z-index: 5; flex: none;
+  display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 4px;
+  min-height: 64px; padding: 0 4px; background: var(--m3-surface); color: var(--m3-on-surface);
+  transition: background-color var(--m3-dur-short-3) var(--m3-easing-standard);
+}
+.m3-top-app-bar.is-scrolled { background: var(--m3-surface-container); }
+.m3-top-app-bar__leading { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; }
+.m3-top-app-bar__title { margin: 0; padding-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m3-top-app-bar__actions { display: inline-flex; align-items: center; }
+.logo-mark { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: var(--m3-shape-full); background: var(--m3-primary-container); color: var(--m3-on-primary-container); }
+
+/* M3NavigationBar（PARENT-022） */
+.m3-navigation-bar { display: flex; flex: none; height: 80px; background: var(--m3-surface-container); color: var(--m3-on-surface-variant); }
+.m3-nav-tab {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  padding: 12px 0 16px; border: none; background: transparent; color: inherit; cursor: pointer; outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.m3-nav-tab__icon { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 32px; border-radius: var(--m3-shape-full); transition: background-color var(--m3-dur-short-3) var(--m3-easing-standard); }
+.m3-nav-tab__icon::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: currentColor; opacity: 0; pointer-events: none; }
+.m3-nav-tab:hover .m3-nav-tab__icon::before { opacity: var(--m3-state-hover); }
+.m3-nav-tab:active .m3-nav-tab__icon::before { opacity: var(--m3-state-pressed); }
+.m3-nav-tab:focus-visible .m3-nav-tab__icon { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+.m3-nav-tab.is-active .m3-nav-tab__icon { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.m3-nav-tab.is-active .m3-nav-tab__label { color: var(--m3-on-surface); font-weight: 700; }
+.m3-nav-tab__badge {
+  position: absolute; top: -2px; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px;
+  display: inline-flex; align-items: center; justify-content: center; border-radius: var(--m3-shape-full);
+  font-size: 11px; line-height: 16px; font-weight: 500; background: var(--m3-error); color: var(--m3-on-error);
+}
+
+/* M3Snackbar（PARENT-023） */
+.m3-snackbar {
+  position: absolute; z-index: 20; left: 16px; right: 16px; bottom: 96px;
+  display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 4px 8px 4px 16px;
+  border-radius: var(--m3-shape-extra-small); background: var(--m3-inverse-surface); color: var(--m3-inverse-on-surface);
+  box-shadow: var(--m3-elev-3);
+}
+.m3-snackbar.is-inline { position: relative; left: auto; right: auto; bottom: auto; z-index: auto; }
+.m3-snackbar__icon { color: var(--m3-error-container); }
+.m3-snackbar__message { flex: 1; min-width: 0; padding: 10px 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.m3-snackbar__action { flex: none; min-height: 44px; padding: 0 12px; border: none; border-radius: var(--m3-shape-full); background: transparent; color: var(--m3-inverse-primary); cursor: pointer; }
+.m3-snackbar__action:focus-visible { outline: 2px solid var(--m3-inverse-primary); outline-offset: 0; }
+.m3-snackbar-enter-active { transition: opacity var(--m3-dur-medium-1) var(--m3-easing-emphasized-decel), transform var(--m3-dur-medium-1) var(--m3-easing-emphasized-decel); }
+.m3-snackbar-leave-active { transition: opacity var(--m3-dur-short-3) var(--m3-easing-emphasized-accel); }
+.m3-snackbar-enter-from { opacity: 0; transform: translateY(16px); }
+.m3-snackbar-leave-to { opacity: 0; }
+
+/* M3SegmentedButton（PARENT-098） */
+.m3-segmented { display: grid; width: 100%; height: 48px; border: 1px solid var(--m3-outline); border-radius: var(--m3-shape-full); overflow: hidden; }
+.m3-segment {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; padding: 0 12px;
+  border: none; border-left: 1px solid var(--m3-outline); background: transparent; color: var(--m3-on-surface);
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.m3-segment:first-child { border-left: none; }
+.m3-segment.is-checked { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.m3-segment__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m3-segment:focus-visible { outline: 2px solid var(--m3-primary); outline-offset: -4px; border-radius: var(--m3-shape-full); }
+.m3-segment:disabled { cursor: not-allowed; }
+.m3-segment:disabled > * { opacity: 0.38; }
+
+/* M3Switch（PARENT-175）：52×32 軌道、52×48 點擊區 */
+.m3-switch { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; width: 52px; height: 48px; padding: 0; border: none; background: transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.m3-switch__track { position: relative; width: 52px; height: 32px; border-radius: var(--m3-shape-full); border: 2px solid var(--m3-outline); background: var(--m3-surface-container-highest); transition: background-color var(--m3-dur-short-3) var(--m3-easing-standard), border-color var(--m3-dur-short-3) var(--m3-easing-standard); }
+.m3-switch__thumb {
+  position: absolute; left: 14px; top: 14px; width: 16px; height: 16px; transform: translate(-50%, -50%);
+  display: inline-flex; align-items: center; justify-content: center; border-radius: 50%;
+  background: var(--m3-outline); color: var(--m3-on-primary-container);
+  transition: left var(--m3-dur-medium-1) var(--m3-easing-standard), width var(--m3-dur-short-2) var(--m3-easing-standard), height var(--m3-dur-short-2) var(--m3-easing-standard);
+}
+.m3-switch__thumb::before { content: ''; position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: var(--m3-on-surface); opacity: 0; pointer-events: none; }
+.m3-switch:hover .m3-switch__thumb::before { opacity: var(--m3-state-hover); }
+.m3-switch:active .m3-switch__thumb::before { opacity: var(--m3-state-pressed); }
+.m3-switch.is-on .m3-switch__track { background: var(--m3-primary); border-color: var(--m3-primary); }
+.m3-switch.is-on .m3-switch__thumb { left: 34px; width: 24px; height: 24px; background: var(--m3-on-primary); }
+.m3-switch.is-on .m3-switch__thumb::before { background: var(--m3-primary); }
+.m3-switch:active:not(:disabled):not(.is-busy) .m3-switch__thumb { width: 28px; height: 28px; }
+.m3-switch.is-busy { cursor: progress; }
+.m3-switch.is-busy .m3-switch__thumb { width: 24px; height: 24px; }
+.m3-switch.is-busy .m3-switch__thumb::before { opacity: 0; }
+.m3-switch__spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--m3-surface-container-highest); border-right-color: transparent; animation: m3-spin 0.8s linear infinite; }
+.m3-switch.is-on .m3-switch__spinner { border-color: var(--m3-primary); border-right-color: transparent; }
+.m3-switch:focus-visible { outline: none; }
+.m3-switch:focus-visible .m3-switch__track { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+.m3-switch:disabled { opacity: 0.38; cursor: not-allowed; }
+.m3-switch:disabled .m3-switch__thumb::before { opacity: 0; }
+.pref-row { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 0 0 16px; }
+.pref-row__label { flex: 1; min-width: 0; }
+
+/* ============================================================
+   ParentBottomSheet（PARENT-025）
+   稿內畫在手機框 .screen 裡（absolute）；實作 Teleport 到 body（fixed，高度以 100dvh 計）。
+   ============================================================ */
+.sheet-layer { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; justify-content: flex-end; }
+.sheet-scrim { position: absolute; inset: 0; background: var(--m3-scrim); opacity: 0.32; }
+.sheet {
+  position: relative; display: flex; flex-direction: column; width: 100%; max-height: calc(100% - 56px);
+  border-radius: var(--m3-shape-extra-large) var(--m3-shape-extra-large) 0 0;
+  background: var(--m3-surface-container-low); color: var(--m3-on-surface); box-shadow: var(--m3-elev-1); outline: none;
+  transition: transform var(--m3-dur-short-4) var(--m3-easing-standard);
+}
+.sheet.is-full { height: calc(100% - 56px); }
+.sheet.is-dragging { transition: none; }
+.sheet__drag { flex: none; touch-action: none; cursor: grab; user-select: none; }
+.sheet.is-dragging .sheet__drag { cursor: grabbing; }
+.sheet__handle { width: 32px; height: 4px; margin: 16px auto 8px; border-radius: var(--m3-shape-full); background: var(--m3-on-surface-variant); opacity: 0.4; }
+.sheet__header { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 24px 8px; }
+.sheet__header.has-close { padding-right: 12px; }
+.sheet__title { flex: 1; min-width: 0; margin: 0; }
+.sheet__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 24px 24px; }
+.sheet__footer { flex: none; display: flex; gap: 8px; padding: 16px 24px calc(16px + env(safe-area-inset-bottom)); border-top: 1px solid var(--m3-outline-variant); }
+.sheet__footer > * { flex: 1 1 0; }
+.sheet-enter-active .sheet { transition: transform var(--m3-dur-medium-4) var(--m3-easing-emphasized-decel); }
+.sheet-enter-active .sheet-scrim { transition: opacity var(--m3-dur-medium-4) linear; }
+.sheet-leave-active .sheet { transition: transform var(--m3-dur-short-4) var(--m3-easing-emphasized-accel) !important; }
+.sheet-leave-active .sheet-scrim { transition: opacity var(--m3-dur-short-4) linear; }
+.sheet-enter-from .sheet, .sheet-leave-to .sheet { transform: translateY(100%) !important; }
+.sheet-enter-from .sheet-scrim, .sheet-leave-to .sheet-scrim { opacity: 0; }
+/* warning token（PARENT-051 寫入 m3-tokens.css） */
+:root { --m3-warning-container: #ffddb0; --m3-on-warning-container: #2b1700; }
+:root[data-theme='dark'] { --m3-warning-container: #5b3a00; --m3-on-warning-container: #ffddb0; }
+
+/* ---- 稿件框架補充 ---- */
+.notes__rec { color: var(--preview-success); font-weight: 600; }
+.notes__q { margin-bottom: 12px; }
+.notes__hint { margin: 4px 0 0; color: var(--preview-text-secondary); font-size: 12px; }
+.muted { color: var(--m3-on-surface-variant); }
+.screen__content.is-locked { overflow: hidden; }
+.m3-snackbar:not(.is-inline) { z-index: 60; }
+/* ===== StatusPill 樣式複製自 parent-component-status-pill.html ===== */
+/* StatusPill（PARENT-051）：28px 高資訊膠囊，不可互動、不拿焦點 */
+.status-pill {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 100%; height: 28px; padding: 0 12px;
+  border-radius: var(--m3-shape-full); white-space: nowrap; vertical-align: middle;
+}
+.status-pill.has-icon { padding-left: 8px; }
+.status-pill__label { overflow: hidden; text-overflow: ellipsis; }
+.status-pill--success { background: var(--m3-primary-container); color: var(--m3-on-primary-container); }
+.status-pill--warning { background: var(--m3-warning-container); color: var(--m3-on-warning-container); }
+.status-pill--danger { background: var(--m3-error-container); color: var(--m3-on-error-container); }
+.status-pill--info { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.status-pill--neutral { background: var(--m3-surface-container-high); color: var(--m3-on-surface); }
+/* ===== SkeletonBlock 樣式複製自 parent-component-skeleton.html ===== */
+.skeleton { display: block; }
+.sk { display: block; height: 14px; width: 100%; border-radius: var(--m3-shape-extra-small); background: var(--m3-surface-container-high); animation: sk-pulse 1.2s ease-in-out infinite; }
+@keyframes sk-pulse { 50% { opacity: 0.5; } }
+.sk--circle { flex: none; width: 40px; height: 40px; border-radius: var(--m3-shape-full); }
+.skeleton-line + .skeleton-line { margin-top: 8px; }
+.skeleton-card { padding: 16px; border-radius: var(--m3-shape-medium); background: var(--m3-surface-container-low); }
+.skeleton-card + .skeleton-card { margin-top: 12px; }
+.skeleton-card .sk + .sk { margin-top: 8px; }
+.skeleton-card .sk:first-child { margin-bottom: 12px; }
+.skeleton-row { display: flex; align-items: center; gap: 16px; min-height: 72px; padding: 8px 16px; }
+.skeleton-row__lines { flex: 1; min-width: 0; }
+.skeleton-row__lines .sk + .sk { margin-top: 8px; }
+
+/* ===== ParentEmptyState 樣式複製自 parent-component-empty-state.html ===== */
+/* ParentEmptyState（PARENT-029） */
+.empty-state { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px 16px; text-align: center; }
+.empty-state__icon { display: inline-flex; align-items: center; justify-content: center; color: var(--m3-outline); }
+.empty-state--error .empty-state__icon { color: var(--m3-error); }
+.empty-state__title { margin: 0; max-width: 320px; color: var(--m3-on-surface); overflow-wrap: anywhere; }
+.empty-state__desc { margin: 0; max-width: 280px; color: var(--m3-on-surface-variant); overflow-wrap: anywhere; }
+.empty-state__action { margin-top: 8px; }
+
+/* ---- 稿件框架補充（design-parent-r6 共用） ---- */
+.notes__h5 { margin: 12px 0 4px; font-size: 13px; font-weight: 600; }
+.cap { display: flex; align-items: baseline; gap: 8px; margin: 20px 0 8px; color: var(--m3-on-surface-variant); }
+.cap:first-child { margin-top: 8px; }
+.cap__tag { flex: none; padding: 0 6px; border-radius: var(--m3-shape-extra-small); border: 1px dashed var(--m3-outline); font: 11px/16px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.not-rendered { padding: 16px; border: 1px dashed var(--m3-outline-variant); border-radius: var(--m3-shape-medium); color: var(--m3-on-surface-variant); text-align: center; }
+.m3-headline-small { font-size: 24px; line-height: 32px; font-weight: 400; }
+/* ===== ChildContextHeader 樣式複製自 parent-component-child-context-header.html ===== */
+/* ChildContextHeader（PARENT-050）：小孩身分卡；多位小孩時整張可點 */
+.cch {
+  position: relative; display: flex; align-items: center; gap: 16px; width: 100%; min-height: 80px; margin: 0;
+  padding: 12px 16px; border: none; border-radius: var(--m3-shape-large);
+  background: var(--m3-surface-container-low); color: var(--m3-on-surface); text-align: left; font: inherit;
+}
+.cch.is-interactive { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.cch.is-interactive:focus-visible { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+.cch__avatar, .cch-option__avatar {
+  display: inline-flex; align-items: center; justify-content: center; flex: none; overflow: hidden;
+  border-radius: var(--m3-shape-full); background: var(--m3-tertiary-container); color: var(--m3-on-tertiary-container);
+}
+.cch__avatar { width: 48px; height: 48px; }
+.cch__avatar img, .cch-option__avatar img { width: 100%; height: 100%; object-fit: cover; }
+.cch__text, .cch-option__text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.cch__name-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cch__name, .cch__sub, .cch__school, .cch-option__name, .cch-option__sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cch__sub, .cch__school { color: var(--m3-on-surface-variant); }
+.cch__chevron { flex: none; color: var(--m3-on-surface-variant); }
+
+/* 「選擇小孩」sheet 內清單 */
+.cch-list { list-style: none; margin: 0 -12px; padding: 0 0 8px; display: flex; flex-direction: column; gap: 4px; }
+.cch-option {
+  position: relative; display: flex; align-items: center; gap: 16px; width: 100%; min-height: 64px; padding: 8px 16px;
+  border: none; border-radius: var(--m3-shape-large); background: transparent; color: var(--m3-on-surface);
+  text-align: left; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.cch-option:focus-visible { outline: 2px solid var(--m3-primary); outline-offset: -2px; }
+.cch-option.is-selected { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.cch-option__avatar { width: 40px; height: 40px; }
+.cch-option__sub { color: var(--m3-on-surface-variant); }
+.cch-option.is-selected .cch-option__sub { color: var(--m3-on-secondary-container); }
+.cch-option__check { flex: none; color: var(--m3-primary); }
+.cch-option.is-selected .cch-option__check { color: var(--m3-on-secondary-container); }
+/* ===== PickupReplyMessage 樣式複製自 parent-component-pickup-reply-message.html ===== */
+/* PickupReplyMessage（PARENT-094） */
+.prm p { margin: 0; }
+.prm-source { display: flex; align-items: center; gap: 4px; color: var(--m3-on-surface-variant); }
+.prm-eta { margin-top: 4px !important; color: var(--m3-on-surface); }
+.prm-eta__time { color: var(--m3-primary); font-weight: 500; font-variant-numeric: tabular-nums; }
+.prm-bubble {
+  margin-top: 8px !important; padding: 12px 16px; max-width: 100%;
+  border-radius: var(--m3-shape-extra-small) var(--m3-shape-large) var(--m3-shape-large) var(--m3-shape-large);
+  background: var(--m3-secondary-container); color: var(--m3-on-secondary-container);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.prm-time { margin-top: 4px !important; color: var(--m3-on-surface-variant); font-variant-numeric: tabular-nums; }
+.prm-wait { display: flex; align-items: center; gap: 8px; color: var(--m3-on-surface); }
+.prm-wait__icon { color: var(--m3-on-surface-variant); }
+.prm-wait__text { flex: 1; min-width: 0; }
+.prm-progress { position: relative; height: 4px; margin-top: 12px; border-radius: var(--m3-shape-full); background: var(--m3-surface-container-highest); overflow: hidden; }
+.prm-progress__bar { position: absolute; top: 0; bottom: 0; left: -40%; width: 40%; border-radius: inherit; background: var(--m3-primary); animation: prm-indeterminate 1.6s var(--m3-easing-standard) infinite; }
+@keyframes prm-indeterminate { from { left: -40%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .prm-progress__bar { animation: none; left: 0; width: 100%; opacity: 0.38; } }
+/* compact（首頁 TodayStatusCard） */
+.prm.is-compact .prm-source { margin-top: 2px; }
+.prm-compact__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--m3-on-surface); }
+.prm.is-compact .prm-wait__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prm.is-compact .m3-spinner { width: 16px; height: 16px; color: var(--m3-primary); }
+/* ===== PickupProgressSteps 樣式複製自 parent-component-pickup-progress-steps.html ===== */
+/* PickupProgressSteps（PARENT-095）：垂直步驟條 */
+.pps-list { list-style: none; margin: 0; padding: 0; }
+.pps-step { position: relative; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; column-gap: 12px; padding-bottom: 20px; }
+.pps-step:last-child { padding-bottom: 0; }
+.pps-step::before { content: ''; position: absolute; left: 11px; top: 28px; bottom: 4px; width: 2px; border-radius: 1px; background: var(--m3-outline-variant); }
+.pps-step:last-child::before { display: none; }
+.pps-step.is-line-done::before { background: var(--m3-primary); }
+.pps-marker {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+  border-radius: var(--m3-shape-full); border: 2px solid var(--m3-outline-variant); background: var(--m3-surface); color: var(--m3-on-primary);
+}
+.pps-step.is-done .pps-marker { border-color: var(--m3-primary); background: var(--m3-primary); }
+.pps-step.is-current .pps-marker { border-color: var(--m3-primary); }
+.pps-step.is-current .pps-marker::after { content: ''; width: 10px; height: 10px; border-radius: var(--m3-shape-full); background: var(--m3-primary); }
+.pps-body { min-width: 0; padding-top: 2px; }
+.pps-label { color: var(--m3-on-surface-variant); }
+.pps-step.is-done .pps-label { color: var(--m3-on-surface); }
+.pps-step.is-current .pps-label { color: var(--m3-on-surface); font-weight: 500; }
+.pps-sub { margin-top: 2px; color: var(--m3-on-surface-variant); overflow-wrap: anywhere; }
+.pps-step.is-current .pps-sub { color: var(--m3-primary); }
+.pps-time { padding-top: 2px; color: var(--m3-on-surface-variant); font-variant-numeric: tabular-nums; }
+.pps.is-ended .pps-step:not(.is-done) .pps-marker,
+.pps.is-ended .pps-step:not(.is-done) .pps-body { opacity: 0.38; }
+.pps-ended { display: flex; align-items: center; gap: 8px; margin-top: 16px; padding: 12px 16px; border-radius: var(--m3-shape-medium); background: var(--m3-surface-container-high); color: var(--m3-on-surface); }
+.pps-ended__icon { color: var(--m3-on-surface-variant); }
+/* ===== ArrivalTimePicker 樣式複製自 parent-component-arrival-time-picker.html ===== */
+/* ArrivalTimePicker（PARENT-096） */
+.arrival { display: flex; flex-direction: column; gap: 12px; }
+.arrival__label { margin: 0; color: var(--m3-on-surface); }
+.arrival__chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0; }
+.arrival__time { font-variant-numeric: tabular-nums; }
+.arrival__custom { padding-top: 4px; }
+/* ===== ConfirmDialog 樣式複製自 parent-component-confirm-dialog.html ===== */
+/* ConfirmDialog（PARENT-026）：M3 basic dialog。稿內畫在 .screen 裡（absolute）；實作 Teleport 到 body（fixed）。 */
+.dialog-layer { position: absolute; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.dialog-scrim { position: absolute; inset: 0; background: var(--m3-scrim); opacity: 0.32; }
+.dialog {
+  position: relative; display: flex; flex-direction: column; gap: 16px;
+  width: 100%; min-width: 280px; max-width: 400px; max-height: calc(100% - 48px); overflow-y: auto;
+  padding: 24px; border-radius: var(--m3-shape-extra-large);
+  background: var(--m3-surface-container-high); color: var(--m3-on-surface); box-shadow: var(--m3-elev-3); outline: none;
+}
+.dialog__title { margin: 0; overflow-wrap: anywhere; }
+.dialog__message { margin: 0; color: var(--m3-on-surface-variant); overflow-wrap: anywhere; white-space: pre-line; }
+.dialog__extra { margin: -4px 0; }
+.dialog__actions { display: flex; flex-wrap: wrap-reverse; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.dialog__actions .m3-button { max-width: 100%; }
+.dialog__actions .m3-button > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.m3-button--filled.is-destructive { background: var(--m3-error); color: var(--m3-on-error); }
+.dialog-enter-active { transition: opacity var(--m3-dur-short-4) var(--m3-easing-emphasized-decel); }
+.dialog-enter-active .dialog { transition: transform var(--m3-dur-short-4) var(--m3-easing-emphasized-decel); }
+.dialog-leave-active { transition: opacity var(--m3-dur-short-3) var(--m3-easing-emphasized-accel); }
+.dialog-enter-from, .dialog-leave-to { opacity: 0; }
+.dialog-enter-from .dialog { transform: scale(0.92); }
+
+/* 「下次不再提醒」勾選（slot 內容由呼叫端提供；這是建議樣式） */
+.check-row { display: flex; align-items: center; gap: 12px; min-height: 48px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.check-row input { width: 18px; height: 18px; margin: 0 3px; accent-color: var(--m3-primary); cursor: pointer; flex: none; }
+.check-row input:focus-visible { outline: 2px solid var(--m3-primary); outline-offset: 4px; }
+/* ===== ConnectionBanner 樣式複製自 parent-component-connection-banner.html ===== */
+/* ConnectionBanner（PARENT-174）：放在頂部列正下方、與頂部列同一個 sticky 區塊（z-index 5） */
+.app-header { position: relative; z-index: 5; flex: none; }
+.conn-banner {
+  display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 4px 4px 4px 16px;
+  overflow: hidden;
+}
+.conn-banner--offline { background: var(--m3-warning-container); color: var(--m3-on-warning-container); }
+.conn-banner--ws { background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
+.conn-banner__text { flex: 1; min-width: 0; padding: 10px 0; }
+.conn-banner__action {
+  position: relative; flex: none; min-height: 40px; height: 40px; padding: 0 12px; border: none; border-radius: var(--m3-shape-full);
+  background: transparent; color: inherit; font-weight: 700; cursor: pointer;
+}
+.conn-banner__action:focus-visible { outline: 2px solid currentColor; outline-offset: 0; }
+.conn-banner__action::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 48px; transform: translateY(-50%); }
+.conn-banner-enter-active, .conn-banner-leave-active { transition: max-height var(--m3-dur-medium-2) var(--m3-easing-standard), opacity var(--m3-dur-medium-2) var(--m3-easing-standard); max-height: 96px; }
+.conn-banner-enter-from, .conn-banner-leave-to { max-height: 0; opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .conn-banner-enter-active, .conn-banner-leave-active { transition: none; } }
+/* ============================================================
+   本稿頁面：PickupView（PARENT-097）
+   頁面內距沿用 .screen__content（左右 16px、底 24px），上方 8px 由 .pk-head 補
+   ============================================================ */
+.pk-head { padding-top: 8px; }
+.pk-cch-skeleton { border-radius: var(--m3-shape-large); background: var(--m3-surface-container-low); overflow: hidden; }
+
+/* 作業提示列 */
+.hw-hint {
+  display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 12px;
+  border-radius: var(--m3-shape-small); background: var(--m3-surface-container); color: var(--m3-on-surface-variant);
+  font-variant-numeric: tabular-nums;
+}
+.hw-hint__done { color: var(--m3-primary); }
+
+/* 主區：依狀態放表單 / 進行中 / 無權限 / 骨架 / 載入失敗 */
+.pk-main { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.pk-card-title { margin: 0; }
+
+/* 表單卡（選擇器前綴卡片 class：蓋過 M3Card 的 .m3-card p { margin: 0 }） */
+.pk-form .pk-form__sub { margin: 4px 0 0; color: var(--m3-on-surface-variant); }
+.form-error { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; color: var(--m3-error); }
+.pk-form__submit { margin-top: 16px; }
+.pk-or { display: flex; align-items: center; gap: 12px; color: var(--m3-on-surface-variant); }
+.pk-or::before, .pk-or::after { content: ''; flex: 1; height: 1px; background: var(--m3-outline-variant); }
+.pk-arrive-hint { margin: -4px 0 0; text-align: center; color: var(--m3-on-surface-variant); }
+
+/* 進行中：請求卡 + 進度卡 */
+.pk-req__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.pk-req .pk-req__expected { display: flex; align-items: center; gap: 6px; margin: 12px 0 0; color: var(--m3-on-surface-variant); font-variant-numeric: tabular-nums; }
+.pk-req__arrive { margin-top: 16px; }
+.pk-steps__actions { display: flex; justify-content: flex-end; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--m3-outline-variant); }
+
+/* 已接走成功卡 */
+.pk-done {
+  display: flex; align-items: center; gap: 12px; padding: 16px;
+  border-radius: var(--m3-shape-medium); background: var(--m3-primary-container); color: var(--m3-on-primary-container);
+}
+.pk-done__text { flex: 1; min-width: 0; }
+.pk-done__text p { margin: 0; }
+.pk-done__title { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.pk-again {
+  position: relative; align-self: center; display: inline-flex; align-items: center; gap: 4px; min-height: 48px; padding: 0 16px;
+  border: none; border-radius: var(--m3-shape-full); background: transparent; color: var(--m3-primary); cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.pk-again:focus-visible { outline: 2px solid var(--m3-primary); outline-offset: 2px; }
+
+/* 今日紀錄 */
+.pk-section { margin: 24px 4px 8px; color: var(--m3-on-surface-variant); }
+.pk-history { list-style: none; margin: 0; padding: 0; }
+.pk-history__row { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 16px; }
+.pk-history__row + .pk-history__row { border-top: 1px solid var(--m3-outline-variant); }
+.pk-history__text { flex: 1; min-width: 0; color: var(--m3-on-surface); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.pk-history__time { flex: none; color: var(--m3-on-surface-variant); font-variant-numeric: tabular-nums; }
+
+/* 代理接送入口 */
+.pk-proxy { margin-top: 24px; overflow: hidden; }
+</style>
+</head>
+
+<body>
+<div id="app">
+
+  <div class="preview-bar">
+    <span class="preview-tag" :class="{ 'is-approved': meta.status === 'approved' }">
+      {{ meta.status === 'approved' ? '已核可' : '待核可' }}
+    </span>
+    <span>{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span class="preview-bar__spacer"></span>
+    <span>更新 {{ meta.updated }}</span>
+    <span>設計說明 / 待裁定（{{ openQuestions.length }}）在手機框右側</span>
+  </div>
+
+  <div class="stage">
+    <div class="device">
+      <div class="screen">
+        <div class="app-header">
+          <m3-top-app-bar title="接送" :scrolled="scrolled"><template v-slot:leading><span class="logo-mark m3-title-medium" aria-hidden="true">向</span></template></m3-top-app-bar>
+          <connection-banner :online="true" :ws-enabled="true" :ws-status="wsDown ? 'reconnecting' : 'open'" :delay-ms="0" @poll-now="pollNow"></connection-banner>
+        </div>
+        <main class="screen__content" :class="{ 'is-locked': arrive.confirmOpen || cancelOpen }" @scroll="scrolled = $event.target.scrollTop > 0">
+          <div class="pk-head">
+            <skeleton-block v-if="childrenLoading" variant="row" height="80px" class="pk-cch-skeleton"></skeleton-block>
+            <child-context-header v-else :children="children" :selected-id="selectedId" @select="selectChild"></child-context-header>
+          </div>
+
+          <div v-if="hwHint" class="hw-hint m3-body-medium">
+            <m3-icon :name="hwHint.done ? 'check_circle' : 'assignment'" :size="20" :filled="hwHint.done" :class="{ 'hw-hint__done': hwHint.done }"></m3-icon>
+            <span>{{ hwHint.text }}</span>
+          </div>
+
+          <div class="pk-main">
+            <skeleton-block v-if="mainState === 'loading'" variant="card" :count="2"></skeleton-block>
+            <parent-empty-state v-else-if="mainState === 'error'" variant="error" title="接送狀態載入失敗" description="請檢查網路連線後再試一次" @action="retryLoad"></parent-empty-state>
+            <template v-else-if="openReq">
+              <m3-card variant="elevated" class="pk-req">
+                <div class="pk-req__head">
+                  <h2 class="pk-card-title m3-title-medium">今天的接送</h2>
+                  <status-pill :label="statusMeta(openReq.status).label" :tone="statusMeta(openReq.status).tone"></status-pill>
+                </div>
+                <pickup-reply-message :request="openReq"></pickup-reply-message>
+                <p v-if="openReq.expected_arrival_at" class="pk-req__expected m3-body-medium"><m3-icon name="schedule" :size="18"></m3-icon>您預計 {{ openReq.expected_arrival_at }} 抵達</p>
+                <m3-button v-if="openReq.can_mark_arrived" class="pk-req__arrive" :block="true" icon="where_to_vote" :loading="arrive.busy" @click="arrive.request(selectedId, openReq.id)">我到了</m3-button>
+              </m3-card>
+              <m3-card variant="outlined">
+                <pickup-progress-steps :request="openReq"></pickup-progress-steps>
+                <div v-if="openReq.can_cancel" class="pk-steps__actions">
+                  <m3-button variant="text" icon="close" :disabled="arrive.busy" @click="cancelOpen = true">取消接送</m3-button>
+                </div>
+              </m3-card>
+            </template>
+            <parent-empty-state v-else-if="!canPickup" icon="block" title="您沒有這位小孩的接送權限" description="如需接送請聯絡安親班"></parent-empty-state>
+            <template v-else>
+              <div v-if="doneReq" class="pk-done" role="status">
+                <m3-icon name="check_circle" :size="32" :filled="true"></m3-icon>
+                <div class="pk-done__text">
+                  <p class="pk-done__title m3-title-medium">{{ completedText(doneReq) }}</p>
+                  <p class="m3-body-medium">今天的接送已完成</p>
+                </div>
+              </div>
+              <button v-if="doneReq && !formExpanded" type="button" class="pk-again m3-state m3-label-large" aria-expanded="false" @click="formExpanded = true">需要再次接送？<m3-icon name="expand_more" :size="18"></m3-icon></button>
+              <template v-else>
+                <m3-card class="pk-form">
+                  <template v-slot:header>
+                    <h2 class="pk-card-title m3-title-medium">我要來接</h2>
+                    <p class="pk-form__sub m3-body-medium">通知老師您正在路上，系統會立即回覆預計可接送時間</p>
+                  </template>
+                  <arrival-time-picker :key="pickerKey" v-model="arrival" :now="now"></arrival-time-picker>
+                  <div v-if="formError" class="form-error m3-body-medium" role="alert"><m3-icon name="error" :filled="true" :size="20"></m3-icon><span>{{ formError }}</span></div>
+                  <m3-button class="pk-form__submit" :block="true" icon="send" :loading="pending === 'create'" :disabled="arrive.busy" @click="submit">通知安親班</m3-button>
+                </m3-card>
+                <div class="pk-or m3-label-medium" aria-hidden="true">或</div>
+                <m3-button variant="outlined" :block="true" icon="where_to_vote" :loading="arrive.busy" :disabled="pending === 'create'" @click="arrive.request(selectedId, null)">我已經到了</m3-button>
+                <p class="pk-arrive-hint m3-body-small">人已在安親班門口時使用，不必先通知</p>
+              </template>
+            </template>
+          </div>
+
+          <template v-if="mainState === 'ready' && history.length">
+            <h2 class="pk-section m3-label-large">今日紀錄</h2>
+            <m3-card variant="outlined" padding="none">
+              <ul class="pk-history" role="list" aria-label="今日接送紀錄">
+                <li v-for="r in history" :key="r.id" class="pk-history__row">
+                  <status-pill :label="statusMeta(r.status).label" :tone="statusMeta(r.status).tone"></status-pill>
+                  <span class="pk-history__text m3-body-medium">{{ historyText(r) }}</span>
+                  <span class="pk-history__time m3-body-small">{{ fmtTime(r.created_at) }} 發起</span>
+                </li>
+              </ul>
+            </m3-card>
+          </template>
+
+          <m3-card variant="outlined" padding="none" class="pk-proxy">
+            <ul class="m3-list" role="list">
+              <m3-list-item headline="代理接送與常用接送人" supporting-text="由親友代接時，先建立代理接送與接送碼" leading-icon="badge" trailing-icon="chevron_right" to="/pickup/proxy" @click="go('/pickup/proxy')"></m3-list-item>
+            </ul>
+          </m3-card>
+        </main>
+        <m3-snackbar :item="snack.items[0] || null" @dismiss="snack.dismiss"></m3-snackbar>
+        <m3-navigation-bar :items="navItems" current-key="pickup"></m3-navigation-bar>
+        <confirm-dialog :open="arrive.confirmOpen" title="確認已抵達安親班？" message="老師會收到通知並準備帶孩子出來" confirm-label="我到了" @confirm="arrive.confirm" @cancel="arrive.dismiss">
+          <label class="check-row m3-body-large"><input type="checkbox" v-model="arrive.skipNextTime">下次不再提醒</label>
+        </confirm-dialog>
+        <confirm-dialog :open="cancelOpen" title="取消這次接送？" confirm-label="確定取消" cancel-label="先不要" :destructive="true" :loading="cancelLoading" @confirm="confirmCancel" @cancel="cancelOpen = false"></confirm-dialog>
+      </div>
+    </div>
+
+    <aside class="notes">
+      <h3>設計說明 / 待裁定</h3>
+      <div class="notes__alert" v-if="openQuestions.length">以下項目需要你裁定，未回覆前這張稿不會進入實作（稿已照推薦選項畫）</div>
+
+      <h4>情境（套用在王小明；之後可直接在手機裡操作）</h4>
+      <template v-for="g in scenarioGroups" :key="g.label">
+        <div class="notes__group">{{ g.label }}</div>
+        <div class="state-switch state-switch--wrap" role="group" :aria-label="g.label">
+          <button v-for="s in g.items" :key="s.key" type="button" :class="{ 'is-active': currentScenario === s.key }" @click="applyScenario(s.key)">{{ s.label }}</button>
+        </div>
+      </template>
+      <p class="notes__hint">稿內今天是 2026-10-07（三）、現在 17:22:20。按「通知安親班」會依該小孩的作業狀態立即產生系統自動回覆；「我到了 / 我已經到了 / 取消接送」都會實際更新畫面與今日紀錄。多位小孩時點身分卡切換：王小華有老師已確認的請求、王小美沒有接送權限。「送出中」「首次載入骨架」是靜止畫面，選其他情境離開。</p>
+
+      <h4>下一次寫入的結果（通知安親班 / 我到了 / 我已經到了 / 取消接送；用過一次就回到「成功」）</h4>
+      <div class="state-switch state-switch--wrap" role="group" aria-label="下一次寫入結果">
+        <button v-for="w in writeResults" :key="w.value" type="button" :class="{ 'is-active': writeResult === w.value }" @click="writeResult = w.value">{{ w.label }}</button>
+      </div>
+      <p class="notes__hint">前六種是「通知安親班」的表單內錯誤（顯示後端 error.message）；其餘走 snackbar。「已有進行中請求」用在「通知安親班」時會同步出別台裝置建立的請求，用在「我已經到了」時改對該請求按「我到了」。</p>
+
+      <h4>模擬 ws 推送（目前小孩的進行中請求）</h4>
+      <div class="state-switch state-switch--wrap" role="group" aria-label="模擬 ws 推送">
+        <button v-for="w in wsEvents" :key="w.key" type="button" @click="pushWs(w.key)">{{ w.label }}</button>
+      </div>
+      <p v-if="wsLog" class="notes__hint">{{ wsLog }}</p>
+
+      <h4>預覽選項</h4>
+      <div class="notes__row">小孩
+        <span class="state-switch"><button type="button" :class="{ 'is-active': childMode === 'multi' }" @click="setChildMode('multi')">多位（3 位）</button><button type="button" :class="{ 'is-active': childMode === 'single' }" @click="setChildMode('single')">單一</button></span>
+      </div>
+      <div class="notes__row">
+        <span>「下次不再提醒」：{{ arrive.skipStored ? '已記住（之後直接送出）' : '未記住（每次先確認）' }}</span>
+        <span v-if="arrive.skipStored" class="state-switch"><button type="button" @click="arrive.skipStored = false">重設</button></span>
+      </div>
+      <div class="notes__row">連線橫幅（ParentLayout 負責）
+        <span class="state-switch"><button type="button" :class="{ 'is-active': !wsDown }" @click="wsDown = false">連線正常</button><button type="button" :class="{ 'is-active': wsDown }" @click="wsDown = true">即時更新中斷</button></span>
+      </div>
+      <div class="notes__row">主題
+        <span class="state-switch"><button type="button" :class="{ 'is-active': theme === 'light' }" @click="theme = 'light'">淺色</button><button type="button" :class="{ 'is-active': theme === 'dark' }" @click="theme = 'dark'">深色</button></span>
+      </div>
+
+      <h4>設計決策</h4>
+      <ol><li v-for="(d, i) in decisions" :key="i">{{ d }}</li></ol>
+
+      <h4 v-if="openQuestions.length">待裁定</h4>
+      <ol>
+        <li v-for="(q, i) in openQuestions" :key="i" class="notes__q">
+          <div>{{ q.question }}</div>
+          <div class="notes__option" v-for="(o, j) in q.options" :key="j">{{ 'ABCD'[j] }}. {{ o.text }}<span v-if="o.recommended" class="notes__rec">（推薦，稿已照此畫）</span></div>
+        </li>
+      </ol>
+    </aside>
+  </div>
+</div>
+<script>
+const { createApp, ref, reactive, computed, watch, nextTick, onBeforeUnmount } = Vue
+
+/* ===== 以下元件複製自 parent-component-m3-kit.html / parent-component-bottom-sheet.html ===== */
+/** PARENT-014 M3Icon：label 有值 → role=img + aria-label；無 → aria-hidden */
+const M3Icon = {
+  props: {
+    name: { type: String, required: true },
+    size: { type: [Number, String], default: 24 },
+    filled: { type: Boolean, default: false },
+    label: { type: String, default: '' },
+  },
+  computed: {
+    iconStyle() {
+      const fontSize = typeof this.size === 'number' ? `${this.size}px` : this.size
+      return { fontSize, fontVariationSettings: `'FILL' ${this.filled ? 1 : 0}, 'wght' 400, 'GRAD' 0, 'opsz' 24` }
+    },
+  },
+  template: `<span class="material-symbols-rounded m3-icon" :style="iconStyle" :role="label ? 'img' : null" :aria-label="label || null" :aria-hidden="label ? null : 'true'">{{ name }}</span>`,
+}
+
+/** PARENT-015 M3Button：loading 用 aria-disabled 擋點擊並保留焦點；disabled 用原生屬性 */
+const M3Button = {
+  props: {
+    variant: { type: String, default: 'filled' },
+    type: { type: String, default: 'button' },
+    disabled: { type: Boolean, default: false },
+    loading: { type: Boolean, default: false },
+    block: { type: Boolean, default: false },
+    icon: { type: String, default: '' },
+  },
+  emits: ['click'],
+  methods: {
+    onClick(e) { if (this.disabled || this.loading) return; this.$emit('click', e) },
+  },
+  template: `<button :type="type" class="m3-button m3-state m3-label-large"
+    :class="['m3-button--' + variant, { 'is-block': block, 'has-icon': !!icon || loading, 'is-loading': loading }]"
+    :disabled="disabled" :aria-disabled="loading ? 'true' : null" :aria-busy="loading ? 'true' : null" @click="onClick">
+    <span v-if="loading" class="m3-spinner" aria-hidden="true"></span>
+    <m3-icon v-else-if="icon" :name="icon" :size="18"></m3-icon>
+    <span><slot></slot></span>
+  </button>`,
+}
+
+/** PARENT-016 M3IconButton：label 必填 */
+const M3IconButton = {
+  props: {
+    icon: { type: String, required: true },
+    label: { type: String, required: true },
+    variant: { type: String, default: 'standard' },
+    disabled: { type: Boolean, default: false },
+  },
+  emits: ['click'],
+  template: `<button type="button" class="m3-icon-button" :class="'m3-icon-button--' + variant" :aria-label="label" :disabled="disabled"
+    @click="!disabled && $emit('click', $event)"><span class="m3-icon-button__container"><m3-icon :name="icon"></m3-icon></span></button>`,
+}
+
+/** PARENT-017 M3Card */
+const M3Card = {
+  props: {
+    variant: { type: String, default: 'filled' },
+    clickable: { type: Boolean, default: false },
+    padding: { type: String, default: 'md' },
+  },
+  emits: ['click'],
+  methods: {
+    onClick(e) { if (this.clickable) this.$emit('click', e) },
+    onKeydown(e) {
+      if (!this.clickable || (e.key !== 'Enter' && e.key !== ' ')) return
+      e.preventDefault()
+      this.$emit('click', e)
+    },
+  },
+  template: `<div class="m3-card" :class="['m3-card--' + variant, 'm3-card--pad-' + padding, { 'is-clickable m3-state': clickable }]"
+    :role="clickable ? 'button' : null" :tabindex="clickable ? 0 : null" @click="onClick" @keydown="onKeydown">
+    <div v-if="$slots.header" class="m3-card__header"><slot name="header"></slot></div>
+    <slot></slot>
+    <div v-if="$slots.actions" class="m3-card__actions"><slot name="actions"></slot></div>
+  </div>`,
+}
+
+/** PARENT-018 M3TextField（forceFocus 只為稿件示範，實作沒有這個 prop） */
+let tfUid = 0
+const M3TextField = {
+  props: {
+    modelValue: { type: String, default: '' },
+    label: { type: String, required: true },
+    type: { type: String, default: 'text' },
+    placeholder: { type: String, default: '' },
+    supportingText: { type: String, default: '' },
+    errorText: { type: String, default: '' },
+    disabled: { type: Boolean, default: false },
+    maxlength: { type: Number, default: undefined },
+    inputmode: { type: String, default: undefined },
+    autocomplete: { type: String, default: undefined },
+    id: { type: String, default: undefined },
+    forceFocus: { type: Boolean, default: false },
+  },
+  emits: ['update:modelValue', 'enter'],
+  data() { return { focused: false, uid: ++tfUid } },
+  computed: {
+    inputId() { return this.id || `m3-tf-${this.uid}` },
+    descId() { return `${this.inputId}-desc` },
+    hasError() { return !!this.errorText },
+    isFocused() { return this.focused || this.forceFocus },
+    floating() { return this.isFocused || !!this.modelValue || this.type === 'date' || this.type === 'time' },
+    supportText() { return this.errorText || this.supportingText },
+  },
+  methods: {
+    onInput(e) { this.$emit('update:modelValue', e.target.value) },
+    onKeydown(e) {
+      if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return
+      this.$emit('enter')
+    },
+  },
+  template: `<div class="m3-tf" :class="{ 'is-focused': isFocused, 'is-floating': floating, 'is-error': hasError, 'is-disabled': disabled, 'is-textarea': type === 'textarea', 'has-trailing': hasError }">
+    <div class="m3-tf__control">
+      <textarea v-if="type === 'textarea'" :id="inputId" class="m3-tf__input" rows="4" :value="modelValue" :placeholder="placeholder"
+        :disabled="disabled" :maxlength="maxlength" :aria-invalid="hasError ? 'true' : 'false'" :aria-describedby="supportText ? descId : null"
+        @input="onInput" @focus="focused = true" @blur="focused = false"></textarea>
+      <input v-else :id="inputId" class="m3-tf__input" :type="type" :value="modelValue" :placeholder="placeholder" :disabled="disabled"
+        :maxlength="maxlength" :inputmode="inputmode" :autocomplete="autocomplete" :aria-invalid="hasError ? 'true' : 'false'"
+        :aria-describedby="supportText ? descId : null" @input="onInput" @keydown="onKeydown" @focus="focused = true" @blur="focused = false">
+      <label class="m3-tf__label" :for="inputId">{{ label }}</label>
+      <fieldset class="m3-tf__outline" aria-hidden="true"><legend><span>{{ label }}</span></legend></fieldset>
+      <m3-icon v-if="hasError" class="m3-tf__trailing" name="error" :filled="true"></m3-icon>
+    </div>
+    <div v-if="supportText || maxlength" class="m3-tf__supporting m3-body-small">
+      <span v-if="supportText" :id="descId" class="m3-tf__supporting-text">{{ supportText }}</span>
+      <span v-if="maxlength" class="m3-tf__counter">{{ (modelValue || '').length }}/{{ maxlength }}</span>
+    </div>
+  </div>`,
+}
+
+/** PARENT-019 M3Chip */
+const M3Chip = {
+  props: {
+    label: { type: String, required: true },
+    variant: { type: String, default: 'assist' },
+    selected: { type: Boolean, default: false },
+    icon: { type: String, default: '' },
+    disabled: { type: Boolean, default: false },
+  },
+  emits: ['click'],
+  computed: {
+    isSelected() { return this.variant === 'filter' && this.selected },
+    leading() { return this.isSelected ? 'check' : this.icon },
+  },
+  template: `<button type="button" class="m3-chip m3-state" :class="['m3-chip--' + variant, { 'is-selected': isSelected, 'has-icon': !!leading }]"
+    :aria-pressed="variant === 'filter' ? String(selected) : null" :disabled="disabled" @click="!disabled && $emit('click', $event)">
+    <m3-icon v-if="leading" class="m3-chip__icon" :name="leading" :size="18"></m3-icon><span class="m3-label-large">{{ label }}</span>
+  </button>`,
+}
+
+/** PARENT-020 M3ListItem：li 保持 listitem 語意，互動元素是 li 內的 a（to）或 div[role=button]（clickable） */
+const M3ListItem = {
+  props: {
+    headline: { type: String, required: true },
+    supportingText: { type: String, default: '' },
+    leadingIcon: { type: String, default: '' },
+    trailingIcon: { type: String, default: '' },
+    clickable: { type: Boolean, default: false },
+    disabled: { type: Boolean, default: false },
+    to: { type: String, default: '' },
+  },
+  emits: ['click'],
+  computed: {
+    interactive() { return this.clickable || !!this.to },
+    tag() { return this.to ? 'a' : 'div' },
+  },
+  methods: {
+    onClick(e) {
+      if (this.to) e.preventDefault() // 稿內沒有 router；實作用 RouterLink
+      if (this.disabled || !this.interactive) return
+      this.$emit('click', e)
+    },
+    onKeydown(e) {
+      if (this.to || !this.clickable || (e.key !== 'Enter' && e.key !== ' ')) return
+      e.preventDefault()
+      this.onClick(e)
+    },
+  },
+  template: `<li class="m3-list-item" :class="{ 'is-two-line': !!supportingText, 'is-disabled': disabled }">
+    <component :is="tag" class="m3-list-item__inner" :class="{ 'is-interactive m3-state': interactive }"
+      :href="to ? '#' + to : null" :role="interactive && !to ? 'button' : null"
+      :tabindex="interactive && !to ? (disabled ? -1 : 0) : null" :aria-disabled="interactive && disabled ? 'true' : null"
+      @click="onClick" @keydown="onKeydown">
+      <span v-if="$slots.leading || leadingIcon" class="m3-list-item__leading" :class="{ 'is-icon': !$slots.leading }"><slot name="leading"><m3-icon v-if="leadingIcon" :name="leadingIcon"></m3-icon></slot></span>
+      <span class="m3-list-item__content">
+        <span class="m3-list-item__headline m3-body-large">{{ headline }}</span>
+        <span v-if="supportingText" class="m3-list-item__supporting m3-body-medium">{{ supportingText }}</span>
+      </span>
+      <span v-if="$slots.trailing || trailingIcon" class="m3-list-item__trailing"><slot name="trailing"><m3-icon v-if="trailingIcon" :name="trailingIcon"></m3-icon></slot></span>
+    </component>
+  </li>`,
+}
+
+/** PARENT-021 M3TopAppBar（scrolled 只為稿件示範；實作自行偵測捲動） */
+const M3TopAppBar = {
+  props: {
+    title: { type: String, required: true },
+    showBack: { type: Boolean, default: false },
+    scrolled: { type: Boolean, default: false },
+  },
+  emits: ['back'],
+  template: `<header class="m3-top-app-bar" :class="{ 'is-scrolled': scrolled }">
+    <div class="m3-top-app-bar__leading">
+      <m3-icon-button v-if="showBack" icon="arrow_back" label="返回" @click="$emit('back')"></m3-icon-button>
+      <slot v-else name="leading"></slot>
+    </div>
+    <h1 class="m3-top-app-bar__title m3-title-large">{{ title }}</h1>
+    <div class="m3-top-app-bar__actions"><slot name="actions"></slot></div>
+  </header>`,
+}
+
+/** PARENT-022 M3NavigationBar */
+const M3NavigationBar = {
+  props: {
+    items: { type: Array, required: true },
+    currentKey: { type: String, required: true },
+  },
+  emits: ['select'],
+  methods: {
+    badgeText(b) { if (!b || b < 1) return null; return b > 99 ? '99+' : String(b) },
+  },
+  template: `<nav class="m3-navigation-bar" aria-label="主要功能">
+    <button v-for="item in items" :key="item.key" type="button" class="m3-nav-tab" :class="{ 'is-active': item.key === currentKey }"
+      :aria-current="item.key === currentKey ? 'page' : null" @click="$emit('select', item.key, item)">
+      <span class="m3-nav-tab__icon">
+        <m3-icon :name="item.icon" :filled="item.key === currentKey"></m3-icon>
+        <span v-if="badgeText(item.badge)" class="m3-nav-tab__badge" aria-hidden="true">{{ badgeText(item.badge) }}</span>
+      </span>
+      <span class="m3-nav-tab__label m3-label-medium">{{ item.label }}</span>
+      <span v-if="badgeText(item.badge)" class="visually-hidden">，{{ item.badge }} 則未讀</span>
+    </button>
+  </nav>`,
+}
+
+/** PARENT-023 M3Snackbar（inline 只為稿件靜態示範） */
+const M3Snackbar = {
+  props: {
+    item: { type: Object, default: null },
+    inline: { type: Boolean, default: false },
+  },
+  emits: ['dismiss'],
+  methods: {
+    onAction() { this.item.action.onClick(); this.$emit('dismiss', this.item.id) },
+  },
+  template: `<transition name="m3-snackbar" mode="out-in">
+    <div v-if="item" :key="item.id" class="m3-snackbar" :class="['m3-snackbar--' + item.tone, { 'is-inline': inline }]"
+      :role="item.tone === 'error' ? 'alert' : 'status'" :aria-live="item.tone === 'error' ? null : 'polite'">
+      <m3-icon v-if="item.tone === 'error'" class="m3-snackbar__icon" name="error" :filled="true"></m3-icon>
+      <span class="m3-snackbar__message m3-body-medium">{{ item.message }}</span>
+      <button v-if="item.action" type="button" class="m3-snackbar__action m3-state m3-label-large" @click="onAction">{{ item.action.label }}</button>
+    </div>
+  </transition>`,
+}
+
+/** PARENT-098 M3SegmentedButton：radiogroup、roving tabindex、方向鍵略過 disabled 並循環 */
+const M3SegmentedButton = {
+  props: {
+    modelValue: { type: String, required: true },
+    items: { type: Array, required: true },
+    ariaLabel: { type: String, required: true },
+  },
+  emits: ['update:modelValue'],
+  computed: {
+    focusIndex() {
+      const i = this.items.findIndex((x) => x.value === this.modelValue)
+      return i >= 0 ? i : this.items.findIndex((x) => !x.disabled)
+    },
+  },
+  methods: {
+    select(item) { if (!item.disabled) this.$emit('update:modelValue', item.value) },
+    onKeydown(e, idx) {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+      e.preventDefault()
+      const dir = e.key === 'ArrowRight' ? 1 : -1
+      const n = this.items.length
+      let i = idx
+      for (let k = 0; k < n; k++) {
+        i = (i + dir + n) % n
+        if (!this.items[i].disabled) break
+      }
+      if (i === idx || this.items[i].disabled) return
+      this.$emit('update:modelValue', this.items[i].value)
+      nextTick(() => this.$refs.seg[i].focus())
+    },
+  },
+  template: `<div class="m3-segmented" role="radiogroup" :aria-label="ariaLabel" :style="{ gridTemplateColumns: 'repeat(' + items.length + ', minmax(0, 1fr))' }">
+    <button v-for="(item, idx) in items" :key="item.value" ref="seg" type="button" role="radio" class="m3-segment m3-state m3-label-large"
+      :class="{ 'is-checked': item.value === modelValue }" :aria-checked="String(item.value === modelValue)" :disabled="item.disabled"
+      :tabindex="idx === focusIndex ? 0 : -1" @click="select(item)" @keydown="onKeydown($event, idx)">
+      <m3-icon v-if="item.value === modelValue" name="check" :size="18"></m3-icon>
+      <m3-icon v-else-if="item.icon" :name="item.icon" :size="18"></m3-icon>
+      <span class="m3-segment__label">{{ item.label }}</span>
+    </button>
+  </div>`,
+}
+
+/** PARENT-175 M3Switch：disabled 或 busy 時不 emit */
+const M3Switch = {
+  props: {
+    modelValue: { type: Boolean, required: true },
+    disabled: { type: Boolean, default: false },
+    label: { type: String, required: true },
+    busy: { type: Boolean, default: false },
+  },
+  emits: ['update:modelValue'],
+  methods: {
+    toggle() { if (this.disabled || this.busy) return; this.$emit('update:modelValue', !this.modelValue) },
+  },
+  template: `<button type="button" role="switch" class="m3-switch" :class="{ 'is-on': modelValue, 'is-busy': busy }"
+    :aria-checked="String(modelValue)" :aria-label="label" :aria-busy="busy ? 'true' : null" :disabled="disabled" @click="toggle">
+    <span class="m3-switch__track"><span class="m3-switch__thumb">
+      <span v-if="busy" class="m3-switch__spinner" aria-hidden="true"></span>
+      <m3-icon v-else-if="modelValue" name="check" :size="16"></m3-icon>
+    </span></span>
+  </button>`,
+}
+
+/* ============================================================
+   PARENT-025 ParentBottomSheet
+   ============================================================ */
+const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+const DISMISS_DISTANCE = 80
+const LOCKED_MAX_OFFSET = 24
+let sheetUid = 0
+
+const ParentBottomSheet = {
+  props: {
+    modelValue: { type: Boolean, required: true },
+    title: { type: String, default: '' },
+    dismissible: { type: Boolean, default: true },
+    fullHeight: { type: Boolean, default: false },
+  },
+  emits: ['update:modelValue'],
+  data() {
+    return { titleId: `sheet-title-${++sheetUid}`, offset: 0, dragging: false, startY: 0, prevFocus: null }
+  },
+  computed: {
+    sheetStyle() { return this.offset ? { transform: `translateY(${this.offset}px)` } : null },
+  },
+  watch: {
+    modelValue: {
+      handler(open) {
+        if (open) {
+          this.prevFocus = document.activeElement
+          document.addEventListener('keydown', this.onDocKeydown)
+          nextTick(() => {
+            const dialog = this.$refs.dialog
+            if (!dialog) return
+            const first = dialog.querySelector(FOCUSABLE)
+            ;(first || dialog).focus({ preventScroll: true })
+          })
+        } else {
+          document.removeEventListener('keydown', this.onDocKeydown)
+          this.offset = 0
+          this.dragging = false
+          if (this.prevFocus && typeof this.prevFocus.focus === 'function') this.prevFocus.focus({ preventScroll: true })
+        }
+      },
+    },
+  },
+  beforeUnmount() { document.removeEventListener('keydown', this.onDocKeydown) },
+  methods: {
+    requestClose() { if (this.dismissible) this.$emit('update:modelValue', false) },
+    onDocKeydown(e) { if (e.key === 'Escape') { e.stopPropagation(); this.requestClose() } },
+    onKeydown(e) {
+      if (e.key !== 'Tab') return
+      const list = Array.from(this.$refs.dialog.querySelectorAll(FOCUSABLE))
+      if (!list.length) { e.preventDefault(); return }
+      const first = list[0]
+      const last = list[list.length - 1]
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === this.$refs.dialog)) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    },
+    startDrag(e) {
+      this.dragging = true
+      this.startY = e.clientY
+      window.addEventListener('pointermove', this.onPointerMove)
+      window.addEventListener('pointerup', this.onPointerUp)
+      window.addEventListener('pointercancel', this.onPointerUp)
+    },
+    onHandleDown(e) { if (e.button === 0 || e.pointerType !== 'mouse') this.startDrag(e) },
+    onPointerMove(e) {
+      if (!this.dragging) return
+      const dy = Math.max(0, e.clientY - this.startY)
+      this.offset = this.dismissible ? dy : Math.min(LOCKED_MAX_OFFSET, dy / 4)
+    },
+    onPointerUp() {
+      window.removeEventListener('pointermove', this.onPointerMove)
+      window.removeEventListener('pointerup', this.onPointerUp)
+      window.removeEventListener('pointercancel', this.onPointerUp)
+      if (!this.dragging) return
+      this.dragging = false
+      if (this.dismissible && this.offset > DISMISS_DISTANCE) {
+        this.$emit('update:modelValue', false)
+      } else {
+        this.offset = 0
+      }
+    },
+  },
+  template: `<transition name="sheet" :duration="{ enter: 400, leave: 200 }">
+    <div v-if="modelValue" class="sheet-layer">
+      <div class="sheet-scrim" @click="requestClose"></div>
+      <div ref="dialog" class="sheet" :class="{ 'is-full': fullHeight, 'is-dragging': dragging }" :style="sheetStyle"
+        role="dialog" aria-modal="true" :aria-labelledby="titleId" tabindex="-1" @keydown="onKeydown">
+        <div class="sheet__drag" @pointerdown="onHandleDown">
+          <div class="sheet__handle" aria-hidden="true"></div>
+          <div class="sheet__header" :class="{ 'has-close': dismissible }">
+            <h2 :id="titleId" class="sheet__title m3-title-large">{{ title }}</h2>
+            <m3-icon-button v-if="dismissible" icon="close" label="關閉" @pointerdown.stop @click="requestClose"></m3-icon-button>
+          </div>
+        </div>
+        <div class="sheet__body"><slot></slot></div>
+        <div v-if="$slots.footer" class="sheet__footer"><slot name="footer"></slot></div>
+      </div>
+    </div>
+  </transition>`,
+}
+/* ===== 稿件共用：snackbar 佇列（照 PARENT-011）與底部導覽 ===== */
+function createSnack() {
+  let nextId = 1
+  let headTimer = null
+  const snack = reactive({
+    items: [],
+    show(message, opts = {}) {
+      const item = { id: nextId++, message, tone: opts.tone || 'info', duration: opts.duration ?? 4000, action: opts.action }
+      snack.items.push(item)
+      if (snack.items.length > 3) snack.items.splice(1, 1)
+      if (snack.items.length === 1) startHeadTimer()
+      return item.id
+    },
+    dismiss(id) {
+      const i = snack.items.findIndex((x) => x.id === id)
+      if (i < 0) return
+      snack.items.splice(i, 1)
+      if (i === 0) startHeadTimer()
+    },
+    clear() { snack.items.splice(0); clearTimeout(headTimer) },
+  })
+  function startHeadTimer() {
+    clearTimeout(headTimer)
+    const head = snack.items[0]
+    if (head && head.duration > 0) headTimer = setTimeout(() => snack.dismiss(head.id), head.duration)
+  }
+  return snack
+}
+
+const NAV_ITEMS = [
+  { key: 'home', label: '首頁', icon: 'home', path: '/' },
+  { key: 'homework', label: '作業', icon: 'assignment', path: '/homework' },
+  { key: 'pickup', label: '接送', icon: 'directions_walk', path: '/pickup' },
+  { key: 'exams', label: '成績', icon: 'grading', path: '/exams' },
+  { key: 'more', label: '更多', icon: 'menu', path: '/more' },
+]
+
+/* ===== 以下元件複製自 parent-component-status-pill.html ===== */
+/** PARENT-051 StatusPill：純展示，不可互動、不拿焦點；tone 預設 neutral */
+const StatusPill = {
+  props: {
+    label: { type: String, required: true },
+    tone: { type: String, default: 'neutral' },
+    icon: { type: String, default: '' },
+  },
+  template: `<span class="status-pill m3-label-large" :class="['status-pill--' + tone, { 'has-icon': !!icon }]">
+    <m3-icon v-if="icon" :name="icon" :size="18"></m3-icon><span class="status-pill__label">{{ label }}</span>
+  </span>`,
+}
+
+/* ===== 以下元件複製自 parent-component-skeleton.html ===== */
+/** PARENT-028 SkeletonBlock */
+const SkeletonBlock = {
+  props: {
+    variant: { type: String, default: 'line' },
+    count: { type: Number, default: 1 },
+    width: { type: String, default: '' },
+    height: { type: String, default: '' },
+  },
+  computed: {
+    n() { return Math.max(1, this.count) },
+    custom() {
+      const s = {}
+      if (this.width) s.width = this.width
+      if (this.height) s.height = this.height
+      return s
+    },
+  },
+  methods: {
+    lineStyle(i) {
+      if (this.width || this.height) return this.custom
+      return this.n > 1 && i === this.n ? { width: '60%' } : null
+    },
+  },
+  template: `<div class="skeleton" :class="'skeleton--' + variant" aria-busy="true">
+    <span class="visually-hidden">載入中</span>
+    <template v-if="variant === 'card'">
+      <div v-for="i in n" :key="i" class="skeleton-card" :style="custom" aria-hidden="true">
+        <span class="sk" style="width: 40%; height: 16px"></span>
+        <span class="sk"></span>
+        <span class="sk" style="width: 70%"></span>
+      </div>
+    </template>
+    <template v-else-if="variant === 'row'">
+      <div v-for="i in n" :key="i" class="skeleton-row" :style="custom" aria-hidden="true">
+        <span class="sk sk--circle"></span>
+        <span class="skeleton-row__lines"><span class="sk" style="width: 30%"></span><span class="sk" style="width: 70%; height: 12px"></span></span>
+      </div>
+    </template>
+    <template v-else>
+      <span v-for="i in n" :key="i" class="sk skeleton-line" :style="lineStyle(i)" aria-hidden="true"></span>
+    </template>
+  </div>`,
+}
+
+/* ===== 以下元件複製自 parent-component-empty-state.html ===== */
+/** PARENT-029 ParentEmptyState */
+const ParentEmptyState = {
+  props: {
+    variant: { type: String, default: 'empty' },
+    icon: { type: String, default: '' },
+    title: { type: String, required: true },
+    description: { type: String, default: '' },
+    actionLabel: { type: String, default: '' },
+  },
+  emits: ['action'],
+  computed: {
+    isError() { return this.variant === 'error' },
+    resolvedIcon() { return this.icon || (this.isError ? 'error' : 'inbox') },
+    label() { return this.actionLabel || (this.isError ? '重試' : '') },
+  },
+  template: `<div class="empty-state" :class="'empty-state--' + variant" :role="isError ? 'alert' : null">
+    <span class="empty-state__icon"><m3-icon :name="resolvedIcon" :size="48"></m3-icon></span>
+    <p class="empty-state__title m3-title-medium">{{ title }}</p>
+    <p v-if="description" class="empty-state__desc m3-body-medium">{{ description }}</p>
+    <div v-if="label" class="empty-state__action">
+      <m3-button variant="tonal" :icon="isError ? 'refresh' : ''" @click="$emit('action')">{{ label }}</m3-button>
+    </div>
+  </div>`,
+}
+/* ===== 以下元件複製自 parent-component-child-context-header.html ===== */
+/** 稿件用：以 canvas 產生示範人像（data URL，不連外） */
+function makePhotoUrl(bgToken, fgToken) {
+  const c = document.createElement('canvas')
+  c.width = 160; c.height = 160
+  const ctx = c.getContext('2d')
+  const css = getComputedStyle(document.documentElement)
+  ctx.fillStyle = css.getPropertyValue(bgToken).trim() || 'gray'
+  ctx.fillRect(0, 0, 160, 160)
+  ctx.fillStyle = css.getPropertyValue(fgToken).trim() || 'black'
+  ctx.beginPath(); ctx.arc(80, 64, 32, 0, Math.PI * 2); ctx.fill()
+  ctx.beginPath(); ctx.ellipse(80, 160, 62, 54, 0, Math.PI, 0); ctx.fill()
+  return c.toDataURL('image/jpeg', 0.8)
+}
+/** PARENT-050 ChildContextHeader（openSignal 只為稿件「開啟 sheet」按鈕，實作沒有這個 prop） */
+const ChildContextHeader = {
+  props: {
+    children: { type: Array, required: true },
+    selectedId: { type: String, default: null },
+    openSignal: { type: Number, default: 0 },
+  },
+  emits: ['select'],
+  data() { return { open: false, failed: {} } },
+  computed: {
+    current() { return this.children.find((c) => c.id === this.selectedId) || this.children[0] || null },
+    multi() { return this.children.length > 1 },
+  },
+  watch: {
+    openSignal() { if (this.multi) this.open = true },
+  },
+  methods: {
+    sub(c) { return [`${c.grade_level} 年級`, c.class_name].filter(Boolean).join(' · ') },
+    showPhoto(c) { return !!c.photo_url && !this.failed[c.id] },
+    pick(id) {
+      if (id !== this.current.id) this.$emit('select', id)
+      this.open = false
+    },
+  },
+  template: `<template v-if="current">
+    <component :is="multi ? 'button' : 'div'" :type="multi ? 'button' : null" class="cch" :class="{ 'is-interactive m3-state': multi }"
+      :aria-haspopup="multi ? 'dialog' : null" @click="multi && (open = true)">
+      <span class="cch__avatar m3-title-medium" aria-hidden="true">
+        <img v-if="showPhoto(current)" :src="current.photo_url" alt="" @error="failed[current.id] = true">
+        <template v-else>{{ current.name.slice(0, 1) }}</template>
+      </span>
+      <span class="cch__text">
+        <span class="cch__name-row">
+          <span class="cch__name m3-title-medium">{{ current.name }}</span>
+          <status-pill v-if="current.status === 'suspended'" label="暫停" tone="warning"></status-pill>
+        </span>
+        <span class="cch__sub m3-body-medium">{{ sub(current) }}</span>
+        <span v-if="current.school_name" class="cch__school m3-body-small">{{ current.school_name }}</span>
+      </span>
+      <template v-if="multi">
+        <span class="visually-hidden">，切換小孩</span>
+        <m3-icon class="cch__chevron" name="expand_more"></m3-icon>
+      </template>
+    </component>
+    <parent-bottom-sheet v-if="multi" v-model="open" title="選擇小孩">
+      <ul class="cch-list">
+        <li v-for="c in children" :key="c.id">
+          <button type="button" class="cch-option m3-state" :class="{ 'is-selected': c.id === current.id }"
+            :aria-current="c.id === current.id ? 'true' : null" @click="pick(c.id)">
+            <span class="cch-option__avatar m3-title-small" aria-hidden="true">
+              <img v-if="showPhoto(c)" :src="c.photo_url" alt="" @error="failed[c.id] = true">
+              <template v-else>{{ c.name.slice(0, 1) }}</template>
+            </span>
+            <span class="cch-option__text">
+              <span class="cch__name-row">
+                <span class="cch-option__name m3-body-large">{{ c.name }}</span>
+                <status-pill v-if="c.status === 'suspended'" label="暫停" tone="warning"></status-pill>
+              </span>
+              <span class="cch-option__sub m3-body-medium">{{ sub(c) }}</span>
+            </span>
+            <m3-icon v-if="c.id === current.id" class="cch-option__check" name="check"></m3-icon>
+          </button>
+        </li>
+      </ul>
+    </parent-bottom-sheet>
+  </template>`,
+}
+/* ===== 以下元件複製自 parent-component-pickup-reply-message.html ===== */
+/** FRONTEND-003 formatTime 的稿件版：UTC ISO → 台北 HH:MM */
+const fmtTime = (iso) => {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false }).format(d)
+}
+const SOURCE_META = {
+  auto: { icon: 'smart_toy', label: '系統自動回覆' },
+  staff: { icon: 'person', label: '老師回覆' },
+}
+const WAITING_TEXT = '已通知老師，稍後回覆預計時間'
+
+/** PARENT-094 PickupReplyMessage */
+const PickupReplyMessage = {
+  props: {
+    request: { type: Object, required: true },
+    compact: { type: Boolean, default: false },
+  },
+  computed: {
+    eta() { return this.request.reply_ready_eta || null },
+    etaText() { return this.eta ? `預計 ${this.eta} 可接送` : '' },
+    waiting() { return !this.eta && !this.request.reply_message },
+    source() { return SOURCE_META[this.request.reply_source] || null },
+    /** 訊息第一行與 ETA 大字完全相同時（系統自動回覆的固定格式）省略該行 */
+    bubbleText() {
+      const m = this.request.reply_message
+      if (!m) return ''
+      if (!this.eta) return m
+      const [first, ...rest] = m.split('\n')
+      return first.trim() === this.etaText ? rest.join('\n').trim() : m
+    },
+    compactText() { return this.etaText || (this.request.reply_message || '').split('\n')[0] },
+    repliedAt() { return this.request.replied_at ? fmtTime(this.request.replied_at) : '' },
+  },
+  setup() { return { WAITING_TEXT } },
+  template: `<div class="prm" :class="{ 'is-compact': compact }" aria-live="polite">
+    <template v-if="waiting">
+      <div class="prm-wait">
+        <m3-icon class="prm-wait__icon" name="hourglass_top" :size="compact ? 18 : 24"></m3-icon>
+        <span class="prm-wait__text" :class="compact ? 'm3-body-medium' : 'm3-body-large'">{{ WAITING_TEXT }}</span>
+        <span v-if="compact" class="m3-spinner" aria-hidden="true"></span>
+      </div>
+      <div v-if="!compact" class="prm-progress" role="progressbar" aria-label="等待老師回覆"><span class="prm-progress__bar"></span></div>
+    </template>
+    <template v-else-if="compact">
+      <p class="prm-compact__text m3-title-medium">{{ compactText }}</p>
+      <p v-if="source" class="prm-source m3-label-small"><m3-icon :name="source.icon" :size="14"></m3-icon>{{ source.label }}</p>
+    </template>
+    <template v-else>
+      <p v-if="source" class="prm-source m3-label-medium"><m3-icon :name="source.icon" :size="16"></m3-icon>{{ source.label }}</p>
+      <p v-if="eta" class="prm-eta m3-headline-small">預計 <span class="prm-eta__time">{{ eta }}</span> 可接送</p>
+      <p v-if="bubbleText" class="prm-bubble m3-body-large">{{ bubbleText }}</p>
+      <p v-if="repliedAt" class="prm-time m3-body-small">{{ repliedAt }} 回覆</p>
+    </template>
+  </div>`,
+}
+/* ===== 以下元件複製自 parent-component-pickup-progress-steps.html（fmtTime 同上方 PickupReplyMessage 區塊，不重複宣告） ===== */
+const OPEN_STATUSES = ['pending', 'acknowledged', 'arrived']
+/** 目前步驟的提示文字 */
+const CURRENT_HINTS = {
+  ack: '等待老師確認',
+  arrived: '抵達安親班門口後請按「我到了」',
+  completed: '老師正在帶小孩出來',
+}
+
+/** PARENT-095 PickupProgressSteps */
+const PickupProgressSteps = {
+  props: { request: { type: Object, required: true } },
+  computed: {
+    ended() { return this.request.status === 'cancelled' || this.request.status === 'expired' },
+    steps() {
+      const r = this.request
+      const ackDone = ['acknowledged', 'arrived', 'completed'].includes(r.status) || !!r.arrived_at
+      // completed 但 arrived_at 為 null → 第 3 步視為完成、不顯示時間
+      const arrivedDone = !!r.arrived_at || r.status === 'completed'
+      const doneAll = r.status === 'completed'
+      const list = [
+        { key: 'sent', label: '已送出', done: true, time: fmtTime(r.created_at) },
+        { key: 'ack', label: '老師已確認', done: ackDone, time: '' },
+        { key: 'arrived', label: '我已到達', done: arrivedDone, time: r.arrived_at ? fmtTime(r.arrived_at) : '' },
+        { key: 'completed', label: '已接走', done: doneAll, time: doneAll && r.completed_at ? fmtTime(r.completed_at) : '', sub: doneAll && r.picked_up_by_name ? `由 ${r.picked_up_by_name} 接走` : '' },
+      ]
+      const currentIdx = OPEN_STATUSES.includes(r.status) ? list.findIndex((s) => !s.done) : -1
+      return list.map((s, i) => ({
+        ...s,
+        current: i === currentIdx,
+        lineDone: i < list.length - 1 && list[i + 1].done,
+        sub: s.sub || (i === currentIdx ? CURRENT_HINTS[s.key] : ''),
+      }))
+    },
+    endedText() {
+      if (this.request.status === 'cancelled') return `已取消（${fmtTime(this.request.cancelled_at)}）`
+      if (this.request.status === 'expired') return '接送請求已逾時自動結束'
+      return ''
+    },
+  },
+  template: `<div class="pps" :class="{ 'is-ended': ended }">
+    <ol class="pps-list" aria-label="接送進度">
+      <li v-for="s in steps" :key="s.key" class="pps-step" :class="{ 'is-done': s.done, 'is-current': s.current, 'is-line-done': s.lineDone }"
+        :aria-current="s.current ? 'step' : null">
+        <span class="pps-marker" aria-hidden="true"><m3-icon v-if="s.done" name="check" :size="16"></m3-icon></span>
+        <div class="pps-body">
+          <div class="pps-label m3-body-large">{{ s.label }}<span class="visually-hidden">（{{ s.done ? '已完成' : s.current ? '進行中' : '未完成' }}）</span></div>
+          <div v-if="s.sub" class="pps-sub m3-body-medium">{{ s.sub }}</div>
+        </div>
+        <span v-if="s.time" class="pps-time m3-body-medium">{{ s.time }}</span>
+      </li>
+    </ol>
+    <div v-if="endedText" class="pps-ended m3-body-medium">
+      <m3-icon class="pps-ended__icon" :name="request.status === 'cancelled' ? 'cancel' : 'timer_off'"></m3-icon><span>{{ endedText }}</span>
+    </div>
+  </div>`,
+}
+/* ===== 以下元件複製自 parent-component-arrival-time-picker.html ===== */
+/** 稿內以「台北時間的時 / 分 / 秒」模擬 now；實作用 FRONTEND-003 的台北時間工具從 Date 取出。 */
+const pad2 = (n) => String(n).padStart(2, '0')
+const toHHMM = (mins) => `${pad2(Math.floor(mins / 60))}:${pad2(mins % 60)}`
+const nowSeconds = (now) => now.h * 3600 + now.m * 60 + now.s
+/** now + n 分鐘，秒數無條件進位到分鐘；超過 23:59 回傳 null（跨午夜） */
+function relativeHHMM(now, minutes) {
+  const total = Math.ceil((nowSeconds(now) + minutes * 60) / 60)
+  return total > 23 * 60 + 59 ? null : toHHMM(total)
+}
+const RELATIVE = [10, 20, 30]
+let pickerUid = 0
+
+/** PARENT-096 ArrivalTimePicker */
+const ArrivalTimePicker = {
+  props: {
+    modelValue: { type: String, default: null },
+    now: { type: Object, required: true },
+  },
+  emits: ['update:modelValue'],
+  data() { return { uid: ++pickerUid, choice: this.modelValue ? 'custom' : 'none', custom: this.modelValue || '' } },
+  computed: {
+    labelId() { return `arrival-label-${this.uid}` },
+    options() {
+      return [
+        { key: 'none', label: '不指定' },
+        ...RELATIVE.map((m) => ({ key: m, label: `約 ${m} 分鐘後`, time: relativeHHMM(this.now, m) })),
+        { key: 'custom', label: '自選時間' },
+      ]
+    },
+    nowHHMM() { return toHHMM(Math.floor(nowSeconds(this.now) / 60)) },
+    customError() { return this.choice === 'custom' && this.custom && this.custom < this.nowHHMM ? '預計抵達時間不能早於現在' : '' },
+    value() {
+      if (this.choice === 'none') return null
+      if (this.choice === 'custom') return this.custom && !this.customError ? this.custom : null
+      return relativeHHMM(this.now, this.choice)
+    },
+  },
+  watch: {
+    value: { immediate: true, handler(v) { if (v !== this.modelValue) this.$emit('update:modelValue', v) } },
+    modelValue(v) { if (v === null && this.choice !== 'none' && this.value !== null) this.choice = 'none' },
+    options() { const opt = this.options.find((o) => o.key === this.choice); if (opt && opt.time === null) this.choice = 'none' },
+  },
+  methods: {
+    pick(opt) {
+      if (opt.time === null) return
+      if (opt.key === 'custom' && this.choice !== 'custom') this.custom = relativeHHMM(this.now, 10) || ''
+      this.choice = opt.key
+    },
+  },
+  template: `<div class="arrival" role="group" :aria-labelledby="labelId">
+    <p :id="labelId" class="arrival__label m3-title-small">預計抵達時間</p>
+    <div class="arrival__chips">
+      <button v-for="opt in options" :key="opt.key" type="button" class="m3-chip m3-chip--filter m3-state"
+        :class="{ 'is-selected': choice === opt.key, 'has-icon': choice === opt.key }" :aria-pressed="String(choice === opt.key)"
+        :disabled="opt.time === null" @click="pick(opt)">
+        <m3-icon v-if="choice === opt.key" class="m3-chip__icon" name="check" :size="18"></m3-icon>
+        <span class="m3-label-large">{{ opt.label }}<template v-if="opt.time"> · <span class="arrival__time">{{ opt.time }}</span></template></span>
+      </button>
+    </div>
+    <div v-if="choice === 'custom'" class="arrival__custom">
+      <m3-text-field v-model="custom" type="time" label="抵達時間" :error-text="customError" supporting-text="今天的時間；清空時視同不指定"></m3-text-field>
+    </div>
+  </div>`,
+}
+/* ===== 以下元件複製自 parent-component-confirm-dialog.html ===== */
+/** PARENT-026 ConfirmDialog（forceFocus 只為稿件示範鍵盤焦點，實作沒有這個 prop） */
+const DIALOG_FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+let dialogUid = 0
+const ConfirmDialog = {
+  props: {
+    open: { type: Boolean, required: true },
+    title: { type: String, required: true },
+    message: { type: String, default: '' },
+    confirmLabel: { type: String, default: '確定' },
+    cancelLabel: { type: String, default: '取消' },
+    destructive: { type: Boolean, default: false },
+    loading: { type: Boolean, default: false },
+    forceFocus: { type: Boolean, default: false },
+  },
+  emits: ['confirm', 'cancel'],
+  data() { const id = ++dialogUid; return { titleId: `confirm-title-${id}`, msgId: `confirm-msg-${id}`, prevFocus: null } },
+  watch: {
+    open: {
+      immediate: true,
+      handler(v) {
+        if (v) {
+          this.prevFocus = document.activeElement
+          document.addEventListener('keydown', this.onDocKeydown)
+          nextTick(() => { const b = this.$refs.cancelBtn; if (b) b.$el.focus({ preventScroll: true }) })
+        } else {
+          document.removeEventListener('keydown', this.onDocKeydown)
+          if (this.prevFocus && typeof this.prevFocus.focus === 'function') this.prevFocus.focus({ preventScroll: true })
+        }
+      },
+    },
+  },
+  beforeUnmount() { document.removeEventListener('keydown', this.onDocKeydown) },
+  methods: {
+    requestCancel() { if (!this.loading) this.$emit('cancel') },
+    onConfirm() { if (!this.loading) this.$emit('confirm') },
+    onDocKeydown(e) { if (e.key === 'Escape') { e.stopPropagation(); this.requestCancel() } },
+    onKeydown(e) {
+      if (e.key !== 'Tab') return
+      const list = Array.from(this.$refs.dialog.querySelectorAll(DIALOG_FOCUSABLE))
+      if (!list.length) { e.preventDefault(); return }
+      const first = list[0]
+      const last = list[list.length - 1]
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    },
+  },
+  template: `<transition name="dialog" :duration="{ enter: 200, leave: 150 }">
+    <div v-if="open" class="dialog-layer">
+      <div class="dialog-scrim" @click="requestCancel"></div>
+      <div ref="dialog" class="dialog" role="alertdialog" aria-modal="true" :aria-labelledby="titleId"
+        :aria-describedby="message ? msgId : null" tabindex="-1" @keydown="onKeydown">
+        <h2 :id="titleId" class="dialog__title m3-headline-small">{{ title }}</h2>
+        <p v-if="message" :id="msgId" class="dialog__message m3-body-medium">{{ message }}</p>
+        <div v-if="$slots.default" class="dialog__extra"><slot></slot></div>
+        <div class="dialog__actions">
+          <m3-button ref="cancelBtn" variant="text" :disabled="loading" :class="{ 'force-focus': forceFocus }" @click="requestCancel">{{ cancelLabel }}</m3-button>
+          <m3-button :class="{ 'is-destructive': destructive }" :loading="loading" @click="onConfirm">{{ confirmLabel }}</m3-button>
+        </div>
+      </div>
+    </div>
+  </transition>`,
+}
+/* ===== 以下元件複製自 parent-component-connection-banner.html ===== */
+/** PARENT-174 ConnectionBanner。
+    稿內以 props（online / wsEnabled / wsStatus）代替 navigator.onLine 與 PARENT-173 parentWs store；
+    實作只有 delayMs 一個 prop，其餘自己讀 window online / offline 事件與 store。pollNow 稿內以事件代替。 */
+const ConnectionBanner = {
+  props: {
+    delayMs: { type: Number, default: 3000 },
+    online: { type: Boolean, default: true },
+    wsEnabled: { type: Boolean, default: true },
+    wsStatus: { type: String, default: 'open' },
+  },
+  emits: ['poll-now'],
+  data() { return { wsDownLong: false, timer: null } },
+  computed: {
+    wsDown() { return this.wsEnabled && (this.wsStatus === 'reconnecting' || this.wsStatus === 'closed') },
+    variant() {
+      if (!this.online) return 'offline'
+      if (this.wsDownLong) return 'ws'
+      return null
+    },
+  },
+  watch: {
+    wsDown: { immediate: true, handler(down) { this.schedule(down) } },
+  },
+  beforeUnmount() { clearTimeout(this.timer) },
+  methods: {
+    schedule(down) {
+      clearTimeout(this.timer)
+      if (!down) { this.wsDownLong = false; return }
+      if (this.delayMs <= 0) { this.wsDownLong = true; return }
+      this.timer = setTimeout(() => { this.wsDownLong = this.wsDown }, this.delayMs)
+    },
+  },
+  template: `<transition name="conn-banner">
+    <div v-if="variant" class="conn-banner" :class="'conn-banner--' + variant" role="status">
+      <m3-icon :name="variant === 'offline' ? 'wifi_off' : 'sync_problem'" :size="20"></m3-icon>
+      <span class="conn-banner__text m3-body-medium">{{ variant === 'offline' ? '目前離線，恢復網路後會自動更新' : '即時更新中斷，正在重新連線…' }}</span>
+      <button v-if="variant === 'ws'" type="button" class="conn-banner__action m3-state m3-label-large" @click="$emit('poll-now')">立即更新</button>
+    </div>
+  </transition>`,
+}
+/* ============================================================
+   本稿資料（PickupView，PARENT-097）
+   ============================================================ */
+const PAGE_COMPONENTS = { StatusPill, SkeletonBlock, ParentEmptyState, ChildContextHeader, PickupReplyMessage, PickupProgressSteps, ArrivalTimePicker, ConfirmDialog, ConnectionBanner }
+
+/** FRONTEND-005 PICKUP_REQUEST_STATUS_META 的複本（稿件用；實作直接 import statusLabels） */
+const PICKUP_REQUEST_STATUS_META = {
+  pending: { label: '待回覆', tone: 'warning' },
+  acknowledged: { label: '已確認', tone: 'info' },
+  arrived: { label: '家長已到', tone: 'danger' },
+  completed: { label: '已接走', tone: 'success' },
+  cancelled: { label: '已取消', tone: 'info' },
+  expired: { label: '已逾時', tone: 'info' },
+}
+const statusMeta = (s) => PICKUP_REQUEST_STATUS_META[s] || { label: s, tone: 'info' }
+
+/** 稿內「現在」：2026-10-07（三）台北 17:22:20 */
+const NOW = '2026-10-07T09:22:00Z'
+const WAIT_TEXT = '已通知老師，稍後回覆預計時間'
+
+/** 後端 error.message（BACKEND-406 / 180 的實際文案；pickup.window 預設 12:00～19:00、最晚抵達 19:00） */
+const BACKEND_MESSAGES = {
+  pickup_window_closed: '接送請求開放時間為 12:00～19:00',
+  student_not_available: '學生今天請假、缺席或已離班',
+  not_service_day: '今天不是營業日',
+  expected_arrival_too_late: '預計抵達時間最晚為 19:00',
+  expected_arrival_in_past: '預計抵達時間已經過了',
+  student_not_active: '此學生已退班，無法進行此操作',
+}
+/** 「通知安親班」在表單卡內顯示 error.message 的錯誤碼 */
+const FORM_ERROR_CODES = Object.keys(BACKEND_MESSAGES)
+/** useArriveNow（PARENT-105）以 snackbar 顯示 error.message 的錯誤碼 */
+const ARRIVE_MESSAGE_CODES = ['pickup_window_closed', 'student_not_available', 'not_service_day', 'student_not_active']
+const ARRIVE_SNACK_CODES = ['invalid_pickup_status', 'pickup_request_not_found', 'pickup_not_allowed']
+const SNACK_TEXT = {
+  pickup_request_exists: '今天已有接送請求，已更新狀態',
+  invalid_pickup_status: '狀態已更新，請確認後再操作',
+  pickup_request_not_found: '找不到這筆接送請求，已重新整理',
+  pickup_not_allowed: '您沒有這位小孩的接送權限',
+  server_error: '送出失敗，請稍後再試',
+}
+const WRITE_RESULTS = [
+  { value: '', label: '成功' },
+  { value: 'pickup_window_closed', label: '不在時段' },
+  { value: 'student_not_available', label: '請假 / 缺席 / 已離班' },
+  { value: 'not_service_day', label: '非營業日' },
+  { value: 'expected_arrival_too_late', label: '時間太晚' },
+  { value: 'expected_arrival_in_past', label: '時間已過' },
+  { value: 'student_not_active', label: '已退班' },
+  { value: 'pickup_request_exists', label: '已有進行中請求（409）' },
+  { value: 'invalid_pickup_status', label: '狀態已變更（409）' },
+  { value: 'pickup_request_not_found', label: '請求不存在（404）' },
+  { value: 'pickup_not_allowed', label: '無接送權限（403）' },
+  { value: 'server_error', label: '其他錯誤（500）' },
+]
+
+/* ---- GET /parent/pickup/requests/today（ParentPickupRequest）的稿件資料 ---- */
+const KID_NAMES = { s1: '王小明', s2: '王小華', s3: '王小美' }
+let reqSeq = 0
+/** can_cancel / can_mark_arrived 依後端規則（BACKEND-402）由 status 推出 */
+function withFlags(r) {
+  r.can_cancel = OPEN_STATUSES.includes(r.status)
+  r.can_mark_arrived = r.status === 'pending' || r.status === 'acknowledged'
+  return r
+}
+function R(o = {}) {
+  const sid = o.student_id || 's1'
+  return withFlags({
+    id: `r${++reqSeq}`, student_id: sid, student_name: KID_NAMES[sid], service_date: '2026-10-07', status: 'pending',
+    expected_arrival_at: null, reply_ready_eta: null, reply_message: null, reply_source: null, replied_at: null,
+    arrived_at: null, completed_at: null, picked_up_by_name: null, cancelled_at: null, created_at: '2026-10-07T09:05:00Z',
+    ...o,
+  })
+}
+const AUTO_DONE = { reply_message: '作業已完成，可以接送', reply_source: 'auto', replied_at: '2026-10-07T09:05:00Z' }
+const AUTO_ETA = { reply_ready_eta: '17:30', reply_message: '預計 17:30 可接送\n剩數學訂正', reply_source: 'auto', replied_at: '2026-10-07T09:05:00Z' }
+const AUTO_WAIT = { reply_message: WAIT_TEXT, reply_source: 'auto', replied_at: '2026-10-07T09:05:00Z' }
+/** 後端 compute_auto_reply（BACKEND-403）的稿件版：建立請求時立即自動回覆 */
+function autoReply(h) {
+  if (h.overall_status === 'done') return { reply_message: '作業已完成，可以接送', reply_source: 'auto', replied_at: NOW }
+  if (h.ready_eta) return { reply_ready_eta: h.ready_eta, reply_message: `預計 ${h.ready_eta} 可接送` + (h.note ? `\n${h.note}` : ''), reply_source: 'auto', replied_at: NOW }
+  return { reply_message: WAIT_TEXT, reply_source: 'auto', replied_at: NOW }
+}
+/** GET /parent/children/{id}/homework 的摘要（homeworkToday store） */
+const HW = {
+  progress: { total: 3, done: 2, overall_status: 'in_progress', ready_eta: '17:30', note: '剩數學訂正' },
+  done: { total: 3, done: 3, overall_status: 'done', ready_eta: null, note: null },
+  waiting: { total: 2, done: 0, overall_status: 'not_started', ready_eta: null, note: null },
+  none: { total: 0, done: 0, overall_status: 'not_started', ready_eta: null, note: null },
+}
+/** 王小華：老師已確認、預計 17:35 抵達（切換小孩時看進行中畫面） */
+const otherKidsRequests = () => [
+  R({ student_id: 's2', status: 'acknowledged', created_at: '2026-10-07T09:02:00Z', expected_arrival_at: '17:35', reply_message: '作業寫完了，正在收書包\n請由正門進入', reply_source: 'staff', replied_at: '2026-10-07T09:12:00Z' }),
+]
+const SCENARIOS = [
+  { group: '沒有進行中請求', key: 'form', label: '表單（作業 2/3 · 有 ETA）', hw: 'progress' },
+  { group: '沒有進行中請求', key: 'form-hwdone', label: '表單（作業已完成）', hw: 'done' },
+  { group: '沒有進行中請求', key: 'submitting', label: '送出中', hw: 'progress', submitting: true },
+  { group: '沒有進行中請求', key: 'err-window', label: '錯誤：不在時段', hw: 'progress', formError: 'pickup_window_closed' },
+  { group: '沒有進行中請求', key: 'err-leave', label: '錯誤：請假中', hw: 'none', formError: 'student_not_available' },
+  { group: '沒有進行中請求', key: 'err-closed', label: '錯誤：非營業日', hw: 'none', formError: 'not_service_day' },
+  { group: '沒有進行中請求', key: 'err-late', label: '錯誤：時間太晚', hw: 'progress', formError: 'expected_arrival_too_late', arrival: '19:30' },
+  { group: '沒有進行中請求', key: 'no-permission', label: '無接送權限', hw: 'progress', canPickup: false },
+  { group: '進行中', key: 'pending-done', label: 'pending · 自動回覆（作業完成）', hw: 'done', requests: () => [R(AUTO_DONE)] },
+  { group: '進行中', key: 'pending-eta', label: 'pending · 自動回覆（有 ETA）', hw: 'progress', requests: () => [R({ ...AUTO_ETA, expected_arrival_at: '17:40' })] },
+  { group: '進行中', key: 'pending-wait', label: 'pending · 自動回覆（等待老師）', hw: 'waiting', requests: () => [R(AUTO_WAIT)] },
+  { group: '進行中', key: 'pending-none', label: 'pending · 尚未回覆（後台關閉自動回覆）', hw: 'waiting', requests: () => [R()] },
+  { group: '進行中', key: 'ack', label: 'acknowledged · 老師回覆', hw: 'progress', requests: () => [R({ status: 'acknowledged', expected_arrival_at: '17:40', reply_ready_eta: '17:40', reply_message: '國語訂正中，預計 17:40 可接送', reply_source: 'staff', replied_at: '2026-10-07T09:12:00Z' })] },
+  { group: '進行中', key: 'arrived', label: 'arrived（老師確認後到達）', hw: 'done', requests: () => [R({ status: 'arrived', reply_message: '作業寫完了，正在收書包', reply_source: 'staff', replied_at: '2026-10-07T09:12:00Z', arrived_at: '2026-10-07T09:20:00Z' })] },
+  { group: '進行中', key: 'arrived-now', label: 'arrived（「我已經到了」捷徑）', hw: 'progress', requests: () => [R({ ...AUTO_ETA, status: 'arrived', created_at: '2026-10-07T09:18:00Z', arrived_at: '2026-10-07T09:18:00Z', replied_at: '2026-10-07T09:18:00Z' })] },
+  { group: '已結束 / 今日紀錄', key: 'completed', label: '已接走（成功卡 + 今日紀錄）', hw: 'done', requests: () => [R({ ...AUTO_WAIT, status: 'cancelled', created_at: '2026-10-07T08:00:00Z', replied_at: '2026-10-07T08:00:00Z', cancelled_at: '2026-10-07T08:12:00Z' }), R({ ...AUTO_DONE, status: 'completed', created_at: '2026-10-07T08:50:00Z', replied_at: '2026-10-07T08:50:00Z', arrived_at: '2026-10-07T09:12:00Z', completed_at: '2026-10-07T09:18:00Z', picked_up_by_name: '王媽媽' })] },
+  { group: '已結束 / 今日紀錄', key: 'cancelled', label: '上一筆已取消', hw: 'progress', requests: () => [R({ ...AUTO_ETA, status: 'cancelled', cancelled_at: '2026-10-07T09:10:00Z' })] },
+  { group: '已結束 / 今日紀錄', key: 'expired', label: '上一筆已逾時', hw: 'progress', requests: () => [R({ ...AUTO_WAIT, status: 'expired', created_at: '2026-10-07T06:30:00Z', replied_at: '2026-10-07T06:30:00Z' })] },
+  { group: '載入', key: 'loading', label: '首次載入骨架', loading: true },
+  { group: '載入', key: 'load-error', label: '載入失敗', loadError: true },
+]
+const WS_EVENTS = [
+  { key: 'reply', label: '老師回覆（預計 17:40）' },
+  { key: 'ack', label: '老師確認' },
+  { key: 'completed', label: '已接走' },
+  { key: 'staff-cancel', label: '老師取消' },
+]
+
+function pageSetup({ snack }) {
+  const photoA = makePhotoUrl('--m3-tertiary-container', '--m3-tertiary')
+  const photoB = makePhotoUrl('--m3-secondary-container', '--m3-secondary')
+  const kids = {
+    ming: { id: 's1', status: 'active', name: '王小明', grade_level: 3, class_name: '中年級 A 班', school_name: '某某國小', photo_url: photoA },
+    hua: { id: 's2', status: 'active', name: '王小華', grade_level: 5, class_name: '高年級 B 班', school_name: '某某國小', photo_url: null },
+    mei: { id: 's3', status: 'active', name: '王小美', grade_level: 1, class_name: '低年級班', school_name: '某某實驗國民小學', photo_url: photoB },
+  }
+  const CHILD_SETS = { multi: [kids.ming, kids.hua, kids.mei], single: [kids.ming] }
+  const childMode = ref('multi')
+  const children = computed(() => CHILD_SETS[childMode.value])
+  const selectedId = ref('s1')
+  const childrenLoading = ref(false)
+
+  /* pickupRequests store（PARENT-093）的稿件版：openFor / latestFor / historyFor */
+  const store = reactive({ items: [] })
+  const listState = ref('ready') // loading | ready | error
+  const pending = ref(null) // pendingAction（「通知安親班」）；「我到了 / 我已經到了」用 arrive.busy
+  const reqsOf = (id) => store.items.filter((r) => r.student_id === id).sort((a, b) => b.created_at.localeCompare(a.created_at))
+  const openReq = computed(() => reqsOf(selectedId.value).find((r) => OPEN_STATUSES.includes(r.status)) || null)
+  const latest = computed(() => reqsOf(selectedId.value)[0] || null)
+  const history = computed(() => reqsOf(selectedId.value).filter((r) => !OPEN_STATUSES.includes(r.status)))
+  const doneReq = computed(() => (!openReq.value && latest.value && latest.value.status === 'completed' ? latest.value : null))
+  function upsert(r) {
+    const i = store.items.findIndex((x) => x.id === r.id)
+    if (i >= 0) store.items.splice(i, 1, r)
+    else store.items.push(r)
+    return store.items.find((x) => x.id === r.id)
+  }
+  const remove = (id) => { store.items = store.items.filter((x) => x.id !== id) }
+  const markArrivedLocal = (r) => withFlags(Object.assign(r, { status: 'arrived', arrived_at: NOW }))
+  const completeLocal = (r) => withFlags(Object.assign(r, { status: 'completed', completed_at: NOW, picked_up_by_name: '王媽媽' }))
+
+  /* 小孩詳情（getChild → my_guardian.can_pickup）與作業（homeworkToday）的稿件版 */
+  const details = reactive({ s1: { can_pickup: true }, s2: { can_pickup: true }, s3: { can_pickup: false } })
+  const hw = reactive({ s1: HW.progress, s2: HW.done, s3: HW.none })
+  const seen = reactive({ s1: true })
+  const detailLoading = ref(false)
+  const hwLoading = ref(false)
+  const canPickup = computed(() => !details[selectedId.value] || details[selectedId.value].can_pickup !== false)
+  const mainState = computed(() => {
+    if (childrenLoading.value || listState.value === 'loading' || detailLoading.value) return 'loading'
+    if (listState.value === 'error') return 'error'
+    return 'ready'
+  })
+  const hwHint = computed(() => {
+    if (childrenLoading.value || hwLoading.value) return null
+    const h = hw[selectedId.value]
+    if (!h) return null
+    if (h.overall_status === 'done') return { done: true, text: '作業已完成' }
+    const head = h.total > 0 ? `作業進度 ${h.done}/${h.total}` : '今天尚無作業項目'
+    return { done: false, text: h.ready_eta ? `${head} · 預計 ${h.ready_eta} 可接送` : head }
+  })
+
+  /* 表單（我要來接） */
+  const now = reactive({ h: 17, m: 22, s: 20 })
+  const arrival = ref(null)
+  const pickerKey = ref(0)
+  const formError = ref('')
+  const formExpanded = ref(false)
+  const writeResult = ref('')
+  const takeResult = () => { const c = writeResult.value; writeResult.value = ''; return c }
+  const resetForm = () => { arrival.value = null; pickerKey.value++; formError.value = '' }
+  function submit() {
+    if (pending.value || arrive.busy) return
+    formError.value = ''
+    pending.value = 'create'
+    const id = selectedId.value
+    const expected = arrival.value
+    setTimeout(() => {
+      pending.value = null
+      const code = takeResult()
+      if (code) { onCreateError(code, id); return }
+      upsert(R({ student_id: id, created_at: NOW, expected_arrival_at: expected, ...autoReply(hw[id]) }))
+      resetForm()
+      formExpanded.value = false
+      snack.show('已通知安親班')
+    }, 1200)
+  }
+  function onCreateError(code, id) {
+    if (FORM_ERROR_CODES.includes(code)) { formError.value = BACKEND_MESSAGES[code]; return }
+    if (code === 'pickup_request_exists') {
+      // store 先 load(true)：同步到別台裝置已建立的請求（老師已確認、預計 17:45）
+      upsert(R({ student_id: id, status: 'acknowledged', created_at: '2026-10-07T09:15:00Z', reply_ready_eta: '17:45', reply_message: '預計 17:45 可接送', reply_source: 'staff', replied_at: '2026-10-07T09:18:00Z' }))
+      snack.show(SNACK_TEXT.pickup_request_exists, { tone: 'error' })
+      return
+    }
+    if (code === 'pickup_not_allowed') details[id] = { can_pickup: false } // 重抓小孩詳情的結果
+    snack.show(SNACK_TEXT[code] || SNACK_TEXT.server_error, { tone: 'error' })
+  }
+
+  /* useArriveNow（PARENT-105）的稿件版：確認 → 先關對話框 → 送出 */
+  const arrive = reactive({
+    confirmOpen: false,
+    skipNextTime: false,
+    skipStored: false,
+    busy: false,
+    target: null,
+    request(childId, openRequestId) {
+      if (arrive.busy || pending.value) return
+      arrive.target = { childId, openRequestId }
+      if (arrive.skipStored) { runArrive(); return }
+      arrive.skipNextTime = false
+      arrive.confirmOpen = true
+    },
+    confirm() {
+      if (arrive.busy) return
+      if (arrive.skipNextTime) arrive.skipStored = true
+      arrive.confirmOpen = false
+      runArrive()
+    },
+    dismiss() { arrive.confirmOpen = false },
+  })
+  function runArrive() {
+    const { childId, openRequestId } = arrive.target
+    arrive.busy = true
+    setTimeout(() => {
+      arrive.busy = false
+      const code = takeResult()
+      const open = openRequestId ? store.items.find((r) => r.id === openRequestId) : null
+      if (!code) {
+        if (open) markArrivedLocal(open)
+        else upsert(R({ student_id: childId, status: 'arrived', created_at: NOW, arrived_at: NOW, ...autoReply(hw[childId]) }))
+        resetForm()
+        snack.show('已通知老師您到了')
+        return
+      }
+      if (code === 'pickup_request_exists' && !openRequestId) {
+        // 「我已經到了」遇到別台裝置建立的請求：store 改對該請求呼叫「我到了」，不先報錯
+        markArrivedLocal(upsert(R({ ...AUTO_ETA, student_id: childId, status: 'acknowledged', created_at: '2026-10-07T09:15:00Z' })))
+        resetForm()
+        snack.show('已通知老師您到了')
+        return
+      }
+      if (code === 'invalid_pickup_status' && open) completeLocal(open)
+      if (code === 'pickup_request_not_found' && open) remove(open.id)
+      let text = SNACK_TEXT.server_error
+      if (ARRIVE_SNACK_CODES.includes(code)) text = SNACK_TEXT[code]
+      else if (ARRIVE_MESSAGE_CODES.includes(code) && !openRequestId) text = BACKEND_MESSAGES[code]
+      snack.show(text, { tone: 'error' })
+    }, 900)
+  }
+
+  /* 取消接送 */
+  const cancelOpen = ref(false)
+  const cancelLoading = ref(false)
+  function confirmCancel() {
+    if (cancelLoading.value) return
+    const target = openReq.value
+    cancelLoading.value = true
+    setTimeout(() => {
+      cancelLoading.value = false
+      const code = takeResult()
+      if (code === 'pickup_request_not_found' || code === 'invalid_pickup_status') {
+        // store 先 load(true) 同步：請求已不存在 / 已被老師交付
+        if (target && code === 'pickup_request_not_found') remove(target.id)
+        else if (target) completeLocal(target)
+        cancelOpen.value = false
+        snack.show(SNACK_TEXT[code], { tone: 'error' })
+        return
+      }
+      if (code) { snack.show(SNACK_TEXT.server_error, { tone: 'error' }); return } // 對話框保持開啟，可再按或「先不要」
+      if (target) withFlags(Object.assign(target, { status: 'cancelled', cancelled_at: NOW }))
+      cancelOpen.value = false
+      resetForm()
+      snack.show('已取消接送')
+    }, 900)
+  }
+
+  /* 切換小孩：今日請求共用不重抓；小孩詳情與作業第一次取得前顯示骨架 */
+  function selectChild(id) {
+    if (id === selectedId.value) return
+    selectedId.value = id
+    resetForm()
+    formExpanded.value = false
+    if (!seen[id]) {
+      seen[id] = true
+      detailLoading.value = true
+      hwLoading.value = true
+      setTimeout(() => { hwLoading.value = false }, 500)
+      setTimeout(() => { detailLoading.value = false }, 700)
+    }
+  }
+  const setChildMode = (mode) => {
+    childMode.value = mode
+    if (!CHILD_SETS[mode].some((c) => c.id === selectedId.value)) selectChild('s1')
+  }
+
+  /* 情境（右側切換） */
+  const scenarioGroups = ['沒有進行中請求', '進行中', '已結束 / 今日紀錄', '載入'].map((label) => ({ label, items: SCENARIOS.filter((s) => s.group === label) }))
+  const currentScenario = ref('form')
+  function applyScenario(key) {
+    const scn = SCENARIOS.find((s) => s.key === key)
+    currentScenario.value = key
+    selectedId.value = 's1'
+    childrenLoading.value = !!scn.loading
+    listState.value = scn.loading ? 'loading' : scn.loadError ? 'error' : 'ready'
+    detailLoading.value = false
+    hwLoading.value = !!scn.loading
+    store.items = [...(scn.requests ? scn.requests() : []), ...otherKidsRequests()]
+    hw.s1 = HW[scn.hw || 'progress']
+    details.s1 = { can_pickup: scn.canPickup !== false }
+    pending.value = scn.submitting ? 'create' : null
+    arrival.value = scn.arrival || null
+    pickerKey.value++
+    formError.value = scn.formError ? BACKEND_MESSAGES[scn.formError] : ''
+    formExpanded.value = false
+    cancelOpen.value = false
+    cancelLoading.value = false
+    arrive.confirmOpen = false
+  }
+  const retryLoad = () => {
+    listState.value = 'loading'
+    setTimeout(() => { listState.value = 'ready'; currentScenario.value = 'form' }, 900)
+  }
+  applyScenario('form')
+
+  /* ws 即時更新（parentWs → pickupRequests store） */
+  const wsLog = ref('')
+  function pushWs(key) {
+    const r = openReq.value
+    if (!r) { wsLog.value = '目前小孩沒有進行中的接送請求：先按「通知安親班」或選「進行中」情境。'; return }
+    if (key === 'reply') Object.assign(r, { reply_ready_eta: '17:40', reply_message: '國語訂正中，預計 17:40 可接送', reply_source: 'staff', replied_at: NOW })
+    if (key === 'ack' && r.status === 'pending') r.status = 'acknowledged'
+    if (key === 'completed') completeLocal(r)
+    if (key === 'staff-cancel') Object.assign(r, { status: 'cancelled', cancelled_at: NOW })
+    withFlags(r)
+    wsLog.value = `已推送 pickup.request_updated（${WS_EVENTS.find((w) => w.key === key).label}）：畫面原地更新，沒有重新整理。`
+  }
+
+  function historyText(r) {
+    if (r.status === 'completed') {
+      if (!r.completed_at) return '已接走'
+      return r.picked_up_by_name ? `${fmtTime(r.completed_at)} 由 ${r.picked_up_by_name} 接走` : `${fmtTime(r.completed_at)} 接走`
+    }
+    if (r.status === 'cancelled') return r.cancelled_at ? `${fmtTime(r.cancelled_at)} 取消` : '已取消'
+    return '逾時自動結束'
+  }
+  const completedText = (r) => (r.completed_at && r.picked_up_by_name ? `${fmtTime(r.completed_at)} 已由 ${r.picked_up_by_name} 接走` : '今天已接走')
+  const go = (path) => snack.show(`（示意）router.push('${path}')`)
+  const wsDown = ref(false)
+  const pollNow = () => snack.show('（示意）parentWs.pollNow()：重抓今日接送請求與作業')
+  const scrolled = ref(false)
+
+  const decisions = [
+    '版面（由上而下）：頂部列「接送」（無返回鍵、leading 安親班 Logo；底部導覽停在「接送」）→ ChildContextHeader → 作業提示列 → 主區（依狀態：骨架 / 載入失敗 / 進行中 / 無接送權限 / 表單）→「今日紀錄」→「代理接送與常用接送人」入口。頁面自帶左右 16px、上 8px、底 24px 內距。沒有下拉重新整理（照 task：ws 即時套用、回到前景 load(true)、斷線 poller 補齊）。',
+    '作業提示列（身分卡下方）：surface-container 底、圓角 8px、20px 圖示 + body-medium。有作業項目 →「作業進度 2/3 · 預計 17:30 可接送」（沒有 ETA 只顯示前半）；整體 done →「作業已完成」（filled check_circle、primary 色）；0 項且未完成 →「今天尚無作業項目」（有 ETA 時接「 · 預計 HH:MM 可接送」）；作業資料尚未載入或載入失敗 → 整列不顯示。純資訊、不可點；有進行中請求時照常顯示。',
+    '表單卡（沒有進行中請求且可接送）：filled M3Card，標題「我要來接」（title-medium）+ 一行說明「通知老師您正在路上，系統會立即回覆預計可接送時間」→ ArrivalTimePicker（外觀照元件稿，預設「不指定」）→ 送出鈕「通知安親班」（filled、send、整寬 48px）。送出中按鈕 loading（轉圈、aria-busy、重複點無效），同時「我已經到了」停用。成功 → snackbar「已通知安親班」，主區直接換成進行中並顯示自動回覆，抵達時間回到「不指定」。',
+    '表單內業務錯誤：pickup_window_closed / student_not_available / not_service_day / expected_arrival_in_past / expected_arrival_too_late / student_not_active → 在選擇器與送出鈕之間顯示後端 error.message（filled error 圖示 + error 色 body-medium、role="alert"，例如「接送請求開放時間為 12:00～19:00」「學生今天請假、缺席或已離班」「今天不是營業日」「預計抵達時間最晚為 19:00」），表單保持可修改再送；下次送出或切換小孩時清除。其他錯誤走 snackbar error：pickup_request_exists「今天已有接送請求，已更新狀態」（store 已同步，主區換成既有請求）、pickup_not_allowed「您沒有這位小孩的接送權限」（同時重抓小孩詳情，can_pickup 已為 false 時主區換成無接送權限）、其他「送出失敗，請稍後再試」。',
+    '「我已經到了」（沒有進行中請求時）：表單卡下方「或」分隔線 → outlined 整寬按鈕「我已經到了」（where_to_vote）→ 小字「人已在安親班門口時使用，不必先通知」。按下 → useArriveNow.request(id, null)，與「我到了」共用 ConfirmDialog「確認已抵達安親班？」/「老師會收到通知並準備帶孩子出來」/ 確認鈕「我到了」+「下次不再提醒」勾選（localStorage parent_pickup_arrive_skip_confirm=1 時直接送出）。確認後對話框先關再送出，送出中按鈕 loading、「通知安親班」停用；成功 → 主區換成 arrived（含自動回覆）、snackbar「已通知老師您到了」；409 pickup_request_exists 由 store 改對既有請求按「我到了」，畫面同樣換成 arrived。錯誤 → snackbar error（useArriveNow 對照表）。',
+    '進行中（pending / acknowledged / arrived）：elevated 卡——標題列「今天的接送」+ StatusPill（待回覆 warning / 已確認 info / 家長已到 danger）→ PickupReplyMessage 完整模式（元件稿：來源小標、ETA 大字、對話泡泡、「HH:MM 回覆」、等待樣式）→ expected_arrival_at 有值時「您預計 17:40 抵達」（schedule 圖示、on-surface-variant）→ can_mark_arrived 時主要按鈕「我到了」（filled 整寬、where_to_vote，送出中 loading）。下方 outlined 卡放 PickupProgressSteps（元件稿），卡底分隔線後靠右文字按鈕「取消接送」（can_cancel 時；「我到了」送出中停用），與「我到了」分開放、避免在門口誤觸。',
+    '取消：ConfirmDialog destructive「取消這次接送？」（無說明）、確認鈕「確定取消」、取消鈕「先不要」。按確認後對話框 loading（不能關閉），成功 → 關閉、snackbar「已取消接送」、主區回到表單、今日紀錄多一列；pickup_request_not_found「找不到這筆接送請求，已重新整理」/ invalid_pickup_status「狀態已更新，請確認後再操作」→ 關閉 + snackbar error，畫面以 store 同步後的狀態重畫；其他錯誤 → 對話框保持開啟 + snackbar error「送出失敗，請稍後再試」，可再按或「先不要」。「我到了」遇到這兩種錯誤同樣 snackbar error 並以同步後的狀態重畫。',
+    '已接走（latestFor 為 completed 且沒有進行中請求）：primary-container 成功卡——filled check_circle（32px）+ title-medium「17:18 已由 王媽媽 接走」+ body-medium「今天的接送已完成」；completed_at 或 picked_up_by_name 任一為 null →「今天已接走」。成功卡下方只放文字按鈕「需要再次接送？」（expand_more），點開才顯示表單與「我已經到了」（待裁定 1，稿照推薦畫）。',
+    '無接送權限（my_guardian.can_pickup === false 且沒有進行中請求）：ParentEmptyState（block 圖示）「您沒有這位小孩的接送權限」/「如需接送請聯絡安親班」，取代表單與「我已經到了」。有進行中請求時照常顯示進行中（例如其他監護人發起；後端允許任一綁定家長按「我到了」與取消）。小孩詳情載入失敗（can_pickup 未知）時照常顯示表單，由後端 403 把關。',
+    '今日紀錄：historyFor(id)（已接走 / 已取消 / 已逾時，新到舊）放在 outlined 卡清單，每列最小高 56px：StatusPill + 結果（「17:18 由 王媽媽 接走」/「16:12 取消」/「逾時自動結束」）+ 右側「16:50 發起」（body-small、tabular-nums）。沒有終態請求時整個區塊不顯示。API 沒有取消原因與取消者，不顯示。',
+    '載入與切換：首次載入 → 身分卡骨架（小孩清單未載入時）+ 主區 SkeletonBlock card × 2，作業提示列不顯示；載入失敗（store.error 且沒有資料）→ ParentEmptyState error「接送狀態載入失敗」/「請檢查網路連線後再試一次」/「重試」→ pickupRequests.load(true)；已有資料時背景重抓失敗不打擾（保留舊資料）。切換小孩：今日請求是全部小孩共用、不重抓；重抓小孩詳情與作業——該小孩的 can_pickup 第一次取得前主區顯示骨架、作業未取得前不顯示提示列；表單錯誤與抵達時間清除。',
+    '代理接送入口：頁底 outlined 卡內一列 M3ListItem（badge 圖示、「代理接送與常用接送人」/「由親友代接時，先建立代理接送與接送碼」、chevron_right）→ /pickup/proxy，任何狀態都顯示。',
+    '移植 ivy PickupNoticeView：保留「已抵達」捷徑隨時可用（改為表單下方次要按鈕）、抵達確認含「下次不再提醒」、取消前確認、回到前景重抓、409 先同步再提示；去掉滾輪、備註、client_request_id、30 秒定時輪詢與子女 tab 列（改用 ChildContextHeader）。家長端層級：頂部列 5、sheet 10、dialog 15、snackbar 20。',
+  ]
+  const openQuestions = [
+    {
+      question: '已接走後（今天最後一筆請求是 completed、沒有進行中請求），「我要來接」表單要不要直接展開？接送完成時後端會把出勤改成「已離班」，之後再按「通知安親班」或「我已經到了」都會被 student_not_available 擋下（除非老師改判出勤）。',
+      options: [
+        { text: '照 PARENT-097 原規格：成功卡下方照常顯示完整表單與「我已經到了」，送出被擋時在表單卡內顯示後端訊息。' },
+        { text: '成功卡下方只放文字按鈕「需要再次接送？」，點開才顯示表單與「我已經到了」；PARENT-097 的 red case「completed card … 且仍顯示「通知安親班」表單」改為點開後才顯示。', recommended: true },
+      ],
+    },
+  ]
+
+  return {
+    children, childMode, setChildMode, selectedId, selectChild, childrenLoading,
+    hwHint, mainState, retryLoad, openReq, doneReq, history, canPickup,
+    statusMeta, fmtTime, historyText, completedText,
+    now, arrival, pickerKey, formError, formExpanded, submit, pending,
+    arrive, cancelOpen, cancelLoading, confirmCancel,
+    writeResult, writeResults: WRITE_RESULTS, scenarioGroups, currentScenario, applyScenario,
+    wsEvents: WS_EVENTS, wsLog, pushWs, wsDown, pollNow, go, scrolled,
+    decisions, openQuestions,
+  }
+}
+
+const app = createApp({
+  setup() {
+    const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
+    const meta = { status: readMeta('preview-status'), tasks: readMeta('preview-tasks'), route: readMeta('preview-route'), updated: readMeta('preview-updated') }
+    const snack = createSnack()
+    const theme = ref('light')
+    watch(theme, (v) => {
+      if (v === 'dark') document.documentElement.setAttribute('data-theme', 'dark')
+      else document.documentElement.removeAttribute('data-theme')
+    })
+    return { meta, snack, theme, navItems: NAV_ITEMS, ...pageSetup({ snack }) }
+  },
+})
+
+app.component('M3Icon', M3Icon)
+app.component('M3Button', M3Button)
+app.component('M3IconButton', M3IconButton)
+app.component('M3Card', M3Card)
+app.component('M3TextField', M3TextField)
+app.component('M3Chip', M3Chip)
+app.component('M3ListItem', M3ListItem)
+app.component('M3TopAppBar', M3TopAppBar)
+app.component('M3NavigationBar', M3NavigationBar)
+app.component('M3Snackbar', M3Snackbar)
+app.component('M3SegmentedButton', M3SegmentedButton)
+app.component('M3Switch', M3Switch)
+app.component('ParentBottomSheet', ParentBottomSheet)
+Object.entries(PAGE_COMPONENTS).forEach(([name, def]) => app.component(name, def))
+app.mount('#app')
+</script>
+</body>
+</html>
