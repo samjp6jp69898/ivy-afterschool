@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 393,
-  "last_updated": "2026-10-05T06:30:46Z",
+  "version": 394,
+  "last_updated": "2026-10-07T07:32:26Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5221,8 +5221,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": "BE:api/students.py::update_student",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-151",
         "BACKEND-529"
@@ -5382,8 +5382,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_import_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-155",
         "BACKEND-102"
@@ -5451,8 +5451,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/grade_promotion_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-157",
         "BACKEND-017",
@@ -8212,8 +8212,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/attendance.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-308",
         "BACKEND-301",
@@ -8952,8 +8952,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/leaves.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-346",
         "BACKEND-341",
@@ -9113,8 +9113,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/leaves.py",
       "source_ref": "BE:api/parent_portal/leaves.py::cancel_leave",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-346",
         "BACKEND-341",
@@ -9153,8 +9153,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/leaves.py",
       "source_ref": "BE:api/parent_portal/leaves.py::upload_leave_attachment",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-349",
         "BACKEND-341",
@@ -9452,8 +9452,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-375",
         "BACKEND-371",
@@ -9490,8 +9490,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-375",
         "BACKEND-371",
@@ -9528,8 +9528,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-375",
         "BACKEND-371",
@@ -9564,8 +9564,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-375",
         "BACKEND-371"
@@ -9947,8 +9947,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/homework.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-382",
         "BACKEND-371",
@@ -11031,8 +11031,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:services/pickup_verification.py::verify_pickup_code",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9d",
       "depends_on": [
         "BACKEND-424",
         "BACKEND-425",
@@ -11069,8 +11069,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:services/pickup_verification.py::confirm_visual_match",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9d",
       "depends_on": [
         "BACKEND-424",
         "BACKEND-425",
@@ -11107,8 +11107,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:services/pickup_verification.py::override_complete",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9d",
       "depends_on": [
         "BACKEND-424",
         "BACKEND-425",
@@ -11222,8 +11222,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-407",
         "BACKEND-402",
@@ -11300,8 +11300,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/portal/dismissal_calls.py::portal_complete",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-410",
         "BACKEND-402",
@@ -14064,8 +14064,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/staff_users.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-521",
         "BACKEND-093",
@@ -14144,8 +14144,8 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/pickup.py::regenerate_code",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-523",
         "BACKEND-440",
@@ -14474,8 +14474,8 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_import_template.py",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-155"
       ],

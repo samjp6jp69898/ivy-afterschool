@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 116,
-  "last_updated": "2026-10-05T06:01:05Z",
+  "version": 117,
+  "last_updated": "2026-10-07T07:32:26Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -470,8 +470,8 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/utils/permission.ts",
       "source_ref": "FE:src/utils/auth.ts::hasPermission",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9a",
       "depends_on": [
         "FRONTEND-022"
       ],
@@ -539,8 +539,8 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/router/authGuard.ts",
       "source_ref": "FE:src/router/index.ts::authGuard",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9a",
       "depends_on": [
         "FRONTEND-022",
         "FRONTEND-024"
@@ -867,8 +867,8 @@
       "granularity_unit": "store",
       "target_path": "apps/web/src/stores/notifications.ts",
       "source_ref": "FE:src/stores/notification.ts::useNotificationStore",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9a",
       "depends_on": [
         "FRONTEND-033",
         "FRONTEND-037"
@@ -1014,8 +1014,8 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/useAdminWsTopic.ts",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9a",
       "depends_on": [
         "FRONTEND-037"
       ],
@@ -2249,8 +2249,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/RoleCreateDialog.vue",
       "source_ref": "FE:src/views/settings/SettingsRolesView.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-068",
         "FRONTEND-040"
@@ -2844,8 +2844,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/student/GuardianManager.vue",
       "source_ref": "FE:src/components/student/GuardianManager.vue::default",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-082",
         "FRONTEND-092",
@@ -3939,8 +3939,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/homework/HomeworkItemDialog.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-083",
         "FRONTEND-040"
@@ -3975,8 +3975,8 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/homework/HomeworkBatchAddDialog.vue",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-083",
         "FRONTEND-040"
@@ -4937,8 +4937,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/exams.ts",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-frontend-r9a",
       "depends_on": [
         "FRONTEND-020",
         "BACKEND-467",

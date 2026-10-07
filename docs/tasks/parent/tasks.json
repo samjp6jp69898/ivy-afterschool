@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 93,
-  "last_updated": "2026-10-05T06:30:46Z",
+  "version": 94,
+  "last_updated": "2026-10-07T07:32:26Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -180,8 +180,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/children.ts",
       "source_ref": "FE:src/parent/api/profile.ts::getMe",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-064",
         "BACKEND-184",
@@ -1749,8 +1749,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/pickupRequests.ts",
       "source_ref": "FE:src/parent/api/dismissalCalls.ts::createDismissalNotice",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-440",
         "BACKEND-441",
@@ -1790,8 +1790,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/pickupPersons.ts",
       "source_ref": "FE:src/parent/api/pickup.ts::createPickupPerson",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-444",
         "BACKEND-445",
@@ -2418,8 +2418,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/attendance.ts",
       "source_ref": "FE:src/parent/api/attendance.ts::getMonthlyAttendance",
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-323",
         "PARENT-004",
@@ -2791,8 +2791,8 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/exams.ts",
       "source_ref": null,
-      "status": "pending",
-      "assignee_session": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-479",
         "BACKEND-480",
