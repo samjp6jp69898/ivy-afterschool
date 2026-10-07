@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 399,
-  "last_updated": "2026-10-07T07:46:03Z",
+  "version": 400,
+  "last_updated": "2026-10-07T07:46:35Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -9153,7 +9153,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/leaves.py",
       "source_ref": "BE:api/parent_portal/leaves.py::upload_leave_attachment",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-349",
@@ -14148,7 +14148,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/pickup.py::regenerate_code",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-523",
