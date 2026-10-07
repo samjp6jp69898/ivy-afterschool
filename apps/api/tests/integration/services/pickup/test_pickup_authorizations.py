@@ -10,6 +10,7 @@
 - BACKEND-428：override_complete（主管強制完成代理接送，寫 audit）。
 - BACKEND-555：authorization_out / staff_authorization_out（公開組裝函式；close_out 不再匯入
   私有名稱）。
+- BACKEND-422：cancel_authorization（家長取消代理授權；條件式更新，與員工核銷並發只有一方成功）。
 """
 
 import ast
@@ -59,6 +60,7 @@ from app.services.pickup import authorizations as authorizations_module
 from app.services.pickup.authorizations import (
     VerifyOutcome,
     authorization_out,
+    cancel_authorization,
     complete_via_authorization,
     confirm_visual_match,
     create_authorization,
@@ -1665,3 +1667,218 @@ def test_authorization_public_assembler_is_used_by_close_out(
     assert row.status == "cancelled"
     assert message["data"] == jsonable_encoder(authorization_out(row, _TODAY).model_dump())
     assert message["data"]["effective_status"] == "cancelled"
+
+
+# --- BACKEND-422 cancel_authorization ---
+
+
+def test_cancel_authorization(db_session: Session, published: list[Call]) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    parent = _parent_of(db_session, ming)
+    today_auth = make_pickup_authorization(db_session, ming, service_date=_TODAY, code_attempts=2)
+    future = make_pickup_authorization(
+        db_session, ming, service_date=_TODAY + timedelta(days=1), code="654321"
+    )
+    untouched = make_pickup_authorization(db_session, ming, service_date=_TODAY, code="111111")
+
+    out = cancel_authorization(db_session, today_auth.id, parent=parent, clock=clock)
+
+    assert isinstance(out, PickupAuthorizationOut)
+    assert (out.id, out.status, out.effective_status) == (today_auth.id, "cancelled", "cancelled")
+    assert (out.student_id, out.verified_at, out.verification_method) == (ming.id, None, None)
+    row = _fresh(db_session, today_auth.id)
+    assert (row.status, row.verified_at, row.verification_method) == ("cancelled", None, None)
+    assert (row.code_attempts, row.code_locked_at) == (2, None)  # 只改狀態
+    # 未來日期的 active 授權也可取消；同學生其他授權不受影響
+    assert cancel_authorization(db_session, future.id, parent=parent, clock=clock).status == (
+        "cancelled"
+    )
+    assert _fresh(db_session, untouched.id).status == "active"
+
+    db_session.commit()
+    messages = [m for ch, m in published if ch == [admin_topic_channel("pickup")]]
+    assert [(m["type"], m["data"]["id"], m["data"]["status"]) for m in messages] == [
+        ("pickup.authorization_updated", str(today_auth.id), "cancelled"),
+        ("pickup.authorization_updated", str(future.id), "cancelled"),
+    ]
+    assert messages[0]["data"] == jsonable_encoder(authorization_out(row, _TODAY).model_dump())
+    assert all("code_hash" not in m["data"] for m in messages)
+
+
+def test_cancel_authorization_not_active(db_session: Session, published: list[Call]) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    parent = _parent_of(db_session, ming)
+    completed = make_pickup_authorization(db_session, ming, service_date=_TODAY, status="completed")
+    cancelled = make_pickup_authorization(
+        db_session, ming, service_date=_TODAY, status="cancelled", code="654321"
+    )
+
+    for auth_id in (completed.id, cancelled.id):
+        with pytest.raises(AppError) as exc:
+            cancel_authorization(db_session, auth_id, parent=parent, clock=clock)
+        assert (exc.value.status, exc.value.code) == (409, "authorization_not_active")
+
+    row = _fresh(db_session, completed.id)
+    assert (row.status, row.verification_method) == ("completed", "code")
+    assert row.verified_at is not None
+    db_session.commit()
+    assert [m for ch, m in published if ch == [admin_topic_channel("pickup")]] == []
+
+
+def test_cancel_authorization_idor(db_session: Session) -> None:
+    clock = FakeClock(_CLOCK_NOW)
+    ming = make_student(db_session)
+    other = make_student(db_session, name="林小安")
+    parent_a = _parent_of(db_session, ming)
+    _parent_of(db_session, other)
+    others_auth = make_pickup_authorization(db_session, other, service_date=_TODAY)
+
+    with pytest.raises(AppError) as idor:
+        cancel_authorization(db_session, others_auth.id, parent=parent_a, clock=clock)
+    with pytest.raises(AppError) as missing:
+        cancel_authorization(db_session, uuid4(), parent=parent_a, clock=clock)
+
+    assert (idor.value.status, idor.value.code) == (404, "pickup_authorization_not_found")
+    assert (idor.value.status, idor.value.code, idor.value.message, idor.value.details) == (
+        missing.value.status,
+        missing.value.code,
+        missing.value.message,
+        missing.value.details,
+    )
+    assert _fresh(db_session, others_auth.id).status == "active"
+
+
+def _race_fixture(
+    committing_db_session: Session, owner_cleanup_rows: list[tuple[str, UUID]]
+) -> tuple[PickupAuthorization, CurrentStaff, CurrentParent]:
+    """committing 測試用：一位學生、已綁定的家長、seed 角色員工、一筆今天的 active 授權。"""
+    ming = make_student(committing_db_session)
+    parent_row = make_parent(committing_db_session)
+    guardian = make_guardian(committing_db_session, ming, parent=parent_row)
+    teacher = make_staff(committing_db_session, role_code="tutor")
+    auth = make_pickup_authorization(
+        committing_db_session, ming, service_date=_TODAY, code="123456"
+    )
+    committing_db_session.commit()
+    owner_cleanup_rows.extend(
+        [
+            ("guardians", guardian.id),
+            ("students", ming.id),
+            ("parent_accounts", parent_row.id),
+            ("staff_users", teacher.id),
+        ]
+    )
+    return auth, _current_staff(teacher), _current_parent(parent_row)
+
+
+_RACE_TABLES = ("pickup_authorizations", "pickup_requests", "notifications", "notification_outbox")
+
+
+@pytest.mark.cleanup_tables(*_RACE_TABLES)
+def test_cancel_authorization_race_with_verify(
+    owner_cleanup_rows: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    kick_off: None,
+) -> None:
+    """連線 1 以正確碼核銷（未 commit）、連線 2 取消 → 連線 2 被擋住，連線 1 commit 後得到 409。"""
+    clock = FakeClock(_CLOCK_NOW)
+    auth, actor, parent = _race_fixture(committing_db_session, owner_cleanup_rows)
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    s2_done = threading.Event()
+    outcome: dict[str, Any] = {}
+
+    def worker() -> None:
+        try:
+            s2.execute(text("set local lock_timeout = '10s'"))
+            outcome["s2"] = cancel_authorization(s2, auth.id, parent=parent, clock=clock)
+            s2.commit()
+        except BaseException as exc:
+            outcome["s2"] = exc
+            s2.rollback()
+        finally:
+            s2_done.set()
+
+    thread = threading.Thread(target=worker)
+    try:
+        s1.execute(text("set local lock_timeout = '10s'"))
+        verified = verify_code(s1, auth.id, "123456", actor=actor, clock=clock)
+        assert verified.ok is True
+        thread.start()
+        assert not s2_done.wait(timeout=0.5)  # s1 尚未 commit：s2 的條件式 UPDATE 等待
+        s1.commit()
+        thread.join(timeout=10)
+    finally:
+        s1.close()
+        if thread.is_alive():
+            thread.join(timeout=10)
+        s2.close()
+
+    error = outcome["s2"]
+    assert isinstance(error, AppError)
+    assert (error.status, error.code) == (409, "authorization_not_active")
+    row = _fresh(committing_db_session, auth.id)
+    assert (row.status, row.verification_method) == ("completed", "code")
+    [request] = _completed_requests(committing_db_session, auth.student_id)
+    assert (request.status, request.picked_up_by_authorization_id) == ("completed", auth.id)
+
+
+@pytest.mark.cleanup_tables(*_RACE_TABLES)
+def test_cancel_authorization_race_with_verify_reverse(
+    owner_cleanup_rows: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    kick_off: None,
+) -> None:
+    """連線 1 取消（未 commit）、連線 2 以正確碼核銷 → 連線 2 在 FOR UPDATE 等待，連線 1 commit 後
+    得到 409 authorization_not_active，沒有核銷、沒有請求與通知。"""
+    clock = FakeClock(_CLOCK_NOW)
+    auth, actor, parent = _race_fixture(committing_db_session, owner_cleanup_rows)
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    s2_done = threading.Event()
+    outcome: dict[str, Any] = {}
+
+    def worker() -> None:
+        try:
+            s2.execute(text("set local lock_timeout = '10s'"))
+            outcome["s2"] = verify_code(s2, auth.id, "123456", actor=actor, clock=clock)
+            s2.commit()
+        except BaseException as exc:
+            outcome["s2"] = exc
+            s2.rollback()
+        finally:
+            s2_done.set()
+
+    thread = threading.Thread(target=worker)
+    try:
+        s1.execute(text("set local lock_timeout = '10s'"))
+        cancelled = cancel_authorization(s1, auth.id, parent=parent, clock=clock)
+        assert cancelled.status == "cancelled"
+        thread.start()
+        assert not s2_done.wait(timeout=0.5)  # s1 尚未 commit：s2 的 FOR UPDATE 等待
+        s1.commit()
+        thread.join(timeout=10)
+    finally:
+        s1.close()
+        if thread.is_alive():
+            thread.join(timeout=10)
+        s2.close()
+
+    error = outcome["s2"]
+    assert isinstance(error, AppError)
+    assert (error.status, error.code) == (409, "authorization_not_active")
+    row = _fresh(committing_db_session, auth.id)
+    assert (row.status, row.verified_at, row.verification_method) == ("cancelled", None, None)
+    assert _completed_requests(committing_db_session, auth.student_id) == []
+    assert (
+        committing_db_session.execute(
+            select(func.count())
+            .select_from(Notification)
+            .where(Notification.payload["student_id"].astext == str(auth.student_id))
+        ).scalar_one()
+        == 0
+    )
