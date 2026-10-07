@@ -13,6 +13,10 @@
   ``reset_password`` → commit → ``TempPasswordOut``（no-store）；目標既有登入立即失效。
 - BACKEND-098 ``POST /staff-users/{staff_id}/deactivate``：staff:write → BACKEND-092 ``deactivate``
   → commit → ``StaffUserOut``；目標既有登入立即失效。
+- BACKEND-522 ``POST /staff-users/{staff_id}/activate``：staff:write；無 body + request meta →
+  BACKEND-521 ``activate``（權限較大者 403 ``cannot_manage_staff``、已啟用 409
+  ``staff_already_active``）→ commit → ``StaffUserCreatedOut``。臨時密碼只在此回傳一次（no-store），
+  下次登入須先改密碼。
 - BACKEND-528 ``GET /staff-users/options``：classes:write 或 staff:read → BACKEND-527
   ``list_staff_options`` → ``list[StaffOptionOut]``（只含啟用員工）。必須註冊在
   ``GET /staff-users/{staff_id}`` 之前，否則 ``options`` 會被當成 staff_id 而回 422。
@@ -131,4 +135,20 @@ def deactivate_staff_user(
 ) -> StaffUserOut:
     out = staff_user_service.deactivate(db, staff_id, actor=staff, meta=meta, clock=clock)
     db.commit()
+    return out
+
+
+@router.post("/{staff_id}/activate", response_model=StaffUserCreatedOut)
+def activate_staff_user(
+    staff_id: UUID,
+    response: Response,
+    staff: Annotated[CurrentStaff, Depends(require_permission(Permission.STAFF_WRITE))],
+    db: Annotated[Session, Depends(get_db)],
+    meta: Annotated[RequestMeta, Depends(get_request_meta)],
+    clock: Annotated[Clock, Depends(get_clock)],
+) -> StaffUserCreatedOut:
+    out = staff_user_service.activate(db, staff_id, actor=staff, meta=meta, clock=clock)
+    db.commit()
+    # 臨時密碼只回這一次：瀏覽器與中介不得快取
+    response.headers["Cache-Control"] = "no-store"
     return out
