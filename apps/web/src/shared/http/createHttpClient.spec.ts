@@ -1,5 +1,5 @@
 import { flushPromises } from '@vue/test-utils'
-import axios, { type AxiosInstance } from 'axios'
+import axios, { AxiosError, type AxiosInstance, type AxiosResponse } from 'axios'
 import type MockAdapter from 'axios-mock-adapter'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/shared/types/api'
@@ -52,6 +52,54 @@ const UNAUTHORIZED = { error: { code: 'unauthenticated', message: '請重新登�
 
 function reply401Then200(mock: MockAdapter, url: string, body: unknown = { ok: url }): void {
   mock.onGet(url).replyOnce(401, UNAUTHORIZED).onGet(url).replyOnce(200, body)
+}
+
+interface SentRequest {
+  /** transformRequest 之後真正交給 adapter 的 body */
+  data: unknown
+  contentType: unknown
+}
+
+/**
+ * 以自訂 adapter 取代傳輸層，記錄每次請求經過 transformRequest 之後的 body 與 Content-Type
+ * （不依賴 axios-mock-adapter 的內部實作）。statuses 依序是每次請求的回應狀態碼，用完後一律 200。
+ */
+function setupCapturing(statuses: Array<200 | 401> = []) {
+  const refresh = vi.fn<() => Promise<void>>(() => Promise.resolve())
+  const client = createHttpClient({ refresh, noRefreshPaths: ADMIN_NO_REFRESH, onAuthFailure: vi.fn() })
+  const sent: SentRequest[] = []
+  client.defaults.adapter = async (config) => {
+    sent.push({ data: config.data, contentType: config.headers.get('Content-Type') })
+    const status = statuses[sent.length - 1] ?? 200
+    const response: AxiosResponse = {
+      data: status === 401 ? UNAUTHORIZED : {},
+      status,
+      statusText: String(status),
+      headers: {},
+      config,
+    }
+    if (status === 401) {
+      throw new AxiosError('Request failed with status code 401', AxiosError.ERR_BAD_REQUEST, config, null, response)
+    }
+    return response
+  }
+  return { client, sent, refresh }
+}
+
+function photoForm(): FormData {
+  const form = new FormData()
+  form.append('file', new File(['abc'], 'a.png', { type: 'image/png' }))
+  form.append('name', '王小明')
+  return form
+}
+
+async function expectPhotoForm(data: unknown): Promise<void> {
+  expect(data).toBeInstanceOf(FormData)
+  const form = data as FormData
+  const file = form.get('file') as File
+  expect(file.name).toBe('a.png')
+  expect(await file.text()).toBe('abc')
+  expect(form.get('name')).toBe('王小明')
 }
 
 describe('createHttpClient', () => {
@@ -348,5 +396,60 @@ describe('createHttpClient', () => {
     })
     expect(custom.defaults.baseURL).toBe('/api/v2')
     expect(custom.defaults.timeout).toBe(5000)
+  })
+
+  it('createHttpClient FormData body 保持 FormData', async () => {
+    const { client, sent } = setupCapturing()
+
+    await client.post('/admin/students/s1/photo', photoForm())
+
+    expect(sent).toHaveLength(1)
+    await expectPhotoForm(sent[0]!.data)
+    expect(String(sent[0]!.contentType)).not.toContain('application/json')
+  })
+
+  it('createHttpClient FormData 一般 JSON body 不受影響', async () => {
+    const { client, sent } = setupCapturing()
+
+    await client.post('/admin/students', { a: 1 })
+
+    expect(sent).toHaveLength(1)
+    expect(sent[0]!.data).toBe('{"a":1}')
+    expect(sent[0]!.contentType).toBe('application/json')
+  })
+
+  it('createHttpClient FormData 明確指定 multipart/form-data 仍保留 FormData', async () => {
+    const { client, sent } = setupCapturing()
+
+    await client.post('/parent/children/s1/pickup-persons', photoForm(), {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+
+    expect(sent).toHaveLength(1)
+    await expectPhotoForm(sent[0]!.data)
+    expect(String(sent[0]!.contentType)).not.toContain('application/json')
+  })
+
+  it('createHttpClient FormData 401 refresh 重試後檔案仍在', async () => {
+    const { client, sent, refresh } = setupCapturing([401, 200])
+
+    await client.post('/admin/students/s1/photo', photoForm())
+
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(sent).toHaveLength(2)
+    for (const request of sent) {
+      await expectPhotoForm(request.data)
+      expect(String(request.contentType)).not.toContain('application/json')
+    }
+  })
+
+  it('createHttpClient FormData 一般 JSON body 401 refresh 重試後仍是 JSON', async () => {
+    const { client, sent, refresh } = setupCapturing([401, 200])
+
+    await client.post('/admin/students', { a: 1 })
+
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(sent.map((request) => request.data)).toEqual(['{"a":1}', '{"a":1}'])
+    expect(sent.map((request) => request.contentType)).toEqual(['application/json', 'application/json'])
   })
 })
