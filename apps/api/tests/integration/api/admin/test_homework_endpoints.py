@@ -1,6 +1,7 @@
 """BACKEND-385：GET /api/admin/homework/board。
 BACKEND-390：PUT /api/admin/homework/progress/{student_id}。
 BACKEND-386：POST /api/admin/homework/items。
+BACKEND-387：POST /api/admin/homework/items/batch（整班）。
 
 fake_clock 預設 2026-09-01 01:00 UTC（台北 09:00）。"""
 
@@ -518,3 +519,118 @@ def test_admin_homework_item_create_business(
     assert_error(missing, 404, "student_not_found")
     assert _items_of(db_session, ming.id) == []
     assert _items_of(db_session, gone.id) == []
+
+
+# --- BACKEND-387：POST /api/admin/homework/items/batch -------------------------------------------
+
+_BATCH = f"{_ITEMS}/batch"
+
+
+def test_admin_homework_batch_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "post" in app.openapi()["paths"][_BATCH]
+
+
+def test_admin_homework_batch_success(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    class_a = make_class(db_session, name="A班")
+    students = [
+        make_student(db_session, name=n, class_=class_a) for n in ("王小明", "陳小華", "林小安")
+    ]
+    paused = make_student(db_session, name="暫停中", class_=class_a, status="suspended")
+    outsider = make_student(db_session, name="他班", class_=make_class(db_session, name="B班"))
+    make_homework_item(db_session, students[0], service_date=_DAY, title="既有項目", sort_order=5)
+    client, staff = staff_client(permissions=["homework:write"])
+
+    resp = client.post(_BATCH, json={"class_id": str(class_a.id), "title": "國語第 5 課生字"})
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert set(body) == {"created", "items"}
+    assert body["created"] == 3
+    # 依班內學號順序；sort_order 接在該生當天既有項目之後
+    assert [(i["student_id"], i["title"], i["status"], i["sort_order"]) for i in body["items"]] == [
+        (str(students[0].id), "國語第 5 課生字", "todo", 6),
+        (str(students[1].id), "國語第 5 課生字", "todo", 0),
+        (str(students[2].id), "國語第 5 課生字", "todo", 0),
+    ]
+    # 已 commit：重讀 DB；暫停與他班學生沒有新增
+    for student in students:
+        added = [i for i in _items_of(db_session, student.id) if i.title != "既有項目"]
+        assert [(i.title, i.updated_by) for i in added] == [("國語第 5 課生字", staff.id)]
+        assert _progress_rows(db_session, student.id)[_DAY].overall_status == "not_started"
+    assert _items_of(db_session, paused.id) == []
+    assert _items_of(db_session, outsider.id) == []
+
+
+def test_admin_homework_batch_422(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    class_a = make_class(db_session, name="A班")
+    ming = make_student(db_session, name="王小明", class_=class_a)
+    outsider = make_student(db_session, name="他班", class_=make_class(db_session, name="B班"))
+    empty_class = make_class(db_session, name="空班")
+    client, _ = staff_client(permissions=["homework:write"])
+
+    for body in (
+        {"title": "國語"},
+        {"class_id": str(class_a.id), "title": ""},
+        {"class_id": str(class_a.id), "title": "國語", "student_ids": []},
+        {"class_id": str(class_a.id), "title": "國語", "student_ids": [str(ming.id)] * 2},
+        {"class_id": str(class_a.id), "title": "國語", "status": "done"},
+    ):
+        assert_error(client.post(_BATCH, json=body), 422, "validation_error")
+    not_in_class = client.post(
+        _BATCH,
+        json={
+            "class_id": str(class_a.id),
+            "title": "國語",
+            "student_ids": [str(ming.id), str(outsider.id)],
+        },
+    )
+    assert_error(not_in_class, 422, "student_not_in_class")
+    assert not_in_class.json()["error"]["details"] == {"student_ids": [str(outsider.id)]}
+    assert_error(
+        client.post(_BATCH, json={"class_id": str(empty_class.id), "title": "國語"}),
+        422,
+        "no_students",
+    )
+    # 整批拒絕：沒有任何學生被新增
+    assert _items_of(db_session, ming.id) == []
+    assert _items_of(db_session, outsider.id) == []
+
+
+def test_admin_homework_batch_401(api_client: TestClient, assert_error: AssertError) -> None:
+    resp = api_client.post(_BATCH, json={"class_id": str(uuid4()), "title": "國語"})
+
+    assert_error(resp, 401, "unauthenticated")
+
+
+def test_admin_homework_batch_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    class_a = make_class(db_session)
+    ming = make_student(db_session, class_=class_a)
+    client, _ = staff_client(permissions=["homework:read"])
+
+    resp = client.post(_BATCH, json={"class_id": str(class_a.id), "title": "國語"})
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["homework:write"]}
+    assert _items_of(db_session, ming.id) == []
+
+
+def test_admin_homework_batch_404(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    archived = make_class(db_session, name="已封存班", archived=True)
+    ming = make_student(db_session, class_=archived)
+    client, _ = staff_client(permissions=["homework:write"])
+
+    archived_resp = client.post(_BATCH, json={"class_id": str(archived.id), "title": "國語"})
+    missing = client.post(_BATCH, json={"class_id": str(uuid4()), "title": "國語"})
+
+    assert_error(archived_resp, 404, "class_not_found")
+    assert_error(missing, 404, "class_not_found")
+    assert _items_of(db_session, ming.id) == []
