@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 421,
-  "last_updated": "2026-10-07T08:38:37Z",
+  "version": 422,
+  "last_updated": "2026-10-07T08:39:18Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5221,7 +5221,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": "BE:api/students.py::update_student",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-151",
@@ -5251,9 +5251,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-c",
+        "notes": "pass（review-r9-c）。tdd.run 10/10 綠、整檔 50/50 綠（BACKEND-529 / 548 的 close_out 測試未受影響）；--collect-only 帶 / 不帶 -k 比對，10 條 red_cases 全部選到；commit 順序 39323f9（測試，當時 update_student 不存在）→ 04b3846（實作）；lint / typecheck 乾淨。獨立突變：拿掉 _check_class 的班級列 FOR SHARE → 並發測試轉紅（B 立即復學 commit）；拿掉 populate_existing → 轉紅（鎖等到了卻讀到 identity map 舊的 archived_at）；拿掉 students:sensitive 檢查 → sensitive_forbidden 轉紅。兩 session 真實函式探針：復學先取 FOR SHARE、archive_class 等待後 409 class_has_students（班級未封存、學生在學）；update_student 與 promote_grade execute 互相等待、無 40P01；無權限 actor 對不存在學生寫敏感欄位回 403（不洩漏存在與否）、清除本來就空的欄位或只給空白仍 403；改 school_id / class_id 後回傳的 school / class 與 DB 一致。殘留（不打回）：(1) 回傳的 photo_url 恆為 None（簽章沒有 storage），BACKEND-162 實作時需決定如何補 photo_url（例如以 get_student 重組回應或另注入 storage）；(2) 明確給與現值相同的 class_id 也會取班級 FOR SHARE、封存班時 422，與 create 一致、屬預期；(3) 鎖序為學生列 → 班級列 FOR SHARE → 授權列 → 請求列 → 請假 / 出勤，盤點現有流程無反向取鎖。"
       }
     },
     {
@@ -5386,7 +5386,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_import_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-155",
@@ -5410,9 +5410,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-c",
+        "notes": "pass（review-r9-c）。tdd.run 4/4 綠、整檔 41/41 綠（BACKEND-155 深度防護測試未受影響）；--collect-only 比對 4 條 red_cases 全部選到；commit 順序 f8d8b0f（測試，當時 execute / ImportResult 不存在）→ e39aa46（實作；create_student 的寫入邏輯抽成公開 insert_student，create 行為不變，repo 內無舊名參照、無 import 循環）；lint / typecheck 乾淨。獨立突變：拿掉整批 savepoint → conflict_rolls_back_all 轉紅（第 1 列殘留在交易內）。探針：有錯誤列時 409 details 不含任何列（含合法列）的身分證 / 健康備註明文（display 已遮罩）、rows 只含錯誤列、無 data 鍵、不寫入任何學生；execute 只經 preview 吃 155 驗證過的資料，沒有繞過 xlsx 防護；稽核 student.import 不含個資。殘留（不打回）：(1) 範本沒有退班日欄，狀態「退班」且入學日晚於今天的列在 preview 會判 valid，execute 時 insert_student 以今天為退班日而擋下 invalid_dates → 409 import_conflict（訊息要求重新預覽，但重預覽結果不會變），屬 BACKEND-155 preview 的規格缺口（preview 沒有 clock），需協調者決定由 155 補檢查或範本加退班日；(2) 測試未斷言 student.import 稽核的 entity_id 為 None（實作已傳 None）；(3) BACKEND-166 驗收標準尚未列 409 import_conflict 與檔案層 422 原樣透傳，協調者可補。"
       }
     },
     {
@@ -5456,7 +5456,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/grade_promotion_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-157",
@@ -5486,9 +5486,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-c",
+        "notes": "pass（review-r9-c）。tdd.run 8/8 綠、整檔 11/11 綠；--collect-only 比對 8 條 red_cases 全部選到；commit 順序 32dfb44（測試，當時 execute / PromotionResult 不存在）→ 0ac74a8（實作）→ b8032ff（並發測試 owner 清理補 close_out 稽核）；lint / typecheck 乾淨。獨立突變：拿掉 advisory_xact_lock → 並發測試轉紅（B 再升一次，得到 PromotionResult(1, 1)）；拿掉 _lock_candidate_ids 的 FOR UPDATE → 8 條仍全綠（這把鎖沒有回歸測試）。兩 session 真實函式探針補驗該鎖：A execute 持對象列鎖未 commit → B update_student(withdrawn) 等待，A commit 後 B 讀到升級後年級再退班、稽核各一筆；反向 B update_student 持學生列鎖 → A execute 在 FOR UPDATE 等待，B commit 後該生不再是對象 → 409 preview_stale {expected_total 2, total 1} 且整批不動、無稽核；suspended 六年級入班日晚於退班日同樣 422 invalid_dates 並列出該生。殘留（不打回）：(1) 對象列 FOR UPDATE 沒有「拿掉會轉紅」的並發測試，可補 update_student vs execute 的阻塞測試；(2) preview_stale 只比對總數，預覽與執行之間同數量的成員 / 年級變動不會被偵測（規格即如此；鎖只保證鎖定後到寫入之間不變）；(3) graduated_ids 在兩條 bulk update 之前就以鎖住的列算定，更新順序實際上已不影響結果，「先六年級再其他」為保守說明；(4) BACKEND-165 的驗收標準尚未列 422 invalid_dates，協調者可補。"
       }
     },
     {
