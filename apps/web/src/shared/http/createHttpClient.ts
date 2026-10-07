@@ -118,8 +118,9 @@ export function createHttpClient(opts: HttpClientOptions): AxiosInstance {
     (config) => {
       ;(config as ClientRequestConfig)._fromRefresh = callingRefresh
       // instance 預設的 JSON Content-Type 會讓 axios 的 transformRequest 把 FormData 序列化成 JSON 字串（檔案遺失）；
-      // 在 transformRequest 之前移除，由瀏覽器自行帶 multipart boundary。401 重送同一個 config 時也會再經過這裡。
-      if (config.data instanceof FormData) config.headers.delete('Content-Type')
+      // 在 transformRequest 之前移除，由瀏覽器自行帶 multipart boundary。呼叫端明確指定的 multipart/form-data 不動；
+      // 401 重送同一個 config 時也會再經過這裡。
+      if (config.data instanceof FormData) config.headers.delete('Content-Type', 'application/json')
       return config
     },
     undefined,
