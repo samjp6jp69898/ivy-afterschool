@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 426,
-  "last_updated": "2026-10-07T10:39:54Z",
+  "version": 427,
+  "last_updated": "2026-10-07T10:40:40Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5606,7 +5606,7 @@
     {
       "id": "BACKEND-162",
       "title": "實作 PATCH /api/admin/students/{id} endpoint",
-      "description": "建立 `apps/api/app/api/admin/students.py`（`router = APIRouter(prefix='/students', tags=['admin-students'])`，掛到 admin_router）。注意路由順序：`/students/import` 與 `/students/promote-grade` 必須在 `/students/{student_id}` 之前註冊。\n- `PATCH /api/admin/students/{student_id}`，`require_permission(STUDENTS_WRITE)`，body `StudentUpdateIn` → BACKEND-152 → commit → 200 `StudentDetailOut`。\n\n**驗收標準**\n- 200；422；401；403；404（封存 / 不存在）；409。",
+      "description": "建立 `apps/api/app/api/admin/students.py`（`router = APIRouter(prefix='/students', tags=['admin-students'])`，掛到 admin_router）。注意路由順序：`/students/import` 與 `/students/promote-grade` 必須在 `/students/{student_id}` 之前註冊。\n- `PATCH /api/admin/students/{student_id}`，`require_permission(STUDENTS_WRITE)`，body `StudentUpdateIn` → BACKEND-152 `update_student`（改狀態時同交易觸發 529 收尾）→ 回應以 BACKEND-150 `get_student(db, student_id, actor, storage, clock)` 重組（同一個組裝函式簽 photo_url；update_student 沒有 storage 參數、自己回的 photo_url 恆 None，endpoint 不得複寫簽名邏輯）→ commit → 200 `StudentDetailOut`：有照片回短效簽名 URL、無照片 null；`sensitive` 只在持 students:sensitive 時有值。敏感欄位的 403 / 409 / 稽核遮罩規則照 service。\n\n**驗收標準**\n- 200；422；401；403；404（封存 / 不存在）；409。\n- 有照片的學生 PATCH 後回應 photo_url 為簽名 URL；無照片為 null。\n- 寫入成功後重讀 DB 確認已 commit。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::update_student",
@@ -5629,7 +5629,9 @@
           "test_admin_students_update_422：body {} → 422",
           "test_admin_students_update_401：無 cookie → 401",
           "test_admin_students_update_403：staff_client(permissions=['students:read']) → 403；有 write 無 sensitive 送 health_note → 403 sensitive_permission_required",
-          "test_admin_students_update_404_409：封存學生 → 404；學號衝突 → 409 student_no_taken"
+          "test_admin_students_update_404_409：封存學生 → 404；學號衝突 → 409 student_no_taken",
+          "test_admin_students_update_photo_url：有 photo_path 的學生 PATCH {'note':'x'} → 200 photo_url == 'https://storage.test/student-photos/<photo_path>?exp=300'（與 GET 詳情相同）；無照片的學生 → photo_url is None",
+          "test_admin_students_update_sensitive：staff_client(permissions=['students:write','students:sensitive']) PATCH {'id_number': null, 'health_note': '氣喘'} → 200 sensitive == {'id_number': None, 'health_note': '氣喘'}、has_id_number False；DB id_number_enc / hmac 為 None、health_note_enc 可解回；audit student.sensitive_update after == {'cleared': ['id_number'], 'set': ['health_note']}；只有 students:write 的回應 sensitive is None 且本文不含明文"
         ],
         "run": "just test-int apps/api/tests/integration/api/admin/test_students_endpoints.py -k \"test_admin_students_update_\"",
         "notes": ""
@@ -5717,7 +5719,7 @@
     {
       "id": "BACKEND-165",
       "title": "實作 POST /api/admin/students/promote-grade endpoint（預覽 + 執行）",
-      "description": "建立 `apps/api/app/api/admin/students.py`（`router = APIRouter(prefix='/students', tags=['admin-students'])`，掛到 admin_router）。注意路由順序：`/students/import` 與 `/students/promote-grade` 必須在 `/students/{student_id}` 之前註冊。\n- `POST /api/admin/students/promote-grade`，`require_permission(STUDENTS_WRITE)`，body `PromoteGradeIn`：`from_academic_year`（100~200）、`dry_run`（bool，預設 true）、`expected_total`（dry_run=false 時必填）、`withdrawn_on`（date，可空）。\n- dry_run=true → BACKEND-157 → 200 `PromotionPreviewOut`；dry_run=false → BACKEND-158 → commit → 200 `PromotionResultOut`。\n- `PromoteGradeIn`、`PromotionPreviewOut`、`PromotionResultOut` 定義在 `apps/api/app/schemas/students.py`。\n\n**驗收標準**\n- 預覽不寫入；執行後結果正確。\n- 422（dry_run=false 缺 expected_total）；401；403；409（already_promoted / preview_stale）。",
+      "description": "建立 `apps/api/app/api/admin/students.py`（`router = APIRouter(prefix='/students', tags=['admin-students'])`，掛到 admin_router）。注意路由順序：`/students/import` 與 `/students/promote-grade` 必須在 `/students/{student_id}` 之前註冊。\n- `POST /api/admin/students/promote-grade`，`require_permission(STUDENTS_WRITE)`，body `PromoteGradeIn`：`from_academic_year`（100~200）、`dry_run`（bool，預設 true）、`expected_total`（dry_run=false 時必填）、`withdrawn_on`（date，可空）。\n- dry_run=true → BACKEND-157 `preview` → 200 `PromotionPreviewOut`（不寫入）；dry_run=false → BACKEND-158 `execute` → commit → 200 `PromotionResultOut`。\n- 業務錯誤由 BACKEND-158 拋出、endpoint 不 commit：409 `already_promoted`；409 `preview_stale`（details `{expected_total, total}`）；422 `invalid_dates`（六年級 enrolled_on 晚於退班日，details `{withdrawn_on, students: [{id, student_no, name, enrolled_on}]}`，整批不動）。\n- `PromoteGradeIn`（`from_academic_year` 100~200、`dry_run` 預設 true、`expected_total` 0~100000 且 dry_run=false 時必填、`withdrawn_on` 可空）、`PromotionItemOut`（id、student_no、name、grade_from、grade_to、class_name）、`PromotionPreviewOut`（from_academic_year、to_academic_year、promote、graduate、total、already_promoted）、`PromotionResultOut`（promoted、graduated）定義在 `apps/api/app/schemas/students.py`。\n\n**驗收標準**\n- 預覽不寫入；執行後結果正確。\n- 422（dry_run=false 缺 expected_total；from_academic_year 超出 100~200）；401；403；409 already_promoted；409 preview_stale（details 以 service 實際回傳為準）；422 invalid_dates（列出學生、整批不動）。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::bulk_graduate_students",
@@ -5741,7 +5743,9 @@
           "test_admin_promote_execute：POST {'from_academic_year':114,'dry_run':false,'expected_total':3} → 200 promoted == 2、graduated == 1",
           "test_admin_promote_422：{'from_academic_year':114,'dry_run':false} → 422",
           "test_admin_promote_401_403：無 cookie → 401；staff_client(permissions=['students:read']) → 403",
-          "test_admin_promote_409：執行兩次 → 第二次 409 already_promoted"
+          "test_admin_promote_409：執行兩次 → 第二次 409 already_promoted",
+          "test_admin_promote_stale：{'from_academic_year':114,'dry_run':false,'expected_total':5}（實際 3）→ 409 preview_stale，error.details == {'expected_total': 5, 'total': 3}，學生 grade 未變、無稽核",
+          "test_admin_promote_invalid_dates：六年級 enrolled_on 晚於今天、withdrawn_on 未給 → 422 invalid_dates，details.students[0].student_no 為該生、details.withdrawn_on == 今天；所有學生未變、無稽核"
         ],
         "run": "just test-int apps/api/tests/integration/api/admin/test_students_endpoints.py -k \"test_admin_promote_\"",
         "notes": ""
@@ -5755,7 +5759,7 @@
     {
       "id": "BACKEND-166",
       "title": "實作 POST /api/admin/students/import endpoint（Excel 預覽 + 執行）",
-      "description": "建立 `apps/api/app/api/admin/students.py`（`router = APIRouter(prefix='/students', tags=['admin-students'])`，掛到 admin_router）。注意路由順序：`/students/import` 與 `/students/promote-grade` 必須在 `/students/{student_id}` 之前註冊。\n- `POST /api/admin/students/import`，multipart：`file`（xlsx）、`academic_year`（int）、`dry_run`（bool，預設 true）；`require_permission(STUDENTS_WRITE)`。\n- `read_validated_upload(file, allowed=XLSX_TYPES, max_bytes=5 MiB)` → dry_run → BACKEND-155 → 200 `ImportPreviewOut`；否則 BACKEND-156 → commit → 200 `ImportResultOut`。\n- Out schemas 定義在 `apps/api/app/schemas/students.py`。\n\n**驗收標準**\n- 預覽回逐列結果；執行建立學生。\n- 422（缺 file / academic_year、標題缺欄）；401；403；415（非 xlsx）；409（import_has_errors）。",
+      "description": "建立 `apps/api/app/api/admin/students.py`（`router = APIRouter(prefix='/students', tags=['admin-students'])`，掛到 admin_router）。注意路由順序：`/students/import` 與 `/students/promote-grade` 必須在 `/students/{student_id}` 之前註冊。\n- `POST /api/admin/students/import`，multipart：`file`（xlsx）、`academic_year`（int）、`dry_run`（bool，預設 true）；`require_permission(STUDENTS_WRITE)`。\n- 上傳檔一律先經 BACKEND-016 `read_validated_upload(file, allowed=XLSX_TYPES, max_bytes=XLSX_MAX_BYTES)`（分塊讀取、累計超過 5 MiB 立即 413 `file_too_large`、空檔 422 `file_empty`、檔頭非 xlsx 415 `unsupported_file_type`；endpoint 不得自行讀整個檔或繞過），再交給 service：dry_run=true → BACKEND-155 `preview`（zip / XML 深度防護在 service 內）→ 200 `ImportPreviewOut`；dry_run=false → BACKEND-156 `execute` → commit → 200 `ImportResultOut`。`academic_year` 100~200、`dry_run` 預設 true。\n- 業務錯誤由 service 拋出、endpoint 不 commit：409 `import_has_errors`（details `{total, valid, invalid, rows}`，rows 只含錯誤列、每列只有 row_number / display / errors，不帶正規化資料）；409 `import_conflict`（details `{row_number, code, message}`，整批已回滾）；422 `import_invalid_header` / `import_too_many_rows` / `import_empty` / `import_invalid_file` 原樣回傳。\n- Out schemas 定義在 `apps/api/app/schemas/students.py`：`ImportRowOut`（row_number、display、errors；不含 data）、`ImportPreviewOut`（rows、total、valid、invalid）、`ImportResultOut`（created、student_ids）。\n\n**驗收標準**\n- 預覽回逐列結果；執行建立學生。\n- 422（缺 file / academic_year、標題缺欄）；401；403；415（非 xlsx）；413（超過 5 MiB）；409 import_has_errors（details 只含錯誤列、不帶正規化資料）；409 import_conflict（details {row_number, code, message}，不寫入任何學生）。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:utils/excel_io.py::parse_excel",
@@ -5779,7 +5783,10 @@
           "test_admin_import_execute：dry_run=false → 200 created == 3",
           "test_admin_import_422：不帶 academic_year → 422；標題缺『學號*』→ 422 import_invalid_header 且 error.details == {'missing': ['學號*'], 'unexpected': []}",
           "test_admin_import_401_403：無 cookie → 401；staff_client(permissions=['students:read']) → 403",
-          "test_admin_import_business：上傳 PNG → 415；含錯誤列 dry_run=false → 409 import_has_errors"
+          "test_admin_import_business：上傳 PNG → 415 unsupported_file_type；空檔 → 422 file_empty；含錯誤列 dry_run=false → 409 import_has_errors",
+          "test_admin_import_has_errors_details：含錯誤列 dry_run=false → 409 import_has_errors，details.rows 只有錯誤列（row_number、display、errors，無 'data'）、details total / valid / invalid 正確、display['身分證字號'] 為遮罩；students 筆數不變、無 student.import 稽核",
+          "test_admin_import_conflict：monkeypatch preview 在回傳後插入同學號模擬競態、dry_run=false → 409 import_conflict，error.details == {'row_number': 3, 'code': 'student_no_taken', 'message': '學號已被使用'}；三個學號都不存在、無 student.import 稽核",
+          "test_admin_import_413：超過 5 MiB 的上傳 → 413 file_too_large，students 筆數不變"
         ],
         "run": "just test-int apps/api/tests/integration/api/admin/test_students_endpoints.py -k \"test_admin_import_\"",
         "notes": ""
@@ -14558,7 +14565,7 @@
     {
       "id": "BACKEND-533",
       "title": "實作 GET /api/admin/students/import-template endpoint（下載匯入範本）",
-      "description": "在 `apps/api/app/api/admin/students.py`（BACKEND-159 的 router）新增：\n- `GET /api/admin/students/import-template`，`Depends(require_permission(Permission.STUDENTS_WRITE))` → BACKEND-532 → 200 xlsx：`Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`、`Content-Disposition: attachment; filename*=UTF-8''<urlencoded 學生匯入範本.xlsx>`、`Cache-Control: no-store`。\n- 路由必須註冊在 `/students/{student_id}` 之前（與 import / promote-grade 相同）。\n\n**驗收標準**\n- 200 回傳可讀的 xlsx 且標題列正確；401；403（缺 students:write）；路由不被 `/{student_id}` 攔截；route audit 通過。",
+      "description": "在 `apps/api/app/api/admin/students.py`（BACKEND-159 的 router）新增：\n- `GET /api/admin/students/import-template`，`Depends(require_permission(Permission.STUDENTS_WRITE))` → BACKEND-532 → 200 xlsx：`Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`、`Content-Disposition: attachment; filename*=UTF-8''<urlencoded 學生匯入範本.xlsx>`、`Cache-Control: no-store`。\n- 路由必須註冊在 `/students/{student_id}` 之前（與 import / promote-grade 相同）。\n- 回應本文為 BACKEND-532 `build_import_template()` 的常數內容，檔名固定「學生匯入範本.xlsx」，不含任何使用者輸入；無 query / body 參數。\n\n**驗收標準**\n- 200 回傳可讀的 xlsx 且標題列正確；401；403（缺 students:write）；路由不被 `/{student_id}` 攔截；route audit 通過。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": null,
@@ -14579,7 +14586,7 @@
           "integration"
         ],
         "red_cases": [
-          "test_admin_students_import_template_success：staff_client(permissions=['students:write']) → 200，content-type 為 xlsx、content-disposition 含 \"filename*=UTF-8''\"，load_workbook 後 '學生資料' 第 1 列 == IMPORT_COLUMNS",
+          "test_admin_students_import_template_success：staff_client(permissions=['students:write']) → 200，content-type 為 xlsx、content-disposition 含 \"filename*=UTF-8''\"，檔名解碼後 == '學生匯入範本.xlsx'、cache-control == 'no-store'，load_workbook 後第一張可見工作表為 '學生資料' 且第 1 列 == IMPORT_COLUMNS、另有 '說明' 工作表",
           "test_admin_students_import_template_route_order：GET /api/admin/students/import-template 不回 422（未被 /{student_id} 的 UUID 驗證攔截）",
           "test_admin_students_import_template_401：無 cookie → 401",
           "test_admin_students_import_template_403：staff_client(permissions=['students:read']) → 403 permission_denied",
