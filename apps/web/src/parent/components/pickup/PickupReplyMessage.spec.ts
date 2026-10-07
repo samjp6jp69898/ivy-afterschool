@@ -21,7 +21,8 @@ function mountReply(overrides: Partial<ReplyRequest> = {}, compact = false) {
 
 /** 根元素的直接子節點（版面由上而下的區塊）以第一個 class 表示 */
 function blocks(wrapper: VueWrapper): (string | undefined)[] {
-  return Array.from(wrapper.element.children).map((el) => el.classList[0])
+  const root = wrapper.element as Element
+  return Array.from(root.children).map((el) => el.classList[0])
 }
 
 /** ?raw 原始碼中某選擇器（行首，可縮排）的所有樣式區塊內容，依出現順序 */
@@ -86,7 +87,8 @@ describe('PickupReplyMessage', () => {
     const link = mountReply({ reply_message: '請由<a href="#">側門</a>進入', reply_source: 'staff' })
     expect(link.get(BUBBLE).text()).toBe('請由<a href="#">側門</a>進入')
     expect(link.find('a').exists()).toBe(false)
-    expect(source).not.toContain('v-html')
+    // 範本只用文字插值，不用 v-html（說明註解在 script 區，不算）
+    expect(source.slice(source.indexOf('<template>'), source.indexOf('<style'))).not.toContain('v-html')
   })
 
   it('PickupReplyMessage compact one line', () => {
