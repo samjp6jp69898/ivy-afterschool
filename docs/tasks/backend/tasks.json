@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 411,
-  "last_updated": "2026-10-07T08:08:23Z",
+  "version": 412,
+  "last_updated": "2026-10-07T08:09:36Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -9118,7 +9118,7 @@
     {
       "id": "BACKEND-357",
       "title": "實作 POST /api/parent/leaves/{id}/cancel endpoint",
-      "description": "建立 / 沿用 `apps/api/app/api/parent/leaves.py`（`router = APIRouter(tags=['parent-leaves'])`，掛到 parent_router）。寫入型 handler 呼叫 service 後自行 `db.commit()`。\n- `POST /api/parent/leaves/{leave_id}/cancel`，`Depends(get_current_parent)`，無 body → BACKEND-346（scope 固定 remaining）→ commit → 200 `ParentLeaveOut`（未開始 → cancelled；已開始 → active 且 end_date 縮短為昨天）。\n\n**驗收標準**\n- 成功；422；401（無 cookie / 員工 cookie）；IDOR：他人小孩或他人資源與不存在 id 回相同 404；業務錯誤碼如 red_cases。",
+      "description": "建立 / 沿用 `apps/api/app/api/parent/leaves.py`（`router = APIRouter(tags=['parent-leaves'])`，掛到 parent_router）。寫入型 handler 呼叫 service 後自行 `db.commit()`。\n- `POST /api/parent/leaves/{leave_id}/cancel`，`Depends(get_current_parent)`，無 body，注入 `get_storage` → BACKEND-346（scope 固定 remaining）→ commit → 200 `ParentLeaveOut`（未開始 → cancelled；已開始 → active 且 end_date 縮短為昨天；`attachments` 為該請假既有附件與短效簽名 URL，單一附件簽名失敗時該筆 `url` 為 null、不讓取消失敗）。\n\n**驗收標準**\n- 成功；422；401（無 cookie / 員工 cookie）；IDOR：他人小孩或他人資源與不存在 id 回相同 404；業務錯誤碼如 red_cases。\n- 回應含既有附件的簽名 URL（與列表 BACKEND-348 同格式）；請求後重讀 DB，請假狀態與今天起的出勤還原已 commit。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/leaves.py",
       "source_ref": "BE:api/parent_portal/leaves.py::cancel_leave",
@@ -9140,11 +9140,13 @@
           "integration"
         ],
         "red_cases": [
-          "test_parent_leaves_cancel_success：今天開始的請假 → 200 status == 'cancelled'；週一~五的請假在週三取消 → 200 status == 'active'、end_date == 週二、can_cancel False",
+          "test_parent_leaves_cancel_success：今天開始的請假 → 200 status == 'cancelled'；週一~五的請假在週三取消 → 200 status == 'active'、end_date == 週二、can_cancel False；請求後重讀 DB 為同一狀態，週三起的出勤由 leave 回 expected、週一週二維持 leave",
           "test_parent_leaves_cancel_422：path 'abc' → 422",
-          "test_parent_leaves_cancel_401：無 cookie → 401",
-          "test_parent_leaves_cancel_idor：家長 A 取消家長 B 的請假 → 404 leave_not_found，body 與 uuid4() 相同，B 的請假仍 active 且 end_date 不變",
-          "test_parent_leaves_cancel_409：已全部過去的請假 → 409 leave_already_ended；已取消 → 409 leave_not_active"
+          "test_parent_leaves_cancel_401：無 cookie → 401；staff cookie → 401",
+          "test_parent_leaves_cancel_idor：家長 A 取消家長 B 的請假 → 404 leave_not_found，body 與 uuid4() 相同，B 的請假仍 active 且 end_date 不變、出勤不變",
+          "test_parent_leaves_cancel_409：已全部過去的請假 → 409 leave_already_ended；已取消 → 409 leave_not_active；已開始的請假連點兩次取消，第二次 → 409 leave_already_ended",
+          "test_parent_leaves_cancel_response_includes_attachments：有 PDF 附件的請假取消 → 200 attachments 一筆，id、mime_type、size_bytes 正確，url == 'https://storage.test/leave-attachments/<path>?exp=300'",
+          "test_parent_leaves_cancel_sign_failure_still_cancels：fake_storage.sign_error 設定 → 200 status == 'cancelled'、附件 url 為 null，重讀 DB 請假已取消"
         ],
         "run": "just test-int apps/api/tests/integration/api/parent/test_leaves_endpoints.py -k \"test_parent_leaves_cancel_\"",
         "notes": "家長端無權限碼，403 以 IDOR 404 取代。"
@@ -9182,10 +9184,13 @@
         ],
         "red_cases": [
           "test_parent_leave_attachment_success：上傳 JPEG → 201 mime_type == 'image/jpeg'、url 非空字串",
-          "test_parent_leave_attachment_422：缺 file 欄位 → 422；空檔 → 422 file_empty",
+          "test_parent_leave_attachment_422：缺 file 欄位 → 422；空檔 → 422 file_empty；path 非 uuid → 422",
           "test_parent_leave_attachment_401：無 cookie → 401",
           "test_parent_leave_attachment_idor：上傳到他人請假 → 404 leave_not_found，fake_storage.objects 為空",
-          "test_parent_leave_attachment_business：exe 內容 → 415 unsupported_file_type；leave.window max_attachments 設為 3 時第 4 個附件 → 409 attachment_limit_reached"
+          "test_parent_leave_attachment_business：exe 內容 → 415 unsupported_file_type；leave.window max_attachments 設為 3 時第 4 個附件 → 409 attachment_limit_reached",
+          "test_parent_leave_attachment_too_large：leave.window max_attachment_mb 設為 1 時恰 1 MB 的 JPEG → 201、多 1 byte → 413 file_too_large（details.max_bytes == 1048576）且沒有多存物件",
+          "test_parent_leave_attachment_cancelled_leave：已取消的請假 → 409 leave_not_active，fake_storage.objects 為空",
+          "test_parent_leave_attachment_storage_unavailable：fake_storage.upload_error 設定 → 502 storage_unavailable，回應不含上游錯誤文字，無附件列"
         ],
         "run": "just test-int apps/api/tests/integration/api/parent/test_leaves_endpoints.py -k \"test_parent_leave_attachment_\"",
         "notes": "家長端無權限碼，403 以 IDOR 404 取代。"
@@ -9457,7 +9462,7 @@
     {
       "id": "BACKEND-377",
       "title": "實作 HomeworkService.create_item：新增單一學生作業項目",
-      "description": "在 `apps/api/app/services/homework_service.py` 實作：\n```python\ndef create_item(session: Session, data: HomeworkItemCreateIn, *, actor: CurrentStaff, clock: Clock) -> HomeworkMutationOut: ...\n```\n1. 學生：`get_student_or_404`；`status != 'active'` → 409 `student_not_active`。\n2. subject_id 給值：不存在或停用 → 422 `invalid_subject`。\n3. service_date = data.service_date or today；`w = get_setting(session, HOMEWORK_WINDOW)` → 必須介於 `today - w.past_days` ~ `today + w.future_days`（預設 30 / 7）→ 否則 422 `invalid_service_date`（details 帶範圍）。\n4. 新增 item（updated_by=actor.id），flush。\n5. `recompute_progress`（BACKEND-375）。\n6. 回傳 item 與 progress。\n\n**驗收標準**\n- 建立成功並回傳最新 progress（例如原本 done 變 in_progress）。\n- 學生不存在 404、非在學 409、科目無效 422、日期超出範圍 422。",
+      "description": "在 `apps/api/app/services/homework_service.py` 實作：\n```python\ndef create_item(session: Session, data: HomeworkItemCreateIn, *, actor: CurrentStaff, clock: Clock) -> HomeworkMutationOut: ...\n```\n1. 學生：`get_student_or_404`；`status != 'active'` → 409 `student_not_active`。\n2. subject_id 給值：不存在或停用 → 422 `invalid_subject`。\n3. service_date = data.service_date or today；`w = get_setting(session, HOMEWORK_WINDOW)` → 必須介於 `today - w.past_days` ~ `today + w.future_days`（預設 30 / 7）→ 否則 422 `invalid_service_date`（details 帶範圍）。\n4. 新增 item（updated_by=actor.id），flush。\n5. `recompute_progress`（BACKEND-375）：鎖進度列後重算，鎖在 commit 前一直持有，與同時修改 / 刪除同一學生項目的交易序列化（鎖序：項目列 → 進度列 → 請求列）。\n6. 回傳 item 與 progress。\n\n**驗收標準**\n- 建立成功並回傳最新 progress（例如原本 done 變 in_progress）。\n- 學生不存在 404、非在學 409、科目無效 422、日期超出範圍 422。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
@@ -9481,7 +9486,13 @@
         "red_cases": [
           "test_create_homework_item_success：王小明今日無作業 → create_item(title='國語習作 p.5', subject=國語) → item.status == 'todo'、item.subject_name == '國語'、progress.overall_status == 'not_started'",
           "test_create_homework_item_resets_done：progress 已 done（全部項目 done）→ 新增 todo → progress.overall_status == 'in_progress'",
-          "test_create_homework_item_validation：uuid4() 學生 → 404 'student_not_found'；withdrawn → 409 'student_not_active'；停用科目 → 422 'invalid_subject'；homework.window future_days 設為 7 時 service_date=today+8 → 422 'invalid_service_date'；改為 future_days=10 並 invalidate → today+8 成功"
+          "test_create_homework_item_validation：uuid4() 學生 → 404 'student_not_found'；withdrawn → 409 'student_not_active'；停用科目 → 422 'invalid_subject'；homework.window future_days 設為 7 時 service_date=today+8 → 422 'invalid_service_date'；改為 future_days=10 並 invalidate → today+8 成功",
+          "test_create_homework_item_passes_status_and_sort_order：status='doing'、sort_order=7、service_date=明天 → item 原樣帶入、subject_id 與 subject_name 為 null、progress.overall_status == 'in_progress'",
+          "test_create_homework_item_done_notifies_parent_once：唯一的項目建成 done → progress done；再建一個 done 項目 → homework.done 通知仍只有 1 列",
+          "test_create_homework_item_defaults_to_taipei_today：UTC 9/1 16:30（台北 9/2）沒給 service_date → item 與 progress 的 service_date == 9/2",
+          "test_create_homework_item_broadcasts_snapshot：commit 後 admin homework 頻道與該生家長頻道各收到含新項目的快照",
+          "test_create_homework_item_window_edges：homework.window 30 / 7 時今天 - 30 與今天 + 7 可建立，今天 - 31 → 422 invalid_service_date；驗證失敗不留下項目或進度列",
+          "test_create_homework_item_holds_progress_lock_until_commit：老師 A 新增項目尚未 commit 時，老師 B 同時把最後一個未完成項目改 done 必須排隊（0.5 秒內未完成），A commit 後 B 重算仍為 in_progress、沒有 homework.done 通知（拿掉進度列鎖轉紅）"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_homework_service.py -k \"test_create_homework_item_\"",
         "notes": ""
@@ -9495,7 +9506,7 @@
     {
       "id": "BACKEND-378",
       "title": "實作 HomeworkService.batch_create_items：整班批次新增同一份作業",
-      "description": "在 `apps/api/app/services/homework_service.py` 實作（domain_spec M6：員工可對整班批次新增同一份作業項目）：\n```python\ndef batch_create_items(session: Session, data: HomeworkBatchCreateIn, *, actor: CurrentStaff, clock: Clock) -> HomeworkBatchOut: ...\n```\n1. `get_class_or_404`（封存班 404）；subject 驗證同 create_item；service_date 範圍同 create_item。\n2. 對象：`list_active_student_ids(class_id=...)`；給了 student_ids 時取交集，有任何 id 不屬於該班的 active 學生 → 422 `student_not_in_class`（details 列出 id）。對象為空 → 422 `no_students`。\n3. 每位學生新增一個 item（sort_order = 該生該日現有最大 sort_order + 1，一次查詢取得）。\n4. **依 student_id 排序**後逐一 `recompute_progress`（鎖順序固定，避免與其他批次交易死結）。\n5. 回傳 created 數與 items。\n\n**驗收標準**\n- 全班 active 學生各一個 item，排除 suspended / 封存。\n- student_ids 子集合；含他班學生 → 422。\n- sort_order 接在既有項目之後。\n- 鎖定順序依 student_id（以記錄 lock_progress_row 呼叫順序驗證）。",
+      "description": "在 `apps/api/app/services/homework_service.py` 實作（domain_spec M6：員工可對整班批次新增同一份作業項目）：\n```python\ndef batch_create_items(session: Session, data: HomeworkBatchCreateIn, *, actor: CurrentStaff, clock: Clock) -> HomeworkBatchOut: ...\n```\n1. `get_class_or_404`（封存班 404）；subject 驗證同 create_item；service_date 範圍同 create_item。\n2. 對象：`list_active_student_ids(class_id=...)`；給了 student_ids 時取交集，有任何 id 不屬於該班的 active 學生 → 422 `student_not_in_class`（details 列出 id）。對象為空 → 422 `no_students`。\n3. 每位學生新增一個 item（sort_order = 該生該日現有最大 sort_order + 1，一次查詢取得）。\n4. **依 student_id 排序**後逐一 `recompute_progress`（鎖順序固定，避免與其他批次交易死結）；每位學生的進度列鎖在 commit 前一直持有（鎖序：項目列 → 進度列 → 請求列）。\n5. 回傳 created 數與 items（依班級內的學號順序）。\n\n**驗收標準**\n- 全班 active 學生各一個 item，排除 suspended / 封存。\n- student_ids 子集合；含他班學生 → 422。\n- sort_order 接在既有項目之後。\n- 鎖定順序依 student_id（以記錄 lock_progress_row 呼叫順序驗證）。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
@@ -9516,10 +9527,13 @@
           "integration"
         ],
         "red_cases": [
-          "test_batch_create_items_whole_class：班 A 有 3 位 active + 1 位 suspended → created == 3，三人各 1 個 item title '國語第5課生字'",
-          "test_batch_create_items_subset_and_validation：student_ids=[王小明] → created == 1；含班 B 學生 → 422 'student_not_in_class'；封存班 → 404 'class_not_found'",
-          "test_batch_create_items_sort_order：王小明已有 sort_order 0、1 的項目 → 新 item sort_order == 2",
-          "test_batch_create_items_lock_order：monkeypatch lock_progress_row 記錄 student_id → 記錄順序 == sorted(ids)"
+          "test_batch_create_items_whole_class：班 A 有 3 位 active + 1 位 suspended → created == 3，三人各 1 個 item title '國語第5課生字'；暫停、封存、退班與他班學生沒有項目也沒有進度列，項目的 updated_by 為操作員工",
+          "test_batch_create_items_subset_and_validation：student_ids=[王小明] → created == 1；含班 B 學生 → 422 'student_not_in_class'；封存班 → 404 'class_not_found'；student_not_in_class 的 details.student_ids 列出不合格的 id（他班、暫停都算）；空班 → 422 no_students；停用科目與日期超出範圍 → 422；驗證失敗不留下項目或進度列",
+          "test_batch_create_items_sort_order：王小明已有 sort_order 0、1 的項目 → 新 item sort_order == 2；沒有既有項目的學生 sort_order == 0，別天的項目不計入",
+          "test_batch_create_items_lock_order：monkeypatch lock_progress_row 記錄 student_id → 記錄順序 == sorted(ids)",
+          "test_batch_create_items_recomputes_progress_and_broadcasts：全部 done 的學生新增後回到 in_progress 且不發 homework.done、沒有項目的學生建立 not_started；每位學生各推一次含新項目的快照",
+          "test_batch_create_items_defaults_to_taipei_today：UTC 9/1 16:30（台北 9/2）沒給 service_date → 建在 9/2",
+          "test_batch_create_items_holds_progress_locks_until_commit：批次尚未 commit 時，另一位老師同時把其中一位學生最後一個未完成項目改 done 必須排隊，批次 commit 後重算仍為 in_progress、沒有 homework.done 通知"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_homework_service.py -k \"test_batch_create_items_\"",
         "notes": ""
@@ -9533,7 +9547,7 @@
     {
       "id": "BACKEND-379",
       "title": "實作 HomeworkService.update_item：修改作業項目（狀態變更重算進度）",
-      "description": "在 `apps/api/app/services/homework_service.py` 實作：\n```python\ndef update_item(session: Session, item_id: UUID, data: HomeworkItemUpdateIn, *, actor: CurrentStaff, clock: Clock) -> HomeworkMutationOut: ...\n```\n- item 不存在 → 404 `homework_item_not_found`；subject 驗證同 create_item。\n- 只更新 `model_fields_set` 中的欄位；updated_by=actor.id。\n- `recompute_progress`（status 未變也呼叫，以推送最新快照；通知只在轉 done 時發生）。\n\n**驗收標準**\n- 部分更新正確；把最後一個未完成項目改 done → progress done 且家長收到 homework.done。\n- 不存在 404；無效科目 422。",
+      "description": "在 `apps/api/app/services/homework_service.py` 實作：\n```python\ndef update_item(session: Session, item_id: UUID, data: HomeworkItemUpdateIn, *, actor: CurrentStaff, clock: Clock) -> HomeworkMutationOut: ...\n```\n- 先 `SELECT ... FOR UPDATE`（`of=HomeworkItem`、`populate_existing`）鎖項目列並讀 DB 現值：item 不存在（含剛被別的交易刪除）→ 404 `homework_item_not_found`；同一項目同時被修改 / 刪除時後到者排隊，等前者 commit 後重新判定。subject 驗證同 create_item，在改任何欄位之前完成，驗證失敗時整筆都不改；`subject_id` 給 null 代表清除科目。鎖序：項目列 → 進度列 → 請求列。\n- 只更新 `model_fields_set` 中的欄位；updated_by=actor.id。\n- `recompute_progress`（status 未變也呼叫，以推送最新快照；通知只在轉 done 時發生）。\n\n**驗收標準**\n- 部分更新正確；把最後一個未完成項目改 done → progress done 且家長收到 homework.done。\n- 不存在 404；無效科目 422。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
@@ -9554,8 +9568,15 @@
         ],
         "red_cases": [
           "test_update_homework_item_status_done：兩個項目一個 done、一個 doing → 把 doing 改 done → progress.overall_status == 'done'，notifications(event='homework.done') 1 列",
-          "test_update_homework_item_partial：只改 title → subject 與 status 不變",
-          "test_update_homework_item_errors：uuid4() → 404 'homework_item_not_found'；subject_id=uuid4() → 422 'invalid_subject'"
+          "test_update_homework_item_partial：只改 title → subject 與 status 不變；只改 sort_order、只改 status 時其他欄位不動，updated_by 為操作員工",
+          "test_update_homework_item_errors：uuid4() → 404 'homework_item_not_found'；subject_id=uuid4() → 422 'invalid_subject'；同一請求的 title 合法但 subject_id 無效 / 停用 → 422，title 與 updated_by 都沒改",
+          "test_update_homework_item_subject_set_and_clear：subject_id 改為國語 → subject_name == '國語'；subject_id=None → 科目清除",
+          "test_update_homework_item_reads_current_row_after_locking：同一 session 已載入項目、DB 內被別人改成 done 後，修改 sort_order 的回應與重算看到的是 DB 現值（拿掉 populate_existing 轉紅）",
+          "test_update_homework_item_back_to_open_resets_done：全部 done 的項目之一改回 correcting → 整體回到 in_progress、沒有 homework.done 通知",
+          "test_update_homework_item_notifies_only_when_turning_done_today：今天的項目轉 done 通知一次、重複存成 done 不再通知、別天的項目轉 done 不通知",
+          "test_update_homework_item_title_only_still_publishes_snapshot：只改 title（status 不變）commit 後仍推送含新標題的快照",
+          "test_update_homework_item_concurrent_updates_single_notification：兩位老師同時把最後兩個項目改 done，第二位排隊（0.5 秒內未完成），最終整體 done 且 homework.done 恰好 1 則（拿掉進度列鎖轉紅）",
+          "test_update_homework_item_waits_for_concurrent_delete_then_404：項目正被另一個交易刪除時修改者排隊，刪除 commit 後回 404 homework_item_not_found（拿掉項目列鎖時是 StaleDataError）"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_homework_service.py -k \"test_update_homework_item_\"",
         "notes": ""
@@ -9569,7 +9590,7 @@
     {
       "id": "BACKEND-380",
       "title": "實作 HomeworkService.delete_item：刪除作業項目並重算進度",
-      "description": "在 `apps/api/app/services/homework_service.py` 實作：\n```python\ndef delete_item(session: Session, item_id: UUID, *, actor: CurrentStaff, clock: Clock) -> HomeworkMutationOut: ...\n```\n- item 不存在 → 404 `homework_item_not_found`。\n- 硬刪除（作業項目為當日工作資料，不屬於交易紀錄）。\n- `recompute_progress`：刪掉最後一個未完成項目使其餘全部 done → 轉 done 並通知；刪光全部項目 → not_started。\n- 回傳 `HomeworkMutationOut(item=None, progress=...)`。\n\n**驗收標準**\n- 刪除後重算；刪到剩全 done 時通知一次；刪光變 not_started。\n- 不存在 404。",
+      "description": "在 `apps/api/app/services/homework_service.py` 實作：\n```python\ndef delete_item(session: Session, item_id: UUID, *, actor: CurrentStaff, clock: Clock) -> HomeworkMutationOut: ...\n```\n- 以 `SELECT ... FOR UPDATE`（同 BACKEND-379）鎖項目列：item 不存在（含剛被別的交易刪除）→ 404 `homework_item_not_found`；鎖序：項目列 → 進度列 → 請求列。\n- 硬刪除（作業項目為當日工作資料，不屬於交易紀錄）。\n- `recompute_progress`：刪掉最後一個未完成項目使其餘全部 done → 轉 done 並通知；刪光全部項目 → not_started。\n- 回傳 `HomeworkMutationOut(item=None, progress=...)`。\n\n**驗收標準**\n- 刪除後重算；刪到剩全 done 時通知一次；刪光變 not_started。\n- 不存在 404。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/homework_service.py",
       "source_ref": null,
@@ -9590,7 +9611,12 @@
         "red_cases": [
           "test_delete_homework_item_to_done：項目 [done, todo] 刪掉 todo → progress 'done'，homework.done 通知 1 列",
           "test_delete_homework_item_all：刪除唯一項目 → progress 'not_started'、item is None",
-          "test_delete_homework_item_not_found：uuid4() → 404 'homework_item_not_found'"
+          "test_delete_homework_item_not_found：uuid4() → 404 'homework_item_not_found'",
+          "test_delete_homework_item_recomputes_remaining：[done, todo] 刪 done → 剩 todo 整體回到 not_started；[doing, done] 刪 done → 維持 in_progress；只刪指定項目",
+          "test_delete_homework_item_past_date_no_notification：過去日期 [done, todo] 刪 todo → progress done，不發 homework.done",
+          "test_delete_homework_item_publishes_snapshot_without_item：commit 後 admin 與家長頻道的快照不含已刪除項目",
+          "test_delete_homework_item_holds_progress_lock_until_commit：項目 [done, doing, doing]，A 刪第三個尚未 commit 時 B 把第二個改 done 必須排隊，A commit 後 B 重算為 done 並通知 1 則（拿掉進度列鎖轉紅）",
+          "test_delete_homework_item_waits_for_concurrent_delete_then_404：同一項目被兩個交易同時刪除，後到者排隊，前者 commit 後回 404"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_homework_service.py -k \"test_delete_homework_item_\"",
         "notes": ""
@@ -14504,7 +14530,14 @@
           "test_import_template_header：load_workbook(BytesIO(build_import_template()))['學生資料'] 第 1 列值 == IMPORT_COLUMNS，A1 字型為粗體，freeze_panes == 'A2'，max_row == 1",
           "test_import_template_validations：'學生資料' 的 data_validations 中有 formula1 == '\"男,女,其他\"' 且套用在性別欄、'\"在學,暫停,退班\"' 套用在狀態欄",
           "test_import_template_help_sheet：'說明' 工作表 A 欄（第 2 列起）的欄名集合 == set(IMPORT_COLUMNS)",
-          "test_import_template_passes_header_check：讀範本第 1 列交給 check_header（BACKEND-155）→ ([], [])"
+          "test_import_template_passes_header_check：讀範本第 1 列交給 check_header（BACKEND-155）→ ([], [])",
+          "test_import_template_sheet_order：工作表順序為「學生資料」「說明」且都是可見（BACKEND-155 讀第一張可見工作表）",
+          "test_import_template_required_headers_highlighted：帶 * 的標題粗體 + 淡黃底（FFF2CC），其餘標題無粗體與底色",
+          "test_import_template_column_widths_follow_titles：每欄寬度不小於標題的顯示寬度，標題較長的欄較寬",
+          "test_import_template_validations_match_importer_rules：下拉選項與匯入的性別 / 狀態對照表一致，年級驗證的上下界等於 StudentCreateIn 接受的最小 / 最大值；驗證只套用在第 2 列起共 MAX_IMPORT_ROWS 列",
+          "test_import_template_help_sheet_content：說明工作表每欄一列，必填 / 選填與格式說明正確（日期 YYYY-MM-DD、身分證與健康備註需 students:sensitive、國小與安親班班級需與系統名稱一致）",
+          "test_import_template_is_accepted_by_upload_validation：範本原樣通過 BACKEND-016 的 xlsx 上傳驗證與 BACKEND-155 的 zip / XML 層防護",
+          "test_import_template_preview_reports_empty_not_invalid_header：範本原樣交給 preview → 422 import_empty（不是 import_invalid_header），過程不碰 DB"
         ],
         "run": "just test apps/api/tests/unit/services/test_student_import_template.py -k \"test_import_template_\"",
         "notes": ""
