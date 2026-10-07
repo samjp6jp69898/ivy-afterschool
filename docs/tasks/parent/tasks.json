@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 107,
-  "last_updated": "2026-10-07T10:45:39Z",
+  "version": 108,
+  "last_updated": "2026-10-07T10:46:13Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -2563,7 +2563,7 @@
     {
       "id": "PARENT-133",
       "title": "實作家長端 api client parent/api/leaves.ts（請假列表、申請、取消、上傳附件）",
-      "description": "建立 `apps/web/src/parent/api/leaves.ts`（型別依 `docs/tasks/api_index.md` §14）：\n```ts\n// LeaveType / LeaveStatus 與 Page<T> 由 FRONTEND-002 import\nexport interface LeaveAttachment { id: string; mime_type: string; size_bytes: number; created_at: string; url: string }\nexport interface ParentLeave { id: string; student_id: string; leave_type: LeaveType; leave_type_label: string; start_date: string; end_date: string; reason: string | null; status: 'active' | 'cancelled'; created_by_type: 'parent' | 'staff'; created_at: string; cancelled_at: string | null; can_cancel: boolean; attachments: LeaveAttachment[] }\nexport function listChildLeaves(childId: string, page = 1, pageSize = 20): Promise<Page<ParentLeave>> // GET /parent/children/{id}/leaves（BACKEND-355）\nexport function createLeave(body: { student_id: string; leave_type: LeaveType; start_date: string; end_date: string; reason?: string }): Promise<ParentLeave> // POST /parent/leaves（BACKEND-356）\nexport function cancelLeave(id: string): Promise<ParentLeave>                 // POST /parent/leaves/{id}/cancel（BACKEND-357）\nexport function uploadLeaveAttachment(leaveId: string, file: File): Promise<LeaveAttachment> // POST multipart file（BACKEND-358）\n```\n`Page<T>` 取自 FRONTEND-002。reason 為空字串時 body 不帶。附件以 FormData 欄位 `file` 送出，請求以 `headers: { 'Content-Type': 'multipart/form-data' }` 覆蓋 parentHttp 預設的 `application/json`（否則 axios 會把 FormData 轉成 JSON 字串、檔案遺失，做法同 PARENT-091）；瀏覽器端 axios 送出前會清掉此標頭，由瀏覽器帶 boundary。走 PARENT-004 `parentHttp`。\n\n移植 ivy `FE:src/parent/api/leaves.ts::uploadLeaveAttachment` 的 multipart 做法；路徑改為本專案；**去掉** getLeave 單筆、deleteLeaveAttachment（本專案無此 endpoint）。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/api/leaves.ts`（型別依 `docs/tasks/api_index.md` §14）：\n```ts\n// LeaveType / LeaveStatus 與 Page<T> 由 FRONTEND-002 import\nexport interface LeaveAttachment { id: string; mime_type: string; size_bytes: number; created_at: string; url: string | null /* 短效簽名網址；簽名失敗時後端回 null（BACKEND-341 / 348 / 357），列表、取消、上傳回應都可能出現 */ }\nexport interface ParentLeave { id: string; student_id: string; leave_type: LeaveType; leave_type_label: string; start_date: string; end_date: string; reason: string | null; status: 'active' | 'cancelled'; created_by_type: 'parent' | 'staff'; created_at: string; cancelled_at: string | null; can_cancel: boolean; attachments: LeaveAttachment[] }\nexport function listChildLeaves(childId: string, page = 1, pageSize = 20): Promise<Page<ParentLeave>> // GET /parent/children/{id}/leaves（BACKEND-355）\nexport function createLeave(body: { student_id: string; leave_type: LeaveType; start_date: string; end_date: string; reason?: string }): Promise<ParentLeave> // POST /parent/leaves（BACKEND-356）\nexport function cancelLeave(id: string): Promise<ParentLeave>                 // POST /parent/leaves/{id}/cancel（BACKEND-357）\nexport function uploadLeaveAttachment(leaveId: string, file: File): Promise<LeaveAttachment> // POST multipart file（BACKEND-358）\n```\n`Page<T>` 取自 FRONTEND-002。reason 為 undefined、空字串或純空白時 body 不帶 reason 鍵（與 PARENT-090 的取消原因一致）。路徑中的 `childId`、`id`、`leaveId` 一律先 `encodeURIComponent`（與後台 api client、PARENT-192 一致），傳入 `'../../me?x=1#y'` 這類值時請求仍只打到該 endpoint 的路徑。附件以 FormData 欄位 `file` 送出，請求以 `headers: { 'Content-Type': 'multipart/form-data' }` 覆蓋 parentHttp 預設的 `application/json`（否則 axios 會把 FormData 轉成 JSON 字串、檔案遺失，做法同 PARENT-091）；瀏覽器端 axios 送出前會清掉此標頭，由瀏覽器帶 boundary。走 PARENT-004 `parentHttp`。\n\n移植 ivy `FE:src/parent/api/leaves.ts::uploadLeaveAttachment` 的 multipart 做法；路徑改為本專案；**去掉** getLeave 單筆、deleteLeaveAttachment（本專案無此 endpoint）。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/leaves.ts",
       "source_ref": "FE:src/parent/api/leaves.ts::uploadLeaveAttachment",
@@ -2589,7 +2589,10 @@
           "leavesApi lists with paging：listChildLeaves('s1', 2) → GET '/parent/children/s1/leaves' params 深等於 {page:2, page_size:20}；回 {items:[...1 筆], total:21} → resolve.total === 21",
           "leavesApi create omits empty reason：createLeave({student_id:'s1', leave_type:'sick', start_date:'2026-10-05', end_date:'2026-10-06', reason:''}) → body 不含 reason 鍵；回 409 {error:{code:'leave_overlap', details:{start_date:'2026-10-05', end_date:'2026-10-07'}}} → reject 且 details.end_date === '2026-10-07'",
           "leavesApi upload sends file field：uploadLeaveAttachment('l1', new File(['x'],'note.pdf',{type:'application/pdf'})) → POST '/parent/leaves/l1/attachments'，FormData.get('file').name === 'note.pdf'；回 413 → reject 且 error.status === 413",
-          "leavesApi cancel path：cancelLeave('l1') → POST '/parent/leaves/l1/cancel'，回 status 'cancelled' → 原樣 resolve"
+          "leavesApi cancel path：cancelLeave('l1') → POST '/parent/leaves/l1/cancel'，回 status 'cancelled' → 原樣 resolve",
+          "leavesApi keeps null attachment url：列表回的附件 url:null、取消回應與上傳回應的 url:null → 原樣 resolve（attachments[0].url === null，其餘欄位不變；型別為 string | null）",
+          "leavesApi encodes path ids：listChildLeaves / cancelLeave / uploadLeaveAttachment 傳入 '../../me?x=1#y' → 請求 URL 該段為 encodeURIComponent 後的值（不含未編碼的 '/'、'?'、'#'）；傳入一般 UUID 時 URL 與未編碼相同",
+          "leavesApi create omits blank reason：reason 為 undefined 或 '   ' → body 不含 reason 鍵"
         ],
         "run": "just web-test src/parent/api/leaves.spec.ts -t \"leavesApi\"",
         "notes": ""
