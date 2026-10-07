@@ -9,29 +9,37 @@ BACKEND-162：PATCH /api/admin/students/{student_id}（students:write；回應�
 photo_url；改狀態同交易收尾並 commit）。
 BACKEND-533：GET /api/admin/students/import-template（students:write；xlsx 範本、固定檔名、
 no-store、路由在 /{student_id} 之前）。
+BACKEND-165：POST /api/admin/students/promote-grade（students:write；dry_run 預覽不寫入、執行
+commit；422 / 409 already_promoted / 409 preview_stale / 422 invalid_dates 由 service 拋出）。
+BACKEND-166：POST /api/admin/students/import（students:write；multipart 經 read_validated_upload
+再交 preview / execute；415 / 413 / 422 / 409 import_has_errors / 409 import_conflict）。
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, date, datetime
 from io import BytesIO
 from urllib.parse import unquote
 from uuid import uuid4
 
+import httpx2
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from openpyxl import load_workbook
-from sqlalchemy import select
+from openpyxl import Workbook, load_workbook
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.crypto import decrypt_bytes, encrypt_bytes
+from app.core.uploads import XLSX_MAX_BYTES
 from app.models.account import StaffUser
 from app.models.audit import AuditLog
 from app.models.parents import ParentAccount
 from app.models.pickup import PickupRequest
 from app.models.students import Student
-from app.services.student_import_service import IMPORT_COLUMNS
+from app.services import student_import_service
+from app.services.student_import_service import IMPORT_COLUMNS, ImportPreview
 from app.services.students.id_number import id_number_hmac
 from tests.support.factories import (
     make_class,
@@ -885,3 +893,512 @@ def test_admin_students_import_template_method(
 def test_admin_students_import_template_guard_registered(app: FastAPI) -> None:
     assert admin_routes_without_permission(app) == []
     assert "get" in app.openapi()["paths"]["/api/admin/students/import-template"]
+
+
+# --- BACKEND-165：POST /api/admin/students/promote-grade --------------------------
+
+_PROMOTE_URL = f"{_URL}/promote-grade"
+
+
+def _three_grades(db: Session) -> tuple[Student, Student, Student]:
+    klass = make_class(db, name="彩虹班")
+    first = make_student(db, name="王小明", student_no="P114001", grade_level=1, class_=klass)
+    fifth = make_student(db, name="陳小華", student_no="P114005", grade_level=5, class_=klass)
+    sixth = make_student(db, name="林小安", student_no="P114006", grade_level=6, class_=klass)
+    db.commit()
+    return first, fifth, sixth
+
+
+def _grades(db: Session, *students: Student) -> list[tuple[int, str, date | None]]:
+    db.expire_all()
+    return [(s.grade_level, s.status, s.withdrawn_on) for s in students]
+
+
+def _promote_audits(db: Session, academic_year: int) -> list[AuditLog]:
+    return _audits(db, "student.promote_grade", academic_year)
+
+
+def test_admin_promote_preview(staff_client: StaffClientFactory, db_session: Session) -> None:
+    first, fifth, sixth = _three_grades(db_session)
+    client, _ = staff_client(permissions=["students:write"])
+
+    resp = client.post(_PROMOTE_URL, json={"from_academic_year": 114})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert (body["from_academic_year"], body["to_academic_year"]) == (114, 115)
+    assert (body["total"], body["already_promoted"]) == (3, False)
+    assert [(i["grade_from"], i["grade_to"]) for i in body["promote"]] == [(1, 2), (5, 6)]
+    assert [i["id"] for i in body["promote"]] == [str(first.id), str(fifth.id)]
+    assert body["promote"][0] == {
+        "id": str(first.id),
+        "student_no": "P114001",
+        "name": "王小明",
+        "grade_from": 1,
+        "grade_to": 2,
+        "class_name": "彩虹班",
+    }
+    assert [(i["id"], i["grade_to"]) for i in body["graduate"]] == [(str(sixth.id), None)]
+    # 預覽不寫入、不稽核；明確 dry_run=true 相同
+    assert _grades(db_session, first, fifth, sixth) == [
+        (1, "active", None),
+        (5, "active", None),
+        (6, "active", None),
+    ]
+    assert _promote_audits(db_session, 114) == []
+    explicit = client.post(_PROMOTE_URL, json={"from_academic_year": 114, "dry_run": True})
+    assert explicit.status_code == 200
+    assert explicit.json() == body
+
+
+def test_admin_promote_execute(
+    staff_client: StaffClientFactory, db_session: Session, fake_clock: FakeClock
+) -> None:
+    first, fifth, sixth = _three_grades(db_session)
+    pending = make_pickup_request(db_session, sixth, service_date=fake_clock.today())
+    db_session.commit()
+    client, staff = staff_client(permissions=["students:write"])
+
+    resp = client.post(
+        _PROMOTE_URL, json={"from_academic_year": 114, "dry_run": False, "expected_total": 3}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"promoted": 2, "graduated": 1}
+    # 已 commit：年級 / 狀態、畢業生收尾（接送請求取消）、稽核
+    assert _grades(db_session, first, fifth, sixth) == [
+        (2, "active", None),
+        (6, "active", None),
+        (6, "withdrawn", fake_clock.today()),
+    ]
+    assert db_session.get(PickupRequest, pending.id).status == "cancelled"  # type: ignore[union-attr]
+    audits = _promote_audits(db_session, 114)
+    assert len(audits) == 1
+    assert audits[0].after == {"promoted": 2, "graduated": 1, "to_academic_year": 115}
+    assert audits[0].actor_id == staff.id
+    assert client.post(_PROMOTE_URL, json={"from_academic_year": 114}).json()["already_promoted"]
+
+
+def test_admin_promote_explicit_withdrawn_on(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    _, _, sixth = _three_grades(db_session)
+    client, _ = staff_client(permissions=["students:write"])
+
+    resp = client.post(
+        _PROMOTE_URL,
+        json={
+            "from_academic_year": 114,
+            "dry_run": False,
+            "expected_total": 3,
+            "withdrawn_on": "2026-07-31",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert _grades(db_session, sixth) == [(6, "withdrawn", date(2026, 7, 31))]
+
+
+def test_admin_promote_422(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    first, _, _ = _three_grades(db_session)
+    client, _ = staff_client(permissions=["students:write"])
+
+    for body in (
+        {"from_academic_year": 114, "dry_run": False},  # 執行缺 expected_total
+        {"from_academic_year": 99},
+        {"from_academic_year": 201},
+        {"from_academic_year": 114, "foo": 1},
+        {"from_academic_year": 114, "dry_run": False, "expected_total": -1},
+        {"from_academic_year": 114, "withdrawn_on": "not-a-date"},
+        {},
+    ):
+        assert_error(client.post(_PROMOTE_URL, json=body), 422, "validation_error")
+    assert _grades(db_session, first) == [(1, "active", None)]
+    assert _promote_audits(db_session, 114) == []
+
+
+def test_admin_promote_401_403(
+    api_client: TestClient,
+    staff_client: StaffClientFactory,
+    assert_error: AssertError,
+    db_session: Session,
+) -> None:
+    first, _, _ = _three_grades(db_session)
+    reader, _ = staff_client(permissions=["students:read"])
+    body = {"from_academic_year": 114, "dry_run": False, "expected_total": 3}
+
+    assert_error(api_client.post(_PROMOTE_URL, json=body), 401, "unauthenticated")
+    denied = reader.post(_PROMOTE_URL, json=body)
+    assert_error(denied, 403, "permission_denied")
+    assert denied.json()["error"]["details"] == {"required": ["students:write"]}
+    assert _grades(db_session, first) == [(1, "active", None)]
+
+
+def test_admin_promote_409(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    first, fifth, _sixth = _three_grades(db_session)
+    client, _ = staff_client(permissions=["students:write"])
+    body = {"from_academic_year": 114, "dry_run": False, "expected_total": 3}
+
+    assert client.post(_PROMOTE_URL, json=body).status_code == 200
+    second = client.post(_PROMOTE_URL, json=body)
+
+    assert_error(second, 409, "already_promoted")
+    # 只升一次
+    assert _grades(db_session, first, fifth) == [(2, "active", None), (6, "active", None)]
+    assert len(_promote_audits(db_session, 114)) == 1
+
+
+def test_admin_promote_stale(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    first, fifth, sixth = _three_grades(db_session)
+    client, _ = staff_client(permissions=["students:write"])
+
+    resp = client.post(
+        _PROMOTE_URL, json={"from_academic_year": 114, "dry_run": False, "expected_total": 5}
+    )
+
+    assert_error(resp, 409, "preview_stale")
+    assert resp.json()["error"]["details"] == {"expected_total": 5, "total": 3}
+    assert _grades(db_session, first, fifth, sixth) == [
+        (1, "active", None),
+        (5, "active", None),
+        (6, "active", None),
+    ]
+    assert _promote_audits(db_session, 114) == []
+
+
+def test_admin_promote_invalid_dates(
+    staff_client: StaffClientFactory,
+    assert_error: AssertError,
+    db_session: Session,
+    fake_clock: FakeClock,
+) -> None:
+    first, fifth, sixth = _three_grades(db_session)
+    sixth.enrolled_on = date(2026, 9, 15)  # 晚於今天（2026-09-01）
+    db_session.commit()
+    client, _ = staff_client(permissions=["students:write"])
+
+    resp = client.post(
+        _PROMOTE_URL, json={"from_academic_year": 114, "dry_run": False, "expected_total": 3}
+    )
+
+    assert_error(resp, 422, "invalid_dates")
+    details = resp.json()["error"]["details"]
+    assert details["withdrawn_on"] == fake_clock.today().isoformat()
+    assert [(s["student_no"], s["enrolled_on"]) for s in details["students"]] == [
+        ("P114006", "2026-09-15")
+    ]
+    assert details["students"][0]["id"] == str(sixth.id)
+    assert _grades(db_session, first, fifth, sixth) == [
+        (1, "active", None),
+        (5, "active", None),
+        (6, "active", None),
+    ]
+    assert _promote_audits(db_session, 114) == []
+
+
+def test_admin_promote_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "post" in app.openapi()["paths"]["/api/admin/students/promote-grade"]
+
+
+# --- BACKEND-166：POST /api/admin/students/import -----------------------------------
+
+_IMPORT_URL = f"{_URL}/import"
+_PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 100
+_IMPORT_NOS = ("S115101", "S115102", "S115103")
+
+
+def _xlsx(rows: Sequence[Sequence[object]], header: Sequence[str] = IMPORT_COLUMNS) -> bytes:
+    wb = Workbook()
+    ws = wb.active
+    assert ws is not None
+    ws.append(list(header))
+    for row in rows:
+        ws.append(list(row))
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _row(  # 欄位順序對齊 IMPORT_COLUMNS
+    student_no: object = "S115101",
+    name: object = "林小安",
+    gender: object = "男",
+    birthday: object = date(2018, 5, 1),
+    grade: object = 2,
+    school: object = "新生",
+    school_class: object = "二年三班",
+    klass: object = "低年級 A 班",
+    status: object = "在學",
+    enrolled: object = "2026-09-01",
+    note: object = None,
+    id_number: object = None,
+    health_note: object = None,
+) -> list[object]:
+    return [
+        student_no,
+        name,
+        gender,
+        birthday,
+        grade,
+        school,
+        school_class,
+        klass,
+        status,
+        enrolled,
+        note,
+        id_number,
+        health_note,
+    ]
+
+
+def _three_rows() -> list[list[object]]:
+    return [
+        _row(id_number=f" {_ID_NUMBER.lower()} ", health_note="氣喘"),
+        _row(student_no="S115102", name="陳小華", gender="女", status="暫停"),
+        _row(student_no="S115103", name="黃小美", school=None, klass=None),
+    ]
+
+
+def _import_lookups(db: Session) -> None:
+    school = make_school(db, name="新生國小")
+    school.short_name = "新生"
+    make_class(db, name="低年級 A 班", academic_year=115)
+    db.commit()
+
+
+def _upload(client: TestClient, content: bytes | None, **form: object) -> httpx2.Response:
+    data = {"academic_year": "115", **{k: str(v) for k, v in form.items()}}
+    files = None if content is None else {"file": ("students.xlsx", content, _XLSX)}
+    return client.post(_IMPORT_URL, data=data, files=files)
+
+
+def _imported(db: Session) -> list[Student]:
+    db.expire_all()
+    return list(
+        db.execute(
+            select(Student).where(Student.student_no.in_(_IMPORT_NOS)).order_by(Student.student_no)
+        ).scalars()
+    )
+
+
+def _import_audits(db: Session) -> list[AuditLog]:
+    return list(db.execute(select(AuditLog).where(AuditLog.action == "student.import")).scalars())
+
+
+def test_admin_import_preview(staff_client: StaffClientFactory, db_session: Session) -> None:
+    _import_lookups(db_session)
+    client, _ = staff_client(permissions=["students:write", "students:sensitive"])
+
+    resp = _upload(client, _xlsx(_three_rows()))
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert (body["total"], body["valid"], body["invalid"]) == (3, 3, 0)
+    assert [r["row_number"] for r in body["rows"]] == [2, 3, 4]
+    assert all(r["errors"] == [] for r in body["rows"])
+    first = body["rows"][0]
+    assert set(first) == {"row_number", "display", "errors"}  # 不回正規化資料
+    assert first["display"]["學號*"] == "S115101"
+    assert first["display"]["身分證字號"] == "A12****789"
+    assert first["display"]["健康備註"] != ""
+    for leaked in (_ID_NUMBER, "氣喘"):
+        assert leaked not in resp.text
+    assert _imported(db_session) == []  # 預覽不寫入
+    assert _import_audits(db_session) == []
+    # 明確 dry_run=true 相同
+    assert _upload(client, _xlsx(_three_rows()), dry_run="true").json() == body
+
+
+def test_admin_import_execute(staff_client: StaffClientFactory, db_session: Session) -> None:
+    _import_lookups(db_session)
+    client, staff = staff_client(permissions=["students:write", "students:sensitive"])
+
+    resp = _upload(client, _xlsx(_three_rows()), dry_run="false")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["created"] == 3
+    assert len(body["student_ids"]) == 3
+    students = _imported(db_session)
+    assert [s.student_no for s in students] == list(_IMPORT_NOS)
+    assert sorted(body["student_ids"]) == sorted(str(s.id) for s in students)
+    first, second, third = students
+    assert (first.name, first.gender, first.grade_level, first.status) == (
+        "林小安",
+        "male",
+        2,
+        "active",
+    )
+    assert first.class_id is not None
+    assert first.school_id is not None
+    assert first.id_number_enc is not None
+    assert decrypt_bytes(first.id_number_enc) == _ID_NUMBER
+    assert first.id_number_hmac == id_number_hmac(_ID_NUMBER)
+    assert (second.gender, second.status) == ("female", "suspended")
+    assert (third.class_id, third.school_id) == (None, None)
+    for leaked in (_ID_NUMBER, "氣喘"):
+        assert leaked not in resp.text
+    audits = _import_audits(db_session)
+    assert len(audits) == 1
+    assert audits[0].after == {"created": 3, "academic_year": 115}
+    assert audits[0].actor_id == staff.id
+
+
+def test_admin_import_422(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    _import_lookups(db_session)
+    client, _ = staff_client(permissions=["students:write"])
+    content = _xlsx([_row()])
+
+    no_year = client.post(_IMPORT_URL, files={"file": ("students.xlsx", content, _XLSX)})
+    bad_year = _upload(client, content, academic_year="99")
+    bad_flag = _upload(client, content, dry_run="maybe")
+    no_file = _upload(client, None)
+    missing_header = _upload(
+        client,
+        _xlsx([_row()[1:]], header=[c for c in IMPORT_COLUMNS if c != "學號*"]),
+        dry_run="false",
+    )
+
+    for resp in (no_year, bad_year, bad_flag, no_file):
+        assert_error(resp, 422, "validation_error")
+    assert_error(missing_header, 422, "import_invalid_header")
+    assert missing_header.json()["error"]["details"] == {"missing": ["學號*"], "unexpected": []}
+    assert _imported(db_session) == []
+
+
+def test_admin_import_401_403(
+    api_client: TestClient,
+    staff_client: StaffClientFactory,
+    assert_error: AssertError,
+    db_session: Session,
+) -> None:
+    _import_lookups(db_session)
+    content = _xlsx([_row()])
+    reader, _ = staff_client(permissions=["students:read"])
+
+    assert_error(_upload(api_client, content, dry_run="false"), 401, "unauthenticated")
+    denied = _upload(reader, content, dry_run="false")
+    assert_error(denied, 403, "permission_denied")
+    assert denied.json()["error"]["details"] == {"required": ["students:write"]}
+    assert _imported(db_session) == []
+
+
+def test_admin_import_business(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    _import_lookups(db_session)
+    client, _ = staff_client(permissions=["students:write"])
+
+    png = client.post(
+        _IMPORT_URL, data={"academic_year": "115"}, files={"file": ("a.png", _PNG, "image/png")}
+    )
+    empty = _upload(client, b"", dry_run="false")
+    has_errors = _upload(
+        client, _xlsx([_row(), _row(student_no="S115102", school="不存在國小")]), dry_run="false"
+    )
+
+    assert_error(png, 415, "unsupported_file_type")
+    assert png.json()["error"]["details"] == {"allowed": ["xlsx"]}
+    assert_error(empty, 422, "file_empty")
+    assert_error(has_errors, 409, "import_has_errors")
+    assert _imported(db_session) == []
+    assert _import_audits(db_session) == []
+
+
+def test_admin_import_413(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    client, _ = staff_client(permissions=["students:write"])
+    oversized = b"PK\x03\x04" + b"\0" * XLSX_MAX_BYTES  # 超過 5 MiB 一個 byte
+
+    resp = _upload(client, oversized, dry_run="false")
+
+    assert_error(resp, 413, "file_too_large")
+    assert resp.json()["error"]["details"] == {"max_bytes": XLSX_MAX_BYTES}
+    assert _imported(db_session) == []
+
+
+def test_admin_import_has_errors_details(
+    staff_client: StaffClientFactory, assert_error: AssertError, db_session: Session
+) -> None:
+    _import_lookups(db_session)
+    client, _ = staff_client(permissions=["students:write", "students:sensitive"])
+    rows = [
+        _row(),
+        _row(student_no="S115102", name="陳小華", school="不存在國小", id_number=_ID_NUMBER),
+        _row(student_no="S115103", name="黃小美"),
+    ]
+
+    resp = _upload(client, _xlsx(rows), dry_run="false")
+
+    assert_error(resp, 409, "import_has_errors")
+    details = resp.json()["error"]["details"]
+    assert (details["total"], details["valid"], details["invalid"]) == (3, 2, 1)
+    assert len(details["rows"]) == 1  # 只含錯誤列
+    bad = details["rows"][0]
+    assert set(bad) == {"row_number", "display", "errors"}
+    assert bad["row_number"] == 3
+    assert bad["errors"] == ["找不到國小：不存在國小"]
+    assert bad["display"]["學號*"] == "S115102"
+    assert bad["display"]["身分證字號"] == "A12****789"
+    assert _ID_NUMBER not in resp.text
+    assert _imported(db_session) == []
+    assert _import_audits(db_session) == []
+
+
+def test_admin_import_conflict(
+    staff_client: StaffClientFactory,
+    assert_error: AssertError,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """preview 全部合法、寫入前另一筆同學號被人插入（競態）→ 409 import_conflict，三列都不寫入。"""
+    _import_lookups(db_session)
+    client, _ = staff_client(permissions=["students:write"])
+    real_preview = student_import_service.preview
+
+    def preview_then_race(session: Session, *args: object, **kwargs: object) -> ImportPreview:
+        result = real_preview(session, *args, **kwargs)  # type: ignore[arg-type]
+        make_student(session, name="搶先者", student_no="S115102")
+        return result
+
+    monkeypatch.setattr(student_import_service, "preview", preview_then_race)
+    rows = [
+        _row(),
+        _row(student_no="S115102", name="陳小華"),
+        _row(student_no="S115103", name="黃小美"),
+    ]
+
+    resp = _upload(client, _xlsx(rows), dry_run="false")
+
+    assert_error(resp, 409, "import_conflict")
+    assert resp.json()["error"]["details"] == {
+        "row_number": 3,
+        "code": "student_no_taken",
+        "message": "學號已被使用",
+    }
+    # 整批回滾且請求未 commit：連搶先者也不存在（request 結束 rollback）
+    assert _imported(db_session) == []
+    assert _import_audits(db_session) == []
+    assert (
+        db_session.execute(
+            select(func.count())
+            .select_from(AuditLog)
+            .where(AuditLog.action == "student.sensitive_update")
+        ).scalar_one()
+        == 0
+    )
+
+
+def test_admin_import_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "post" in app.openapi()["paths"]["/api/admin/students/import"]
