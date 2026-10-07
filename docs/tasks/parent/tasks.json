@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 109,
-  "last_updated": "2026-10-07T10:47:29Z",
+  "version": 110,
+  "last_updated": "2026-10-07T10:48:22Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -2567,7 +2567,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/leaves.ts",
       "source_ref": "FE:src/parent/api/leaves.ts::uploadLeaveAttachment",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-355",
@@ -2586,13 +2586,19 @@
           "vitest"
         ],
         "red_cases": [
-          "leavesApi lists with paging：listChildLeaves('s1', 2) → GET '/parent/children/s1/leaves' params 深等於 {page:2, page_size:20}；回 {items:[...1 筆], total:21} → resolve.total === 21",
+          "leavesApi lists with paging：listChildLeaves('s1', 2) → GET '/parent/children/s1/leaves' params 深等於 {page:2, page_size:20}；回 {items:[...1 筆], total:21} → resolve.total === 21；listChildLeaves('s1') 預設 params 深等於 {page:1, page_size:20}",
           "leavesApi create omits empty reason：createLeave({student_id:'s1', leave_type:'sick', start_date:'2026-10-05', end_date:'2026-10-06', reason:''}) → body 不含 reason 鍵；回 409 {error:{code:'leave_overlap', details:{start_date:'2026-10-05', end_date:'2026-10-07'}}} → reject 且 details.end_date === '2026-10-07'",
           "leavesApi upload sends file field：uploadLeaveAttachment('l1', new File(['x'],'note.pdf',{type:'application/pdf'})) → POST '/parent/leaves/l1/attachments'，FormData.get('file').name === 'note.pdf'；回 413 → reject 且 error.status === 413",
-          "leavesApi cancel path：cancelLeave('l1') → POST '/parent/leaves/l1/cancel'，回 status 'cancelled' → 原樣 resolve",
+          "leavesApi cancel path：cancelLeave('l1') → POST '/parent/leaves/l1/cancel'，不帶 body，回 status 'cancelled' → 原樣 resolve",
           "leavesApi keeps null attachment url：列表回的附件 url:null、取消回應與上傳回應的 url:null → 原樣 resolve（attachments[0].url === null，其餘欄位不變；型別為 string | null）",
           "leavesApi encodes path ids：listChildLeaves / cancelLeave / uploadLeaveAttachment 傳入 '../../me?x=1#y' → 請求 URL 該段為 encodeURIComponent 後的值（不含未編碼的 '/'、'?'、'#'）；傳入一般 UUID 時 URL 與未編碼相同",
-          "leavesApi create omits blank reason：reason 為 undefined 或 '   ' → body 不含 reason 鍵"
+          "leavesApi create omits blank reason：reason 為 undefined 或 '   ' → body 不含 reason 鍵",
+          "leavesApi list propagates 404：GET '/parent/children/s9/leaves' 回 404 {error:{code:'student_not_found'}} → reject 且 status === 404、code === 'student_not_found'",
+          "leavesApi create sends the given fields：createLeave({student_id:'s1', leave_type:'personal', start_date:'2026-10-05', end_date:'2026-10-06', reason:'家裡有事'}) → body 深等於同樣欄位；回 201 → resolve 為該 ParentLeave",
+          "leavesApi upload sends only the file field as multipart：請求 data 為 FormData（不是 JSON 字串）、Content-Type 不含 application/json、欄位只有 file",
+          "leavesApi upload resends multipart after session refresh：第一次回 401、refresh 成功後重送 → 兩次請求的 data 都是含 file 的 FormData，回傳第二次的 201 結果",
+          "leavesApi upload surfaces business errors：回 409 attachment_limit_reached 與 415 unsupported_file_type → reject 且 status、code 原樣",
+          "leavesApi cancel surfaces business errors：回 409 {error:{code:'leave_already_ended'}} → reject 且 status === 409、code 相同"
         ],
         "run": "just web-test src/parent/api/leaves.spec.ts -t \"leavesApi\"",
         "notes": ""
