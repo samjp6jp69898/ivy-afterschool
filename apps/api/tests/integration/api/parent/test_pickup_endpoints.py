@@ -1,10 +1,13 @@
 """BACKEND-441：GET /api/parent/pickup/requests/today。
 BACKEND-444 / 445 / 446：家長端常用接送人（列表、新增 multipart 含照片、刪除）。
 BACKEND-447 / 448：家長端代理接送授權（列表、建立；接送碼只回一次、Cache-Control: no-store）。
-BACKEND-440 / 442 / 443：接送請求「我要來接」（含 arrived 捷徑）、「我到了」、取消。"""
+BACKEND-440 / 442 / 443：接送請求「我要來接」（含 arrived 捷徑）、「我到了」、取消。
+BACKEND-524：代理接送授權重新產生接送碼（舊碼失效、新碼只回一次、重設連錯與鎖定）。"""
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Callable, Iterator
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
@@ -16,10 +19,12 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.models.account import StaffUser
+from app.models.audit import AuditLog
 from app.models.notifications import Notification
 from app.models.parents import ParentAccount
-from app.models.pickup import PickupPerson, PickupRequest
+from app.models.pickup import PickupAuthorization, PickupPerson, PickupRequest
 from app.models.students import Student
+from app.services.pickup.codes import pickup_code_matches
 from app.services.settings_service import clear_settings_cache
 from tests.support.factories import (
     make_guardian,
@@ -930,3 +935,174 @@ def test_parent_pickup_cancel_409(
 
     assert_error(resp, 409, "invalid_pickup_status")
     assert resp.json()["error"]["details"] == {"current_status": "completed"}
+
+
+# --- BACKEND-524：POST /api/parent/pickup-authorizations/{id}/regenerate-code ---------------------
+
+
+def _regenerate_url(auth_id: object) -> str:
+    return f"/api/parent/pickup-authorizations/{auth_id}/regenerate-code"
+
+
+def _reload_auth(db: Session, auth_id: object) -> PickupAuthorization:
+    """跳過 identity map 重讀：handler 沒 commit 時，請求結束的 rollback 會讓這裡讀到舊值。"""
+    return db.execute(
+        select(PickupAuthorization)
+        .where(PickupAuthorization.id == auth_id)
+        .execution_options(populate_existing=True)
+    ).scalar_one()
+
+
+def _regenerate_audits(db: Session, auth_id: object) -> list[AuditLog]:
+    return list(
+        db.execute(
+            select(AuditLog).where(
+                AuditLog.action == "pickup_authorization.regenerate_code",
+                AuditLog.entity_id == str(auth_id),
+            )
+        ).scalars()
+    )
+
+
+# 舊碼用 000000：generate_pickup_code 的範圍是 100000~999999，新碼不可能與舊碼相同
+_OLD_CODE = "000000"
+
+
+def test_parent_pickup_auth_regenerate_success(
+    parent_client: ParentClientFactory, db_session: Session
+) -> None:
+    client, parent = parent_client()
+    ming = _own_child(db_session, parent)
+    auth = make_pickup_authorization(
+        db_session, ming, service_date=_TODAY, code=_OLD_CODE, code_attempts=3
+    )
+    locked = make_pickup_authorization(
+        db_session,
+        ming,
+        service_date=_TODAY + timedelta(days=1),
+        code=_OLD_CODE,
+        code_attempts=5,
+    )
+    db_session.commit()
+    assert locked.code_locked_at is not None
+
+    resp = client.post(_regenerate_url(auth.id), headers={"User-Agent": "LIFF-test/1.0"})
+    locked_resp = client.post(_regenerate_url(locked.id))
+
+    assert resp.status_code == 200
+    assert resp.headers["cache-control"] == "no-store"
+    body = resp.json()
+    assert set(body) == {"authorization", "code"}
+    assert re.fullmatch(r"\d{6}", body["code"])
+    authorization = body["authorization"]
+    assert authorization["id"] == str(auth.id)
+    assert authorization["student_id"] == str(ming.id)
+    assert authorization["code_last4"] == body["code"][-4:]
+    assert (authorization["status"], authorization["effective_status"]) == ("active", "active")
+    assert "code_hash" not in resp.text
+    # 請求後重讀 DB：新碼生效、舊碼失效、連錯次數歸零
+    db_session.expire_all()
+    stored = _reload_auth(db_session, auth.id)
+    assert pickup_code_matches(body["code"], stored.code_hash)
+    assert not pickup_code_matches(_OLD_CODE, stored.code_hash)
+    assert (stored.code_last4, stored.code_attempts, stored.code_locked_at) == (
+        body["code"][-4:],
+        0,
+        None,
+    )
+    # 稽核：actor 是家長、user_agent 來自這個請求，內容不含明碼
+    [log] = _regenerate_audits(db_session, auth.id)
+    assert (log.actor_type, log.actor_id, log.user_agent) == ("parent", parent.id, "LIFF-test/1.0")
+    assert body["code"] not in json.dumps([log.before, log.after])
+    # 已鎖定的授權也可以重新產生：鎖定一併解除
+    assert locked_resp.status_code == 200
+    relocked = _reload_auth(db_session, locked.id)
+    assert (relocked.code_attempts, relocked.code_locked_at) == (0, None)
+    assert pickup_code_matches(locked_resp.json()["code"], relocked.code_hash)
+    # 之後的列表只有末四碼，沒有明碼欄位
+    listed = client.get(_auths_url(ming.id)).json()
+    assert {a["code_last4"] for a in listed} == {
+        body["code"][-4:],
+        locked_resp.json()["code"][-4:],
+    }
+    assert all("code" not in a for a in listed)
+
+
+def test_parent_pickup_auth_regenerate_422(
+    parent_client: ParentClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = parent_client()
+
+    assert_error(client.post(_regenerate_url("abc")), 422, "validation_error")
+
+
+def test_parent_pickup_auth_regenerate_401(
+    api_client: TestClient, staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    assert_error(api_client.post(_regenerate_url(uuid4())), 401, "unauthenticated")
+    staff, _ = staff_client(permissions=["pickup:operate", "pickup:override"])
+    assert_error(staff.post(_regenerate_url(uuid4())), 401, "unauthenticated")
+
+
+def test_parent_pickup_auth_regenerate_idor(
+    parent_client: ParentClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client_a, _ = parent_client()
+    _, parent_b = parent_client()
+    hua = _own_child(db_session, parent_b, name="陳小華")
+    theirs = make_pickup_authorization(
+        db_session, hua, service_date=_TODAY, code="111111", code_attempts=2
+    )
+    db_session.commit()
+    hash_before = theirs.code_hash
+
+    theirs_resp = client_a.post(_regenerate_url(theirs.id))
+    missing = client_a.post(_regenerate_url(uuid4()))
+
+    assert_error(theirs_resp, 404, "pickup_authorization_not_found")
+    assert theirs_resp.json() == missing.json()
+    db_session.expire_all()
+    stored = _reload_auth(db_session, theirs.id)
+    assert stored.code_hash == hash_before
+    assert (stored.code_last4, stored.code_attempts) == ("1111", 2)
+    assert pickup_code_matches("111111", stored.code_hash)
+    assert _regenerate_audits(db_session, theirs.id) == []
+
+
+def test_parent_pickup_auth_regenerate_409(
+    parent_client: ParentClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client, parent = parent_client()
+    ming = _own_child(db_session, parent)
+    gone = _own_child(db_session, parent, name="已退班")
+    cases = {
+        "completed": make_pickup_authorization(
+            db_session, ming, service_date=_TODAY, code="111111", status="completed"
+        ),
+        "cancelled": make_pickup_authorization(
+            db_session, ming, service_date=_TODAY, code="222222", status="cancelled"
+        ),
+        "expired": make_pickup_authorization(
+            db_session, ming, service_date=_TODAY - timedelta(days=1), code="333333"
+        ),
+        "withdrawn": make_pickup_authorization(
+            db_session, gone, service_date=_TODAY, code="444444"
+        ),
+    }
+    _withdraw(db_session, gone)
+    db_session.commit()
+
+    completed = client.post(_regenerate_url(cases["completed"].id))
+    cancelled = client.post(_regenerate_url(cases["cancelled"].id))
+    expired = client.post(_regenerate_url(cases["expired"].id))
+    withdrawn = client.post(_regenerate_url(cases["withdrawn"].id))
+
+    assert_error(completed, 409, "authorization_not_active")
+    assert_error(cancelled, 409, "authorization_not_active")
+    assert_error(expired, 409, "authorization_expired")
+    assert_error(withdrawn, 409, "student_not_active")
+    # 失敗的請求不換碼、不寫稽核
+    db_session.expire_all()
+    for auth, code in zip(cases.values(), ("111111", "222222", "333333", "444444"), strict=True):
+        assert pickup_code_matches(code, _reload_auth(db_session, auth.id).code_hash)
+        assert _regenerate_audits(db_session, auth.id) == []
