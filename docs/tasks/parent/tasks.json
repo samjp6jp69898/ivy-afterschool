@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 102,
-  "last_updated": "2026-10-07T08:14:42Z",
+  "version": 103,
+  "last_updated": "2026-10-07T08:23:03Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -3391,7 +3391,7 @@
       "granularity_unit": "test",
       "target_path": "apps/web/src/parent/components/pickup/PickupPersonForm.spec.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "PARENT-099"
@@ -3409,9 +3409,9 @@
         "notes": "純型別修正，驗收以指令為準：①修正前 `just web-typecheck` 輸出含 PickupPersonForm.spec.ts(32,3) 的 TS2740（紅）；②修正後輸出不再含這個檔案的 error（綠；全專案歸零以 FRONTEND-295 也完成為準）；③`just web-test src/parent/components/pickup/PickupPersonForm.spec.ts -t \"PickupPersonForm\"` 全綠、測試數量與斷言與修正前相同；④`just web-lint src/parent/components/pickup/PickupPersonForm.spec.ts` 乾淨。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-p",
+        "notes": "tdd.notes 四條逐條實跑。①修正前後對照：以 extends tsconfig.app.json 的 scratch tsconfig，對 1930ea5^ 與 1930ea5 兩版 spec 各跑一次 vue-tsc（不動 repo）。修正前恰為 (32,3) TS2740（Omit<DOMWrapper<HTMLInputElement>, \"exists\"> 缺 subTree / setChecked / setSelected / wrapperElem），修正後 0 個錯誤；just web-typecheck 在 e8121e3 全專案 exit 0，輸出不含此檔。②just web-test 該檔 -t \"PickupPersonForm\" 14/14 綠；修正前後以靜態擷取的 it() 名稱 14 條逐字相同，且與 vitest JSON 報告的實跑名稱一致；45 行 expect 逐字相同，斷言沒有改弱。③just web-lint 該檔乾淨。④git diff 1930ea5^ 1930ea5 只動 spec：第 29 行的回傳型別標註與新增的一行註解，沒有 @ts-ignore / @ts-expect-error / @ts-nocheck / any / as unknown as；PickupPersonForm.vue 在 PARENT-099（1f0c27f）之後沒有任何 commit。新標註與 @vue/test-utils 2.5.1 dist/src/baseWrapper.d.ts:55 的 get() 回傳型別一致，註解描述正確；field() 的呼叫端只用 setValue / attributes，不需要 exists()。殘留：無。"
       }
     }
   ]
