@@ -389,11 +389,14 @@ def test_promotion_execute_concurrent_second_run_waits_then_409(
     fifth = make_student(committing_db_session, name="陳小華", grade_level=5)
     committing_db_session.commit()
     first_id, fifth_id = first.id, fifth.id
+    # 實作有誤（沒鎖、順序錯）時五年級會被當畢業生 close_out 並 commit：連 close_out 稽核一起清
     owner_cleanup_rows.extend(
         [
             ("students", "id", first_id),
             ("students", "id", fifth_id),
             ("audit_logs", "entity_id", str(_CONCURRENT_YEAR)),
+            ("audit_logs", "entity_id", str(first_id)),
+            ("audit_logs", "entity_id", str(fifth_id)),
         ]
     )
     a_locked = threading.Event()
