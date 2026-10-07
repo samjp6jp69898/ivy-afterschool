@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 157,
-  "last_updated": "2026-10-07T11:21:54Z",
+  "version": 158,
+  "last_updated": "2026-10-07T11:26:12Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -5375,7 +5375,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/student/StudentExamHistoryTab.vue",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r9d",
       "depends_on": [
         "FRONTEND-230",
