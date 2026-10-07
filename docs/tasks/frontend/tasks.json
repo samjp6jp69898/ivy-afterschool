@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 155,
-  "last_updated": "2026-10-07T11:08:18Z",
+  "version": 156,
+  "last_updated": "2026-10-07T11:14:16Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1351,7 +1351,7 @@
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/LoginView.vue",
       "source_ref": "FE:src/views/LoginView.vue::default",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r9d",
       "depends_on": [
         "FRONTEND-022",
