@@ -238,6 +238,51 @@ describe('childrenStore', () => {
     expect(store.loading).toBe(false)
   })
 
+  it('childrenStore ignores a stale failure', async () => {
+    const held = holdReply()
+    const store = useChildrenStore()
+
+    const pending = store.load()
+    store.seed([HUA])
+    await held.release(SERVER_ERROR, 500)
+    await pending
+
+    expect(store.error).toBe('')
+    expect(store.items).toEqual([HUA])
+    expect(store.loading).toBe(false)
+  })
+
+  it('childrenStore keeps loading until the latest request finishes', async () => {
+    const older = holdReply()
+    const newer = holdReply()
+    const store = useChildrenStore()
+
+    const first = store.load()
+    const second = store.load(true)
+    // 較舊的請求先回來：結果丟棄、最新的請求仍在進行中
+    await older.release([MING])
+    await first
+    expect(store.items).toEqual([])
+    expect(store.loaded).toBe(false)
+    expect(store.loading).toBe(true)
+
+    await newer.release([HUA])
+    await second
+    expect(store.items).toEqual([HUA])
+    expect(store.loaded).toBe(true)
+    expect(store.loading).toBe(false)
+  })
+
+  it('childrenStore seed copies the given array', () => {
+    const source = [MING]
+    const store = useChildrenStore()
+
+    store.seed(source)
+    source.push(HUA)
+
+    expect(store.items).toEqual([MING])
+  })
+
   it('childrenStore falls back to the first child when the selected one disappears', async () => {
     mock.onGet('/parent/children').replyOnce(200, [MING, HUA]).onGet('/parent/children').replyOnce(200, [MING])
     const store = useChildrenStore()
