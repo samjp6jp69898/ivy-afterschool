@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 150,
-  "last_updated": "2026-10-07T10:50:29Z",
+  "version": 151,
+  "last_updated": "2026-10-07T10:55:09Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1825,7 +1825,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/reference/SubjectTable.vue",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-051",
