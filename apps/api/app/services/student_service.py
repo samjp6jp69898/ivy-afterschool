@@ -352,14 +352,17 @@ def _record_sensitive_audit(
     )
 
 
-def create_student(
+def insert_student(
     session: Session,
     data: StudentCreateIn,
     *,
     actor: CurrentStaff,
     meta: RequestMeta,
     clock: Clock,
-) -> StudentDetailOut:
+) -> Student:
+    """BACKEND-151 的寫入邏輯（``create_student`` 與 BACKEND-156 匯入共用）：權限 / 參照 / 日期
+    檢查、身分證查重與加密、savepoint 內 insert 並轉譯 unique、敏感欄位稽核；只回 ORM 物件、
+    不組回應。"""
     id_number = _blank_to_none(data.id_number)
     health_note = _blank_to_none(data.health_note)
     _require_sensitive_permission(actor, id_number is not None or health_note is not None)
@@ -406,6 +409,18 @@ def create_student(
         _record_sensitive_audit(
             session, actor=actor, student_id=student.id, after={"set": written}, meta=meta
         )
+    return student
+
+
+def create_student(
+    session: Session,
+    data: StudentCreateIn,
+    *,
+    actor: CurrentStaff,
+    meta: RequestMeta,
+    clock: Clock,
+) -> StudentDetailOut:
+    student = insert_student(session, data, actor=actor, meta=meta, clock=clock)
     return _detail_out(session, student, actor=actor, storage=None, clock=clock)
 
 

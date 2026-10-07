@@ -39,6 +39,18 @@
   寫入邏輯）。
 - ``display`` 為原始儲存格字串供前端呈現：身分證遮罩（``mask_id_number``）、健康備註以固定文字
   取代。
+
+BACKEND-156 ``execute``（第二段：全有或全無寫入）：
+- 重新執行 ``preview``（不信任前端送回的預覽）；有任何 invalid 列 → 409 ``import_has_errors``，
+  details 為 preview 結果（``total`` / ``valid`` / ``invalid`` 與只含錯誤列的 ``rows``，每列只有
+  ``row_number`` / ``display`` / ``errors``，不含可能帶敏感明文的正規化資料）。
+- 全部 valid → 在一個 savepoint 內逐列以 BACKEND-151 的 ``student_service.insert_student``（含加密、
+  HMAC、unique 轉譯、敏感欄位稽核）新增；任一列失敗（預覽與寫入之間的競態：學號 / 身分證撞
+  unique、班級剛封存等）→ savepoint 回滾整批、409 ``import_conflict``（details
+  ``{row_number, code, message}``）。
+- 稽核 ``student.import``（entity_type ``student_import``、after
+  ``{"created": n, "academic_year": y}``）。
+- 不 commit（endpoint commit）。
 """
 
 from __future__ import annotations
@@ -60,13 +72,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentStaff
-from app.core.errors import AppError
+from app.core.clock import Clock
+from app.core.errors import AppError, ConflictError
 from app.core.permissions import Permission
+from app.core.request_meta import RequestMeta
 from app.core.uploads import ValidatedUpload
 from app.models.classes import SchoolClass
 from app.models.reference import School
 from app.models.students import Student
 from app.schemas.students import StudentCreateIn
+from app.services import audit_service
+from app.services.student_service import insert_student
 from app.services.students.id_number import (
     id_number_hmac,
     mask_id_number,
@@ -633,12 +649,86 @@ def preview(
     )
 
 
+# --- execute（BACKEND-156）--------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ImportResult:
+    created: int
+    student_ids: list[UUID]
+
+
+def _error_details(result: ImportPreview) -> dict[str, Any]:
+    """409 ``import_has_errors`` 的 details：只含有錯誤的列，不帶正規化資料（可能含敏感明文）。"""
+    return {
+        "total": result.total,
+        "valid": result.valid,
+        "invalid": result.invalid,
+        "rows": [
+            {"row_number": row.row_number, "display": row.display, "errors": row.errors}
+            for row in result.rows
+            if row.errors
+        ],
+    }
+
+
+def _insert_row(
+    session: Session, row: ImportRowResult, *, actor: CurrentStaff, meta: RequestMeta, clock: Clock
+) -> UUID:
+    assert row.data is not None  # noqa: S101  invalid == 0 時每列都有正規化資料
+    try:
+        return insert_student(session, row.data, actor=actor, meta=meta, clock=clock).id
+    except AppError as exc:
+        # preview 剛判定合法卻寫不進去 = 預覽與寫入之間有人動了資料（學號 / 身分證撞 unique、
+        # 班級剛封存等）；呼叫端的 savepoint 會把本批已寫入的列一併回滾
+        raise ConflictError(
+            "import_conflict",
+            f"匯入第 {row.row_number} 列時與既有資料衝突（{exc.message}），請重新預覽後再試",
+            details={"row_number": row.row_number, "code": exc.code, "message": exc.message},
+        ) from exc
+
+
+def execute(
+    session: Session,
+    upload: ValidatedUpload,
+    *,
+    academic_year: int,
+    actor: CurrentStaff,
+    meta: RequestMeta,
+    clock: Clock,
+) -> ImportResult:
+    result = preview(session, upload, academic_year=academic_year, actor=actor)
+    if result.invalid:
+        raise ConflictError(
+            "import_has_errors",
+            "匯入資料有錯誤，請修正後重新預覽",
+            details=_error_details(result),
+        )
+    # 全有或全無：任一列失敗，savepoint 回滾整批
+    with session.begin_nested():
+        student_ids = [
+            _insert_row(session, row, actor=actor, meta=meta, clock=clock) for row in result.rows
+        ]
+    audit_service.record(
+        session,
+        actor=audit_service.Actor.staff(actor),
+        action="student.import",
+        entity_type="student_import",
+        entity_id=None,
+        after={"created": len(student_ids), "academic_year": academic_year},
+        meta=meta,
+    )
+    return ImportResult(created=len(student_ids), student_ids=student_ids)
+
+
 __all__ = [
     "IMPORT_COLUMNS",
     "MAX_IMPORT_ROWS",
     "ImportPreview",
+    "ImportResult",
     "ImportRowResult",
     "assert_xlsx_within_limits",
     "check_header",
+    "execute",
     "preview",
 ]
