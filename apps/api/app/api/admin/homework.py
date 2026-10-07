@@ -4,6 +4,10 @@
   BACKEND-383 ``get_board`` → ``BoardOut``。
 - BACKEND-386 ``POST /homework/items``：homework:write；``HomeworkItemCreateIn`` → BACKEND-377
   ``create_item`` → commit → 201 ``HomeworkMutationOut``（項目與重算後的進度）。
+- BACKEND-387 ``POST /homework/items/batch``：homework:write；``HomeworkBatchCreateIn`` →
+  BACKEND-378 ``batch_create_items``（整班或班內指定學生）→ commit → 201 ``HomeworkBatchOut``。
+
+固定路徑 ``/items/batch`` 宣告在 ``/items/{item_id}`` 之前。
 - BACKEND-390 ``PUT /homework/progress/{student_id}``：homework:write；``ProgressPutIn``
   （service_date 預設今天）→ 有給 overall 先 BACKEND-381 ``set_overall_status``，有給
   ready_eta / note 再 BACKEND-382 ``set_ready_eta_and_note``（未給的欄位傳 UNSET）→ commit →
@@ -29,6 +33,8 @@ from app.models.homework import HomeworkDailyProgress
 from app.schemas.homework import (
     BoardOut,
     BoardQuery,
+    HomeworkBatchCreateIn,
+    HomeworkBatchOut,
     HomeworkItemCreateIn,
     HomeworkMutationOut,
     ProgressOut,
@@ -59,6 +65,15 @@ def create_item(
     body: HomeworkItemCreateIn, staff: HomeworkWrite, db: Db, clock: ClockDep
 ) -> HomeworkMutationOut:
     out = homework_service.create_item(db, body, actor=staff, clock=clock)
+    db.commit()
+    return out
+
+
+@router.post("/items/batch", status_code=201, response_model=HomeworkBatchOut)
+def batch_create_items(
+    body: HomeworkBatchCreateIn, staff: HomeworkWrite, db: Db, clock: ClockDep
+) -> HomeworkBatchOut:
+    out = homework_service.batch_create_items(db, body, actor=staff, clock=clock)
     db.commit()
     return out
 
