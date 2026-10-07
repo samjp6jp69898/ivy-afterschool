@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 119,
-  "last_updated": "2026-10-07T07:46:12Z",
+  "version": 120,
+  "last_updated": "2026-10-07T07:47:44Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -539,7 +539,7 @@
       "granularity_unit": "composable",
       "target_path": "apps/web/src/router/authGuard.ts",
       "source_ref": "FE:src/router/index.ts::authGuard",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r9a",
       "depends_on": [
         "FRONTEND-022",
