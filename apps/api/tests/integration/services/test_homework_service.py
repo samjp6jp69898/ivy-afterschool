@@ -1,6 +1,6 @@
 """BACKEND-373 / 384 / 374 / 383 / 376 / 382：homework_service（進度列鎖定、家長端當日作業明細、
 ws 快照推播、作業進度看板、整體完成副作用、設定預計可接送時間、重算整體進度、手動標整體完成）。
-BACKEND-377：新增單一學生作業項目。BACKEND-378：整班批次新增同一份作業。
+BACKEND-377：新增單一學生作業項目。BACKEND-378：整班批次新增同一份作業。BACKEND-379：修改作業項目。
 
 推播測試以 monkeypatch 記錄 publish_threadsafe；commit 走 db_session（savepoint 模式的 commit
 同樣觸發 before_commit / after_commit，見 BACKEND-006）。
@@ -36,6 +36,7 @@ from app.schemas.homework import (
     BoardStudentOut,
     HomeworkBatchCreateIn,
     HomeworkItemCreateIn,
+    HomeworkItemUpdateIn,
 )
 from app.services import homework_service
 from app.services.homework_service import (
@@ -50,6 +51,7 @@ from app.services.homework_service import (
     recompute_progress,
     set_overall_status,
     set_ready_eta_and_note,
+    update_item,
 )
 from app.services.settings_service import clear_settings_cache
 from tests.integration.db.conftest import connect_owner
@@ -1748,3 +1750,325 @@ def test_batch_create_items_holds_progress_locks_until_commit(
     assert _item_count(committing_db_session, hua.id) == 3
     assert _item_count(committing_db_session, ming.id) == 1
     assert _notifications(committing_db_session, "homework.done", hua.id) == []
+
+
+# --- BACKEND-379 update_item ---
+
+
+def _update_in(**fields: Any) -> HomeworkItemUpdateIn:
+    return HomeworkItemUpdateIn(**fields)
+
+
+def test_update_homework_item_status_done(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = _with_parent(db_session)
+    make_homework_item(db_session, ming, service_date=_DAY, status="done", title="國語生字")
+    last = make_homework_item(db_session, ming, service_date=_DAY, status="doing", title="數學習作")
+    make_homework_progress(db_session, ming, service_date=_DAY, overall_status="in_progress")
+
+    out = update_item(db_session, last.id, _update_in(status="done"), actor=actor, clock=clock)
+
+    assert out.item is not None
+    assert (out.item.id, out.item.status, out.item.title) == (last.id, "done", "數學習作")
+    assert out.progress.overall_status == "done"
+    assert _progress_row(db_session, ming.id).overall_status == "done"
+    [notification] = _notifications(db_session, "homework.done", ming.id)
+    assert notification.title == "王小明 作業已完成"
+    stored = _stored_item(db_session, last.id)
+    assert (stored.status, stored.updated_by) == ("done", actor.id)
+
+
+def test_update_homework_item_partial(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    math = _subject(db_session, "數學")
+    item = make_homework_item(
+        db_session,
+        ming,
+        service_date=_DAY,
+        title="數學習作",
+        status="doing",
+        subject=math,
+        sort_order=3,
+    )
+
+    renamed = update_item(
+        db_session, item.id, _update_in(title="數學習作 p.12-13"), actor=actor, clock=clock
+    )
+
+    assert renamed.item is not None
+    assert (
+        renamed.item.title,
+        renamed.item.status,
+        renamed.item.subject_id,
+        renamed.item.subject_name,
+        renamed.item.sort_order,
+    ) == ("數學習作 p.12-13", "doing", math.id, "數學", 3)
+    assert renamed.progress.overall_status == "in_progress"
+    stored = _stored_item(db_session, item.id)
+    assert (stored.title, stored.status, stored.subject_id, stored.sort_order) == (
+        "數學習作 p.12-13",
+        "doing",
+        math.id,
+        3,
+    )
+    assert stored.updated_by == actor.id
+
+    reordered = update_item(db_session, item.id, _update_in(sort_order=9), actor=actor, clock=clock)
+    corrected = update_item(
+        db_session, item.id, _update_in(status="correcting"), actor=actor, clock=clock
+    )
+
+    assert reordered.item is not None
+    assert (reordered.item.sort_order, reordered.item.status, reordered.item.title) == (
+        9,
+        "doing",
+        "數學習作 p.12-13",
+    )
+    assert corrected.item is not None
+    assert (corrected.item.status, corrected.item.sort_order) == ("correcting", 9)
+    assert corrected.progress.overall_status == "in_progress"
+
+
+def test_update_homework_item_subject_set_and_clear(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session)
+    math = _subject(db_session, "數學")
+    chinese = _subject(db_session, "國語")
+    item = make_homework_item(db_session, ming, service_date=_DAY, subject=math)
+
+    changed = update_item(
+        db_session, item.id, _update_in(subject_id=chinese.id), actor=actor, clock=clock
+    )
+    cleared = update_item(
+        db_session, item.id, _update_in(subject_id=None), actor=actor, clock=clock
+    )
+
+    assert changed.item is not None
+    assert (changed.item.subject_id, changed.item.subject_name) == (chinese.id, "國語")
+    assert cleared.item is not None
+    assert (cleared.item.subject_id, cleared.item.subject_name) == (None, None)
+    assert _stored_item(db_session, item.id).subject_id is None
+
+
+def test_update_homework_item_errors(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = make_student(db_session)
+    item = make_homework_item(db_session, ming, service_date=_DAY, title="國語生字")
+    inactive_subject = _subject(db_session, "自然")
+    inactive_subject.is_active = False
+    db_session.flush()
+
+    def fail(item_id: UUID, **fields: Any) -> AppError:
+        with pytest.raises(AppError) as excinfo:
+            update_item(db_session, item_id, _update_in(**fields), actor=actor, clock=clock)
+        return excinfo.value
+
+    missing = fail(uuid4(), title="x")
+    unknown_subject = fail(item.id, title="改名", subject_id=uuid4())
+    stopped_subject = fail(item.id, subject_id=inactive_subject.id)
+
+    assert (missing.status, missing.code) == (404, "homework_item_not_found")
+    assert (unknown_subject.status, unknown_subject.code) == (422, "invalid_subject")
+    assert (stopped_subject.status, stopped_subject.code) == (422, "invalid_subject")
+    # 驗證失敗時整筆都不改（含同一請求裡本來合法的 title）
+    stored = _stored_item(db_session, item.id)
+    assert (stored.title, stored.subject_id, stored.updated_by) == ("國語生字", None, None)
+
+
+def test_update_homework_item_back_to_open_resets_done(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = _with_parent(db_session)
+    make_homework_item(db_session, ming, service_date=_DAY, status="done", title="國語生字")
+    second = make_homework_item(db_session, ming, service_date=_DAY, status="done", title="數學")
+    make_homework_progress(db_session, ming, service_date=_DAY, overall_status="done")
+
+    out = update_item(
+        db_session, second.id, _update_in(status="correcting"), actor=actor, clock=clock
+    )
+
+    assert out.progress.overall_status == "in_progress"
+    assert _progress_row(db_session, ming.id).overall_status == "in_progress"
+    assert _notifications(db_session, "homework.done", ming.id) == []
+
+
+def test_update_homework_item_notifies_only_when_turning_done_today(
+    db_session: Session, clock: FakeClock, actor: CurrentStaff, kick_off: None
+) -> None:
+    ming = _with_parent(db_session)
+    today_item = make_homework_item(db_session, ming, service_date=_DAY, status="doing")
+    tomorrow_item = make_homework_item(
+        db_session, ming, service_date=date(2026, 9, 2), status="doing", title="明天的作業"
+    )
+
+    update_item(db_session, today_item.id, _update_in(status="done"), actor=actor, clock=clock)
+    update_item(db_session, today_item.id, _update_in(title="改名"), actor=actor, clock=clock)
+    update_item(db_session, today_item.id, _update_in(status="done"), actor=actor, clock=clock)
+    tomorrow = update_item(
+        db_session, tomorrow_item.id, _update_in(status="done"), actor=actor, clock=clock
+    )
+
+    # 今天轉 done 通知一次；重複存成 done 不再通知；別天的作業轉 done 不通知
+    assert tomorrow.progress.overall_status == "done"
+    assert len(_notifications(db_session, "homework.done", ming.id)) == 1
+
+
+def test_update_homework_item_title_only_still_publishes_snapshot(
+    db_session: Session,
+    clock: FakeClock,
+    actor: CurrentStaff,
+    kick_off: None,
+    published: list[Call],
+) -> None:
+    ming = make_student(db_session)
+    make_guardian(db_session, ming, parent=make_parent(db_session))
+    item = make_homework_item(db_session, ming, service_date=_DAY, status="doing", title="數學")
+
+    update_item(db_session, item.id, _update_in(title="數學習作"), actor=actor, clock=clock)
+    db_session.commit()
+
+    [admin] = _on(published, admin_topic_channel("homework"))
+    assert [(i["title"], i["status"]) for i in admin["data"]["items"]] == [("數學習作", "doing")]
+    [parent] = _on(published, student_channel(ming.id))
+    assert [i["title"] for i in parent["data"]["items"]] == ["數學習作"]
+
+
+@pytest.mark.cleanup_tables(
+    "homework_items", "homework_daily_progress", "notification_outbox", "notifications"
+)
+def test_update_homework_item_concurrent_updates_single_notification(
+    owner_cleanup_people: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    clock: FakeClock,
+    kick_off: None,
+) -> None:
+    """兩位老師同時把同一學生最後兩個項目改成 done：第二位排在進度列後面，看到第一位的結果後
+    才重算，所以整體最終是 done 且 homework.done 恰好一則。拿掉進度列鎖時兩人互相看不到對方
+    未 commit 的 done，各自算出 in_progress，最終項目全 done 但整體停在 in_progress、沒有通知。"""
+    ming = make_student(committing_db_session, name="王小明")
+    parent = make_parent(committing_db_session)
+    guardian = make_guardian(committing_db_session, ming, parent=parent)
+    staff = make_staff(committing_db_session, role_code="tutor")
+    first = make_homework_item(committing_db_session, ming, service_date=_DAY, status="doing")
+    second = make_homework_item(
+        committing_db_session, ming, service_date=_DAY, title="國語生字", status="doing"
+    )
+    make_homework_progress(
+        committing_db_session, ming, service_date=_DAY, overall_status="in_progress"
+    )
+    committing_db_session.commit()
+    owner_cleanup_people.extend(
+        [
+            ("guardians", guardian.id),
+            ("students", ming.id),
+            ("parent_accounts", parent.id),
+            ("staff_users", staff.id),
+        ]
+    )
+    teacher = _current(staff)
+
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    s2_done = threading.Event()
+    outcome: dict[str, Any] = {}
+
+    def finish_second() -> None:
+        try:
+            s2.execute(text("set local lock_timeout = '10s'"))
+            outcome["s2"] = update_item(
+                s2, second.id, _update_in(status="done"), actor=teacher, clock=clock
+            )
+            s2.commit()
+        except BaseException as exc:
+            outcome["s2"] = exc
+            s2.rollback()
+        finally:
+            s2_done.set()
+
+    thread = threading.Thread(target=finish_second)
+    try:
+        s1.execute(text("set local lock_timeout = '10s'"))
+        outcome["s1"] = update_item(
+            s1, first.id, _update_in(status="done"), actor=teacher, clock=clock
+        )
+        thread.start()
+        assert not s2_done.wait(timeout=0.5)  # s1 尚未 commit：s2 在進度列排隊
+        s1.commit()
+        thread.join(timeout=10)
+    finally:
+        s1.close()
+        if thread.is_alive():
+            thread.join(timeout=10)
+        s2.close()
+
+    assert outcome["s1"].progress.overall_status == "in_progress"
+    assert outcome["s2"].progress.overall_status == "done"
+    assert _progress_row(committing_db_session, ming.id).overall_status == "done"
+    assert len(_notifications(committing_db_session, "homework.done", ming.id)) == 1
+
+
+@pytest.mark.cleanup_tables(
+    "homework_items", "homework_daily_progress", "notification_outbox", "notifications"
+)
+def test_update_homework_item_waits_for_concurrent_delete_then_404(
+    owner_cleanup_people: list[tuple[str, UUID]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    clock: FakeClock,
+    kick_off: None,
+) -> None:
+    """項目正在被另一個交易刪除時，修改者鎖項目列排隊，刪除 commit 後回 404，而不是在 UPDATE
+    時撞上 0 列（StaleDataError → 500）。"""
+    ming = make_student(committing_db_session, name="王小明")
+    staff = make_staff(committing_db_session, role_code="tutor")
+    item = make_homework_item(committing_db_session, ming, service_date=_DAY, status="doing")
+    committing_db_session.commit()
+    owner_cleanup_people.extend([("students", ming.id), ("staff_users", staff.id)])
+    teacher = _current(staff)
+    item_id = item.id
+
+    s1 = Session(bind=db_engine)
+    s2 = Session(bind=db_engine)
+    s2_done = threading.Event()
+    outcome: dict[str, Any] = {}
+
+    def rename() -> None:
+        try:
+            s2.execute(text("set local lock_timeout = '10s'"))
+            outcome["s2"] = update_item(
+                s2, item_id, _update_in(title="改名"), actor=teacher, clock=clock
+            )
+            s2.commit()
+        except BaseException as exc:
+            outcome["s2"] = exc
+            s2.rollback()
+        finally:
+            s2_done.set()
+
+    thread = threading.Thread(target=rename)
+    try:
+        s1.execute(text("set local lock_timeout = '10s'"))
+        doomed = s1.get(HomeworkItem, item_id)
+        assert doomed is not None
+        s1.delete(doomed)
+        s1.flush()
+        thread.start()
+        assert not s2_done.wait(timeout=0.5)  # 刪除尚未 commit：修改者排隊
+        s1.commit()
+        thread.join(timeout=10)
+    finally:
+        s1.close()
+        if thread.is_alive():
+            thread.join(timeout=10)
+        s2.close()
+
+    error = outcome["s2"]
+    assert isinstance(error, AppError), repr(error)
+    assert (error.status, error.code) == (404, "homework_item_not_found")
+    assert _item_count(committing_db_session, ming.id) == 0
