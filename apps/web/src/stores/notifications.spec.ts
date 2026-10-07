@@ -216,6 +216,8 @@ describe('notifications store', () => {
   it('notifications store binds ws once', () => {
     const store = startWsAndBind()
     const off = store.bindWs()
+    const transient = vi.fn()
+    store.onTransient(transient)
 
     lastSocket().serverMessage({ type: 'notification.created', data: makeNotification('n1'), sent_at: '2026-10-07T08:00:00Z' })
 
@@ -223,6 +225,14 @@ describe('notifications store', () => {
     expect(store.items[0]?.id).toBe('n1')
     expect(store.unreadCount).toBe(1)
     expect(store.total).toBe(1)
+
+    // transient 沒有 id 去重：綁了兩次會收到兩次，這裡確認只有一次
+    lastSocket().serverMessage({
+      type: 'notification.transient',
+      data: { event: 'pickup.arrived', title: '王小明家長已到', body: '', payload: { request_id: 'r1' } },
+      sent_at: '2026-10-07T08:00:30Z',
+    })
+    expect(transient).toHaveBeenCalledTimes(1)
 
     // 解除後不再收；再綁一次恢復
     off()
