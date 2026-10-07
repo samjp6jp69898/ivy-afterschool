@@ -1,7 +1,7 @@
-import { config, flushPromises, type VueWrapper } from '@vue/test-utils'
+import { flushPromises, type VueWrapper } from '@vue/test-utils'
 import type MockAdapter from 'axios-mock-adapter'
 import { ElMessage } from 'element-plus'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { adminHttp } from '@/api/http'
 import type { Notification } from '@/shared/types/api'
@@ -30,8 +30,8 @@ function makeNotification(overrides: Partial<Notification> = {}): Notification {
 let mock: MockAdapter
 
 /**
- * popover 開關有延遲（showAfter 0、hideAfter 200 ms，以 setTimeout 排程），關閉後的 transition 以
- * requestAnimationFrame 收尾；兩者都用 fake timers 推進，flushPromises 走 setImmediate 不受影響。
+ * popover 開關有延遲（showAfter 0、hideAfter 200 ms，都以 setTimeout 排程，flushPromises 等不到），
+ * 以 fake timers 推進；flushPromises 走 setImmediate 不受影響。
  */
 async function settle(): Promise<void> {
   await nextTick()
@@ -76,17 +76,8 @@ function panelRow(title: string): HTMLElement {
 }
 
 describe('NotificationBell', () => {
-  // 開啟時載入靠 el-popover 的 before-enter（transition hook）；VTU 預設把 transition stub 掉、hook 不會跑
-  const defaultTransitionStub = config.global.stubs.transition
-  beforeAll(() => {
-    config.global.stubs.transition = false
-  })
-  afterAll(() => {
-    config.global.stubs.transition = defaultTransitionStub
-  })
-
   beforeEach(() => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     mock = createApiMock(adminHttp)
   })
 
@@ -109,7 +100,6 @@ describe('NotificationBell', () => {
     await settle()
     expect(badgeContent(wrapper).text()).toBe('99')
 
-    // 徽章以 transition 淡出，等 transition 收尾後才移除
     store.unreadCount = 0
     await settle()
     expect(badgeContent(wrapper).exists()).toBe(false)
