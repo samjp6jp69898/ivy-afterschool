@@ -7,7 +7,9 @@ BACKEND-530：purge_student（永久刪除 = 匿名化；前置條件、個資�
 BACKEND-529：close_out_inactive_student（停讀 / 退班收尾：接送請求、代理授權、出勤、請假、稽核、
 同交易）。
 BACKEND-548：close_out 鎖序「授權列 → 請求列 → 請假 / 出勤」，與 425 complete_via_authorization
-不死結。"""
+不死結。
+BACKEND-152：update_student（部分更新、狀態轉換與退班日、敏感欄位清除 / 修改與權限、封存 404、
+學號 409、改為 suspended / withdrawn 觸發 529 收尾、改狀態 / 改班對班級列取 FOR SHARE）。"""
 
 from __future__ import annotations
 
@@ -52,7 +54,9 @@ from app.schemas.students import (
     StudentListQuery,
     StudentPurgeIn,
     StudentPurgeOut,
+    StudentUpdateIn,
 )
+from app.services import student_service
 from app.services.binding_code_service import hash_code
 from app.services.class_service import archive_class
 from app.services.parent_scope import get_parent_student_ids
@@ -68,6 +72,7 @@ from app.services.student_service import (
     get_student,
     list_students,
     purge_student,
+    update_student,
     upload_photo,
 )
 from app.services.students.id_number import id_number_hmac, normalize_id_number
@@ -1695,3 +1700,430 @@ def test_close_out_vs_authorization_complete_no_deadlock(
         assert check.get(PickupAuthorization, auth_id).status == "completed"  # type: ignore[union-attr]
         assert check.get(PickupRequest, request_id).status == "completed"  # type: ignore[union-attr]
         assert check.get(Student, sid).status == "withdrawn"  # type: ignore[union-attr]
+
+
+# --- BACKEND-152：update_student ------------------------------------------------------------------
+
+
+def _update(
+    db: Session,
+    student_id: UUID,
+    actor: CurrentStaff,
+    clock: FakeClock,
+    **payload: object,
+) -> StudentDetailOut:
+    data = StudentUpdateIn.model_validate(payload)
+    return update_student(db, student_id, data, actor=actor, meta=_META, clock=clock)
+
+
+def _update_error(
+    db: Session, student_id: UUID, actor: CurrentStaff, clock: FakeClock, **payload: object
+) -> AppError:
+    with pytest.raises(AppError) as exc:
+        _update(db, student_id, actor, clock, **payload)
+    return exc.value
+
+
+def _close_out_audits(db: Session, student_id: UUID) -> int:
+    return int(
+        db.execute(
+            select(func.count())
+            .select_from(AuditLog)
+            .where(AuditLog.action == "student.close_out", AuditLog.entity_id == str(student_id))
+        ).scalar_one()
+    )
+
+
+def test_update_student_partial(db_session: Session, fake_clock: FakeClock) -> None:
+    klass = make_class(db_session, name="A班")
+    student = make_student(db_session, name="王小明", grade_level=3, class_=klass)
+    student.gender = "male"
+    student.enrolled_on = date(2026, 8, 1)
+    db_session.flush()
+
+    out = _update(db_session, student.id, _actor("students:write"), fake_clock, note="喜歡數學")
+
+    assert isinstance(out, StudentDetailOut)
+    assert out.id == student.id
+    assert out.note == "喜歡數學"
+    assert (out.name, out.grade_level, out.gender, out.status) == ("王小明", 3, "male", "active")
+    assert out.enrolled_on == date(2026, 8, 1)
+    assert out.class_ is not None
+    assert out.class_.id == klass.id
+    assert out.sensitive is None  # 無 students:sensitive → 不回明文
+    stored = _stored(db_session, student.id)
+    assert (stored.note, stored.grade_level, stored.gender, stored.class_id) == (
+        "喜歡數學",
+        3,
+        "male",
+        klass.id,
+    )
+    # 多欄位一起改：只動給定欄位；school_class 只填空白 → null
+    student.school_class = "三年二班"
+    db_session.flush()
+    out = _update(
+        db_session,
+        student.id,
+        _actor("students:write"),
+        fake_clock,
+        name="王大明",
+        grade_level=4,
+        school_class="   ",
+    )
+    assert (out.name, out.grade_level, out.school_class, out.note) == (
+        "王大明",
+        4,
+        None,
+        "喜歡數學",
+    )
+    assert _close_out_audits(db_session, student.id) == 0
+    assert _sensitive_audits(db_session, student.id) == []
+
+
+@pytest.mark.clock("2026-09-02T00:30:00+08:00")
+def test_update_student_withdraw_and_reactivate(db_session: Session, fake_clock: FakeClock) -> None:
+    student = make_student(db_session, name="王小明")
+    actor = _actor("students:write")
+
+    withdrawn = _update(db_session, student.id, actor, fake_clock, status="withdrawn")
+
+    # UTC 仍是 9/1，台北已是 9/2：退班日以台北「今天」為準
+    assert (withdrawn.status, withdrawn.withdrawn_on) == ("withdrawn", date(2026, 9, 2))
+    assert _stored(db_session, student.id).withdrawn_on == fake_clock.today()
+    assert _close_out_audits(db_session, student.id) == 1
+
+    reactivated = _update(db_session, student.id, actor, fake_clock, status="active")
+
+    assert (reactivated.status, reactivated.withdrawn_on) == ("active", None)
+    assert _stored(db_session, student.id).withdrawn_on is None
+    assert _close_out_audits(db_session, student.id) == 1  # 改回 active 不收尾
+
+    # 明確給退班日時以給的為準；withdrawn → suspended 同樣清除
+    explicit = _update(
+        db_session, student.id, actor, fake_clock, status="withdrawn", withdrawn_on="2026-09-01"
+    )
+    assert explicit.withdrawn_on == date(2026, 9, 1)
+    suspended = _update(db_session, student.id, actor, fake_clock, status="suspended")
+    assert (suspended.status, suspended.withdrawn_on) == ("suspended", None)
+
+
+def test_update_student_clear_sensitive(db_session: Session, fake_clock: FakeClock) -> None:
+    student = _with_sensitive(db_session)
+    actor = _actor("students:write", "students:sensitive")
+
+    out = _update(db_session, student.id, actor, fake_clock, id_number=None)
+
+    assert (out.has_id_number, out.has_health_note) == (False, True)
+    assert out.sensitive is not None
+    assert out.sensitive.model_dump() == {"id_number": None, "health_note": "對花生過敏"}
+    stored = _stored(db_session, student.id)
+    assert (stored.id_number_enc, stored.id_number_hmac) == (None, None)
+    assert stored.health_note_enc is not None
+    audits = _sensitive_audits(db_session, student.id)
+    assert len(audits) == 1
+    assert audits[0].after == {"cleared": ["id_number"]}
+    assert (audits[0].actor_id, audits[0].ip) == (actor.id, "127.0.0.1")
+    # 只填空白視同清除；再清一次已經是空的欄位不算變動、不寫稽核
+    _update(db_session, student.id, actor, fake_clock, health_note="   ", id_number="  ")
+    stored = _stored(db_session, student.id)
+    assert (stored.id_number_enc, stored.health_note_enc) == (None, None)
+    audits = _sensitive_audits(db_session, student.id)
+    assert len(audits) == 2
+    assert audits[1].after == {"cleared": ["health_note"]}
+
+
+def test_update_student_set_sensitive_and_duplicate(
+    db_session: Session, fake_clock: FakeClock
+) -> None:
+    actor = _actor("students:write", "students:sensitive")
+    ming = make_student(db_session, name="王小明")
+    hua = make_student(db_session, name="陳小華", student_no="S115777")
+
+    out = _update(db_session, ming.id, actor, fake_clock, id_number=" a123456789 ")
+
+    assert out.has_id_number is True
+    assert out.sensitive is not None
+    assert out.sensitive.id_number == _ID_NUMBER
+    stored = _stored(db_session, ming.id)
+    assert stored.id_number_hmac == id_number_hmac(_ID_NUMBER)
+    assert stored.id_number_enc is not None
+    assert _ID_NUMBER.encode() not in stored.id_number_enc
+    assert decrypt_bytes(stored.id_number_enc) == _ID_NUMBER
+    audits = _sensitive_audits(db_session, ming.id)
+    assert [a.after for a in audits] == [{"set": ["id_number"]}]
+
+    # 同一個值再送一次：沒有變動 → 不寫稽核
+    _update(db_session, ming.id, actor, fake_clock, id_number="A123456789")
+    assert len(_sensitive_audits(db_session, ming.id)) == 1
+
+    # 他人的身分證 → 409 並指出既有學生；格式錯 → 422
+    dup = _update_error(db_session, hua.id, actor, fake_clock, id_number=_ID_NUMBER)
+    assert (dup.status, dup.code) == (409, "id_number_duplicate")
+    assert dup.details == {"student_id": ming.id, "student_no": ming.student_no, "name": "王小明"}
+    bad = _update_error(db_session, hua.id, actor, fake_clock, id_number="A123")
+    assert (bad.status, bad.code) == (422, "invalid_id_number")
+    assert _stored(db_session, hua.id).id_number_hmac is None
+    assert _sensitive_audits(db_session, hua.id) == []
+
+    # 一次清除一欄、設定另一欄：after 兩個 key 都只放有變動的欄位
+    out = _update(db_session, ming.id, actor, fake_clock, id_number=None, health_note="氣喘")
+    assert (out.has_id_number, out.has_health_note) == (False, True)
+    stored = _stored(db_session, ming.id)
+    assert stored.health_note_enc is not None
+    assert decrypt_bytes(stored.health_note_enc) == "氣喘"
+    assert _sensitive_audits(db_session, ming.id)[-1].after == {
+        "cleared": ["id_number"],
+        "set": ["health_note"],
+    }
+
+
+def test_update_student_sensitive_forbidden(db_session: Session, fake_clock: FakeClock) -> None:
+    student = _with_sensitive(db_session)
+    actor = _actor("students:write")
+
+    note_exc = _update_error(db_session, student.id, actor, fake_clock, health_note="氣喘")
+    clear_exc = _update_error(db_session, student.id, actor, fake_clock, id_number=None)
+    mixed_exc = _update_error(db_session, student.id, actor, fake_clock, note="x", id_number="B1")
+
+    for exc in (note_exc, clear_exc, mixed_exc):
+        assert (exc.status, exc.code) == (403, "sensitive_permission_required")
+    stored = _stored(db_session, student.id)
+    assert stored.note is None
+    assert stored.id_number_hmac == id_number_hmac(_ID_NUMBER)
+    assert stored.health_note_enc is not None
+    assert decrypt_bytes(stored.health_note_enc) == "對花生過敏"
+    assert _sensitive_audits(db_session, student.id) == []
+    # 不碰敏感欄位 → 可更新
+    assert _update(db_session, student.id, actor, fake_clock, note="x").note == "x"
+
+
+def test_update_student_archived_404_and_conflict(
+    db_session: Session, fake_clock: FakeClock
+) -> None:
+    actor = _actor("students:write")
+    archived = make_student(db_session, name="王小明", archived=True)
+    taken = make_student(db_session, name="陳小華", student_no="S115001")
+    student = make_student(db_session, name="林小安", student_no="S115002")
+
+    gone = _update_error(db_session, archived.id, actor, fake_clock, note="x")
+    missing = _update_error(db_session, uuid4(), actor, fake_clock, note="x")
+    conflict = _update_error(db_session, student.id, actor, fake_clock, student_no="S115001")
+
+    assert (gone.status, gone.code) == (404, "student_not_found")
+    assert (missing.status, missing.code) == (404, "student_not_found")
+    assert (conflict.status, conflict.code) == (409, "student_no_taken")
+    db_session.expire_all()
+    assert _stored(db_session, archived.id).note is None
+    assert _stored(db_session, student.id).student_no == "S115002"
+    assert _stored(db_session, taken.id).student_no == "S115001"
+    # savepoint 已回滾：session 仍可用，改成沒人用的學號成功
+    assert _update(db_session, student.id, actor, fake_clock, student_no="S115003").student_no == (
+        "S115003"
+    )
+
+
+def test_update_student_invalid_refs_and_dates(db_session: Session, fake_clock: FakeClock) -> None:
+    actor = _actor("students:write")
+    archived_class = make_class(db_session, archived=True)
+    inactive_school = make_school(db_session)
+    inactive_school.is_active = False
+    student = make_student(db_session, name="王小明")
+    student.enrolled_on = date(2026, 9, 1)
+    db_session.flush()
+
+    closed_class = _update_error(
+        db_session, student.id, actor, fake_clock, class_id=archived_class.id
+    )
+    missing_class = _update_error(db_session, student.id, actor, fake_clock, class_id=uuid4())
+    disabled_school = _update_error(
+        db_session, student.id, actor, fake_clock, school_id=inactive_school.id
+    )
+    missing_school = _update_error(db_session, student.id, actor, fake_clock, school_id=uuid4())
+    early = _update_error(
+        db_session, student.id, actor, fake_clock, status="withdrawn", withdrawn_on="2026-08-31"
+    )
+    # 入班日改到退班日之後：跨欄位規則由 service 擋，不落成 DB CHECK 的通用 409
+    _update(
+        db_session, student.id, actor, fake_clock, status="withdrawn", withdrawn_on="2026-09-05"
+    )
+    late_enroll = _update_error(db_session, student.id, actor, fake_clock, enrolled_on="2026-09-06")
+    # 退班中清除退班日 → 明確錯誤碼
+    cleared = _update_error(db_session, student.id, actor, fake_clock, withdrawn_on=None)
+
+    assert (closed_class.status, closed_class.code) == (422, "invalid_class")
+    assert (missing_class.status, missing_class.code) == (422, "invalid_class")
+    assert (disabled_school.status, disabled_school.code) == (422, "invalid_school")
+    assert (missing_school.status, missing_school.code) == (422, "invalid_school")
+    assert (early.status, early.code) == (422, "invalid_dates")
+    assert (late_enroll.status, late_enroll.code) == (422, "invalid_dates")
+    assert (cleared.status, cleared.code) == (422, "invalid_dates")
+    stored = _stored(db_session, student.id)
+    assert (stored.class_id, stored.school_id) == (None, None)
+    assert (stored.status, stored.enrolled_on, stored.withdrawn_on) == (
+        "withdrawn",
+        date(2026, 9, 1),
+        date(2026, 9, 5),
+    )
+    # 清掉入班日後退班日可以任意；改到未封存班成功
+    klass = make_class(db_session)
+    out = _update(
+        db_session,
+        student.id,
+        actor,
+        fake_clock,
+        enrolled_on=None,
+        withdrawn_on="2026-01-01",
+        class_id=klass.id,
+    )
+    assert (out.enrolled_on, out.withdrawn_on) == (None, date(2026, 1, 1))
+    assert out.class_ is not None
+    assert out.class_.id == klass.id
+
+
+def test_update_student_status_requires_open_class(
+    db_session: Session, fake_clock: FakeClock
+) -> None:
+    """退班學生留在班上、班級隨後封存：改回 active / suspended 要 422，先改班或清除班級才行。"""
+    actor = _actor("students:write")
+    klass = make_class(db_session)
+    student = make_student(db_session, name="王小明", class_=klass)
+    _update(db_session, student.id, actor, fake_clock, status="withdrawn")
+    archive_class(db_session, klass.id, clock=fake_clock)
+
+    reactivate = _update_error(db_session, student.id, actor, fake_clock, status="active")
+    suspend = _update_error(db_session, student.id, actor, fake_clock, status="suspended")
+
+    assert (reactivate.status, reactivate.code) == (422, "invalid_class")
+    assert (suspend.status, suspend.code) == (422, "invalid_class")
+    assert _stored(db_session, student.id).status == "withdrawn"
+    # 不改狀態的欄位更新不受封存班影響；同時清除班級即可改回 active
+    assert _update(db_session, student.id, actor, fake_clock, note="x").note == "x"
+    out = _update(db_session, student.id, actor, fake_clock, status="active", class_id=None)
+    assert (out.status, out.class_) == ("active", None)
+
+
+@pytest.mark.clock("2026-09-09T10:00:00+08:00")
+def test_update_student_triggers_close_out(
+    db_session: Session, fake_clock: FakeClock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[tuple[UUID, str]] = []
+    real = student_service.close_out_inactive_student
+
+    def spy(session: Session, student: Student, **kwargs: Any) -> CloseOutResult:
+        calls.append((student.id, student.status))
+        return real(session, student, **kwargs)
+
+    monkeypatch.setattr(student_service, "close_out_inactive_student", spy)
+    actor = _actor("students:write")
+    ming = make_student(db_session, name="王小明")
+    pending = make_pickup_request(db_session, ming, service_date=_D)
+    hua = make_student(db_session, name="陳小華")
+    hua_request = make_pickup_request(db_session, hua, service_date=_D)
+
+    out = _update(db_session, ming.id, actor, fake_clock, status="withdrawn")
+
+    assert out.status == "withdrawn"
+    db_session.expire_all()
+    assert (pending.status, pending.cancel_reason) == ("cancelled", "學生已退班")
+    assert calls == [(ming.id, "withdrawn")]
+    assert _close_out_audits(db_session, ming.id) == 1
+
+    # 另一位學生只改 note → 不收尾；同一位再改其他欄位也不重複收尾
+    _update(db_session, hua.id, actor, fake_clock, note="只改備註")
+    _update(db_session, ming.id, actor, fake_clock, note="已退班")
+    db_session.expire_all()
+    assert hua_request.status == "pending"
+    assert calls == [(ming.id, "withdrawn")]
+    assert _close_out_audits(db_session, hua.id) == 0
+
+    # suspended 也收尾（文案為停讀）；suspended → withdrawn 再次收尾
+    hua_request2 = make_pickup_request(db_session, hua, service_date=_D + timedelta(days=1))
+    _update(db_session, hua.id, actor, fake_clock, status="suspended")
+    db_session.expire_all()
+    assert (hua_request2.status, hua_request2.cancel_reason) == ("cancelled", "學生已停讀")
+    _update(db_session, hua.id, actor, fake_clock, status="withdrawn")
+    assert calls == [(ming.id, "withdrawn"), (hua.id, "suspended"), (hua.id, "withdrawn")]
+
+
+@pytest.mark.cleanup_tables("class_staff")
+def test_update_student_reactivate_blocked_by_concurrent_class_archive(
+    owner_cleanup_rows: list[tuple[str, str, object]],
+    committing_db_session: Session,
+    db_engine: Engine,
+    fake_clock: FakeClock,
+) -> None:
+    """退班學生留在班上（不擋封存）。A 封存班級未 commit（FOR UPDATE）→ B 把學生改回 active 而不改
+    class_id：不會觸發 FK 檢查，必須靠 _check_class 的 FOR SHARE 等待（0.5 秒內沒結束）→ A commit →
+    B 重讀到 archived_at → 422 invalid_class，學生仍是 withdrawn。沒有 FOR SHARE 時 B 會讀到舊的
+    未封存狀態並立即 commit，封存班裡就出現在學學生。"""
+    klass = make_class(committing_db_session)
+    ming = make_student(committing_db_session, name="王小明", class_=klass)
+    ming.status = "withdrawn"
+    ming.withdrawn_on = date(2026, 8, 31)
+    committing_db_session.commit()
+    sid, cid = ming.id, klass.id
+    owner_cleanup_rows.append(("classes", "id", cid))
+    owner_cleanup_rows.append(("students", "id", sid))
+    owner_cleanup_rows.append(("audit_logs", "entity_id", str(sid)))
+    data = StudentUpdateIn(status="active")
+    a_locked = threading.Event()
+    release_a = threading.Event()
+    b_done = threading.Event()
+    outcome: dict[str, object] = {}
+
+    def worker_a() -> None:
+        sa = Session(bind=db_engine)
+        try:
+            sa.execute(text("set local lock_timeout = '15s'"))
+            archive_class(sa, cid, clock=fake_clock)
+            a_locked.set()
+            release_a.wait(timeout=15)
+            sa.commit()
+        except BaseException as exc:
+            sa.rollback()
+            outcome["a_error"] = exc
+            a_locked.set()
+        finally:
+            sa.close()
+
+    def worker_b() -> None:
+        sb = Session(bind=db_engine)
+        try:
+            a_locked.wait(timeout=15)
+            sb.execute(text("set local lock_timeout = '15s'"))
+            try:
+                update_student(
+                    sb, sid, data, actor=_actor("students:write"), meta=_META, clock=fake_clock
+                )
+                sb.commit()
+                outcome["b"] = "reactivated"
+            except AppError as exc:
+                sb.rollback()
+                outcome["b"] = (exc.status, exc.code)
+        except BaseException as exc:
+            sb.rollback()
+            outcome["b_error"] = exc
+        finally:
+            sb.close()
+            b_done.set()
+
+    threads = [threading.Thread(target=worker_a), threading.Thread(target=worker_b)]
+    for t in threads:
+        t.start()
+    try:
+        assert a_locked.wait(timeout=15)
+        assert not b_done.wait(timeout=0.5), outcome  # A 尚未 commit：B 的 FOR SHARE 被擋住
+    finally:
+        release_a.set()
+        for t in threads:
+            t.join(timeout=30)
+
+    assert "a_error" not in outcome, outcome
+    assert "b_error" not in outcome, outcome
+    assert outcome["b"] == (422, "invalid_class")
+    with Session(bind=db_engine) as check:
+        student = check.get(Student, sid)
+        assert student is not None
+        assert (student.status, student.class_id) == ("withdrawn", cid)
+        assert student.class_ is not None
+        assert student.class_.archived_at is not None
