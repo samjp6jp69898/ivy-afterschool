@@ -1,7 +1,7 @@
-import { flushPromises, type VueWrapper } from '@vue/test-utils'
+import { config, flushPromises, type VueWrapper } from '@vue/test-utils'
 import type MockAdapter from 'axios-mock-adapter'
 import { ElMessage } from 'element-plus'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { adminHttp } from '@/api/http'
 import type { Notification } from '@/shared/types/api'
@@ -29,8 +29,13 @@ function makeNotification(overrides: Partial<Notification> = {}): Notification {
 
 let mock: MockAdapter
 
+/**
+ * popover 開關有延遲（showAfter 0、hideAfter 200 ms，以 setTimeout 排程），關閉後的 transition 以
+ * requestAnimationFrame 收尾；兩者都用 fake timers 推進，flushPromises 走 setImmediate 不受影響。
+ */
 async function settle(): Promise<void> {
   await nextTick()
+  await vi.advanceTimersByTimeAsync(300)
   await flushPromises()
 }
 
@@ -57,6 +62,11 @@ function popover(wrapper: VueWrapper) {
   return wrapper.findComponent({ name: 'ElPopover' })
 }
 
+/** popover（role dialog）開關狀態反映在觸發按鈕的 aria-expanded */
+function isOpen(wrapper: VueWrapper): boolean {
+  return wrapper.find('[aria-label=通知]').attributes('aria-expanded') === 'true'
+}
+
 function panelRow(title: string): HTMLElement {
   const row = Array.from(document.body.querySelectorAll<HTMLElement>('.notif__row')).find((r) =>
     r.textContent?.includes(title),
@@ -66,12 +76,23 @@ function panelRow(title: string): HTMLElement {
 }
 
 describe('NotificationBell', () => {
+  // 開啟時載入靠 el-popover 的 before-enter（transition hook）；VTU 預設把 transition stub 掉、hook 不會跑
+  const defaultTransitionStub = config.global.stubs.transition
+  beforeAll(() => {
+    config.global.stubs.transition = false
+  })
+  afterAll(() => {
+    config.global.stubs.transition = defaultTransitionStub
+  })
+
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] })
     mock = createApiMock(adminHttp)
   })
 
   afterEach(() => {
     mock.restore()
+    vi.useRealTimers()
     document.body.innerHTML = ''
   })
 
@@ -81,15 +102,16 @@ describe('NotificationBell', () => {
 
     const store = useNotificationsStore()
     store.unreadCount = 120
-    await nextTick()
+    await settle()
     expect(badgeContent(wrapper).text()).toBe('99+')
 
     store.unreadCount = 99
-    await nextTick()
+    await settle()
     expect(badgeContent(wrapper).text()).toBe('99')
 
+    // 徽章以 transition 淡出，等 transition 收尾後才移除
     store.unreadCount = 0
-    await nextTick()
+    await settle()
     expect(badgeContent(wrapper).exists()).toBe(false)
   })
 
@@ -100,17 +122,17 @@ describe('NotificationBell', () => {
 
     await clickBell(wrapper)
 
-    expect(popover(wrapper).props('visible')).toBe(true)
+    expect(isOpen(wrapper)).toBe(true)
     expect(document.body.textContent).toContain('王小明 家長要來接')
     expect(mock.history.get).toHaveLength(1)
     expect(mock.history.get[0]?.params).toEqual({ page_size: 20 })
     expect(badgeContent(wrapper).text()).toBe('1')
 
     await clickBell(wrapper)
-    expect(popover(wrapper).props('visible')).toBe(false)
+    expect(isOpen(wrapper)).toBe(false)
     await clickBell(wrapper)
 
-    expect(popover(wrapper).props('visible')).toBe(true)
+    expect(isOpen(wrapper)).toBe(true)
     expect(mock.history.get).toHaveLength(1)
   })
 
@@ -139,7 +161,7 @@ describe('NotificationBell', () => {
 
     expect(mock.history.post[0]?.url).toBe('/admin/notifications/n1/read')
     expect(router.currentRoute.value.path).toBe('/pickup')
-    expect(popover(wrapper).props('visible')).toBe(false)
+    expect(isOpen(wrapper)).toBe(false)
     expect(useNotificationsStore().unreadCount).toBe(0)
     expect(badgeContent(wrapper).exists()).toBe(false)
   })
@@ -176,7 +198,7 @@ describe('NotificationBell', () => {
     await settle()
 
     expect(mock.history.post[0]?.url).toBe('/admin/notifications/n2/read')
-    expect(popover(wrapper).props('visible')).toBe(false)
+    expect(isOpen(wrapper)).toBe(false)
     expect(router.currentRoute.value.path).toBe('/students')
   })
 
@@ -229,6 +251,9 @@ describe('NotificationBell', () => {
     expect(props.placement).toBe('bottom-end')
     expect(props.showArrow).toBe(false)
     expect(props.trigger).toBe('click')
+    // 面板可操作：dialog 讓觸發鈕帶 aria-haspopup / aria-expanded
+    expect(wrapper.find('[aria-label=通知]').attributes('aria-haspopup')).toBe('dialog')
+    expect(isOpen(wrapper)).toBe(false)
     // 44×44 觸控目標（happy-dom 不計算版面，以原始碼斷言）
     expect(notificationBellSource).toMatch(/\.notification-bell\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px/)
   })
