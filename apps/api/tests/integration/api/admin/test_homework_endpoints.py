@@ -1,10 +1,12 @@
 """BACKEND-385：GET /api/admin/homework/board。
 BACKEND-390：PUT /api/admin/homework/progress/{student_id}。
+BACKEND-386：POST /api/admin/homework/items。
 
 fake_clock 預設 2026-09-01 01:00 UTC（台北 09:00）。"""
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Iterator
 from datetime import date, datetime, time
 from uuid import UUID, uuid4
@@ -12,12 +14,13 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.models.account import StaffUser
-from app.models.homework import HomeworkDailyProgress
+from app.models.homework import HomeworkDailyProgress, HomeworkItem
 from app.models.notifications import Notification
+from app.models.reference import Subject
 from app.notifications import outbox_jobs
 from app.services.settings_service import clear_settings_cache
 from tests.support.factories import (
@@ -354,3 +357,164 @@ def test_admin_homework_progress_overall_auto(
     assert resp.status_code == 200
     assert resp.json()["overall_status"] == "in_progress"
     assert _progress_rows(db_session, ming.id)[_DAY].overall_status == "in_progress"
+
+
+# --- BACKEND-386：POST /api/admin/homework/items -------------------------------------------------
+
+_ITEMS = "/api/admin/homework/items"
+
+
+def _subject(db: Session, name: str) -> Subject:
+    return db.execute(select(Subject).where(Subject.name == name)).scalar_one()
+
+
+def _items_of(db: Session, student_id: UUID) -> list[HomeworkItem]:
+    db.expire_all()
+    return list(
+        db.execute(
+            select(HomeworkItem)
+            .where(HomeworkItem.student_id == student_id)
+            .order_by(HomeworkItem.sort_order, HomeworkItem.created_at)
+        ).scalars()
+    )
+
+
+def _set_window(db: Session, *, past_days: int, future_days: int) -> None:
+    db.execute(
+        text(
+            "update public.system_settings set value = cast(:value as jsonb) "
+            "where key = 'homework.window'"
+        ),
+        {"value": json.dumps({"past_days": past_days, "future_days": future_days})},
+    )
+    clear_settings_cache()
+
+
+def test_admin_homework_item_create_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "post" in app.openapi()["paths"][_ITEMS]
+
+
+def test_admin_homework_item_create_success(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    math = _subject(db_session, "數學")
+    client, staff = staff_client(permissions=["homework:write"])
+
+    resp = client.post(_ITEMS, json={"student_id": str(ming.id), "title": "數學習作 p.12-13"})
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert set(body) == {"item", "progress"}
+    item = body["item"]
+    assert (item["student_id"], item["service_date"], item["title"], item["status"]) == (
+        str(ming.id),
+        "2026-09-01",
+        "數學習作 p.12-13",
+        "todo",
+    )
+    assert (item["subject_id"], item["subject_name"], item["sort_order"]) == (None, None, 0)
+    assert (body["progress"]["student_id"], body["progress"]["overall_status"]) == (
+        str(ming.id),
+        "not_started",
+    )
+
+    # 帶科目、已完成的第二個項目：整體重算為進行中
+    second = client.post(
+        _ITEMS,
+        json={
+            "student_id": str(ming.id),
+            "title": "數學考卷訂正",
+            "subject_id": str(math.id),
+            "status": "done",
+            "sort_order": 10,
+        },
+    )
+
+    assert second.status_code == 201
+    assert (second.json()["item"]["subject_name"], second.json()["item"]["status"]) == (
+        "數學",
+        "done",
+    )
+    assert second.json()["progress"]["overall_status"] == "in_progress"
+    # 已 commit：重讀 DB
+    rows = _items_of(db_session, ming.id)
+    assert [(i.title, i.status, i.updated_by) for i in rows] == [
+        ("數學習作 p.12-13", "todo", staff.id),
+        ("數學考卷訂正", "done", staff.id),
+    ]
+    assert str(rows[0].id) == item["id"]
+    assert _progress_rows(db_session, ming.id)[_DAY].overall_status == "in_progress"
+
+
+def test_admin_homework_item_create_422(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming = make_student(db_session)
+    client, _ = staff_client(permissions=["homework:write"])
+
+    for body in (
+        {"student_id": str(ming.id), "title": ""},
+        {"student_id": str(ming.id), "title": "國語", "foo": "bar"},
+        {"title": "國語"},
+        {"student_id": str(ming.id), "title": "國語", "status": "finished"},
+        {"student_id": str(ming.id), "title": "國語", "sort_order": -1},
+        {"student_id": str(ming.id), "title": "x" * 101},
+    ):
+        assert_error(client.post(_ITEMS, json=body), 422, "validation_error")
+    assert _items_of(db_session, ming.id) == []
+
+
+def test_admin_homework_item_create_401(api_client: TestClient, assert_error: AssertError) -> None:
+    resp = api_client.post(_ITEMS, json={"student_id": str(uuid4()), "title": "國語"})
+
+    assert_error(resp, 401, "unauthenticated")
+
+
+def test_admin_homework_item_create_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming = make_student(db_session)
+    client, _ = staff_client(permissions=["homework:read"])
+
+    resp = client.post(_ITEMS, json={"student_id": str(ming.id), "title": "國語"})
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["homework:write"]}
+    assert _items_of(db_session, ming.id) == []
+
+
+def test_admin_homework_item_create_business(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    gone = make_student(db_session, name="已退班")
+    gone.status = "withdrawn"
+    gone.withdrawn_on = date(2026, 8, 31)
+    stopped = _subject(db_session, "自然")
+    stopped.is_active = False
+    db_session.flush()
+    _set_window(db_session, past_days=0, future_days=7)
+    client, _ = staff_client(permissions=["homework:write"])
+
+    not_active = client.post(_ITEMS, json={"student_id": str(gone.id), "title": "國語"})
+    stopped_subject = client.post(
+        _ITEMS,
+        json={"student_id": str(ming.id), "title": "自然習作", "subject_id": str(stopped.id)},
+    )
+    yesterday = client.post(
+        _ITEMS, json={"student_id": str(ming.id), "title": "國語", "service_date": "2026-08-31"}
+    )
+    missing = client.post(_ITEMS, json={"student_id": str(uuid4()), "title": "國語"})
+
+    assert_error(not_active, 409, "student_not_active")
+    assert_error(stopped_subject, 422, "invalid_subject")
+    assert_error(yesterday, 422, "invalid_service_date")
+    assert yesterday.json()["error"]["details"] == {
+        "min_date": "2026-09-01",
+        "max_date": "2026-09-08",
+    }
+    assert_error(missing, 404, "student_not_found")
+    assert _items_of(db_session, ming.id) == []
+    assert _items_of(db_session, gone.id) == []
