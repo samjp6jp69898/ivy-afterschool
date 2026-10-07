@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 398,
-  "last_updated": "2026-10-07T07:45:46Z",
+  "version": 399,
+  "last_updated": "2026-10-07T07:46:03Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -11456,7 +11456,7 @@
     {
       "id": "BACKEND-437",
       "title": "實作 POST /api/admin/pickup/authorizations/{id}/verify endpoint（錯碼累計先 commit）",
-      "description": "建立 / 沿用 `apps/api/app/api/admin/pickup.py`（`router = APIRouter(prefix='/pickup', tags=['admin-pickup'])`，掛到 admin_router）。寫入型 handler 呼叫 service 後自行 `db.commit()`。\n- `POST /api/admin/pickup/authorizations/{auth_id}/verify`，`Depends(require_permission(Permission.PICKUP_OPERATE))`，body `VerifyCodeIn` → BACKEND-426 → commit → 200 `AuthorizationCompleteOut`。\n- **錯碼處理順序**：`outcome = verify_code(...)` → **一律先 `db.commit()`**（讓 code_attempts / code_locked_at 落地）→ outcome.ok 為 False 時才拋錯：locked → 409 `pickup_code_locked`；否則 400 `pickup_code_mismatch`，details `{\"remaining_attempts\": n}`。不得在 commit 前拋例外（get_db 會 rollback，連錯上限形同失效）。\n\n**驗收標準**\n- 成功回應形狀如上；422；401；403（缺 pickup:operate）；業務錯誤碼如 red_cases。\n- 路由通過 BACKEND-073 route audit。",
+      "description": "建立 / 沿用 `apps/api/app/api/admin/pickup.py`（`router = APIRouter(prefix='/pickup', tags=['admin-pickup'])`，掛到 admin_router）。寫入型 handler 呼叫 service 後自行 `db.commit()`。\n- `POST /api/admin/pickup/authorizations/{auth_id}/verify`，`Depends(require_permission(Permission.PICKUP_OPERATE))`，body `VerifyCodeIn` → BACKEND-426 → commit → 200 `AuthorizationCompleteOut`。\n- **錯碼處理順序**：`outcome = verify_code(...)` → **一律先 `db.commit()`**（讓 code_attempts / code_locked_at 落地）→ outcome.ok 為 False 時才拋錯：locked → 409 `pickup_code_locked`；否則 400 `pickup_code_mismatch`，details `{\"remaining_attempts\": n}`。不得在 commit 前拋例外（get_db 會 rollback，連錯上限形同失效）。\n\n**驗收標準**\n- 成功回應形狀如上；422；401；403（缺 pickup:operate）；業務錯誤碼如 red_cases。\n- 家長以 BACKEND-524 重新產生接送碼後：以舊碼核對 → 400 `pickup_code_mismatch`（`remaining_attempts` 為 4，重新產生已把連錯次數歸零）、以新碼核對 → 200 核銷完成。\n- 路由通過 BACKEND-073 route audit。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/pickup_authorizations.py::admin_verify",
@@ -11466,7 +11466,8 @@
         "BACKEND-426",
         "BACKEND-402",
         "BACKEND-073",
-        "BACKEND-023"
+        "BACKEND-023",
+        "BACKEND-524"
       ],
       "suggested_model": "fable-5",
       "risk_notes": "",
@@ -11482,7 +11483,8 @@
           "test_admin_pickup_verify_401：無 cookie → 401",
           "test_admin_pickup_verify_403：只有 pickup:read → 403",
           "test_admin_pickup_verify_mismatch_persists：錯碼 → 400 pickup_code_mismatch、error.details.remaining_attempts == 4；再以新的請求查 DB code_attempts == 1（已 commit）",
-          "test_admin_pickup_verify_lock_on_fifth：連續 5 次錯碼 → 第 5 次 409 pickup_code_locked；第 6 次以正確碼 → 409 pickup_code_locked"
+          "test_admin_pickup_verify_lock_on_fifth：連續 5 次錯碼 → 第 5 次 409 pickup_code_locked；第 6 次以正確碼 → 409 pickup_code_locked",
+          "test_admin_pickup_verify_after_regenerate：家長 POST /api/parent/pickup-authorizations/{id}/regenerate-code 取得新碼 → 員工以舊碼 verify → 400 pickup_code_mismatch、error.details.remaining_attempts == 4；再以新碼 verify → 200 authorization.status == 'completed'"
         ],
         "run": "just test-int apps/api/tests/integration/api/admin/test_pickup_endpoints.py -k \"test_admin_pickup_verify_\"",
         "notes": ""
@@ -14142,7 +14144,7 @@
     {
       "id": "BACKEND-524",
       "title": "實作 POST /api/parent/pickup-authorizations/{id}/regenerate-code endpoint",
-      "description": "在 `apps/api/app/api/parent/pickup.py`（BACKEND-440 建立的 router）新增：\n- `POST /api/parent/pickup-authorizations/{auth_id}/regenerate-code`，`Depends(get_current_parent)`，無 body，注入 `get_request_meta` → BACKEND-523 → commit → 200 `PickupAuthorizationCreatedOut`，回應加 `Cache-Control: no-store`。\n\n**驗收標準**\n- 200 回新碼（6 位數字）且舊碼失效；422；401（無 cookie / 員工 cookie）；IDOR：他人授權與不存在 id 相同 404；409（非 active / 過期）。",
+      "description": "在 `apps/api/app/api/parent/pickup.py`（BACKEND-440 建立的 router）新增：\n- `POST /api/parent/pickup-authorizations/{auth_id}/regenerate-code`，`Depends(get_current_parent)`，無 body，注入 `get_request_meta` → BACKEND-523 → commit → 200 `PickupAuthorizationCreatedOut`，回應加 `Cache-Control: no-store`。\n\n**驗收標準**\n- 200 回新碼（6 位數字）且舊碼失效（讀 DB 的 `code_hash`：`pickup_code_matches` 新碼為 True、舊碼為 False）；已鎖定的授權重新產生後 `code_attempts == 0`、`code_locked_at` 為 null；稽核 `pickup_authorization.regenerate_code` 的 actor 為家長、`user_agent` 取自請求（`get_request_meta` 有接上）、before / after 不含明碼。\n- 422；401（無 cookie / 員工 cookie）；IDOR：他人授權與不存在 id 相同 404（對方 `code_hash` 不變、無稽核）；409（completed / cancelled → `authorization_not_active`；過期 → `authorization_expired`；學生已退班 → `student_not_active`）。\n- 重新產生後員工以舊碼核對被拒（400 `pickup_code_mismatch`）、以新碼核對成功的端對端驗收由 BACKEND-437 負責（員工核驗 endpoint 依賴 BACKEND-426）。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/pickup.py::regenerate_code",
@@ -14163,11 +14165,11 @@
           "integration"
         ],
         "red_cases": [
-          "test_parent_pickup_auth_regenerate_success：active 授權 → 200 code 符合 ^\\d{6}$、authorization.code_last4 == code[-4:]、cache-control == 'no-store'；員工以舊碼 POST /api/admin/pickup/authorizations/{id}/verify → 400 pickup_code_mismatch",
+          "test_parent_pickup_auth_regenerate_success：active 授權（舊碼 000000，generate_pickup_code 不會產生前導 0）→ 200 code 符合 ^\\d{6}$、authorization.code_last4 == code[-4:]、cache-control == 'no-store'；請求後重讀 DB：pickup_code_matches(新碼) 為 True、pickup_code_matches('000000') 為 False、code_attempts == 0；已鎖定的授權（code_attempts=5）也可重新產生並解除鎖定；稽核 actor 為家長、user_agent 為請求帶的值且不含明碼",
           "test_parent_pickup_auth_regenerate_422：path 'abc' → 422",
           "test_parent_pickup_auth_regenerate_401：無 cookie → 401；staff cookie → 401",
-          "test_parent_pickup_auth_regenerate_idor：他人授權 → 404 pickup_authorization_not_found，body 與 uuid4() 相同，對方 code_hash 不變",
-          "test_parent_pickup_auth_regenerate_409：completed → 409 authorization_not_active；昨天的授權 → 409 authorization_expired"
+          "test_parent_pickup_auth_regenerate_idor：他人授權 → 404 pickup_authorization_not_found，body 與 uuid4() 相同，對方 code_hash 不變且沒有稽核紀錄",
+          "test_parent_pickup_auth_regenerate_409：completed 與 cancelled → 409 authorization_not_active；昨天的授權 → 409 authorization_expired；已退班學生的授權 → 409 student_not_active；失敗時 code_hash 不變、無稽核"
         ],
         "run": "just test-int apps/api/tests/integration/api/parent/test_pickup_endpoints.py -k \"test_parent_pickup_auth_regenerate_\"",
         "notes": "家長端無權限碼，403 以 IDOR 404 取代。"
