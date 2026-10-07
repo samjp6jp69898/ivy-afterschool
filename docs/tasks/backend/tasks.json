@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 404,
-  "last_updated": "2026-10-07T07:49:54Z",
+  "version": 405,
+  "last_updated": "2026-10-07T07:50:46Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -11113,7 +11113,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:services/pickup_verification.py::override_complete",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9d",
       "depends_on": [
         "BACKEND-424",
