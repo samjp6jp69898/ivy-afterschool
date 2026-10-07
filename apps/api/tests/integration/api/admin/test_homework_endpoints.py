@@ -2,6 +2,7 @@
 BACKEND-390：PUT /api/admin/homework/progress/{student_id}。
 BACKEND-386：POST /api/admin/homework/items。
 BACKEND-387：POST /api/admin/homework/items/batch（整班）。
+BACKEND-388：PATCH /api/admin/homework/items/{item_id}。
 
 fake_clock 預設 2026-09-01 01:00 UTC（台北 09:00）。"""
 
@@ -634,3 +635,119 @@ def test_admin_homework_batch_404(
     assert_error(archived_resp, 404, "class_not_found")
     assert_error(missing, 404, "class_not_found")
     assert _items_of(db_session, ming.id) == []
+
+
+# --- BACKEND-388：PATCH /api/admin/homework/items/{item_id} --------------------------------------
+
+
+def _item_url(item_id: object) -> str:
+    return f"{_ITEMS}/{item_id}"
+
+
+def test_admin_homework_item_update_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "patch" in app.openapi()["paths"][_ITEMS + "/{item_id}"]
+
+
+def test_admin_homework_item_update_success(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    ming = make_student(db_session, name="王小明")
+    parent = make_parent(db_session)
+    make_guardian(db_session, ming, parent=parent)
+    item = make_homework_item(db_session, ming, service_date=_DAY, title="數學習作 p.12-13")
+    make_homework_progress(db_session, ming, service_date=_DAY)
+    client, staff = staff_client(permissions=["homework:write"])
+
+    resp = client.patch(_item_url(item.id), json={"status": "done"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {"item", "progress"}
+    assert (body["item"]["id"], body["item"]["status"], body["item"]["title"]) == (
+        str(item.id),
+        "done",
+        "數學習作 p.12-13",
+    )
+    assert body["progress"]["overall_status"] == "done"
+    # 已 commit：重讀 DB；唯一項目完成 → 整體 done，家長收到 homework.done 一則
+    [row] = _items_of(db_session, ming.id)
+    assert (row.status, row.updated_by) == ("done", staff.id)
+    assert _progress_rows(db_session, ming.id)[_DAY].overall_status == "done"
+    assert _parent_notifications(db_session, parent.id, "homework.done") == 1
+
+    # 部分更新：只改標題與科目，狀態不動
+    math = _subject(db_session, "數學")
+    renamed = client.patch(
+        _item_url(item.id), json={"title": "數學習作 p.14", "subject_id": str(math.id)}
+    )
+
+    assert renamed.status_code == 200
+    assert (
+        renamed.json()["item"]["title"],
+        renamed.json()["item"]["subject_name"],
+        renamed.json()["item"]["status"],
+    ) == ("數學習作 p.14", "數學", "done")
+    # subject_id 給 null 代表清除
+    cleared = client.patch(_item_url(item.id), json={"subject_id": None})
+    assert (cleared.status_code, cleared.json()["item"]["subject_id"]) == (200, None)
+    [row] = _items_of(db_session, ming.id)
+    assert (row.title, row.subject_id, row.status) == ("數學習作 p.14", None, "done")
+
+
+def test_admin_homework_item_update_422(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming = make_student(db_session)
+    item = make_homework_item(db_session, ming, service_date=_DAY, title="國語生字")
+    stopped = _subject(db_session, "自然")
+    stopped.is_active = False
+    db_session.flush()
+    client, _ = staff_client(permissions=["homework:write"])
+
+    for body in (
+        {},
+        {"status": "finished"},
+        {"title": ""},
+        {"title": None},
+        {"status": "done", "student_id": str(ming.id)},
+    ):
+        assert_error(client.patch(_item_url(item.id), json=body), 422, "validation_error")
+    assert_error(client.patch(_item_url("abc"), json={"status": "done"}), 422, "validation_error")
+    stopped_subject = client.patch(
+        _item_url(item.id), json={"title": "自然習作", "subject_id": str(stopped.id)}
+    )
+    assert_error(stopped_subject, 422, "invalid_subject")
+    [row] = _items_of(db_session, ming.id)
+    assert (row.title, row.status, row.subject_id) == ("國語生字", "todo", None)
+
+
+def test_admin_homework_item_update_401(api_client: TestClient, assert_error: AssertError) -> None:
+    resp = api_client.patch(_item_url(uuid4()), json={"status": "done"})
+
+    assert_error(resp, 401, "unauthenticated")
+
+
+def test_admin_homework_item_update_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming = make_student(db_session)
+    item = make_homework_item(db_session, ming, service_date=_DAY)
+    client, _ = staff_client(permissions=["homework:read"])
+
+    resp = client.patch(_item_url(item.id), json={"status": "done"})
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["homework:write"]}
+    [row] = _items_of(db_session, ming.id)
+    assert row.status == "todo"
+
+
+def test_admin_homework_item_update_404(
+    staff_client: StaffClientFactory, assert_error: AssertError
+) -> None:
+    client, _ = staff_client(permissions=["homework:write"])
+
+    resp = client.patch(_item_url(uuid4()), json={"status": "done"})
+
+    assert_error(resp, 404, "homework_item_not_found")
