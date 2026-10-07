@@ -23,6 +23,9 @@
   BACKEND-426 ``verify_code`` → **一律先 commit**（錯碼累計與鎖定要落地）→ 正確碼 200
   ``AuthorizationCompleteOut``；錯碼 400 ``pickup_code_mismatch``（details remaining_attempts）、
   第 5 次錯碼 409 ``pickup_code_locked``。已鎖定 / 非 active / 非今天由 service 在寫入前拋 409。
+- BACKEND-438 ``POST /pickup/authorizations/{auth_id}/confirm-visual-match``：pickup:operate；
+  ``VisualMatchIn`` 可省略 + request meta → BACKEND-427 ``confirm_visual_match``（照片只是輔助；
+  寫 audit）→ commit → ``AuthorizationCompleteOut``。
 """
 
 from __future__ import annotations
@@ -55,6 +58,7 @@ from app.schemas.pickup import (
     StaffAuthorizationOut,
     StaffPickupRequestCreateIn,
     VerifyCodeIn,
+    VisualMatchIn,
 )
 from app.services.audit_service import Actor
 from app.services.pickup import authorizations as authorization_service
@@ -184,3 +188,21 @@ def verify_authorization_code(
         status=400,
         details={"remaining_attempts": outcome.remaining_attempts},
     )
+
+
+@router.post(
+    "/authorizations/{auth_id}/confirm-visual-match", response_model=AuthorizationCompleteOut
+)
+def confirm_visual_match(
+    auth_id: UUID,
+    staff: PickupOperate,
+    db: Db,
+    meta: Annotated[RequestMeta, Depends(get_request_meta)],
+    clock: ClockDep,
+    body: VisualMatchIn | None = None,
+) -> AuthorizationCompleteOut:
+    out = authorization_service.confirm_visual_match(
+        db, auth_id, body, actor=staff, meta=meta, clock=clock
+    )
+    db.commit()
+    return out
