@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 413,
-  "last_updated": "2026-10-07T08:11:12Z",
+  "version": 414,
+  "last_updated": "2026-10-07T08:15:31Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -15135,11 +15135,11 @@
     {
       "id": "BACKEND-549",
       "title": "補 GuardianService 170 / 171 / 172 的並發回歸測試（學生列鎖與 FOR UPDATE 重讀，拿掉任一道鎖要轉紅）",
-      "description": "補強 BACKEND-170 `update_guardian`、171 `archive_guardian`、172 `unbind_guardian` 的測試，實作不變。\n\n三個寫入方法共用 `guardian_service._lock_guardian_for_write`：先對學生列取 FOR UPDATE（`get_student_or_404(for_update=True)`）序列化同一學生的監護人異動，再以 `FOR UPDATE of Guardian` + `populate_existing` 重讀本列並判斷是否已封存。`apps/api/tests/integration/services/test_guardian_service.py` 目前只有單 session 測試，拿掉任一道鎖測試都不會轉紅。若寫測試時證明鎖有缺口，先依 README「實作中發現規格有錯」處理並回報，不要默默改實作。\n\n**測試寫法**（kickoff 實作慣例「鎖」一節）：兩條 `app_backend` 連線 + threading 阻塞模式；一條連線持鎖時另一條在 thread 呼叫 service，斷言「放鎖前未完成、放鎖後完成且結果正確」；每條連線 `SET LOCAL lock_timeout`，join / wait 都帶 timeout；驗 `populate_existing` 時後到的 session 要事先載入並持有該 Guardian 的 ORM 參照（identity map 弱參照驗不到）。committing 測資只用 seed 角色（`make_staff(role_code=\"tutor\")`）與 owner 清理 fixture（排在 `committing_db_session` 之前、設 `lock_timeout`），不得往 seed 表寫列；跑完以 owner 唯讀查 students、staff_users、非系統 roles 無殘列。\n\n**驗收標準**：每一條對應下列 red_case；每道鎖都要有突變證明（拿掉該鎖，對應測試轉紅），突變結果記在回報。",
+      "description": "補強 BACKEND-170 `update_guardian`、171 `archive_guardian`、172 `unbind_guardian` 的測試，實作不變。\n\n三個寫入方法共用 `guardian_service._lock_guardian_for_write`：先對學生列取 FOR UPDATE（`get_student_or_404(for_update=True)`）序列化同一學生的監護人異動，再以 `FOR UPDATE of Guardian` + `populate_existing` 重讀本列並判斷是否已封存。`apps/api/tests/integration/services/test_guardian_service.py` 目前只有單 session 測試，拿掉任一道鎖測試都不會轉紅。若寫測試時證明鎖有缺口，先依 README「實作中發現規格有錯」處理並回報，不要默默改實作。\n\n**測試寫法**（kickoff 實作慣例「鎖」一節）：兩條 `app_backend` 連線 + threading 阻塞模式；一條連線持鎖時另一條在 thread 呼叫 service，斷言「放鎖前未完成、放鎖後完成且結果正確」；每條連線 `SET LOCAL lock_timeout`，join / wait 都帶 timeout；驗 `populate_existing` 時後到的 session 要事先載入並持有該 Guardian 的 ORM 參照（identity map 弱參照驗不到）。committing 測資只用 seed 角色（`make_staff(role_code=\"tutor\")`）與 owner 清理 fixture（排在 `committing_db_session` 之前、設 `lock_timeout`），不得往 seed 表寫列；跑完以 owner 唯讀查 students、staff_users、非系統 roles 無殘列。\n\n**驗收標準**：每一條對應下列 red_case；每道鎖都要有突變證明（拿掉該鎖，對應測試轉紅），突變結果記在回報。\n\n**鎖與突變的對應**：學生列鎖由「外部學生列鎖讓三個方法排隊」與「兩 session 把不同監護人設成主要聯絡人」證明；populate_existing 由「封存後更新 404」與「同時解除綁定」證明；guardian 列的 FOR UPDATE 只在「不經學生列鎖的寫入者」同時進行時才有可觀測差異（guardian_service 內的寫入都先鎖學生列），由「archive 等待進行中的 binding_code_service.claim」證明。",
       "granularity_unit": "test",
       "target_path": "apps/api/app/services/guardian_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9e",
       "depends_on": [
         "BACKEND-170",
@@ -15156,9 +15156,10 @@
         ],
         "red_cases": [
           "test_guardian_concurrent_write_methods_block_on_student_row_lock：外部連線對該學生列 SELECT ... FOR UPDATE 持鎖，另一條連線在 thread 分別呼叫 update_guardian / archive_guardian / unbind_guardian（三個方法各一個案例）→ 放鎖前 thread 未完成，放鎖後完成且結果正確；拿掉 _lock_guardian_for_write 的學生列鎖 → 轉紅",
-          "test_guardian_concurrent_primary_switch_ends_with_single_primary：同一學生 G1（primary）與 G2，兩個 session 同時 update_guardian(G2, is_primary=True) 與 update_guardian(G1, is_primary=True) → 兩者先後序列化都成功，最後恰一位 is_primary 為 True，沒有 uq_guardians_one_primary 造成的 409 conflict；拿掉學生列鎖 → 轉紅",
+          "test_guardian_concurrent_primary_switch_ends_with_single_primary：同一學生 G0（primary）、G1、G2，兩個 session 同時 update_guardian(G1, is_primary=True) 與 update_guardian(G2, is_primary=True)（兩個 session 不可碰同一列，否則列鎖就足以序列化、驗不到學生列鎖）→ 兩者先後序列化都成功，最後恰一位 is_primary 為 True（後 commit 的 G2），沒有 uq_guardians_one_primary 造成的 409 conflict；拿掉學生列鎖 → 轉紅（後到者的降級 UPDATE 快照看不到前者剛升上去的 G1，flush 撞唯一索引）",
           "test_guardian_concurrent_update_after_archive_returns_404：A 的 archive_guardian(G) 取得鎖後暫停（未 commit），B（事先載入並持有 G 的 ORM 參照，顯示未封存）呼叫 update_guardian(G, is_primary=True) 被阻塞；A commit 後 B 完成 → 404 guardian_not_found，DB 中 G 仍 is_primary=False 且 archived_at 為 A 寫入的值；拿掉 FOR UPDATE 重讀的 populate_existing → 轉紅",
-          "test_guardian_concurrent_unbind_only_one_succeeds：已綁定的 G，兩個 session 同時 unbind_guardian(G) → 恰一個成功、另一個 409 guardian_not_bound；audit_logs 中該監護人的 guardian.unbind 恰 1 筆；拿掉鎖 → 轉紅（兩邊都成功、audit 兩筆）"
+          "test_guardian_concurrent_unbind_only_one_succeeds：已綁定的 G，B 事先載入並持有 G 的 ORM 參照，兩個 session 同時 unbind_guardian(G) → 恰一個成功、另一個 409 guardian_not_bound；audit_logs 中該監護人的 guardian.unbind 恰 1 筆；拿掉鎖（學生列鎖與 guardian 列 FOR UPDATE）或拿掉 populate_existing → 轉紅（兩邊都成功、audit 兩筆）",
+          "test_guardian_concurrent_archive_waits_for_in_flight_claim：家長端 binding_code_service.claim（不鎖學生列，只對 G 列條件式 UPDATE）正把 G 綁到家長 P、尚未 commit；另一 session 同時 archive_guardian(G) → 在 G 列的 FOR UPDATE 等待（0.5 秒內未完成），claim commit 後完成：guardian.unbind 稽核恰 1 筆（before 含 P、after reason=archived）、archived_at 寫入、parent_account_id 保留 P 作歷史、家長可見範圍為空；只拿掉 guardian 列的 with_for_update → 轉紅（普通 SELECT 讀到未綁定、不寫稽核）"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_guardian_service.py -k \"test_guardian_concurrent_\"",
         "notes": "新測試一律以 test_guardian_concurrent_ 為前綴，讓 tdd.run 選得到；既有單 session 測試不動。lock_timeout 寫法可能被 FK KEY SHARE 混淆，優先用阻塞模式（見 kickoff「鎖」一節）。整合測試包 flock /tmp/afterschool_db.lock 並在內層加 timeout。"
