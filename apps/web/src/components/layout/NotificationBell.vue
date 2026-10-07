@@ -90,8 +90,9 @@ async function onReadAll(): Promise<void> {
   font-size: 18px;
 }
 
+/* 徽章貼在鈴鐺 icon 右上（不是按鈕角落） */
 .notification-bell :deep(.el-badge__content.is-fixed) {
-  top: 2px;
-  right: 6px;
+  top: 10px;
+  right: 12px;
 }
 </style>
