@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 132,
-  "last_updated": "2026-10-07T08:22:50Z",
+  "version": 133,
+  "last_updated": "2026-10-07T08:25:28Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1010,7 +1010,7 @@
     {
       "id": "FRONTEND-038",
       "title": "實作 composables/useAdminWsTopic.ts：頁面層訂閱 topic、綁定事件、斷線輪詢與重連補抓",
-      "description": "建立 `apps/web/src/composables/useAdminWsTopic.ts`，出勤（FRONTEND-126）、作業看板（FRONTEND-152）、接送（FRONTEND-188）頁面共用。\n\n**介面**\n```ts\nexport function useAdminWsTopic(\n  topic: 'pickup' | 'homework' | 'attendance',\n  handlers: Record<string, (data: any) => void>,     // 例如 { 'pickup.request_updated': upsert }\n  opts: { resync: () => void | Promise<void> },      // 斷線輪詢與重連後呼叫\n): { status: ComputedRef<WsStatus>; denied: ComputedRef<boolean> }\n```\n- onMounted：`adminWs.subscribe(topic)`、逐一 `adminWs.on(type, handler)`、`registerPoller(resync)`、`onReconnect(resync)`。\n- onScopeDispose：全部解除並 `unsubscribe(topic)`。\n- `resync` 執行中再次觸發時略過（不併發）。\n- `denied`：topic 在 `deniedTopics` 中（頁面顯示「沒有即時更新權限」並只靠手動重新整理）。\n\n**驗收標準**\n- 兩個元件同時使用同一 topic 時只送一次 subscribe，全部卸載後才 unsubscribe。\n- 事件分派到 handler；斷線輪詢與重連都呼叫 resync，且不併發。",
+      "description": "建立 `apps/web/src/composables/useAdminWsTopic.ts`，出勤（FRONTEND-126）、作業看板（FRONTEND-152）、接送（FRONTEND-188）頁面共用。\n\n**介面**\n```ts\nexport function useAdminWsTopic(\n  topic: 'pickup' | 'homework' | 'attendance',\n  handlers: Record<string, (data: any) => void>,     // 例如 { 'pickup.request_updated': upsert }\n  opts: { resync: () => void | Promise<void> },      // 斷線輪詢與重連後呼叫\n): { status: ComputedRef<WsStatus>; denied: ComputedRef<boolean> }\n```\n- onMounted：`adminWs.subscribe(topic)`、逐一 `adminWs.on(type, handler)`、`registerPoller(resync)`、`onReconnect(resync)`。\n- onScopeDispose：全部解除並 `unsubscribe(topic)`。\n- `resync` 執行中再次觸發（輪詢 / 重連 / 頁面重新可見）時不併發，但記為待補，本輪結束（成功或失敗）後立刻補跑一次，多次觸發合併為一次；元件卸載後不再補跑。\n- `denied`：topic 在 `deniedTopics` 中（頁面顯示「沒有即時更新權限」並只靠手動重新整理）。\n\n**驗收標準**\n- 兩個元件同時使用同一 topic 時只送一次 subscribe，全部卸載後才 unsubscribe。\n- 事件分派到 handler；斷線輪詢與重連都呼叫 resync，且不併發；進行中被觸發的補跑在本輪結束後恰好執行一次。",
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/useAdminWsTopic.ts",
       "source_ref": null,
@@ -1031,7 +1031,10 @@
           "useAdminWsTopic shares subscription across components：兩個測試元件都 useAdminWsTopic('homework', {}, {resync}) → socket.sent 中 subscribe 訊息 1 則；unmount 第一個 → 無 unsubscribe；unmount 第二個 → 送出 unsubscribe homework",
           "useAdminWsTopic dispatches events to handlers：handlers {'homework.progress_updated': h} → server 送 {type:'homework.progress_updated',data:{student_id:'s1'}} → h 收到的 data.student_id === 's1'；unmount 後再送同訊息 h 呼叫次數仍為 1",
           "useAdminWsTopic resyncs on poll and reconnect without overlap：resync 回傳 500ms 後 resolve 的 promise；斷線 → resync 呼叫 1 次；200ms 內再觸發 poll → 仍為 1 次；重連 open → 2 次",
-          "useAdminWsTopic exposes denied flag：收到 permission_denied topics ['attendance'] → useAdminWsTopic('attendance', ...) 的 denied.value === true"
+          "useAdminWsTopic exposes denied flag：收到 permission_denied topics ['attendance'] → useAdminWsTopic('attendance', ...) 的 denied.value === true",
+          "useAdminWsTopic reruns resync once after overlapping triggers：resync 回傳 2000ms 後 resolve 的 promise；斷線 → 1 次；1000ms 後重連 open（上一輪仍在跑）→ 仍 1 次；期間 visibilitychange 再觸發一次輪詢 → 仍 1 次；再 1000ms 上一輪完成 → 立刻 2 次（重連與輪詢兩次觸發合併成 1 次補跑）；補跑完成後再等 60000ms 仍為 2 次",
+          "useAdminWsTopic reruns resync after a rejected run：第一輪 resync 在重連 open 之後才 reject → reject 後立刻補跑 1 次（總數 2）；之後 60000ms 仍為 2 次",
+          "useAdminWsTopic drops pending rerun after unmount：上一輪 resync 進行中重連 open（記為待補）後卸載元件 → 上一輪完成後不補跑，總數仍為 1"
         ],
         "run": "just web-test src/composables/useAdminWsTopic.spec.ts -t \"useAdminWsTopic\"",
         "notes": ""
