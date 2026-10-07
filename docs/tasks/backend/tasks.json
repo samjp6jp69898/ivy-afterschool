@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 420,
-  "last_updated": "2026-10-07T08:37:53Z",
+  "version": 421,
+  "last_updated": "2026-10-07T08:38:37Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -9122,7 +9122,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/leaves.py",
       "source_ref": "BE:api/parent_portal/leaves.py::cancel_leave",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-346",
@@ -9159,9 +9159,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代。服務層測試 test_parent_leave_out_* 在 apps/api/tests/integration/services/test_leave_service.py，tdd.run 已一併選到。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-b2",
+        "notes": "通過。tdd.run（兩檔 + -k）以 --collect-only 與 red_cases 逐名比對 14/14、實跑 14 passed；BACKEND-348 的 tdd.run 5 passed、test_leave_service.py 全檔 43 passed、api/parent/test_leaves_endpoints.py 全檔 25 passed。commit 順序：dab972f 測試（當時路由不存在）→ 96830be 實作；範圍外延 c4a655b 測試（當時 parent_leave_out 不存在）→ bd5241a 重構 → d42df9b endpoint → dc3cdb9 規格。bd5241a 逐行比對：parent_leave_out 與 list_child_leaves 內嵌的組裝欄位、can_cancel、附件簽名與失敗回 None 完全相同，查詢、排序、分頁與 selectin 不變；呼叫端只有家長請假 endpoint 檔。endpoint：cancel_leave（scope 預設 remaining，無 body 參數、家長無法升級為 all）→ leave_service.parent_leave_out → db.commit()，業務錯誤在 commit 前拋出。獨立突變（單一 flock、trap 還原、逐位元組比對備份、git diff 為空）皆轉紅：拿掉 db.commit()（success / sign_failure / 409）、_leave_for_update 不驗擁有者（cancel_idor）、parent_leave_out 不簽 URL（含 348 的 attachment_url 共 5 條）、簽名失敗改為拋例外（3 條）、list_child_leaves 每筆 refresh 造成 N+1（query_count）、can_cancel 改成 >（4 條）、endpoint 改用不含附件的 _parent_leave_out（2 條）。lint / typecheck（實作與測試檔）乾淨；測試後以 owner 唯讀查 students / staff_users / 非系統 roles / parent_accounts / guardians / student_leaves / 附件 / 出勤 / notifications / audit_logs 皆為 0。殘留（不擋）：(1) api/parent/leaves.py 給建立請假用的 _parent_leave_out 與 leave_service.parent_leave_out 並存（已列入下一輪重構）；(2) 重構後 today 改為每筆各取一次 clock.today()，同一頁恰跨台北午夜的瞬間理論上前後筆 can_cancel 的基準日可能不同（實務上觀測不到）；(3) 家長端路由不在 BACKEND-073 route audit 範圍（只掃 /api/admin/），登入守衛由本 task 的無 cookie / 員工 cookie 401 測試把關。"
       }
     },
     {
@@ -9171,7 +9171,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/leaves.py",
       "source_ref": "BE:api/parent_portal/leaves.py::upload_leave_attachment",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-349",
@@ -9203,9 +9203,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-b2",
+        "notes": "通過。tdd.run 以 --collect-only 與 red_cases 逐名比對 8/8、實跑 8 passed；dab972f 測試（當時路由不存在）→ 61ef3d3 實作。endpoint 以 Annotated[UploadFile, File()] 接 multipart 欄位 file，原樣交給 BACKEND-349 upload_leave_attachment → db.commit()；endpoint 本身不讀檔，大小與檔頭由 read_validated_upload（BACKEND-016）以 64 KB 串流讀取、超過上限立即 413，且在 _leave_for_update 擁有者檢查與附件數計數之後才讀檔；Starlette 對超過 1 MB 的 part 落地暫存檔、nginx /api/ 的 client_max_body_size 為 20m，leave.window.max_attachment_mb 上限 10 與之一致。測試涵蓋 201（重讀 DB 與列表、物件路徑不含使用者檔名、url 為簽名 URL）、422（欄位名錯誤 / 無 body / 空檔 file_empty / path 非 uuid）、401（無 cookie / 員工 cookie）、IDOR 404 與不存在相同且 fake_storage 無物件、無附件列、415（exe 與偽裝成 JPEG 的 exe）、409 attachment_limit_reached（details.max_attachments）、413（恰 1 MB 通過、多 1 byte 拒絕）、409 leave_not_active、502 不含上游錯誤文字。獨立突變皆轉紅：拿掉 db.commit()（success / business / too_large）、_leave_for_update 不驗擁有者（attachment_idor）。lint / typecheck 乾淨。殘留（不擋）：上傳成功但 commit 失敗會留下孤兒物件（沿用 BACKEND-349 已接受的風險）；讀檔與 R2 上傳期間持有請假列 FOR UPDATE（349 的設計，與取消請假序列化）；multipart 的多餘欄位會被忽略（與 BACKEND-445 相同）。"
       }
     },
     {
@@ -14190,7 +14190,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/pickup.py::regenerate_code",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-523",
@@ -14217,9 +14217,9 @@
         "notes": "家長端無權限碼，403 以 IDOR 404 取代。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-b2",
+        "notes": "通過。tdd.run 以 --collect-only 與 red_cases 逐名比對 5/5、實跑 5 passed，parent/test_pickup_endpoints.py 全檔 50 passed；17296be 測試（當時路由不存在）→ 54ee356 規格 → 085a7eb 實作。endpoint 注入 get_request_meta → BACKEND-523 regenerate_code（參數與 523 簽名一致）→ db.commit() → 200 PickupAuthorizationCreatedOut + Cache-Control: no-store。測試以 DB code_hash 的 pickup_code_matches 驗新碼相符、舊碼 000000 不符，已鎖定授權 code_attempts 歸 0、code_locked_at 為 null，稽核 actor 為家長、user_agent 取自請求且 before / after 不含明碼；IDOR 404 與不存在相同且對方 code_hash、末四碼、連錯次數不變、無稽核；409 completed / cancelled / 過期 / 退班且失敗不換碼、不寫稽核；422；401（無 cookie / 員工 cookie）。驗收移交 BACKEND-437 四件事齊全：524 description 註明去向；437 description 寫入舊碼 400 pickup_code_mismatch（remaining_attempts 4）、新碼 200；437 red_cases 有 test_admin_pickup_verify_after_regenerate；437 tdd.run 的 -k test_admin_pickup_verify_ 以合成測試檔實際 collect 確認選得到（437 為 pending，測試待其實作時撰寫）。437 depends_on 加 524 無循環（validate 零 ERROR，524 的遞移依賴不含 437）。獨立突變皆轉紅：拿掉 db.commit()、regenerate_code 不驗擁有者、meta 改為不取自請求、不重設連錯與鎖定、稽核 after 帶明碼。lint / typecheck 乾淨。殘留（不擋）：handler 自設 no-store 與 middleware 全域設定重複，測試驗不出差別；稽核「不含雜湊」由 523 服務層測試與 audit_service 的 code_hash 遮罩把關，endpoint 測試只斷言不含明碼。"
       }
     },
     {
@@ -14520,7 +14520,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_import_template.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-155"
@@ -14550,9 +14550,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-b2",
+        "notes": "通過。tdd.run 以 --collect-only 與 red_cases 逐名比對 11/11；在目前 HEAD 實跑 11 passed（BACKEND-156 的 e39aa46 之後 student_import_service.py 沒有新改動），與 IMPORT_COLUMNS、MAX_IMPORT_ROWS、preview(session, upload, *, academic_year, actor) 的耦合成立；a1649dc、c392ae7 測試（當時模組不存在）→ fe7efe2 實作。build_import_template 無參數、內容全為常數，沒有使用者輸入的注入面；學生資料工作表排第一且兩張皆可見、標題列等於 IMPORT_COLUMNS、必填欄粗體 + FFF2CC、凍結 A2、欄寬依顯示寬度、資料驗證恰為性別 / 狀態 / 年級三組且只套用第 2~501 列，下拉選項與匯入的 _GENDERS / _STATUSES 一致、年級上下界與 StudentCreateIn 一致；說明工作表逐欄列出，內容已與匯入規則核對（學號樣式、狀態留空為在學、國小比對啟用中的名稱或簡稱、班級限該學年度未封存、敏感欄位需 students:sensitive）；原樣通過 read_validated_upload 與 assert_xlsx_within_limits，preview 回 422 import_empty 且不碰 DB。獨立突變皆轉紅：GRADE_MAX 改 7、年級驗證範圍含標題列、範圍少一列。lint / typecheck 乾淨。殘留（不擋）：測試匯入 student_import_service 的私有 _GENDERS / _STATUSES（匯入改名時測試會失敗而非靜默，可考慮公開）。"
       }
     },
     {
