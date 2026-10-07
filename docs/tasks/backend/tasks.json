@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 415,
-  "last_updated": "2026-10-07T08:18:19Z",
+  "version": 416,
+  "last_updated": "2026-10-07T08:19:40Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -9118,7 +9118,7 @@
     {
       "id": "BACKEND-357",
       "title": "實作 POST /api/parent/leaves/{id}/cancel endpoint",
-      "description": "建立 / 沿用 `apps/api/app/api/parent/leaves.py`（`router = APIRouter(tags=['parent-leaves'])`，掛到 parent_router）。寫入型 handler 呼叫 service 後自行 `db.commit()`。\n- `POST /api/parent/leaves/{leave_id}/cancel`，`Depends(get_current_parent)`，無 body，注入 `get_storage` → BACKEND-346（scope 固定 remaining）→ commit → 200 `ParentLeaveOut`（未開始 → cancelled；已開始 → active 且 end_date 縮短為昨天；`attachments` 為該請假既有附件與短效簽名 URL，單一附件簽名失敗時該筆 `url` 為 null、不讓取消失敗）。\n\n**驗收標準**\n- 成功；422；401（無 cookie / 員工 cookie）；IDOR：他人小孩或他人資源與不存在 id 回相同 404；業務錯誤碼如 red_cases。\n- 回應含既有附件的簽名 URL（與列表 BACKEND-348 同格式）；請求後重讀 DB，請假狀態與今天起的出勤還原已 commit。",
+      "description": "建立 / 沿用 `apps/api/app/api/parent/leaves.py`（`router = APIRouter(tags=['parent-leaves'])`，掛到 parent_router）。寫入型 handler 呼叫 service 後自行 `db.commit()`。\n- `POST /api/parent/leaves/{leave_id}/cancel`，`Depends(get_current_parent)`，無 body，注入 `get_storage` → BACKEND-346（scope 固定 remaining）→ commit → 200 `ParentLeaveOut`，由 `leave_service.parent_leave_out(leave, *, storage, clock)` 組裝（未開始 → cancelled；已開始 → active 且 end_date 縮短為昨天；`attachments` 為該請假既有附件與短效簽名 URL，單一附件簽名失敗時該筆 `url` 為 null、不讓取消失敗）。\n- 同時在 `apps/api/app/services/leave_service.py` 抽出公開 `parent_leave_out(leave, *, storage, clock) -> ParentLeaveOut`（欄位、`can_cancel`＝active 且 end_date >= 今天、附件簽名與失敗規則沿用 BACKEND-348），`list_child_leaves` 逐筆委派給它，行為不變：分頁、排序與 attachments selectin 載入不變，SQL 仍為 count、請假、附件共 3 次。服務層測試在 `apps/api/tests/integration/services/test_leave_service.py`。\n\n**驗收標準**\n- 成功；422；401（無 cookie / 員工 cookie）；IDOR：他人小孩或他人資源與不存在 id 回相同 404；業務錯誤碼如 red_cases。\n- 回應含既有附件的簽名 URL（與列表 BACKEND-348 同格式，不是 null 或空字串）；請求後重讀 DB，請假狀態與今天起的出勤還原已 commit。\n- `parent_leave_out`：含附件時 url 為簽名 URL；單一附件簽名失敗只讓該筆 url 為 None 且不拋例外；`can_cancel` 邊界（今天結束仍可取消、已結束 / 已取消不可、台北午夜翻轉）；列表每一筆等於單筆組裝；`list_child_leaves` 重構前後 BACKEND-348 的 tdd.run 與 `test_leave_service.py` 全檔皆綠。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/leaves.py",
       "source_ref": "BE:api/parent_portal/leaves.py::cancel_leave",
@@ -9145,11 +9145,18 @@
           "test_parent_leaves_cancel_401：無 cookie → 401；staff cookie → 401",
           "test_parent_leaves_cancel_idor：家長 A 取消家長 B 的請假 → 404 leave_not_found，body 與 uuid4() 相同，B 的請假仍 active 且 end_date 不變、出勤不變",
           "test_parent_leaves_cancel_409：已全部過去的請假 → 409 leave_already_ended；已取消 → 409 leave_not_active；已開始的請假連點兩次取消，第二次 → 409 leave_already_ended",
-          "test_parent_leaves_cancel_response_includes_attachments：有 PDF 附件的請假取消 → 200 attachments 一筆，id、mime_type、size_bytes 正確，url == 'https://storage.test/leave-attachments/<path>?exp=300'",
-          "test_parent_leaves_cancel_sign_failure_still_cancels：fake_storage.sign_error 設定 → 200 status == 'cancelled'、附件 url 為 null，重讀 DB 請假已取消"
+          "test_parent_leaves_cancel_response_includes_attachments：有 PDF 附件的請假取消 → 200 attachments 一筆，id、mime_type、size_bytes 正確，url == 'https://storage.test/leave-attachments/<path>?exp=300'（簽名 URL，不是 null 或空字串）",
+          "test_parent_leaves_cancel_sign_failure_still_cancels：fake_storage.sign_error 設定 → 200 status == 'cancelled'、附件 url 為 null，重讀 DB 請假已取消",
+          "test_parent_leave_out_fields：單筆組裝的欄位與預期的 ParentLeaveOut 完全相同（leave_type_label、cancelled_at、attachments 空清單），不含員工姓名與取消者欄位",
+          "test_parent_leave_out_attachment_urls：兩個附件（jpg、pdf）→ 各自 mime_type、size_bytes 正確，url == 'https://storage.test/leave-attachments/<path>?exp=300'，皆為非空簽名 URL",
+          "test_parent_leave_out_single_signing_failure：其中一個附件簽名失敗 → 該附件 url 為 None、另一個照常簽名、整體不拋例外；log 有該附件 id 的 warning 且不含上游錯誤文字",
+          "test_parent_leave_out_can_cancel_boundaries：今天結束 / 今天開始 / 未來 → True；昨天結束、已取消（未來或今天結束）→ False",
+          "test_parent_leave_out_can_cancel_flips_at_taipei_midnight：UTC 9/1 15:30（台北 23:30）當天結束的請假 can_cancel True，UTC 16:30（台北 9/2 00:30）→ False",
+          "test_parent_leave_out_matches_list_child_leaves：list_child_leaves 的每一筆等於同一請假的 parent_leave_out（含兩個附件的那筆）",
+          "test_parent_leave_out_list_child_leaves_query_count：10 筆請假各 2 個附件，list_child_leaves 的 SQL 恆為 3 次（count、請假、附件 selectin）且附件 url 都有值"
         ],
-        "run": "just test-int apps/api/tests/integration/api/parent/test_leaves_endpoints.py -k \"test_parent_leaves_cancel_\"",
-        "notes": "家長端無權限碼，403 以 IDOR 404 取代。"
+        "run": "just test-int apps/api/tests/integration/api/parent/test_leaves_endpoints.py apps/api/tests/integration/services/test_leave_service.py -k \"test_parent_leaves_cancel_ or test_parent_leave_out_\"",
+        "notes": "家長端無權限碼，403 以 IDOR 404 取代。服務層測試 test_parent_leave_out_* 在 apps/api/tests/integration/services/test_leave_service.py，tdd.run 已一併選到。"
       },
       "review": {
         "status": "pending",
