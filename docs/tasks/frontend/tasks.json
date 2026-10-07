@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 146,
-  "last_updated": "2026-10-07T10:44:32Z",
+  "version": 147,
+  "last_updated": "2026-10-07T10:48:01Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -756,7 +756,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/layout/AdminSidebar.vue",
       "source_ref": "FE:src/components/layout/AdminSidebar.vue::default",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r9d",
       "depends_on": [
         "FRONTEND-030",
