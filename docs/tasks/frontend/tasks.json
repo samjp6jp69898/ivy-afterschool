@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 129,
-  "last_updated": "2026-10-07T08:11:13Z",
+  "version": 130,
+  "last_updated": "2026-10-07T08:15:41Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -3940,7 +3940,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/homework/HomeworkItemDialog.vue",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-083",
@@ -3981,7 +3981,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/homework/HomeworkBatchAddDialog.vue",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-083",
