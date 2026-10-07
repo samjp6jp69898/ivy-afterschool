@@ -109,6 +109,8 @@ describe('ExamScoreTable', () => {
     expect(cell.classes()).toContain('is-absent')
     expect(row(wrapper, 0).text()).not.toContain('60')
     expect(rule('.score-table__score.is-absent')).toContain('color: var(--m3-error)')
+    // 只用文字表達，不另加圖示
+    expect(wrapper.find('.m3-icon').exists()).toBe(false)
   })
 
   it('ExamScoreTable unrecorded is plain text with muted colour and normal weight', () => {
