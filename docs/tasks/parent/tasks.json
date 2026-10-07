@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 106,
-  "last_updated": "2026-10-07T10:42:48Z",
+  "version": 107,
+  "last_updated": "2026-10-07T10:45:39Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -338,11 +338,11 @@
     {
       "id": "PARENT-010",
       "title": "實作 parent/stores/children.ts：小孩清單與目前選中的小孩（持久化、切換）",
-      "description": "建立 `apps/web/src/parent/stores/children.ts`（Pinia setup store，id `parentChildren`）：\n- state：`items: ChildSummary[]`、`loaded`、`loading`、`error: string`、`selectedId: string | null`（localStorage `parent_selected_child_v1` 還原與寫回）。\n- getters：`selectedChild`（在 items 中找 selectedId，找不到為 null）、`hasMultiple`。\n- actions：`load(force = false)`：呼叫 PARENT-006 `listChildren()`；已 loaded 且非 force 直接 return；以 request version 丟棄過期回應（移植 ivy `stores/children.ts::load` 的 requestVersion）；完成後呼叫 `ensureSelected()`；失敗設定 `error = '小孩清單載入失敗'`（不清空既有 items）。`seed(children)`：以 ParentMe.children 直接填入（登入 / 綁定回應已含清單時省一次請求）並 `ensureSelected()`。`select(id)`：id 不在 items 中則忽略。`ensureSelected()`：selectedId 仍在 items 中就保留，否則選第一位，items 為空則設 null。`clear()`：清空全部並移除 localStorage key（登出時避免下一位家長看到舊 id）。\n\n移植 ivy `FE:src/parent/stores/children.ts::useChildrenStore` 與 `FE:src/parent/composables/useChildSelection.ts::useChildSelection`（合併為單一 store）；id 型別改為 uuid 字串。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/stores/children.ts`（Pinia setup store，id `parentChildren`）：\n- state：`items: ChildSummary[]`、`loaded`、`loading`、`error: string`、`selectedId: string | null`（localStorage `parent_selected_child_v1` 還原與寫回）。\n- getters：`selectedChild`（在 items 中找 selectedId，找不到為 null）、`hasMultiple`。\n- actions：`load(force = false)`：呼叫 PARENT-006 `listChildren()`；已 loaded 且非 force 直接 return；載入中的非 force 呼叫共用同一個進行中的請求；force 會取代進行中的請求（較舊請求的回應不論成功或失敗都丟棄，`loading` 持續到最新一個請求結束）；以 request version 丟棄過期回應（移植 ivy `stores/children.ts::load` 的 requestVersion）；成功時清除 `error`；完成後呼叫 `ensureSelected()`；失敗設定 `error = '小孩清單載入失敗'`（不清空既有 items）。`seed(children)`：以 ParentMe.children 的複本直接填入並標記 loaded（登入 / 綁定回應已含清單時省一次請求）、清除 `error`，並丟棄進行中的載入（避免較舊的回應蓋掉較新的清單），再 `ensureSelected()`。`select(id)`：id 不在 items 中則忽略。`ensureSelected()`：selectedId 仍在 items 中就保留，否則選第一位（寫回 localStorage），items 為空則設 null（移除 localStorage key）。localStorage 讀寫拋錯（無痕模式等）時一律忽略，只是少了跨 session 的記憶。`clear()`：清空全部並移除 localStorage key（登出時避免下一位家長看到舊 id）。\n\n移植 ivy `FE:src/parent/stores/children.ts::useChildrenStore` 與 `FE:src/parent/composables/useChildSelection.ts::useChildSelection`（合併為單一 store）；id 型別改為 uuid 字串。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "store",
       "target_path": "apps/web/src/parent/stores/children.ts",
       "source_ref": "FE:src/parent/stores/children.ts::useChildrenStore",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "PARENT-006",
@@ -362,7 +362,21 @@
           "childrenStore drops stale stored selection：localStorage 's9'（不在清單）→ load() 後 selectedId === 's1'",
           "childrenStore select ignores unknown id：load 後 select('s9') → selectedId 仍為 's1'；select('s2') → 's2'",
           "childrenStore ignores stale response：load() 進行中呼叫 clear() 再讓第一個請求回應 → items.length === 0 且 loaded === false",
-          "childrenStore load error keeps items：先 seed([{id:'s1',...}])，load(true) 回 500 → error === '小孩清單載入失敗' 且 items.length === 1"
+          "childrenStore load error keeps items：先 seed([{id:'s1',...}])，load(true) 回 500 → error === '小孩清單載入失敗' 且 items.length === 1",
+          "childrenStore load clears the error after a successful retry：第一次 GET 回 500（error === '小孩清單載入失敗'、loaded === false）→ 再 load() 回 [s1] → error === ''、loaded === true",
+          "childrenStore load skips refetch when loaded unless forced：load() 兩次只打 1 次 GET；load(true) 再打 1 次（共 2 次）",
+          "childrenStore load shares the in-flight request：load() 進行中再呼叫 load() → 只打 1 次 GET，兩個 promise 在回應後一起 resolve",
+          "childrenStore force reload supersedes an older in-flight request：load() 與 load(true) 先後發出，較新的請求先回 [s2]、較舊的晚到回 [s1] → items 仍為 [s2]、selectedId === 's2'、loading === false",
+          "childrenStore seed fills items without a request：localStorage 's2'、seed([s1,s2]) → items 兩筆、loaded === true、selectedId === 's2'；之後 load() 不發請求、error === ''",
+          "childrenStore seed discards an in-flight load：load() 進行中 seed([s2]) 再讓第一個請求回 [s1] → items 仍為 [s2]、selectedId === 's2'、loading === false",
+          "childrenStore ignores a stale failure：load() 進行中 seed([s2])，第一個請求回 500 → error === ''、items 仍為 [s2]",
+          "childrenStore keeps loading until the latest request finishes：load() 與 load(true) 先後發出，較舊的先回 [s1] → items 為空、loaded === false、loading === true；較新的回 [s2] → items 為 [s2]、loaded === true、loading === false",
+          "childrenStore seed copies the given array：seed(source) 後對 source.push(...) → store.items 不變",
+          "childrenStore falls back to the first child when the selected one disappears：[s1,s2] 載入後 select('s2')，load(true) 回 [s1] → selectedId === 's1'、localStorage === 's1'",
+          "childrenStore clears the selection for an empty list：localStorage 's1'，load() 回 [] → selectedId === null、selectedChild === null、localStorage key 已移除",
+          "childrenStore hasMultiple follows the item count：0 或 1 位小孩為 false，2 位為 true",
+          "childrenStore clear resets state and removes the stored selection：載入後再失敗一次（error 有值），clear() → items 空、loaded / loading false、error ''、selectedId null、localStorage key 已移除",
+          "childrenStore still works when localStorage throws：getItem / setItem / removeItem 皆拋錯 → 建立 store 不拋錯（selectedId null）、load() 後 selectedId === 's1'、select('s2') 生效、clear() 不拋錯"
         ],
         "run": "just web-test src/parent/stores/children.spec.ts -t \"childrenStore\"",
         "notes": ""
