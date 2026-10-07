@@ -9,9 +9,11 @@
 - BACKEND-382：``set_ready_eta_and_note``（設定預計可接送時間與說明，通知 homework.eta_updated）。
 - BACKEND-375：``recompute_progress``（項目異動後重算整體進度；轉 done 觸發 handle_homework_done）。
 - BACKEND-381：``set_overall_status``（員工手動標整體完成 / 改回由項目推導）。
+- BACKEND-377：``create_item``（新增單一學生作業項目並重算進度）。
 
 鎖序一律「進度列 → 請求列」：寫入方法先 ``lock_progress_row``，之後才可能由 sync_open_request_reply
-鎖接送請求（與 BACKEND-407 / 413 一致）。
+鎖接送請求（與 BACKEND-407 / 413 一致）。項目寫入（新增 / 修改 / 刪除）是先寫項目列、再由
+``recompute_progress`` 鎖進度列；沒有任何流程在鎖了進度列之後才寫項目列，所以兩者不會互等成環。
 """
 
 from __future__ import annotations
@@ -27,12 +29,13 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session, SessionTransaction
 
 from app.core.clock import Clock
-from app.core.errors import AppError
+from app.core.errors import AppError, ConflictError
 from app.core.settings_registry import HOMEWORK_WINDOW
 from app.models.account import StaffUser
 from app.models.attendance import AttendanceStatus, StudentAttendance
 from app.models.classes import SchoolClass
 from app.models.homework import HomeworkDailyProgress, HomeworkItem
+from app.models.reference import Subject
 from app.models.students import Student
 from app.notifications.events import Event
 from app.notifications.recipients import parent_recipients
@@ -45,7 +48,9 @@ from app.schemas.homework import (
     BoardStudentOut,
     BoardSummaryOut,
     BoardWindowOut,
+    HomeworkItemCreateIn,
     HomeworkItemOut,
+    HomeworkMutationOut,
     ParentHomeworkItemOut,
     ParentHomeworkOut,
     ProgressOut,
@@ -175,6 +180,16 @@ def _progress_out(
         eta_updated_at=progress.eta_updated_at,
         eta_updated_by_name=eta_updated_by_name,
     )
+
+
+def _progress_view(session: Session, progress: HomeworkDailyProgress) -> ProgressOut:
+    """進度列 → ``ProgressOut``（含預計可接送時間最後修改者的姓名）。"""
+    eta_by = None
+    if progress.eta_updated_by is not None:
+        eta_by = session.execute(
+            select(StaffUser.display_name).where(StaffUser.id == progress.eta_updated_by)
+        ).scalar_one_or_none()
+    return _progress_out(progress.student_id, progress.service_date, progress, eta_by)
 
 
 def _publish_snapshot(session: Session, student_id: UUID, service_date: date, clock: Clock) -> None:
@@ -432,13 +447,7 @@ def set_ready_eta_and_note(
     if eta_changed:
         sync_open_request_reply(session, student_id, service_date, clock=clock)
     broadcast_homework_snapshot(session, student_id, service_date, clock=clock)
-
-    eta_by = None
-    if progress.eta_updated_by is not None:
-        eta_by = session.execute(
-            select(StaffUser.display_name).where(StaffUser.id == progress.eta_updated_by)
-        ).scalar_one_or_none()
-    return _progress_out(student_id, service_date, progress, eta_by)
+    return _progress_view(session, progress)
 
 
 @dataclass(frozen=True)
@@ -504,3 +513,48 @@ def set_overall_status(
     progress = lock_progress_row(session, student_id, service_date)
     new_status = "done" if mode == "done" else _derived_status(session, student_id, service_date)
     return _apply_overall(session, progress, new_status, clock=clock)
+
+
+def _require_active_subject(session: Session, subject_id: UUID | None) -> Subject | None:
+    """subject_id 給值時必須是存在且啟用中的科目，否則 422 ``invalid_subject``。"""
+    if subject_id is None:
+        return None
+    subject = session.execute(
+        select(Subject).where(Subject.id == subject_id, Subject.is_active.is_(True))
+    ).scalar_one_or_none()
+    if subject is None:
+        raise AppError("invalid_subject", "科目不存在或已停用", status=422)
+    return subject
+
+
+def create_item(
+    session: Session, data: HomeworkItemCreateIn, *, actor: CurrentStaff, clock: Clock
+) -> HomeworkMutationOut:
+    """新增單一學生的作業項目，重算整體進度並回傳項目與最新進度。
+
+    學生須在學（不存在 / 已封存 404、非 active 409）、科目須啟用中、日期須在 homework.window 內
+    （沒給日期用台北今天）。項目寫入後由 ``recompute_progress`` 鎖進度列重算：新增者 commit 前一直
+    持有該鎖，同時把最後一個未完成項目改成 done 的人必須排隊，才不會漏算這個新項目。
+    """
+    student = get_student_or_404(session, data.student_id)
+    if student.status != "active":
+        raise ConflictError("student_not_active", "學生目前不在學，無法新增作業項目")
+    subject = _require_active_subject(session, data.subject_id)
+    service_date = data.service_date or clock.today()
+    check_service_date(session, service_date, clock=clock)
+
+    item = HomeworkItem(
+        student_id=student.id,
+        service_date=service_date,
+        subject=subject,
+        title=data.title,
+        status=data.status,
+        sort_order=data.sort_order,
+        updated_by=actor.id,
+    )
+    session.add(item)
+    session.flush()
+    change = recompute_progress(session, student.id, service_date, clock=clock)
+    return HomeworkMutationOut(
+        item=_item_out(item), progress=_progress_view(session, change.progress)
+    )
