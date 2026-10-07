@@ -3,6 +3,7 @@ BACKEND-435：GET /api/admin/pickup/roster（POS 學生卡）。
 BACKEND-436：GET /api/admin/pickup/authorizations（代理接送核驗清單）。
 BACKEND-430 / 432 / 434：POST /api/admin/pickup/requests、/{id}/acknowledge、/{id}/cancel。
 BACKEND-431：POST /api/admin/pickup/requests/{id}/reply。
+BACKEND-433：POST /api/admin/pickup/requests/{id}/complete。
 
 fake_clock 預設 2026-09-01 01:00 UTC（台北 09:00）；接送請求 / 授權的 service_date 用台北「今天」。
 """
@@ -10,7 +11,7 @@ fake_clock 預設 2026-09-01 01:00 UTC（台北 09:00）；接送請求 / 授權
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from datetime import date, time
+from datetime import UTC, date, datetime, time
 from uuid import UUID, uuid4
 
 import pytest
@@ -20,6 +21,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.account import StaffUser
+from app.models.attendance import StudentAttendance
+from app.models.audit import AuditLog
 from app.models.homework import HomeworkDailyProgress
 from app.models.notifications import Notification
 from app.models.parents import ParentAccount
@@ -36,6 +39,7 @@ from tests.support.factories import (
     make_parent,
     make_pickup_authorization,
     make_pickup_request,
+    make_staff,
     make_student,
 )
 from tests.support.route_audit import admin_routes_without_permission
@@ -673,3 +677,195 @@ def test_admin_pickup_reply_409(
         404,
         "pickup_request_not_found",
     )
+
+
+# --- BACKEND-433：POST /requests/{id}/complete ------------------------------------------------
+
+
+def _complete_url(request_id: object) -> str:
+    return _request_url(request_id, "/complete")
+
+
+def test_admin_pickup_complete_guard_registered(app: FastAPI) -> None:
+    assert admin_routes_without_permission(app) == []
+    assert "post" in app.openapi()["paths"][_REQUESTS + "/{request_id}/complete"]
+
+
+def test_admin_pickup_complete_success(
+    staff_client: StaffClientFactory, db_session: Session
+) -> None:
+    ming, mom = _family(db_session)
+    dad = make_guardian(db_session, ming, name="王爸爸", relation="father")
+    # 到班時間早於「現在」（台北 09:00），接送完成才會把出勤改 left
+    make_attendance(
+        db_session,
+        ming,
+        service_date=_TODAY,
+        status="present",
+        check_in_at=datetime(2026, 9, 1, 0, 30, tzinfo=UTC),
+    )
+    request = make_pickup_request(
+        db_session, ming, service_date=_TODAY, status="arrived", requested_by=mom.id
+    )
+    client, staff = staff_client(permissions=["pickup:operate"], display_name="林老師")
+
+    resp = client.post(
+        _complete_url(request.id), json={"method": "guardian", "guardian_id": str(dad.id)}
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert (body["id"], body["status"], body["picked_up_by_name"]) == (
+        str(request.id),
+        "completed",
+        "王爸爸",
+    )
+    assert (body["completion_method"], body["completed_by_name"]) == ("guardian", "林老師")
+    # 已 commit：重讀 DB；出勤已 left、家長收到 pickup.completed
+    db_session.expire_all()
+    assert (request.status, request.completed_by, request.picked_up_by_guardian_id) == (
+        "completed",
+        staff.id,
+        dad.id,
+    )
+    attendance = db_session.execute(
+        select(StudentAttendance).where(
+            StudentAttendance.student_id == ming.id, StudentAttendance.service_date == _TODAY
+        )
+    ).scalar_one()
+    assert (attendance.status, attendance.check_out_source) == ("left", "pickup")
+    completed = _parent_events(db_session, "pickup.completed", mom.id)
+    assert [n.payload["picked_up_by"] for n in completed] == ["王爸爸"]
+
+
+def test_admin_pickup_complete_override_audit(
+    api_client: TestClient,
+    app: FastAPI,
+    db_session: Session,
+    login_staff: Callable[[TestClient, StaffUser], None],
+) -> None:
+    ming, mom = _family(db_session)
+    request = make_pickup_request(
+        db_session, ming, service_date=_TODAY, status="acknowledged", requested_by=mom.id
+    )
+    supervisor = make_staff(db_session, permissions=["pickup:operate", "pickup:override"])
+    db_session.commit()
+    # 指定真實來源 IP 才能驗 request meta 有注入到 audit
+    client = TestClient(app, base_url="http://testserver", client=("203.0.113.5", 50000))
+    login_staff(client, supervisor)
+
+    resp = client.post(
+        _complete_url(request.id), json={"method": "override", "note": "家長來電確認由鄰居接"}
+    )
+
+    assert resp.status_code == 200
+    assert (resp.json()["completion_method"], resp.json()["picked_up_by_name"]) == (
+        "override",
+        "老師確認交付",
+    )
+    log = db_session.execute(
+        select(AuditLog).where(
+            AuditLog.action == "pickup.override_complete", AuditLog.entity_id == str(request.id)
+        )
+    ).scalar_one()
+    assert (log.actor_id, log.ip) == (supervisor.id, "203.0.113.5")
+    assert log.after == {"status": "completed", "note": "家長來電確認由鄰居接"}
+
+
+def test_admin_pickup_complete_422(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming, _ = _family(db_session)
+    hua = make_student(db_session, name="陳小華")
+    hua_mom = make_guardian(db_session, hua, name="陳媽媽")
+    request = make_pickup_request(db_session, ming, service_date=_TODAY)
+    client, _ = staff_client(permissions=["pickup:operate"])
+
+    for body in (
+        {"method": "guardian"},
+        {"method": "override"},
+        {"method": "code", "guardian_id": str(hua_mom.id)},
+        {"method": "guardian", "guardian_id": "abc"},
+        {"method": "override", "note": "x", "authorization_id": str(uuid4())},
+        {},
+    ):
+        assert_error(client.post(_complete_url(request.id), json=body), 422, "validation_error")
+    assert_error(
+        client.post(_complete_url("abc"), json={"method": "override", "note": "x"}),
+        422,
+        "validation_error",
+    )
+    # 他人學生的監護人
+    other = client.post(
+        _complete_url(request.id), json={"method": "guardian", "guardian_id": str(hua_mom.id)}
+    )
+    assert_error(other, 422, "invalid_guardian")
+    db_session.expire_all()
+    assert request.status == "pending"
+
+
+def test_admin_pickup_complete_401(api_client: TestClient, assert_error: AssertError) -> None:
+    resp = api_client.post(_complete_url(uuid4()), json={"method": "override", "note": "x"})
+
+    assert_error(resp, 401, "unauthenticated")
+
+
+def test_admin_pickup_complete_403(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming, _ = _family(db_session)
+    dad = make_guardian(db_session, ming, name="王爸爸", relation="father")
+    request = make_pickup_request(db_session, ming, service_date=_TODAY)
+    reader, _ = staff_client(permissions=["pickup:read"])
+    operator, _ = staff_client(permissions=["pickup:operate"])
+
+    resp = reader.post(
+        _complete_url(request.id), json={"method": "guardian", "guardian_id": str(dad.id)}
+    )
+
+    assert_error(resp, 403, "permission_denied")
+    assert resp.json()["error"]["details"] == {"required": ["pickup:operate"]}
+    # pickup:operate 但強制完成另需 pickup:override（service 檢查）
+    override = operator.post(
+        _complete_url(request.id), json={"method": "override", "note": "家長來電確認"}
+    )
+    assert_error(override, 403, "permission_denied")
+    assert override.json()["error"]["details"] == {"required": ["pickup:override"]}
+    db_session.expire_all()
+    assert request.status == "pending"
+
+
+def test_admin_pickup_complete_409(
+    staff_client: StaffClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    ming, _ = _family(db_session)
+    dad = make_guardian(db_session, ming, name="王爸爸", relation="father")
+    grandma = make_guardian(
+        db_session, ming, name="王奶奶", relation="grandparent", can_pickup=False
+    )
+    cancelled = make_pickup_request(db_session, ming, service_date=_TODAY, status="cancelled")
+    pending = make_pickup_request(db_session, ming, service_date=_TODAY)
+    client, _ = staff_client(permissions=["pickup:operate"])
+
+    resp = client.post(
+        _complete_url(cancelled.id), json={"method": "guardian", "guardian_id": str(dad.id)}
+    )
+
+    assert_error(resp, 409, "invalid_pickup_status")
+    assert resp.json()["error"]["details"] == {"current_status": "cancelled"}
+    assert_error(
+        client.post(
+            _complete_url(pending.id), json={"method": "guardian", "guardian_id": str(grandma.id)}
+        ),
+        409,
+        "guardian_cannot_pickup",
+    )
+    assert_error(
+        client.post(
+            _complete_url(uuid4()), json={"method": "guardian", "guardian_id": str(dad.id)}
+        ),
+        404,
+        "pickup_request_not_found",
+    )
+    db_session.expire_all()
+    assert pending.status == "pending"
