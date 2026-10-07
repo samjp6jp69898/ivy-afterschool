@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 145,
-  "last_updated": "2026-10-07T10:44:25Z",
+  "version": 146,
+  "last_updated": "2026-10-07T10:44:32Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -679,7 +679,7 @@
     {
       "id": "FRONTEND-029",
       "title": "實作 layouts/AdminLayout.vue：側欄 + 頂欄 + 內容區、啟動 ws 與通知、斷線提示",
-      "description": "建立 `apps/web/src/layouts/AdminLayout.vue`。移植 ivy `FE:src/layouts/AdminLayout.vue` 的版面骨架與手機抽屜；**去掉** high-risk audit count、portal context 判斷、tenant、輪詢 summary。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-admin-shell.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：桌機（側欄展開 / 收合）、平板 1024×768（`meta.tablet` 頁面側欄預設收合成 icon）、手機（側欄改抽屜）、斷線橫幅、通知面板展開。\n\n**行為**\n- 版面：左 `AdminSidebar`（FRONTEND-031）、上 `AdminHeader`（FRONTEND-032）、中 `<slot />`。側欄收合狀態存 `localStorage['admin.sidebarCollapsed']`（try/catch，讀不到用預設）；`route.meta.tablet` 頁面初次進入時預設收合；視窗寬 < 768 改為 el-drawer，點選選單後關閉。\n- onMounted：`useAdminWsStore().start()`（FRONTEND-037）、`useNotificationsStore().fetch()` 並綁定 ws（FRONTEND-034）；onUnmounted：`adminWs.stop()`。\n- `adminWs.status` 為 `reconnecting` 超過 5 秒 → 頂欄下方顯示 warning 橫幅「即時連線中斷，畫面每 15 秒自動更新」；回到 `open` 時橫幅消失。\n\n**驗收標準**\n- 掛載後建立 `/api/ws/admin` 連線並取得通知清單。\n- 斷線 5 秒後出現橫幅、恢復後消失。\n- 收合狀態可切換且被記住；平板頁預設收合。",
+      "description": "建立 `apps/web/src/layouts/AdminLayout.vue`。移植 ivy `FE:src/layouts/AdminLayout.vue` 的版面骨架與手機抽屜；**去掉** high-risk audit count、portal context 判斷、tenant、輪詢 summary。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-admin-shell.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：桌機（側欄展開 / 收合）、平板 1024×768（`meta.tablet` 頁面側欄預設收合成 icon）、手機（側欄改抽屜）、斷線橫幅、通知面板展開。\n\n**行為**\n- 版面：左 `AdminSidebar`（FRONTEND-031）、上 `AdminHeader`（FRONTEND-032）、中 `<slot />`。側欄收合狀態存 `localStorage['admin.sidebarCollapsed']`（try/catch，讀不到用預設）；`route.meta.tablet` 頁面初次進入時預設收合；視窗寬 < 768 改為 el-drawer（寬 240，內放 `<AdminSidebar drawer>`：不顯示收合按鈕，FRONTEND-031），點選選單（`navigate`）後關閉。\n- onMounted：`useAdminWsStore().start()`（FRONTEND-037）、`useNotificationsStore().fetch()` 並綁定 ws（FRONTEND-034）；onUnmounted：`adminWs.stop()`。\n- `adminWs.status` 為 `reconnecting` 超過 5 秒 → 頂欄下方顯示 warning 橫幅「即時連線中斷，畫面每 15 秒自動更新」；回到 `open` 時橫幅消失。\n\n**驗收標準**\n- 掛載後建立 `/api/ws/admin` 連線並取得通知清單。\n- 斷線 5 秒後出現橫幅、恢復後消失。\n- 收合狀態可切換且被記住；平板頁預設收合。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/layouts/AdminLayout.vue",
       "source_ref": "FE:src/layouts/AdminLayout.vue::default",
@@ -752,7 +752,7 @@
     {
       "id": "FRONTEND-031",
       "title": "實作 components/layout/AdminSidebar.vue：依權限顯示選單、收合、目前頁面高亮",
-      "description": "建立 `apps/web/src/components/layout/AdminSidebar.vue`（根元素 `data-test=\"admin-sidebar\"`）。移植 ivy `FE:src/components/layout/AdminSidebar.vue` 的 el-menu 結構、收合按鈕與「選單項目由 manifest 衍生」；**去掉** tenant branding、platform admin 分支、PERMISSION_NAMES 全量預算。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-admin-shell.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。 稿需呈現 director / clerk / tutor 三種權限下的選單差異。\n\n**props / emits**：`collapsed: boolean`；emits `navigate(path: string)`（手機抽屜據此關閉）、`toggle()`。\n**行為**\n- 選單 = `visibleNavigation(auth.permissions)`（FRONTEND-030），群組標題 + 項目（icon + label）；沒有任何可見項目時顯示「沒有可使用的功能，請聯絡管理員」。\n- 目前高亮：取所有 item.path 中「是 route.path 的前綴（以 `/` 分段比對）」者的最長者；`/exams/abc` → `/exams`、`/pickup/authorizations` → 自己、`/` 只在 route.path === '/' 時高亮。\n- 點選項目 `router.push(path)` 並 emit `navigate`。\n- 頂部顯示安親班名稱（`org.profile` 不在此取得，固定「安親班管理系統」）。\n\n**驗收標準**\n- tutor 看不到「設定」群組；director 看得到「員工帳號」但看不到「角色權限」以外沒有的項目（依 §3 預設權限）。\n- 巢狀路徑高亮正確；點選導頁並 emit。",
+      "description": "建立 `apps/web/src/components/layout/AdminSidebar.vue`（根元素 `data-test=\"admin-sidebar\"`）。移植 ivy `FE:src/components/layout/AdminSidebar.vue` 的 el-menu 結構、收合按鈕與「選單項目由 manifest 衍生」；**去掉** tenant branding、platform admin 分支、PERMISSION_NAMES 全量預算。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-admin-shell.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。 稿需呈現 director / clerk / tutor 三種權限下的選單差異。\n\n**props / emits**：`collapsed: boolean`、`drawer?: boolean`（預設 false；手機抽屜模式：寬度填滿抽屜、不顯示底部收合按鈕、忽略 `collapsed`，對應設計稿「抽屜內不顯示收合按鈕」）；emits `navigate(path: string)`（手機抽屜據此關閉）、`toggle()`（底部收合按鈕：展開時 aria-label「收合側欄」+「收合」字樣，收合時 aria-label「展開側欄」只剩 icon）。\n**行為**\n- 選單 = `visibleNavigation(auth.permissions)`（FRONTEND-030），群組標題 + 項目（icon + label）；沒有任何可見項目時顯示「沒有可使用的功能，請聯絡管理員」。\n- 目前高亮：取所有 item.path 中「是 route.path 的前綴（以 `/` 分段比對）」者的最長者；`/exams/abc` → `/exams`、`/pickup/authorizations` → 自己、`/` 只在 route.path === '/' 時高亮。\n- 點選項目 `router.push(path)` 並 emit `navigate`。\n- 頂部顯示安親班名稱（`org.profile` 不在此取得，固定「安親班管理系統」）。\n\n**驗收標準**\n- tutor 看不到「設定」群組；director 看得到「員工帳號」但看不到「角色權限」以外沒有的項目（依 §3 預設權限）。\n- 巢狀路徑高亮正確；點選導頁並 emit。\n- 收合按鈕 emit toggle；抽屜模式沒有收合按鈕且不收合。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/layout/AdminSidebar.vue",
       "source_ref": "FE:src/components/layout/AdminSidebar.vue::default",
@@ -775,7 +775,9 @@
           "AdminSidebar shows settings items per permission：permissions ['settings:read','staff:read'] → 設定群組項目文字依序為 ['系統設定','參考資料','員工帳號']",
           "AdminSidebar highlights longest matching prefix：initialRoute '/exams/e1' → 'is-active' 的項目文字為 '考試'；initialRoute '/pickup/authorizations' → 'is-active' 項目為 '代理接送核驗'（'接送' 不為 active）",
           "AdminSidebar navigates and emits on click：點 '學生工作台' → router.currentRoute.value.path === '/students'，emitted('navigate')[0] 深等於 ['/students']",
-          "AdminSidebar empty permissions shows hint：permissions [] → wrapper.text() 含 '沒有可使用的功能，請聯絡管理員'"
+          "AdminSidebar empty permissions shows hint：permissions [] → wrapper.text() 含 '沒有可使用的功能，請聯絡管理員'",
+          "AdminSidebar collapse button emits toggle：props {collapsed:false} → [aria-label=收合側欄] 文字 '收合'，點擊後 emitted('toggle').length === 1；props {collapsed:true} → 根元素 class 含 is-collapsed、.el-menu 含 el-menu--collapse、[aria-label=展開側欄] 存在",
+          "AdminSidebar drawer mode hides collapse button and ignores collapsed：props {collapsed:true, drawer:true} → 根元素 class 含 is-drawer、不含 is-collapsed，沒有 [aria-label=收合側欄] 與 [aria-label=展開側欄]；點 '請假' → emitted('navigate')[0] 深等於 ['/leaves']"
         ],
         "run": "just web-test src/components/layout/AdminSidebar.spec.ts -t \"AdminSidebar\"",
         "notes": ""
