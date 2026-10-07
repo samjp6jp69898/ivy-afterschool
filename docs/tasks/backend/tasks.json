@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 408,
-  "last_updated": "2026-10-07T07:56:25Z",
+  "version": 409,
+  "last_updated": "2026-10-07T07:57:56Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5451,11 +5451,11 @@
     {
       "id": "BACKEND-158",
       "title": "實作 GradePromotionService.execute：執行學年升級（冪等、互斥、稽核）",
-      "description": "在 `apps/api/app/services/grade_promotion_service.py` 實作：\n```python\ndef execute(session: Session, *, from_academic_year: int, expected_total: int, withdrawn_on: date | None, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> PromotionResult: ...   # promoted、graduated 數\n```\n1. `advisory_xact_lock(session, 'students:promote_grade', str(from_academic_year))`（BACKEND-017，同時按兩次的第二個請求等待後走到步驟 2）。\n2. 已有 audit `student.promote_grade` / entity_id = from_academic_year → 409 `already_promoted`。\n3. 重新計算 preview；`total != expected_total` → 409 `preview_stale`（預覽後名單有變，請重新預覽）。\n4. 以兩條 bulk update：grade 1~5 `grade_level = grade_level + 1`；grade 6 → `status='withdrawn'`、`withdrawn_on = withdrawn_on or clock.today()`（先更新六年級再更新其他，避免剛升上六年級的被誤判）。\n5. 轉為 withdrawn 的六年級學生逐一呼叫 `close_out_inactive_student`（BACKEND-529），收尾其未來請假、代理授權與出勤。\n6. 稽核 `student.promote_grade`（entity_type `academic_year`、entity_id `str(from_academic_year)`、after `{promoted, graduated, to_academic_year}`）。\n- class_id 不變：學生保留原安親班班級（BACKEND-157）。\n\n**驗收標準**\n- 升級與退班結果正確；五年級變六年級但不會被同一次執行轉為退班。\n- 第二次執行 409 already_promoted。\n- expected_total 不符 409 preview_stale。\n- 寫一筆 audit。",
+      "description": "在 `apps/api/app/services/grade_promotion_service.py` 實作：\n```python\ndef execute(session: Session, *, from_academic_year: int, expected_total: int, withdrawn_on: date | None, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> PromotionResult: ...   # promoted、graduated 數\n```\n1. `advisory_xact_lock(session, 'students:promote_grade', str(from_academic_year))`（BACKEND-017，同時按兩次的第二個請求等待後走到步驟 2）。\n2. 已有 audit `student.promote_grade` / entity_id = from_academic_year → 409 `already_promoted`。\n3. 先以 FOR UPDATE（依主鍵排序，批次鎖多列的全專案約定）鎖住全部對象列（未封存、active / suspended），再重新計算 preview；`total != expected_total`（或鎖到的列數與 preview 不符）→ 409 `preview_stale`（預覽後名單有變，請重新預覽；details `{expected_total, total}`）。對象列鎖住後，並發的 update_student 在學生列上等待，名單與寫入之間不會變動。\n3a. 六年級的 `enrolled_on` 晚於退班日（`withdrawn_on or clock.today()`）會違反 DB CHECK：先以 422 `invalid_dates` 擋下並在 details 列出學生（`{withdrawn_on, students: [{id, student_no, name, enrolled_on}]}`），整批不動；指定不早於入班日的退班日即可執行。\n4. 以兩條 bulk update：grade 1~5 `grade_level = grade_level + 1`；grade 6 → `status='withdrawn'`、`withdrawn_on = withdrawn_on or clock.today()`（先更新六年級再更新其他，避免剛升上六年級的被誤判）；兩條都只對步驟 3 鎖住的 id 執行，promoted 取自實際更新列數。\n5. 轉為 withdrawn 的六年級學生逐一呼叫 `close_out_inactive_student`（BACKEND-529），收尾其未來請假、代理授權與出勤；依主鍵順序處理，鎖序與 update_student 同向（學生列 → 授權列 → 請求列 → 請假 / 出勤）。\n6. 稽核 `student.promote_grade`（entity_type `academic_year`、entity_id `str(from_academic_year)`、after `{promoted, graduated, to_academic_year}`）。\n- class_id 不變：學生保留原安親班班級（BACKEND-157）。\n\n**驗收標準**\n- 升級與退班結果正確；五年級變六年級但不會被同一次執行轉為退班。\n- 第二次執行 409 already_promoted。\n- expected_total 不符 409 preview_stale。\n- 寫一筆 audit。\n- 同時按兩次：兩條連線的阻塞並發測試，第二次在 advisory lock 等待、前者 commit 後 409（拿掉鎖轉紅：會被升第二次）。\n- 六年級入班日晚於退班日 → 422 invalid_dates，整批不動。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/grade_promotion_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-157",
@@ -5475,7 +5475,11 @@
           "test_promotion_execute_success：一年級、五年級、六年級各一 → execute(from_academic_year=114, expected_total=3, withdrawn_on=None) → 一年級變 2、五年級變 6 且 status 仍 active、六年級 status 'withdrawn' 且 withdrawn_on == fake_clock.today()；result == (promoted=2, graduated=1)",
           "test_promotion_execute_already：執行成功後再執行 → 409 'already_promoted'",
           "test_promotion_execute_stale：expected_total=5 → 409 'preview_stale'，所有學生未變",
-          "test_promotion_execute_audit：audit 'student.promote_grade' entity_id == '114'、after.to_academic_year == 115"
+          "test_promotion_execute_audit：audit 'student.promote_grade' entity_id == '114'、after.to_academic_year == 115",
+          "test_promotion_execute_scope_and_explicit_date：suspended 五年級 → 6 仍 suspended、suspended 六年級 → withdrawn 且 withdrawn_on == 給定的 2026-07-31；withdrawn 與封存學生不動；result == (promoted=1, graduated=1)",
+          "test_promotion_execute_closes_out_graduates：六年級今日 pending 接送請求與明日 active 代理授權 → 執行後皆 cancelled（cancel_reason '學生已退班'）、audit student.close_out 1 筆；五年級的請求仍 pending、無 close_out 稽核",
+          "test_promotion_execute_invalid_dates：六年級 enrolled_on 2026-09-01、今天 8/15、withdrawn_on=None → 422 'invalid_dates'，details == {'withdrawn_on': 8/15, 'students': [{id, student_no, name, enrolled_on}]}，所有學生未變、無 promote_grade 稽核；改給 withdrawn_on=2026-09-01 → 成功",
+          "test_promotion_execute_concurrent_second_run_waits_then_409：committing、兩條連線——A execute 持 advisory lock 未 commit → B execute 必須等待（0.5 秒內未結束）→ A commit → B 409 'already_promoted'；最終一年級 2、五年級 6 且 active（只升一次）、promote_grade 稽核 1 筆（拿掉 advisory_xact_lock 時 B 會再升一次，轉紅）"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_grade_promotion_service.py -k \"test_promotion_execute_\"",
         "notes": ""
