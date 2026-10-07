@@ -12,6 +12,8 @@
 - BACKEND-428：``override_complete``（pickup:override 員工強制完成，鎖定的授權也可；寫 audit）。
 - BACKEND-555：``authorization_out`` / ``staff_authorization_out``（公開的輸出組裝函式；其他模組
   —— 例如 student_service 的 close_out —— 組授權推播資料一律用它，不匯入本模組的私有名稱）。
+- BACKEND-422：``cancel_authorization``（家長取消 active 授權；條件式更新，與員工核銷並發只有一方
+  成功）。
 
 列表只回 ``code_last4``，不回 ``code_hash``（單向 HMAC）；明碼只在建立時的回應出現一次，DB、log
 與例外訊息都不保存。``effective_status``：active 且 service_date 早於今天（台北）→ ``expired``，
@@ -283,6 +285,48 @@ def create_authorization(
         clock=clock,
     )
     return PickupAuthorizationCreatedOut(authorization=out, code=code)
+
+
+def cancel_authorization(
+    session: Session, auth_id: UUID, *, parent: CurrentParent, clock: Clock
+) -> PickupAuthorizationOut:
+    """家長取消自己小孩的 active 代理授權（任何日期）；只改 status，連錯次數與鎖定不動。
+
+    他人小孩的授權與不存在回同一個 404。狀態以條件式 UPDATE（``WHERE status = 'active'``）切換：
+    員工同時在核銷（持有 FOR UPDATE、已把列改成 completed）時這裡會等到對方 commit 再重新判斷，
+    只有一方成功，另一方 409。移植 ivy ``api/parent_portal/pickup.py::cancel_authorization``；去掉
+    連動取消 dismissal_call（本專案授權與接送請求在核銷時才關聯）。
+    """
+    student_id = session.execute(
+        select(PickupAuthorization.student_id).where(PickupAuthorization.id == auth_id)
+    ).scalar_one_or_none()
+    if student_id is None or student_id not in get_parent_student_ids(session, parent.id):
+        raise NotFoundError("pickup_authorization_not_found", "找不到代理接送授權")
+
+    hit = session.execute(
+        update(PickupAuthorization)
+        .where(PickupAuthorization.id == auth_id, PickupAuthorization.status == "active")
+        .values(status="cancelled")
+        .returning(PickupAuthorization.id)
+    ).scalar_one_or_none()
+    if hit is None:
+        raise ConflictError("authorization_not_active", "此代理接送授權已完成或已取消")
+    # bulk update 不經 ORM：以 DB 現值覆蓋同 session 內可能已載入的舊屬性
+    auth = session.execute(
+        select(PickupAuthorization)
+        .where(PickupAuthorization.id == auth_id)
+        .execution_options(populate_existing=True)
+    ).scalar_one()
+
+    out = authorization_out(auth, clock.today())
+    broadcast_after_commit(
+        session,
+        topic="pickup",
+        type="pickup.authorization_updated",
+        data=out.model_dump(),
+        clock=clock,
+    )
+    return out
 
 
 def load_verifiable_authorization(
