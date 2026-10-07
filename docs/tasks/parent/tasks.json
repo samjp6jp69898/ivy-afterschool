@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 114,
-  "last_updated": "2026-10-07T10:59:24Z",
+  "version": 115,
+  "last_updated": "2026-10-07T10:59:35Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -2202,11 +2202,11 @@
     {
       "id": "PARENT-100",
       "title": "建立 PickupPersonListItem 元件：常用接送人列（照片、姓名、關係、電話、刪除）",
-      "description": "建立 `apps/web/src/parent/components/pickup/PickupPersonListItem.vue`：\n```ts\nprops: { person: PickupPerson }\nemits: { delete: [person: PickupPerson] }\n```\n- 根元素 `<li>`；左側照片（`photo_url`，`loading=\"lazy\"`，載入失敗改顯示姓名首字圓形）；姓名、「{relation} · {phone}」；右側 PARENT-016 M3IconButton `delete`，label「刪除 {name}」，點擊 emit delete。\n- 照片 URL 為後端簽發的短效網址，不快取到 storage。\n\n參考 ivy `FE:src/parent/views/PickupView.vue::openEditPerson` 所在的接送人清單呈現；**去掉** 編輯（本專案無 update endpoint）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-pickup-person-list-item.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：有照片 / 無照片 / 照片載入失敗。可併入 `parent-page-pickup-proxy.html`。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/pickup/PickupPersonListItem.vue`：\n```ts\nprops: { person: PickupPerson }\nemits: { delete: [person: PickupPerson] }\n```\n- 根元素 `<li>`；左側照片（`photo_url`，`loading=\"lazy\"`，載入失敗改顯示姓名首字圓形，首字以 `Array.from` 取、罕用字不切半）；姓名、「{relation} · {phone}」（電話照 API 原樣顯示，不加連字號、不做 `tel:` 連結；兩行皆單行省略）；右側 PARENT-016 M3IconButton（standard、icon `delete`），label「刪除 {name}」，點擊 emit delete(person)。整列不可點、無 state layer（沒有編輯接送人的功能）；列間 1px outline-variant 分隔線由列自己畫（`li + li`）。\n- 照片 URL 為後端簽發的短效網址，不快取到 storage；載入失敗以網址記錄，photo_url 換成新網址（重抓清單）時重新嘗試載入，同一個失效網址不重試。\n\n參考 ivy `FE:src/parent/views/PickupView.vue::openEditPerson` 所在的接送人清單呈現；**去掉** 編輯（本專案無 update endpoint）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-pickup-person-list-item.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：有照片 / 無照片 / 照片載入失敗。可併入 `parent-page-pickup-proxy.html`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/PickupPersonListItem.vue",
       "source_ref": "FE:src/parent/views/PickupView.vue::openEditPerson",
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "PARENT-016",
@@ -2214,7 +2214,7 @@
         "INFRA-012"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "圖示 `delete` 不在 `parent/styles/icons.css` 的自架字型子集內：390×844 的 headless Chromium 實測，刪除鈕的 ligature 沒有生效，顯示成被 1em 夾盒裁掉的字母（亂碼）；需重取字型子集並更新 icons.css 的圖示清單後才會正確顯示。happy-dom 單元測試驗不出字型，所以測試只斷言圖示名稱為 delete。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/components/pickup/PickupPersonListItem.spec.ts",
@@ -2223,7 +2223,14 @@
         ],
         "red_cases": [
           "PickupPersonListItem renders info and emits delete：person {name:'李阿姨', relation:'保母', phone:'0912000123', photo_url:'https://acct.r2.cloudflarestorage.com/afterschool/pickup-person-photos/p.jpg'} → 含 '李阿姨' 與 '保母 · 0912000123'，img.src 為該網址；點 aria-label '刪除 李阿姨' → emitted('delete')[0][0].name === '李阿姨'",
-          "PickupPersonListItem falls back to initial：photo_url=null → 無 img，頭像文字 '李'；有 photo_url 但 img 觸發 error 事件 → img 消失並顯示 '李'"
+          "PickupPersonListItem falls back to initial：photo_url=null → 無 img，頭像文字 '李'；有 photo_url 但 img 觸發 error 事件 → img 消失並顯示 '李'",
+          "PickupPersonListItem is a list row with a decorative avatar：根元素為 li；頭像 aria-hidden='true'、img alt 為空且 loading='lazy'；整列只有一顆 button、沒有連結、沒有 tabindex",
+          "PickupPersonListItem delete button is a standard icon button：button[aria-label='刪除 王爺爺']、type=button、class 含 m3-icon-button--standard、圖示文字為 'delete'",
+          "PickupPersonListItem shows the phone as returned：'0912000123' 與 '02-2345-6789' 原樣顯示於「關係 · 電話」，沒有 <a> 連結",
+          "PickupPersonListItem retries when the photo url changes：img 失敗後換成新網址 → img 重新出現且 src 為新網址；再換回同一個失效網址 → 不顯示 img、頭像為首字",
+          "PickupPersonListItem only the delete button emits：點 li、文字區、頭像都不 emit delete",
+          "PickupPersonListItem initial keeps a whole character：name='𠮷野家'、photo_url=null → 頭像文字為 '𠮷'",
+          "PickupPersonListItem keeps the approved layout rules：?raw 檢查一列最小高 72px、padding 8px 4px 8px 16px、gap 16px、li + li 的 1px outline-variant 上框線；頭像 40px 圓形（tertiary-container 底、img cover）；文字欄 min-width 0，姓名與關係 · 電話單行省略"
         ],
         "run": "just web-test src/parent/components/pickup/PickupPersonListItem.spec.ts -t \"PickupPersonListItem\"",
         "notes": ""
