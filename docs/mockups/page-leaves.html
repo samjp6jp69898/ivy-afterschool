@@ -1,0 +1,1361 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+
+<meta name="preview-status" content="draft">
+<meta name="preview-tasks" content="FRONTEND-129,FRONTEND-130,FRONTEND-131,FRONTEND-132">
+<meta name="preview-route" content="/leaves">
+<meta name="preview-updated" content="2026-10-07">
+
+<title>設計稿：請假</title>
+
+<!-- 版號對齊 apps/web/pnpm-lock.yaml 的實際安裝版本 -->
+<link rel="stylesheet" href="https://unpkg.com/element-plus@2.14.7/dist/index.css">
+<script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/locale/zh-tw.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue@2.3.2/dist/index.iife.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+#app { display: flex; flex-direction: column; height: 100%; }
+body { font-family: var(--el-font-family); background: var(--el-fill-color); color: var(--el-text-color-primary); }
+
+.preview-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 6px 16px; font-size: 12px;
+  color: var(--el-color-info-dark-2);
+  background: var(--el-color-info-light-9);
+  border-bottom: 1px dashed var(--el-border-color);
+}
+.preview-bar__spacer { flex: 1; }
+.preview-bar code { font-size: 12px; }
+.text-secondary { color: var(--el-text-color-secondary); font-size: 13px; }
+.el-button > span > .el-icon { margin-right: 4px; }
+.stage { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+.control-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; font-size: 12px; color: var(--el-text-color-secondary); background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-lighter); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.last-request { font-size: 12px; color: var(--el-text-color-secondary); }
+
+/* ==================== ADMIN SHELL CSS START（各頁稿逐字複製這一段） ==================== */
+/* 裝置框：只存在於設計稿，模擬桌機 / 平板 1024×768 / 手機 390×844 */
+.device-frame { position: relative; margin: 0 auto; overflow: hidden; background: var(--el-bg-color-page); border: 1px solid var(--el-border-color); border-radius: 10px; box-shadow: var(--el-box-shadow-light); }
+.device-frame.is-desktop { width: 1200px; height: 760px; }
+.device-frame.is-tablet { width: 1024px; height: 768px; }
+.device-frame.is-mobile { width: 390px; height: 844px; border-radius: 24px; }
+
+.shell { display: flex; height: 100%; }
+.shell__aside { display: flex; flex-direction: column; flex-shrink: 0; width: 220px; background: var(--el-bg-color); border-right: 1px solid var(--el-border-color-light); transition: width 0.2s ease; }
+.shell__aside.is-collapsed { width: 64px; }
+.shell__brand { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 22px; flex-shrink: 0; white-space: nowrap; overflow: hidden; font-weight: 600; color: var(--el-text-color-primary); border-bottom: 1px solid var(--el-border-color-lighter); }
+.shell__brand .el-icon { font-size: 20px; color: var(--el-color-primary); flex-shrink: 0; }
+.shell__menu { flex: 1; min-height: 0; overflow: hidden auto; }
+.shell__menu .el-menu { border-right: none; }
+.shell__menu .el-menu-item-group__title { padding-top: 14px; font-size: 12px; }
+.shell__menu .el-menu--collapse .el-menu-item-group__title { height: 1px; padding: 0; margin: 8px 12px; background: var(--el-border-color-lighter); overflow: hidden; }
+.shell__menu .el-menu-item { height: 44px; line-height: 44px; }
+.shell__empty { padding: 24px 16px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.shell__collapse { flex-shrink: 0; height: 44px; border-top: 1px solid var(--el-border-color-lighter); display: flex; align-items: center; justify-content: center; }
+.shell__body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.shell__header { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 12px 0 8px; flex-shrink: 0; background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-light); }
+.shell__toggle { width: 44px; height: 44px; }
+.shell__title { margin: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shell__spacer { flex: 1; }
+.ws-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-info-light-3); margin: 0 6px; }
+.ws-dot.is-open { background: var(--el-color-success); }
+.ws-dot.is-reconnecting { background: var(--el-color-warning); }
+.shell__bell { width: 44px; height: 44px; font-size: 18px; }
+.shell__bell .el-badge__content { top: 10px; right: 12px; }
+.shell__user { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 8px; cursor: pointer; border-radius: 6px; color: var(--el-text-color-regular); font-size: 14px; }
+.shell__user:hover { background: var(--el-fill-color-light); }
+.shell__banner { flex-shrink: 0; border-radius: 0; }
+.shell__main { flex: 1; min-height: 0; overflow: auto; padding: 20px; }
+.device-frame.is-tablet .shell__main { padding: 16px; }
+.device-frame.is-mobile .shell__main { padding: 12px; }
+/* 手機：側欄改抽屜（實作用 el-drawer，稿裡在裝置框內模擬） */
+.shell__scrim { position: absolute; inset: 0; z-index: 20; background: var(--el-overlay-color-lighter); }
+.shell__drawer { position: absolute; top: 0; bottom: 0; left: 0; z-index: 21; width: 240px; display: flex; flex-direction: column; background: var(--el-bg-color); box-shadow: var(--el-box-shadow-dark); }
+
+/* 通知面板（FRONTEND-036） */
+.notif { width: 360px; margin: -12px; }
+.notif__head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 10px 16px; border-bottom: 1px solid var(--el-border-color-lighter); }
+.notif__title { font-size: 15px; font-weight: 600; }
+.notif__list { max-height: 420px; overflow: auto; }
+.notif__row { position: relative; display: block; width: 100%; padding: 12px 16px 12px 28px; text-align: left; cursor: pointer; border: none; border-bottom: 1px solid var(--el-border-color-extra-light); background: var(--el-bg-color); font-family: inherit; color: inherit; }
+.notif__row:hover, .notif__row:focus-visible { background: var(--el-fill-color-light); outline: none; }
+.notif__row.is-unread { background: var(--el-color-primary-light-9); }
+.notif__row.is-unread:hover { background: var(--el-color-primary-light-8); }
+.notif__dot { position: absolute; left: 12px; top: 18px; width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-primary); }
+.notif__row-title { font-size: 14px; font-weight: 600; color: var(--el-text-color-primary); }
+.notif__row-body { margin-top: 2px; font-size: 13px; line-height: 1.5; color: var(--el-text-color-regular); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+.notif__row-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--el-text-color-secondary); }
+.notif__empty { padding: 40px 16px; text-align: center; font-size: 13px; color: var(--el-text-color-secondary); }
+.notif__skeleton { padding: 12px 16px; }
+/* ==================== ADMIN SHELL CSS END ==================== */
+
+/* ==== 以下逐字複製自 component-common.html（已核可） ==== */
+/* ---------- PageHeader（FRONTEND-039） ---------- */
+.page-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+.page-header__body { flex: 1; min-width: 0; }
+.page-header__title { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; color: var(--el-text-color-primary); }
+.page-header__subtitle { margin: 4px 0 0; font-size: 13px; color: var(--el-text-color-secondary); }
+.page-header__extra { margin-top: 8px; }
+.page-header__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+.page-header__actions .el-button + .el-button { margin-left: 0; }
+/* 實作用 @media (max-width: 767.98px)；稿裡用 .is-narrow 在 375px 框內示意 */
+.is-narrow .page-header { flex-wrap: wrap; }
+.is-narrow .page-header__body { flex-basis: 100%; }
+.is-narrow .page-header__actions { width: 100%; }
+
+/* ---------- AdminListToolbar（FRONTEND-041） ---------- */
+.list-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.list-toolbar__search { width: 240px; }
+.list-toolbar__filter { display: flex; align-items: center; gap: 6px; }
+.list-toolbar__filter-label { font-size: 13px; color: var(--el-text-color-secondary); white-space: nowrap; }
+.list-toolbar__spacer { flex: 1 1 auto; }
+.list-toolbar__count { font-size: 13px; color: var(--el-text-color-secondary); white-space: nowrap; }
+.list-toolbar__actions { display: flex; gap: 8px; }
+.list-toolbar__actions .el-button + .el-button { margin-left: 0; }
+.is-narrow .list-toolbar__search { width: 100%; }
+.is-narrow .list-toolbar__filter { flex: 1 1 calc(50% - 6px); }
+.is-narrow .list-toolbar__filter .el-select { flex: 1; }
+
+/* ---------- EmptyState（FRONTEND-042） ---------- */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 16px; }
+.empty-state__icon { font-size: 48px; color: var(--el-text-color-placeholder); margin-bottom: 16px; }
+.empty-state__title { margin: 0 0 6px; font-size: 16px; font-weight: 500; color: var(--el-text-color-regular); }
+.empty-state__desc { margin: 0; max-width: 360px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.empty-state__action { margin-top: 16px; display: flex; gap: 8px; }
+.empty-state.is-error .empty-state__icon { color: var(--el-color-danger); }
+.empty-state.is-inline { padding: 16px 8px; }
+.empty-state.is-inline .empty-state__title { font-size: 14px; margin-bottom: 2px; }
+.empty-state.is-inline .empty-state__action { margin-top: 8px; }
+
+/* ==== 以下逐字複製自 component-common-extra.html（已核可） ==== */
+/* ---------- FormDialog（FRONTEND-040） ---------- */
+.form-dialog__footer { display: flex; justify-content: flex-end; gap: 8px; }
+.form-dialog__footer .el-button + .el-button { margin-left: 0; }
+
+/* ==== 以下逐字複製自 component-student-select.html（已核可） ==== */
+/* ---------- StudentSelect（FRONTEND-096） ---------- */
+.student-option { display: flex; align-items: baseline; gap: 2px; min-width: 0; }
+.student-option__name { color: var(--el-text-color-primary); }
+.student-option__meta { color: var(--el-text-color-secondary); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.el-select-dropdown__item.is-selected .student-option__name { color: var(--el-color-primary); font-weight: 600; }
+.student-select__status { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; font-size: 14px; color: var(--el-text-color-secondary); }
+.student-select__status.is-error { color: var(--el-color-danger); }
+
+/* ==================== 請假列表（FRONTEND-129） ==================== */
+.panel { background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter); border-radius: 8px; padding: 16px; }
+.lv-student { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.4; }
+.lv-student .el-button { height: auto; padding: 0; font-weight: 600; }
+.lv-student__name { font-weight: 600; color: var(--el-text-color-primary); }
+.lv-sub { font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); font-variant-numeric: tabular-nums; }
+.lv-none { color: var(--el-text-color-placeholder); }
+.lv-period { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lv-period .el-tag { margin-left: 6px; }
+.lv-status-note { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); }
+.lv-att-toggle .lv-att-chev { margin-left: 2px; transition: transform 0.2s ease; }
+.lv-att-toggle.is-open .lv-att-chev { transform: rotate(180deg); }
+.leave-table .leave-expand-col > .cell { display: none; }
+.leave-table td.leave-expand-col, .leave-table th.leave-expand-col { border-right: none; }
+.leave-table .el-table__expanded-cell { padding: 12px 16px 16px; background: var(--el-fill-color-lighter); }
+.lv-pager { display: flex; justify-content: flex-end; margin-top: 12px; }
+.lv-reset { margin-left: -4px; }
+@media (prefers-reduced-motion: reduce) { .lv-att-toggle .lv-att-chev { transition: none; } }
+
+/* LeaveFormDialog（FRONTEND-130） */
+.form-hint { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); }
+.lf-type .el-radio-button__inner { min-width: 76px; }
+
+/* LeaveCancelDialog（FRONTEND-131） */
+.lc-summary { margin-bottom: 16px; padding: 10px 12px; border-radius: 6px; font-size: 13px; line-height: 1.8; color: var(--el-text-color-regular); background: var(--el-fill-color-light); }
+.lc-summary__name { font-weight: 600; color: var(--el-text-color-primary); }
+.lc-summary__period { margin-left: 8px; font-variant-numeric: tabular-nums; }
+.lc-options { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.lc-options .el-radio.is-bordered { height: auto; margin: 0; padding: 10px 14px; align-items: flex-start; white-space: normal; width: 100%; }
+.lc-options .el-radio__input { margin-top: 3px; }
+.lc-option__title { display: block; font-weight: 600; line-height: 1.5; color: var(--el-text-color-primary); font-variant-numeric: tabular-nums; }
+.lc-option__desc { display: block; margin-top: 2px; font-size: 13px; font-weight: 400; line-height: 1.6; color: var(--el-text-color-secondary); }
+.lc-only { padding: 12px 14px; border: 1px solid var(--el-border-color-lighter); border-radius: 6px; font-size: 14px; line-height: 1.7; color: var(--el-text-color-regular); }
+.lc-only__title { font-weight: 600; color: var(--el-text-color-primary); }
+.lc-notify { display: flex; align-items: center; gap: 4px; margin-top: 12px; font-size: 12px; color: var(--el-text-color-secondary); }
+.lc-error { margin-bottom: 12px; }
+
+/* LeaveAttachmentList（FRONTEND-132） */
+.la__list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.la__item {
+  display: flex; align-items: center; gap: 10px; width: 300px; max-width: 100%; min-height: 52px; padding: 8px 12px;
+  text-align: left; font: inherit; color: inherit; cursor: pointer;
+  border: 1px solid var(--el-border-color-lighter); border-radius: 6px; background: var(--el-bg-color);
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.la__item:hover { border-color: var(--el-color-primary-light-5); background: var(--el-color-primary-light-9); }
+.la__item:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+.la__item.is-loading { cursor: progress; }
+.la__icon { flex-shrink: 0; font-size: 22px; color: var(--el-color-primary); }
+.la__icon.is-pdf { color: var(--el-color-danger); }
+.la__body { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.la__name { font-size: 14px; color: var(--el-text-color-primary); }
+.la__meta { font-size: 12px; color: var(--el-text-color-secondary); font-variant-numeric: tabular-nums; }
+.la__action { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; font-size: 13px; color: var(--el-color-primary); white-space: nowrap; }
+.la__empty { margin: 0; font-size: 13px; color: var(--el-text-color-secondary); }
+@media (prefers-reduced-motion: reduce) { .la__item { transition: none; } }
+
+/* 稿件專用：元件狀態一覽（實作沒有） */
+.gallery { max-width: 1200px; margin: 20px auto 0; padding: 16px; border: 1px dashed var(--el-border-color); border-radius: 8px; background: var(--el-bg-color); }
+.gallery__title { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+.gallery__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-top: 12px; }
+.gallery__caption { margin-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--el-text-color-secondary); }
+.gallery__cell { padding: 12px; border-radius: 6px; background: var(--el-fill-color-lighter); }
+</style>
+</head>
+
+<body>
+<div id="app">
+  <div class="preview-bar">
+    <el-tag :type="meta.status === 'approved' ? 'success' : 'warning'" size="small" effect="dark" disable-transitions>
+      {{ meta.status === 'approved' ? '已核可' : '待核可' }}
+    </el-tag>
+    <span>{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span>以身分檢視</span>
+    <el-select v-model="viewAs" size="small" style="width: 300px">
+      <el-option v-for="(r, key) in roles" :key="key" :label="r.label" :value="key"></el-option>
+    </el-select>
+    <span>裝置</span>
+    <el-radio-group v-model="device" size="small">
+      <el-radio-button value="desktop">桌機 1200</el-radio-button>
+      <el-radio-button value="tablet">平板 1024</el-radio-button>
+    </el-radio-group>
+    <span class="preview-bar__spacer"></span>
+    <span>更新 {{ meta.updated }}</span>
+    <el-button size="small" text type="primary" @click="notesOpen = true">
+      設計說明 / 待裁定（{{ openQuestions.length }}）
+    </el-button>
+  </div>
+  <div class="control-bar">
+    <span>稿件控制：</span>
+    <span>列表</span>
+    <el-radio-group v-model="listState" size="small">
+      <el-radio-button value="data">有資料</el-radio-button>
+      <el-radio-button value="empty">空清單</el-radio-button>
+      <el-radio-button value="loading">載入中</el-radio-button>
+      <el-radio-button value="error">載入失敗</el-radio-button>
+    </el-radio-group>
+    <span>代登記送出</span>
+    <el-select v-model="createSim" size="small" style="width: 230px">
+      <el-option label="成功" value="ok"></el-option>
+      <el-option label="409 leave_overlap" value="leave_overlap"></el-option>
+      <el-option label="422 no_service_days_in_range" value="no_service_days_in_range"></el-option>
+      <el-option label="409 student_not_active" value="student_not_active"></el-option>
+    </el-select>
+    <span>取消送出</span>
+    <el-select v-model="cancelSim" size="small" style="width: 200px">
+      <el-option label="成功" value="ok"></el-option>
+      <el-option label="409 leave_not_active" value="leave_not_active"></el-option>
+      <el-option label="409 leave_already_ended" value="leave_already_ended"></el-option>
+    </el-select>
+    <span>附件網址</span>
+    <el-select v-model="attachmentSim" size="small" style="width: 210px">
+      <el-option label="成功" value="ok"></el-option>
+      <el-option label="404 attachment_not_found" value="attachment_not_found"></el-option>
+      <el-option label="502 storage_unavailable" value="storage_unavailable"></el-option>
+    </el-select>
+    <span>今天才開始的請假（待裁定 1）</span>
+    <el-radio-group v-model="startTodayMode" size="small">
+      <el-radio-button value="B">B 推薦</el-radio-button>
+      <el-radio-button value="A">A 照 task</el-radio-button>
+    </el-radio-group>
+    <span class="last-request">GET <span class="mono">/admin/leaves?{{ queryString }}</span></span>
+    <span v-if="lastRequest" class="last-request">最後送出：<span class="mono">{{ lastRequest }}</span></span>
+    <span class="last-request">提示：日期區間選「過去 90 天」可看已結束的請假（整筆取消）；狀態選「已取消」看取消資訊。</span>
+  </div>
+
+  <div class="stage">
+    <admin-shell :key="device + viewAs" :device="device" :perms="perms" :user="user" active-path="/leaves" @navigate="onNavigate">
+      <el-alert v-if="!can('leaves:read')" type="info" :closable="false" show-icon style="margin-bottom: 16px"
+                title="此身分沒有 leaves:read：側欄沒有「請假」，直接輸入網址會被導向 /forbidden（見 page-error.html）。以下內容僅供對照。"></el-alert>
+
+      <page-header title="請假" subtitle="家長在 LINE 送出即生效；員工可代登記與取消">
+        <template #actions>
+          <el-button :loading="refreshing" @click="refresh"><el-icon v-if="!refreshing"><icon-refresh></icon-refresh></el-icon>重新整理</el-button>
+          <el-button v-if="canCreate" type="primary" @click="openCreate"><el-icon><icon-plus></icon-plus></el-icon>代登記請假</el-button>
+        </template>
+      </page-header>
+
+      <section class="panel">
+        <!-- 篩選列：沿用 AdminListToolbar 的版面樣式（本頁 API 沒有關鍵字搜尋，所以不用該元件） -->
+        <div class="list-toolbar">
+          <div v-if="can('students:read')" class="list-toolbar__filter">
+            <span class="list-toolbar__filter-label">學生</span>
+            <div style="width: 220px">
+              <student-select v-model="filters.student_id" sim="normal" @change="onStudentFilter"></student-select>
+            </div>
+          </div>
+          <div class="list-toolbar__filter">
+            <span class="list-toolbar__filter-label">班級</span>
+            <el-select v-model="filters.class_id" style="width: 130px" aria-label="班級" @change="onFilter">
+              <el-option label="全部" :value="ALL"></el-option>
+              <el-option v-for="c in classes" :key="c.id" :label="c.name" :value="c.id"></el-option>
+            </el-select>
+          </div>
+          <div class="list-toolbar__filter">
+            <span class="list-toolbar__filter-label">狀態</span>
+            <el-select v-model="filters.status" style="width: 104px" aria-label="狀態" @change="onFilter">
+              <el-option v-for="(m, k) in LEAVE_STATUS_META" :key="k" :label="m.label" :value="k"></el-option>
+            </el-select>
+          </div>
+          <div class="list-toolbar__filter">
+            <span class="list-toolbar__filter-label">假別</span>
+            <el-select v-model="filters.leave_type" style="width: 96px" aria-label="假別" @change="onFilter">
+              <el-option label="全部" :value="ALL"></el-option>
+              <el-option v-for="(m, k) in LEAVE_TYPE_META" :key="k" :label="m.label" :value="k"></el-option>
+            </el-select>
+          </div>
+          <div class="list-toolbar__filter">
+            <span class="list-toolbar__filter-label">建立者</span>
+            <el-select v-model="filters.created_by_type" style="width: 96px" aria-label="建立者" @change="onFilter">
+              <el-option label="全部" :value="ALL"></el-option>
+              <el-option label="家長" value="parent"></el-option>
+              <el-option label="員工" value="staff"></el-option>
+            </el-select>
+          </div>
+          <div class="list-toolbar__filter">
+            <span class="list-toolbar__filter-label">日期</span>
+            <el-date-picker v-model="filters.range" type="daterange" value-format="YYYY-MM-DD" unlink-panels
+                            range-separator="~" start-placeholder="不限" end-placeholder="不限" :shortcuts="rangeShortcuts"
+                            style="width: 240px" aria-label="日期區間" @change="onFilter"></el-date-picker>
+          </div>
+          <el-button class="lv-reset" text type="primary" :disabled="!isFiltered" @click="resetFilters">重設</el-button>
+          <span class="list-toolbar__spacer"></span>
+          <span v-if="listState === 'data' || listState === 'empty'" class="list-toolbar__count">共 {{ rows.length }} 筆</span>
+        </div>
+
+        <empty-state v-if="listState === 'error'" variant="error" title="無法載入請假紀錄" description="網路連線中斷，請確認網路後再試一次">
+          <template #action><el-button @click="retry">重試</el-button></template>
+        </empty-state>
+
+        <template v-else>
+          <el-table class="leave-table" v-loading="listState === 'loading' || refreshing" :data="rows" row-key="id"
+                    :expand-row-keys="expanded" style="width: 100%">
+            <el-table-column label="學生" width="120" fixed="left">
+              <template #default="{ row }">
+                <div class="lv-student">
+                  <el-button v-if="can('students:read')" link type="primary" @click="goStudent(row)">{{ row.student.name }}</el-button>
+                  <span v-else class="lv-student__name">{{ row.student.name }}</span>
+                  <span class="lv-sub">{{ row.student.student_no }}</span>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="班級" width="100" show-overflow-tooltip>
+              <template #default="{ row }"><span :class="{ 'lv-none': !row.student.class_name }">{{ row.student.class_name || '未分班' }}</span></template>
+            </el-table-column>
+            <el-table-column label="假別" width="76">
+              <template #default="{ row }">
+                <el-tag :type="LEAVE_TYPE_META[row.leave_type].tone" disable-transitions>{{ row.leave_type_label }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="期間" width="236">
+              <template #default="{ row }">
+                <span class="lv-period">{{ fmtRange(row.start_date, row.end_date) }}<el-tag v-if="isOngoing(row)" type="primary" effect="plain" size="small" disable-transitions>進行中</el-tag></span>
+              </template>
+            </el-table-column>
+            <el-table-column label="原因" min-width="150" show-overflow-tooltip>
+              <template #default="{ row }"><span :class="{ 'lv-none': !row.reason }">{{ row.reason || '—' }}</span></template>
+            </el-table-column>
+            <el-table-column label="建立者" width="150">
+              <template #default="{ row }">
+                <div>{{ actorLabel(row.created_by_type, row.created_by_name) }}</div>
+                <div class="lv-sub">{{ fmtDateTime(row.created_at) }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column label="狀態" width="170">
+              <template #default="{ row }">
+                <el-tag :type="LEAVE_STATUS_META[row.status].tone" disable-transitions>{{ LEAVE_STATUS_META[row.status].label }}</el-tag>
+                <div v-if="row.status === 'cancelled'" class="lv-status-note">{{ cancelledNote(row) }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column label="附件" width="104">
+              <template #default="{ row }">
+                <el-button v-if="row.attachments.length" class="lv-att-toggle" :class="{ 'is-open': expanded.includes(row.id) }" link type="primary"
+                           :aria-expanded="expanded.includes(row.id) ? 'true' : 'false'" @click="toggleAttachments(row)">
+                  <el-icon><icon-paperclip></icon-paperclip></el-icon>{{ row.attachments.length }} 個<el-icon class="lv-att-chev"><icon-arrow-down></icon-arrow-down></el-icon>
+                </el-button>
+                <span v-else class="lv-none">—</span>
+              </template>
+            </el-table-column>
+            <el-table-column type="expand" width="1" class-name="leave-expand-col">
+              <template #default="{ row }">
+                <leave-attachment-list :leave-id="row.id" :attachments="row.attachments" :sim="attachmentSim"
+                                       @request="(r) => lastRequest = r"></leave-attachment-list>
+              </template>
+            </el-table-column>
+            <el-table-column v-if="can('leaves:write')" label="操作" width="96" fixed="right">
+              <template #default="{ row }">
+                <template v-if="row.status === 'active'">
+                  <el-button v-if="row.end_date >= TODAY" link type="danger" @click="openCancel(row)">取消</el-button>
+                  <el-button v-else link type="danger" @click="openCancel(row)">整筆取消</el-button>
+                </template>
+                <span v-else class="lv-none">—</span>
+              </template>
+            </el-table-column>
+            <template #empty>
+              <empty-state v-if="listState !== 'loading'" variant="inline"
+                           :title="filters.range && filters.range.length ? '這段期間沒有請假紀錄' : '沒有符合條件的請假紀錄'"
+                           description="試著調整日期區間或篩選條件"></empty-state>
+              <span v-else></span>
+            </template>
+          </el-table>
+          <div v-if="listState === 'data' && rows.length" class="lv-pager">
+            <el-pagination v-model:current-page="page" :page-size="20" :total="rows.length" layout="total, prev, pager, next" background></el-pagination>
+          </div>
+        </template>
+      </section>
+
+      <leave-form-dialog v-if="formOpen" :key="formKey" v-model="formOpen" :preset-student="presetStudent" :sim="createSim"
+                         @created="onCreated" @request="(r) => lastRequest = r"></leave-form-dialog>
+      <leave-cancel-dialog v-if="cancelTarget" :key="cancelKey" v-model="cancelOpen" :leave="cancelTarget" :sim="cancelSim"
+                           :start-today-mode="startTodayMode" @cancelled="onCancelled" @failed="needsReload = true"
+                           @closed="onCancelClosed" @request="(r) => lastRequest = r"></leave-cancel-dialog>
+    </admin-shell>
+
+    <section class="gallery">
+      <h2 class="gallery__title">LeaveAttachmentList 狀態一覽<el-tag size="small" disable-transitions>FRONTEND-132</el-tag></h2>
+      <p class="text-secondary" style="margin: 0">稿件專用：實際出現在請假列表的展開列內，這裡把各狀態並排對照（點擊同樣會模擬取得短效網址）。</p>
+      <div class="gallery__grid">
+        <div class="gallery__cell">
+          <div class="gallery__caption">1. 圖片 + PDF（點圖片預覽、點 PDF 另開）</div>
+          <leave-attachment-list leave-id="l05" :attachments="SAMPLE_ATTACHMENTS.mixed" :sim="attachmentSim" @request="(r) => lastRequest = r"></leave-attachment-list>
+        </div>
+        <div class="gallery__cell">
+          <div class="gallery__caption">2. 取得網址中（該列轉圈，其他列仍可點）</div>
+          <leave-attachment-list leave-id="l05" :attachments="SAMPLE_ATTACHMENTS.mixed" demo-loading-id="a1"></leave-attachment-list>
+        </div>
+        <div class="gallery__cell">
+          <div class="gallery__caption">3. HEIC 照片（頁內無法預覽 → 另開）</div>
+          <leave-attachment-list leave-id="l02" :attachments="SAMPLE_ATTACHMENTS.heic" :sim="attachmentSim" @request="(r) => lastRequest = r"></leave-attachment-list>
+        </div>
+        <div class="gallery__cell">
+          <div class="gallery__caption">4. 空清單</div>
+          <leave-attachment-list leave-id="l03" :attachments="[]"></leave-attachment-list>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <el-drawer v-model="notesOpen" title="設計說明 / 待裁定" size="560px">
+    <el-alert v-if="openQuestions.length" title="以下項目需要你裁定，未回覆前這張稿不會進入實作"
+              type="warning" :closable="false" show-icon style="margin-bottom: 16px"></el-alert>
+    <h4>設計決策</h4>
+    <ol>
+      <li v-for="(d, i) in decisions" :key="i" style="margin-bottom: 6px">{{ d }}</li>
+    </ol>
+    <h4 v-if="openQuestions.length">待裁定</h4>
+    <ol>
+      <li v-for="(q, i) in openQuestions" :key="i" style="margin-bottom: 8px">
+        <div>{{ q.question }}</div>
+        <div style="color: var(--el-text-color-secondary); font-size: 13px">
+          A. {{ q.optionA }}<br>B. {{ q.optionB }}
+        </div>
+      </li>
+    </ol>
+  </el-drawer>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch, onBeforeUnmount, nextTick } = Vue
+const { ElMessage, ElMessageBox } = ElementPlus
+
+/* ==================== ADMIN SHELL JS START（各頁稿逐字複製這一段） ==================== */
+/** 各角色預設權限碼，與 docs/domain_spec.md §3「預設授予」一致；admin 擁有全部。 */
+const ALL_STAFF = [
+  'dashboard:read', 'classes:read', 'students:read',
+  'attendance:read', 'attendance:operate', 'leaves:read',
+  'homework:read', 'homework:write', 'pickup:read', 'pickup:operate', 'exams:read',
+]
+const DIRECTOR = [...ALL_STAFF,
+  'staff:read', 'roles:read', 'settings:read', 'settings:write', 'audit:read',
+  'classes:write', 'students:write', 'students:sensitive', 'guardians:write',
+  'attendance:amend', 'leaves:write', 'pickup:override', 'exams:write', 'exams:publish']
+const CLERK = [...ALL_STAFF, 'settings:read', 'classes:write', 'students:write', 'guardians:write',
+  'leaves:write', 'exams:write', 'exams:publish']
+const TUTOR = [...ALL_STAFF, 'exams:write']
+const ADMIN = [...DIRECTOR, 'staff:write', 'roles:write', 'students:purge']
+const SHELL_USERS = {
+  admin: { display_name: '系統管理員', role: '系統管理員' },
+  director: { display_name: '張主任', role: '主任' },
+  clerk: { display_name: '林行政', role: '行政' },
+  tutor: { display_name: '陳老師', role: '課輔老師' },
+}
+
+/** 與 apps/web/src/constants/navigation.ts 的 NAVIGATION 逐項一致（原檔是權威） */
+const NAVIGATION = [
+  { key: 'home', label: '首頁', items: [{ label: '今日儀表板', path: '/', icon: 'icon-odometer', permission: 'dashboard:read' }] },
+  { key: 'daily', label: '日常營運', items: [
+    { label: '今日出勤', path: '/attendance', icon: 'icon-calendar', permission: 'attendance:read' },
+    { label: '作業進度', path: '/homework', icon: 'icon-edit-pen', permission: 'homework:read' },
+    { label: '接送', path: '/pickup', icon: 'icon-van', permission: 'pickup:read' },
+    { label: '代理接送核驗', path: '/pickup/authorizations', icon: 'icon-stamp', permission: 'pickup:read' },
+    { label: '請假', path: '/leaves', icon: 'icon-tickets', permission: 'leaves:read' },
+  ] },
+  { key: 'students', label: '學生與班級', items: [
+    { label: '學生工作台', path: '/students', icon: 'icon-user', permission: 'students:read' },
+    { label: '班級管理', path: '/classes', icon: 'icon-school', permission: 'classes:read' },
+    { label: '月出勤報表', path: '/attendance/monthly', icon: 'icon-data-line', permission: 'attendance:read' },
+  ] },
+  { key: 'exams', label: '成績', items: [{ label: '考試', path: '/exams', icon: 'icon-trophy', permission: 'exams:read' }] },
+  { key: 'settings', label: '設定', items: [
+    { label: '系統設定', path: '/settings/system', icon: 'icon-setting', permission: 'settings:read' },
+    { label: '參考資料', path: '/settings/reference', icon: 'icon-collection', permission: 'settings:read' },
+    { label: '員工帳號', path: '/settings/accounts', icon: 'icon-user-filled', permission: 'staff:read' },
+    { label: '角色權限', path: '/settings/roles', icon: 'icon-lock', permission: 'roles:read' },
+    { label: '稽核紀錄', path: '/settings/audit', icon: 'icon-list', permission: 'audit:read' },
+  ] },
+]
+/** 與 apps/web/src/router/routes.ts 的 meta.title / meta.tablet 一致 */
+const ROUTE_META = {
+  '/': { title: '今日儀表板' }, '/students': { title: '學生工作台' }, '/classes': { title: '班級管理' },
+  '/attendance': { title: '今日出勤', tablet: true }, '/attendance/monthly': { title: '月出勤報表' }, '/leaves': { title: '請假' },
+  '/homework': { title: '作業進度', tablet: true }, '/pickup': { title: '接送', tablet: true },
+  '/pickup/authorizations': { title: '代理接送核驗', tablet: true }, '/exams': { title: '考試' }, '/exams/e1': { title: '考試成績' },
+  '/settings/system': { title: '系統設定' }, '/settings/reference': { title: '參考資料' }, '/settings/accounts': { title: '員工帳號' },
+  '/settings/roles': { title: '角色權限' }, '/settings/audit': { title: '稽核紀錄' },
+}
+/** 與 apps/web/src/shared/constants/statusLabels.ts 的 NOTIFICATION_EVENT_LABELS 一致 */
+const NOTIFICATION_EVENT_LABELS = {
+  'attendance.checked_in': '到班通知', 'attendance.checked_out': '離班通知', 'leave.created': '學生請假',
+  'leave.cancelled': '學生取消請假', 'homework.eta_updated': '預計可接送時間', 'homework.done': '作業完成',
+  'pickup.requested': '家長發起接送', 'pickup.replied': '老師回覆接送', 'pickup.arrived': '家長已抵達',
+  'pickup.completed': '接送完成', 'pickup.cancelled': '接送取消', 'exam.published': '成績公布', 'binding.completed': '綁定完成',
+}
+/** 員工收得到的站內通知（domain_spec M9）；文案依 BACKEND-203 templates */
+const SAMPLE_NOTIFICATIONS = () => [
+  { id: 'n1', event: 'pickup.requested', title: '王小明 家長要來接', body: '家長預計 17:30 抵達。', deep_link: '/pickup', created_at: '2026/10/02 17:05', read_at: null },
+  { id: 'n2', event: 'leave.created', title: '陳小美 請假', body: '陳小美 2026-10-05～2026-10-06 病假。', deep_link: '/leaves', created_at: '2026/10/02 16:40', read_at: null },
+  { id: 'n3', event: 'pickup.cancelled', title: '李承恩 接送已取消', body: '家長已取消今天的接送請求。\n原因：改由爺爺來接', deep_link: '/pickup', created_at: '2026/10/02 16:12', read_at: null },
+  { id: 'n4', event: 'leave.cancelled', title: '林小華 取消請假', body: '林小華 2026-10-02～2026-10-02 的請假已取消。', deep_link: '/leaves', created_at: '2026/10/01 20:31', read_at: '2026/10/01 21:00' },
+  { id: 'n5', event: 'pickup.requested', title: '張語晴 家長要來接', body: '家長已發起接送。', deep_link: '/pickup', created_at: '2026/10/01 17:48', read_at: '2026/10/01 17:50' },
+]
+
+const NotificationPanel = {
+  props: { items: Array, unreadCount: Number, loading: Boolean, unreadOnly: Boolean },
+  emits: ['open', 'read-all', 'filter'],
+  setup() { return { LABELS: NOTIFICATION_EVENT_LABELS } },
+  template: `
+    <div class="notif">
+      <div class="notif__head">
+        <span class="notif__title">通知</span>
+        <el-segmented :model-value="unreadOnly ? 'unread' : 'all'" size="small"
+                      :options="[{ label: '全部', value: 'all' }, { label: '未讀', value: 'unread' }]"
+                      @change="(v) => $emit('filter', v === 'unread')"></el-segmented>
+        <span style="flex: 1"></span>
+        <el-button link type="primary" :disabled="unreadCount === 0" @click="$emit('read-all')">全部標為已讀</el-button>
+      </div>
+      <div class="notif__list">
+        <template v-if="loading">
+          <div v-for="i in 3" :key="i" class="notif__skeleton"><el-skeleton :rows="1" animated></el-skeleton></div>
+        </template>
+        <div v-else-if="!items.length" class="notif__empty">{{ unreadOnly ? '沒有未讀通知' : '目前沒有通知' }}</div>
+        <template v-else>
+          <button v-for="n in items" :key="n.id" type="button" class="notif__row" :class="{ 'is-unread': !n.read_at }" @click="$emit('open', n)">
+            <span v-if="!n.read_at" class="notif__dot" data-test="unread-dot" aria-label="未讀"></span>
+            <div class="notif__row-title">{{ n.title }}</div>
+            <div class="notif__row-body">{{ n.body }}</div>
+            <div class="notif__row-meta">
+              <el-tag size="small" type="info" disable-transitions>{{ LABELS[n.event] || n.event }}</el-tag>
+              <span>{{ n.created_at }}</span>
+            </div>
+          </button>
+        </template>
+      </div>
+    </div>`,
+}
+
+/**
+ * AdminShell：AdminLayout + AdminSidebar + AdminHeader + NotificationBell 的稿內合體。
+ * props 只有 device / perms / user / activePath 是各頁需要傳的；wsStatus / notifState 只有外框稿用來切狀態。
+ * emits navigate(path)：點側欄項目或通知 deep_link 時發出，各頁稿可以忽略或顯示提示。
+ */
+const AdminShell = {
+  components: { NotificationPanel },
+  props: {
+    device: { type: String, default: 'desktop' },
+    perms: { type: Array, required: true },
+    user: { type: Object, required: true },
+    activePath: { type: String, required: true },
+    wsStatus: { type: String, default: 'open' },
+    notifState: { type: String, default: 'data' },
+  },
+  emits: ['navigate'],
+  setup(props, { emit }) {
+    const isMobile = computed(() => props.device === 'mobile')
+    // 模擬 localStorage['admin.sidebarCollapsed']：使用者沒切過（remembered = null）時，依路由 meta.tablet 決定預設
+    const remembered = ref(null)
+    const collapsed = computed({
+      get: () => remembered.value ?? !!ROUTE_META[props.activePath]?.tablet,
+      set: (v) => { remembered.value = v },
+    })
+    const drawerOpen = ref(false)
+    const groups = computed(() => NAVIGATION
+      .map((g) => ({ ...g, items: g.items.filter((i) => props.perms.includes(i.permission)) }))
+      .filter((g) => g.items.length))
+    const activeItem = computed(() => {
+      const segs = (p) => p.split('/').filter(Boolean)
+      const route = segs(props.activePath)
+      let best = null
+      for (const g of groups.value) for (const it of g.items) {
+        const s = segs(it.path)
+        const match = it.path === '/' ? props.activePath === '/' : s.every((x, i) => route[i] === x)
+        if (match && (!best || s.length > segs(best).length)) best = it.path
+      }
+      return best ?? ''
+    })
+    const title = computed(() => ROUTE_META[props.activePath]?.title ?? '')
+    const go = (path) => { drawerOpen.value = false; emit('navigate', path) }
+    const toggle = () => { if (isMobile.value) drawerOpen.value = !drawerOpen.value; else collapsed.value = !collapsed.value }
+
+    // 通知（NotificationBell + store 的稿內模擬）
+    const items = ref(SAMPLE_NOTIFICATIONS())
+    const unreadOnly = ref(false)
+    const popoverOpen = ref(false)
+    const unreadCount = computed(() => {
+      if (props.notifState === 'many') return 120
+      if (props.notifState === 'empty') return 0
+      return items.value.filter((n) => !n.read_at).length
+    })
+    const shownItems = computed(() => {
+      if (props.notifState === 'empty' || props.notifState === 'loading') return []
+      return unreadOnly.value ? items.value.filter((n) => !n.read_at) : items.value
+    })
+    const openNotif = (n) => {
+      if (!n.read_at) n.read_at = '剛剛'
+      popoverOpen.value = false
+      if (n.deep_link) go(n.deep_link)
+    }
+    const readAll = () => { items.value.forEach((n) => { if (!n.read_at) n.read_at = '剛剛' }) }
+    const loggingOut = ref(false)
+    const onUserCommand = (cmd) => {
+      if (cmd === 'password') { ElMessage.info('（稿）導頁至 /change-password'); return }
+      loggingOut.value = true
+      setTimeout(() => { loggingOut.value = false; ElMessage.success('（稿）已登出，導回 /login') }, 800)
+    }
+    const wsTip = computed(() => ({ open: '即時連線正常', reconnecting: '即時連線重試中' }[props.wsStatus] ?? '即時連線未建立'))
+    return {
+      isMobile, collapsed, drawerOpen, groups, activeItem, title, go, toggle,
+      shownItems, unreadCount, unreadOnly, popoverOpen, openNotif, readAll, loggingOut, onUserCommand, wsTip,
+    }
+  },
+  template: `
+    <div class="device-frame" :class="'is-' + device">
+      <div class="shell">
+        <aside v-if="!isMobile" class="shell__aside" :class="{ 'is-collapsed': collapsed }" data-test="admin-sidebar">
+          <div class="shell__brand"><el-icon><icon-school></icon-school></el-icon><span v-show="!collapsed">安親班管理系統</span></div>
+          <div class="shell__menu">
+            <div v-if="!groups.length" class="shell__empty" v-show="!collapsed">沒有可使用的功能，請聯絡管理員</div>
+            <el-menu v-else :default-active="activeItem" :collapse="collapsed" :collapse-transition="false" @select="go">
+              <el-menu-item-group v-for="g in groups" :key="g.key" :title="g.label">
+                <el-menu-item v-for="it in g.items" :key="it.path" :index="it.path">
+                  <el-icon><component :is="it.icon"></component></el-icon>
+                  <template #title>{{ it.label }}</template>
+                </el-menu-item>
+              </el-menu-item-group>
+            </el-menu>
+          </div>
+          <div class="shell__collapse">
+            <el-button text :aria-label="collapsed ? '展開側欄' : '收合側欄'" @click="collapsed = !collapsed">
+              <el-icon><icon-arrow-right v-if="collapsed"></icon-arrow-right><icon-arrow-left v-else></icon-arrow-left></el-icon>
+              <span v-if="!collapsed">收合</span>
+            </el-button>
+          </div>
+        </aside>
+
+        <div class="shell__body">
+          <header class="shell__header">
+            <el-button class="shell__toggle" text aria-label="切換側欄" @click="toggle">
+              <el-icon :size="18"><icon-expand v-if="isMobile || collapsed"></icon-expand><icon-fold v-else></icon-fold></el-icon>
+            </el-button>
+            <h1 class="shell__title">{{ title }}</h1>
+            <span class="shell__spacer"></span>
+            <el-tooltip :content="wsTip" placement="bottom">
+              <span class="ws-dot" :class="'is-' + wsStatus" data-test="ws-dot" :aria-label="wsTip" role="img"></span>
+            </el-tooltip>
+            <el-popover v-model:visible="popoverOpen" trigger="click" placement="bottom-end" :width="360" :show-arrow="false">
+              <template #reference>
+                <el-button class="shell__bell" text aria-label="通知">
+                  <el-badge :value="unreadCount" :max="99" :hidden="unreadCount === 0">
+                    <el-icon :size="18"><icon-bell></icon-bell></el-icon>
+                  </el-badge>
+                </el-button>
+              </template>
+              <notification-panel :items="shownItems" :unread-count="unreadCount" :loading="notifState === 'loading'"
+                                  :unread-only="unreadOnly" @open="openNotif" @read-all="readAll"
+                                  @filter="(v) => unreadOnly = v"></notification-panel>
+            </el-popover>
+            <el-dropdown trigger="click" @command="onUserCommand">
+              <span class="shell__user">
+                <el-icon><icon-avatar></icon-avatar></el-icon>
+                <span v-if="!isMobile">{{ user.display_name }}</span>
+                <el-tag v-if="!isMobile" size="small" type="info" disable-transitions>{{ user.role }}</el-tag>
+                <el-icon><icon-arrow-down></icon-arrow-down></el-icon>
+              </span>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-if="isMobile" disabled>{{ user.display_name }}（{{ user.role }}）</el-dropdown-item>
+                  <el-dropdown-item command="password"><el-icon><icon-key></icon-key></el-icon>修改密碼</el-dropdown-item>
+                  <el-dropdown-item command="logout" divided :disabled="loggingOut">
+                    <el-icon><icon-loading v-if="loggingOut" class="is-loading"></icon-loading><icon-switch-button v-else></icon-switch-button></el-icon>
+                    {{ loggingOut ? '登出中…' : '登出' }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </header>
+          <el-alert v-if="wsStatus === 'reconnecting'" class="shell__banner" type="warning" :closable="false" show-icon
+                    title="即時連線中斷，畫面每 15 秒自動更新"></el-alert>
+          <main class="shell__main"><slot></slot></main>
+        </div>
+
+        <template v-if="isMobile && drawerOpen">
+          <div class="shell__scrim" @click="drawerOpen = false"></div>
+          <aside class="shell__drawer" data-test="admin-sidebar">
+            <div class="shell__brand"><el-icon><icon-school></icon-school></el-icon><span>安親班管理系統</span></div>
+            <div class="shell__menu">
+              <div v-if="!groups.length" class="shell__empty">沒有可使用的功能，請聯絡管理員</div>
+              <el-menu v-else :default-active="activeItem" @select="go">
+                <el-menu-item-group v-for="g in groups" :key="g.key" :title="g.label">
+                  <el-menu-item v-for="it in g.items" :key="it.path" :index="it.path">
+                    <el-icon><component :is="it.icon"></component></el-icon><span>{{ it.label }}</span>
+                  </el-menu-item>
+                </el-menu-item-group>
+              </el-menu>
+            </div>
+          </aside>
+        </template>
+      </div>
+    </div>`,
+}
+/* ==================== ADMIN SHELL JS END ==================== */
+
+/* ==== 以下逐字複製自 component-common.html（已核可） ==== */
+/* ---------- PageHeader ---------- */
+const PageHeader = {
+  props: { title: { type: String, required: true }, subtitle: { type: String, default: '' } },
+  template: `
+    <div class="page-header">
+      <div class="page-header__body">
+        <h1 class="page-header__title">{{ title }}</h1>
+        <p v-if="subtitle" class="page-header__subtitle" data-test="page-subtitle">{{ subtitle }}</p>
+        <div v-if="$slots.default" class="page-header__extra"><slot></slot></div>
+      </div>
+      <div v-if="$slots.actions" class="page-header__actions"><slot name="actions"></slot></div>
+    </div>`,
+}
+
+/* ---------- EmptyState ---------- */
+const EmptyState = {
+  props: {
+    title: { type: String, required: true },
+    description: { type: String, default: '' },
+    variant: { type: String, default: 'default' },
+    icon: { type: String, default: '' },
+  },
+  computed: {
+    iconName() { return this.icon || (this.variant === 'error' ? 'icon-warning-filled' : 'icon-folder-opened') },
+  },
+  template: `
+    <div class="empty-state" :class="{ 'is-error': variant === 'error', 'is-inline': variant === 'inline' }" role="status">
+      <el-icon v-if="variant !== 'inline'" class="empty-state__icon" data-test="empty-icon">
+        <component :is="iconName"></component>
+      </el-icon>
+      <p class="empty-state__title">{{ title }}</p>
+      <p v-if="description" class="empty-state__desc">{{ description }}</p>
+      <div v-if="$slots.action" class="empty-state__action"><slot name="action"></slot></div>
+    </div>`,
+}
+
+/* ==== 以下逐字複製自 component-common-extra.html（已核可） ==== */
+/** 與 apps/web/src/composables/useFormDirty.ts 的 confirmDiscardChanges 一致 */
+const confirmDiscardChanges = () => ElMessageBox.confirm('尚未儲存的變更將會遺失，確定要關閉嗎？', '未儲存的變更', {
+  confirmButtonText: '放棄變更', cancelButtonText: '繼續編輯',
+}).then(() => true).catch(() => false)
+
+/* ---------- FormDialog ----------
+   fullscreen prop 只用於稿裡模擬視窗寬 < 768；實作依視窗寬自動判斷。 */
+const WIDTH = { sm: '420px', md: '560px', lg: '800px' }
+const FormDialog = {
+  props: {
+    modelValue: Boolean, title: { type: String, required: true }, size: { type: String, default: 'md' },
+    loading: Boolean, submitText: { type: String, default: '儲存' }, cancelText: { type: String, default: '取消' },
+    submitDisabled: Boolean, dirty: Boolean, hideFooter: Boolean, autofocus: { type: Boolean, default: true },
+    fullscreen: Boolean,
+  },
+  emits: ['update:modelValue', 'submit', 'closed'],
+  setup(props, { emit }) {
+    const body = ref(null)
+    const canClose = async () => !props.loading && (!props.dirty || await confirmDiscardChanges())
+    const beforeClose = async (done) => { if (await canClose()) done() }
+    const cancel = async () => { if (await canClose()) emit('update:modelValue', false) }
+    const onOpened = () => {
+      if (!props.autofocus) return
+      const PICKERS = '.el-select, .el-date-editor, .el-time-picker, .el-cascader, .el-autocomplete'
+      const el = [...(body.value?.querySelectorAll('input:not([disabled]):not([readonly]):not([type=checkbox]):not([type=radio]), textarea:not([disabled]):not([readonly])') ?? [])]
+        .find((x) => !x.closest(PICKERS))
+      el?.focus()
+    }
+    return { body, width: computed(() => WIDTH[props.size]), beforeClose, cancel, onOpened }
+  },
+  template: `
+    <el-dialog :model-value="modelValue" :title="title" :width="width" :fullscreen="fullscreen"
+               :show-close="!loading" :before-close="beforeClose" append-to-body
+               @update:model-value="(v) => $emit('update:modelValue', v)" @opened="onOpened" @closed="$emit('closed')">
+      <div ref="body"><slot></slot></div>
+      <template v-if="!hideFooter" #footer>
+        <div class="form-dialog__footer">
+          <el-button :disabled="loading" @click="cancel">{{ cancelText }}</el-button>
+          <el-button type="primary" :loading="loading" :disabled="loading || submitDisabled" @click="$emit('submit')">{{ submitText }}</el-button>
+        </div>
+      </template>
+    </el-dialog>`,
+}
+
+/* ==================== 日期（對照 shared/utils/datetime.ts，FRONTEND-003） ==================== */
+const TODAY = '2026-10-07'          // 稿裡固定的「今天」（台北），週三
+const pad2 = (n) => String(n).padStart(2, '0')
+const addDays = (iso, n) => {
+  const [y, m, d] = iso.split('-').map(Number)
+  const t = new Date(Date.UTC(y, m - 1, d + n))
+  return `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(t.getUTCDate())}`
+}
+const daysBetween = (a, b) => (Date.UTC(...b.split('-').map((x, i) => Number(x) - (i === 1 ? 1 : 0))) - Date.UTC(...a.split('-').map((x, i) => Number(x) - (i === 1 ? 1 : 0)))) / 86400000
+const localDate = (iso) => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d) }
+const isoOfLocal = (dt) => `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`
+/** formatDateTime：UTC 時間點 → 台北「2026/10/02 16:05」 */
+const fmtDateTime = (iso) => {
+  if (!iso) return '—'
+  const t = new Date(new Date(iso).getTime() + 8 * 3600e3)
+  return `${t.getUTCFullYear()}/${pad2(t.getUTCMonth() + 1)}/${pad2(t.getUTCDate())} ${pad2(t.getUTCHours())}:${pad2(t.getUTCMinutes())}`
+}
+/** 期間：同一天只顯示一天 */
+const fmtRange = (s, e) => (s === e ? s : `${s}~${e}`)
+
+/* ==================== 狀態標籤（對照 shared/constants/statusLabels.ts，FRONTEND-005） ==================== */
+const LEAVE_TYPE_META = { sick: { label: '病假', tone: 'warning' }, personal: { label: '事假', tone: 'info' }, other: { label: '其他', tone: 'info' } }
+const LEAVE_STATUS_META = { active: { label: '生效中', tone: 'success' }, cancelled: { label: '已取消', tone: 'info' } }
+const actorLabel = (type, name) => `${type === 'parent' ? '家長' : '員工'}：${name || '—'}`
+
+/* ==================== 學生（StudentSelect 的資料來源；StudentListItem 形狀） ==================== */
+const ALL = '__all__'
+const CLASSES = [
+  { id: 'c1', name: '低年級A班' }, { id: 'c2', name: '低年級B班' }, { id: 'c3', name: '中年級班' }, { id: 'c4', name: '高年級班' },
+]
+const cls = (id) => CLASSES.find((c) => c.id === id) ?? null
+const STUDENTS = [
+  { id: 's1', student_no: 'S11301', name: '王小明', class: cls('c3'), status: 'active' },
+  { id: 's2', student_no: 'S11302', name: '陳小美', class: cls('c1'), status: 'active' },
+  { id: 's3', student_no: 'S11305', name: '李承恩', class: cls('c4'), status: 'active' },
+  { id: 's4', student_no: 'S11308', name: '王小華', class: cls('c2'), status: 'active' },
+  { id: 's5', student_no: 'S11311', name: '林小安', class: cls('c3'), status: 'active' },
+  { id: 's6', student_no: 'S11312', name: '王語晴', class: null, status: 'active' },
+  { id: 's7', student_no: 'S11320', name: '李小宇', class: cls('c3'), status: 'active' },
+]
+/** 模擬 GET /admin/students?q=&status=active：學號前綴或姓名包含 */
+const searchStudents = (q, classId) => STUDENTS
+  .filter((s) => s.student_no.toLowerCase().startsWith(q.toLowerCase()) || s.name.includes(q))
+  .filter((s) => !classId || s.class?.id === classId)
+  .slice(0, 20)
+const optionLabel = (s) => `${s.name}（${s.student_no}・${s.class ? s.class.name : '未分班'}）`
+const studentBrief = (s) => ({ id: s.id, student_no: s.student_no, name: s.name, class_name: s.class ? s.class.name : null })
+
+/* ==== 以下逐字複製自 component-student-select.html（已核可）；searchStudents / optionLabel 由本稿提供同形狀的實作 ==== */
+/* ---------- StudentSelect ----------
+   sim prop 與 request emit 只用於稿裡模擬後端與記錄請求；實作沒有。 */
+const StudentSelect = {
+  props: {
+    modelValue: { type: String, default: null },
+    classId: { type: String, default: undefined },
+    placeholder: { type: String, default: '輸入學號或姓名搜尋' },
+    disabled: { type: Boolean, default: false },
+    initialOption: { type: Object, default: null },
+    sim: { type: String, default: 'normal' },
+  },
+  emits: ['update:modelValue', 'change', 'request'],
+  setup(props, { emit }) {
+    const toItem = (o) => (o ? { id: o.id, name: o.name, student_no: o.student_no, class: o.class_name ? { name: o.class_name } : null } : null)
+    const options = ref(props.initialOption ? [toItem(props.initialOption)] : [])
+    const loading = ref(false)
+    const failed = ref(false)
+    const query = ref('')
+    let timer = null
+    let seq = 0
+    const run = (q) => {
+      const mySeq = ++seq
+      loading.value = true; failed.value = false
+      const params = { q, class_id: props.classId, status: 'active', page_size: 20 }
+      emit('request', `#${mySeq} GET /admin/students ${JSON.stringify(params)}`)
+      let delay = props.sim === 'slow' ? 2500 : 500
+      if (props.sim === 'race' && mySeq % 2 === 1) delay = 1800
+      setTimeout(() => {
+        if (mySeq !== seq) { emit('request', `#${mySeq} 回應晚到（目前最新 #${seq}）→ 丟棄`); return }
+        loading.value = false
+        if (props.sim === 'error') { failed.value = true; options.value = []; return }
+        options.value = searchStudents(q, props.classId)
+        emit('request', `#${mySeq} 回應 ${options.value.length} 筆 → 採用`)
+      }, delay)
+    }
+    const remoteMethod = (raw) => {
+      const q = raw.trim()
+      query.value = q
+      clearTimeout(timer)
+      if (!q) { seq++; loading.value = false; failed.value = false; return }
+      loading.value = true; failed.value = false
+      timer = setTimeout(() => run(q), 300)
+    }
+    onBeforeUnmount(() => clearTimeout(timer))
+    const onUpdate = (id) => {
+      emit('update:modelValue', id ?? null)
+      emit('change', options.value.find((o) => o.id === id) ?? null)
+    }
+    return { options, loading, failed, query, remoteMethod, onUpdate, optionLabel }
+  },
+  template: `
+    <el-select :model-value="modelValue" filterable remote clearable :remote-method="remoteMethod"
+               :loading="loading" :placeholder="placeholder" :disabled="disabled" style="width: 100%"
+               loading-text="搜尋中…" @update:model-value="onUpdate">
+      <el-option v-for="s in options" :key="s.id" :value="s.id" :label="optionLabel(s)">
+        <span class="student-option"><span class="student-option__name">{{ s.name }}</span><span class="student-option__meta">（{{ s.student_no }}・{{ s.class ? s.class.name : '未分班' }}）</span></span>
+      </el-option>
+      <!-- 提供 #empty slot 時 EP 不再顯示 loading-text，搜尋中要自己畫 -->
+      <template #empty>
+        <div v-if="loading" class="student-select__status" role="status"><el-icon class="is-loading"><icon-loading></icon-loading></el-icon>搜尋中…</div>
+        <div v-else-if="failed" class="student-select__status is-error" role="alert"><el-icon><icon-warning-filled></icon-warning-filled></el-icon>無法載入學生</div>
+        <div v-else-if="query" class="student-select__status">找不到符合的學生</div>
+      </template>
+    </el-select>`,
+}
+
+/* ==================== 請假假資料（GET /admin/leaves 的 Leave 形狀，BACKEND-341 / 347） ==================== */
+const att = (id, mime_type, size_bytes, created_at) => ({ id, mime_type, size_bytes, created_at })
+const L = (id, sid, leave_type, start_date, end_date, reason, created_by_type, created_by_name, created_at, attachments = [], cancel = null) => ({
+  id, student: studentBrief(STUDENTS.find((s) => s.id === sid)), leave_type, leave_type_label: LEAVE_TYPE_META[leave_type].label,
+  start_date, end_date, reason, status: cancel ? 'cancelled' : 'active', created_by_type, created_by_name, created_at,
+  cancelled_at: cancel?.at ?? null, cancelled_by_type: cancel?.type ?? null, cancelled_by_name: cancel?.name ?? null, attachments,
+})
+const LEAVES_FIXTURE = () => [
+  L('l01', 's5', 'personal', '2026-10-19', '2026-10-23', '家庭旅遊（花蓮三天兩夜），週五晚上回來', 'parent', '林媽媽', '2026-10-05T13:12:00Z'),
+  L('l02', 's6', 'sick', '2026-10-14', '2026-10-15', null, 'parent', 'Mia 媽咪', '2026-10-06T23:02:00Z',
+    [att('a5', 'image/heic', 3565158, '2026-10-06T23:03:00Z')]),
+  L('l03', 's1', 'sick', '2026-10-12', '2026-10-12', '預約牙醫回診', 'staff', '林行政', '2026-10-07T01:20:00Z'),
+  L('l04', 's3', 'other', '2026-10-07', '2026-10-07', '參加學校語文競賽集訓，放學直接由家長接回', 'parent', '李爺爺', '2026-10-06T12:03:00Z',
+    [att('a4', 'image/png', 1153434, '2026-10-06T12:04:00Z')]),
+  L('l05', 's2', 'sick', '2026-10-06', '2026-10-08', '流感，醫生建議在家休息三天', 'parent', '陳爸爸', '2026-10-05T23:45:00Z',
+    [att('a1', 'image/jpeg', 524288, '2026-10-05T23:46:00Z'), att('a2', 'application/pdf', 2621440, '2026-10-05T23:47:00Z')]),
+  L('l06', 's4', 'personal', '2026-10-05', '2026-10-09', '回南部參加親戚婚禮', 'staff', '張主任', '2026-10-02T10:30:00Z'),
+  L('l07', 's7', 'sick', '2026-09-29', '2026-10-02', '腸胃炎', 'parent', '李媽媽', '2026-09-28T22:50:00Z',
+    [att('a3', 'image/jpeg', 831488, '2026-09-28T22:52:00Z')]),
+  L('l08', 's2', 'personal', '2026-09-22', '2026-09-22', '家中有事', 'staff', '林行政', '2026-09-21T09:10:00Z'),
+  L('l09', 's1', 'sick', '2026-10-01', '2026-10-02', '發燒', 'parent', '王大明', '2026-09-30T12:20:00Z', [],
+    { at: '2026-10-01T02:00:00Z', type: 'staff', name: '林行政' }),
+  L('l10', 's5', 'other', '2026-10-16', '2026-10-16', '學校校外教學，當天較晚放學', 'parent', '林媽媽', '2026-10-03T11:00:00Z', [],
+    { at: '2026-10-06T14:10:00Z', type: 'parent', name: '林媽媽' }),
+]
+const SAMPLE_ATTACHMENTS = {
+  mixed: [att('a1', 'image/jpeg', 524288, '2026-10-05T23:46:00Z'), att('a2', 'application/pdf', 2621440, '2026-10-05T23:47:00Z')],
+  heic: [att('a5', 'image/heic', 3565158, '2026-10-06T23:03:00Z')],
+}
+
+/* ==================== LeaveAttachmentList（FRONTEND-132） ====================
+   sim / demoLoadingId 與 request emit 只用於稿裡模擬後端與狀態；實作沒有。 */
+const PREVIEWABLE = ['image/jpeg', 'image/png', 'image/webp']   // 瀏覽器可在頁內顯示的圖片；HEIC 另開
+const MIME_LABELS = { 'image/jpeg': '圖片（JPG）', 'image/png': '圖片（PNG）', 'image/webp': '圖片（WEBP）', 'image/heic': '圖片（HEIC）', 'application/pdf': 'PDF 文件' }
+const sizeLabel = (bytes) => (bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${(bytes / 1024).toFixed(1)} KB`)
+/** 稿裡的示意圖：用 canvas 依 --el-* 變數畫一張「診斷證明（示意）」，不寫死任何色碼 */
+const mockImage = (attachment) => {
+  const canvas = document.createElement('canvas')
+  canvas.width = 720
+  canvas.height = 960
+  const g = canvas.getContext ? canvas.getContext('2d') : null
+  if (!g) return 'data:,'
+  const css = getComputedStyle(document.documentElement)
+  const v = (n) => css.getPropertyValue(n).trim()
+  g.fillStyle = v('--el-bg-color'); g.fillRect(0, 0, 720, 960)
+  g.strokeStyle = v('--el-border-color'); g.lineWidth = 4; g.strokeRect(40, 40, 640, 880)
+  g.textAlign = 'center'
+  g.fillStyle = v('--el-text-color-primary'); g.font = 'bold 44px sans-serif'; g.fillText('診斷證明書（示意）', 360, 150)
+  g.fillStyle = v('--el-text-color-regular'); g.font = '28px sans-serif'
+  ;['姓名：陳小美', '診斷：流行性感冒', '醫囑：建議在家休養三日', `附件編號：${attachment.id}`, '某某診所'].forEach((t, i) => g.fillText(t, 360, 260 + i * 70))
+  g.strokeStyle = v('--el-color-danger'); g.lineWidth = 6; g.beginPath(); g.arc(540, 760, 80, 0, Math.PI * 2); g.stroke()
+  g.fillStyle = v('--el-color-danger'); g.font = 'bold 30px sans-serif'; g.fillText('示意章', 540, 772)
+  return canvas.toDataURL('image/png')
+}
+const LeaveAttachmentList = {
+  props: {
+    leaveId: { type: String, required: true },
+    attachments: { type: Array, default: () => [] },
+    sim: { type: String, default: 'ok' },
+    demoLoadingId: { type: String, default: '' },
+  },
+  emits: ['request'],
+  setup(props, { emit }) {
+    const loading = reactive({})
+    const viewerUrl = ref('')
+    const isLoading = (a) => !!loading[a.id] || props.demoLoadingId === a.id
+    const isPreviewable = (a) => PREVIEWABLE.includes(a.mime_type)
+    const typeLabel = (a) => MIME_LABELS[a.mime_type] ?? '檔案'
+    const open = (a) => {
+      if (isLoading(a)) return
+      loading[a.id] = true
+      emit('request', `GET /admin/leaves/${props.leaveId}/attachments/${a.id}（每次點擊都重新取得）`)
+      setTimeout(() => {
+        loading[a.id] = false
+        if (props.sim === 'attachment_not_found') { ElMessage.error('找不到附件'); return }
+        if (props.sim === 'storage_unavailable') { ElMessage.error('檔案儲存服務暫時無法使用，請稍後再試'); return }
+        if (isPreviewable(a)) viewerUrl.value = mockImage(a)
+        else ElMessage.info(`（稿）window.open(短效網址, '_blank', 'noopener')：${typeLabel(a)} 在新分頁開啟`)
+      }, 600)
+    }
+    return { loading, viewerUrl, isLoading, isPreviewable, typeLabel, open, sizeLabel, fmtDateTime }
+  },
+  template: `
+    <div class="la">
+      <p v-if="!attachments.length" class="la__empty">沒有附件</p>
+      <ul v-else class="la__list" aria-label="請假附件">
+        <li v-for="(a, i) in attachments" :key="a.id">
+          <button type="button" class="la__item" :class="{ 'is-loading': isLoading(a) }" :aria-busy="isLoading(a) ? 'true' : undefined"
+                  @click="open(a)">
+            <el-icon class="la__icon" :class="{ 'is-pdf': a.mime_type === 'application/pdf', 'is-loading': isLoading(a) }">
+              <icon-loading v-if="isLoading(a)"></icon-loading>
+              <icon-document v-else-if="a.mime_type === 'application/pdf'"></icon-document>
+              <icon-picture v-else></icon-picture>
+            </el-icon>
+            <span class="la__body">
+              <span class="la__name">附件 {{ i + 1 }}・{{ typeLabel(a) }}</span>
+              <span class="la__meta">{{ sizeLabel(a.size_bytes) }}・{{ fmtDateTime(a.created_at) }} 上傳</span>
+            </span>
+            <span class="la__action">
+              <template v-if="isLoading(a)">取得中…</template>
+              <template v-else-if="isPreviewable(a)"><el-icon><icon-zoom-in></icon-zoom-in></el-icon>預覽</template>
+              <template v-else><el-icon><icon-top-right></icon-top-right></el-icon>另開</template>
+            </span>
+          </button>
+        </li>
+      </ul>
+      <el-image-viewer v-if="viewerUrl" :url-list="[viewerUrl]" teleported hide-on-click-modal @close="viewerUrl = ''"></el-image-viewer>
+    </div>`,
+}
+
+/* ==================== LeaveFormDialog（FRONTEND-130） ====================
+   sim 與 request emit 只用於稿裡模擬後端；實作沒有。 */
+const LeaveFormDialog = {
+  props: {
+    modelValue: Boolean,
+    presetStudent: { type: Object, default: null },
+    sim: { type: String, default: 'ok' },
+    today: { type: String, default: TODAY },
+  },
+  emits: ['update:modelValue', 'created', 'request'],
+  setup(props, { emit }) {
+    const blank = () => ({ student_id: props.presetStudent?.id ?? null, leave_type: null, range: [], reason: '' })
+    const form = reactive(blank())
+    const baseline = JSON.stringify(blank())
+    const picked = ref(props.presetStudent)
+    const errors = reactive({ student_id: '', leave_type: '', range: '', reason: '' })
+    const loading = ref(false)
+    const dirty = computed(() => JSON.stringify(form) !== baseline)
+    const minDate = addDays(props.today, -30)
+    const disabledDate = (d) => isoOfLocal(d) < minDate
+    const shortcuts = [
+      { text: '今天', value: () => [localDate(props.today), localDate(props.today)] },
+      { text: '明天', value: () => [localDate(addDays(props.today, 1)), localDate(addDays(props.today, 1))] },
+    ]
+    const onStudent = (s) => { picked.value = s ? studentBrief(s) : null; errors.student_id = '' }
+    const submit = () => {
+      Object.keys(errors).forEach((k) => { errors[k] = '' })
+      if (!form.student_id) errors.student_id = '請選擇學生'
+      if (!form.leave_type) errors.leave_type = '請選擇假別'
+      if (!form.range || form.range.length !== 2) errors.range = '請選擇請假期間'
+      else if (daysBetween(form.range[0], form.range[1]) > 60) errors.range = '單筆請假最長 61 天'
+      if (Object.values(errors).some(Boolean)) return
+      const body = { student_id: form.student_id, leave_type: form.leave_type, start_date: form.range[0], end_date: form.range[1] }
+      if (form.reason.trim()) body.reason = form.reason.trim()
+      emit('request', `POST /admin/leaves ${JSON.stringify(body)}`)
+      loading.value = true
+      setTimeout(() => {
+        loading.value = false
+        if (props.sim === 'leave_overlap') { errors.range = `與既有請假（${fmtRange('2026-10-06', '2026-10-08')}）重疊`; return }
+        if (props.sim === 'no_service_days_in_range') { errors.range = '所選期間沒有營業日'; return }
+        if (props.sim === 'student_not_active') { errors.student_id = '此學生不是在學狀態'; return }
+        ElMessage.success('已登記請假')
+        emit('created', {
+          id: 'l' + Date.now(), student: picked.value, leave_type: form.leave_type, leave_type_label: LEAVE_TYPE_META[form.leave_type].label,
+          start_date: form.range[0], end_date: form.range[1], reason: body.reason ?? null, status: 'active',
+          created_by_type: 'staff', created_by_name: '張主任', created_at: new Date().toISOString(),
+          cancelled_at: null, cancelled_by_type: null, cancelled_by_name: null, attachments: [],
+        })
+        emit('update:modelValue', false)
+      }, 800)
+    }
+    return { form, errors, loading, dirty, disabledDate, shortcuts, onStudent, submit, LEAVE_TYPE_META, minDate }
+  },
+  template: `
+    <form-dialog :model-value="modelValue" title="代登記請假" submit-text="送出" :loading="loading" :dirty="dirty"
+                 @update:model-value="(v) => $emit('update:modelValue', v)" @submit="submit">
+      <el-form label-position="top" @submit.prevent>
+        <el-form-item label="學生" required :error="errors.student_id">
+          <student-select v-model="form.student_id" :initial-option="presetStudent" :disabled="loading" sim="normal"
+                          @change="onStudent"></student-select>
+        </el-form-item>
+        <el-form-item label="假別" required :error="errors.leave_type">
+          <el-radio-group v-model="form.leave_type" class="lf-type" :disabled="loading" @change="errors.leave_type = ''">
+            <el-radio-button v-for="(m, k) in LEAVE_TYPE_META" :key="k" :value="k">{{ m.label }}</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="請假期間" required :error="errors.range">
+          <el-date-picker v-model="form.range" type="daterange" value-format="YYYY-MM-DD" unlink-panels range-separator="~"
+                          start-placeholder="開始日" end-placeholder="結束日" :disabled-date="disabledDate" :shortcuts="shortcuts"
+                          :disabled="loading" style="width: 100%" @change="errors.range = ''"></el-date-picker>
+          <div v-if="!errors.range" class="form-hint" style="width: 100%">單日請假：開始與結束選同一天。最早可選 {{ minDate }}（30 天前）。</div>
+        </el-form-item>
+        <el-form-item label="原因（選填）" :error="errors.reason">
+          <el-input v-model="form.reason" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="例如：發燒看醫生"
+                    :disabled="loading"></el-input>
+        </el-form-item>
+      </el-form>
+      <el-alert type="info" :closable="false" show-icon title="送出後立即生效，期間內的出勤會改為請假，並通知班級負責老師"></el-alert>
+    </form-dialog>`,
+}
+
+/* ==================== LeaveCancelDialog（FRONTEND-131） ====================
+   sim / startTodayMode（待裁定 1 的對照）與 request emit 只用於稿裡；實作沒有。 */
+const LeaveCancelDialog = {
+  props: {
+    modelValue: Boolean,
+    leave: { type: Object, required: true },
+    today: { type: String, default: TODAY },
+    sim: { type: String, default: 'ok' },
+    startTodayMode: { type: String, default: 'B' },
+  },
+  emits: ['update:modelValue', 'cancelled', 'failed', 'closed', 'request'],
+  setup(props, { emit }) {
+    const phase = computed(() => {
+      const { start_date: s, end_date: e } = props.leave
+      if (e < props.today) return 'ended'
+      if (s > props.today) return 'future'
+      if (s === props.today && props.startTodayMode === 'B') return 'future'
+      return 'started'
+    })
+    const scope = ref('remaining')
+    const errorMsg = ref('')
+    const loading = ref(false)
+    const yesterday = addDays(props.today, -1)
+    const remainingRange = computed(() => fmtRange(props.today, props.leave.end_date))
+    const wholeRange = computed(() => fmtRange(props.leave.start_date, props.leave.end_date))
+    const remainingDesc = computed(() => (props.leave.start_date === props.today
+      ? '將取消整筆請假'
+      : `今天起的出勤會恢復為預計到班；${fmtRange(props.leave.start_date, yesterday)} 保留為請假`))
+    const submitScope = computed(() => (phase.value === 'ended' ? 'all' : phase.value === 'future' ? 'remaining' : scope.value))
+    const title = computed(() => (phase.value === 'ended' ? '整筆取消請假' : '取消請假'))
+    const submitText = computed(() => (submitScope.value === 'all' ? '整筆取消' : '取消請假'))
+    const submit = () => {
+      errorMsg.value = ''
+      emit('request', `POST /admin/leaves/${props.leave.id}/cancel ${JSON.stringify({ scope: submitScope.value })}`)
+      loading.value = true
+      setTimeout(() => {
+        loading.value = false
+        if (props.sim === 'leave_not_active') { errorMsg.value = '這筆請假已取消'; emit('failed'); return }
+        if (props.sim === 'leave_already_ended') { errorMsg.value = '這筆請假的日子都已過去，沒有可取消的日子'; emit('failed'); return }
+        const truncated = submitScope.value === 'remaining' && props.leave.start_date < props.today
+        ElMessage.success('已取消請假')
+        emit('cancelled', truncated
+          ? { ...props.leave, end_date: yesterday }
+          : { ...props.leave, status: 'cancelled', cancelled_at: new Date().toISOString(), cancelled_by_type: 'staff', cancelled_by_name: '張主任' })
+        emit('update:modelValue', false)
+      }, 800)
+    }
+    return { phase, scope, errorMsg, loading, remainingRange, wholeRange, remainingDesc, title, submitText, submit, fmtRange, LEAVE_TYPE_META }
+  },
+  template: `
+    <form-dialog :model-value="modelValue" :title="title" cancel-text="返回" :submit-text="submitText" :loading="loading" :autofocus="false"
+                 @update:model-value="(v) => $emit('update:modelValue', v)" @submit="submit" @closed="$emit('closed')">
+      <el-alert v-if="errorMsg" class="lc-error" type="error" show-icon :title="errorMsg" @close="errorMsg = ''"></el-alert>
+      <div class="lc-summary">
+        <span class="lc-summary__name">{{ leave.student.name }}</span>（{{ leave.student.student_no }}・{{ leave.student.class_name || '未分班' }}）<br>
+        <el-tag :type="LEAVE_TYPE_META[leave.leave_type].tone" size="small" disable-transitions>{{ leave.leave_type_label }}</el-tag>
+        <span class="lc-summary__period">{{ fmtRange(leave.start_date, leave.end_date) }}</span>
+      </div>
+
+      <div v-if="phase === 'future'" class="lc-only"><span class="lc-only__title">將取消整筆請假</span></div>
+
+      <el-radio-group v-else-if="phase === 'started'" v-model="scope" class="lc-options" :disabled="loading" aria-label="取消範圍">
+        <el-radio value="remaining" border>
+          <span class="lc-option__title">取消今天起的請假（{{ remainingRange }}）</span>
+          <span class="lc-option__desc">{{ remainingDesc }}</span>
+        </el-radio>
+        <el-radio value="all" border>
+          <span class="lc-option__title">整筆取消（{{ wholeRange }}）</span>
+          <span class="lc-option__desc">已過去的日子也會改回，已登記到班或離班的紀錄不受影響</span>
+        </el-radio>
+      </el-radio-group>
+
+      <div v-else class="lc-only">已結束的請假只能整筆取消（事後更正）；期間內登記為請假的出勤會自動還原，已登記到班或離班的紀錄不受影響</div>
+
+      <div class="lc-notify"><el-icon><icon-bell></icon-bell></el-icon>取消後會通知班級負責老師</div>
+    </form-dialog>`,
+}
+
+const ROLES = {
+  director: { label: '主任（可代登記與取消）', permissions: DIRECTOR },
+  clerk: { label: '行政（可代登記與取消）', permissions: CLERK },
+  tutor: { label: '課輔老師（只有 leaves:read）', permissions: TUTOR },
+  nostudents: { label: '自訂角色（請假讀寫，沒有 students:read）', permissions: [...ALL_STAFF.filter((c) => c !== 'students:read'), 'leaves:write'] },
+  noleaves: { label: '自訂角色（沒有 leaves:read）', permissions: ALL_STAFF.filter((c) => !c.startsWith('leaves:')) },
+}
+
+const app = createApp({
+  components: { AdminShell, PageHeader, LeaveAttachmentList, LeaveFormDialog, LeaveCancelDialog },
+  setup() {
+    const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
+    const meta = {
+      status: readMeta('preview-status'), tasks: readMeta('preview-tasks'),
+      route: readMeta('preview-route'), updated: readMeta('preview-updated'),
+    }
+    const viewAs = ref('director')
+    const perms = computed(() => ROLES[viewAs.value].permissions)
+    const can = (code) => perms.value.includes(code)
+    const user = computed(() => SHELL_USERS[viewAs.value] ?? { display_name: '新進員工', role: '自訂角色' })
+    const device = ref('desktop')
+    const onNavigate = (p) => { if (p !== '/leaves') ElMessage.info(`（稿）導頁至 ${p}`) }
+
+    const listState = ref('data')
+    const createSim = ref('ok')
+    const cancelSim = ref('ok')
+    const attachmentSim = ref('ok')
+    const startTodayMode = ref('B')
+    const lastRequest = ref('')
+
+    // ---- 篩選（usePagedList，syncQuery）----
+    const DEFAULT_RANGE = [TODAY, addDays(TODAY, 30)]
+    const defaults = () => ({ student_id: null, class_id: ALL, status: 'active', leave_type: ALL, created_by_type: ALL, range: [...DEFAULT_RANGE] })
+    const filters = reactive(defaults())
+    const filterStudent = ref(null)
+    const page = ref(1)
+    const isFiltered = computed(() => JSON.stringify(filters) !== JSON.stringify(defaults()))
+    const queryString = computed(() => {
+      const p = new URLSearchParams()
+      if (filters.student_id) p.set('student_id', filters.student_id)
+      if (filters.class_id !== ALL) p.set('class_id', filters.class_id)
+      p.set('status', filters.status)
+      if (filters.leave_type !== ALL) p.set('leave_type', filters.leave_type)
+      if (filters.created_by_type !== ALL) p.set('created_by_type', filters.created_by_type)
+      if (filters.range && filters.range.length === 2) { p.set('date_from', filters.range[0]); p.set('date_to', filters.range[1]) }
+      p.set('page', String(page.value)); p.set('page_size', '20')
+      return p.toString()
+    })
+    const refreshing = ref(false)
+    const reload = () => { refreshing.value = true; setTimeout(() => { refreshing.value = false }, 450) }
+    const onFilter = () => { page.value = 1; reload() }
+    const onStudentFilter = (s) => { filterStudent.value = s ? studentBrief(s) : null; onFilter() }
+    const resetFilters = () => { Object.assign(filters, defaults()); filterStudent.value = null; onFilter() }
+    const refresh = () => { lastRequest.value = `GET /admin/leaves?${queryString.value}`; reload() }
+    const retry = () => { listState.value = 'loading'; setTimeout(() => { listState.value = 'data' }, 800) }
+    const rangeShortcuts = [
+      { text: '今天起 30 天', value: () => [localDate(TODAY), localDate(addDays(TODAY, 30))] },
+      { text: '本月', value: () => [localDate('2026-10-01'), localDate('2026-10-31')] },
+      { text: '上個月', value: () => [localDate('2026-09-01'), localDate('2026-09-30')] },
+      { text: '過去 90 天', value: () => [localDate(addDays(TODAY, -89)), localDate(TODAY)] },
+    ]
+
+    // ---- 資料 ----
+    const leaves = ref(LEAVES_FIXTURE())
+    const studentClassId = (sid) => STUDENTS.find((s) => s.id === sid)?.class?.id ?? null
+    const rows = computed(() => {
+      if (listState.value !== 'data') return []
+      const hasRange = filters.range && filters.range.length === 2
+      return leaves.value.filter((l) => (!filters.student_id || l.student.id === filters.student_id)
+        && (filters.class_id === ALL || studentClassId(l.student.id) === filters.class_id)
+        && l.status === filters.status
+        && (filters.leave_type === ALL || l.leave_type === filters.leave_type)
+        && (filters.created_by_type === ALL || l.created_by_type === filters.created_by_type)
+        && (!hasRange || (l.start_date <= filters.range[1] && l.end_date >= filters.range[0])))
+        .sort((a, b) => b.start_date.localeCompare(a.start_date) || b.created_at.localeCompare(a.created_at))
+    })
+    const isOngoing = (l) => l.status === 'active' && l.start_date <= TODAY && TODAY <= l.end_date
+    const cancelledNote = (l) => `${l.cancelled_by_name ? actorLabel(l.cancelled_by_type, l.cancelled_by_name) + ' ' : ''}於 ${fmtDateTime(l.cancelled_at)} 取消`
+    const goStudent = (row) => ElMessage.info(`（稿）router.push('/students?student=${row.student.id}')`)
+
+    // ---- 附件展開 ----
+    const expanded = ref([])
+    const toggleAttachments = (row) => {
+      expanded.value = expanded.value.includes(row.id) ? expanded.value.filter((id) => id !== row.id) : [...expanded.value, row.id]
+    }
+
+    // ---- 代登記 ----
+    const canCreate = computed(() => can('leaves:write') && can('students:read'))
+    const formOpen = ref(false)
+    const formKey = ref(0)
+    const presetStudent = computed(() => filterStudent.value)
+    const openCreate = () => { formKey.value += 1; formOpen.value = true }
+    const onCreated = (leave) => { leaves.value = [leave, ...leaves.value]; reload() }
+
+    // ---- 取消 ----
+    const cancelTarget = ref(null)
+    const cancelOpen = ref(false)
+    const cancelKey = ref(0)
+    const needsReload = ref(false)
+    const openCancel = (row) => { cancelTarget.value = row; cancelKey.value += 1; needsReload.value = false; cancelOpen.value = true }
+    const onCancelled = (leave) => { leaves.value = leaves.value.map((l) => (l.id === leave.id ? leave : l)); reload() }
+    const onCancelClosed = () => { if (needsReload.value) { needsReload.value = false; reload() } }
+
+    const decisions = [
+      '版面：PageHeader「請假」+ 副標「家長在 LINE 送出即生效；員工可代登記與取消」，右側「重新整理」（重抓目前條件，轉圈中停用）與 primary「代登記請假」。下方白底面板：篩選列 → 表格 → 分頁（每頁 20 筆）。不訂閱 ws（leave.created / leave.cancelled 只走站內通知），靠「重新整理」。',
+      '篩選列沿用 AdminListToolbar 的版面樣式，但不使用該元件：它固定有關鍵字搜尋框，而 GET /admin/leaves 沒有關鍵字參數（學生改用 StudentSelect 遠端搜尋）。順序：學生（StudentSelect，可清除，寬 220）→ 班級 → 狀態（生效中 / 已取消，沒有「全部」，預設生效中）→ 假別 → 建立者（家長 / 員工）→ 日期 →「重設」文字鈕（與預設相同時停用）→ 右側「共 N 筆」。下拉除狀態外第一項都是「全部」。',
+      '日期區間預設今天起 30 天（2026-10-07 ~ 2026-11-06），以「與請假期間有交集」篩選；可清除 = 不限日期（看某位學生的全部紀錄）；快捷「今天起 30 天」「本月」「上個月」「過去 90 天」。任何篩選變更回到第 1 頁；篩選與頁碼同步到網址（usePagedList syncQuery）。',
+      '表格欄位：學生（固定在左；姓名粗體、下一行學號；有 students:read 時姓名是連結 → /students?student={id}）、班級（null 顯示淡灰「未分班」）、假別 tag（LEAVE_TYPE_META：病假橘、事假 / 其他灰）、期間（2026-10-06~2026-10-08，同一天只顯示一天；生效中且含今天時後接藍色線框「進行中」）、原因（單行省略，hover 看全文；null「—」）、建立者（「家長：陳爸爸」/「員工：林行政」+ 下一行 2026/10/06 07:45）、狀態（生效中 / 已取消 tag；已取消下一行「員工：林行政 於 2026/10/01 10:00 取消」）、附件、操作（固定在右）。依開始日新到舊（後端排序），不提供欄位排序；寬度不夠時中間欄橫向捲動。',
+      '附件欄：有附件時顯示迴紋針 +「2 個」+ 向下箭頭的文字按鈕，點擊展開 / 收合該列（箭頭轉向、aria-expanded），展開區放 LeaveAttachmentList；沒有附件顯示「—」。展開用 el-table 的 expand（預設箭頭欄隱藏，只由附件欄按鈕觸發）。',
+      '操作欄只在有 leaves:write 時出現：生效中且 end_date ≥ 今天 →「取消」；生效中且已結束（end_date < 今天）→「整筆取消」（事後更正）；已取消 →「—」。兩者都開 LeaveCancelDialog。只有 leaves:read（課輔老師）：沒有「代登記請假」、整個操作欄移除，附件照常可看。',
+      '沒有 students:read 的自訂角色：學生篩選不出現、學生姓名不做連結；StudentSelect 需要 GET /admin/students（students:read），所以「代登記請假」也不出現（避免開出一個搜不到學生的表單）。',
+      'LeaveFormDialog（FormDialog md 560，標題「代登記請假」，送出鈕「送出」）：學生（StudentSelect；列表已用學生篩選時預帶該生）→ 假別（病假 / 事假 / 其他三段按鈕，必填、沒有預設）→ 請假期間（daterange「開始日 ~ 結束日」，30 天前以前 disabled，快捷「今天」「明天」，下方灰字「單日請假：開始與結束選同一天。最早可選 {date}（30 天前）」）→ 原因（選填，≤ 200 字計數，placeholder「例如：發燒看醫生」）；表單下方 info alert「送出後立即生效，期間內的出勤會改為請假，並通知班級負責老師」。有輸入後關閉要確認（dirty）。',
+      'LeaveFormDialog 驗證與錯誤（錯誤顯示在對應欄位下方）：沒選「請選擇學生」「請選擇假別」「請選擇請假期間」，期間超過 61 天「單筆請假最長 61 天」（同後端上限），以上都不送請求；409 leave_overlap → 期間欄「與既有請假（{details.start_date}~{details.end_date}）重疊」；422 no_service_days_in_range → 期間欄「所選期間沒有營業日」；409 student_not_active → 學生欄「此學生不是在學狀態」；其他 422 依 validationFieldErrors 對到欄位。原因空白時 body 不帶 reason。成功 ElMessage.success「已登記請假」、關閉並重新整理列表。',
+      'LeaveCancelDialog（FormDialog md，取消鈕「返回」；送出鈕「取消請假」，整筆取消時為「整筆取消」；標題「取消請假」，已結束時「整筆取消請假」）：上方灰底摘要「姓名（學號・班級）」+ 假別 tag + 期間。尚未開始 → 只顯示「將取消整筆請假」（scope remaining）；已開始 → 兩個帶框選項，預設「取消今天起的請假（{today}~{end}）」+ 說明「今天起的出勤會恢復為預計到班；{start}~{昨天} 保留為請假」，另一個「整筆取消（{start}~{end}）」+ 說明「已過去的日子也會改回，已登記到班或離班的紀錄不受影響」；已結束 → 只顯示「已結束的請假只能整筆取消（事後更正）；期間內登記為請假的出勤會自動還原，已登記到班或離班的紀錄不受影響」（scope all）。底部鈴鐺灰字「取消後會通知班級負責老師」。區間同一天只顯示一天。',
+      'LeaveCancelDialog 錯誤：409 leave_not_active / leave_already_ended → dialog 頂部紅色 alert 顯示後端訊息（例：「這筆請假已取消」），dialog 保持開啟；發生過錯誤的話關閉後列表自動重新整理（狀態可能已被別人改變）。成功 ElMessage.success「已取消請假」、關閉並重新整理（取消剩餘日子後 end_date 變成昨天，預設日期區間下該列會從清單消失）。',
+      '今天才開始的請假（start_date = 今天）：後端 remaining 與 all 結果相同（都是整筆取消），稿照推薦視同尚未開始、只顯示「將取消整筆請假」（待裁定 1；控制列可切 A 對照）。',
+      'LeaveAttachmentList：每個附件一個按鈕（寬 300、高 ≥ 52，橫向排列可換行）：左側類型 icon（圖片藍、PDF 紅色文件）+「附件 1・圖片（JPG）」+ 下一行「512.0 KB・2026/10/06 07:46 上傳」（KB / MB 一位小數，1024 為底）+ 右側動作「預覽」或「另開」。附件沒有使用者檔名（後端只存物件路徑），所以用序號與類型稱呼。',
+      'LeaveAttachmentList 開啟：每次點擊都重新呼叫 fetchLeaveAttachmentUrl（不快取）；取得中該列 icon 轉圈、動作文字「取得中…」、aria-busy，其他列仍可點。JPG / PNG / WEBP 以 el-image-viewer 預覽（點遮罩或 Esc 關閉）；PDF 與 HEIC（多數瀏覽器無法在頁內顯示 HEIC）以 window.open(url, \'_blank\', \'noopener\') 另開。失敗 ElMessage.error 顯示後端訊息（「找不到附件」「檔案儲存服務暫時無法使用，請稍後再試」），沒有訊息時「無法開啟附件」。空陣列顯示「沒有附件」。',
+      '三態 + 錯誤：載入中 → 表格 v-loading；空清單 → 表格內 inline EmptyState「這段期間沒有請假紀錄」+「試著調整日期區間或篩選條件」（清除日期區間時標題改為「沒有符合條件的請假紀錄」）；載入失敗 → EmptyState error「無法載入請假紀錄」+「重試」取代表格。',
+    ]
+    const openQuestions = [
+      {
+        question: '請假「今天才開始」時（start_date = 今天），取消 dialog 要怎麼呈現？兩個選項送出後的結果完全相同（後端都會整筆取消）。',
+        optionA: '照 task：顯示兩個選項，第一項說明改為「將取消整筆請假」，第二項「整筆取消」照常',
+        optionB: '視同尚未開始：不出現選項，只顯示「將取消整筆請假」（推薦，稿已照此畫；控制列可切 A 對照）',
+      },
+    ]
+
+    return {
+      meta, decisions, openQuestions, roles: ROLES, viewAs, perms, can, user, device, onNavigate, notesOpen: ref(false),
+      listState, createSim, cancelSim, attachmentSim, startTodayMode, lastRequest,
+      filters, page, isFiltered, queryString, refreshing, onFilter, onStudentFilter, resetFilters, refresh, retry, rangeShortcuts,
+      rows, isOngoing, cancelledNote, goStudent, expanded, toggleAttachments,
+      canCreate, formOpen, formKey, presetStudent, openCreate, onCreated,
+      cancelTarget, cancelOpen, cancelKey, needsReload, openCancel, onCancelled, onCancelClosed,
+      classes: CLASSES, ALL, TODAY, LEAVE_TYPE_META, LEAVE_STATUS_META, SAMPLE_ATTACHMENTS, fmtRange, fmtDateTime, actorLabel,
+    }
+  },
+})
+
+app.use(ElementPlus, { locale: ElementPlusLocaleZhTw })
+app.component('EmptyState', EmptyState)
+app.component('FormDialog', FormDialog)
+app.component('StudentSelect', StudentSelect)
+const toKebab = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+for (const [name, component] of Object.entries(ElementPlusIconsVue)) {
+  app.component(`icon-${toKebab(name)}`, component)
+}
+app.mount('#app')
+</script>
+</body>
+</html>
