@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 417,
-  "last_updated": "2026-10-07T08:20:57Z",
+  "version": 418,
+  "last_updated": "2026-10-07T08:23:59Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -15218,7 +15218,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/clock.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9e",
       "depends_on": [
         "BACKEND-404",
@@ -15239,7 +15239,7 @@
           "test_no_private_hm_copies_remain：以 ast 解析 app/services/pickup/views.py、app/services/pickup/requests.py、app/services/parent_today_service.py，模組層級不再定義 _hm 與 _taipei_hm，且三者都從 app.core.clock 匯入公開函式（拿回任一份私有副本 → 轉紅）"
         ],
         "run": "just test apps/api/tests/unit/core/test_clock.py -k \"test_format_ or test_no_private_hm_copies\"",
-        "notes": "行為不變的證據：重構後 apps/api/tests/integration/services/pickup/test_pickup_views.py、test_pickup_requests.py 與 apps/api/tests/integration/services/test_parent_today_service.py（指定路徑，整合測試包 flock）全綠，結果記在回報。"
+        "notes": "行為不變的證據：重構後 apps/api/tests/integration/services/pickup/test_pickup_views.py、test_pickup_requests.py 與 apps/api/tests/integration/services/test_parent_today_service.py（指定路徑，整合測試包 flock）全綠，結果記在回報。 test_no_private_hm_copies_remain 以三個模組路徑參數化（三個案例），tdd.run 的 -k 仍選得到。"
       },
       "review": {
         "status": "pending",
