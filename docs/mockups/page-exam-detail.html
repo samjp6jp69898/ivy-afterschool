@@ -1,0 +1,2033 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+
+<meta name="preview-status" content="draft">
+<meta name="preview-tasks" content="FRONTEND-233,FRONTEND-234,FRONTEND-235,FRONTEND-239">
+<meta name="preview-route" content="/exams/:id">
+<meta name="preview-updated" content="2026-10-07">
+
+<title>設計稿：考試詳情（成績輸入 / 各科平均 / 科目設定）</title>
+
+<!-- 版號對齊 apps/web/pnpm-lock.yaml 的實際安裝版本 -->
+<link rel="stylesheet" href="https://unpkg.com/element-plus@2.14.7/dist/index.css">
+<script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/element-plus@2.14.7/dist/locale/zh-tw.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue@2.3.2/dist/index.iife.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+#app { display: flex; flex-direction: column; height: 100%; }
+body { font-family: var(--el-font-family); background: var(--el-fill-color); color: var(--el-text-color-primary); }
+
+.preview-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 6px 16px; font-size: 12px;
+  color: var(--el-color-info-dark-2);
+  background: var(--el-color-info-light-9);
+  border-bottom: 1px dashed var(--el-border-color);
+}
+.preview-bar__spacer { flex: 1; }
+.preview-bar code { font-size: 12px; }
+.text-secondary { color: var(--el-text-color-secondary); font-size: 13px; }
+.el-button > span > .el-icon { margin-right: 4px; }
+.stage { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+.control-bar { display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap; padding: 8px 16px; font-size: 12px; color: var(--el-text-color-secondary); background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-lighter); }
+.control-bar .el-button + .el-button { margin-left: 0; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.last-request { font-size: 12px; color: var(--el-text-color-secondary); word-break: break-all; }
+
+/* ==================== ADMIN SHELL CSS START（各頁稿逐字複製這一段） ==================== */
+/* 裝置框：只存在於設計稿，模擬桌機 / 平板 1024×768 / 手機 390×844 */
+.device-frame { position: relative; margin: 0 auto; overflow: hidden; background: var(--el-bg-color-page); border: 1px solid var(--el-border-color); border-radius: 10px; box-shadow: var(--el-box-shadow-light); }
+.device-frame.is-desktop { width: 1200px; height: 760px; }
+.device-frame.is-tablet { width: 1024px; height: 768px; }
+.device-frame.is-mobile { width: 390px; height: 844px; border-radius: 24px; }
+
+.shell { display: flex; height: 100%; }
+.shell__aside { display: flex; flex-direction: column; flex-shrink: 0; width: 220px; background: var(--el-bg-color); border-right: 1px solid var(--el-border-color-light); transition: width 0.2s ease; }
+.shell__aside.is-collapsed { width: 64px; }
+.shell__brand { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 22px; flex-shrink: 0; white-space: nowrap; overflow: hidden; font-weight: 600; color: var(--el-text-color-primary); border-bottom: 1px solid var(--el-border-color-lighter); }
+.shell__brand .el-icon { font-size: 20px; color: var(--el-color-primary); flex-shrink: 0; }
+.shell__menu { flex: 1; min-height: 0; overflow: hidden auto; }
+.shell__menu .el-menu { border-right: none; }
+.shell__menu .el-menu-item-group__title { padding-top: 14px; font-size: 12px; }
+.shell__menu .el-menu--collapse .el-menu-item-group__title { height: 1px; padding: 0; margin: 8px 12px; background: var(--el-border-color-lighter); overflow: hidden; }
+.shell__menu .el-menu-item { height: 44px; line-height: 44px; }
+.shell__empty { padding: 24px 16px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.shell__collapse { flex-shrink: 0; height: 44px; border-top: 1px solid var(--el-border-color-lighter); display: flex; align-items: center; justify-content: center; }
+.shell__body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.shell__header { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 12px 0 8px; flex-shrink: 0; background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-light); }
+.shell__toggle { width: 44px; height: 44px; }
+.shell__title { margin: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shell__spacer { flex: 1; }
+.ws-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-info-light-3); margin: 0 6px; }
+.ws-dot.is-open { background: var(--el-color-success); }
+.ws-dot.is-reconnecting { background: var(--el-color-warning); }
+.shell__bell { width: 44px; height: 44px; font-size: 18px; }
+.shell__bell .el-badge__content { top: 10px; right: 12px; }
+.shell__user { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 8px; cursor: pointer; border-radius: 6px; color: var(--el-text-color-regular); font-size: 14px; }
+.shell__user:hover { background: var(--el-fill-color-light); }
+.shell__banner { flex-shrink: 0; border-radius: 0; }
+.shell__main { flex: 1; min-height: 0; overflow: auto; padding: 20px; }
+.device-frame.is-tablet .shell__main { padding: 16px; }
+.device-frame.is-mobile .shell__main { padding: 12px; }
+/* 手機：側欄改抽屜（實作用 el-drawer，稿裡在裝置框內模擬） */
+.shell__scrim { position: absolute; inset: 0; z-index: 20; background: var(--el-overlay-color-lighter); }
+.shell__drawer { position: absolute; top: 0; bottom: 0; left: 0; z-index: 21; width: 240px; display: flex; flex-direction: column; background: var(--el-bg-color); box-shadow: var(--el-box-shadow-dark); }
+
+/* 通知面板（FRONTEND-036） */
+.notif { width: 360px; margin: -12px; }
+.notif__head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 10px 16px; border-bottom: 1px solid var(--el-border-color-lighter); }
+.notif__title { font-size: 15px; font-weight: 600; }
+.notif__list { max-height: 420px; overflow: auto; }
+.notif__row { position: relative; display: block; width: 100%; padding: 12px 16px 12px 28px; text-align: left; cursor: pointer; border: none; border-bottom: 1px solid var(--el-border-color-extra-light); background: var(--el-bg-color); font-family: inherit; color: inherit; }
+.notif__row:hover, .notif__row:focus-visible { background: var(--el-fill-color-light); outline: none; }
+.notif__row.is-unread { background: var(--el-color-primary-light-9); }
+.notif__row.is-unread:hover { background: var(--el-color-primary-light-8); }
+.notif__dot { position: absolute; left: 12px; top: 18px; width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-primary); }
+.notif__row-title { font-size: 14px; font-weight: 600; color: var(--el-text-color-primary); }
+.notif__row-body { margin-top: 2px; font-size: 13px; line-height: 1.5; color: var(--el-text-color-regular); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+.notif__row-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--el-text-color-secondary); }
+.notif__empty { padding: 40px 16px; text-align: center; font-size: 13px; color: var(--el-text-color-secondary); }
+.notif__skeleton { padding: 12px 16px; }
+/* ==================== ADMIN SHELL CSS END ==================== */
+
+/* ==== 以下逐字複製自 component-common.html（已核可） ==== */
+/* ---------- PageHeader（FRONTEND-039） ---------- */
+.page-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+.page-header__body { flex: 1; min-width: 0; }
+.page-header__title { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; color: var(--el-text-color-primary); }
+.page-header__subtitle { margin: 4px 0 0; font-size: 13px; color: var(--el-text-color-secondary); }
+.page-header__extra { margin-top: 8px; }
+.page-header__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+.page-header__actions .el-button + .el-button { margin-left: 0; }
+/* 實作用 @media (max-width: 767.98px)；稿裡用 .is-narrow 在 375px 框內示意 */
+.is-narrow .page-header { flex-wrap: wrap; }
+.is-narrow .page-header__body { flex-basis: 100%; }
+.is-narrow .page-header__actions { width: 100%; }
+
+/* ---------- AdminListToolbar（FRONTEND-041） ---------- */
+.list-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.list-toolbar__search { width: 240px; }
+.list-toolbar__filter { display: flex; align-items: center; gap: 6px; }
+.list-toolbar__filter-label { font-size: 13px; color: var(--el-text-color-secondary); white-space: nowrap; }
+.list-toolbar__spacer { flex: 1 1 auto; }
+.list-toolbar__count { font-size: 13px; color: var(--el-text-color-secondary); white-space: nowrap; }
+.list-toolbar__actions { display: flex; gap: 8px; }
+.list-toolbar__actions .el-button + .el-button { margin-left: 0; }
+.is-narrow .list-toolbar__search { width: 100%; }
+.is-narrow .list-toolbar__filter { flex: 1 1 calc(50% - 6px); }
+.is-narrow .list-toolbar__filter .el-select { flex: 1; }
+
+/* ---------- EmptyState（FRONTEND-042） ---------- */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 16px; }
+.empty-state__icon { font-size: 48px; color: var(--el-text-color-placeholder); margin-bottom: 16px; }
+.empty-state__title { margin: 0 0 6px; font-size: 16px; font-weight: 500; color: var(--el-text-color-regular); }
+.empty-state__desc { margin: 0; max-width: 360px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.empty-state__action { margin-top: 16px; display: flex; gap: 8px; }
+.empty-state.is-error .empty-state__icon { color: var(--el-color-danger); }
+.empty-state.is-inline { padding: 16px 8px; }
+.empty-state.is-inline .empty-state__title { font-size: 14px; margin-bottom: 2px; }
+.empty-state.is-inline .empty-state__action { margin-top: 8px; }
+
+/* ==== 以下逐字複製自 component-common-extra.html（已核可） ==== */
+/* ---------- FormDialog（FRONTEND-040） ---------- */
+.form-dialog__footer { display: flex; justify-content: flex-end; gap: 8px; }
+.form-dialog__footer .el-button + .el-button { margin-left: 0; }
+
+/* ==== 以下逐字複製自 component-exams.html（已核可：ScoreCell、RenotifyChoiceDialog 與成績格工具列） ==== */
+/* ---------- 情境：ScoreGrid 工具列與表格（屬 FRONTEND-235） ---------- */
+.grid-toolbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; font-size: 13px; }
+.grid-toolbar__status { display: inline-flex; align-items: center; gap: 4px; color: var(--el-text-color-secondary); }
+.grid-toolbar__status.is-ok { color: var(--el-color-success); }
+.grid-toolbar__status.is-error { color: var(--el-color-danger); }
+.grid-toolbar__spacer { flex: 1; }
+.grid-toolbar__notify { display: inline-flex; align-items: center; gap: 8px; }
+.row-out { opacity: 0.55; }
+.out-tag { margin-left: 6px; }
+
+/* ---------- ScoreCell（FRONTEND-236） ---------- */
+.score-cell { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.score-cell__input { width: 64px; }
+.score-cell__input .el-input__inner { text-align: center; font-variant-numeric: tabular-nums; }
+.score-cell.is-error .el-input__wrapper,
+.score-cell.is-invalid .el-input__wrapper { box-shadow: 0 0 0 1px var(--el-color-danger) inset; }
+.score-cell__absent { height: 24px; }
+.score-cell__absent .el-checkbox__label { padding-left: 4px; font-size: 13px; }
+/* 角標與狀態圖示：貼在輸入框右上角，不擠動版面 */
+.score-cell__mark { position: absolute; top: -5px; left: 54px; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.score-cell__dirty { position: absolute; top: 1px; left: 53px; width: 0; height: 0; border-top: 10px solid var(--el-color-warning); border-left: 10px solid transparent; border-top-right-radius: 3px; pointer-events: none; }
+.score-cell__spin { font-size: 13px; color: var(--el-color-primary); background: var(--el-bg-color); border-radius: 50%; animation: score-spin 1s linear infinite; }
+.score-cell__ok { font-size: 13px; color: var(--el-color-white); background: var(--el-color-success); border-radius: 50%; padding: 1px; }
+.score-cell__err { font-size: 14px; color: var(--el-color-danger); background: var(--el-bg-color); border-radius: 50%; }
+@keyframes score-spin { to { transform: rotate(360deg); } }
+.fade-leave-active { transition: opacity 0.4s ease; }
+.fade-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .score-cell__spin { animation: none; } .fade-leave-active { transition: none; } }
+.score-cell__text { display: inline-block; min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
+.score-cell__text.is-absent { color: var(--el-color-warning-dark-2); }
+.score-cell__text.is-empty { color: var(--el-text-color-placeholder); }
+/* ---------- RenotifyChoiceDialog（FRONTEND-238） ---------- */
+.renotify__lead { margin: 0; line-height: 1.7; color: var(--el-text-color-regular); }
+.renotify__count { margin: 12px 0 0; font-weight: 600; color: var(--el-color-warning-dark-2); }
+.renotify__hint { margin: 8px 0 0; font-size: 13px; color: var(--el-text-color-secondary); }
+
+/* ==== 以下逐字複製自 page-exams.html（ExamFormDialog 與共用樣式） ==== */
+/* ==================== EXAM SHARED CSS START（page-exam-detail.html 逐字複製這一段） ==================== */
+/* 觸控：頁面層級的主要按鈕撐到 44px（平板） */
+.touch.el-button { min-height: 44px; }
+.form-hint { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); }
+.form-warn { margin-top: 4px; font-size: 12px; line-height: 1.6; color: var(--el-color-warning-dark-2); }
+.form-error { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--el-color-danger); }
+
+/* ExamFormDialog（FRONTEND-232） */
+.ef-alert { margin-bottom: 16px; }
+.ef-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 0 16px; }
+.ef-grid--2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.ef-grid .el-select { width: 100%; }
+.ef-section { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 14px; font-weight: 600; color: var(--el-text-color-regular); }
+.ef-section__required { color: var(--el-color-danger); }
+.ef-section__hint { margin-left: 4px; font-size: 12px; font-weight: normal; color: var(--el-text-color-secondary); }
+.ef-section__spacer { flex: 1; }
+.ef-scope.is-error .el-select__wrapper { box-shadow: 0 0 0 1px var(--el-color-danger) inset; }
+.ef-scope-msg { margin: -12px 0 14px; }
+.ef-subjects { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 16px; margin-bottom: 4px; }
+.ef-subject { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 0 8px 0 12px; border: 1px solid var(--el-border-color-lighter); border-radius: 6px; background: var(--el-bg-color); }
+.ef-subject.is-off { background: var(--el-fill-color-lighter); }
+.ef-subject.is-off .el-checkbox__label { color: var(--el-text-color-secondary); }
+.ef-subject__full { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--el-text-color-secondary); }
+.ef-subject__full .el-input-number { width: 120px; }
+/* ==================== EXAM SHARED CSS END ==================== */
+
+/* ==================== 考試詳情（FRONTEND-234） ==================== */
+.panel { background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter); border-radius: 8px; padding: 16px; }
+.back-row { margin: -6px 0 4px; }
+.back-link.el-button { min-height: 32px; padding: 0; font-size: 13px; color: var(--el-text-color-regular); }
+.exam-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--el-text-color-secondary); }
+.exam-meta__note { max-width: 440px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--el-text-color-regular); }
+.readonly-hint { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; font-size: 13px; color: var(--el-text-color-secondary); }
+.detail-panel { padding: 4px 16px 12px; }
+.exam-tabs > .el-tabs__header { margin-bottom: 12px; }
+.exam-tabs { --el-tabs-header-height: 44px; }
+.exam-tabs .el-tabs__item { font-size: 15px; }
+.page-skeleton { padding: 8px 0; }
+
+/* ScoreGrid（FRONTEND-235） */
+.score-grid .grid-toolbar { min-height: 44px; margin-bottom: 8px; }
+.score-grid .grid-toolbar .el-button { min-height: 44px; }
+.sg-keys { font-size: 12px; color: var(--el-text-color-secondary); }
+.sg-keys kbd { padding: 0 5px; margin: 0 2px; font-family: inherit; font-size: 11px; line-height: 18px; border: 1px solid var(--el-border-color); border-radius: 3px; background: var(--el-fill-color-light); }
+.sg-notify .el-radio-button__inner { min-height: 44px; display: inline-flex; align-items: center; padding: 0 18px; }
+.score-grid .el-table .el-table__body .el-table__cell { padding: 6px 0; }
+.sg-head { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.35; }
+.sg-head__full { font-size: 12px; font-weight: normal; color: var(--el-text-color-secondary); }
+.sg-name { white-space: nowrap; }
+.sg-out-tag { margin-top: 2px; }
+/* 列高 ≥ 48px；點格子內任何位置都聚焦輸入框 */
+.sg-cell { display: flex; justify-content: center; align-items: center; min-height: 40px; cursor: text; }
+.sg-cell.is-readonly { min-height: 28px; cursor: default; }
+/* 已不在名單：只淡化儲存格內容；固定欄底色保持不透明，橫向捲動時不會透出後面的格子 */
+.score-grid .row-out { opacity: 1; }
+.score-grid .row-out > td > .cell { opacity: 0.55; }
+/* 鍵盤移動時，被左側固定欄（學號 88 + 姓名 118 + 班級 100）遮住的格子捲到可見 */
+.score-grid .el-table__body-wrapper .el-scrollbar__wrap { scroll-padding-left: 306px; }
+.sg-skeleton { padding: 8px 0; }
+
+/* ExamSummaryTable（FRONTEND-239） */
+.summary__head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.summary__roster { font-size: 15px; font-weight: 600; color: var(--el-text-color-primary); }
+.summary__table { max-width: 860px; }
+.summary__num, .summary__avg { font-variant-numeric: tabular-nums; }
+.summary__avg { font-weight: 600; }
+.summary__rate { font-size: 12px; color: var(--el-text-color-secondary); }
+.summary__dash { color: var(--el-text-color-placeholder); font-weight: normal; }
+.summary .is-warning { color: var(--el-color-warning-dark-2); font-weight: 600; }
+
+/* ExamSubjectsEditor（FRONTEND-233） */
+.subj { max-width: 860px; }
+.subj__alert { margin-bottom: 12px; }
+.subj__hint { margin: 0 0 12px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.subj__table { max-width: 560px; }
+.subj-head, .subj-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 150px 96px 196px; gap: 8px; align-items: center; }
+.subj-head { padding: 0 0 6px; font-size: 12px; color: var(--el-text-color-secondary); }
+.subj-head span:nth-child(4) { text-align: right; }
+.subj-row { min-height: 52px; padding: 4px 0; border-top: 1px solid var(--el-border-color-extra-light); }
+.subj-row__no { text-align: center; font-variant-numeric: tabular-nums; color: var(--el-text-color-secondary); }
+.subj-row__subject { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.subj-row__subject .el-select { flex: 1; min-width: 0; }
+.subj-row .el-input-number { width: 100%; }
+.subj-row__count { text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--el-text-color-secondary); }
+.subj-row__ops { display: flex; justify-content: flex-end; }
+.subj-row__ops .el-button { min-height: 44px; padding: 0 10px; margin-left: 0; }
+.subj-row.is-error-subject .el-select__wrapper,
+.subj-row.is-error-full .el-input__wrapper { box-shadow: 0 0 0 1px var(--el-color-danger) inset; }
+.subj-row__error { grid-column: 2 / -1; margin-top: -2px; font-size: 12px; color: var(--el-color-danger); }
+.subj-empty { padding: 16px 0; text-align: center; font-size: 13px; color: var(--el-text-color-secondary); border-top: 1px solid var(--el-border-color-extra-light); }
+.subj-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--el-border-color-extra-light); }
+.subj-foot__count { font-size: 12px; color: var(--el-text-color-secondary); }
+.subj-foot__spacer { flex: 1; }
+</style>
+</head>
+
+<body>
+<div id="app">
+  <div class="preview-bar">
+    <el-tag :type="meta.status === 'approved' ? 'success' : 'warning'" size="small" effect="dark" disable-transitions>
+      {{ meta.status === 'approved' ? '已核可' : '待核可' }}
+    </el-tag>
+    <span>{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span>以身分檢視</span>
+    <el-select v-model="viewAs" size="small" style="width: 280px">
+      <el-option v-for="(r, key) in roles" :key="key" :label="r.label" :value="key"></el-option>
+    </el-select>
+    <span>裝置</span>
+    <el-radio-group v-model="device" size="small">
+      <el-radio-button value="desktop">桌機 1200</el-radio-button>
+      <el-radio-button value="tablet">平板 1024</el-radio-button>
+    </el-radio-group>
+    <span class="preview-bar__spacer"></span>
+    <span>更新 {{ meta.updated }}</span>
+    <el-button size="small" text type="primary" @click="notesOpen = true">
+      設計說明 / 待裁定（{{ openQuestions.length }}）
+    </el-button>
+  </div>
+  <div class="control-bar">
+    <span>稿件控制：</span>
+    <span>考試狀態</span>
+    <el-radio-group v-model="examStatusCtl" size="small">
+      <el-radio-button value="draft">草稿</el-radio-button>
+      <el-radio-button value="published">已發布</el-radio-button>
+    </el-radio-group>
+    <span>頁面</span>
+    <el-select v-model="pageState" size="small" style="width: 140px">
+      <el-option label="正常" value="ok"></el-option>
+      <el-option label="載入中" value="loading"></el-option>
+      <el-option label="找不到（404）" value="notfound"></el-option>
+      <el-option label="載入失敗" value="error"></el-option>
+    </el-select>
+    <span>成績格</span>
+    <el-select v-model="gridMode" size="small" style="width: 200px">
+      <el-option label="有資料（33 位、5 科）" value="ok"></el-option>
+      <el-option label="沒有科目" value="nosubjects"></el-option>
+      <el-option label="沒有應考學生" value="nostudents"></el-option>
+      <el-option label="載入中" value="loading"></el-option>
+      <el-option label="載入失敗" value="error"></el-option>
+    </el-select>
+    <span>下一次自動儲存</span>
+    <el-select v-model="gridSim.nextSave" size="small" style="width: 270px">
+      <el-option label="成功" value="ok"></el-option>
+      <el-option label="網路錯誤（整批失敗）" value="network"></el-option>
+      <el-option label="422 invalid_score_cells（第一格超出滿分）" value="invalid"></el-option>
+    </el-select>
+    <el-button size="small" @click="showcase">示範五種格子狀態</el-button>
+    <span>各科平均</span>
+    <el-select v-model="summarySim" size="small" style="width: 110px">
+      <el-option label="有資料" value="ok"></el-option>
+      <el-option label="載入中" value="loading"></el-option>
+      <el-option label="載入失敗" value="error"></el-option>
+    </el-select>
+    <span>發布</span>
+    <el-select v-model="publishSim" size="small" style="width: 220px">
+      <el-option label="成功" value="ok"></el-option>
+      <el-option label="422 exam_has_no_subjects" value="no_subjects"></el-option>
+      <el-option label="409 exam_already_published" value="already"></el-option>
+    </el-select>
+    <span>取消發布</span>
+    <el-select v-model="unpublishSim" size="small" style="width: 200px">
+      <el-option label="成功" value="ok"></el-option>
+      <el-option label="409 exam_not_published" value="not_published"></el-option>
+    </el-select>
+    <span>科目儲存</span>
+    <el-select v-model="subjectsSim" size="small" style="width: 170px">
+      <el-option label="成功" value="ok"></el-option>
+      <el-option label="409 exam_published" value="exam_published"></el-option>
+    </el-select>
+    <el-checkbox v-model="socialInactive" size="small">社會已在參考資料停用</el-checkbox>
+    <span>編輯資訊送出</span>
+    <el-select v-model="formSim" size="small" style="width: 210px">
+      <el-option label="成功" value="ok"></el-option>
+      <el-option label="422 grade_not_in_class" value="grade_not_in_class"></el-option>
+      <el-option label="409 exam_published" value="exam_published"></el-option>
+    </el-select>
+    <span class="last-request">網址：<span class="mono">/exams/e1?tab={{ tab }}</span></span>
+    <span v-if="lastRead" class="last-request">最後讀取：<span class="mono">{{ lastRead }}</span></span>
+    <span v-if="lastWrite" class="last-request">最後送出：<span class="mono">{{ lastWrite }}</span></span>
+  </div>
+
+  <div class="stage">
+    <admin-shell :key="device + viewAs" :device="device" :perms="perms" :user="user" active-path="/exams/e1" @navigate="leave">
+      <div class="back-row">
+        <el-button link class="back-link" @click="leave('/exams')"><el-icon><icon-arrow-left></icon-arrow-left></el-icon>考試列表</el-button>
+      </div>
+
+      <div v-if="pageState === 'loading'" class="page-skeleton">
+        <el-skeleton animated>
+          <template #template>
+            <el-skeleton-item variant="h1" style="width: 220px; height: 28px"></el-skeleton-item>
+            <el-skeleton-item variant="text" style="display: block; width: 360px; margin-top: 12px"></el-skeleton-item>
+            <el-skeleton-item variant="text" style="display: block; width: 260px; margin-top: 10px"></el-skeleton-item>
+            <el-skeleton-item variant="rect" style="display: block; width: 100%; height: 380px; margin-top: 24px"></el-skeleton-item>
+          </template>
+        </el-skeleton>
+      </div>
+      <empty-state v-else-if="pageState === 'notfound'" title="找不到此考試" description="這場考試可能已被刪除，或網址不正確" icon="icon-document">
+        <template #action><el-button type="primary" class="touch" @click="leave('/exams')">回考試列表</el-button></template>
+      </empty-state>
+      <empty-state v-else-if="pageState === 'error'" variant="error" title="無法載入考試" description="網路連線中斷，請確認網路後再試一次">
+        <template #action><el-button class="touch" @click="retryPage">重試</el-button></template>
+      </empty-state>
+      <template v-else>
+        <page-header :title="exam.name" :subtitle="subtitle">
+          <div class="exam-meta">
+            <el-tag :type="statusMeta(exam.status).tone" disable-transitions>{{ statusMeta(exam.status).label }}</el-tag>
+            <span v-if="isPublished">{{ exam.published_by_name }} 於 {{ formatDateTime(exam.published_at) }} 發布・修改分數會記錄於稽核紀錄</span>
+            <span v-else>尚未發布，家長看不到這次成績</span>
+            <span v-if="exam.note" class="exam-meta__note" :title="exam.note">備註：{{ exam.note }}</span>
+          </div>
+          <template #actions>
+            <span v-if="!can('exams:write') && !can('exams:publish')" class="readonly-hint"><el-icon><icon-lock></icon-lock></el-icon>你只有檢視權限</span>
+            <el-button v-if="can('exams:write') && !isPublished" class="touch" type="danger" plain :disabled="!!busy" @click="removeExam">
+              <el-icon><icon-delete></icon-delete></el-icon>刪除
+            </el-button>
+            <el-button v-if="can('exams:write')" class="touch" :disabled="!!busy" @click="formOpen = true">
+              <el-icon><icon-edit></icon-edit></el-icon>編輯資訊
+            </el-button>
+            <el-button v-if="can('exams:publish') && !isPublished" class="touch" type="primary" :loading="busy === 'publish'" :disabled="!!busy" @click="publish">
+              <el-icon><icon-promotion></icon-promotion></el-icon>發布
+            </el-button>
+            <el-button v-if="can('exams:publish') && isPublished" class="touch" :loading="busy === 'unpublish'" :disabled="!!busy" @click="unpublish">
+              <el-icon><icon-refresh-left></icon-refresh-left></el-icon>取消發布
+            </el-button>
+          </template>
+        </page-header>
+
+        <section class="panel detail-panel">
+          <el-tabs v-model="tab" class="exam-tabs">
+            <el-tab-pane label="成績輸入" name="scores" lazy>
+              <score-grid ref="grid" exam-id="e1" :can-write="can('exams:write')" :reload-key="gridReloadKey" :sim="gridSim"
+                          :height="device === 'tablet' ? 416 : 400" @dirty-change="(v) => hasUnsaved = v"
+                          @go-subjects="tab = 'subjects'" @request="onRequest"></score-grid>
+            </el-tab-pane>
+            <el-tab-pane label="各科平均" name="summary" lazy>
+              <exam-summary-table exam-id="e1" :refresh-key="summaryKey" :sim="summarySim" @request="onRequest"></exam-summary-table>
+            </el-tab-pane>
+            <el-tab-pane label="科目設定" name="subjects" lazy>
+              <exam-subjects-editor :exam="exam" :scored-counts="scoredCounts" :can-write="can('exams:write')" :sim="subjectsSim"
+                                    :inactive-ids="inactiveIds" @saved="onSubjectsSaved" @conflict="onSubjectsConflict"
+                                    @request="onRequest"></exam-subjects-editor>
+            </el-tab-pane>
+          </el-tabs>
+        </section>
+
+        <exam-form-dialog v-model="formOpen" :exam="exam" :sim="formSim" @saved="onEdited" @request="onRequest"></exam-form-dialog>
+      </template>
+    </admin-shell>
+  </div>
+
+  <el-drawer v-model="notesOpen" title="設計說明 / 待裁定" size="600px">
+    <el-alert v-if="openQuestions.length" title="以下項目需要你裁定，未回覆前這張稿不會進入實作"
+              type="warning" :closable="false" show-icon style="margin-bottom: 16px"></el-alert>
+    <h4>設計決策</h4>
+    <ol>
+      <li v-for="(d, i) in decisions" :key="i" style="margin-bottom: 6px">{{ d }}</li>
+    </ol>
+    <h4 v-if="openQuestions.length">待裁定</h4>
+    <ol>
+      <li v-for="(q, i) in openQuestions" :key="i" style="margin-bottom: 8px">
+        <div>{{ q.question }}</div>
+        <div style="color: var(--el-text-color-secondary); font-size: 13px">
+          A. {{ q.optionA }}<br>B. {{ q.optionB }}
+        </div>
+      </li>
+    </ol>
+  </el-drawer>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch, onBeforeUnmount, nextTick, h } = Vue
+const { ElMessage, ElMessageBox } = ElementPlus
+
+/* ==================== ADMIN SHELL JS START（各頁稿逐字複製這一段） ==================== */
+/** 各角色預設權限碼，與 docs/domain_spec.md §3「預設授予」一致；admin 擁有全部。 */
+const ALL_STAFF = [
+  'dashboard:read', 'classes:read', 'students:read',
+  'attendance:read', 'attendance:operate', 'leaves:read',
+  'homework:read', 'homework:write', 'pickup:read', 'pickup:operate', 'exams:read',
+]
+const DIRECTOR = [...ALL_STAFF,
+  'staff:read', 'roles:read', 'settings:read', 'settings:write', 'audit:read',
+  'classes:write', 'students:write', 'students:sensitive', 'guardians:write',
+  'attendance:amend', 'leaves:write', 'pickup:override', 'exams:write', 'exams:publish']
+const CLERK = [...ALL_STAFF, 'settings:read', 'classes:write', 'students:write', 'guardians:write',
+  'leaves:write', 'exams:write', 'exams:publish']
+const TUTOR = [...ALL_STAFF, 'exams:write']
+const ADMIN = [...DIRECTOR, 'staff:write', 'roles:write', 'students:purge']
+const SHELL_USERS = {
+  admin: { display_name: '系統管理員', role: '系統管理員' },
+  director: { display_name: '張主任', role: '主任' },
+  clerk: { display_name: '林行政', role: '行政' },
+  tutor: { display_name: '陳老師', role: '課輔老師' },
+}
+
+/** 與 apps/web/src/constants/navigation.ts 的 NAVIGATION 逐項一致（原檔是權威） */
+const NAVIGATION = [
+  { key: 'home', label: '首頁', items: [{ label: '今日儀表板', path: '/', icon: 'icon-odometer', permission: 'dashboard:read' }] },
+  { key: 'daily', label: '日常營運', items: [
+    { label: '今日出勤', path: '/attendance', icon: 'icon-calendar', permission: 'attendance:read' },
+    { label: '作業進度', path: '/homework', icon: 'icon-edit-pen', permission: 'homework:read' },
+    { label: '接送', path: '/pickup', icon: 'icon-van', permission: 'pickup:read' },
+    { label: '代理接送核驗', path: '/pickup/authorizations', icon: 'icon-stamp', permission: 'pickup:read' },
+    { label: '請假', path: '/leaves', icon: 'icon-tickets', permission: 'leaves:read' },
+  ] },
+  { key: 'students', label: '學生與班級', items: [
+    { label: '學生工作台', path: '/students', icon: 'icon-user', permission: 'students:read' },
+    { label: '班級管理', path: '/classes', icon: 'icon-school', permission: 'classes:read' },
+    { label: '月出勤報表', path: '/attendance/monthly', icon: 'icon-data-line', permission: 'attendance:read' },
+  ] },
+  { key: 'exams', label: '成績', items: [{ label: '考試', path: '/exams', icon: 'icon-trophy', permission: 'exams:read' }] },
+  { key: 'settings', label: '設定', items: [
+    { label: '系統設定', path: '/settings/system', icon: 'icon-setting', permission: 'settings:read' },
+    { label: '參考資料', path: '/settings/reference', icon: 'icon-collection', permission: 'settings:read' },
+    { label: '員工帳號', path: '/settings/accounts', icon: 'icon-user-filled', permission: 'staff:read' },
+    { label: '角色權限', path: '/settings/roles', icon: 'icon-lock', permission: 'roles:read' },
+    { label: '稽核紀錄', path: '/settings/audit', icon: 'icon-list', permission: 'audit:read' },
+  ] },
+]
+/** 與 apps/web/src/router/routes.ts 的 meta.title / meta.tablet 一致 */
+const ROUTE_META = {
+  '/': { title: '今日儀表板' }, '/students': { title: '學生工作台' }, '/classes': { title: '班級管理' },
+  '/attendance': { title: '今日出勤', tablet: true }, '/attendance/monthly': { title: '月出勤報表' }, '/leaves': { title: '請假' },
+  '/homework': { title: '作業進度', tablet: true }, '/pickup': { title: '接送', tablet: true },
+  '/pickup/authorizations': { title: '代理接送核驗', tablet: true }, '/exams': { title: '考試' }, '/exams/e1': { title: '考試成績' },
+  '/settings/system': { title: '系統設定' }, '/settings/reference': { title: '參考資料' }, '/settings/accounts': { title: '員工帳號' },
+  '/settings/roles': { title: '角色權限' }, '/settings/audit': { title: '稽核紀錄' },
+}
+/** 與 apps/web/src/shared/constants/statusLabels.ts 的 NOTIFICATION_EVENT_LABELS 一致 */
+const NOTIFICATION_EVENT_LABELS = {
+  'attendance.checked_in': '到班通知', 'attendance.checked_out': '離班通知', 'leave.created': '學生請假',
+  'leave.cancelled': '學生取消請假', 'homework.eta_updated': '預計可接送時間', 'homework.done': '作業完成',
+  'pickup.requested': '家長發起接送', 'pickup.replied': '老師回覆接送', 'pickup.arrived': '家長已抵達',
+  'pickup.completed': '接送完成', 'pickup.cancelled': '接送取消', 'exam.published': '成績公布', 'binding.completed': '綁定完成',
+}
+/** 員工收得到的站內通知（domain_spec M9）；文案依 BACKEND-203 templates */
+const SAMPLE_NOTIFICATIONS = () => [
+  { id: 'n1', event: 'pickup.requested', title: '王小明 家長要來接', body: '家長預計 17:30 抵達。', deep_link: '/pickup', created_at: '2026/10/02 17:05', read_at: null },
+  { id: 'n2', event: 'leave.created', title: '陳小美 請假', body: '陳小美 2026-10-05～2026-10-06 病假。', deep_link: '/leaves', created_at: '2026/10/02 16:40', read_at: null },
+  { id: 'n3', event: 'pickup.cancelled', title: '李承恩 接送已取消', body: '家長已取消今天的接送請求。\n原因：改由爺爺來接', deep_link: '/pickup', created_at: '2026/10/02 16:12', read_at: null },
+  { id: 'n4', event: 'leave.cancelled', title: '林小華 取消請假', body: '林小華 2026-10-02～2026-10-02 的請假已取消。', deep_link: '/leaves', created_at: '2026/10/01 20:31', read_at: '2026/10/01 21:00' },
+  { id: 'n5', event: 'pickup.requested', title: '張語晴 家長要來接', body: '家長已發起接送。', deep_link: '/pickup', created_at: '2026/10/01 17:48', read_at: '2026/10/01 17:50' },
+]
+
+const NotificationPanel = {
+  props: { items: Array, unreadCount: Number, loading: Boolean, unreadOnly: Boolean },
+  emits: ['open', 'read-all', 'filter'],
+  setup() { return { LABELS: NOTIFICATION_EVENT_LABELS } },
+  template: `
+    <div class="notif">
+      <div class="notif__head">
+        <span class="notif__title">通知</span>
+        <el-segmented :model-value="unreadOnly ? 'unread' : 'all'" size="small"
+                      :options="[{ label: '全部', value: 'all' }, { label: '未讀', value: 'unread' }]"
+                      @change="(v) => $emit('filter', v === 'unread')"></el-segmented>
+        <span style="flex: 1"></span>
+        <el-button link type="primary" :disabled="unreadCount === 0" @click="$emit('read-all')">全部標為已讀</el-button>
+      </div>
+      <div class="notif__list">
+        <template v-if="loading">
+          <div v-for="i in 3" :key="i" class="notif__skeleton"><el-skeleton :rows="1" animated></el-skeleton></div>
+        </template>
+        <div v-else-if="!items.length" class="notif__empty">{{ unreadOnly ? '沒有未讀通知' : '目前沒有通知' }}</div>
+        <template v-else>
+          <button v-for="n in items" :key="n.id" type="button" class="notif__row" :class="{ 'is-unread': !n.read_at }" @click="$emit('open', n)">
+            <span v-if="!n.read_at" class="notif__dot" data-test="unread-dot" aria-label="未讀"></span>
+            <div class="notif__row-title">{{ n.title }}</div>
+            <div class="notif__row-body">{{ n.body }}</div>
+            <div class="notif__row-meta">
+              <el-tag size="small" type="info" disable-transitions>{{ LABELS[n.event] || n.event }}</el-tag>
+              <span>{{ n.created_at }}</span>
+            </div>
+          </button>
+        </template>
+      </div>
+    </div>`,
+}
+
+/**
+ * AdminShell：AdminLayout + AdminSidebar + AdminHeader + NotificationBell 的稿內合體。
+ * props 只有 device / perms / user / activePath 是各頁需要傳的；wsStatus / notifState 只有外框稿用來切狀態。
+ * emits navigate(path)：點側欄項目或通知 deep_link 時發出，各頁稿可以忽略或顯示提示。
+ */
+const AdminShell = {
+  components: { NotificationPanel },
+  props: {
+    device: { type: String, default: 'desktop' },
+    perms: { type: Array, required: true },
+    user: { type: Object, required: true },
+    activePath: { type: String, required: true },
+    wsStatus: { type: String, default: 'open' },
+    notifState: { type: String, default: 'data' },
+  },
+  emits: ['navigate'],
+  setup(props, { emit }) {
+    const isMobile = computed(() => props.device === 'mobile')
+    // 模擬 localStorage['admin.sidebarCollapsed']：使用者沒切過（remembered = null）時，依路由 meta.tablet 決定預設
+    const remembered = ref(null)
+    const collapsed = computed({
+      get: () => remembered.value ?? !!ROUTE_META[props.activePath]?.tablet,
+      set: (v) => { remembered.value = v },
+    })
+    const drawerOpen = ref(false)
+    const groups = computed(() => NAVIGATION
+      .map((g) => ({ ...g, items: g.items.filter((i) => props.perms.includes(i.permission)) }))
+      .filter((g) => g.items.length))
+    const activeItem = computed(() => {
+      const segs = (p) => p.split('/').filter(Boolean)
+      const route = segs(props.activePath)
+      let best = null
+      for (const g of groups.value) for (const it of g.items) {
+        const s = segs(it.path)
+        const match = it.path === '/' ? props.activePath === '/' : s.every((x, i) => route[i] === x)
+        if (match && (!best || s.length > segs(best).length)) best = it.path
+      }
+      return best ?? ''
+    })
+    const title = computed(() => ROUTE_META[props.activePath]?.title ?? '')
+    const go = (path) => { drawerOpen.value = false; emit('navigate', path) }
+    const toggle = () => { if (isMobile.value) drawerOpen.value = !drawerOpen.value; else collapsed.value = !collapsed.value }
+
+    // 通知（NotificationBell + store 的稿內模擬）
+    const items = ref(SAMPLE_NOTIFICATIONS())
+    const unreadOnly = ref(false)
+    const popoverOpen = ref(false)
+    const unreadCount = computed(() => {
+      if (props.notifState === 'many') return 120
+      if (props.notifState === 'empty') return 0
+      return items.value.filter((n) => !n.read_at).length
+    })
+    const shownItems = computed(() => {
+      if (props.notifState === 'empty' || props.notifState === 'loading') return []
+      return unreadOnly.value ? items.value.filter((n) => !n.read_at) : items.value
+    })
+    const openNotif = (n) => {
+      if (!n.read_at) n.read_at = '剛剛'
+      popoverOpen.value = false
+      if (n.deep_link) go(n.deep_link)
+    }
+    const readAll = () => { items.value.forEach((n) => { if (!n.read_at) n.read_at = '剛剛' }) }
+    const loggingOut = ref(false)
+    const onUserCommand = (cmd) => {
+      if (cmd === 'password') { ElMessage.info('（稿）導頁至 /change-password'); return }
+      loggingOut.value = true
+      setTimeout(() => { loggingOut.value = false; ElMessage.success('（稿）已登出，導回 /login') }, 800)
+    }
+    const wsTip = computed(() => ({ open: '即時連線正常', reconnecting: '即時連線重試中' }[props.wsStatus] ?? '即時連線未建立'))
+    return {
+      isMobile, collapsed, drawerOpen, groups, activeItem, title, go, toggle,
+      shownItems, unreadCount, unreadOnly, popoverOpen, openNotif, readAll, loggingOut, onUserCommand, wsTip,
+    }
+  },
+  template: `
+    <div class="device-frame" :class="'is-' + device">
+      <div class="shell">
+        <aside v-if="!isMobile" class="shell__aside" :class="{ 'is-collapsed': collapsed }" data-test="admin-sidebar">
+          <div class="shell__brand"><el-icon><icon-school></icon-school></el-icon><span v-show="!collapsed">安親班管理系統</span></div>
+          <div class="shell__menu">
+            <div v-if="!groups.length" class="shell__empty" v-show="!collapsed">沒有可使用的功能，請聯絡管理員</div>
+            <el-menu v-else :default-active="activeItem" :collapse="collapsed" :collapse-transition="false" @select="go">
+              <el-menu-item-group v-for="g in groups" :key="g.key" :title="g.label">
+                <el-menu-item v-for="it in g.items" :key="it.path" :index="it.path">
+                  <el-icon><component :is="it.icon"></component></el-icon>
+                  <template #title>{{ it.label }}</template>
+                </el-menu-item>
+              </el-menu-item-group>
+            </el-menu>
+          </div>
+          <div class="shell__collapse">
+            <el-button text :aria-label="collapsed ? '展開側欄' : '收合側欄'" @click="collapsed = !collapsed">
+              <el-icon><icon-arrow-right v-if="collapsed"></icon-arrow-right><icon-arrow-left v-else></icon-arrow-left></el-icon>
+              <span v-if="!collapsed">收合</span>
+            </el-button>
+          </div>
+        </aside>
+
+        <div class="shell__body">
+          <header class="shell__header">
+            <el-button class="shell__toggle" text aria-label="切換側欄" @click="toggle">
+              <el-icon :size="18"><icon-expand v-if="isMobile || collapsed"></icon-expand><icon-fold v-else></icon-fold></el-icon>
+            </el-button>
+            <h1 class="shell__title">{{ title }}</h1>
+            <span class="shell__spacer"></span>
+            <el-tooltip :content="wsTip" placement="bottom">
+              <span class="ws-dot" :class="'is-' + wsStatus" data-test="ws-dot" :aria-label="wsTip" role="img"></span>
+            </el-tooltip>
+            <el-popover v-model:visible="popoverOpen" trigger="click" placement="bottom-end" :width="360" :show-arrow="false">
+              <template #reference>
+                <el-button class="shell__bell" text aria-label="通知">
+                  <el-badge :value="unreadCount" :max="99" :hidden="unreadCount === 0">
+                    <el-icon :size="18"><icon-bell></icon-bell></el-icon>
+                  </el-badge>
+                </el-button>
+              </template>
+              <notification-panel :items="shownItems" :unread-count="unreadCount" :loading="notifState === 'loading'"
+                                  :unread-only="unreadOnly" @open="openNotif" @read-all="readAll"
+                                  @filter="(v) => unreadOnly = v"></notification-panel>
+            </el-popover>
+            <el-dropdown trigger="click" @command="onUserCommand">
+              <span class="shell__user">
+                <el-icon><icon-avatar></icon-avatar></el-icon>
+                <span v-if="!isMobile">{{ user.display_name }}</span>
+                <el-tag v-if="!isMobile" size="small" type="info" disable-transitions>{{ user.role }}</el-tag>
+                <el-icon><icon-arrow-down></icon-arrow-down></el-icon>
+              </span>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-if="isMobile" disabled>{{ user.display_name }}（{{ user.role }}）</el-dropdown-item>
+                  <el-dropdown-item command="password"><el-icon><icon-key></icon-key></el-icon>修改密碼</el-dropdown-item>
+                  <el-dropdown-item command="logout" divided :disabled="loggingOut">
+                    <el-icon><icon-loading v-if="loggingOut" class="is-loading"></icon-loading><icon-switch-button v-else></icon-switch-button></el-icon>
+                    {{ loggingOut ? '登出中…' : '登出' }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </header>
+          <el-alert v-if="wsStatus === 'reconnecting'" class="shell__banner" type="warning" :closable="false" show-icon
+                    title="即時連線中斷，畫面每 15 秒自動更新"></el-alert>
+          <main class="shell__main"><slot></slot></main>
+        </div>
+
+        <template v-if="isMobile && drawerOpen">
+          <div class="shell__scrim" @click="drawerOpen = false"></div>
+          <aside class="shell__drawer" data-test="admin-sidebar">
+            <div class="shell__brand"><el-icon><icon-school></icon-school></el-icon><span>安親班管理系統</span></div>
+            <div class="shell__menu">
+              <div v-if="!groups.length" class="shell__empty">沒有可使用的功能，請聯絡管理員</div>
+              <el-menu v-else :default-active="activeItem" @select="go">
+                <el-menu-item-group v-for="g in groups" :key="g.key" :title="g.label">
+                  <el-menu-item v-for="it in g.items" :key="it.path" :index="it.path">
+                    <el-icon><component :is="it.icon"></component></el-icon><span>{{ it.label }}</span>
+                  </el-menu-item>
+                </el-menu-item-group>
+              </el-menu>
+            </div>
+          </aside>
+        </template>
+      </div>
+    </div>`,
+}
+/* ==================== ADMIN SHELL JS END ==================== */
+
+/* ==== 以下逐字複製自 component-common.html（已核可） ==== */
+/* ---------- PageHeader ---------- */
+const PageHeader = {
+  props: { title: { type: String, required: true }, subtitle: { type: String, default: '' } },
+  template: `
+    <div class="page-header">
+      <div class="page-header__body">
+        <h1 class="page-header__title">{{ title }}</h1>
+        <p v-if="subtitle" class="page-header__subtitle" data-test="page-subtitle">{{ subtitle }}</p>
+        <div v-if="$slots.default" class="page-header__extra"><slot></slot></div>
+      </div>
+      <div v-if="$slots.actions" class="page-header__actions"><slot name="actions"></slot></div>
+    </div>`,
+}
+
+/* ---------- AdminListToolbar ---------- */
+const ALL = '__all__'
+const AdminListToolbar = {
+  props: {
+    search: { type: String, default: '' },
+    searchPlaceholder: { type: String, default: '搜尋' },
+    filters: { type: Array, default: () => [] },
+    filterValues: { type: Object, default: () => ({}) },
+    total: { type: Number, default: undefined },
+  },
+  emits: ['update:search', 'update:filterValues'],
+  setup(props, { emit }) {
+    const text = ref(props.search)
+    watch(() => props.search, (v) => { if (v !== text.value.trim()) text.value = v })
+    let timer = null
+    const flush = () => { clearTimeout(timer); timer = null; emit('update:search', text.value.trim()) }
+    const onInput = (v) => { text.value = v; clearTimeout(timer); timer = setTimeout(flush, 300) }
+    onBeforeUnmount(() => clearTimeout(timer))
+    const clearable = (g) => g.clearable !== false
+    const current = (g) => {
+      const v = props.filterValues[g.key]
+      return v === undefined && clearable(g) ? ALL : v
+    }
+    const onSelect = (g, v) => {
+      emit('update:filterValues', { ...props.filterValues, [g.key]: v === ALL || v === '' ? undefined : v })
+    }
+    return { text, onInput, flush, clearable, current, onSelect, ALL }
+  },
+  template: `
+    <div class="list-toolbar">
+      <el-input class="list-toolbar__search" :model-value="text" :placeholder="searchPlaceholder"
+                :aria-label="searchPlaceholder" clearable
+                @update:model-value="onInput" @keyup.enter="flush" @clear="flush">
+        <template #prefix><el-icon><icon-search></icon-search></el-icon></template>
+      </el-input>
+      <div v-for="g in filters" :key="g.key" class="list-toolbar__filter">
+        <span class="list-toolbar__filter-label">{{ g.label }}</span>
+        <el-select :model-value="current(g)" :clearable="clearable(g) && current(g) !== ALL"
+                   style="width: 130px" @update:model-value="(v) => onSelect(g, v)">
+          <el-option v-if="clearable(g)" label="全部" :value="ALL"></el-option>
+          <el-option v-for="o in g.options" :key="String(o.value)" :label="o.label" :value="o.value"></el-option>
+        </el-select>
+      </div>
+      <slot name="extra-filters"></slot>
+      <span class="list-toolbar__spacer"></span>
+      <span v-if="total !== undefined" class="list-toolbar__count">共 {{ total }} 筆</span>
+      <div v-if="$slots.actions" class="list-toolbar__actions"><slot name="actions"></slot></div>
+    </div>`,
+}
+
+/* ---------- EmptyState ---------- */
+const EmptyState = {
+  props: {
+    title: { type: String, required: true },
+    description: { type: String, default: '' },
+    variant: { type: String, default: 'default' },
+    icon: { type: String, default: '' },
+  },
+  computed: {
+    iconName() { return this.icon || (this.variant === 'error' ? 'icon-warning-filled' : 'icon-folder-opened') },
+  },
+  template: `
+    <div class="empty-state" :class="{ 'is-error': variant === 'error', 'is-inline': variant === 'inline' }" role="status">
+      <el-icon v-if="variant !== 'inline'" class="empty-state__icon" data-test="empty-icon">
+        <component :is="iconName"></component>
+      </el-icon>
+      <p class="empty-state__title">{{ title }}</p>
+      <p v-if="description" class="empty-state__desc">{{ description }}</p>
+      <div v-if="$slots.action" class="empty-state__action"><slot name="action"></slot></div>
+    </div>`,
+}
+
+/* ==== 以下逐字複製自 component-common-extra.html（已核可） ==== */
+/** 與 apps/web/src/composables/useFormDirty.ts 的 confirmDiscardChanges 一致 */
+const confirmDiscardChanges = () => ElMessageBox.confirm('尚未儲存的變更將會遺失，確定要關閉嗎？', '未儲存的變更', {
+  confirmButtonText: '放棄變更', cancelButtonText: '繼續編輯',
+}).then(() => true).catch(() => false)
+
+/* ---------- FormDialog ----------
+   fullscreen prop 只用於稿裡模擬視窗寬 < 768；實作依視窗寬自動判斷。 */
+const WIDTH = { sm: '420px', md: '560px', lg: '800px' }
+const FormDialog = {
+  props: {
+    modelValue: Boolean, title: { type: String, required: true }, size: { type: String, default: 'md' },
+    loading: Boolean, submitText: { type: String, default: '儲存' }, cancelText: { type: String, default: '取消' },
+    submitDisabled: Boolean, dirty: Boolean, hideFooter: Boolean, autofocus: { type: Boolean, default: true },
+    fullscreen: Boolean,
+  },
+  emits: ['update:modelValue', 'submit', 'closed'],
+  setup(props, { emit }) {
+    const body = ref(null)
+    const canClose = async () => !props.loading && (!props.dirty || await confirmDiscardChanges())
+    const beforeClose = async (done) => { if (await canClose()) done() }
+    const cancel = async () => { if (await canClose()) emit('update:modelValue', false) }
+    const onOpened = () => {
+      if (!props.autofocus) return
+      const PICKERS = '.el-select, .el-date-editor, .el-time-picker, .el-cascader, .el-autocomplete'
+      const el = [...(body.value?.querySelectorAll('input:not([disabled]):not([readonly]):not([type=checkbox]):not([type=radio]), textarea:not([disabled]):not([readonly])') ?? [])]
+        .find((x) => !x.closest(PICKERS))
+      el?.focus()
+    }
+    return { body, width: computed(() => WIDTH[props.size]), beforeClose, cancel, onOpened }
+  },
+  template: `
+    <el-dialog :model-value="modelValue" :title="title" :width="width" :fullscreen="fullscreen"
+               :show-close="!loading" :before-close="beforeClose" append-to-body
+               @update:model-value="(v) => $emit('update:modelValue', v)" @opened="onOpened" @closed="$emit('closed')">
+      <div ref="body"><slot></slot></div>
+      <template v-if="!hideFooter" #footer>
+        <div class="form-dialog__footer">
+          <el-button :disabled="loading" @click="cancel">{{ cancelText }}</el-button>
+          <el-button type="primary" :loading="loading" :disabled="loading || submitDisabled" @click="$emit('submit')">{{ submitText }}</el-button>
+        </div>
+      </template>
+    </el-dialog>`,
+}
+
+/* ==== 以下逐字複製自 component-exams.html（已核可：FRONTEND-236 ScoreCell、FRONTEND-238 RenotifyChoiceDialog） ==== */
+const fmt = (n) => (n === null || n === undefined ? '' : String(n))
+
+/* ---------- ScoreCell ----------
+   initialText 只用於狀態一覽直接停在「輸入了不合法值」的樣子；實作沒有這個 prop。 */
+const ScoreCell = {
+  props: {
+    score: { type: Number, default: null },
+    isAbsent: { type: Boolean, default: false },
+    fullScore: { type: Number, required: true },
+    state: { type: String, default: 'idle' },
+    errorMessage: { type: String, default: '' },
+    readonly: { type: Boolean, default: false },
+    initialText: { type: String, default: null },
+  },
+  emits: ['change'],
+  setup(props, { emit }) {
+    const text = ref(props.initialText ?? fmt(props.score))
+    watch(() => [props.score, props.isAbsent], () => { text.value = fmt(props.score) })
+    const parse = (raw) => {
+      const t = raw.trim()
+      if (t === '') return { ok: true, value: { score: null, is_absent: false } }
+      if (t === '缺' || t === '-') return { ok: true, value: { score: null, is_absent: true } }
+      if (/^\d+\.\d{2,}$/.test(t)) return { ok: false, message: '最多一位小數' }
+      if (!/^\d+(\.\d)?$/.test(t) || Number(t) > props.fullScore) return { ok: false, message: `需介於 0~${props.fullScore}` }
+      return { ok: true, value: { score: Number(t), is_absent: false } }
+    }
+    const localError = computed(() => { const r = parse(text.value); return r.ok ? '' : r.message })
+    const tip = computed(() => localError.value || (props.state === 'error' ? props.errorMessage : ''))
+    const commit = () => {
+      const r = parse(text.value)
+      if (!r.ok) return
+      if (r.value.is_absent) { text.value = ''; if (!props.isAbsent) emit('change', r.value); return }
+      if (r.value.score === props.score && props.isAbsent === false) return
+      emit('change', r.value)
+    }
+    const toggleAbsent = (v) => { text.value = ''; emit('change', { score: null, is_absent: v }) }
+    const display = computed(() => (props.isAbsent ? '缺考' : props.score === null ? '—' : fmt(props.score)))
+    return { text, localError, tip, commit, toggleAbsent, display }
+  },
+  template: `
+    <span v-if="readonly" class="score-cell__text"
+          :class="{ 'is-absent': isAbsent, 'is-empty': !isAbsent && score === null }">{{ display }}</span>
+    <div v-else class="score-cell" :class="{ 'is-error': state === 'error', 'is-invalid': !!localError }" :title="tip">
+      <el-tooltip :content="tip" :disabled="!tip" placement="top" effect="dark">
+        <el-input v-model="text" class="score-cell__input" inputmode="decimal" :disabled="isAbsent"
+                  :placeholder="isAbsent ? '缺考' : ''" @blur="commit" @keyup.enter="commit"></el-input>
+      </el-tooltip>
+      <el-checkbox class="score-cell__absent" :model-value="isAbsent" size="small" @update:model-value="toggleAbsent">缺</el-checkbox>
+      <span v-if="state === 'dirty'" class="score-cell__dirty" aria-label="尚未儲存"></span>
+      <span v-else-if="state === 'saving'" class="score-cell__mark"><el-icon class="score-cell__spin" aria-label="儲存中"><icon-loading></icon-loading></el-icon></span>
+      <transition name="fade">
+        <span v-if="state === 'saved'" class="score-cell__mark"><el-icon class="score-cell__ok" aria-label="已儲存"><icon-check></icon-check></el-icon></span>
+      </transition>
+      <span v-if="state === 'error' && !localError" class="score-cell__mark"><el-icon class="score-cell__err"><icon-warning-filled></icon-warning-filled></el-icon></span>
+    </div>`,
+}
+
+/* ---------- RenotifyChoiceDialog ---------- */
+const RenotifyChoiceDialog = {
+  props: { modelValue: { type: Boolean, default: false }, pendingCount: { type: Number, default: 0 } },
+  emits: ['update:modelValue', 'choose'],
+  setup(props, { emit }) {
+    const pick = (v) => { emit('choose', v); emit('update:modelValue', false) }
+    const dismiss = () => emit('update:modelValue', false)
+    return { pick, dismiss }
+  },
+  template: `
+    <el-dialog :model-value="modelValue" title="修改已發布的成績" width="440px" :close-on-click-modal="false"
+               append-to-body @update:model-value="(v) => { if (!v) dismiss() }">
+      <p class="renotify__lead">此考試已發布，修改分數會記錄於稽核紀錄。是否在修改後通知家長分數已更新？</p>
+      <p class="renotify__count">目前有 {{ pendingCount }} 格等待儲存</p>
+      <p class="renotify__hint">本次編輯期間都會套用此選擇，可在工具列切換。</p>
+      <template #footer>
+        <el-button @click="pick(false)">不通知</el-button>
+        <el-button type="primary" @click="pick(true)">通知家長</el-button>
+      </template>
+    </el-dialog>`,
+}
+
+/* ==== 以下逐字複製自 page-exams.html（日期 / 參考資料與 FRONTEND-232 ExamFormDialog） ==== */
+/* ==================== EXAM SHARED JS START（page-exam-detail.html 逐字複製這一段） ==================== */
+/* 日期與年級：對照 shared/utils/datetime.ts（formatDateWithWeekday / formatDateTime）與 utils/academicYear.ts（GRADE_OPTIONS） */
+const TODAY = '2026-10-07'   // 稿內固定的「今天」（台北），115 學年度
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
+const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+const formatDateWithWeekday = (iso) => `${iso.slice(5, 7)}/${iso.slice(8, 10)}（${WEEKDAYS[new Date(iso + 'T00:00:00Z').getUTCDay()]}）`
+const formatDateTime = (iso) => {
+  if (!iso) return '—'
+  const d = new Date(new Date(iso).getTime() + 8 * 3600 * 1000)
+  return d.toISOString().slice(0, 16).replace('T', ' ').replaceAll('-', '/')
+}
+const GRADE_TEXT = ['一', '二', '三', '四', '五', '六']
+const GRADE_OPTIONS = GRADE_TEXT.map((t, i) => ({ label: `${t}年級`, value: i + 1 }))
+const gradeLabel = (g) => (g ? `${GRADE_TEXT[g - 1]}年級` : '')
+const fmtNum = (n) => (n === null || n === undefined ? '—' : String(n))
+/** 與 shared/constants/statusLabels.ts 的 EXAM_STATUS_META 一致（tone 直接當 el-tag type） */
+const EXAM_STATUS_META = { draft: { label: '草稿', tone: 'info' }, published: { label: '已發布', tone: 'success' } }
+const statusMeta = (s) => EXAM_STATUS_META[s] ?? { label: s ?? '—', tone: 'info' }
+/** 對象：「三年級」「低年級A班」「低年級A班・二年級」 */
+const targetLabel = (exam) => [exam.class ? exam.class.name : '', gradeLabel(exam.grade_level)].filter(Boolean).join('・')
+
+/* 參考資料（stores/lookups.ts 的 examTypeOptions / classOptions(115) / subjectOptions，只含啟用中的項目） */
+const EXAM_TYPES = [{ id: 't1', name: '段考' }, { id: 't2', name: '小考' }, { id: 't3', name: '複習考' }]
+const CLASSES = [
+  { id: 'c1', name: '低年級A班', grade_levels: [1, 2], student_count: 18 },
+  { id: 'c2', name: '低年級B班', grade_levels: [1, 2], student_count: 15 },
+  { id: 'c3', name: '中年級A班', grade_levels: [3, 4], student_count: 31 },
+  { id: 'c4', name: '中年級B班', grade_levels: [3, 4], student_count: 29 },
+  { id: 'c5', name: '高年級班', grade_levels: [5, 6], student_count: 22 },
+]
+const SUBJECTS = [
+  { id: 'sub1', name: '國語' }, { id: 'sub2', name: '數學' }, { id: 'sub3', name: '英語' }, { id: 'sub4', name: '自然' }, { id: 'sub5', name: '社會' },
+]
+const GRADE_COUNTS = { 1: 17, 2: 16, 3: 32, 4: 28, 5: 12, 6: 10 }
+const typeOf = (id) => EXAM_TYPES.find((t) => t.id === id) ?? { id, name: '—' }
+const classBrief = (id) => { const c = CLASSES.find((x) => x.id === id); return c ? { id: c.id, name: c.name } : null }
+/** 稿用：新建考試的應考人數（實際由後端 resolve_exam_roster 計算） */
+const estimateRoster = (grade, classId) => {
+  const c = CLASSES.find((x) => x.id === classId)
+  if (c && grade) return Math.round(c.student_count / c.grade_levels.length)
+  return c ? c.student_count : (GRADE_COUNTS[grade] ?? 0)
+}
+
+/* ==================== ExamFormDialog（FRONTEND-232） ==================== */
+const SCOPE_FIELDS = ['exam_type_id', 'grade_level', 'class_id']
+/** 後端 422 錯誤碼 → 顯示在哪個欄位（訊息用後端 message） */
+const EXAM_FORM_ERRORS = {
+  invalid_exam_type: { field: 'exam_type_id', message: '考試類型不存在或已停用' },
+  invalid_class: { field: 'class_id', message: '班級不存在或已封存' },
+  grade_not_in_class: { field: 'grade_level', message: '班級不包含指定的年級' },
+}
+let examSeq = 20
+const ExamFormDialog = {
+  props: { modelValue: Boolean, exam: { type: Object, default: null }, sim: { type: String, default: 'ok' } },
+  emits: ['update:modelValue', 'saved', 'request'],
+  setup(props, { emit }) {
+    const isEdit = computed(() => !!props.exam)
+    const isPublished = computed(() => props.exam?.status === 'published')
+    const blank = () => ({
+      name: props.exam?.name ?? '',
+      exam_type_id: props.exam?.exam_type.id ?? '',
+      exam_date: props.exam?.exam_date ?? '',
+      grade_level: props.exam?.grade_level ?? null,
+      class_id: props.exam?.class?.id ?? null,
+      note: props.exam?.note ?? '',
+    })
+    const form = reactive(blank())
+    const subjects = ref([])
+    const baseline = ref('')
+    const errors = reactive({ name: '', exam_type_id: '', exam_date: '', grade_level: '', class_id: '', scope: '', subjects: '' })
+    const alertMsg = ref('')
+    const loading = ref(false)
+    const snapshot = () => JSON.stringify({ form, subjects: subjects.value })
+    const dirty = computed(() => snapshot() !== baseline.value)
+    const clearErrors = () => { Object.keys(errors).forEach((k) => { errors[k] = '' }); alertMsg.value = '' }
+    watch(() => props.modelValue, (open) => {
+      if (!open) return
+      Object.assign(form, blank())
+      subjects.value = isEdit.value ? [] : SUBJECTS.map((s) => ({ subject_id: s.id, name: s.name, on: true, full_score: 100 }))
+      baseline.value = snapshot()
+      clearErrors()
+    })
+
+    const examTypeOptions = EXAM_TYPES.map((t) => ({ label: t.name, value: t.id }))
+    const gradeOptions = GRADE_OPTIONS
+    // 編輯舊考試時班級可能不在目前學年度的清單：仍以原班級名稱顯示
+    const classOptions = computed(() => {
+      const opts = CLASSES.map((c) => ({ label: c.name, value: c.id }))
+      const cur = props.exam?.class
+      if (cur && !opts.some((o) => o.value === cur.id)) opts.push({ label: cur.name, value: cur.id })
+      return opts
+    })
+    const scopeChanged = computed(() => isEdit.value && !isPublished.value
+      && (form.grade_level !== (props.exam.grade_level ?? null) || form.class_id !== (props.exam.class?.id ?? null)))
+    const allOn = computed(() => subjects.value.length > 0 && subjects.value.every((s) => s.on))
+    const someOn = computed(() => subjects.value.some((s) => s.on))
+    const toggleAll = (v) => { subjects.value.forEach((s) => { s.on = v }); errors.subjects = '' }
+    const onScopeChange = () => { errors.scope = ''; errors.grade_level = ''; errors.class_id = '' }
+
+    const validate = () => {
+      clearErrors()
+      if (!form.name.trim()) errors.name = '請輸入考試名稱'
+      if (!form.exam_type_id) errors.exam_type_id = '請選擇考試類型'
+      if (!form.exam_date) errors.exam_date = '請選擇考試日期'
+      if (!form.grade_level && !form.class_id) errors.scope = '請選擇年級或班級'
+      if (subjects.value.some((s) => s.on && !(s.full_score > 0))) errors.subjects = '請輸入勾選科目的滿分'
+      return !Object.values(errors).some(Boolean)
+    }
+    const createBody = () => {
+      const b = { name: form.name.trim(), exam_type_id: form.exam_type_id, exam_date: form.exam_date }
+      if (form.grade_level) b.grade_level = form.grade_level
+      if (form.class_id) b.class_id = form.class_id
+      if (form.note.trim()) b.note = form.note.trim()
+      return b
+    }
+    // 編輯只送有變更的欄位；年級 / 班級清除時送 null
+    const patchBody = () => {
+      const base = blank()
+      const now = { ...form, name: form.name.trim(), note: form.note.trim() }
+      const b = {}
+      for (const k of Object.keys(base)) {
+        if (now[k] === base[k]) continue
+        b[k] = now[k] === '' ? null : now[k]
+      }
+      return b
+    }
+    const toExam = (src, patch) => {
+      const merged = { ...src, ...patch }
+      return {
+        ...merged,
+        exam_type: typeOf(merged.exam_type_id),
+        class: merged.class_id ? (classBrief(merged.class_id) ?? props.exam?.class ?? null) : null,
+        roster_count: estimateRoster(merged.grade_level, merged.class_id),
+      }
+    }
+    const finish = (exam) => { loading.value = false; emit('saved', exam); emit('update:modelValue', false) }
+
+    const submit = () => {
+      if (!validate()) return
+      loading.value = true
+      if (!isEdit.value) {
+        const body = createBody()
+        emit('request', `POST /admin/exams ${JSON.stringify(body)}`)
+        setTimeout(() => {
+          const err = EXAM_FORM_ERRORS[props.sim]
+          if (err && (props.sim !== 'invalid_class' || body.class_id) && (props.sim !== 'grade_not_in_class' || (body.class_id && body.grade_level))) {
+            loading.value = false
+            errors[err.field] = err.message
+            return
+          }
+          const id = 'e' + (examSeq += 1)
+          const created = toExam({ id, status: 'draft', published_at: null, published_by_name: null, note: null, subjects: [], created_at: new Date().toISOString(),
+            exam_type_id: body.exam_type_id, grade_level: body.grade_level ?? null, class_id: body.class_id ?? null }, body)
+          delete created.exam_type_id
+          delete created.class_id
+          const picked = subjects.value.filter((s) => s.on)
+          if (!picked.length) { ElMessage.success('已建立考試'); finish(created); return }
+          const items = picked.map((s, i) => ({ subject_id: s.subject_id, full_score: s.full_score, sort_order: i + 1 }))
+          emit('request', `PUT /admin/exams/${id}/subjects ${JSON.stringify({ items })}`)
+          setTimeout(() => {
+            if (props.sim === 'subjects_fail') {
+              ElMessage.warning('考試已建立，但科目設定失敗，請到「科目設定」分頁重試')
+              finish(created)
+              return
+            }
+            created.subjects = picked.map((s, i) => ({ subject_id: s.subject_id, subject_name: s.name, full_score: s.full_score, sort_order: i + 1 }))
+            ElMessage.success('已建立考試')
+            finish(created)
+          }, 500)
+        }, 600)
+        return
+      }
+      const body = patchBody()
+      emit('request', `PATCH /admin/exams/${props.exam.id} ${JSON.stringify(body)}`)
+      setTimeout(() => {
+        if (props.sim === 'exam_published' && SCOPE_FIELDS.some((k) => k in body)) {
+          loading.value = false
+          alertMsg.value = '考試已發布，名單與類型不可修改，請先取消發布'
+          return
+        }
+        const err = EXAM_FORM_ERRORS[props.sim]
+        const touched = { invalid_exam_type: 'exam_type_id' in body, invalid_class: 'class_id' in body && body.class_id,
+          grade_not_in_class: ('grade_level' in body || 'class_id' in body) && form.grade_level && form.class_id }
+        if (err && touched[props.sim]) { loading.value = false; errors[err.field] = err.message; return }
+        const src = { ...props.exam, exam_type_id: props.exam.exam_type.id, class_id: props.exam.class?.id ?? null }
+        const updated = toExam(src, body)
+        delete updated.exam_type_id
+        delete updated.class_id
+        ElMessage.success('已更新')
+        finish(updated)
+      }, 600)
+    }
+    return {
+      isEdit, isPublished, form, subjects, errors, alertMsg, loading, dirty, examTypeOptions, gradeOptions, classOptions,
+      scopeChanged, allOn, someOn, toggleAll, onScopeChange, submit,
+    }
+  },
+  template: `
+    <form-dialog :model-value="modelValue" :title="isEdit ? '編輯考試' : '建立考試'" size="lg"
+                 :submit-text="isEdit ? '儲存' : '建立'" :loading="loading" :dirty="dirty" :submit-disabled="isEdit && !dirty"
+                 @update:model-value="(v) => $emit('update:modelValue', v)" @submit="submit">
+      <el-alert v-if="isPublished" class="ef-alert" type="info" :closable="false" show-icon
+                title="已發布的考試只能修改名稱、日期與備註"></el-alert>
+      <el-alert v-if="alertMsg" class="ef-alert" type="error" show-icon :title="alertMsg" @close="alertMsg = ''"></el-alert>
+      <el-form label-position="top" @submit.prevent>
+        <div class="ef-grid">
+          <el-form-item label="名稱" required :error="errors.name">
+            <el-input v-model="form.name" maxlength="50" show-word-limit placeholder="例如：第一次段考"
+                      :disabled="loading" @input="errors.name = ''"></el-input>
+          </el-form-item>
+          <el-form-item label="考試類型" required :error="errors.exam_type_id">
+            <el-select v-model="form.exam_type_id" placeholder="選擇類型" :disabled="loading || isPublished"
+                       @change="errors.exam_type_id = ''">
+              <el-option v-for="t in examTypeOptions" :key="t.value" :label="t.label" :value="t.value"></el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item label="考試日期" required :error="errors.exam_date">
+            <el-date-picker v-model="form.exam_date" type="date" value-format="YYYY-MM-DD" format="YYYY/MM/DD"
+                            placeholder="選擇日期" :disabled="loading" style="width: 100%"
+                            @change="errors.exam_date = ''"></el-date-picker>
+          </el-form-item>
+        </div>
+
+        <div class="ef-section">
+          <span>應考對象</span><span class="ef-section__required">*</span>
+          <span class="ef-section__hint">年級與班級至少選一項，決定應考學生名單</span>
+        </div>
+        <div class="ef-grid ef-grid--2 ef-scope" :class="{ 'is-error': !!errors.scope }">
+          <el-form-item label="年級" :error="errors.grade_level">
+            <el-select v-model="form.grade_level" clearable placeholder="不限" :disabled="loading || isPublished"
+                       @change="onScopeChange">
+              <el-option v-for="g in gradeOptions" :key="g.value" :label="g.label" :value="g.value"></el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item label="班級" :error="errors.class_id">
+            <el-select v-model="form.class_id" clearable placeholder="不限" :disabled="loading || isPublished"
+                       @change="onScopeChange">
+              <el-option v-for="c in classOptions" :key="c.value" :label="c.label" :value="c.value"></el-option>
+            </el-select>
+          </el-form-item>
+        </div>
+        <div v-if="errors.scope" class="ef-scope-msg form-error">{{ errors.scope }}</div>
+        <div v-else-if="form.grade_level && form.class_id && !errors.grade_level && !errors.class_id" class="ef-scope-msg form-hint">只包含該班中該年級的學生</div>
+        <div v-if="scopeChanged" class="ef-scope-msg form-warn">變更應考對象後，已有成績但不在新名單的學生，成績會保留並標示「已不在名單」。</div>
+
+        <el-form-item label="備註">
+          <el-input v-model="form.note" type="textarea" :rows="2" maxlength="200" show-word-limit
+                    placeholder="例如：範圍 國語第 1~4 課" :disabled="loading"></el-input>
+        </el-form-item>
+
+        <template v-if="!isEdit">
+          <div class="ef-section">
+            <span>科目與滿分</span>
+            <span class="ef-section__hint">建立後可在考試頁的「科目設定」分頁調整科目、滿分與順序</span>
+            <span class="ef-section__spacer"></span>
+            <el-checkbox v-if="subjects.length" :model-value="allOn" :indeterminate="someOn && !allOn" :disabled="loading"
+                         @update:model-value="toggleAll">全選</el-checkbox>
+          </div>
+          <div v-if="subjects.length" class="ef-subjects">
+            <div v-for="s in subjects" :key="s.subject_id" class="ef-subject" :class="{ 'is-off': !s.on }">
+              <el-checkbox v-model="s.on" :disabled="loading" @change="errors.subjects = ''">{{ s.name }}</el-checkbox>
+              <span class="ef-subject__full">滿分
+                <el-input-number v-model="s.full_score" :min="0.1" :max="1000" :step="1" controls-position="right"
+                                 :disabled="!s.on || loading" :aria-label="s.name + ' 滿分'"
+                                 @change="errors.subjects = ''"></el-input-number>
+              </span>
+            </div>
+          </div>
+          <p v-else class="form-hint">尚未建立任何科目。可以先建立考試，之後再到考試頁的「科目設定」新增。</p>
+          <div v-if="errors.subjects" class="form-error">{{ errors.subjects }}</div>
+        </template>
+        <p v-else-if="!isPublished" class="form-hint">科目與滿分請在考試頁的「科目設定」分頁調整。</p>
+      </el-form>
+    </form-dialog>`,
+}
+/* ==================== EXAM SHARED JS END ==================== */
+
+/* ==================== 稿內的「後端」：考試 e1（GET 讀這裡、PUT 寫回這裡） ==================== */
+const ST = (id, no, name, cls, inRoster = true) => ({ id, student_no: no, name, class_name: cls, in_roster: inRoster })
+/** GET /admin/exams/e1/scores 的 students：三年級名單 32 位 + 9 月退班但已有本次成績的林小華（in_roster false）；依班級、學號 */
+const STUDENT_FIXTURE = [
+  ST('s01', 'S11301', '王小明', '中年級A班'), ST('s02', 'S11302', '陳小美', '中年級A班'), ST('s03', 'S11303', '李承恩', '中年級A班'),
+  ST('s04', 'S11304', '張語晴', '中年級A班'), ST('s05', 'S11305', '黃柏翰', '中年級A班'), ST('s06', 'S11306', '吳芷涵', '中年級A班'),
+  ST('s07', 'S11307', '劉宇軒', '中年級A班'), ST('s08', 'S11308', '蔡沛蓉', '中年級A班'), ST('s09', 'S11309', '楊子睿', '中年級A班'),
+  ST('s10', 'S11310', '許安琪', '中年級A班'), ST('s11', 'S11311', '鄭家豪', '中年級A班'), ST('s12', 'S11312', '謝宜蓁', '中年級A班'),
+  ST('s13', 'S11313', '郭品睿', '中年級A班'), ST('s14', 'S11314', '洪詩涵', '中年級A班'), ST('s15', 'S11315', '曾冠宇', '中年級A班'),
+  ST('s16', 'S11316', '邱怡君', '中年級A班'), ST('s17', 'S11317', '廖柏宇', '中年級A班'),
+  ST('s18', 'S11318', '賴思妤', '中年級B班'), ST('s19', 'S11319', '周承翰', '中年級B班'), ST('s20', 'S11320', '葉佳穎', '中年級B班'),
+  ST('s21', 'S11321', '蘇宥辰', '中年級B班'), ST('s22', 'S11322', '莊詠晴', '中年級B班'), ST('s23', 'S11323', '呂昱廷', '中年級B班'),
+  ST('s24', 'S11324', '江欣妍', '中年級B班'), ST('s25', 'S11325', '何彥廷', '中年級B班'), ST('s26', 'S11326', '林小華', '中年級B班', false),
+  ST('s27', 'S11327', '羅語彤', '中年級B班'), ST('s28', 'S11328', '高子翔', '中年級B班'), ST('s29', 'S11329', '潘心怡', '中年級B班'),
+  ST('s30', 'S11330', '簡宇恩', '中年級B班'), ST('s31', 'S11331', '朱芷瑜', '中年級B班'), ST('s32', 'S11332', '鍾昊宇', '中年級B班'),
+  ST('s33', 'S11333', '彭婉婷', '中年級B班'),
+]
+/** 輸入進度：國語幾乎輸入完（陳小美缺考、何彥廷未填）、數學缺 3 位、英語（滿分 50）前 20 位、自然前 6 位、社會還沒開始 */
+const seedCells = () => {
+  const cells = {}
+  const put = (sid, subid, score, absent = false) => { cells[`${sid}:${subid}`] = { score, is_absent: absent } }
+  STUDENT_FIXTURE.forEach((s, i) => {
+    const n = i + 1
+    if (s.id === 's02') put(s.id, 'sub1', null, true)
+    else if (s.id !== 's25') put(s.id, 'sub1', 62 + ((n * 37) % 39))
+    if (!['s19', 's28', 's33'].includes(s.id)) put(s.id, 'sub2', 55 + ((n * 53) % 46))
+    if (n <= 20) put(s.id, 'sub3', n === 4 ? 42.5 : 28 + ((n * 29) % 23))
+    if (n <= 6) put(s.id, 'sub4', 70 + ((n * 41) % 31))
+  })
+  return cells
+}
+const EXAM_E1 = () => ({
+  id: 'e1', name: '第一次段考', exam_type: { id: 't1', name: '段考' }, exam_date: '2026-10-01', grade_level: 3, class: null,
+  status: 'draft', published_at: null, published_by_name: null, note: '範圍：國語第 1~4 課、數學第 1~3 單元',
+  subjects: [
+    { subject_id: 'sub1', subject_name: '國語', full_score: 100, sort_order: 1 },
+    { subject_id: 'sub2', subject_name: '數學', full_score: 100, sort_order: 2 },
+    { subject_id: 'sub3', subject_name: '英語', full_score: 50, sort_order: 3 },
+    { subject_id: 'sub4', subject_name: '自然', full_score: 100, sort_order: 4 },
+    { subject_id: 'sub5', subject_name: '社會', full_score: 100, sort_order: 5 },
+  ],
+  roster_count: 32, created_at: '2026-09-20T02:00:00Z',
+})
+const SERVER = reactive({ exam: EXAM_E1(), students: STUDENT_FIXTURE.map((s) => ({ ...s })), cells: seedCells() })
+const keyOf = (sid, subid) => `${sid}:${subid}`
+/** GET /admin/exams/e1/summary：未填 = 目前名單內、沒有分數也沒標缺考的格子（待裁定 2 推薦 A） */
+const serverSummary = () => {
+  const roster = SERVER.students.filter((s) => s.in_roster)
+  return {
+    exam_id: SERVER.exam.id,
+    roster_count: roster.length,
+    subjects: SERVER.exam.subjects.map((sub) => {
+      const vals = SERVER.students.map((st) => SERVER.cells[keyOf(st.id, sub.subject_id)]).filter(Boolean)
+      const scores = vals.filter((v) => v.score !== null).map((v) => v.score)
+      return {
+        subject_id: sub.subject_id, subject_name: sub.subject_name, full_score: sub.full_score,
+        scored_count: scores.length,
+        absent_count: vals.filter((v) => v.is_absent).length,
+        missing_count: roster.filter((st) => { const v = SERVER.cells[keyOf(st.id, sub.subject_id)]; return !v || (v.score === null && !v.is_absent) }).length,
+        average: scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 100) / 100 : null,
+        max: scores.length ? Math.max(...scores) : null,
+        min: scores.length ? Math.min(...scores) : null,
+      }
+    }),
+  }
+}
+const serverMaxScore = (subid) => {
+  const scores = Object.entries(SERVER.cells).filter(([k, v]) => k.endsWith(`:${subid}`) && v.score !== null).map(([, v]) => v.score)
+  return scores.length ? Math.max(...scores) : null
+}
+const shorten = (s, n = 280) => (s.length > n ? `${s.slice(0, n)}…` : s)
+
+/* ==================== ScoreGrid（FRONTEND-235）；自動儲存是 useScoreAutosave（FRONTEND-237）的稿內模擬 ==================== */
+const DEBOUNCE_MS = 800
+const CELL_ERROR_TEXT = { score_out_of_range: '分數超出 0~滿分', student_not_in_exam: '學生不在應考名單', subject_not_in_exam: '此科目不在考試中' }
+const ScoreGrid = {
+  components: { ScoreCell, RenotifyChoiceDialog },
+  props: {
+    examId: { type: String, required: true },
+    canWrite: Boolean,
+    reloadKey: { type: Number, default: 0 },
+    sim: { type: Object, required: true },        // 稿用：{ load: ok | loading | error, nextSave: ok | network | invalid }
+    height: { type: Number, default: 400 },
+  },
+  emits: ['dirty-change', 'go-subjects', 'request'],
+  setup(props, { emit, expose }) {
+    const state = ref('loading')
+    const exam = ref(null)
+    const students = ref([])
+    const subjects = ref([])
+    const cells = reactive({})
+    const cellKeys = reactive({})                  // 稿用：Esc 還原時重建該格（ScoreCell 沒有 reset 介面）
+    const notifyChoice = ref(false)                // 草稿固定 false；已發布從 null（尚未選擇）開始
+    const dialogOpen = ref(false)
+    const tableWrap = ref(null)
+    let timer = null
+    let inFlight = false
+    let frozen = false                             // 稿用：「示範五種格子狀態」時暫停自動儲存
+    const ignoring = new Set()
+
+    const load = () => {
+      clearTimeout(timer)
+      frozen = false
+      state.value = 'loading'
+      emit('request', `GET /admin/exams/${props.examId}/scores`)
+      setTimeout(() => {
+        if (props.sim.load === 'loading') return
+        if (props.sim.load === 'error') { state.value = 'error'; return }
+        exam.value = JSON.parse(JSON.stringify(SERVER.exam))
+        students.value = SERVER.students.map((s) => ({ ...s }))
+        subjects.value = SERVER.exam.subjects.map((s) => ({ ...s }))
+        Object.keys(cells).forEach((k) => { delete cells[k] })
+        for (const st of students.value) {
+          for (const sub of subjects.value) {
+            const v = SERVER.cells[keyOf(st.id, sub.subject_id)] ?? { score: null, is_absent: false }
+            cells[keyOf(st.id, sub.subject_id)] = { score: v.score, is_absent: v.is_absent, state: 'idle', error: '', version: 0 }
+          }
+        }
+        notifyChoice.value = exam.value.status === 'published' ? null : false
+        state.value = 'ok'
+      }, 450)
+    }
+    watch(() => [props.reloadKey, props.sim.load], load, { immediate: true })
+
+    const list = () => Object.values(cells)
+    const dirtyCount = computed(() => list().filter((c) => c.state === 'dirty').length)
+    const failedCount = computed(() => list().filter((c) => c.state === 'error').length)
+    const savingAny = computed(() => list().some((c) => c.state === 'saving'))
+    const hasUnsaved = computed(() => list().some((c) => c.state === 'dirty' || c.state === 'saving' || c.state === 'error'))
+    watch(hasUnsaved, (v) => emit('dirty-change', v))
+    const examStatus = computed(() => (exam.value ? exam.value.status : 'draft'))
+    const cell = (sid, subid) => cells[keyOf(sid, subid)] ?? { score: null, is_absent: false, state: 'idle', error: '' }
+    const cellKey = (sid, subid) => `${keyOf(sid, subid)}:${cellKeys[keyOf(sid, subid)] ?? 0}`
+    const rowClass = ({ row }) => (row.in_roster === false ? 'row-out' : '')
+
+    const unfreeze = () => {
+      if (!frozen) return
+      frozen = false
+      list().forEach((c) => {
+        if (c.state === 'saving') c.state = 'dirty'
+        else if (c.state === 'saved') c.state = 'idle'
+      })
+    }
+    const schedule = () => { clearTimeout(timer); timer = setTimeout(() => flush(true), DEBOUNCE_MS) }
+    const edit = (sid, subid, v) => {
+      const k = keyOf(sid, subid)
+      if (ignoring.has(k) || !cells[k]) return
+      unfreeze()
+      Object.assign(cells[k], { score: v.score, is_absent: v.is_absent, state: 'dirty', error: '' })
+      cells[k].version += 1
+      schedule()
+    }
+    // fromTimer：自動儲存觸發；已發布且尚未選擇是否通知時才開 RenotifyChoiceDialog（離開頁面前的 flush 不開）
+    const flush = (fromTimer = false) => {
+      clearTimeout(timer)
+      if (frozen || inFlight) return
+      const keys = Object.keys(cells).filter((k) => cells[k].state === 'dirty')
+      if (!keys.length) return
+      if (notifyChoice.value === null) {
+        if (fromTimer) dialogOpen.value = true
+        return
+      }
+      send(keys)
+    }
+    const send = (keys, retried = false) => {
+      inFlight = true
+      const batch = keys.map((k) => ({ k, version: cells[k].version }))
+      batch.forEach(({ k }) => { cells[k].state = 'saving'; cells[k].error = '' })
+      const body = {
+        cells: batch.map(({ k }) => {
+          const [student_id, subject_id] = k.split(':')
+          return { student_id, subject_id, score: cells[k].score, is_absent: cells[k].is_absent }
+        }),
+        notify_parents: examStatus.value === 'published' ? notifyChoice.value : false,
+      }
+      emit('request', shorten(`PUT /admin/exams/${props.examId}/scores ${JSON.stringify(body)}`))
+      setTimeout(() => {
+        inFlight = false
+        const outcome = props.sim.nextSave
+        if (outcome !== 'ok') props.sim.nextSave = 'ok'   // 模擬只作用在下一次
+        const fresh = (b) => cells[b.k] && cells[b.k].version === b.version
+        if (outcome === 'network') {
+          batch.forEach((b) => {
+            if (fresh(b)) Object.assign(cells[b.k], { state: 'error', error: '儲存失敗，請重試' })
+            else if (cells[b.k]) cells[b.k].state = 'dirty'
+          })
+        } else if (outcome === 'invalid' && !retried) {
+          // details 指出的格子標錯；同批其他格視為未寫入，重送一次
+          const bad = batch[0]
+          batch.forEach((b) => { if (cells[b.k]) cells[b.k].state = 'dirty' })
+          if (fresh(bad)) Object.assign(cells[bad.k], { state: 'error', error: CELL_ERROR_TEXT.score_out_of_range })
+          const rest = batch.filter((b) => b !== bad && fresh(b)).map((b) => b.k)
+          if (rest.length) { send(rest, true); return }
+        } else {
+          batch.forEach((b) => {
+            if (!cells[b.k]) return
+            if (!fresh(b)) { cells[b.k].state = 'dirty'; return }
+            SERVER.cells[b.k] = { score: cells[b.k].score, is_absent: cells[b.k].is_absent }
+            cells[b.k].state = 'saved'
+            setTimeout(() => { if (cells[b.k] && cells[b.k].state === 'saved' && !frozen) cells[b.k].state = 'idle' }, 1000)
+          })
+        }
+        flush()
+      }, 700)
+    }
+    const retryFailed = () => {
+      if (inFlight) return
+      const keys = Object.keys(cells).filter((k) => cells[k].state === 'error')
+      if (!keys.length) return
+      if (notifyChoice.value === null) { dialogOpen.value = true; return }
+      send(keys)
+    }
+    const choose = (v) => { notifyChoice.value = v; dialogOpen.value = false; flush() }
+
+    // ---- 鍵盤導覽（參考 ivy useGridKeyboardNav，補上左右與 Esc）----
+    const focusCell = (r, c) => {
+      const wrap = tableWrap.value ? tableWrap.value.querySelector(`[data-row="${r}"][data-col="${c}"]`) : null
+      if (!wrap) return false
+      const input = wrap.querySelector('input:not([type="checkbox"]):not([disabled])') || wrap.querySelector('input[type="checkbox"]')
+      if (!input) return false
+      input.focus()
+      if (input.type !== 'checkbox') input.select()
+      return true
+    }
+    const revert = (r, c) => {
+      const st = students.value[r]
+      const sub = subjects.value[c]
+      if (!st || !sub) return
+      const k = keyOf(st.id, sub.subject_id)
+      ignoring.add(k)
+      cellKeys[k] = (cellKeys[k] ?? 0) + 1
+      nextTick(() => { ignoring.delete(k); focusCell(r, c) })
+    }
+    const onKeydown = (e) => {
+      const wrap = e.target && e.target.closest ? e.target.closest('[data-row]') : null
+      if (!wrap || !props.canWrite) return
+      const r = Number(wrap.dataset.row)
+      const c = Number(wrap.dataset.col)
+      const lastRow = students.value.length - 1
+      const lastCol = subjects.value.length - 1
+      const t = e.target
+      const isText = t.tagName === 'INPUT' && t.type !== 'checkbox'
+      const atEnd = !isText || (t.selectionStart === t.value.length && t.selectionEnd === t.value.length)
+      const atStart = !isText || (t.selectionStart === 0 && t.selectionEnd === 0)
+      let to = null
+      if (e.key === 'Enter') to = e.shiftKey ? [r - 1, c] : [r + 1, c]
+      else if (e.key === 'ArrowDown') to = [r + 1, c]
+      else if (e.key === 'ArrowUp') to = [r - 1, c]
+      else if (e.key === 'Tab') {
+        if (e.shiftKey) to = c > 0 ? [r, c - 1] : (r > 0 ? [r - 1, lastCol] : null)
+        else to = c < lastCol ? [r, c + 1] : (r < lastRow ? [r + 1, 0] : null)
+        if (!to) return                                 // 表格第一 / 最後一格：交給瀏覽器，Tab 離開表格
+      } else if (e.key === 'ArrowRight') {
+        if (!atEnd) return
+        to = [r, c + 1]
+      } else if (e.key === 'ArrowLeft') {
+        if (!atStart) return
+        to = [r, c - 1]
+      } else if (e.key === 'Escape') {
+        if (isText) { e.preventDefault(); revert(r, c) }
+        return
+      } else return
+      e.preventDefault()
+      if (to[0] < 0 || to[0] > lastRow || to[1] < 0 || to[1] > lastCol) return   // 邊界：停在原格
+      focusCell(to[0], to[1])
+    }
+    // 點格子內任何位置（不是輸入框或「缺」本身）都聚焦該格輸入框
+    const onCellClick = (row, column, cellEl, event) => {
+      if (!props.canWrite || !cellEl) return
+      if (event && event.target && event.target.closest && event.target.closest('input, label, .el-checkbox')) return
+      const input = cellEl.querySelector('input:not([type="checkbox"]):not([disabled])')
+      if (input) { input.focus(); input.select() }
+    }
+
+    // 稿用：一次看到五種格子狀態
+    const showcase = () => {
+      if (state.value !== 'ok' || students.value.length < 4 || subjects.value.length < 5) return false
+      clearTimeout(timer)
+      frozen = true
+      const at = (r, c) => cells[keyOf(students.value[r].id, subjects.value[c].subject_id)]
+      Object.assign(at(0, 4), { score: null, is_absent: false, state: 'idle', error: '' })
+      Object.assign(at(0, 1), { score: 92, is_absent: false, state: 'dirty', error: '' })
+      Object.assign(at(1, 1), { score: 78, is_absent: false, state: 'saving', error: '' })
+      Object.assign(at(2, 1), { score: 88.5, is_absent: false, state: 'saved', error: '' })
+      Object.assign(at(3, 1), { score: 77, is_absent: false, state: 'error', error: '儲存失敗，請重試' })
+      return true
+    }
+    // 離開頁面 / 重新載入前呼叫：送出未儲存的格子，等請求結束
+    const flushNow = () => new Promise((resolve) => {
+      unfreeze()
+      flush()
+      const tick = () => { if (!inFlight) resolve(); else setTimeout(tick, 100) }
+      setTimeout(tick, 50)
+    })
+    expose({ flush: flushNow, hasUnsaved, failedCount, showcase })
+
+    return {
+      state, load, students, subjects, examStatus, cell, cellKey, rowClass, edit, dirtyCount, failedCount, savingAny,
+      notifyChoice, choose, dialogOpen, retryFailed, tableWrap, onKeydown, onCellClick, fmt,
+    }
+  },
+  template: `
+    <div class="score-grid">
+      <div v-if="state === 'loading'" class="sg-skeleton"><el-skeleton :rows="7" animated></el-skeleton></div>
+      <empty-state v-else-if="state === 'error'" variant="error" title="無法載入成績" description="伺服器暫時沒有回應，請稍後再試">
+        <template #action><el-button class="touch" @click="load">重試</el-button></template>
+      </empty-state>
+      <empty-state v-else-if="!subjects.length" title="尚未設定科目"
+                   :description="canWrite ? '設定考試科目與滿分後才能輸入成績' : '有成績編輯權限的人設定科目後，這裡才會出現成績表'">
+        <template v-if="canWrite" #action>
+          <el-button type="primary" class="touch" @click="$emit('go-subjects')">前往科目設定</el-button>
+        </template>
+      </empty-state>
+      <template v-else>
+        <div v-if="canWrite" class="grid-toolbar">
+          <span v-if="failedCount" class="grid-toolbar__status is-error">
+            <el-icon><icon-warning-filled></icon-warning-filled></el-icon>{{ failedCount }} 格儲存失敗
+            <el-button link type="primary" @click="retryFailed">重試</el-button>
+          </span>
+          <span v-else-if="savingAny" class="grid-toolbar__status"><el-icon class="score-cell__spin"><icon-loading></icon-loading></el-icon>儲存中…</span>
+          <span v-else-if="dirtyCount" class="grid-toolbar__status">{{ dirtyCount }} 格尚未儲存</span>
+          <span v-else class="grid-toolbar__status is-ok"><el-icon><icon-circle-check></icon-circle-check></el-icon>所有變更已儲存</span>
+          <span class="sg-keys"><kbd>Enter</kbd> 下一位　<kbd>Tab</kbd> 下一科　<kbd>Esc</kbd> 還原　輸入「缺」標記缺考</span>
+          <span class="grid-toolbar__spacer"></span>
+          <span v-if="examStatus === 'published'" class="grid-toolbar__notify">
+            修改後通知家長：
+            <el-radio-group :model-value="notifyChoice" class="sg-notify" @update:model-value="choose">
+              <el-radio-button :value="true">開</el-radio-button>
+              <el-radio-button :value="false">關</el-radio-button>
+            </el-radio-group>
+            <el-tag v-if="notifyChoice === null" type="warning" size="small" disable-transitions>尚未選擇</el-tag>
+          </span>
+        </div>
+        <div ref="tableWrap" class="sg-table" @keydown="onKeydown">
+          <el-table :data="students" border :height="height" :row-class-name="rowClass" @cell-click="onCellClick">
+            <el-table-column prop="student_no" label="學號" width="88" fixed></el-table-column>
+            <el-table-column label="姓名" width="118" fixed>
+              <template #default="{ row }">
+                <div class="sg-name">{{ row.name }}</div>
+                <el-tag v-if="row.in_roster === false" class="sg-out-tag" size="small" type="info" disable-transitions>已不在名單</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="班級" width="100" fixed show-overflow-tooltip>
+              <template #default="{ row }">{{ row.class_name || '—' }}</template>
+            </el-table-column>
+            <el-table-column v-for="(sub, ci) in subjects" :key="sub.subject_id" min-width="140" align="center">
+              <template #header>
+                <span class="sg-head"><span class="sg-head__name">{{ sub.subject_name }}</span><span class="sg-head__full">（滿分 {{ fmt(sub.full_score) }}）</span></span>
+              </template>
+              <template #default="{ row, $index }">
+                <div class="sg-cell" :class="{ 'is-readonly': !canWrite }" :data-row="$index" :data-col="ci">
+                  <score-cell :key="cellKey(row.id, sub.subject_id)" :score="cell(row.id, sub.subject_id).score"
+                              :is-absent="cell(row.id, sub.subject_id).is_absent" :full-score="sub.full_score"
+                              :state="cell(row.id, sub.subject_id).state" :error-message="cell(row.id, sub.subject_id).error"
+                              :readonly="!canWrite" @change="(v) => edit(row.id, sub.subject_id, v)"></score-cell>
+                </div>
+              </template>
+            </el-table-column>
+            <template #empty>
+              <empty-state variant="inline" title="此考試沒有應考學生，請確認年級或班級設定"></empty-state>
+            </template>
+          </el-table>
+        </div>
+      </template>
+      <renotify-choice-dialog v-model="dialogOpen" :pending-count="dirtyCount" @choose="choose"></renotify-choice-dialog>
+    </div>`,
+}
+
+/* ==================== ExamSummaryTable（FRONTEND-239） ==================== */
+const ExamSummaryTable = {
+  props: {
+    examId: { type: String, required: true },
+    refreshKey: { type: Number, default: 0 },
+    sim: { type: String, default: 'ok' },           // 稿用：ok | loading | error
+  },
+  emits: ['request'],
+  setup(props, { emit }) {
+    const state = ref('loading')
+    const data = ref(null)
+    const load = () => {
+      state.value = 'loading'
+      emit('request', `GET /admin/exams/${props.examId}/summary`)
+      setTimeout(() => {
+        if (props.sim === 'loading') return
+        if (props.sim === 'error') { state.value = 'error'; return }
+        data.value = serverSummary()
+        state.value = 'ok'
+      }, 450)
+    }
+    watch(() => [props.refreshKey, props.sim], load, { immediate: true })
+    const numText = (n) => (n === null || n === undefined ? '—' : fmt(n))
+    const avgText = (row) => (row.average === null || row.average === undefined ? '—' : row.average.toFixed(1))
+    const rate = (row) => `${Math.round((row.average / row.full_score) * 100)}%`
+    return { state, data, load, numText, avgText, rate }
+  },
+  template: `
+    <div class="summary">
+      <div v-if="state === 'loading'" class="sg-skeleton"><el-skeleton :rows="5" animated></el-skeleton></div>
+      <empty-state v-else-if="state === 'error'" variant="error" title="無法載入各科平均" description="伺服器暫時沒有回應，請稍後再試">
+        <template #action><el-button class="touch" @click="load">重試</el-button></template>
+      </empty-state>
+      <template v-else>
+        <div class="summary__head">
+          <span class="summary__roster">應考 {{ data.roster_count }} 人</span>
+          <span class="text-secondary">平均只計有分數的學生，缺考與未填不計入；不做排名</span>
+        </div>
+        <empty-state v-if="!data.subjects.length" title="尚未設定科目"></empty-state>
+        <el-table v-else :data="data.subjects" border class="summary__table">
+          <el-table-column prop="subject_name" label="科目" min-width="110"></el-table-column>
+          <el-table-column label="滿分" width="80" align="right">
+            <template #default="{ row }"><span class="summary__num">{{ numText(row.full_score) }}</span></template>
+          </el-table-column>
+          <el-table-column label="平均" width="120" align="right">
+            <template #default="{ row }">
+              <div class="summary__avg" :class="{ summary__dash: row.average == null }">{{ avgText(row) }}</div>
+              <div v-if="row.average != null" class="summary__rate">得分率 {{ rate(row) }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="最高" width="80" align="right">
+            <template #default="{ row }"><span class="summary__num" :class="{ summary__dash: row.max == null }">{{ numText(row.max) }}</span></template>
+          </el-table-column>
+          <el-table-column label="最低" width="80" align="right">
+            <template #default="{ row }"><span class="summary__num" :class="{ summary__dash: row.min == null }">{{ numText(row.min) }}</span></template>
+          </el-table-column>
+          <el-table-column label="已填" width="80" align="right">
+            <template #default="{ row }"><span class="summary__num">{{ row.scored_count }}</span></template>
+          </el-table-column>
+          <el-table-column label="缺考" width="80" align="right">
+            <template #default="{ row }"><span class="summary__num">{{ row.absent_count }}</span></template>
+          </el-table-column>
+          <el-table-column label="未填" width="80" align="right">
+            <template #default="{ row }"><span class="summary__num" :class="{ 'is-warning': row.missing_count > 0 }">{{ row.missing_count }}</span></template>
+          </el-table-column>
+        </el-table>
+      </template>
+    </div>`,
+}
+
+/* ==================== ExamSubjectsEditor（FRONTEND-233） ==================== */
+const MAX_SUBJECTS = 20
+const ExamSubjectsEditor = {
+  props: {
+    exam: { type: Object, required: true },
+    scoredCounts: { type: Object, default: () => ({}) },
+    canWrite: Boolean,
+    sim: { type: String, default: 'ok' },           // 稿用：ok | exam_published
+    inactiveIds: { type: Array, default: () => [] }, // 稿用：在參考資料被停用的科目
+  },
+  emits: ['saved', 'conflict', 'request'],
+  setup(props, { emit }) {
+    let seq = 0
+    const toRows = () => props.exam.subjects.map((s) => ({ key: seq++, subject_id: s.subject_id, full_score: s.full_score }))
+    const rows = ref(toRows())
+    const items = () => rows.value.map((r) => ({ subject_id: r.subject_id, full_score: r.full_score }))
+    const baseline = ref(JSON.stringify(items()))
+    const rowErrors = reactive({})
+    const alertMsg = ref('')
+    const saving = ref(false)
+    const clearErrors = () => { Object.keys(rowErrors).forEach((k) => { delete rowErrors[k] }) }
+    const reset = () => { rows.value = toRows(); baseline.value = JSON.stringify(items()); clearErrors(); alertMsg.value = '' }
+    watch(() => props.exam.subjects, reset, { deep: true })
+    const readonly = computed(() => props.exam.status === 'published' || !props.canWrite)
+    const dirty = computed(() => JSON.stringify(items()) !== baseline.value)
+    const hadSubjects = computed(() => props.exam.subjects.length > 0)
+    const nameOf = (id) => (SUBJECTS.find((s) => s.id === id) ?? {}).name
+      ?? (props.exam.subjects.find((s) => s.subject_id === id) ?? {}).subject_name ?? ''
+    const isInactive = (id) => !!id && props.inactiveIds.includes(id)
+    const subjectOptions = computed(() => SUBJECTS.filter((s) => !props.inactiveIds.includes(s.id)).map((s) => ({ label: s.name, value: s.id })))
+    const takenBy = (id, row) => rows.value.some((r) => r !== row && r.subject_id === id)
+    const canAdd = computed(() => {
+      if (saving.value || rows.value.length >= MAX_SUBJECTS) return false
+      const unused = subjectOptions.value.filter((o) => !rows.value.some((r) => r.subject_id === o.value)).length
+      return rows.value.filter((r) => !r.subject_id).length < unused
+    })
+    const countText = (id) => { const n = props.scoredCounts[id] ?? 0; return n ? `${n} 筆` : '—' }
+    const clearRowError = (row) => { delete rowErrors[row.key]; alertMsg.value = '' }
+    const move = (i, d) => { const arr = [...rows.value]; const [r] = arr.splice(i, 1); arr.splice(i + d, 0, r); rows.value = arr }
+    const addRow = () => { rows.value = [...rows.value, { key: seq++, subject_id: null, full_score: 100 }] }
+    const removeRow = (row) => { rows.value = rows.value.filter((r) => r !== row); delete rowErrors[row.key] }
+
+    const save = async () => {
+      clearErrors()
+      alertMsg.value = ''
+      let bad = false
+      for (const r of rows.value) {
+        if (!r.subject_id) { rowErrors[r.key] = { field: 'subject', message: '請選擇科目' }; bad = true }
+        else if (!(r.full_score > 0)) { rowErrors[r.key] = { field: 'full', message: '請輸入滿分' }; bad = true }
+      }
+      if (bad) return
+      const removed = props.exam.subjects.filter((s) => !rows.value.some((r) => r.subject_id === s.subject_id) && (props.scoredCounts[s.subject_id] ?? 0) > 0)
+      if (removed.length) {
+        const ok = await ElMessageBox.confirm(
+          h('div', removed.map((s) => h('p', { style: 'margin: 0 0 4px' }, `移除「${s.subject_name}」會刪除已輸入的 ${props.scoredCounts[s.subject_id]} 筆成績，確定嗎？`))),
+          '移除科目', { type: 'warning', confirmButtonText: '移除並儲存', cancelButtonText: '取消' },
+        ).then(() => true).catch(() => false)
+        if (!ok) return
+      }
+      const payload = { items: rows.value.map((r, i) => ({ subject_id: r.subject_id, full_score: r.full_score, sort_order: i + 1 })) }
+      emit('request', `PUT /admin/exams/${props.exam.id}/subjects ${JSON.stringify(payload)}`)
+      saving.value = true
+      setTimeout(() => {
+        saving.value = false
+        if (props.sim === 'exam_published') {
+          alertMsg.value = '考試已發布，請先取消發布再修改'
+          emit('conflict')
+          return
+        }
+        const inactiveRow = rows.value.find((r) => isInactive(r.subject_id))
+        if (inactiveRow) {
+          alertMsg.value = '科目不存在或已停用'
+          rowErrors[inactiveRow.key] = { field: 'subject', message: '此科目已在參考資料停用，移除後才能儲存（會一併刪除該科成績）' }
+          return
+        }
+        for (const r of rows.value) {
+          const max = serverMaxScore(r.subject_id)
+          if (max !== null && max > r.full_score) {
+            rowErrors[r.key] = { field: 'full', message: `滿分不可低於已輸入的最高分（目前最高 ${fmt(max)} 分）` }
+            return
+          }
+        }
+        // 套用到稿內「後端」：移除的科目連同成績刪除
+        const keep = new Set(payload.items.map((i) => i.subject_id))
+        Object.keys(SERVER.cells).forEach((k) => { if (!keep.has(k.split(':')[1])) delete SERVER.cells[k] })
+        SERVER.exam.subjects = payload.items.map((i) => ({ subject_id: i.subject_id, subject_name: nameOf(i.subject_id), full_score: i.full_score, sort_order: i.sort_order }))
+        ElMessage.success('已儲存科目設定')
+        emit('saved')
+      }, 600)
+    }
+    return {
+      rows, rowErrors, alertMsg, saving, readonly, dirty, hadSubjects, nameOf, isInactive, subjectOptions, takenBy, canAdd,
+      countText, clearRowError, move, addRow, removeRow, reset, save, fmtNum, MAX_SUBJECTS,
+    }
+  },
+  template: `
+    <div class="subj">
+      <el-alert v-if="exam.status === 'published'" class="subj__alert" type="info" :closable="false" show-icon title="已發布的考試不可修改科目"></el-alert>
+      <el-alert v-if="alertMsg" class="subj__alert" type="error" show-icon :title="alertMsg" @close="alertMsg = ''"></el-alert>
+      <template v-if="readonly">
+        <empty-state v-if="!exam.subjects.length" variant="inline" title="尚未設定科目"></empty-state>
+        <el-table v-else :data="exam.subjects" border class="subj__table">
+          <el-table-column label="順序" width="70" align="center">
+            <template #default="{ $index }">{{ $index + 1 }}</template>
+          </el-table-column>
+          <el-table-column prop="subject_name" label="科目" min-width="140"></el-table-column>
+          <el-table-column label="滿分" width="100" align="right">
+            <template #default="{ row }">{{ fmtNum(row.full_score) }}</template>
+          </el-table-column>
+          <el-table-column label="已輸入成績" width="120" align="right">
+            <template #default="{ row }">{{ countText(row.subject_id) }}</template>
+          </el-table-column>
+        </el-table>
+      </template>
+      <template v-else>
+        <p class="subj__hint">科目順序就是成績表與家長端的顯示順序；移除科目會一併刪除該科已輸入的成績。</p>
+        <div v-if="rows.length" class="subj-head"><span>順序</span><span>科目</span><span>滿分</span><span>已輸入成績</span><span></span></div>
+        <div v-for="(row, i) in rows" :key="row.key" class="subj-row" :class="rowErrors[row.key] ? 'is-error-' + rowErrors[row.key].field : ''">
+          <span class="subj-row__no">{{ i + 1 }}</span>
+          <span class="subj-row__subject">
+            <el-select v-model="row.subject_id" placeholder="選擇科目" :disabled="saving" :aria-label="'第 ' + (i + 1) + ' 個科目'" @change="clearRowError(row)">
+              <el-option v-if="isInactive(row.subject_id)" :label="nameOf(row.subject_id) + '（已停用）'" :value="row.subject_id" disabled></el-option>
+              <el-option v-for="o in subjectOptions" :key="o.value" :label="o.label" :value="o.value" :disabled="takenBy(o.value, row)"></el-option>
+            </el-select>
+            <el-tag v-if="isInactive(row.subject_id)" size="small" type="danger" effect="plain" disable-transitions>已停用</el-tag>
+          </span>
+          <el-input-number v-model="row.full_score" :min="0.1" :max="1000" :step="1" controls-position="right" :disabled="saving"
+                           :aria-label="(nameOf(row.subject_id) || '科目') + ' 滿分'" @change="clearRowError(row)"></el-input-number>
+          <span class="subj-row__count">{{ countText(row.subject_id) }}</span>
+          <span class="subj-row__ops">
+            <el-button text :disabled="i === 0 || saving" @click="move(i, -1)">上移</el-button>
+            <el-button text :disabled="i === rows.length - 1 || saving" @click="move(i, 1)">下移</el-button>
+            <el-button text type="danger" :disabled="saving" @click="removeRow(row)">移除</el-button>
+          </span>
+          <div v-if="rowErrors[row.key]" class="subj-row__error">{{ rowErrors[row.key].message }}</div>
+        </div>
+        <div v-if="!rows.length" class="subj-empty">{{ hadSubjects ? '考試至少要有一個科目：請新增科目，或按「還原變更」' : '尚未設定科目，請新增後才能輸入成績' }}</div>
+        <div class="subj-foot">
+          <el-button class="touch" :disabled="!canAdd" @click="addRow"><el-icon><icon-plus></icon-plus></el-icon>新增科目</el-button>
+          <span class="subj-foot__count">{{ rows.length }} / {{ MAX_SUBJECTS }}</span>
+          <span class="subj-foot__spacer"></span>
+          <el-button v-if="dirty" class="touch" text :disabled="saving" @click="reset">還原變更</el-button>
+          <el-button type="primary" class="touch" :loading="saving" :disabled="!dirty || !rows.length" @click="save">儲存</el-button>
+        </div>
+      </template>
+    </div>`,
+}
+
+/* ==================== 考試詳情（FRONTEND-234） ==================== */
+const ROLES = {
+  director: { label: '主任（exams:write + exams:publish）', permissions: DIRECTOR },
+  tutor: { label: '課輔老師（exams:write，沒有 exams:publish）', permissions: TUTOR },
+  viewer: { label: '自訂角色（只有 exams:read）', permissions: ALL_STAFF },
+}
+const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+
+const app = createApp({
+  components: { AdminShell, PageHeader, ScoreGrid, ExamSummaryTable, ExamSubjectsEditor, ExamFormDialog },
+  setup() {
+    const readMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? ''
+    const meta = {
+      status: readMeta('preview-status'), tasks: readMeta('preview-tasks'),
+      route: readMeta('preview-route'), updated: readMeta('preview-updated'),
+    }
+    const viewAs = ref('director')
+    const perms = computed(() => ROLES[viewAs.value].permissions)
+    const can = (code) => perms.value.includes(code)
+    const user = computed(() => SHELL_USERS[viewAs.value] ?? { display_name: '周老師', role: '自訂角色' })
+    const device = ref('desktop')
+
+    const exam = computed(() => SERVER.exam)
+    const isPublished = computed(() => SERVER.exam.status === 'published')
+    const rosterCount = computed(() => SERVER.students.filter((s) => s.in_roster).length)
+    const subtitle = computed(() => [SERVER.exam.exam_type.name, formatDateWithWeekday(SERVER.exam.exam_date), targetLabel(SERVER.exam), `應考 ${rosterCount.value} 人`].join('・'))
+    const scoredCounts = computed(() => Object.fromEntries(serverSummary().subjects.map((s) => [s.subject_id, s.scored_count])))
+
+    // ---- 稿件控制 ----
+    const pageState = ref('ok')
+    const gridMode = ref('ok')
+    const gridSim = reactive({ load: 'ok', nextSave: 'ok' })
+    const summarySim = ref('ok')
+    const publishSim = ref('ok')
+    const unpublishSim = ref('ok')
+    const subjectsSim = ref('ok')
+    const formSim = ref('ok')
+    const socialInactive = ref(false)
+    const inactiveIds = computed(() => (socialInactive.value ? ['sub5'] : []))
+    const lastRead = ref('')
+    const lastWrite = ref('')
+    const onRequest = (r) => { if (r.startsWith('GET ')) lastRead.value = r; else lastWrite.value = r }
+    const examStatusCtl = ref('draft')
+
+    const tab = ref('scores')
+    const gridReloadKey = ref(0)
+    const summaryKey = ref(0)
+    const grid = ref(null)
+    const hasUnsaved = ref(false)
+    const busy = ref('')
+    const formOpen = ref(false)
+    const reloadAll = () => { gridReloadKey.value += 1; summaryKey.value += 1 }
+    watch(tab, (t) => { if (t === 'summary') summaryKey.value += 1 })
+
+    const applyStatus = (status, by) => {
+      if (status === 'published') Object.assign(SERVER.exam, { status, published_at: '2026-10-07T09:30:00Z', published_by_name: by })
+      else Object.assign(SERVER.exam, { status, published_at: null, published_by_name: null })
+      examStatusCtl.value = status
+    }
+    watch(examStatusCtl, (s) => { if (s !== SERVER.exam.status) { applyStatus(s, '張主任'); reloadAll() } })
+    const stash = { subjects: null, students: null }
+    watch(gridMode, (m) => {
+      if (stash.subjects) { SERVER.exam.subjects = stash.subjects; stash.subjects = null }
+      if (stash.students) { SERVER.students = stash.students; stash.students = null }
+      if (m === 'nosubjects') { stash.subjects = SERVER.exam.subjects; SERVER.exam.subjects = [] }
+      if (m === 'nostudents') { stash.students = SERVER.students; SERVER.students = [] }
+      gridSim.load = m === 'loading' || m === 'error' ? m : 'ok'
+      reloadAll()
+    })
+
+    // 先送出成績格未儲存的格子；仍有未儲存 / 失敗的格子時先確認是否放棄
+    const ensureGridClean = async () => {
+      if (!grid.value) return true
+      await grid.value.flush()
+      return !grid.value.hasUnsaved || confirmDiscardChanges()
+    }
+    const leave = async (path) => {
+      if (path === '/exams/e1') return
+      if (grid.value && hasUnsaved.value) {
+        await grid.value.flush()
+        if (grid.value.hasUnsaved && !(await confirmDiscardChanges())) return
+      }
+      ElMessage.info(`（稿）導頁至 ${path}`)
+    }
+    const retryPage = () => { pageState.value = 'loading'; setTimeout(() => { pageState.value = 'ok' }, 900) }
+
+    const publish = async () => {
+      if (busy.value) return
+      busy.value = 'publish'
+      try {
+        // 待裁定 1（稿照推薦 A）：先送出；送出後仍有儲存失敗的格子就不發布
+        if (grid.value) {
+          await grid.value.flush()
+          if (grid.value.failedCount > 0) {
+            ElMessage.warning(`有 ${grid.value.failedCount} 格成績尚未儲存成功，請先重試後再發布`)
+            return
+          }
+        }
+        onRequest('GET /admin/exams/e1/summary')
+        await wait(400)
+        const missing = serverSummary().subjects.reduce((n, s) => n + s.missing_count, 0)
+        busy.value = ''
+        const ok = await ElMessageBox.confirm(
+          `發布後家長即可查看成績並收到通知。${missing > 0 ? `尚有 ${missing} 格未填，家長會看到「未登記」。` : ''}確定發布嗎？`,
+          '發布成績', { type: 'warning', confirmButtonText: '發布', cancelButtonText: '取消' },
+        ).then(() => true).catch(() => false)
+        if (!ok) return
+        busy.value = 'publish'
+        onRequest('POST /admin/exams/e1/publish')
+        await wait(600)
+        if (publishSim.value === 'no_subjects' || !SERVER.exam.subjects.length) {
+          ElMessage.warning('請先設定科目')
+          tab.value = 'subjects'
+          return
+        }
+        if (publishSim.value === 'already') {
+          applyStatus('published', '林行政')
+          ElMessage.warning('考試狀態已變更，已重新載入')
+        } else {
+          applyStatus('published', user.value.display_name)
+          ElMessage.success('已發布，家長會收到成績通知')
+        }
+        reloadAll()
+      } finally {
+        busy.value = ''
+      }
+    }
+    const unpublish = async () => {
+      if (busy.value) return
+      const ok = await ElMessageBox.confirm('取消發布後家長將看不到此次成績，已送出的通知不會收回。', '取消發布', {
+        type: 'warning', confirmButtonText: '取消發布', cancelButtonText: '返回',
+      }).then(() => true).catch(() => false)
+      if (!ok || !(await ensureGridClean())) return
+      busy.value = 'unpublish'
+      try {
+        onRequest('POST /admin/exams/e1/unpublish')
+        await wait(600)
+        applyStatus('draft')
+        if (unpublishSim.value === 'not_published') ElMessage.warning('考試狀態已變更，已重新載入')
+        else ElMessage.success('已取消發布')
+        reloadAll()
+      } finally {
+        busy.value = ''
+      }
+    }
+    // useConfirmDelete（FRONTEND-044）：與列表同一段文案
+    const removeExam = async () => {
+      const ok = await ElMessageBox.confirm(`刪除後已輸入的成績會一併刪除，確定要刪除「${SERVER.exam.name}」嗎？`, '確認刪除', {
+        type: 'warning', confirmButtonText: '刪除', cancelButtonText: '取消',
+      }).then(() => true).catch(() => false)
+      if (!ok) return
+      busy.value = 'delete'
+      onRequest('DELETE /admin/exams/e1')
+      await wait(500)
+      busy.value = ''
+      ElMessage.success('已刪除')
+      setTimeout(() => ElMessage.info('（稿）導頁至 /exams'), 300)
+    }
+    const onEdited = async (updated) => {
+      Object.assign(SERVER.exam, {
+        name: updated.name, exam_type: updated.exam_type, exam_date: updated.exam_date,
+        grade_level: updated.grade_level, class: updated.class, note: updated.note,
+      })
+      if (await ensureGridClean()) reloadAll()      // 年級 / 班級變更會影響名單
+    }
+    const onSubjectsSaved = async () => { if (await ensureGridClean()) reloadAll() }
+    const onSubjectsConflict = () => { applyStatus('published', '林行政'); reloadAll() }
+
+    const showcase = async () => {
+      tab.value = 'scores'
+      pageState.value = 'ok'
+      gridMode.value = 'ok'
+      await nextTick()
+      await wait(650)
+      if (grid.value && grid.value.showcase()) ElMessage.info('前四位學生的數學格與王小明的社會格已設成五種狀態；自動儲存暫停，下一次輸入恢復')
+      else ElMessage.warning('成績格還在載入，請再按一次')
+    }
+
+    const decisions = [
+      '版面：上方「‹ 考試列表」返回連結；PageHeader 標題 = 考試名稱，副標「段考・10/01（四）・三年級・應考 32 人」，下方一行狀態：草稿灰 tag +「尚未發布，家長看不到這次成績」/ 已發布綠 tag +「{published_by_name} 於 {YYYY/MM/DD HH:mm} 發布・修改分數會記錄於稽核紀錄」，有備註時同一行接「備註：…」（過長省略、滑過看全文）。下方白底面板是 el-tabs：成績輸入 / 各科平均 / 科目設定（?tab=scores|summary|subjects，預設 scores；分頁 lazy 載入，切走不卸載，未儲存的格子不會因為切分頁消失）。',
+      'header 動作（缺權限隱藏，不是 disabled；按鈕 44px 高）：草稿 =「刪除」（紅框，exams:write）、「編輯資訊」（exams:write）、「發布」（主色，exams:publish）；已發布 =「編輯資訊」、「取消發布」（exams:publish）。只有 exams:read：右側灰字鎖頭「你只有檢視權限」。課輔老師（有 exams:write、沒有 exams:publish）看不到發布 / 取消發布。',
+      '發布：先 GET summary 加總各科 missing_count → 確認框「發布成績」：「發布後家長即可查看成績並收到通知。尚有 {n} 格未填，家長會看到「未登記」。確定發布嗎？」（n = 0 時省略中間那句；「未登記」與家長端 ExamScoreTable 的顯示一致）→ POST publish → success「已發布，家長會收到成績通知」並重新載入考試與成績格。422 exam_has_no_subjects → warning「請先設定科目」並切到科目設定；409 exam_already_published → warning「考試狀態已變更，已重新載入」並重新載入。按發布時成績格還有未儲存 / 失敗的格子見待裁定 1（稿照推薦 A）。',
+      '取消發布：確認框「取消發布後家長將看不到此次成績，已送出的通知不會收回。」（按鈕「取消發布」/「返回」）→ POST unpublish →「已取消發布」並重新載入；409 exam_not_published 同樣 warning「考試狀態已變更，已重新載入」並重新載入。刪除（只有草稿）：useConfirmDelete「刪除後已輸入的成績會一併刪除，確定要刪除「{name}」嗎？」→「已刪除」並導回 /exams。「編輯資訊」開 ExamFormDialog（外觀見 page-exams.html），儲存後重新載入考試與成績格（年級 / 班級變更會影響名單）。',
+      '成績輸入格（ScoreGrid）：表頭固定，表格高度 = 內容區剩餘高度（頁面本身不捲，只捲表格本體）；學號、姓名、班級三欄固定在左，科目欄橫向捲動；科目欄寬至少 140，表頭「國語」下一行灰字「（滿分 100）」；列依班級、學號（後端排序）；列高 ≥ 48px，點格子內任何位置都聚焦該格輸入框。每格是已核可的 ScoreCell（component-exams.html）：未填 / 編輯中（橘角標）/ 儲存中（轉圈）/ 已儲存（綠勾 1 秒淡出）/ 錯誤（紅框 + 提示）、「缺」勾選、超出滿分即時紅框，外觀一律照元件稿（控制列「示範五種格子狀態」可一次看到）。',
+      '已不在名單的學生（考後退班但已有成績）：整列內容淡化 + 姓名下「已不在名單」灰 tag，仍可編輯；只淡化儲存格內容，固定欄底色保持不透明，橫向捲動時不會透出後面的格子。',
+      '鍵盤：Enter / ↓ 下一位同科、Shift+Enter / ↑ 上一位、Tab 下一科（最後一科跳到下一位的第一科）、Shift+Tab 反向、→ / ← 只在游標位於結尾 / 開頭時換格、Esc 還原這格尚未送出的輸入；移入的格子全選內容，直接打字就取代；缺考格的輸入框停用，移到該格時改聚焦「缺」勾選（空白鍵取消缺考）；到表格邊界停在原格。被左側固定欄遮住的格子自動捲到可見（scroll-padding = 固定欄寬）。工具列灰字提示「Enter 下一位　Tab 下一科　Esc 還原　輸入「缺」標記缺考」。',
+      '工具列（有 exams:write 才有）：左側儲存摘要「所有變更已儲存」（綠）/「n 格尚未儲存」/「儲存中…」/「n 格儲存失敗 重試」（紅）；已發布時右側「修改後通知家長：開 / 關」，尚未選擇時兩個都不亮 + 橘色「尚未選擇」tag。已發布考試第一次自動儲存時跳 RenotifyChoiceDialog（元件稿）；Esc / X 關閉 → 格子維持未儲存、工具列「尚未選擇」，下一次有格子變更時再跳出；也可以直接在工具列選，選完立即送出。',
+      '自動儲存（useScoreAutosave）：停 800ms 後一次 PUT 所有變更的格子（控制列「最後送出」可看 body；草稿 notify_parents 固定 false）；同時只有一個請求，送出中又改的格子回應後維持未儲存再送；422 invalid_score_cells 指出的格子標錯（分數超出 0~滿分 / 學生不在應考名單 / 此科目不在考試中），同批其他格重送一次；網路錯誤或 5xx 整批標「儲存失敗，請重試」，按工具列「重試」重送。',
+      '只有 exams:read：沒有工具列，格子為唯讀文字（缺考橘字「缺考」、未填「—」）；科目設定為唯讀表；各科平均照常。沒有 ws 頻道：多人同時輸入同一場考試時看不到彼此剛輸入的分數（重新整理才看到），同一格由後寫入者生效。',
+      '成績格空狀態：沒有科目 → EmptyState「尚未設定科目」+「設定考試科目與滿分後才能輸入成績」+「前往科目設定」（只有 exams:write；唯讀身分說明改為「有成績編輯權限的人設定科目後，這裡才會出現成績表」、沒有按鈕）；沒有應考學生 → 表格內「此考試沒有應考學生，請確認年級或班級設定」；載入中 skeleton；載入失敗 EmptyState error「無法載入成績」+「重試」。',
+      '各科平均（ExamSummaryTable）：上方「應考 32 人」+ 灰字「平均只計有分數的學生，缺考與未填不計入；不做排名」；欄位：科目、滿分、平均（一位小數，下一行灰字「得分率 82%」；沒有分數「—」）、最高、最低、已填、缺考、未填（> 0 橘色粗體）。每次切到這個分頁、以及發布 / 取消發布 / 科目變更後重新載入（refreshKey）。沒有科目「尚未設定科目」；載入中 skeleton；載入失敗 error + 重試。',
+      '科目設定（ExamSubjectsEditor，草稿且有 exams:write 才可編輯）：上方灰字「科目順序就是成績表與家長端的顯示順序；移除科目會一併刪除該科已輸入的成績。」；每列 = 順序、科目下拉（其他列已選的 disabled）、滿分（>0、≤1000、最多一位小數）、已輸入成績數（「31 筆」）、「上移」「下移」「移除」（文字按鈕 44px 高）；下方「新增科目」+「n / 20」，右側「還原變更」（有變更才出現）與「儲存」（有變更才可按）。儲存前若移除了已有成績的科目 → 確認框「移除「國語」會刪除已輸入的 31 筆成績，確定嗎？」（多科逐行列出，按鈕「移除並儲存」）；成功「已儲存科目設定」並重新載入考試與成績格。',
+      '科目設定錯誤：409 full_score_below_existing → 該列滿分紅框 +「滿分不可低於已輸入的最高分（目前最高 95 分）」（用 details.max_score，例如把國語滿分改成 90 儲存）；409 exam_published → 紅色 alert 顯示後端 message 並重新載入（變成唯讀）；422 invalid_subject（科目在參考資料被停用，控制列可勾）→ 紅色 alert + 該列「已停用」紅框 tag 與說明，移除該科才能儲存。全部移除時顯示「考試至少要有一個科目：請新增科目，或按「還原變更」」且不能儲存（後端 items 1~20）。已發布：info「已發布的考試不可修改科目」+ 唯讀表；沒有任何科目：「尚未設定科目，請新增後才能輸入成績」。',
+      '離開保護：成績格有未儲存 / 儲存中 / 失敗的格子時離開（返回連結、側欄、瀏覽器上一頁）→ 先嘗試送出，仍未完成 → confirmDiscardChanges（「放棄變更」/「繼續編輯」）。會重新載入成績格的動作（取消發布、編輯資訊、科目儲存）同樣先送出，送不出去時先確認；發布見待裁定 1。',
+      '找不到（404）：EmptyState（document icon）「找不到此考試」+「這場考試可能已被刪除，或網址不正確」+「回考試列表」。頁面載入中 skeleton；載入失敗 EmptyState error「無法載入考試」+「重試」。',
+      '平板 1024：本頁不設 meta.tablet，側欄展開時內容寬約 770px，可見約 3 科、其餘橫向捲動；收合側欄後約可見 5 科。header 按鈕、分頁標籤、工具列控制項 44px；「缺」勾選沿用元件稿尺寸，平板上也可以直接輸入「缺」或「-」。',
+    ]
+    const openQuestions = [
+      {
+        question: '按「發布」時，成績格還有未儲存或儲存失敗的格子怎麼處理？（task 沒有規定）',
+        optionA: '先送出未儲存的格子；送出後仍有儲存失敗的格子就不發布，提示「有 n 格成績尚未儲存成功，請先重試後再發布」（推薦，稿已照此畫：控制列選「網路錯誤」後改一格再立刻按發布可看）',
+        optionB: '先送出未儲存的格子；失敗的格子不擋發布，確認框多一行「有 n 格儲存失敗，不會包含在這次發布中」',
+      },
+      {
+        question: '「未填」怎麼算？後端 summary 目前是「名單人數 − 有成績列的人數」：清空過的格子仍有成績列（分數與缺考皆空）而不算未填，名單外學生的成績列還會抵掉未填數，發布確認的未填格數可能偏少。',
+        optionA: '只算目前名單內、既沒有分數也沒標缺考的格子（清空過的也算未填、名單外學生不影響）；需開新 BACKEND task 修正 get_exam_summary 的 missing_count（推薦，稿的數字照此計算）',
+        optionB: '維持後端現行算法、不改後端；各科平均表的已填 + 缺考 + 未填可能不等於應考人數',
+      },
+    ]
+
+    return {
+      meta, decisions, openQuestions, roles: ROLES, viewAs, perms, can, user, device, notesOpen: ref(false),
+      exam, isPublished, subtitle, scoredCounts, statusMeta, formatDateTime,
+      pageState, gridMode, gridSim, summarySim, publishSim, unpublishSim, subjectsSim, formSim, socialInactive, inactiveIds,
+      lastRead, lastWrite, onRequest, examStatusCtl, tab, gridReloadKey, summaryKey, grid, hasUnsaved, busy, formOpen,
+      leave, retryPage, publish, unpublish, removeExam, onEdited, onSubjectsSaved, onSubjectsConflict, showcase,
+    }
+  },
+})
+
+app.use(ElementPlus, { locale: ElementPlusLocaleZhTw })
+app.component('EmptyState', EmptyState)
+app.component('FormDialog', FormDialog)
+const toKebab = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+for (const [name, component] of Object.entries(ElementPlusIconsVue)) {
+  app.component(`icon-${toKebab(name)}`, component)
+}
+app.mount('#app')
+</script>
+</body>
+</html>
