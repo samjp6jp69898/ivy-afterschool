@@ -142,6 +142,22 @@ describe('HomeworkItemDialog', () => {
     expect(submitted(wrapper)).toEqual([{ subject_id: null, title: '圈詞' }])
   })
 
+  it('HomeworkItemDialog sends null subject after clearing', async () => {
+    const wrapper = await mountDialog()
+    await chooseSubject('數學')
+    expect(subjectShown()).toBe('數學')
+
+    // 清除 icon 要對根元素 .el-select 觸發 mouseenter 才會出現
+    await formItem('科目').find('.el-select').trigger('mouseenter')
+    await formItem('科目').find('.el-select__clear').trigger('click')
+    await settle()
+    expect(subjectShown()).toBe('不指定科目')
+
+    await titleInput().setValue('圈詞')
+    await save()
+    expect(submitted(wrapper)).toEqual([{ subject_id: null, title: '圈詞' }])
+  })
+
   it('HomeworkItemDialog quick fills recent titles', async () => {
     localStorage.setItem(RECENT_KEY, '["國語第 5 課生字"]')
     await mountDialog()
@@ -152,6 +168,18 @@ describe('HomeworkItemDialog', () => {
     await recentChips()[0]!.trigger('click')
 
     expect(titleInput().element.value).toBe('國語第 5 課生字')
+  })
+
+  it('HomeworkItemDialog recent title chips work with keyboard', async () => {
+    localStorage.setItem(RECENT_KEY, '["國語第 5 課生字","圈詞"]')
+    await mountDialog()
+
+    const chip = recentChips()[1]!
+    expect(chip.attributes('role')).toBe('button')
+    expect(chip.attributes('tabindex')).toBe('0')
+    await chip.trigger('keydown', { key: 'Enter' })
+
+    expect(titleInput().element.value).toBe('圈詞')
   })
 
   it('HomeworkItemDialog prefills when editing', async () => {
