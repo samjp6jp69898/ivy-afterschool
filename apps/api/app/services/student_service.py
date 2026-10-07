@@ -44,6 +44,23 @@ BACKEND-425 ``complete_via_authorization`` 的「授權列 → 請求列 → 出
 active 代理授權 cancelled 並廣播 → 非終態接送請求條件式改 cancelled 並 ``publish_request_change`` →
 請假（未開始整筆 cancelled、已開始截到昨天，對應出勤還原）→ 刪除今天起 ``expected`` 出勤並廣播
 ``attendance.bulk_updated`` → 稽核 ``student.close_out``（只記計數與新狀態）。不發通知。
+
+BACKEND-152 ``update_student``（移植 ivy ``api/students.py::update_student`` 的部分更新與敏感欄位
+守衛；去掉 lifecycle、租戶、銷帳碼）：先 FOR UPDATE 鎖學生列（封存或不存在 → 404），只處理
+``model_fields_set`` 內的欄位。所有檢查都在改動 ORM 物件之前完成，失敗時 session 內沒有半套的
+pending 變更：
+- 敏感欄位（寫入或清除）需 ``students:sensitive``；給 null 或只填空白 → 同時清除 enc 與 hmac；
+  改成同一個身分證不算變動；他人的身分證 → 409 ``id_number_duplicate``。有變動才稽核
+  ``student.sensitive_update``，after ``{"set": [...], "cleared": [...]}`` 只放有變動的 key。
+- 跨欄位規則以明確錯誤碼擋在 DB CHECK 之前（否則落成通用 409）：→ withdrawn 未給退班日預設
+  ``clock.today()``、withdrawn → active / suspended 未給時清除退班日、退班中清除退班日或退班日早於
+  入班日 → 422 ``invalid_dates``。
+- 改班或改狀態都經 ``_check_class`` 對班級列取 FOR SHARE：明確指定班級（同 create）或改狀態後成為
+  在學（active / suspended）而仍有班級時，封存進行中（FOR UPDATE）會在此等待、commit 後重讀
+  ``archived_at`` 再判斷 → 422 ``invalid_class``。退班學生改回在學不改 class_id 不會觸發 FK 檢查，
+  沒有這把鎖就會進入剛封存的班。
+- status 由其他值改為 suspended / withdrawn → 同交易呼叫 ``close_out_inactive_student``；改回 active
+  或其他欄位變更不收尾。學號撞 unique → 409 ``student_no_taken``。
 """
 
 from __future__ import annotations
@@ -81,7 +98,7 @@ from app.models.notifications import Notification
 from app.models.parents import Guardian, ParentBindingCode
 from app.models.pickup import OPEN_STATUSES, PickupAuthorization, PickupPerson, PickupRequest
 from app.models.reference import School
-from app.models.students import Student
+from app.models.students import Student, StudentStatus
 from app.realtime.publish import broadcast_after_commit
 from app.repositories.students import get_student_or_404
 from app.schemas.pickup import PickupAuthorizationOut
@@ -94,6 +111,7 @@ from app.schemas.students import (
     StudentPurgeIn,
     StudentPurgeOut,
     StudentSensitiveOut,
+    StudentUpdateIn,
 )
 from app.services import audit_service
 from app.services.guardian_service import list_for_student
@@ -795,3 +813,136 @@ def close_out_inactive_student(
         meta=None,
     )
     return result
+
+
+# --- BACKEND-152：update_student ------------------------------------------------------------------
+
+_ENROLLED_STATUSES: Final = ("active", "suspended")
+_SENSITIVE_FIELDS: Final = frozenset({"id_number", "health_note"})
+# 直接 setattr 的一般欄位；status / withdrawn_on / school_class / 敏感欄位各有專屬規則
+_PLAIN_FIELDS: Final = frozenset(
+    {
+        "student_no",
+        "name",
+        "gender",
+        "birthday",
+        "grade_level",
+        "school_id",
+        "class_id",
+        "enrolled_on",
+        "note",
+    }
+)
+
+
+def _resolve_status_dates(
+    student: Student, data: StudentUpdateIn, fields: frozenset[str] | set[str], clock: Clock
+) -> tuple[StudentStatus, bool, date | None, date | None]:
+    """回 ``(new_status, status_changed, enrolled_on, withdrawn_on)``。
+
+    → withdrawn 未給退班日預設今天；withdrawn → active / suspended 未給時清除；退班學生沒有退班日
+    或退班日早於入班日 → 422 ``invalid_dates``（擋在 DB CHECK 之前）。
+    """
+    # status 不在 nullable_fields：有給就是有值
+    new_status: StudentStatus = data.status if data.status is not None else student.status
+    status_changed = new_status != student.status
+    enrolled_on = data.enrolled_on if "enrolled_on" in fields else student.enrolled_on
+    if "withdrawn_on" in fields:
+        withdrawn_on = data.withdrawn_on
+    elif status_changed and new_status == "withdrawn":
+        withdrawn_on = clock.today()
+    elif status_changed and student.status == "withdrawn":
+        withdrawn_on = None
+    else:
+        withdrawn_on = student.withdrawn_on
+    if new_status == "withdrawn" and withdrawn_on is None:
+        raise AppError("invalid_dates", "退班學生必須有退班日", status=422)
+    _check_dates(enrolled_on, withdrawn_on)
+    return new_status, status_changed, enrolled_on, withdrawn_on
+
+
+def _plan_sensitive_update(
+    session: Session, student: Student, data: StudentUpdateIn, fields: frozenset[str] | set[str]
+) -> tuple[dict[str, Any], dict[str, list[str]]]:
+    """回 ``(要寫入的欄位值, 稽核 after)``；沒有變動的欄位不出現在 after（after 為空 → 不稽核）。"""
+    values: dict[str, Any] = {}
+    set_fields: list[str] = []
+    cleared: list[str] = []
+    if "id_number" in fields:
+        raw = _blank_to_none(data.id_number)
+        if raw is None:
+            if student.id_number_enc is not None or student.id_number_hmac is not None:
+                cleared.append("id_number")
+            values.update(id_number_enc=None, id_number_hmac=None)
+        else:
+            normalized = normalize_id_number(raw)
+            validate_id_number(normalized)
+            hmac = id_number_hmac(normalized)
+            if hmac != student.id_number_hmac:
+                _raise_if_id_number_exists(session, hmac)
+                values.update(id_number_enc=encrypt_bytes(normalized), id_number_hmac=hmac)
+                set_fields.append("id_number")
+    if "health_note" in fields:
+        raw = _blank_to_none(data.health_note)
+        if raw is None:
+            if student.health_note_enc is not None:
+                cleared.append("health_note")
+            values["health_note_enc"] = None
+        elif raw != _decrypt_field(student.id, "health_note", student.health_note_enc):
+            # 解密失敗視為不同（覆寫成可解的新密文）
+            values["health_note_enc"] = encrypt_bytes(raw)
+            set_fields.append("health_note")
+    after = {
+        key: sorted(names) for key, names in (("set", set_fields), ("cleared", cleared)) if names
+    }
+    return values, after
+
+
+def update_student(
+    session: Session,
+    student_id: UUID,
+    data: StudentUpdateIn,
+    *,
+    actor: CurrentStaff,
+    meta: RequestMeta,
+    clock: Clock,
+) -> StudentDetailOut:
+    fields = data.model_fields_set
+    _require_sensitive_permission(actor, not fields.isdisjoint(_SENSITIVE_FIELDS))
+    # 封存學生視同不存在；FOR UPDATE 讓同一學生的更新序列化，並重讀上鎖後的現值
+    student = get_student_or_404(session, student_id, for_update=True)
+    if "school_id" in fields:
+        _check_school(session, data.school_id)
+    new_status, status_changed, enrolled_on, withdrawn_on = _resolve_status_dates(
+        student, data, fields, clock
+    )
+    class_id = data.class_id if "class_id" in fields else student.class_id
+    # 明確指定班級（同 create），或改狀態後成為在學而仍有班級：FOR SHARE 等待封存 commit 後再判斷
+    becomes_enrolled = status_changed and new_status in _ENROLLED_STATUSES
+    if class_id is not None and (data.class_id is not None or becomes_enrolled):
+        _check_class(session, class_id)
+    sensitive_values, sensitive_after = _plan_sensitive_update(session, student, data, fields)
+
+    changes: dict[str, Any] = data.model_dump(exclude_unset=True, include=set(_PLAIN_FIELDS))
+    if "school_class" in fields:
+        changes["school_class"] = _blank_to_none(data.school_class)
+    changes.update(status=new_status, enrolled_on=enrolled_on, withdrawn_on=withdrawn_on)
+    changes.update(sensitive_values)
+    try:
+        with session.begin_nested():
+            for name, value in changes.items():
+                setattr(student, name, value)
+            session.flush()
+    except IntegrityError as exc:
+        _translate_student_unique(session, exc, sensitive_values.get("id_number_hmac"))
+    if "class_id" in fields or "school_id" in fields:
+        # 直接改 FK 欄位不會同步 lazy="joined" 的關係屬性，讓回傳的詳情重新載入班級 / 國小
+        session.expire(student, ["class_", "school"])
+
+    if status_changed and new_status in _CLOSE_OUT_REASONS:
+        close_out_inactive_student(session, student, actor=actor, clock=clock)
+    if sensitive_after:
+        _record_sensitive_audit(
+            session, actor=actor, student_id=student.id, after=sensitive_after, meta=meta
+        )
+    return _detail_out(session, student, actor=actor, storage=None, clock=clock)
