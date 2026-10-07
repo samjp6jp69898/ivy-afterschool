@@ -14,6 +14,9 @@
   ``invalid_pickup_status``）→ commit → ``PickupRequestOut``。
 - BACKEND-432 ``POST /pickup/requests/{request_id}/acknowledge``：pickup:operate；無 body →
   BACKEND-408（非 pending 409 ``invalid_pickup_status``）→ commit → ``PickupRequestOut``。
+- BACKEND-433 ``POST /pickup/requests/{request_id}/complete``：pickup:operate；
+  ``PickupCompleteIn`` + request meta → BACKEND-410 ``complete_request``（method=override 另需
+  pickup:override，由 service 檢查回 403；override 寫 audit）→ commit → ``PickupRequestOut``。
 - BACKEND-434 ``POST /pickup/requests/{request_id}/cancel``：pickup:operate；``PickupCancelIn`` 可
   省略 → BACKEND-411（終態 409；家長發起者通知該家長）→ commit → ``PickupRequestOut``。
 """
@@ -31,9 +34,11 @@ from app.api.deps import CurrentStaff, require_permission
 from app.core.clock import Clock, get_clock
 from app.core.db import get_db
 from app.core.permissions import Permission
+from app.core.request_meta import RequestMeta, get_request_meta
 from app.core.storage import Storage, get_storage
 from app.schemas.pickup import (
     PickupCancelIn,
+    PickupCompleteIn,
     PickupQueueOut,
     PickupQueueQuery,
     PickupReplyIn,
@@ -117,6 +122,23 @@ def acknowledge_request(
     request_id: UUID, staff: PickupOperate, db: Db, clock: ClockDep
 ) -> PickupRequestOut:
     request = request_service.acknowledge_request(db, request_id, actor=staff, clock=clock)
+    out = build_request_views(db, [request])[0]
+    db.commit()
+    return out
+
+
+@router.post("/requests/{request_id}/complete", response_model=PickupRequestOut)
+def complete_request(
+    request_id: UUID,
+    body: PickupCompleteIn,
+    staff: PickupOperate,
+    db: Db,
+    meta: Annotated[RequestMeta, Depends(get_request_meta)],
+    clock: ClockDep,
+) -> PickupRequestOut:
+    request = request_service.complete_request(
+        db, request_id, body, actor=staff, meta=meta, clock=clock
+    )
     out = build_request_views(db, [request])[0]
     db.commit()
     return out
