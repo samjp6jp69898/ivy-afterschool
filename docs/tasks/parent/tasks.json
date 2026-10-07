@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 108,
-  "last_updated": "2026-10-07T10:46:13Z",
+  "version": 109,
+  "last_updated": "2026-10-07T10:47:29Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -1941,7 +1941,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/PickupReplyMessage.vue",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r9b",
       "depends_on": [
         "FRONTEND-003",
