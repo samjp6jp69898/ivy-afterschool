@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 103,
-  "last_updated": "2026-10-07T08:23:03Z",
+  "version": 104,
+  "last_updated": "2026-10-07T08:45:01Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -1800,10 +1800,11 @@
         "BACKEND-444",
         "BACKEND-445",
         "BACKEND-446",
-        "PARENT-004"
+        "PARENT-004",
+        "FRONTEND-006"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "經 parentHttp 或後台 http（instance 預設 Content-Type 為 application/json）送 FormData 的 api client，一律要 per-request 覆蓋成 multipart/form-data，否則 axios 把 FormData 轉成 JSON 字串、檔案遺失；拿掉 createPickupPerson 的標頭覆蓋 pickupPersons.spec.ts 會轉紅。",
+      "risk_notes": "createPickupPerson 送 FormData：parentHttp 預設 Content-Type 為 application/json，axios 會把 FormData 轉成 JSON 字串而遺失檔案；FRONTEND-294 的 createHttpClient request interceptor 會移除 FormData 請求上預設的 JSON 標頭，本 client 另外明確帶 multipart/form-data（不依賴 interceptor）。瀏覽器端 axios 送出前會清掉此標頭，由瀏覽器帶 boundary。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/api/pickupPersons.spec.ts",

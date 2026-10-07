@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 137,
-  "last_updated": "2026-10-07T08:44:20Z",
+  "version": 138,
+  "last_updated": "2026-10-07T08:45:01Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1345,7 +1345,7 @@
     {
       "id": "FRONTEND-047",
       "title": "實作 views/LoginView.vue：員工登入頁",
-      "description": "建立 `apps/web/src/views/LoginView.vue`。移植 ivy `FE:src/views/LoginView.vue` 的表單驗證、第一個錯誤欄位聚焦、送出中 loading；**去掉** tenant branding、portal-only 導向、idle logout 提示。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-login.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。 稿需呈現：一般、欄位驗證錯誤、帳密錯誤、嘗試過多（鎖定）、伺服器無法連線、送出中。\n\n**內容**\n- 上方顯示安親班名稱與 Logo：`fetchPublicConfig()`（FRONTEND-021）取得 `org_name` / `logo_url`；失敗或空值顯示「安親班管理系統」。\n- 欄位：帳號（autocomplete username）、密碼（show-password，autocomplete current-password）；皆必填（「請輸入帳號」「請輸入密碼」）。\n- 送出：`auth.login(username.trim(), password)`（FRONTEND-022）→ 成功：`must_change_password` → `/change-password`；否則 `safeRedirect(route.query.redirect)`（FRONTEND-025，且有權限）或 `firstAllowedPath`，都沒有 → `/forbidden`。\n- 錯誤：`invalid_credentials` → 表單上方 el-alert「帳號或密碼錯誤」並清空密碼；`too_many_attempts` → 顯示後端 message；network_error / timeout → 「無法連線伺服器，請稍後再試」。\n- `auth.restoreError` 有值時（啟動還原失敗）同樣顯示無法連線提示。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/LoginView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/views/LoginView.vue`。移植 ivy `FE:src/views/LoginView.vue` 的表單驗證、第一個錯誤欄位聚焦、送出中 loading；**去掉** tenant branding、portal-only 導向、idle logout 提示。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-login.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。 稿需呈現：一般、欄位驗證錯誤、帳密錯誤、嘗試過多（鎖定）、伺服器無法連線、送出中。\n\n**內容**\n- 上方顯示安親班名稱與 Logo：`fetchPublicConfig()`（FRONTEND-021）取得 `org_name` / `logo_url`；失敗或空值顯示「安親班管理系統」。\n- 欄位：帳號（autocomplete username）、密碼（show-password，autocomplete current-password）；皆必填（「請輸入帳號」「請輸入密碼」）。\n- 送出：`auth.login(username.trim(), password)`（FRONTEND-022）→ 成功：`must_change_password` → `/change-password`；否則 `landingPath(route.query.redirect, perms)`（FRONTEND-025：redirect 通過 `safeRedirect` 且解析到使用者持有 `meta.permission` 的路由才採用，否則 `firstAllowedPath`，再否則 `/forbidden`；不自行重做這些判斷，避免 `redirect=/login` 之類的導向迴圈與 open redirect）。\n- 錯誤：`invalid_credentials` → 表單上方 el-alert「帳號或密碼錯誤」並清空密碼；`too_many_attempts` → 顯示後端 message；network_error / timeout → 「無法連線伺服器，請稍後再試」。\n- `auth.restoreError` 有值時（啟動還原失敗）同樣顯示無法連線提示。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/LoginView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/LoginView.vue",
       "source_ref": "FE:src/views/LoginView.vue::default",
@@ -1371,7 +1371,8 @@
           "LoginView sends must-change-password users to change password：回傳 user.must_change_password true → router path === '/change-password'",
           "LoginView shows invalid credentials error and clears password：POST 回 401 invalid_credentials → 文字含 '帳號或密碼錯誤'，密碼 input 值為 ''",
           "LoginView shows throttle and network errors：429 {error:{code:'too_many_attempts',message:'嘗試次數過多，請 15 分鐘後再試'}} → 文字含該訊息；mock.networkError → 文字含 '無法連線伺服器，請稍後再試'",
-          "LoginView shows org name from public config：GET /parent/config 回 {org_name:'快樂安親班',logo_url:null} → 文字含 '快樂安親班'；回 500 → 文字含 '安親班管理系統'"
+          "LoginView shows org name from public config：GET /parent/config 回 {org_name:'快樂安親班',logo_url:null} → 文字含 '快樂安親班'；回 500 → 文字含 '安親班管理系統'",
+          "LoginView ignores unsafe or unusable redirect：route query redirect 分別為 '//evil.example'、'/\\\\evil.example'、'/login'、'/leaves'（回傳 user 沒有 leaves:read）→ 登入成功後 router path 都等於該 user 的 firstAllowedPath（不是 redirect 值、不迴圈）"
         ],
         "run": "just web-test src/views/LoginView.spec.ts -t \"LoginView\"",
         "notes": ""
@@ -5931,7 +5932,7 @@
         "FRONTEND-055"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "Element Plus 2.14 的 el-table-column 是泛型元件，slot 的 row 預設型別是 Record<PropertyKey, any>：`#default=\"{ row }: { row: X }\"` 的註記會被 vue-tsc 擋下（TS2345），不註記則 row 的欄位是 any。AuditLogView 在每個 el-table-column 前加 `<!-- @vue-generic {AuditLog} -->`（vue-tsc 專用註解）指定泛型，row 才是 AuditLog；之後各列表頁的 el-table-column 比照辦理。開發模式（含 vitest）每個註解會在 .hidden-columns 多一個 comment node，正式建置會被 Vue 移除；Element Plus 以 hiddenColumns.children（HTMLCollection，不含 comment）計算欄位順序，不受影響。JsonSchemaFields 的 enum el-select 以 `(valueOf(f) as string | number | boolean | undefined)` 收斂 unknown；template 內含 `|` 的型別斷言一定要放進括號，否則 eslint-plugin-vue 會把它當成已棄用的 filter 語法而報 vue/no-deprecated-filter。",
+      "risk_notes": "Element Plus 2.14 的 el-table-column 是泛型元件，slot 的 row 預設型別是 Record<PropertyKey, any>：`#default=\"{ row }: { row: X }\"` 的註記會被 vue-tsc 擋下（TS2345），不註記則 row 的欄位是 any。AuditLogView 在每個 el-table-column 前加 `<!-- @vue-generic {AuditLog} -->`（vue-tsc 專用註解）指定泛型，row 才是 AuditLog；之後各列表頁的 el-table-column 比照辦理。`@vue-generic` 註解只給 vue-tsc 使用，編譯後的 DOM（開發、測試、正式）都不含它，不影響 Element Plus 以 hiddenColumns.children 計算的欄位順序。JsonSchemaFields 的 enum el-select 以 `(valueOf(f) as string | number | boolean | undefined)` 收斂 unknown；template 內含 `|` 的型別斷言一定要放進括號，否則 eslint-plugin-vue 會把它當成已棄用的 filter 語法而報 vue/no-deprecated-filter。",
       "open_design_questions": [],
       "tdd": {
         "test_path": null,
