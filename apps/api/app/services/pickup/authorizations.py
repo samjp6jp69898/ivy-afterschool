@@ -8,6 +8,7 @@
 - BACKEND-425：``complete_via_authorization``（核銷後完成授權與接送請求、出勤改 left、通知家長）。
   鎖序：授權列（BACKEND-424 已鎖）→ 請求列 → 出勤列。
 - BACKEND-426：``verify_code``（核對接送碼；錯碼以單一語句原子累計，連錯 5 次鎖定、不自動解鎖）。
+- BACKEND-427：``confirm_visual_match``（員工目視核對後核銷；照片只是輔助，寫 audit）。
 
 列表只回 ``code_last4``，不回 ``code_hash``（單向 HMAC）；明碼只在建立時的回應出現一次，DB、log
 與例外訊息都不保存。``effective_status``：active 且 service_date 早於今天（台北）→ ``expired``，
@@ -48,6 +49,7 @@ from app.schemas.pickup import (
     PickupStudentOut,
     StaffAuthorizationListQuery,
     StaffAuthorizationOut,
+    VisualMatchIn,
 )
 from app.services.attendance_service import mark_left_by_pickup
 from app.services.audit_service import Actor, record
@@ -545,3 +547,38 @@ def verify_code(
         remaining_attempts=PICKUP_CODE_MAX_ATTEMPTS - attempts,
         locked=locked,
     )
+
+
+def confirm_visual_match(
+    session: Session,
+    auth_id: UUID,
+    data: VisualMatchIn | None,
+    *,
+    actor: CurrentStaff,
+    meta: RequestMeta,
+    clock: Clock,
+) -> AuthorizationCompleteOut:
+    """員工目視核對代理人後一鍵核銷（verification_method='visual_match'），同交易寫 audit。
+
+    適用於任何 active 的代理授權：常用接送人有照片時核驗畫面以照片輔助比對，沒有照片（一次性代理人
+    或接送人未上傳）時由員工核對身分證件；接送碼已鎖定的授權只能由 pickup:override 處理（409）。
+    移植 ivy ``services/pickup_verification.py::confirm_visual_match``；ivy 比對的是佇列卡上的明碼，
+    本專案不保存明碼，改為目視核對。
+    """
+    auth = load_verifiable_authorization(session, auth_id, clock=clock)
+    person = auth.pickup_person
+    record(
+        session,
+        actor=Actor.staff(actor),
+        action="pickup.visual_match",
+        entity_type="pickup_authorization",
+        entity_id=auth.id,
+        before={"status": "active"},
+        after={
+            "status": "completed",
+            "has_photo": person is not None and person.photo_path is not None,
+            "note": data.note if data is not None else None,
+        },
+        meta=meta,
+    )
+    return complete_via_authorization(session, auth, "visual_match", actor=actor, clock=clock)
