@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 409,
-  "last_updated": "2026-10-07T07:57:56Z",
+  "version": 410,
+  "last_updated": "2026-10-07T08:04:43Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5382,11 +5382,11 @@
     {
       "id": "BACKEND-156",
       "title": "實作 StudentImportService.execute：全有或全無寫入匯入資料",
-      "description": "在 `apps/api/app/services/student_import_service.py` 實作：\n```python\ndef execute(session: Session, upload: ValidatedUpload, *, academic_year: int, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> ImportResult: ...   # ImportResult: created（int）、student_ids（list[UUID]）\n```\n- 重新執行 `preview`（不信任前端送回的預覽）；有任何 invalid 列 → 409 `import_has_errors`，details 為 preview 結果（rows 只含有錯誤的列）。\n- 全部 valid → 逐列以 BACKEND-151 相同的寫入邏輯（共用內部函式 `_insert_student`，含加密與 HMAC）新增；任何一列 DB 錯誤（競態造成的 unique）→ 整批回滾並回 409 `import_conflict`。\n- 稽核 `student.import`（entity_type `student_import`、after `{\"created\": n, \"academic_year\": y}`）。\n- 不 commit（endpoint commit）。\n\n**驗收標準**\n- 全部合法時一次建立全部學生並寫一筆 audit。\n- 有錯誤列時 409 且不寫入任何學生。\n- 敏感欄位以密文 + HMAC 存放。",
+      "description": "在 `apps/api/app/services/student_import_service.py` 實作：\n```python\ndef execute(session: Session, upload: ValidatedUpload, *, academic_year: int, actor: CurrentStaff, meta: RequestMeta, clock: Clock) -> ImportResult: ...   # ImportResult: created（int）、student_ids（list[UUID]）\n```\n- 重新執行 `preview`（不信任前端送回的預覽；檔案層的 422 原樣往上拋）；有任何 invalid 列 → 409 `import_has_errors`，details 為 preview 結果 `{total, valid, invalid, rows}`，rows 只含有錯誤的列、每列只有 `row_number` / `display` / `errors`（不帶可能含敏感明文的正規化資料 `data`）。\n- 全部 valid → 在單一 savepoint 內逐列以 BACKEND-151 相同的寫入邏輯新增（共用 `student_service.insert_student`：create_student 的寫入邏輯抽成公開函式，含權限 / 參照 / 日期檢查、加密與 HMAC、unique 轉譯、逐人 `student.sensitive_update` 稽核；跨模組共用故不用私有名稱）；任何一列寫入失敗（預覽與寫入之間的競態：學號 / 身分證撞 unique、班級剛封存、退班日早於入班日等任何 AppError）→ savepoint 回滾整批（session 仍可用）並回 409 `import_conflict`，details `{row_number, code, message}`（原錯誤碼與訊息）。\n- 稽核 `student.import`（entity_type `student_import`、after `{\"created\": n, \"academic_year\": y}`）；entity_id 為 null（匯入批次沒有可對應的實體）。\n- 不 commit（endpoint commit）。\n\n**驗收標準**\n- 全部合法時一次建立全部學生並寫一筆 audit。\n- 有錯誤列時 409 且不寫入任何學生。\n- 敏感欄位以密文 + HMAC 存放。\n- 競態造成任一列寫入失敗 → 整批回滾、409 import_conflict。",
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/student_import_service.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-155",
@@ -5401,9 +5401,10 @@
           "integration"
         ],
         "red_cases": [
-          "test_import_execute_success：3 列合法（學號 S115101、S115102、S115103）→ ImportResult.created == 3、len(student_ids) == 3；students where student_no in ('S115101','S115102','S115103') 筆數 3；audit 'student.import' after == {'created': 3, 'academic_year': 115}",
-          "test_import_execute_has_errors：第 2 筆資料列（Excel 第 3 列）就讀國小填 '不存在國小' → AppError 409 'import_has_errors'，details.rows == [{'row_number': 3, 'errors': ['找不到國小：不存在國小'], ...}]（只含錯誤列）；students 筆數不變",
-          "test_import_execute_encrypts：第 1 列身分證 'A123456789' → 該生 decrypt_bytes(id_number_enc) == 'A123456789'、id_number_hmac == id_number_hmac('A123456789')"
+          "test_import_execute_success：3 列合法（學號 S115101、S115102、S115103）→ ImportResult.created == 3、len(student_ids) == 3；students where student_no in ('S115101','S115102','S115103') 筆數 3；audit 'student.import' entity_type 'student_import'、after == {'created': 3, 'academic_year': 115}；另一條連線看不到新學生（不 commit）",
+          "test_import_execute_has_errors：第 2 筆資料列（Excel 第 3 列）就讀國小填 '不存在國小' → AppError 409 'import_has_errors'，details.rows == [{'row_number': 3, 'errors': ['找不到國小：不存在國小'], 'display': {...}}]（只含錯誤列、不含 data）、details total / valid / invalid == (3, 2, 1)；students 筆數不變、無 student.import 稽核；空檔 → 422 'import_empty' 原樣拋出",
+          "test_import_execute_encrypts：第 1 列身分證 'A123456789' → 該生 decrypt_bytes(id_number_enc) == 'A123456789'、id_number_hmac == id_number_hmac('A123456789')、健康備註可解回且密文不含明文、該生 sensitive_update 稽核 after == {'set': ['health_note', 'id_number']}；無 students:sensitive 的匯入者帶身分證 → 409 'import_has_errors'（errors 含 '沒有權限匯入敏感欄位'）且不寫入",
+          "test_import_execute_conflict_rolls_back_all：monkeypatch preview 在回傳後插入同學號 S115102 模擬競態 → AppError 409 'import_conflict'，details == {'row_number': 3, 'code': 'student_no_taken', 'message': '學號已被使用'}；S115101 / S115103 皆不存在（整批回滾）、無 student.import 與 sensitive_update 稽核；同一 session 修掉衝突列後再匯入成功"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_student_import_service.py -k \"test_import_execute_\"",
         "notes": ""
