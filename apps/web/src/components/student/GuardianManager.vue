@@ -5,7 +5,8 @@
 // - initial 有值先顯示，掛載後（與切換學生時）仍向後端取最新清單；任一寫入成功後 emit change 並重新載入
 //   （主要聯絡人互斥由後端處理，以重新載入反映）。產生、解除綁定、刪除回 409 / 404 表示畫面過時，顯示後端訊息後也重新載入。
 // - 綁定碼只在 dialog 開著時保留；dialog 一關就清掉，BindingCodeDialog 同時以 v-if 移除內容。
-//   dialog 的監護人與學生姓名取送出請求當下的值：請求中切換學生、回應晚到時，碼仍屬於原學生。
+// - 針對監護人的操作都以點擊按鈕當下的學生為準（學生姓名、表單的 studentId 與主要聯絡人提示）：
+//   確認框或表單開著、請求進行中切換學生，都仍屬於原學生。
 import { Phone, Plus, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, ref, watch } from 'vue'
@@ -57,6 +58,9 @@ const busy = ref(false)
 const issued = ref<IssuedCode | null>(null)
 const formOpen = ref(false)
 const editing = ref<Guardian | undefined>(undefined)
+/** 表單開啟當下的學生，以及當時是否已有其他主要聯絡人 */
+const formStudentId = ref(props.studentId)
+const formHasOtherPrimary = ref(false)
 
 let loadSeq = 0
 
@@ -84,9 +88,6 @@ watch(
 )
 
 const primary = computed(() => guardians.value?.find((g) => g.is_primary) ?? null)
-const hasOtherPrimary = computed(() =>
-  (guardians.value ?? []).some((g) => g.is_primary && g.id !== editing.value?.id),
-)
 
 function bindingText(g: Guardian): string {
   const b = g.binding
@@ -112,10 +113,13 @@ function onWriteError(err: unknown, fallback: string): void {
 
 function openForm(g?: Guardian): void {
   editing.value = g
+  formStudentId.value = props.studentId
+  formHasOtherPrimary.value = (guardians.value ?? []).some((x) => x.is_primary && x.id !== g?.id)
   formOpen.value = true
 }
 
 async function issueCode(g: Guardian): Promise<void> {
+  const studentName = props.studentName
   if (g.binding.status === 'code_issued') {
     try {
       await ElMessageBox.confirm('重新產生後舊的綁定碼會立即失效，確定嗎？', '重新產生綁定碼', {
@@ -127,7 +131,6 @@ async function issueCode(g: Guardian): Promise<void> {
       return
     }
   }
-  const studentName = props.studentName
   busy.value = true
   try {
     const result = await issueBindingCode(g.id)
@@ -145,10 +148,11 @@ function onBindingDialog(open: boolean): void {
 }
 
 async function unbind(g: Guardian): Promise<void> {
+  const studentName = props.studentName
   const parentName = g.binding.parent_display_name || g.name
   try {
     await ElMessageBox.confirm(
-      `解除後 ${parentName} 將無法在家長端看到 ${props.studentName}，確定要解除嗎？`,
+      `解除後 ${parentName} 將無法在家長端看到 ${studentName}，確定要解除嗎？`,
       '解除綁定',
       { type: 'warning', confirmButtonText: '解除綁定', cancelButtonText: '取消' },
     )
@@ -324,9 +328,9 @@ const { confirmDelete, deleting } = useConfirmDelete<Guardian>({
 
     <GuardianFormDialog
       v-model="formOpen"
-      :student-id="studentId"
+      :student-id="formStudentId"
       :guardian="editing"
-      :has-other-primary="hasOtherPrimary"
+      :has-other-primary="formHasOtherPrimary"
       @saved="afterWrite"
     />
     <BindingCodeDialog
