@@ -8,15 +8,23 @@
  *  3. .material-symbols-rounded 夾在 1em 盒內：字型最終載不到也只是 1em 空盒
  *
  * 子集取得方式（新增圖示時把名稱加進下方清單後重抓，產物 commit 進 repo）：
- *   https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&icon_names=<逗號分隔清單>&display=block
+ *   https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&icon_names=<逗號分隔、字母序的清單>&display=block
  *   以桌機 Chrome User-Agent 請求，下載回應中 fonts.gstatic.com 的 woff2 存成
  *   ../assets/fonts/material-symbols-rounded-subset.woff2。FILL 軸保留 0..1（filled 圖示要用）。
+ *   Google 不檢查名稱是否存在（寫錯名稱也回 200，只是字型裡沒有該圖示），換字型後要實際渲染確認。
+ *   icons.spec.ts 會掃描 src/parent 與已核可的家長端設計稿，用到但不在下方清單的圖示會讓測試失敗。
  *
- * 子集涵蓋的圖示（字母序）：
- *   add, arrow_back, arrow_downward, assignment, calendar_month, call, check, check_circle,
- *   chevron_right, close, content_copy, directions_walk, done_all, edit, error, event_available,
- *   event_busy, expand_more, grading, group, help, home, how_to_reg, image, logout, menu,
- *   notifications, password, person, person_add, picture_as_pdf, schedule, send, settings
+ * 子集涵蓋的圖示（字母序；清單放在檔頭註解最後，icons.spec.ts 會解析）：
+ *   add, add_a_photo, add_photo_alternate, arrow_back, arrow_downward, assignment, attach_file,
+ *   autorenew, badge, block, calendar_month, call, cancel, chat, check, check_circle,
+ *   chevron_left, chevron_right, close, cloud_off, content_copy, delete, directions_car,
+ *   directions_walk, done_all, edit, edit_calendar, error, event_available, event_busy,
+ *   event_note, expand_more, grade, grading, group, help, home, hourglass_top, how_to_reg,
+ *   image, image_not_supported, inbox, info, link, login, logout, menu, menu_book, more_horiz,
+ *   notifications, open_in_new, password, pending, person, person_add, picture_as_pdf, pin,
+ *   radio_button_checked, radio_button_unchecked, refresh, remove, schedule, search_off, send,
+ *   settings, sick, smart_toy, sync, sync_problem, timer_off, today, tune, warning,
+ *   where_to_vote, wifi_off
  */
 
 @font-face {
