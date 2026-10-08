@@ -2,7 +2,8 @@
 BACKEND-444 / 445 / 446：家長端常用接送人（列表、新增 multipart 含照片、刪除）。
 BACKEND-447 / 448：家長端代理接送授權（列表、建立；接送碼只回一次、Cache-Control: no-store）。
 BACKEND-440 / 442 / 443：接送請求「我要來接」（含 arrived 捷徑）、「我到了」、取消。
-BACKEND-524：代理接送授權重新產生接送碼（舊碼失效、新碼只回一次、重設連錯與鎖定）。"""
+BACKEND-524：代理接送授權重新產生接送碼（舊碼失效、新碼只回一次、重設連錯與鎖定）。
+BACKEND-557：暫停（suspended）學生的家長端寫入一律 409 student_not_active（讀取不受影響）。"""
 
 from __future__ import annotations
 
@@ -1106,3 +1107,94 @@ def test_parent_pickup_auth_regenerate_409(
     for auth, code in zip(cases.values(), ("111111", "222222", "333333", "444444"), strict=True):
         assert pickup_code_matches(code, _reload_auth(db_session, auth.id).code_hash)
         assert _regenerate_audits(db_session, auth.id) == []
+
+
+# --- BACKEND-557：暫停學生的家長端寫入一律 409 student_not_active --------------------------
+
+_SUSPENDED_MESSAGE = "此學生目前暫停，無法進行此操作"
+
+
+def _own_suspended_child(db: Session, parent: ParentAccount, *, name: str = "王小明") -> Student:
+    student = make_student(db, name=name, status="suspended")
+    make_guardian(db, student, parent=parent)
+    return student
+
+
+def _authorization_count(db: Session, student_id: object) -> int:
+    return db.execute(
+        select(func.count())
+        .select_from(PickupAuthorization)
+        .where(PickupAuthorization.student_id == student_id)
+    ).scalar_one()
+
+
+@pytest.mark.clock(_IN_WINDOW)
+def test_parent_scope_for_write_pickup_request_suspended_409(
+    parent_client: ParentClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client_a, parent_a = parent_client()
+    client_b, parent_b = parent_client()
+    ming = _own_suspended_child(db_session, parent_a)
+    active = _own_child(db_session, parent_a, name="王小華")
+    theirs = _own_suspended_child(db_session, parent_b, name="陳小安")
+    db_session.commit()
+
+    blocked = client_a.post(_REQUESTS_URL, json={"student_id": str(ming.id)})
+    shortcut = client_a.post(_REQUESTS_URL, json={"student_id": str(ming.id), "arrived": True})
+    sibling = client_a.post(_REQUESTS_URL, json={"student_id": str(active.id)})
+    # IDOR 優先：他人的暫停學生與不存在的 id 同一個 404，不是 409
+    theirs_resp = client_a.post(_REQUESTS_URL, json={"student_id": str(theirs.id)})
+    missing = client_a.post(_REQUESTS_URL, json={"student_id": str(uuid4())})
+
+    assert_error(blocked, 409, "student_not_active")
+    assert blocked.json()["error"]["message"] == _SUSPENDED_MESSAGE
+    assert_error(shortcut, 409, "student_not_active")
+    assert _request_count(db_session, ming.id) == 0
+    # 同一位家長另一個在學的小孩不受影響
+    assert sibling.status_code == 201
+    assert_error(theirs_resp, 404, "student_not_found")
+    assert theirs_resp.json() == missing.json()
+    assert _request_count(db_session, theirs.id) == 0
+    # 讀取不受影響
+    assert client_a.get(_TODAY_URL).status_code == 200
+    assert client_b.get(_TODAY_URL).status_code == 200
+
+
+def test_parent_scope_for_write_pickup_person_create_suspended_409(
+    parent_client: ParentClientFactory,
+    db_session: Session,
+    assert_error: AssertError,
+    fake_storage: FakeStorage,
+) -> None:
+    client, parent = parent_client()
+    ming = _own_suspended_child(db_session, parent)
+    existing = make_pickup_person(db_session, ming, name="李阿姨")
+    db_session.commit()
+
+    blocked = _post_person(client, ming.id, photo=("a.jpg", _JPEG, "image/jpeg"))
+    listed = client.get(_persons_url(ming.id))
+
+    assert_error(blocked, 409, "student_not_active")
+    assert blocked.json()["error"]["message"] == _SUSPENDED_MESSAGE
+    assert fake_storage.objects == {}
+    assert db_session.query(PickupPerson).filter_by(student_id=ming.id).count() == 1
+    # 讀取不受影響：既有的常用接送人仍可看
+    assert listed.status_code == 200
+    assert [p["id"] for p in listed.json()] == [str(existing.id)]
+
+
+def test_parent_scope_for_write_pickup_authorization_create_suspended_409(
+    parent_client: ParentClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client, parent = parent_client()
+    ming = _own_suspended_child(db_session, parent)
+    db_session.commit()
+
+    blocked = client.post(_auths_url(ming.id), json=_proxy_body())
+    listed = client.get(_auths_url(ming.id))
+
+    assert_error(blocked, 409, "student_not_active")
+    assert blocked.json()["error"]["message"] == _SUSPENDED_MESSAGE
+    assert _authorization_count(db_session, ming.id) == 0
+    assert listed.status_code == 200
+    assert listed.json() == []

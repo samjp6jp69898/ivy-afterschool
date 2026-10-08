@@ -2,7 +2,8 @@
 BACKEND-356：POST /api/parent/leaves（家長申請請假；student_id 由 service 驗證所有權）。
 BACKEND-357：POST /api/parent/leaves/{id}/cancel（未開始整筆取消、已開始取消剩餘日子）。
 BACKEND-358：POST /api/parent/leaves/{id}/attachments（multipart 上傳附件）。
-BACKEND-554：建立 / 取消請假的回應都由 leave_service.parent_leave_out 組裝（刪除私有複本）。"""
+BACKEND-554：建立 / 取消請假的回應都由 leave_service.parent_leave_out 組裝（刪除私有複本）。
+BACKEND-557：暫停（suspended）學生的家長端寫入一律 409 student_not_active。"""
 
 from __future__ import annotations
 
@@ -826,3 +827,39 @@ def test_parent_leave_assembler_shared_create_and_cancel_use_it(
     assert cancelled.status_code == 200
     assert cancelled.json()["reason"] == "共用組裝函式的輸出"
     assert cancelled.json()["status"] == "cancelled"
+
+
+# --- BACKEND-557：暫停學生不能由家長端申請請假 --------------------------------------------
+
+
+def test_parent_scope_for_write_leave_create_suspended_409(
+    parent_client: ParentClientFactory, db_session: Session, assert_error: AssertError
+) -> None:
+    client_a, parent_a = parent_client()
+    _, parent_b = parent_client()
+    ming = make_student(db_session, name="王小明", status="suspended")
+    make_guardian(db_session, ming, parent=parent_a)
+    hua = make_student(db_session, name="王小華")
+    make_guardian(db_session, hua, parent=parent_a)
+    theirs = make_student(db_session, name="陳小安", status="suspended")
+    make_guardian(db_session, theirs, parent=parent_b)
+    history = make_leave(db_session, ming, start_date=date(2026, 8, 20), reason="暫停前的請假")
+    db_session.commit()
+
+    blocked = client_a.post(_CREATE_URL, json=_leave_body(ming.id))
+    sibling = client_a.post(_CREATE_URL, json=_leave_body(hua.id))
+    # IDOR 優先：他人的暫停學生與不存在的 id 同一個 404，不是 409
+    theirs_resp = client_a.post(_CREATE_URL, json=_leave_body(theirs.id))
+    missing = client_a.post(_CREATE_URL, json=_leave_body(uuid4()))
+    history_resp = client_a.get(_url(ming.id))
+
+    assert_error(blocked, 409, "student_not_active")
+    assert blocked.json()["error"]["message"] == "此學生目前暫停，無法進行此操作"
+    assert _leave_count(db_session, ming.id) == 1  # 只有原本的歷史請假
+    assert sibling.status_code == 201
+    assert_error(theirs_resp, 404, "student_not_found")
+    assert theirs_resp.json() == missing.json()
+    assert _leave_count(db_session, theirs.id) == 0
+    # 讀取不受影響：暫停學生的請假歷史仍可看
+    assert history_resp.status_code == 200
+    assert [i["id"] for i in history_resp.json()["items"]] == [str(history.id)]

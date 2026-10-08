@@ -2,6 +2,7 @@
 BACKEND-180：``assert_parent_owns_student`` 與 ``get_owned_student`` /
 ``get_owned_student_for_write`` dependency（IDOR 一律 404 且與不存在相同；for_write 對 withdrawn
 409）。
+BACKEND-557：for_write 對 suspended 也 409 ``student_not_active``（訊息依狀態區分，讀取不受影響）。
 
 domain_spec M3：``guardians.parent_account_id = 自己`` 且 guardian / student 皆未封存；withdrawn
 仍可見；每次呼叫都查 DB。這是家長端 IDOR 防護的根基。
@@ -23,7 +24,8 @@ from app.core.config import get_settings
 from app.core.crypto import derive_key
 from app.core.db import get_db
 from app.core.errors import AppError, register_exception_handlers
-from app.models.students import Student
+from app.models.parents import ParentAccount
+from app.models.students import Student, StudentStatus
 from app.services.parent_scope import assert_parent_owns_student, get_parent_student_ids
 from tests.support.auth_cookies import login_parent
 from tests.support.db_override import override_get_db
@@ -178,11 +180,65 @@ def test_assert_owns_student_for_write_withdrawn(db_session: Session) -> None:
     assert exc.value.code == "student_not_active"
     assert exc.value.message == "此學生已退班，無法進行此操作"
 
-    # suspended 不算退班，寫入仍允許
-    ming.status = "suspended"
-    ming.withdrawn_on = None
-    db_session.flush()
+
+# --- BACKEND-557：暫停（suspended）學生的家長端寫入一律 409 student_not_active ----------------
+
+
+def _own_child(db: Session, parent: ParentAccount, *, status: StudentStatus, name: str) -> Student:
+    student = make_student(db, name=name)
+    student.status = status
+    if status == "withdrawn":
+        student.withdrawn_on = date(2026, 7, 31)  # DB CHECK：withdrawn 必須有 withdrawn_on
+    make_guardian(db, student, parent=parent)
+    db.flush()
+    return student
+
+
+def test_parent_scope_for_write_blocks_suspended(db_session: Session) -> None:
+    p = make_parent(db_session)
+    ming = _own_child(db_session, p, status="suspended", name="王小明")
+
+    with pytest.raises(AppError) as exc:
+        assert_parent_owns_student(db_session, p.id, ming.id, for_write=True)
+
+    assert (exc.value.status, exc.value.code) == (409, "student_not_active")
+    assert exc.value.message == "此學生目前暫停，無法進行此操作"
+    assert exc.value.details is None
+    # 讀取不受影響：暫停的學生家長仍可讀歷史
+    assert assert_parent_owns_student(db_session, p.id, ming.id, for_write=False).id == ming.id
+    assert assert_parent_owns_student(db_session, p.id, ming.id).id == ming.id
+
+
+def test_parent_scope_for_write_withdrawn_message_unchanged(db_session: Session) -> None:
+    p = make_parent(db_session)
+    ming = _own_child(db_session, p, status="withdrawn", name="王小明")
+
+    with pytest.raises(AppError) as exc:
+        assert_parent_owns_student(db_session, p.id, ming.id, for_write=True)
+
+    assert (exc.value.status, exc.value.code) == (409, "student_not_active")
+    assert exc.value.message == "此學生已退班，無法進行此操作"
+    assert assert_parent_owns_student(db_session, p.id, ming.id, for_write=False).id == ming.id
+
+
+def test_parent_scope_for_write_active_passes_and_idor_first(db_session: Session) -> None:
+    p = make_parent(db_session)
+    q = make_parent(db_session)
+    ming = _own_child(db_session, p, status="active", name="王小明")
+    theirs_suspended = _own_child(db_session, q, status="suspended", name="陳小華")
+    theirs_withdrawn = _own_child(db_session, q, status="withdrawn", name="林小安")
+    own_archived = make_student(db_session, name="張小芳", status="suspended", archived=True)
+    make_guardian(db_session, own_archived, parent=p)
+
     assert assert_parent_owns_student(db_session, p.id, ming.id, for_write=True).id == ming.id
+    # IDOR 優先：他人的暫停 / 退班學生、自己已封存的學生都是 404（不是 409），不洩漏狀態
+    results = []
+    for student_id in (theirs_suspended.id, theirs_withdrawn.id, own_archived.id, uuid4()):
+        with pytest.raises(AppError) as exc:
+            assert_parent_owns_student(db_session, p.id, student_id, for_write=True)
+        results.append(exc.value)
+    for error in results:
+        _assert_student_not_found(error)
 
 
 @pytest.fixture
