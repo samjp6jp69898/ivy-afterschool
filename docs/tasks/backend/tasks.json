@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 439,
-  "last_updated": "2026-10-08T01:24:06Z",
+  "version": 440,
+  "last_updated": "2026-10-08T01:32:24Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -15434,7 +15434,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_scope.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-180"
@@ -15452,7 +15452,9 @@
           "test_parent_scope_for_write_withdrawn_message_unchanged：學生 status='withdrawn' → for_write=True 仍拋 409 student_not_active，訊息為「此學生已退班，無法進行此操作」；for_write=False 回傳該學生",
           "test_parent_scope_for_write_active_passes_and_idor_first：active 學生 for_write=True 回傳該學生；他人的 suspended 學生 for_write=True 回 404（不是 409，IDOR 優先且不洩漏狀態）",
           "test_parent_scope_for_write_pickup_request_suspended_409：暫停學生的家長 POST /api/parent/pickup/requests → 409 student_not_active，DB 沒有新增 pickup_requests 列（放在 api/parent/test_pickup_endpoints.py）",
-          "test_parent_scope_for_write_leave_create_suspended_409：暫停學生的家長 POST /api/parent/leaves → 409 student_not_active，DB 沒有新增 student_leaves 列（放在 api/parent/test_leaves_endpoints.py）"
+          "test_parent_scope_for_write_leave_create_suspended_409：暫停學生的家長 POST /api/parent/leaves → 409 student_not_active，DB 沒有新增 student_leaves 列（放在 api/parent/test_leaves_endpoints.py）",
+          "test_parent_scope_for_write_pickup_person_create_suspended_409：暫停學生的家長 POST /api/parent/children/{id}/pickup-persons（含照片）→ 409 student_not_active、訊息「此學生目前暫停，無法進行此操作」，storage 沒有物件、DB 沒有新增接送人；GET 列表仍 200（放在 api/parent/test_pickup_endpoints.py）",
+          "test_parent_scope_for_write_pickup_authorization_create_suspended_409：暫停學生的家長 POST /api/parent/children/{id}/pickup-authorizations → 409 student_not_active，DB 沒有新增授權；GET 列表仍 200（放在 api/parent/test_pickup_endpoints.py）"
         ],
         "run": "just test-int apps/api/tests/integration/services/test_parent_scope.py apps/api/tests/integration/api/parent/test_pickup_endpoints.py apps/api/tests/integration/api/parent/test_leaves_endpoints.py -k \"test_parent_scope_for_write_\"",
         "notes": "新測試一律以 test_parent_scope_for_write_ 為前綴，讓 tdd.run 三個檔都選得到。pickup 常用接送人新增與代理授權建立也用 get_owned_student_for_write，請在 test_pickup_endpoints.py 各補一個暫停學生 409 的案例（同前綴）。"
