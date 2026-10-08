@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 121,
-  "last_updated": "2026-10-08T01:43:08Z",
+  "version": 122,
+  "last_updated": "2026-10-08T01:43:19Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -2559,7 +2559,7 @@
     {
       "id": "PARENT-132",
       "title": "移植 AttendanceView：月出勤日曆、統計與單日明細",
-      "description": "建立 `apps/web/src/parent/views/AttendanceView.vue`（路由 `/attendance`）。\n\n- 頂部 PARENT-050 ChildContextHeader；月份列：「‹」上個月、`YYYY 年 M 月`、「›」下個月（不可超過台北本月，超過時停用）、「本月」。\n- 依 `children.selectedId` + month 呼叫 PARENT-130；切換小孩或月份以序號丟棄過期回應。\n- 統計列：上課日 `service_days`、出席 `attended`、請假 `leave`、缺席 `absent`、未登記 `unrecorded`。\n- PARENT-131 AttendanceCalendar；預設選中今天（在當月時），否則不選。\n- 單日明細卡：日期「MM/DD（X）」、狀態、到班 HH:MM / 離班 HH:MM（FRONTEND-003，null 顯示「—」）、請假類別；非營業日「安親班休息」；無紀錄「這天沒有出勤紀錄」。\n- 「申請請假」按鈕 → `/leaves`。\n- 首次載入 SkeletonBlock（card）；失敗 → ParentEmptyState error「出勤紀錄載入失敗」+ 重試；PullToRefresh。\n\n移植 ivy `FE:src/parent/views/AttendanceView.vue::prevMonth` / `nextMonth` / `goToday` 的月份切換與 `selectCell` 單日明細；**去掉** 遲到等 ivy 狀態、remark 欄位。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-attendance.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：本月（含今天選中與明細）、上個月、各種單日明細（到班+離班 / 請假 / 缺席 / 休息 / 無紀錄）、下個月按鈕停用、首次載入、載入失敗、多位小孩切換。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `AttendanceView.vue`。\n\n**驗收標準**：每一條對應 red_case（系統時間固定 2026-10-02 台北）。",
+      "description": "建立 `apps/web/src/parent/views/AttendanceView.vue`（路由 `/attendance`）。版面、文案與互動以已核可稿 `docs/mockups/parent-page-attendance.html`（含其 decisions）為準。\n\n- 版面由上而下：PARENT-050 ChildContextHeader → 月份列 → 統計卡 → 單日明細卡 → PARENT-131 AttendanceCalendar（卡片內）→「申請請假」；整頁內容（含身分卡）包在 PARENT-027 PullToRefresh 內。\n- 月份列：「‹」上個月、`YYYY 年 M 月`（aria-live polite）、「›」下個月，右側「本月」。顯示中的月份就是台北本月時「›」與「本月」都 disabled（不隱藏）；往前沒有下限。\n- 依 `children.selectedId` + month 呼叫 PARENT-130；切換小孩或月份以序號丟棄過期回應。換月份時，顯示本月則預設選中今天，否則不選；換小孩保留目前月份與選中日。\n- 統計卡：上課日 `service_days`、出席 `attended`、請假 `leave`、缺席 `absent`、未登記 `unrecorded`（數字照後端 stats，前端不重算）。卡片下方小字：`service_days` 為 0 →「這個月沒有出勤紀錄」；否則顯示中的月份是本月時「統計到今天（MM/DD）為止」，且台北今日是營業日、當天 status 為 `expected` 或 null 時接「；今天還沒到班，先算在「未登記」」（後端把今天還沒到班也算進 unrecorded，月曆上今天卻是「預計到班」）；其他月份不顯示。\n- 單日明細卡放在月曆上方、固定兩行高（點不同日子時月曆不跳動），aria-live polite。第一行：日期「MM/DD（X）」（今天加「今天」標記）+ 狀態 PARENT-051 StatusPill（tone 照 FRONTEND-005；今天以前仍是 expected 的日子為「未登記」neutral，與月曆一致）。第二行依狀態：`present` / `left` / 今天的 `expected` →「到班 HH:MM」「離班 HH:MM」（FRONTEND-003，null 顯示「—」）；`leave` →「假別 病假 / 事假 / 其他」；`absent` →「這天沒有到班，也沒有請假紀錄」；今天以前仍是 `expected` →「老師沒有登記這天的到班情形」；非營業日 →「安親班休息」；無紀錄 →「這天沒有出勤紀錄」。未選取時「未選擇日期」/「點月曆上的日期，查看當天的到班、離班時間」。\n- 「申請請假」（tonal 全寬）→ `/leaves`；只在有資料時顯示。\n- 首次載入、換月份、換小孩：統計卡、明細卡、月曆改顯示 SkeletonBlock（card），不保留上一個月或上一位小孩的資料；失敗 → ParentEmptyState error「出勤紀錄載入失敗」+ 重試（月份列照常可操作）。PullToRefresh 重抓目前小孩與月份，期間保留內容；失敗時保留內容並以 PARENT-011 snackbar（error）顯示「更新失敗，請稍後再試」，不切成錯誤頁；載入中停用下拉。\n\n移植 ivy `FE:src/parent/views/AttendanceView.vue::prevMonth` / `nextMonth` / `goToday` 的月份切換與 `selectCell` 單日明細；**去掉** 遲到等 ivy 狀態、remark 欄位。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-attendance.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：本月（含今天選中與明細）、上個月、各種單日明細（到班+離班 / 請假 / 缺席 / 休息 / 無紀錄）、下個月按鈕停用、首次載入、載入失敗、多位小孩切換。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `AttendanceView.vue`。\n\n**驗收標準**：每一條對應 red_case（系統時間固定 2026-10-02 台北）。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/AttendanceView.vue",
       "source_ref": "FE:src/parent/views/AttendanceView.vue::prevMonth",
@@ -2574,10 +2574,12 @@
         "PARENT-050",
         "PARENT-130",
         "PARENT-131",
-        "INFRA-013"
+        "INFRA-013",
+        "PARENT-011",
+        "PARENT-051"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "尚待使用者裁定、本 task 照現有 API 實作：未來的請假日不會出現在月曆上（BACKEND-342 只把請假套用到今天、BACKEND-303 每日初始化當天才建 leave 列，家長請了之後日子的假，月曆那幾天仍是無紀錄）；營業日卻沒有出勤列的過去日子（例如暫停後恢復的期間）月曆顯示「無紀錄」、統計卻算進「未登記」。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/views/AttendanceView.spec.ts",
@@ -2586,10 +2588,13 @@
         ],
         "red_cases": [
           "AttendanceView loads current month with stats and today detail：GET '/parent/children/s1/attendance' params {month:'2026-10'} 回 stats {service_days:21, attended:1, leave:0, absent:0, unrecorded:0}、days 含 10/2 present check_in_at '2026-10-02T07:40:00Z' check_out_at '..T09:50:00Z' → 含 '上課日 21'、'10/02（五）'、'到班 15:40'、'離班 17:50'",
-          "AttendanceView month navigation：點「‹」→ 請求 month '2026-09'，標題 '2026 年 9 月'；「›」在 10 月時 disabled；在 9 月點「本月」→ 回到 '2026-10'",
-          "AttendanceView child switch uses new id and drops stale：s1 請求延遲中切到 s2 → 送出 '/parent/children/s2/attendance'；s1 晚到回應不影響畫面（統計為 s2 的值）",
+          "AttendanceView month navigation：點「‹」→ 請求 month '2026-09'，標題 '2026 年 9 月'；在 10 月時「›」與「本月」皆 disabled；在 9 月點「本月」→ 回到 '2026-10'",
+          "AttendanceView child switch uses new id and drops stale：s1 請求延遲中切到 s2 → 送出 '/parent/children/s2/attendance' 且 params month 與切換前相同；s1 晚到回應不影響畫面（統計為 s2 的值）",
           "AttendanceView day detail states：點 10/4（is_service_day false）→ 含「安親班休息」；點無紀錄的 10/20 → 含「這天沒有出勤紀錄」",
-          "AttendanceView load error retry：回 500 → 含「出勤紀錄載入失敗」，點重試再送出 1 次"
+          "AttendanceView load error retry：回 500 → 含「出勤紀錄載入失敗」，點重試再送出 1 次",
+          "AttendanceView stats note：month '2026-10'、days 的 10/02 is_service_day true 且 status 'expected' → 含「統計到今天（10/02）為止；今天還沒到班，先算在「未登記」」；10/02 改為 status 'present' → 含「統計到今天（10/02）為止」且不含「先算在」；切到 '2026-09' → 不含「統計到今天」；回應 stats.service_days 為 0 → 含「這個月沒有出勤紀錄」",
+          "AttendanceView day detail texts：點 status 'absent' 的日子 → 含「這天沒有到班，也沒有請假紀錄」；點今天以前 status 'expected' 的 10/01 → 含「未登記」與「老師沒有登記這天的到班情形」；點 status 'leave'、leave_type 'personal' 的日子 → 含「假別 事假」；點「‹」切到 9 月 → 含「未選擇日期」",
+          "AttendanceView pull refresh failure keeps data：10 月載入完成後呼叫 PullToRefresh 的 onRefresh，GET 回 500 → 仍含「上課日」與月曆、不含「出勤紀錄載入失敗」，snackbar store 有一則 tone 'error' 的「更新失敗，請稍後再試」"
         ],
         "run": "just web-test src/parent/views/AttendanceView.spec.ts -t \"AttendanceView\"",
         "notes": ""
@@ -2696,7 +2701,7 @@
     {
       "id": "PARENT-135",
       "title": "移植 LeaveAttachmentList 元件：請假附件縮圖 / 檔案列與補上傳",
-      "description": "建立 `apps/web/src/parent/components/leaves/LeaveAttachmentList.vue`：\n```ts\nprops: { attachments: LeaveAttachment[]; editable?: boolean; uploading?: boolean; max: number; maxMb: number /* 由頁面以 PARENT-005 limits 的 leave_max_attachments / leave_max_attachment_mb 傳入 */ }\nemits: { upload: [file: File] }\n```\n- 圖片類（mime_type 開頭 image/）顯示縮圖（`url`，`loading=\"lazy\"`）；PDF 顯示文件圖示與「PDF 文件 · {大小}」。每項以 `<a target=\"_blank\" rel=\"noopener noreferrer\">` 開啟 `url`（後端簽發短效網址，不快取）。\n- `editable` 且數量 < max 時顯示「新增附件」file input（同 PARENT-134 的格式驗證；單檔 > maxMb MB →「{檔名} 超過 {maxMb} MB」），驗證通過 emit upload；`uploading` 時顯示轉圈並停用新增。\n- 空清單且不可編輯時顯示「沒有附件」。\n\n移植 ivy `FE:src/parent/components/leaves/LeaveAttachments.vue::onFileChange`（input 清空重選技巧）；**去掉** 刪除附件（本專案無 endpoint）與 urlResolver（後端已回 url）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-leave-attachment-list.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：圖片 + PDF 混合、可補上傳、上傳中、已達上限、無附件。可併入 `parent-page-leaves.html`。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/leaves/LeaveAttachmentList.vue`：\n```ts\nprops: { attachments: LeaveAttachment[]; editable?: boolean; uploading?: boolean; max: number; maxMb: number /* 由頁面以 PARENT-005 limits 的 leave_max_attachments / leave_max_attachment_mb 傳入 */ }\nemits: { upload: [file: File] }\n```\n- 圖片類（mime_type 開頭 image/）顯示縮圖（`url`，`loading=\"lazy\"`）；PDF 顯示文件圖示與「PDF 文件 · {大小}」。每項以 `<a target=\"_blank\" rel=\"noopener noreferrer\">` 開啟 `url`（後端簽發短效網址，不快取）。\n- `url` 為 null（後端簽名失敗，BACKEND-341 / 348 / 357；PARENT-133 型別 `string | null`）時，該格改為不可點的 `<span role=\"img\">`：類型圖示（圖片 `image_not_supported`、PDF `picture_as_pdf`，皆 on-surface-variant）+「暫時無法開啟」，沒有 `<a>`、`<img>`、state layer 與 open_in_new 徽章；`aria-label` 為「附件 {n}：圖片 {大小}，暫時無法開啟」或「附件 {n}：PDF 文件 {大小}，暫時無法開啟」。\n- `editable` 且數量 < max 時顯示「新增附件」file input（同 PARENT-134 的格式驗證；單檔 > maxMb MB →「{檔名} 超過 {maxMb} MB」），驗證通過 emit upload；`uploading` 時顯示轉圈並停用新增。下方說明：可新增時「還可新增 {max − 數量} 個，單檔 {maxMb} MB 以內（JPG、PNG、WEBP、HEIC、PDF）」；`editable` 但已達 max 時不顯示新增，改為「已達 {max} 個附件上限」；不可編輯時不顯示說明。\n- 空清單且不可編輯時顯示「沒有附件」。\n\n移植 ivy `FE:src/parent/components/leaves/LeaveAttachments.vue::onFileChange`（input 清空重選技巧）；**去掉** 刪除附件（本專案無 endpoint）與 urlResolver（後端已回 url）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-leave-attachment-list.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：圖片 + PDF 混合、可補上傳、上傳中、已達上限、無附件。url 為 null 的「暫時無法開啟」磚見已核可稿 `docs/mockups/parent-page-leaves.html`（詳情「已結束：附件已滿 3/3（其中 1 個網址暫時失效）」）。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/leaves/LeaveAttachmentList.vue",
       "source_ref": "FE:src/parent/components/leaves/LeaveAttachments.vue::onFileChange",
@@ -2718,8 +2723,9 @@
         "red_cases": [
           "LeaveAttachmentList renders image and pdf：attachments [{mime_type:'image/jpeg', url:'https://x/a.jpg', size_bytes:2048}, {mime_type:'application/pdf', url:'https://x/b.pdf', size_bytes:1258291}] → 有 img src 'https://x/a.jpg'，含 'PDF 文件 · 1.2 MB'，兩個 a 皆 target '_blank' 且 rel 含 'noopener'",
           "LeaveAttachmentList emits valid upload：editable=true、1 個附件 → 選擇 500 KB image/png → emitted('upload')[0][0].name 為該檔名",
-          "LeaveAttachmentList hides add when full or readonly：editable=true、max=3 且 3 個附件 → 無 file input；editable=false 且 attachments [] → 含「沒有附件」",
-          "LeaveAttachmentList follows max props：editable=true、max=5、maxMb=2、3 個附件 → 有 file input；選擇 3 MB 圖片 → 含「超過 2 MB」且無 upload emit"
+          "LeaveAttachmentList hides add when full or readonly：editable=true、max=3 且 3 個附件 → 無 file input 且含「已達 3 個附件上限」；editable=false 且 attachments [] → 含「沒有附件」",
+          "LeaveAttachmentList follows max props：editable=true、max=5、maxMb=2、3 個附件 → 有 file input；選擇 3 MB 圖片 → 含「超過 2 MB」且無 upload emit",
+          "LeaveAttachmentList renders unavailable tile for null url：attachments [{id:'a1', mime_type:'image/jpeg', url:null, size_bytes:2048}, {id:'a2', mime_type:'application/pdf', url:null, size_bytes:1258291}] → 沒有 a 與 img 元素；兩格皆含「暫時無法開啟」，aria-label 分別為「附件 1：圖片 2 KB，暫時無法開啟」、「附件 2：PDF 文件 1.2 MB，暫時無法開啟」"
         ],
         "run": "just web-test src/parent/components/leaves/LeaveAttachmentList.spec.ts -t \"LeaveAttachmentList\"",
         "notes": ""
@@ -2772,7 +2778,7 @@
     {
       "id": "PARENT-137",
       "title": "移植 LeaveDetailSheet 元件：請假詳情（附件補上傳、依 can_cancel 呈現取消）",
-      "description": "建立 `apps/web/src/parent/components/leaves/LeaveDetailSheet.vue`：\n```ts\nprops: { modelValue: boolean; leave: ParentLeave | null; studentName: string; today: string; limits: ParentLimits; uploading?: boolean }\nemits: { 'update:modelValue': [boolean]; cancel: [leave: ParentLeave]; upload: [file: File] }\n```\n- PARENT-025 ParentBottomSheet，標題「請假詳情」。內容：小孩姓名、假別、期間與天數（含首尾日曆天）、事由（無則「未填寫」）、申請者（`created_by_type` parent →「家長申請」、staff →「安親班代為登記」）、申請時間、取消時間（有值時）、狀態（同 PARENT-136 規則）。\n- 附件：PARENT-135，`editable` = status active 且 attachments < `limits.leave_max_attachments`，`max` / `maxMb` 取自 limits，upload 事件往上 emit。\n- `can_cancel` 為 true 時底部顯示取消按鈕（文字規則同 PARENT-136）；`start_date < today` 時按鈕上方說明「將取消今天（MM/DD）起的請假，之前的日子仍保留為請假」。\n\n移植 ivy `FE:src/parent/components/leaves/LeaveDetailSheet.vue` 的 sheet + 附件版面；**去掉** timelineSteps 審核流程、review_note、刪除附件。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-component-leave-detail-sheet.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：未開始可整筆取消、進行中可取消剩餘（含說明）、已結束 / 已取消（無按鈕）、安親班代登記、附件可補上傳 / 已滿。可併入 `parent-page-leaves.html`。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/components/leaves/LeaveDetailSheet.vue`：\n```ts\nprops: { modelValue: boolean; leave: ParentLeave | null; studentName: string; today: string; limits: ParentLimits; uploading?: boolean }\nemits: { 'update:modelValue': [boolean]; cancel: [leave: ParentLeave]; upload: [file: File] }\n```\n- PARENT-025 ParentBottomSheet，標題「請假詳情」（高度自適應）。頂部摘要：假別圖示（同 PARENT-136）+ 假別 + 狀態 PARENT-051 StatusPill（同 PARENT-136 的規則與 tone），下一行期間與天數「10/05（一）～10/07（三）· 共 3 天」（含首尾日曆天；單日「10/12（一）· 共 1 天」）。明細：小孩姓名、事由（無則「未填寫」）、申請者（`created_by_type` parent →「家長申請」、staff →「安親班代為登記」）、申請時間、取消時間（有值時；兩者以 FRONTEND-003 `formatDateTime` 顯示）。已取消的請假摘要淡化（同 PARENT-136）。\n- 附件：PARENT-135，`editable` = `status === 'active'`（已結束但仍 active 的請假也能補附件）；數量上限交給 LeaveAttachmentList 的 `max`（已滿時不顯示新增、顯示「已達 {max} 個附件上限」），`max` / `maxMb` 取自 limits，`uploading` 原樣傳入，upload 事件往上 emit。\n- `can_cancel` 為 true 時 footer 顯示 outlined 全寬取消按鈕（文字規則同 PARENT-136），點擊 emit cancel(leave)（確認對話框屬於頁面）；`start_date < today` 時按鈕上方 info 圖示小字「將取消今天（MM/DD）起的請假，之前的日子仍保留為請假」。`can_cancel` 為 false 時沒有 footer。\n\n移植 ivy `FE:src/parent/components/leaves/LeaveDetailSheet.vue` 的 sheet + 附件版面；**去掉** timelineSteps 審核流程、review_note、刪除附件。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。本元件的稿併入 `docs/mockups/parent-page-leaves.html`（`preview-tasks` 含 PARENT-137；稿內標示 PARENT-137 的 CSS / JS 區段與右側「元件規格」一節為本元件規格），呈現：未開始可整筆取消、進行中可取消剩餘（含說明）、已結束 / 已取消（無按鈕）、安親班代登記、附件可補上傳 / 已滿。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/leaves/LeaveDetailSheet.vue",
       "source_ref": "FE:src/parent/components/leaves/LeaveDetailSheet.vue::emit",
@@ -2798,7 +2804,7 @@
         "red_cases": [
           "LeaveDetailSheet shows details：modelValue true、leave {leave_type_label:'事假', start_date:'2026-10-05', end_date:'2026-10-07', reason:null, created_by_type:'staff'}、studentName '王小明' → dialog 內含 '王小明'、'事假'、'共 3 天'、'未填寫'、'安親班代為登記'",
           "LeaveDetailSheet remaining cancel explanation：today '2026-10-02'、start '2026-09-30'、can_cancel true → 含「取消剩餘日子」與「將取消今天（10/02）起的請假，之前的日子仍保留為請假」；點按鈕 → emitted('cancel')[0][0].id === leave.id",
-          "LeaveDetailSheet attachments editable rule：limits.leave_max_attachments=3、status active 且 2 個附件 → 有新增附件 input，選檔後 emitted('upload') 長度 1；limits.leave_max_attachments=2 同一筆 → 無 input；status cancelled → 無 input、無取消按鈕"
+          "LeaveDetailSheet attachments editable rule：limits.leave_max_attachments=3、status active 且 2 個附件 → 有新增附件 input，選檔後 emitted('upload') 長度 1；limits.leave_max_attachments=2 同一筆 → 無 input 且含「已達 2 個附件上限」；today '2026-10-02'、status active、end_date '2026-09-22'、can_cancel false、0 個附件 → 仍有新增附件 input、無取消按鈕；status cancelled → 無 input、不含「已達」、無取消按鈕"
         ],
         "run": "just web-test src/parent/components/leaves/LeaveDetailSheet.spec.ts -t \"LeaveDetailSheet\"",
         "notes": ""
@@ -2812,7 +2818,7 @@
     {
       "id": "PARENT-138",
       "title": "移植 LeavesView：請假申請、紀錄列表、詳情與取消（剩餘日子 / 整筆依 can_cancel）",
-      "description": "建立 `apps/web/src/parent/views/LeavesView.vue`（路由 `/leaves`）。\n\n- 掛載時 `getParentLimits()`（PARENT-005）取得 limits，傳給 LeaveForm / LeaveDetailSheet，錯誤訊息中的數字也取自 limits。\n- 頂部 PARENT-050 ChildContextHeader；依 `children.selectedId` 呼叫 `listChildLeaves(id, 1)`（PARENT-133），`items.length < total` 時底部「載入更多」取下一頁並附加；切換小孩重置分頁並以序號丟棄過期回應。\n- 清單：`<ul role=\"list\">` + PARENT-136（today = 台北今日）；空 → ParentEmptyState「還沒有請假紀錄」/「需要請假時按「申請請假」」。\n- 「申請請假」→ PARENT-025 BottomSheet + PARENT-134 LeaveForm → `createLeave({student_id: selectedId, ...})`；成功後依序 `uploadLeaveAttachment`（一次一個）；全部成功 snackbar「請假已送出」；有附件失敗 → snackbar「請假已送出，但有 {n} 個附件上傳失敗，可在請假詳情重新上傳」（請假本身保留）；關閉表單並把新請假加到清單最前面（附件以上傳成功者更新）。\n- 建立錯誤（表單保持開啟、顯示於表單上方）：`leave_overlap` →「這段期間已有請假（{details.start_date}～{details.end_date}）」；`leave_date_out_of_window` →「請假日期需在今天前 {leave_past_days} 天到後 {leave_future_days} 天內」；`no_service_days_in_range` →「選擇的日期都不是上課日」；其他 → `error.message`。\n- 點列 → PARENT-137 LeaveDetailSheet；補上傳 → `uploadLeaveAttachment` 成功後更新該筆；錯誤：413 →「檔案超過 {leave_max_attachment_mb} MB」、415 →「檔案格式不支援」、`attachment_limit_reached` →「每筆請假最多 {leave_max_attachments} 個附件」。\n- 取消（列或詳情）→ PARENT-026 ConfirmDialog：`start_date >= today` 標題「取消這筆請假？」/「整筆請假將取消，出勤恢復為預計到班」；否則標題「取消剩餘日子？」/「今天起的請假會取消，之前的日子保留」→ `cancelLeave(id)` → 以回應取代該筆、snackbar「已取消請假」；`leave_already_ended` / `leave_not_active` → snackbar「這筆請假已無法取消」並重抓第一頁。\n- 首次載入 SkeletonBlock（row × 3）；載入失敗 → ParentEmptyState error「請假紀錄載入失敗」+ 重試；PullToRefresh 重抓第一頁。\n\n移植 ivy `FE:src/parent/views/LeavesView.vue` 的列表 + 表單 sheet + 取消確認流程（`cancelTarget` / `cancelTitle`）；**去掉** 跨小孩混合列表與篩選、LeaveHero 學期統計、刪除附件、審核狀態。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-leaves.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：有紀錄（各狀態）、空清單、載入更多、申請表單 sheet（含建立錯誤）、附件部分上傳失敗提示、詳情 sheet、整筆取消確認、取消剩餘日子確認、首次載入、載入失敗、多位小孩切換。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `LeavesView.vue`。\n\n**驗收標準**：每一條對應 red_case（today 固定 2026-10-02）。",
+      "description": "建立 `apps/web/src/parent/views/LeavesView.vue`（路由 `/leaves`）。版面、文案與互動以已核可稿 `docs/mockups/parent-page-leaves.html`（含其 decisions）為準。\n\n- 掛載時 `getParentLimits()`（PARENT-005）取得 limits，傳給 LeaveForm / LeaveDetailSheet，錯誤訊息中的數字也取自 limits。\n- 版面：PARENT-050 ChildContextHeader →「申請請假」（filled 全寬）→ 小標「請假紀錄」+ 右側「共 {total} 筆」→ 卡片內清單 →「載入更多」；整頁內容包在 PARENT-027 PullToRefresh 內。\n- 依 `children.selectedId` 呼叫 `listChildLeaves(id, 1)`（PARENT-133）。`items.length < total` 時清單下方「載入更多」（outlined 全寬，載入中 loading）取下一頁，以 `id` 去重後附加（新建立的請假插在最前面後，伺服器分頁會往前位移，下一頁可能含已顯示的那筆）；失敗 → PARENT-011 snackbar（error）「載入更多失敗，請稍後再試」，已載入的清單與按鈕保留。切換小孩重置分頁、關閉詳情並以序號丟棄過期回應。\n- 清單：`<ul role=\"list\">` + PARENT-136（today = 台北今日）；空 → ParentEmptyState「還沒有請假紀錄」/「需要請假時按「申請請假」」。\n- 「申請請假」→ PARENT-025 BottomSheet（fullHeight）+ PARENT-134 LeaveForm：\n  - 表單上方一列「為 {小孩姓名} 申請請假」（表單沒有選小孩欄位）。\n  - LeaveForm 的按鈕列固定在 sheet 可視區底部（sticky；外觀同 ParentBottomSheet footer：上方 1px outline-variant 分隔線、surface-container-low 底、padding 16px 24px + safe-area，該 sheet 內容區底部內距為 0），初始畫面就看得到「送出請假」，表單在它上方捲動；由 LeavesView 包住 LeaveForm 的元素 + scoped `:deep()` 樣式達成，不改 LeaveForm 介面。\n  - 送出 → `createLeave({student_id: selectedId, ...})`，從送出到附件上傳結束 sheet 為 `dismissible=false`（沒有關閉鈕，scrim / Esc / 拖曳都不關）。成功後依序 `uploadLeaveAttachment`（一次一個），表單上方顯示「請假已建立，正在上傳附件（{i}/{n}）…」。\n  - 全部成功 → 關閉表單、snackbar「請假已送出」；有附件失敗 → 關閉表單、snackbar（error）「請假已送出，但有 {n} 個附件上傳失敗，可在請假詳情重新上傳」+ 動作「查看」（開啟該筆的 LeaveDetailSheet），請假本身保留。新請假加到清單最前面（附件以上傳成功者更新），「共 N 筆」+1。\n- 建立錯誤：表單保持開啟，以 error 橫幅（`role=\"alert\"`）顯示在表單上方並把 sheet 內容捲回頂端，再次送出時先清除。`leave_overlap` →「這段期間已有請假（{details.start_date}～{details.end_date}）」；`leave_date_out_of_window` →「請假日期需在今天前 {leave_past_days} 天到後 {leave_future_days} 天內」；`no_service_days_in_range` →「選擇的日期都不是上課日」；`student_not_active`（學生暫停或退班，BACKEND-557）與其他錯誤 → 直接顯示後端 `error.message`（例如「此學生目前暫停，無法進行此操作」），不自動重試。\n- 點列 → PARENT-137 LeaveDetailSheet；補上傳 → `uploadLeaveAttachment` 期間 `uploading` 為 true，成功後把附件加進該筆；錯誤以 snackbar（error）顯示：413 →「檔案超過 {leave_max_attachment_mb} MB」、415 →「檔案格式不支援」、`attachment_limit_reached` →「每筆請假最多 {leave_max_attachments} 個附件」。\n- 取消（列或詳情）→ PARENT-026 ConfirmDialog（destructive，cancelLabel「先不要」，說明下方一列目標「{小孩姓名} · {假別} {期間}」，期間格式同 PARENT-136）：`start_date >= today` →「取消這筆請假？」/「整筆請假將取消，出勤恢復為預計到班」/ 確認鈕「取消請假」；否則 →「取消剩餘日子？」/「今天起的請假會取消，之前的日子保留」/ 確認鈕「取消剩餘日子」。確認 → `cancelLeave(id)`（確認鈕 loading）→ 以回應取代該筆、snackbar「已取消請假」；從詳情取消時詳情 sheet 保持開啟並顯示更新後的資料（取消按鈕消失）。`leave_already_ended` / `leave_not_active` → 關閉對話框、snackbar（error）「這筆請假已無法取消」並重抓第一頁。\n- 首次載入 SkeletonBlock（row × 3）；載入失敗 → ParentEmptyState error「請假紀錄載入失敗」+ 重試（「申請請假」照常可用）。PullToRefresh 重抓第一頁，期間保留內容；失敗時保留內容並以 snackbar（error）顯示「更新失敗，請稍後再試」；載入中停用下拉。\n\n移植 ivy `FE:src/parent/views/LeavesView.vue` 的列表 + 表單 sheet + 取消確認流程（`cancelTarget` / `cancelTitle`）；**去掉** 跨小孩混合列表與篩選、LeaveHero 學期統計、刪除附件、審核狀態。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-leaves.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：有紀錄（各狀態）、空清單、載入更多、申請表單 sheet（含建立錯誤）、附件部分上傳失敗提示、詳情 sheet、整筆取消確認、取消剩餘日子確認、首次載入、載入失敗、多位小孩切換。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `LeavesView.vue`。\n\n**驗收標準**：每一條對應 red_case（today 固定 2026-10-02）。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/LeavesView.vue",
       "source_ref": "FE:src/parent/views/LeavesView.vue::cancelTitle",
@@ -2846,13 +2852,20 @@
         "red_cases": [
           "LeavesView lists leaves for selected child：selectedId 's2' → GET '/parent/children/s2/leaves' params {page:1, page_size:20}；回 2 筆 total 2 → li 數 2，無「載入更多」",
           "LeavesView load more appends：第一頁回 20 筆 total 25 → 點「載入更多」→ 請求 page 2，回 5 筆後 li 數 25 且按鈕消失",
-          "LeavesView create with attachments partial failure：送出表單（2 個檔案）→ POST /parent/leaves body.student_id === 's1'；回 {id:'l9', ...}；第一個上傳 201、第二個 500 → snackbar「請假已送出，但有 1 個附件上傳失敗，可在請假詳情重新上傳」，清單第一筆 id 為 'l9' 且 attachments.length === 1",
+          "LeavesView create with attachments partial failure：送出表單（2 個檔案）→ POST /parent/leaves body.student_id === 's1'；回 {id:'l9', ...}；第一個上傳 201、第二個 500 → snackbar「請假已送出，但有 1 個附件上傳失敗，可在請假詳情重新上傳」，清單第一筆 id 為 'l9' 且 attachments.length === 1；snackbar store 該則的 action.label 為「查看」，呼叫其 onClick → 開啟 l9 的請假詳情（dialog 含「請假詳情」）",
           "LeavesView create overlap error keeps form：POST 回 409 {error:{code:'leave_overlap', details:{start_date:'2026-10-05', end_date:'2026-10-07'}}} → 表單仍開啟，含「這段期間已有請假（2026-10-05～2026-10-07）」",
           "LeavesView cancel remaining days：列 start '2026-09-30' can_cancel true → 點「取消剩餘日子」→ 對話框標題「取消剩餘日子？」；確認 → POST '/parent/leaves/l1/cancel'，回 end_date '2026-10-01'、can_cancel false → 該列顯示 '已結束' 且無取消按鈕，snackbar「已取消請假」",
           "LeavesView cancel conflict refreshes：cancel 回 409 leave_already_ended → snackbar「這筆請假已無法取消」且 GET 第一頁再送出 1 次",
           "LeavesView empty and error states：GET 回 {items:[], total:0} → 含「還沒有請假紀錄」；GET 回 500 → 含「請假紀錄載入失敗」與「重試」",
           "LeavesView passes configured limits：GET /parent/config 回 limits.leave_future_days 90、leave_max_attachments 1 → 開啟申請表單後結束日 input max 為今天 +90 天（'2026-12-31'），且加入 1 個附件後無新增附件 input",
-          "LeavesView shows staff cancelled past leave：GET 回一筆 status 'cancelled'、created_by_type 'parent'、end_date '2026-09-22'、can_cancel false → 該列含 '已取消'、無取消按鈕；點開詳情含取消時間"
+          "LeavesView shows staff cancelled past leave：GET 回一筆 status 'cancelled'、created_by_type 'parent'、end_date '2026-09-22'、can_cancel false → 該列含 '已取消'、無取消按鈕；點開詳情含取消時間",
+          "LeavesView load more dedupes by id：第一頁回 l1~l20、total 25 → 點「載入更多」，第 2 頁回 [l20, l21~l25] → li 數 25、id 不重複，「載入更多」消失",
+          "LeavesView load more failure keeps list：第一頁 20 筆 total 25，第 2 頁回 500 → li 數仍 20、「載入更多」仍在，snackbar store 有一則 tone 'error' 的「載入更多失敗，請稍後再試」",
+          "LeavesView form shows child and locks while submitting：selectedId 's1'（王小明）開啟申請 → sheet 內含「為 王小明 申請請假」；送出後 POST 尚未回應 → sheet 內沒有 aria-label「關閉」的按鈕，在 document 按 Esc 後 sheet 仍開啟",
+          "LeavesView shows upload progress：送出含 2 個檔案、POST 回 201 後第一個上傳尚未回應 → sheet 內含「請假已建立，正在上傳附件（1/2）…」",
+          "LeavesView create student_not_active shows backend message：POST 回 409 {error:{code:'student_not_active', message:'此學生目前暫停，無法進行此操作'}} → 表單仍開啟、表單上方含「此學生目前暫停，無法進行此操作」，POST 只送出 1 次",
+          "LeavesView cancel from detail keeps sheet open：開啟病假 start '2026-10-05'、end '2026-10-07' 的詳情 → 點詳情內「取消請假」→ 對話框含「取消這筆請假？」、「王小明 · 病假 10/05（一）～10/07（三）」、按鈕「取消請假」與「先不要」；確認 → POST 回 status 'cancelled'、cancelled_at 有值、can_cancel false → 對話框關閉，詳情 dialog 仍開啟且含「已取消」與「取消時間」、無「取消請假」按鈕",
+          "LeavesView pull refresh failure keeps list：已載入 2 筆後呼叫 PullToRefresh 的 onRefresh，GET 回 500 → li 數仍 2、不含「請假紀錄載入失敗」，snackbar store 有一則 tone 'error' 的「更新失敗，請稍後再試」"
         ],
         "run": "just web-test src/parent/views/LeavesView.spec.ts -t \"LeavesView\"",
         "notes": ""
@@ -2977,7 +2990,7 @@
     {
       "id": "PARENT-153",
       "title": "建立 ExamsView：成績列表（只有已發布的考試）",
-      "description": "建立 `apps/web/src/parent/views/ExamsView.vue`（路由 `/exams`，底部導覽「成績」）。\n\n- 頂部 PARENT-050 ChildContextHeader；依 `children.selectedId` 呼叫 `listChildExams(id, 1)`（PARENT-150），依後端順序（考試日期新到舊）以 PARENT-151 列出；`items.length < total` 顯示「載入更多」；切換小孩重置分頁並以序號丟棄過期回應。\n- 空 → ParentEmptyState「目前沒有已公布的成績」/「安親班公布考試成績後會通知您」。\n- 首次載入 SkeletonBlock（row × 4）；失敗 → ParentEmptyState error「成績載入失敗」+ 重試；PullToRefresh。\n\n新寫頁面（domain_spec §4 家長端 `/exams`）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-exams.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：有多筆考試、載入更多、空清單、首次載入、載入失敗、多位小孩切換。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `ExamsView.vue`。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/views/ExamsView.vue`（路由 `/exams`，底部導覽「成績」）。版面與文案以已核可稿 `docs/mockups/parent-page-exams.html`（含其 decisions）為準。\n\n- 頂部 PARENT-050 ChildContextHeader；依 `children.selectedId` 呼叫 `listChildExams(id, 1)`（PARENT-150），依後端順序（考試日期新到舊）以 PARENT-151 列在卡片內的 `<ul role=\"list\">`，不另加區塊標題或筆數；整頁內容包在 PARENT-027 PullToRefresh 內。\n- `items.length < total` 顯示「載入更多」（outlined 全寬，載入中 loading）：取下一頁並以 `exam_id` 去重後附加；失敗 → PARENT-011 snackbar（error）「載入更多失敗，請稍後再試」，已載入的清單與按鈕保留。切換小孩重置分頁、顯示骨架並以序號丟棄過期回應。\n- 空 → ParentEmptyState（icon `grading`）「目前沒有已公布的成績」/「安親班公布考試成績後會通知您」。\n- 首次載入 SkeletonBlock（row × 4）；失敗 → ParentEmptyState error「成績載入失敗」+ 重試。PullToRefresh 重抓第一頁（重置分頁），期間保留內容；失敗時保留內容並以 snackbar（error）顯示「更新失敗，請稍後再試」；載入中停用下拉。\n\n新寫頁面（domain_spec §4 家長端 `/exams`）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-exams.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：有多筆考試、載入更多、空清單、首次載入、載入失敗、多位小孩切換。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `ExamsView.vue`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/ExamsView.vue",
       "source_ref": null,
@@ -2991,7 +3004,8 @@
         "PARENT-050",
         "PARENT-150",
         "PARENT-151",
-        "INFRA-013"
+        "INFRA-013",
+        "PARENT-011"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -3005,7 +3019,10 @@
           "ExamsView lists exams for selected child：selectedId 's2' → GET '/parent/children/s2/exams' params {page:1, page_size:20}；回 2 筆 → li 數 2，含兩個考試名稱",
           "ExamsView switch child reloads：從 s1 切到 s2 → 送出 s2 的請求；s1 晚到的回應不覆蓋畫面",
           "ExamsView load more：第一頁 20 筆 total 23 → 點「載入更多」→ 請求 page 2，li 數變 23",
-          "ExamsView empty and error：回 {items:[], total:0} → 含「目前沒有已公布的成績」；回 500 → 含「成績載入失敗」，點重試再送出 1 次"
+          "ExamsView empty and error：回 {items:[], total:0} → 含「目前沒有已公布的成績」；回 500 → 含「成績載入失敗」，點重試再送出 1 次",
+          "ExamsView load more dedupes by exam_id：第一頁回 e1~e20、total 23 → 點「載入更多」，第 2 頁回 [e20, e21~e23] → li 數 23、exam_id 不重複，「載入更多」消失",
+          "ExamsView load more failure keeps list：第一頁 20 筆 total 23，第 2 頁回 500 → li 數仍 20、「載入更多」仍在，snackbar store 有一則 tone 'error' 的「載入更多失敗，請稍後再試」",
+          "ExamsView pull refresh failure keeps list：已載入 2 筆後呼叫 PullToRefresh 的 onRefresh，GET 回 500 → li 數仍 2、不含「成績載入失敗」，snackbar store 有一則 tone 'error' 的「更新失敗，請稍後再試」"
         ],
         "run": "just web-test src/parent/views/ExamsView.spec.ts -t \"ExamsView\"",
         "notes": ""
@@ -3019,7 +3036,7 @@
     {
       "id": "PARENT-154",
       "title": "建立 ExamDetailView：單次考試成績明細",
-      "description": "建立 `apps/web/src/parent/views/ExamDetailView.vue`（路由 `/exams/:examId`）。\n\n- 以 `children.selectedId` 與 route param `examId` 呼叫 `getChildExam(childId, examId)`（PARENT-150）。\n- 標頭卡：考試名稱、類型、日期「YYYY/MM/DD（X）」、`note`（有值時「備註：{note}」）；下方 PARENT-152 ExamScoreTable。\n- 404（未發布、不屬於該小孩或不存在）→ ParentEmptyState「找不到這次考試的成績」/「可能尚未公布或不屬於目前選擇的小孩」+「回成績列表」→ `/exams`。其他錯誤 → error 變體 + 重試。\n- 在本頁切換小孩（ChildContextHeader）→ `router.replace('/exams')`（考試屬於特定小孩，切換後回列表）。\n- 載入中 SkeletonBlock（card + row × 4）。\n\n新寫頁面。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-exam-detail.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：一般成績（含缺考 / 備註）、考試備註、找不到（404）、載入失敗、載入中。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `ExamDetailView.vue`。\n\n**驗收標準**：每一條對應 red_case。",
+      "description": "建立 `apps/web/src/parent/views/ExamDetailView.vue`（路由 `/exams/:examId`）。版面與文案以已核可稿 `docs/mockups/parent-page-exam-detail.html`（含其 decisions）為準。\n\n- 頂部 PARENT-050 ChildContextHeader；以 `children.selectedId` 與 route param `examId` 呼叫 `getChildExam(childId, examId)`（PARENT-150）。\n- 標頭卡（PARENT-017 M3Card outlined）：考試名稱（可換行）、類型標籤（與 PARENT-151 同一個標籤樣式）、日期「YYYY/MM/DD（X）」；`note` 有值時分隔線下「備註：{note}」（保留換行），沒有就整段不顯示。下方 outlined 卡片包 PARENT-152 ExamScoreTable。\n- 404（未發布、不屬於該小孩或不存在）→ ParentEmptyState（icon `search_off`）「找不到這次考試的成績」/「可能尚未公布或不屬於目前選擇的小孩」+「回成績列表」→ `/exams`。其他錯誤 → ParentEmptyState error「成績載入失敗」+ 重試。\n- 在本頁切換小孩（ChildContextHeader）→ `router.replace('/exams')`（考試屬於特定小孩，切換後回列表）。\n- 載入中 SkeletonBlock（card + row × 4）。不提供下拉重新整理。\n\n新寫頁面。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/parent-page-exam-detail.html`，以 390×844 手機尺寸設計，`preview-status` 為 `approved` 後才能進 `in_progress`。稿必須呈現：一般成績（含缺考 / 備註）、考試備註、找不到（404）、載入失敗、載入中。\n\n本 task 覆寫 PARENT-012 建立的佔位檔 `ExamDetailView.vue`。\n\n**驗收標準**：每一條對應 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/parent/views/ExamDetailView.vue",
       "source_ref": null,
@@ -3048,7 +3065,7 @@
           "ExamDetailView loads exam for selected child：selectedId 's1'、initialRoute '/exams/e1' → GET '/parent/children/s1/exams/e1'；回 name '第一次段考'、note '數學範圍第 1~3 單元'、2 科 → 含 '第一次段考'、'備註：數學範圍第 1~3 單元'、table 有 2 列",
           "ExamDetailView not found state：回 404 {error:{code:'exam_not_found'}} → 含「找不到這次考試的成績」，點「回成績列表」→ currentRoute.path === '/exams'",
           "ExamDetailView switching child returns to list：在 '/exams/e1' 透過標頭選 s2 → currentRoute.path === '/exams'",
-          "ExamDetailView error retry：回 500 → 含「重試」，點擊後 GET 再送出 1 次"
+          "ExamDetailView error retry：回 500 → 含「成績載入失敗」與「重試」，點擊後 GET 再送出 1 次"
         ],
         "run": "just web-test src/parent/views/ExamDetailView.spec.ts -t \"ExamDetailView\"",
         "notes": ""
