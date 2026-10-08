@@ -12,10 +12,10 @@
      preview-route  : 對應的家長端路由 path；元件稿寫 component:<相對路徑>
      preview-updated: 最後更新日期 YYYY-MM-DD
      ============================================================ -->
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-054">
 <meta name="preview-route" content="/">
-<meta name="preview-updated" content="2026-10-07">
+<meta name="preview-updated" content="2026-10-08">
 
 <title>設計稿：家長端 首頁（ChildHubView）</title>
 <script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
@@ -719,18 +719,17 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
 .hub-cch-skeleton { border-radius: var(--m3-shape-large); background: var(--m3-surface-container-low); overflow: hidden; }
 .hub-empty { margin-top: 24px; }
 
-/* 今日狀態錯誤列：卡片上方，error-container 底 */
+/* 今日狀態錯誤列：卡片上方，error-container 底；「重試」本身就是 48×48 以上的點擊區 */
 .today-error {
-  display: flex; align-items: center; gap: 12px; min-height: 48px; margin-bottom: 8px; padding: 4px 4px 4px 16px;
+  display: flex; align-items: center; gap: 12px; min-height: 48px; margin-bottom: 8px; padding: 0 4px 0 16px;
   border-radius: var(--m3-shape-medium); background: var(--m3-error-container); color: var(--m3-on-error-container);
 }
-.today-error__text { flex: 1; min-width: 0; padding: 10px 0; }
+.today-error__text { flex: 1; min-width: 0; padding: 14px 0; }
 .today-error__action {
-  position: relative; flex: none; height: 40px; padding: 0 12px; border: none; border-radius: var(--m3-shape-full);
+  flex: none; min-width: 48px; height: 48px; padding: 0 12px; border: none; border-radius: var(--m3-shape-full);
   background: transparent; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
-.today-error__action::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 48px; transform: translateY(-50%); }
-.today-error__action:focus-visible { outline: 2px solid currentColor; outline-offset: 0; }
+.today-error__action:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
 
 /* 常用功能：一列三格等寬 */
 .quick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
@@ -837,8 +836,9 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
       <h4>小孩</h4>
       <div class="notes__row">
         <span class="state-switch"><button type="button" :class="{ 'is-active': childMode === 'multi' }" @click="setChildMode('multi')">多位（3 位）</button><button type="button" :class="{ 'is-active': childMode === 'single' }" @click="setChildMode('single')">單一</button></span>
+        <span class="state-switch"><button type="button" :class="{ 'is-active': !suspended }" @click="suspended = false">王小明在學</button><button type="button" :class="{ 'is-active': suspended }" @click="suspended = true">王小明暫停中</button></span>
       </div>
-      <p class="notes__hint">多位時點手機裡的身分卡開「選擇小孩」；選另一位後卡片位置先顯示骨架再換成該小孩的今日狀態（王小明：作業進行中、王小華：老師已回覆接送、王小美：今日請假）。</p>
+      <p class="notes__hint">「王小明暫停中」：身分卡姓名旁顯示「暫停」，按「我已經到了」確認後後端回 409 student_not_active，snackbar 顯示「此學生目前暫停，無法進行此操作」。多位時點手機裡的身分卡開「選擇小孩」；選另一位後卡片位置先顯示骨架再換成該小孩的今日狀態（王小明：作業進行中、王小華：老師已回覆接送、王小美：今日請假）。</p>
 
       <h4>今日狀態情境（套用在目前查看的小孩；卡片外觀以 TodayStatusCard 稿為準）</h4>
       <template v-for="g in scenarioGroups" :key="g.label">
@@ -1986,10 +1986,12 @@ const ARRIVE_RESULTS = [
   { value: 'pickup_window_closed', label: '不在時段（409）' },
   { value: 'pickup_not_allowed', label: '無接送權限（403）' },
   { value: 'invalid_pickup_status', label: '狀態已變更（409）' },
+  { value: 'student_not_active', label: '暫停 / 退班（409 student_not_active）' },
   { value: 'server_error', label: '其他錯誤（500）' },
 ]
 const ARRIVE_ERROR_TEXT = {
   pickup_window_closed: '接送請求開放時間為 12:00～19:00',
+  student_not_active: '此學生目前暫停，無法進行此操作',
   pickup_not_allowed: '您沒有這位小孩的接送權限',
   invalid_pickup_status: '狀態已更新，請確認後再操作',
   server_error: '送出失敗，請稍後再試',
@@ -2016,11 +2018,15 @@ function pageSetup({ snack }) {
   }
   const CHILD_SETS = { multi: [kids.ming, kids.hua, kids.mei], single: [kids.ming] }
 
-  /* children store（PARENT-010）的稿件版 */
+  /* children store（PARENT-010）的稿件版；suspended 示範王小明暫停中（身分卡顯示「暫停」，寫入一律 409 student_not_active） */
   const childMode = ref('multi')
   const childrenState = ref('ready') // loading | ready | error
   const noChildren = ref(false)
-  const children = computed(() => (childrenState.value !== 'ready' || noChildren.value ? [] : CHILD_SETS[childMode.value]))
+  const suspended = ref(false)
+  const children = computed(() => {
+    if (childrenState.value !== 'ready' || noChildren.value) return []
+    return CHILD_SETS[childMode.value].map((c) => (c.id === 's1' && suspended.value ? { ...c, status: 'suspended' } : c))
+  })
   const selectedId = ref('s1')
 
   /* 後端目前的今日狀態（各小孩）與 useTodayStatus（PARENT-052）的稿件版 */
@@ -2138,7 +2144,7 @@ function pageSetup({ snack }) {
     arrive.busy = true
     setTimeout(() => {
       arrive.busy = false
-      const code = arriveFail.value
+      const code = childId === 's1' && suspended.value ? 'student_not_active' : arriveFail.value
       arriveFail.value = ''
       if (code) { snack.show(ARRIVE_ERROR_TEXT[code], { tone: 'error' }); return }
       const t = todays[childId]
@@ -2200,17 +2206,18 @@ function pageSetup({ snack }) {
     '版面（由上而下）：頂部列「首頁」（無返回鍵，leading 為安親班 Logo，沒有 Logo 圖時用名稱首字，由 ParentLayout 負責）→ ChildContextHeader → 小標「今日狀態」與右側今日日期（today.date，例「10/07（三）」，尚未取得時不顯示）→ 錯誤列（有錯誤時）→ TodayStatusCard 或骨架 → 小標「常用功能」→ 快捷入口。整頁（含身分卡）包在 PullToRefresh 內（onRefresh = useTodayStatus.refresh）；頁面自帶左右 16px、上 8px、底 24px 內距，放在 PullToRefresh 內層，下拉指示器才會橫跨全寬。',
     '小孩切換：多位小孩時身分卡整張可點，開「選擇小孩」sheet（外觀照 ChildContextHeader 稿）；選另一位 → children.select(id) → useTodayStatus 清空 today、卡片位置換成骨架、只對新小孩打一次 GET /parent/children/{id}/today。單一小孩時身分卡不可點、沒有展開圖示。',
     '載入：小孩清單首次載入 → 身分卡位置 SkeletonBlock row（高 80px、圓角 16px、surface-container-low，同身分卡外框）＋ 卡片位置 SkeletonBlock card（高 300px，接近今日狀態卡高度，載入完成不跳動）；今日狀態首次載入（today 為 null）→ 只有卡片位置骨架。下拉重新整理、ws 斷線輪詢、回到前景時的重抓都保留目前卡片，不顯示骨架。',
-    '今日狀態錯誤列：useTodayStatus.error 有值時，卡片上方一列 error-container 底（圓角 12px、最小高 48px、role="alert"）：filled error 圖示 +「今日狀態載入失敗」+ 右側文字按鈕「重試」（→ refresh()）。已有資料時下方照常顯示舊卡片；第一次就失敗時下方是 TodayStatusCard 的 null 佔位「尚未取得今日狀態」。重試或下拉重新整理開始時錯誤列先收起（today 為 null 時改顯示骨架），再失敗才重新出現；下拉重新整理失敗只以錯誤列呈現，不另跳 snackbar。',
+    '今日狀態錯誤列：useTodayStatus.error 有值時，卡片上方一列 error-container 底（圓角 12px、最小高 48px、role="alert"）：filled error 圖示 +「今日狀態載入失敗」+ 右側文字按鈕「重試」（按鈕本身 48px 高、至少 48px 寬，→ refresh()）。已有資料時下方照常顯示舊卡片；第一次就失敗時下方是 TodayStatusCard 的 null 佔位「尚未取得今日狀態」。重試或下拉重新整理開始時錯誤列先收起（today 為 null 時改顯示骨架），再失敗才重新出現；下拉重新整理失敗只以錯誤列呈現，不另跳 snackbar。',
     '無綁定小孩：ParentEmptyState（link 圖示）「尚未綁定小孩」/「請輸入安親班提供的綁定碼」/ tonal 按鈕「輸入綁定碼」→ /bind；不渲染身分卡與今日狀態卡、不送任何 /today 請求、停用下拉重新整理。小孩清單載入失敗（且沒有舊資料）→ ParentEmptyState error「小孩清單載入失敗」/「請檢查網路連線後再試一次」/「重試」→ children.load(true)，重試中改回骨架。兩種情況「常用功能」三格都停用。',
-    '卡片事件：「我要來接」「查看接送」→ /pickup；作業區塊 → /homework；「我已經到了」（沒有進行中請求）與「我到了」（進行中且 can_mark_arrived）→ useArriveNow.request(selectedId, 進行中請求 id ?? null) → ConfirmDialog「確認已抵達安親班？」/ 說明「老師會收到通知並準備帶孩子出來」/ 確認鈕「我到了」、取消鈕「取消」，說明下方「下次不再提醒」勾選（勾選後確認會記住，之後按下直接送出）。確認後對話框先關再送出；成功 → applyPickup(回應)，卡片立即變「家長已到」並顯示自動回覆、不再出現「我已經到了」，snackbar「已通知老師您到了」，留在首頁不導頁；失敗 → snackbar error（useArriveNow 對照表，例如時段外顯示後端訊息「接送請求開放時間為 12:00～19:00」）。',
+    '卡片事件：「我要來接」「查看接送」→ /pickup；作業區塊 → /homework；「我已經到了」（沒有進行中請求）與「我到了」（進行中且 can_mark_arrived）→ useArriveNow.request(selectedId, 進行中請求 id ?? null) → ConfirmDialog「確認已抵達安親班？」/ 說明「老師會收到通知並準備帶孩子出來」/ 確認鈕「我到了」、取消鈕「取消」，說明下方「下次不再提醒」勾選（勾選後確認會記住，之後按下直接送出）。確認後對話框先關再送出；成功 → applyPickup(回應)，卡片立即變「家長已到」並顯示自動回覆、不再出現「我已經到了」，snackbar「已通知老師您到了」，留在首頁不導頁；失敗 → snackbar error（useArriveNow 對照表，例如時段外顯示後端訊息「接送請求開放時間為 12:00～19:00」）；student_not_active（學生退班或暫停）同樣顯示後端訊息（例如「此學生目前暫停，無法進行此操作」），卡片不變、不自動重試。暫停中的小孩身分卡姓名旁有「暫停」（ChildContextHeader 稿），卡片照 /today 顯示，接送一律由後端擋下。',
     '常用功能：一列三格等寬——請假 /leaves（event_busy）、出勤 /attendance（calendar_month）、代理接送 /pickup/proxy（badge）。每格是 RouterLink：最小高 88px、圓角 16px、outlined（surface 底 + outline-variant 邊）、40px secondary-container 圓形圖示 + label-large 名稱，有 state layer 與 focus 外框。沒有可操作的小孩（清單為空或載入失敗）時三格停用（opacity 0.38、aria-disabled、tabindex -1、不導頁）；清單載入中照常可點（各頁自行載入小孩）。去掉 ivy 的聯絡簿 / 照片 / 成長報告 / 健康紀錄 / 孩子檔案入口。',
+    '觸控目標：本頁可點元素的點擊區（元素本身的框）都 ≥ 44px——身分卡 80px 高、「選擇小孩」每列 64px、卡片作業區塊與按鈕 48px 以上、錯誤列「重試」48×48、常用功能每格 88px、底部導覽 80px、對話框按鈕 48px、「下次不再提醒」整列 48px。',
     '即時更新：ws 的 attendance.updated / homework.progress_updated / pickup.request_updated 由 useTodayStatus 原地套用到卡片（不重新請求、不顯示骨架）；ws 斷線超過 3 秒時頂部列下方出現 ConnectionBanner（ParentLayout 負責，右側可預覽），斷線期間由 parentWs poller 重打 /today 補齊。',
     '稿件示範限制（不要照搬進 src/）：稿內「選擇小孩」sheet 以手機框為定位基準、身分卡上的滑鼠 / 觸控不觸發下拉重新整理，只是為了在手機框內呈現且不與 sheet 拖曳衝突；實作的 ParentBottomSheet Teleport 到 body，PullToRefresh 照元件規則（頁面在最頂端時從任一處下拉都可觸發）。家長端層級：頂部列 5、sheet 10、dialog 15、snackbar 20。',
   ]
   const openQuestions = []
 
   return {
-    children, childMode, setChildMode, childrenState, selectedId, selectChild, retryChildren,
+    children, childMode, setChildMode, childrenState, selectedId, selectChild, retryChildren, suspended,
     today, todayLoading, todayError, failNextRefresh, refreshToday, dateText,
     pageState, pageStates, applyPageState, scenarioGroups, currentScenario, applyScenario,
     quickLinks: QUICK_LINKS, quickDisabled, openQuick, go,

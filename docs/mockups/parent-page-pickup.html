@@ -12,10 +12,10 @@
      preview-route  : 對應的家長端路由 path；元件稿寫 component:<相對路徑>
      preview-updated: 最後更新日期 YYYY-MM-DD
      ============================================================ -->
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-097">
 <meta name="preview-route" content="/pickup">
-<meta name="preview-updated" content="2026-10-07">
+<meta name="preview-updated" content="2026-10-08">
 
 <title>設計稿：家長端 接送（PickupView）</title>
 <script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
@@ -705,6 +705,12 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
 .pk-main { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
 .pk-card-title { margin: 0; }
 
+/* 觸控目標：預計抵達時間 chip 視覺 32px，點擊區由 M3Chip 的 ::after 延伸到 48px；
+   chip 列距 12px（列中心距 44px），相鄰兩列的點擊區重疊後每列仍有 44px。
+   列距屬於 ArrivalTimePicker 的版面（已核可元件稿與 PARENT-096 實作目前是 8px，另開 task 同步），
+   PickupView 實作不以 :deep 覆寫子元件樣式。 */
+.arrival__chips { row-gap: 12px; }
+
 /* 表單卡（選擇器前綴卡片 class：蓋過 M3Card 的 .m3-card p { margin: 0 }） */
 .pk-form .pk-form__sub { margin: 4px 0 0; color: var(--m3-on-surface-variant); }
 .form-error { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; color: var(--m3-error); }
@@ -882,7 +888,9 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
       <h4>預覽選項</h4>
       <div class="notes__row">小孩
         <span class="state-switch"><button type="button" :class="{ 'is-active': childMode === 'multi' }" @click="setChildMode('multi')">多位（3 位）</button><button type="button" :class="{ 'is-active': childMode === 'single' }" @click="setChildMode('single')">單一</button></span>
+        <span class="state-switch"><button type="button" :class="{ 'is-active': !suspended }" @click="suspended = false">王小明在學</button><button type="button" :class="{ 'is-active': suspended }" @click="suspended = true">王小明暫停中</button></span>
       </div>
+      <p class="notes__hint">「王小明暫停中」：身分卡姓名旁顯示「暫停」，按「通知安親班」時後端回 409 student_not_active，表單卡內顯示「此學生目前暫停，無法進行此操作」；按「我已經到了」則由 snackbar 顯示同一句。</p>
       <div class="notes__row">
         <span>「下次不再提醒」：{{ arrive.skipStored ? '已記住（之後直接送出）' : '未記住（每次先確認）' }}</span>
         <span v-if="arrive.skipStored" class="state-switch"><button type="button" @click="arrive.skipStored = false">重設</button></span>
@@ -1840,7 +1848,7 @@ const BACKEND_MESSAGES = {
   not_service_day: '今天不是營業日',
   expected_arrival_too_late: '預計抵達時間最晚為 19:00',
   expected_arrival_in_past: '預計抵達時間已經過了',
-  student_not_active: '此學生已退班，無法進行此操作',
+  student_not_active: '此學生目前暫停，無法進行此操作',
 }
 /** 「通知安親班」在表單卡內顯示 error.message 的錯誤碼 */
 const FORM_ERROR_CODES = Object.keys(BACKEND_MESSAGES)
@@ -1861,7 +1869,7 @@ const WRITE_RESULTS = [
   { value: 'not_service_day', label: '非營業日' },
   { value: 'expected_arrival_too_late', label: '時間太晚' },
   { value: 'expected_arrival_in_past', label: '時間已過' },
-  { value: 'student_not_active', label: '已退班' },
+  { value: 'student_not_active', label: '暫停 / 退班（student_not_active）' },
   { value: 'pickup_request_exists', label: '已有進行中請求（409）' },
   { value: 'invalid_pickup_status', label: '狀態已變更（409）' },
   { value: 'pickup_request_not_found', label: '請求不存在（404）' },
@@ -1915,6 +1923,7 @@ const SCENARIOS = [
   { group: '沒有進行中請求', key: 'err-leave', label: '錯誤：請假中', hw: 'none', formError: 'student_not_available' },
   { group: '沒有進行中請求', key: 'err-closed', label: '錯誤：非營業日', hw: 'none', formError: 'not_service_day' },
   { group: '沒有進行中請求', key: 'err-late', label: '錯誤：時間太晚', hw: 'progress', formError: 'expected_arrival_too_late', arrival: '19:30' },
+  { group: '沒有進行中請求', key: 'err-suspended', label: '錯誤：暫停中', hw: 'progress', formError: 'student_not_active', suspended: true },
   { group: '沒有進行中請求', key: 'no-permission', label: '無接送權限', hw: 'progress', canPickup: false },
   { group: '進行中', key: 'pending-done', label: 'pending · 自動回覆（作業完成）', hw: 'done', requests: () => [R(AUTO_DONE)] },
   { group: '進行中', key: 'pending-eta', label: 'pending · 自動回覆（有 ETA）', hw: 'progress', requests: () => [R({ ...AUTO_ETA, expected_arrival_at: '17:40' })] },
@@ -1946,7 +1955,10 @@ function pageSetup({ snack }) {
   }
   const CHILD_SETS = { multi: [kids.ming, kids.hua, kids.mei], single: [kids.ming] }
   const childMode = ref('multi')
-  const children = computed(() => CHILD_SETS[childMode.value])
+  /** 王小明暫停中：身分卡顯示「暫停」，家長端寫入一律 409 student_not_active（BACKEND-557） */
+  const suspended = ref(false)
+  const children = computed(() => CHILD_SETS[childMode.value].map((c) => (c.id === 's1' && suspended.value ? { ...c, status: 'suspended' } : c)))
+  const forcedCode = (id) => (id === 's1' && suspended.value ? 'student_not_active' : '')
   const selectedId = ref('s1')
   const childrenLoading = ref(false)
 
@@ -2007,7 +2019,7 @@ function pageSetup({ snack }) {
     const expected = arrival.value
     setTimeout(() => {
       pending.value = null
-      const code = takeResult()
+      const code = forcedCode(id) || takeResult()
       if (code) { onCreateError(code, id); return }
       upsert(R({ student_id: id, created_at: NOW, expected_arrival_at: expected, ...autoReply(hw[id]) }))
       resetForm()
@@ -2054,7 +2066,7 @@ function pageSetup({ snack }) {
     arrive.busy = true
     setTimeout(() => {
       arrive.busy = false
-      const code = takeResult()
+      const code = (!openRequestId && forcedCode(childId)) || takeResult()
       const open = openRequestId ? store.items.find((r) => r.id === openRequestId) : null
       if (!code) {
         if (open) markArrivedLocal(open)
@@ -2138,6 +2150,7 @@ function pageSetup({ snack }) {
     store.items = [...(scn.requests ? scn.requests() : []), ...otherKidsRequests()]
     hw.s1 = HW[scn.hw || 'progress']
     details.s1 = { can_pickup: scn.canPickup !== false }
+    suspended.value = !!scn.suspended
     pending.value = scn.submitting ? 'create' : null
     arrival.value = scn.arrival || null
     pickerKey.value++
@@ -2183,30 +2196,23 @@ function pageSetup({ snack }) {
   const decisions = [
     '版面（由上而下）：頂部列「接送」（無返回鍵、leading 安親班 Logo；底部導覽停在「接送」）→ ChildContextHeader → 作業提示列 → 主區（依狀態：骨架 / 載入失敗 / 進行中 / 無接送權限 / 表單）→「今日紀錄」→「代理接送與常用接送人」入口。頁面自帶左右 16px、上 8px、底 24px 內距。沒有下拉重新整理（照 task：ws 即時套用、回到前景 load(true)、斷線 poller 補齊）。',
     '作業提示列（身分卡下方）：surface-container 底、圓角 8px、20px 圖示 + body-medium。有作業項目 →「作業進度 2/3 · 預計 17:30 可接送」（沒有 ETA 只顯示前半）；整體 done →「作業已完成」（filled check_circle、primary 色）；0 項且未完成 →「今天尚無作業項目」（有 ETA 時接「 · 預計 HH:MM 可接送」）；作業資料尚未載入或載入失敗 → 整列不顯示。純資訊、不可點；有進行中請求時照常顯示。',
-    '表單卡（沒有進行中請求且可接送）：filled M3Card，標題「我要來接」（title-medium）+ 一行說明「通知老師您正在路上，系統會立即回覆預計可接送時間」→ ArrivalTimePicker（外觀照元件稿，預設「不指定」）→ 送出鈕「通知安親班」（filled、send、整寬 48px）。送出中按鈕 loading（轉圈、aria-busy、重複點無效），同時「我已經到了」停用。成功 → snackbar「已通知安親班」，主區直接換成進行中並顯示自動回覆，抵達時間回到「不指定」。',
-    '表單內業務錯誤：pickup_window_closed / student_not_available / not_service_day / expected_arrival_in_past / expected_arrival_too_late / student_not_active → 在選擇器與送出鈕之間顯示後端 error.message（filled error 圖示 + error 色 body-medium、role="alert"，例如「接送請求開放時間為 12:00～19:00」「學生今天請假、缺席或已離班」「今天不是營業日」「預計抵達時間最晚為 19:00」），表單保持可修改再送；下次送出或切換小孩時清除。其他錯誤走 snackbar error：pickup_request_exists「今天已有接送請求，已更新狀態」（store 已同步，主區換成既有請求）、pickup_not_allowed「您沒有這位小孩的接送權限」（同時重抓小孩詳情，can_pickup 已為 false 時主區換成無接送權限）、其他「送出失敗，請稍後再試」。',
+    '表單卡（沒有進行中請求且可接送）：filled M3Card，標題「我要來接」（title-medium）+ 一行說明「通知老師您正在路上，系統會立即回覆預計可接送時間」→ ArrivalTimePicker（外觀照元件稿，預設「不指定」；chip 視覺 32px、點擊區由 M3Chip 的 ::after 延伸到 48px，chip 列距 12px 讓每列點擊區實得 44px）→ 送出鈕「通知安親班」（filled、send、整寬 48px）。送出中按鈕 loading（轉圈、aria-busy、重複點無效），同時「我已經到了」停用。成功 → snackbar「已通知安親班」，主區直接換成進行中並顯示自動回覆，抵達時間回到「不指定」。',
+    '表單內業務錯誤：pickup_window_closed / student_not_available / not_service_day / expected_arrival_in_past / expected_arrival_too_late / student_not_active → 在選擇器與送出鈕之間顯示後端 error.message（filled error 圖示 + error 色 body-medium、role="alert"，例如「接送請求開放時間為 12:00～19:00」「學生今天請假、缺席或已離班」「今天不是營業日」「預計抵達時間最晚為 19:00」；student_not_active 是學生暫停或退班，顯示「此學生目前暫停，無法進行此操作」或「此學生已退班，無法進行此操作」），表單保持可修改、不自動重試；下次送出或切換小孩時清除。其他錯誤走 snackbar error：pickup_request_exists「今天已有接送請求，已更新狀態」（store 已同步，主區換成既有請求）、pickup_not_allowed「您沒有這位小孩的接送權限」（同時重抓小孩詳情，can_pickup 已為 false 時主區換成無接送權限）、其他「送出失敗，請稍後再試」。',
     '「我已經到了」（沒有進行中請求時）：表單卡下方「或」分隔線 → outlined 整寬按鈕「我已經到了」（where_to_vote）→ 小字「人已在安親班門口時使用，不必先通知」。按下 → useArriveNow.request(id, null)，與「我到了」共用 ConfirmDialog「確認已抵達安親班？」/「老師會收到通知並準備帶孩子出來」/ 確認鈕「我到了」+「下次不再提醒」勾選（localStorage parent_pickup_arrive_skip_confirm=1 時直接送出）。確認後對話框先關再送出，送出中按鈕 loading、「通知安親班」停用；成功 → 主區換成 arrived（含自動回覆）、snackbar「已通知老師您到了」；409 pickup_request_exists 由 store 改對既有請求按「我到了」，畫面同樣換成 arrived。錯誤 → snackbar error（useArriveNow 對照表）。',
     '進行中（pending / acknowledged / arrived）：elevated 卡——標題列「今天的接送」+ StatusPill（待回覆 warning / 已確認 info / 家長已到 danger）→ PickupReplyMessage 完整模式（元件稿：來源小標、ETA 大字、對話泡泡、「HH:MM 回覆」、等待樣式）→ expected_arrival_at 有值時「您預計 17:40 抵達」（schedule 圖示、on-surface-variant）→ can_mark_arrived 時主要按鈕「我到了」（filled 整寬、where_to_vote，送出中 loading）。下方 outlined 卡放 PickupProgressSteps（元件稿），卡底分隔線後靠右文字按鈕「取消接送」（can_cancel 時；「我到了」送出中停用），與「我到了」分開放、避免在門口誤觸。',
     '取消：ConfirmDialog destructive「取消這次接送？」（無說明）、確認鈕「確定取消」、取消鈕「先不要」。按確認後對話框 loading（不能關閉），成功 → 關閉、snackbar「已取消接送」、主區回到表單、今日紀錄多一列；pickup_request_not_found「找不到這筆接送請求，已重新整理」/ invalid_pickup_status「狀態已更新，請確認後再操作」→ 關閉 + snackbar error，畫面以 store 同步後的狀態重畫；其他錯誤 → 對話框保持開啟 + snackbar error「送出失敗，請稍後再試」，可再按或「先不要」。「我到了」遇到這兩種錯誤同樣 snackbar error 並以同步後的狀態重畫。',
-    '已接走（latestFor 為 completed 且沒有進行中請求）：primary-container 成功卡——filled check_circle（32px）+ title-medium「17:18 已由 王媽媽 接走」+ body-medium「今天的接送已完成」；completed_at 或 picked_up_by_name 任一為 null →「今天已接走」。成功卡下方只放文字按鈕「需要再次接送？」（expand_more），點開才顯示表單與「我已經到了」（待裁定 1，稿照推薦畫）。',
+    '已接走（latestFor 為 completed 且沒有進行中請求）：primary-container 成功卡——filled check_circle（32px）+ title-medium「17:18 已由 王媽媽 接走」+ body-medium「今天的接送已完成」；completed_at 或 picked_up_by_name 任一為 null →「今天已接走」。成功卡下方只放文字按鈕「需要再次接送？」（expand_more），點開才顯示表單與「我已經到了」——接送完成時後端已把出勤改成「已離班」，再送出會被 student_not_available 擋下（除非老師改判出勤），不預設展開以免誤送。',
     '無接送權限（my_guardian.can_pickup === false 且沒有進行中請求）：ParentEmptyState（block 圖示）「您沒有這位小孩的接送權限」/「如需接送請聯絡安親班」，取代表單與「我已經到了」。有進行中請求時照常顯示進行中（例如其他監護人發起；後端允許任一綁定家長按「我到了」與取消）。小孩詳情載入失敗（can_pickup 未知）時照常顯示表單，由後端 403 把關。',
     '今日紀錄：historyFor(id)（已接走 / 已取消 / 已逾時，新到舊）放在 outlined 卡清單，每列最小高 56px：StatusPill + 結果（「17:18 由 王媽媽 接走」/「16:12 取消」/「逾時自動結束」）+ 右側「16:50 發起」（body-small、tabular-nums）。沒有終態請求時整個區塊不顯示。API 沒有取消原因與取消者，不顯示。',
     '載入與切換：首次載入 → 身分卡骨架（小孩清單未載入時）+ 主區 SkeletonBlock card × 2，作業提示列不顯示；載入失敗（store.error 且沒有資料）→ ParentEmptyState error「接送狀態載入失敗」/「請檢查網路連線後再試一次」/「重試」→ pickupRequests.load(true)；已有資料時背景重抓失敗不打擾（保留舊資料）。切換小孩：今日請求是全部小孩共用、不重抓；重抓小孩詳情與作業——該小孩的 can_pickup 第一次取得前主區顯示骨架、作業未取得前不顯示提示列；表單錯誤與抵達時間清除。',
+    '觸控目標：本頁可點元素的點擊區都 ≥ 44px——身分卡 80px、「選擇小孩」每列 64px、按鈕 48px（通知安親班、我已經到了、我到了、取消接送、需要再次接送？、對話框按鈕）、自選時間欄位 56px、代理接送入口 72px、底部導覽 80px；預計抵達時間 chip 見表單卡一條（點擊區 48px、每列實得 44px）。',
     '代理接送入口：頁底 outlined 卡內一列 M3ListItem（badge 圖示、「代理接送與常用接送人」/「由親友代接時，先建立代理接送與接送碼」、chevron_right）→ /pickup/proxy，任何狀態都顯示。',
     '移植 ivy PickupNoticeView：保留「已抵達」捷徑隨時可用（改為表單下方次要按鈕）、抵達確認含「下次不再提醒」、取消前確認、回到前景重抓、409 先同步再提示；去掉滾輪、備註、client_request_id、30 秒定時輪詢與子女 tab 列（改用 ChildContextHeader）。家長端層級：頂部列 5、sheet 10、dialog 15、snackbar 20。',
   ]
-  const openQuestions = [
-    {
-      question: '已接走後（今天最後一筆請求是 completed、沒有進行中請求），「我要來接」表單要不要直接展開？接送完成時後端會把出勤改成「已離班」，之後再按「通知安親班」或「我已經到了」都會被 student_not_available 擋下（除非老師改判出勤）。',
-      options: [
-        { text: '照 PARENT-097 原規格：成功卡下方照常顯示完整表單與「我已經到了」，送出被擋時在表單卡內顯示後端訊息。' },
-        { text: '成功卡下方只放文字按鈕「需要再次接送？」，點開才顯示表單與「我已經到了」；PARENT-097 的 red case「completed card … 且仍顯示「通知安親班」表單」改為點開後才顯示。', recommended: true },
-      ],
-    },
-  ]
+  const openQuestions = []
 
   return {
-    children, childMode, setChildMode, selectedId, selectChild, childrenLoading,
+    children, childMode, setChildMode, suspended, selectedId, selectChild, childrenLoading,
     hwHint, mainState, retryLoad, openReq, doneReq, history, canPickup,
     statusMeta, fmtTime, historyText, completedText,
     now, arrival, pickerKey, formError, formExpanded, submit, pending,
