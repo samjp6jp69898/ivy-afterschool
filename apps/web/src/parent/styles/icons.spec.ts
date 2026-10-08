@@ -61,8 +61,11 @@ function balancedFrom(code: string, start: number): string {
  *  1. <M3Icon> / <m3-icon> 的 name（靜態，或綁定表達式裡「作為結果」的字串）
  *  2. 名稱以 icon 結尾的屬性：icon="x"、:icon="…"、leading-icon、trailing-icon…
  *  3. 物件鍵 / props 預設值：icon: 'x'、leadingIcon: 'x'
- *  4. 名稱為 XXX_ICONS（全大寫）或 xxxIcons / xxxIconMap 的常數對照表：const LEAVE_TYPE_ICONS = { sick: 'sick' }、[['attendance.', 'how_to_reg']]
- *  5. 同一行宣告、名稱為 icon… 或 xxxIcon 的變數（icon、iconOf、statusIcon）
+ *  4. 圖示名稱對照表常數：XXX_ICON、XXX_ICONS、ICONS、ICON_MAP、XXX_ICON_MAP、ICON_BY_XXX（全大寫，ICON 可在開頭）與 icons、iconMap、
+ *     xxxIcons、xxxIconMap（camelCase）；值是 { … }、[ … ] 或 Object.freeze({ … })，型別註記可有可無，例如
+ *     const LEAVE_TYPE_ICONS = { sick: 'sick' }、const ICONS: Record<Tone, string> = { … }、[['attendance.', 'how_to_reg']]。
+ *     ICON_SIZES、ICON_COLORS 這類「圖示的其他屬性」不算
+ *  5. 同一行宣告、名稱為 icon、iconName、iconOf、iconFor 或 xxxIcon / xxxIconName 的變數（iconSize、iconColor 不算）
  *  6. 檔名含 icon 的 .ts 工具檔（例如 notificationEventIcon.ts）裡的值位置字串
  *  7. 直接以 material-symbols-rounded 渲染的文字
  * 其他寫法掃不到：請改成上面幾種，或補掃描規則。
@@ -84,12 +87,17 @@ function iconNamesIn(source: string, fileName = ''): Set<string> {
 
   for (const m of code.matchAll(/(?<![\w.$-])[\w$]*[iI]con(?:Name)?\s*:\s*([^\n,}]*)/g)) add(valueLiterals(m[1] as string))
 
-  const tableName = '(?:[A-Z][A-Z0-9_]*ICONS?[A-Z0-9_]*|[a-z][\\w$]*Icons|[a-z][\\w$]*IconMap|iconMap)'
-  for (const m of code.matchAll(new RegExp(`\\b(?:const|let|var)\\s+${tableName}\\b[^=\\n]*=\\s*(?=[{[])`, 'g'))) {
+  // 全大寫：前綴字（FOO_）+ ICON / ICONS + 選擇性的 _MAP / _BY_XXX，其後不可再接別的字（ICON_SIZES 不算）
+  const tableName = '(?:(?:[A-Z][A-Z0-9]*_)*ICONS?(?:_MAP|_BY_[A-Z][A-Z0-9_]*)?|icons|iconMap|[a-z][\\w$]*(?:Icons|IconMap))'
+  // 名稱之後到「真正的賦值 =」（不是 ==、=>、!=、<=、>=）為止；右式必須是 { 或 [（可包一層 Object.freeze(）
+  const declaration = `\\b(?:const|let|var)\\s+${tableName}\\b[^\\n]*?(?<![=!<>])=(?![=>])\\s*(?:Object\\.freeze\\(\\s*)?(?=[{[])`
+  for (const m of code.matchAll(new RegExp(declaration, 'g'))) {
     add(valueLiterals(balancedFrom(code, (m.index ?? 0) + m[0].length)))
   }
 
-  for (const m of code.matchAll(/\b(?:const|let|var)\s+(?:icon[\w$]*|[a-z][\w$]*Icons?)\b[^=\n]*=([^\n]*)/g)) add(valueLiterals(m[1] as string))
+  for (const m of code.matchAll(/\b(?:const|let|var)\s+(?:icon|iconName|iconOf|iconFor|[a-z][\w$]*Icon(?:Name)?)\b[^=\n]*=([^\n]*)/g)) {
+    add(valueLiterals(m[1] as string))
+  }
 
   if (/icon/i.test(basename(fileName)) && fileName.endsWith('.ts')) add(valueLiterals(code))
 
@@ -214,7 +222,7 @@ describe('parent icons subset', () => {
       'directions_walk',
       'how_to_reg',
     ])
-    // 5. 同一行宣告、名稱為 icon / iconName / iconOf / iconFor / xxxIcon 的變數：只取結果值
+    // 5. 同一行宣告、名稱為 icon / iconName / iconOf / xxxIcon 的變數：只取結果值
     expect(names(`const iconName = computed(() => props.icon || (props.variant === 'error' ? 'error' : 'inbox'))`)).toEqual([
       'error',
       'inbox',
