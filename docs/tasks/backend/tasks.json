@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 440,
-  "last_updated": "2026-10-08T01:32:24Z",
+  "version": 441,
+  "last_updated": "2026-10-08T01:33:22Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -10931,7 +10931,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": "BE:api/parent_portal/pickup.py::cancel_authorization",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9d",
       "depends_on": [
         "BACKEND-401",
@@ -10959,9 +10959,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-d",
+        "notes": "通過。tdd.run 5 passed（--collect-only：5 條 red_cases 全部被 -k 選到）；整檔 test_pickup_authorizations.py 46 passed；lint / typecheck 乾淨；紅燈 commit b0bcb67 的父 commit 沒有 cancel_authorization（ImportError 型紅燈），實作 587327a 在後。實作對照 description：步驟 1 先查授權的 student_id，不存在或不在 get_parent_student_ids → 同一個 404 pickup_authorization_not_found（測試斷言 status / code / message / details 與不存在完全相同）；步驟 2 條件式 UPDATE WHERE id AND status='active' RETURNING，0 列 → 409 authorization_not_active，之後以 populate_existing 重讀組輸出；步驟 3 broadcast_after_commit 推播 pickup.authorization_updated（commit 後、不在 savepoint 內）。不寫 audit、不發通知，與 description 一致（ivy 來源另有 notify_pickup_cancelled 與連動取消 dismissal_call，description 明示去掉連動且未要求通知）。只改 status，code_attempts / code_locked_at 不動。鎖序：cancel 只在授權列取 UPDATE 列鎖、不碰請求 / 出勤列，不可能形成循環，與核銷（授權列 FOR UPDATE → 請求列 → 出勤列）同向。突變（單一 flock、備份→改壞→跑→trap 還原→cmp，實作檔與 HEAD 一致）：拿掉 load_verifiable_authorization 的 FOR UPDATE → test_cancel_authorization_race_with_verify_reverse 紅；拿掉擁有者檢查 → test_cancel_authorization_idor 紅；不推播 → test_cancel_authorization 紅；拿掉 status='active' 守衛 → test_cancel_authorization_not_active 與 race_with_verify 紅。兩 session 真實函式探針：regenerate_code 持 FOR UPDATE 未 commit → cancel 的 UPDATE 等待，commit 後成功 cancelled，無 40P01；反向 cancel 未 commit → regenerate 的 FOR UPDATE 等待，commit 後 409 authorization_not_active。探針殘列以 app_backend 刪除、2 列 audit（regenerate_code / student.close_out）以 owner 依 id 清除。殘留（不擋）：(1) 不檢查學生 withdrawn：get_parent_student_ids 只排除封存學生，退班學生仍在家長可見範圍，這是 description 步驟 1 的直接結果；實測退班後 close_out 已取消 service_date >= 今天的授權，只剩過去日期仍 active（effective expired）的授權可被家長取消成 cancelled——它無法被核銷（load_verifiable_authorization 要求 service_date == 今天），不影響任何流程，構造不出有害反例，只是 expired → cancelled 的顯示差異。(2) 過期（過去日期仍 active）授權可取消：description 與 ivy 都只擋非 active，非缺陷。(3) ivy 會對取消發家長通知，本專案 description 未要求（取消者即家長本人、員工端靠推播更新）；如需員工通知另開 task。"
       }
     },
     {
@@ -15367,7 +15367,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/pickup/authorizations.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9d",
       "depends_on": [
         "BACKEND-529",
@@ -15389,9 +15389,9 @@
         "notes": "新測試一律以 test_authorization_public_assembler_ 為前綴。行為不變的證據：重構前後 test_pickup_authorizations.py 與 test_student_service.py 整檔結果記在回報。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-d",
+        "notes": "通過。tdd.run 2 passed（2 條 red_cases 全部被 -k 選到）；整檔 test_pickup_authorizations.py 46 passed、test_student_service.py 50 passed（r9d 回報重構前 89 → 後 91 與之一致：41 + 50，之後再加 422 的 5 條）；lint / typecheck 乾淨；紅燈 commit 8b9f66e 的父 commit 沒有 authorization_out / staff_authorization_out，實作 b3cb00d 在後。diff 核對為純重構：authorizations.py 只新增兩個公開組裝函式（含 StudentBrief 匯入與 docstring），list_child_authorizations / list_authorizations_for_staff / create_authorization / regenerate_code / complete_via_authorization 五個呼叫點改用；student_service.py 只改匯入（移除跨模組私有 _base_fields 別名與不再使用的 PickupAuthorizationOut）與 close_out 推播呼叫點，無其他行為變更。_base_fields 仍留在 authorizations.py 內部、只被兩個公開函式使用，符合 description「內部各呼叫點與 student_service 都改用公開函式、移除跨模組的私有名稱匯入」。測試：matches_out_fields 逐欄比對 model_dump（含 expired 旗標、locked、code_attempts、不含 code_hash）；is_used_by_close_out 以 ast 守衛（不 import 整個 pickup 模組、from-import 無底線名稱、含 authorization_out）加實際 close_out 推播資料等於 authorization_out 的輸出。突變：student_service 放回私有 _base_fields 匯入 → is_used_by_close_out 紅；_base_fields 不算 expired → matches_out_fields 紅。殘留（不擋）：student_service.py 匯入上方的註解仍寫「私有 helper」，與現況不符，純註解。"
       }
     },
     {
