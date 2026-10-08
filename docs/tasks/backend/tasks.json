@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 443,
-  "last_updated": "2026-10-08T01:34:38Z",
+  "version": 444,
+  "last_updated": "2026-10-08T01:35:32Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -15263,7 +15263,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/app/services/leave_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9e",
       "depends_on": [
         "BACKEND-346",
@@ -15287,9 +15287,9 @@
         "notes": "新測試一律以 test_leave_concurrent_ 為前綴；既有測試不動。整合測試包 flock /tmp/afterschool_db.lock 並在內層加 timeout。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-b1",
+        "notes": "pass。純補測試（a0f8b3d），leave_service.py 未動；4 條 red_cases 對應 4 條測試，tdd.run 4 passed，整檔 test_leave_service.py 47 passed；--collect-only 帶 / 不帶 -k 比對一致；lint / typecheck 乾淨；新測試連跑 3 輪皆綠。_leave_for_update 以 .scalar_one_or_none() 消費查詢結果，沒有 BACKEND-550 那種「只取列鎖、identity map 不覆蓋」的缺口；StudentLeave 的 relationship 為 selectin / raise，FOR UPDATE 的 SELECT 沒有 outer join，不帶 of= 安全。外部鎖用 FOR KEY SHARE 的理由成立：cancel_leave 只更新 status / cancelled_* 等非鍵欄位（student_leaves 的唯一索引只有主鍵；DB-018 的 exclusion constraint 不算鍵欄位），隱含列鎖是 FOR NO KEY UPDATE、與 KEY SHARE 不衝突，只有明確的 SELECT ... FOR UPDATE 會排隊，所以分得出「有沒有先鎖列」。獨立突變（單一 flock、備份 → 改壞 → 跑 → trap 還原 → cmp，git diff 乾淨）：拿掉 with_for_update → 案例 1 / 2 / 3 轉紅、案例 4 仍綠；拿掉 populate_existing → 案例 2 / 4 轉紅（B 讀到 identity map 的 active 而再次取消，沒有 409）；與 r9e 回報一致。案例 3 確認 Storage 只有 A 的物件：B 在 FOR UPDATE 排隊，A commit 後計數到 3 → 409，沒有上傳。committing 測資用 make_staff(role_code='tutor')，owner 清理 fixture 排在 committing_db_session 之前並設 lock_timeout。owner 唯讀連線在跑前、跑完三個 tdd.run、跑完三個整檔三個時點計數：students / staff_users / 非系統 roles / student_leaves / student_leave_attachments / student_attendances / notifications / notification_outbox / audit_logs / guardians / parent_accounts / pickup_requests / pickup_authorizations / classes / class_staff 皆 0 → 0 → 0，seed 角色 tutor 1 → 1 → 1；突變批次跑完再查一次仍全為 0。 殘留（不擋）：案例 1 的最終狀態與缺鎖實作相同（放鎖後都會取消成功），只靠 done.wait(0.5) 的「尚未完成」窗口區分——負載下不會誤判失敗（被鎖住的 thread 不可能提早完成），只在 thread 0.5 秒內還沒送出查詢時可能放過缺鎖實作；案例 2 / 3 / 4 另有狀態斷言（通知筆數、附件數、409）兜底。"
       }
     },
     {
@@ -15299,7 +15299,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/app/services/grade_promotion_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9e",
       "depends_on": [
         "BACKEND-158"
@@ -15321,9 +15321,9 @@
         "notes": "新測試一律以 test_promotion_execute_lock_ 為前綴；既有測試不動。整合測試包 flock /tmp/afterschool_db.lock 並在內層加 timeout。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-b1",
+        "notes": "pass。純補測試（2ee0f6a），grade_promotion_service.py 未動；3 條 red_cases 對應 3 條測試，tdd.run 3 passed，整檔 test_grade_promotion_service.py 14 passed；--collect-only 比對一致；lint / typecheck 乾淨；新測試連跑 3 輪皆綠。獨立突變：拿掉 _lock_candidate_ids 的 with_for_update → 3 條全紅（案例 1 / 2 由「execute / B 沒排隊」的 wait(0.5) 斷言抓到；案例 3 由狀態斷言抓到：A 以舊名單通過檢查回 PromotionResult(2, 0) 而不是 409 preview_stale）。案例 2 以 monkeypatch 包住 preview 的做法評估為穩健：execute 以模組全域查找 preview，monkeypatch.setattr(grade_promotion_service, 'preview', ...) 確實攔到；停頓點在 _lock_candidate_ids 之後、bulk update 之前，正是「持對象列鎖但尚未寫入」的窗口；沒有固定 sleep，全部用 Event（a_locked.wait(15)、b_done.wait(0.5)、release_a.wait(15)），release_a.set() 在 finally、worker_a 例外時也 set a_locked，主執行緒與 A 都不會卡死；monkeypatch 由 pytest 在 teardown 還原，突變與重跑中沒有殘留 patch；負載下不會誤判失敗（B 被鎖住就不可能提早完成）。「只停在 commit 前分不出差別」的理由成立：缺鎖實作在 bulk UPDATE 時也會被 B 持有的學生列鎖擋住。每個測試用不同學年度（151 / 152 / 153），audit_logs 依 entity_id 精準清除。owner 唯讀連線在跑前、跑完三個 tdd.run、跑完三個整檔三個時點計數：students / staff_users / 非系統 roles / student_leaves / student_leave_attachments / student_attendances / notifications / notification_outbox / audit_logs / guardians / parent_accounts / pickup_requests / pickup_authorizations / classes / class_staff 皆 0 → 0 → 0，seed 角色 tutor 1 → 1 → 1；突變批次跑完再查一次仍全為 0。 殘留（不擋）：(1) 案例 1 / 2 的最終狀態與缺鎖實作相同（缺鎖時 B 先退班、A 再升級，最終同為 grade 4 / withdrawn），僅靠時間窗區分；案例 2 可再斷言 B 的 update_student 回傳值 grade_level == 4（有鎖時 B 讀到升級後的值、缺鎖時是 3），就有不依賴時間的判別，建議之後順手補。(2) cleanup_tables('class_staff') 只是為了滿足 committing_db_session 的 marker，測試不碰該表（與 549 相同）。"
       }
     },
     {
@@ -15401,7 +15401,7 @@
       "granularity_unit": "test",
       "target_path": "apps/api/app/services/student_service.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9e",
       "depends_on": [
         "BACKEND-548"
@@ -15422,9 +15422,9 @@
         "notes": "殘列筆數檢查可用測試外的手動比對（前後各以 owner 查一次）記錄在回報；若改寫成自動檢查，放在同一測試的 teardown 斷言。 殘列筆數以 owner 唯讀連線在測試外前後各查一次（staff_users、非系統 roles）記錄在回報；改用 seed 角色後測試不再往 roles 寫列，owner 清理清單也移除了會誤刪 seed 角色的 roles 項目。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-b1",
+        "notes": "pass。453811a 只改兩行：make_staff(committing_db_session, role_code='tutor') 與移除 owner 清理清單中的 ('roles', 'id', staff.role_id)，548 的死結斷言完全不變；tdd.run -k test_close_out_ 7 passed，整檔 test_student_service.py 50 passed；lint / typecheck 乾淨。兩條 red_case 是手動驗收程序（tdd.notes 明定可在測試外以 owner 前後比對），reviewer 以 owner 唯讀連線在跑前 / 跑完 -k test_close_out_（含 548 死結測試）/ 跑完整檔三個時點計數：staff_users 0 → 0 → 0、非系統 roles 0 → 0 → 0、seed 角色 tutor 1 → 1 → 1（清理清單移除 roles 項目後不會誤刪 seed 角色）。獨立突變：把 close_out_inactive_student 的順序還原為「請求列 → 授權列」→ 548 測試以 DeadlockDetected（40P01，locking tuple in pickup_authorizations）轉紅，原斷言仍有效；student_service.py 已還原、git diff 乾淨。同檔其餘 make_staff 只剩 line 737 的 make_staff(db)（db_session 會 rollback，合規）；全測試樹沒有其他 make_staff(committing_db_session) 無 role_code 的寫法。殘留（不擋、不在本 task 範圍）：tests/integration/services/pickup/test_pickup_transitions.py::test_transition_request_concurrent 與 test_class_service.py 的 _committed_staff 仍以 make_staff(session) 在 committing 測試建自訂角色並 commit（有登記 owner 清理 roles，但測試被中斷會留殘列），建議另開 task 比照改用 role_code='tutor'。"
       }
     },
     {
