@@ -1,6 +1,7 @@
 """BACKEND-106：system_settings registry。
 
 11 個 key 的 schema、預設值、secret、公開欄位、中文標籤與分組。
+BACKEND-558：homework.window 的顯示文字只描述「新增」（行為與驗證範圍不變）。
 """
 
 import re
@@ -390,7 +391,7 @@ def test_settings_registry_field_titles_exact() -> None:
         },
         PickupPersonsSettings: {"max_per_student": "每位學生常用接送人上限"},
         HomeworkWindow: {
-            "past_days": "作業可編輯的過去天數",
+            "past_days": "作業可新增的過去天數",
             "future_days": "作業可預先新增的天數",
         },
         LineLiff: {
@@ -504,3 +505,44 @@ def test_settings_registry_defaults_are_immutable() -> None:
     default = REGISTRY["pickup.window"].default
     with pytest.raises(ValidationError):
         default.auto_expire_minutes = 1
+
+
+def test_homework_window_labels_describe_creation_only() -> None:
+    """homework.window 只限制新增（含整班批次）、當日整體狀態與預計可接送時間；
+    既有項目的修改與刪除不受限，設定頁的文字不能再寫「編輯」。"""
+    schema = REGISTRY["homework.window"].schema.model_json_schema()
+    past = schema["properties"]["past_days"]
+    future = schema["properties"]["future_days"]
+
+    assert past["title"] == "作業可新增的過去天數"
+    assert past["description"] == (
+        "可新增作業、設定整體狀態與預計可接送時間的過去天數（既有項目的修改與刪除不受限）"
+    )
+    assert "編輯" not in past["title"] + past["description"]
+    assert (future["title"], future["description"]) == (
+        "作業可預先新增的天數",
+        "可預先新增今天以後幾天的作業",
+    )
+
+
+def test_homework_window_behavior_unchanged() -> None:
+    default = REGISTRY["homework.window"].default
+    assert isinstance(default, HomeworkWindow)
+    assert default.model_dump() == {"past_days": 30, "future_days": 7}
+    assert HomeworkWindow(past_days=0, future_days=0).model_dump() == {
+        "past_days": 0,
+        "future_days": 0,
+    }
+    assert HomeworkWindow(past_days=365, future_days=60).model_dump() == {
+        "past_days": 365,
+        "future_days": 60,
+    }
+    for invalid in (
+        {"past_days": -1, "future_days": 7},
+        {"past_days": 366, "future_days": 7},
+        {"past_days": 30, "future_days": -1},
+        {"past_days": 30, "future_days": 61},
+        {"past_days": 30, "future_days": 7, "extra": 1},
+    ):
+        with pytest.raises(ValidationError):
+            HomeworkWindow.model_validate(invalid)
