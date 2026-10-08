@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 172,
-  "last_updated": "2026-10-08T08:18:24Z",
+  "version": 173,
+  "last_updated": "2026-10-08T08:28:24Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -579,7 +579,7 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/router/index.ts",
       "source_ref": "FE:src/router/index.ts::router",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9a",
       "depends_on": [
         "FRONTEND-025"
@@ -603,9 +603,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r9-f",
-        "notes": "concern（打回，只缺測試、實作不用改）：3 條 red_case 對應 3 個測試，另有 logged-in through / 強制改密碼每次導航 / 預設 hash history 3 條，tdd.run 6/6 全綠；commit 37fa297（測試）→ 110aeba（實作），只動 router/index.ts 與 index.spec.ts、沒有動 viewLoaders.ts；b3b3431 補的 description 是最終規格寫法；lint 乾淨、vue-tsc exit 0。reviewer 核對：(1) 不建 module-level 單例的理由成立——vue-router 5.3.1 `createWebHashHistory → createWebHistory → useHistoryListeners` 在 history 建立當下就 `window.addEventListener('popstate' / 'pagehide')`（dist/vue-router.js 76-77、159、213 行）；探針（未留檔）建立兩個 hash router 後派發 popstate，authGuard 被呼叫 2 次（兩個 router 都導航到 /classes），只留一個時 1 次。但「多打一次 /auth/me」這句不準確：auth store 的 restore() 以 status 去重、並行時共用同一個 promise，第二個 router 不會多打 /auth/me；實際代價是 guard 與導向重複執行、兩個 history 同時改寫 location。(2) authGuard 有掛：突變拿掉 beforeEach → 4 條測試紅；標題不加後綴 → 3 條紅；預設拒絕 / 未登入導向 / 強制改密碼每次導航都攔由 spec 覆蓋。(3) hash history 往返探針：push('/students?class_id=c1&page=2#sec') 未登入 → location.hash 為 `#/login?redirect=/students?class_id=c1%26page=2%23sec`、query.redirect 解回原字串；登入後 landingPath 回同一 fullPath、push 後 hash 為 `#/students?class_id=c1&page=2#sec`；已登入從書籤重訪該 /login URL 也直接導回原頁。(4) afterEach 標題規則探針：重複導航（failure type 16）與被第二個 guard 中止的導航都不改標題；沒有 meta.title 的 authOnly 路由 → document.title === APP_TITLE。打回原因：description 明寫的兩條行為「導航失敗（failure 有值）不改標題」「meta.title 缺漏只顯示 APP_TITLE」沒有任何對應測試——突變拿掉 `if (failure) return`、拿掉 APP_TITLE 回退，spec 6/6 仍全綠。補法見 risk_notes。"
+        "notes": "pass（複審，只核對打回項）：規格 2ea5ec4 → 測試 b08b725 → 純註解 4d9f04e → 狀態 f30294d；`git diff 110aeba..HEAD -- apps/web/src/router/index.ts` 只有開頭註解差異，沒有行為變動。red_cases 新增「admin router keeps title on failed navigation」「admin router falls back to app title without meta.title」，tdd.run 8/8 全綠，5 條 red_case 逐條被 verbose 清單選到（另 3 條額外測試）；兩條新測試斷言具體：哨兵標題、`isNavigationFailure(duplicated)` / `isNavigationFailure(aborted)` 的 failure 有值、被後掛 guard 中止後 currentRoute 仍是 /students、正常導航恢復更新；addRoute 一條只有 authOnly 沒有 title 的路由 → document.title === APP_TITLE 且不含 'undefined'。reviewer 突變（flock 內、皆轉紅後還原且與 HEAD 一致）：拿掉 `if (failure) return` → keeps title on failed navigation 紅；拿掉 APP_TITLE 回退 → falls back to app title 紅。description 的 /auth/me 敘述已準確：auth store 的 restore() 在 status 非 unknown 時直接 resolve、進行中共用同一個 promise，第二個 router 的代價是 guard / 導向重複執行與兩個 history 同時改寫 location；為最終規格寫法、無歷史敘述；risk_notes 已清空。lint 兩檔乾淨、vue-tsc exit 0。上一輪已通過的部分（authGuard 掛載、標題後綴、hash redirect 往返、不建單例的 popstate 理由、強制改密碼每次導航）不重審。殘留：無。"
       }
     },
     {
