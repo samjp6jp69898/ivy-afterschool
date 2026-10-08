@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 171,
-  "last_updated": "2026-10-08T05:03:12Z",
+  "version": 172,
+  "last_updated": "2026-10-08T08:18:24Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -2864,7 +2864,7 @@
         "FRONTEND-044"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "review-r9-u 打回：(1) 刪除監護人回 404（資料已被他人變更）時，要和產生 / 解除綁定一樣在顯示後端訊息後重新載入清單（description 已寫明寫入回 409 / 404 重新載入），並補測試；(2) 產生綁定碼的回應若在切換學生之後才到，綁定碼 dialog 不可以用新學生的姓名呈現（說明文字的學生必須是送出請求當下那位學生），補「請求進行中切換學生、回應晚到」的測試並斷言 dialog 文字；(3) 產生 / 解除綁定回 404 時重新載入的分支沒有測試（把 404 從條件拿掉測試仍全綠），補 404 的測試。\nreview-r9-u 複審打回：(4) 「重新產生綁定碼」的確認框開著時學生被切換（例如瀏覽器上一頁改了 query.student），按「重新產生」後綁定碼 dialog 不可顯示切換後的學生。學生姓名要在使用者點擊該監護人按鈕當下（確認框之前）就固定，或在學生已切換時不送出請求；description 的「取送出產生請求當下的值」要同步改寫。補測試：code_issued 列點「重新產生綁定碼」→ 確認框開著時切到 s2 / 陳小美 → 按「重新產生」→ dialog 文字含「即可綁定 王小明」且不含「陳小美」。其餘攻擊面已驗證通過，修正後只需複核這一項。",
+      "risk_notes": "監護人的所有操作一律以『點擊 / 開啟當下』的學生為準：產生 / 重新產生綁定碼的確認框與綁定碼 dialog、解除綁定、新增 / 編輯表單，都在點擊當下固定 studentId 與學生姓名，不隨 props.student 變動（本元件曾因此被打回兩次）；日後新增的互動（確認框、dialog）須沿用同一原則。寫入回 404（資料已被他人變更）時，刪除 / 產生 / 解除綁定都要在顯示後端訊息後重新載入清單。已知缺口（不擋）：『先切換學生、再開新增 / 編輯表單』這條路徑沒有測試保護（拿掉開表單時更新學生的那一行，測試仍全綠）；沒傳 initial 且清單載入中開新增表單時，『將取代原本主要聯絡人』的提示不會出現（FRONTEND-087 一律傳入 initial，整合下不會發生）；GuardianFormDialog（FRONTEND-092）遇 409 / 404 不 emit 事件，本元件無從重新載入（範圍外）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/components/student/GuardianManager.spec.ts",
@@ -5304,7 +5304,7 @@
     {
       "id": "FRONTEND-237",
       "title": "實作 composables/useScoreAutosave.ts：成績格變更佇列、防抖批次 upsert、逐格狀態與重試",
-      "description": "建立 `apps/web/src/composables/useScoreAutosave.ts`（domain_spec M8：逐格自動儲存（批次 upsert）；api_index §11：每次只送有變動的格子）。\n\n**介面**\n```ts\nexport function useScoreAutosave(opts: {\n  examId: Ref<string>\n  initial: Ref<ScoreCell[]>\n  notifyParents: Ref<boolean | null>     // 已發布考試：null = 尚未選擇（此時暫不送出，等待選擇）；草稿固定 false\n  debounceMs?: number                    // 預設 800\n}): {\n  cellValue(studentId, subjectId): { score: number | null; is_absent: boolean }\n  cellState(studentId, subjectId): 'idle' | 'dirty' | 'saving' | 'saved' | 'error'\n  cellError(studentId, subjectId): string | undefined\n  edit(studentId, subjectId, v: { score: number | null; is_absent: boolean }): void\n  flush(): Promise<void>; retryFailed(): Promise<void>\n  hasUnsaved: ComputedRef<boolean>; failedCount: ComputedRef<number>; saving: ComputedRef<boolean>\n  awaitingNotifyChoice: ComputedRef<boolean>\n}\n```\n- `edit` → 標 dirty、重設 debounce；debounce 到期送出所有 dirty 格（一次 `saveScores`，最多 2000 格，超過分批）。\n- 同一時間只有一個 PUT 進行中；進行中又有新編輯 → 結束後再送新的 dirty（同格以最新值為準）。送出中的格子若在回應前又被編輯，回應後維持 dirty。\n- 成功：送出的格子（且未再被編輯）標 saved（1 秒後轉 idle），並更新基準值。\n- 422 `invalid_score_cells`：details 中的格子標 error（訊息對照：score_out_of_range「分數超出 0~滿分」、student_not_in_exam「學生不在應考名單」、subject_not_in_exam「此科目不在考試中」、未知 code 顯示 code），其餘送出的格子視為未寫入、維持 dirty 後重送一次。\n- 網路錯誤 / 5xx：送出的格子全部標 error「儲存失敗，請重試」；`retryFailed` 重新送出。\n- `notifyParents === null`（已發布且尚未選擇）時不送出，`awaitingNotifyChoice` 為 true（由 FRONTEND-238 要求使用者選擇）；選擇後立即 flush。\n- 離開頁面前 `flush()`；`hasUnsaved` = dirty / saving / error 任一。\n\n**驗收標準**：每一條對應下列 red_case（fake timers）。",
+      "description": "建立 `apps/web/src/composables/useScoreAutosave.ts`（domain_spec M8：逐格自動儲存（批次 upsert）；api_index §11：每次只送有變動的格子）。\n\n**介面**\n```ts\nexport function useScoreAutosave(opts: {\n  examId: Ref<string>\n  initial: Ref<ScoreCell[]>\n  notifyParents: Ref<boolean | null>     // 已發布考試：null = 尚未選擇（此時暫不送出，等待選擇）；草稿固定 false\n  debounceMs?: number                    // 預設 800\n}): {\n  cellValue(studentId, subjectId): { score: number | null; is_absent: boolean }\n  cellState(studentId, subjectId): 'idle' | 'dirty' | 'saving' | 'saved' | 'error'\n  cellError(studentId, subjectId): string | undefined\n  edit(studentId, subjectId, v: { score: number | null; is_absent: boolean }): void\n  flush(): Promise<void>; retryFailed(): Promise<void>\n  hasUnsaved: ComputedRef<boolean>; failedCount: ComputedRef<number>; saving: ComputedRef<boolean>\n  awaitingNotifyChoice: ComputedRef<boolean>\n}\n```\n- `edit` → 標 dirty、重設 debounce；debounce 到期送出所有 dirty 格（一次 `saveScores`，最多 2000 格，超過分批）。\n- 同一時間只有一個 PUT 進行中；進行中又有新編輯 → 結束後再送新的 dirty（同格以最新值為準）。送出中的格子若在回應前又被編輯，回應後維持 dirty。\n- 成功：送出的格子（且未再被編輯）標 saved（1 秒後轉 idle），並更新基準值。\n- 422 `invalid_score_cells`：details 中的格子標 error（訊息對照：score_out_of_range「分數超出 0~滿分」、student_not_in_exam「學生不在應考名單」、subject_not_in_exam「此科目不在考試中」、未知 code 顯示 code），其餘送出的格子視為未寫入、維持 dirty 後重送一次。\n- 網路錯誤 / 5xx：送出的格子全部標 error「儲存失敗，請重試」；`retryFailed` 重新送出。\n- **每格備註 `note`**：後台沒有每格備註的輸入介面，但 PUT 的 upsert 會以請求值覆寫 `note`（沒帶就洗成 NULL）。因此 `initial` 的每格 `note` 要保留在內部基準中，送出時原樣帶回 `ScoreCellIn.note`：沒有成績列的格子帶 `null`（不得省略或帶 `undefined`）；`edit` 只改 `score` / `is_absent`、不動 `note`；成功後以回應值更新基準（含 `note`）。\n- `notifyParents === null`（已發布且尚未選擇）時不送出，`awaitingNotifyChoice` 為 true（由 FRONTEND-238 要求使用者選擇）；選擇後立即 flush。\n- 離開頁面前 `flush()`；`hasUnsaved` = dirty / saving / error 任一。\n\n**驗收標準**：每一條對應下列 red_case（fake timers）。",
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/useScoreAutosave.ts",
       "source_ref": null,
@@ -5315,7 +5315,7 @@
         "FRONTEND-009"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "並發與順序：同一格在請求進行中再次被編輯，回應不得把較新的值標為已儲存或覆蓋基準；序列化 PUT 並以每格版本號比對。\nexam_scores.note 後端支援、家長端顯示，後台無輸入；237 送出不帶 note 會把既有 note 洗成 NULL，待使用者裁定。",
+      "risk_notes": "並發與順序：同一格在請求進行中再次被編輯，回應不得把較新的值標為已儲存或覆蓋基準；序列化 PUT 並以每格版本號比對。\n後台目前沒有每格備註的輸入介面，送出時原樣帶回載入時的 note 避免 upsert 洗成 NULL；日後若要提供每格備註輸入，需另開 task（ScoreCell 與 FRONTEND-235）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/composables/useScoreAutosave.spec.ts",
@@ -5329,7 +5329,8 @@
           "useScoreAutosave marks network failures and retries：PUT networkError → failedCount === 2；retryFailed() 且回 200 → failedCount 0、兩格 state 'saved'",
           "useScoreAutosave waits for notify choice on published exam：notifyParents null → edit 後 2 秒無請求、awaitingNotifyChoice true；設 notifyParents = true → 立即送出且 body.notify_parents === true",
           "useScoreAutosave saved returns to idle and hasUnsaved：成功後 cellState 'saved'，1 秒後 'idle'；全部完成後 hasUnsaved === false",
-          "useScoreAutosave maps cell error codes：PUT 回 422 invalid_score_cells details [{student_id:'s1',subject_id:'sub1',code:'student_not_in_exam'},{student_id:'s2',subject_id:'sub1',code:'subject_not_in_exam'},{student_id:'s3',subject_id:'sub1',code:'absent_with_score'}] → cellError 依序為 '學生不在應考名單'、'此科目不在考試中'、'absent_with_score'"
+          "useScoreAutosave maps cell error codes：PUT 回 422 invalid_score_cells details [{student_id:'s1',subject_id:'sub1',code:'student_not_in_exam'},{student_id:'s2',subject_id:'sub1',code:'subject_not_in_exam'},{student_id:'s3',subject_id:'sub1',code:'absent_with_score'}] → cellError 依序為 '學生不在應考名單'、'此科目不在考試中'、'absent_with_score'",
+          "useScoreAutosave echoes the loaded note：initial 含 s1/sub1 {score:80, is_absent:false, note:'遲到'} 與沒有成績列的 s2/sub1（note null）；edit(s1,sub1,90)、edit(s2,sub1,70) 送出後 PUT body 的 cells 為 s1 {score:90, is_absent:false, note:'遲到'}、s2 {score:70, is_absent:false, note:null}（note 欄位必須存在，不得省略或為 undefined）"
         ],
         "run": "just web-test src/composables/useScoreAutosave.spec.ts -t \"useScoreAutosave\"",
         "notes": ""

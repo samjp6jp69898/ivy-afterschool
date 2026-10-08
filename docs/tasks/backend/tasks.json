@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 448,
-  "last_updated": "2026-10-08T05:12:52Z",
+  "version": 449,
+  "last_updated": "2026-10-08T08:18:24Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -11991,7 +11991,7 @@
     {
       "id": "BACKEND-449",
       "title": "實作 POST /api/parent/pickup-authorizations/{id}/cancel endpoint",
-      "description": "建立 / 沿用 `apps/api/app/api/parent/pickup.py`（`router = APIRouter(tags=['parent-pickup'])`，掛到 parent_router）。寫入型 handler 呼叫 service 後自行 `db.commit()`。\n- `POST /api/parent/pickup-authorizations/{auth_id}/cancel`，`Depends(get_current_parent)`，無 body → BACKEND-422 → commit → 200 `PickupAuthorizationOut`。\n\n**驗收標準**\n- 成功；422；401（無 cookie / 員工 cookie）；IDOR：他人小孩或他人資源與不存在 id 回相同 404；業務錯誤碼如 red_cases。",
+      "description": "建立 / 沿用 `apps/api/app/api/parent/pickup.py`（`router = APIRouter(tags=['parent-pickup'])`，掛到 parent_router）。寫入型 handler 呼叫 service 後自行 `db.commit()`。\n- `POST /api/parent/pickup-authorizations/{auth_id}/cancel`，`Depends(get_current_parent)`，無 body → BACKEND-422 → commit → 200 `PickupAuthorizationOut`。\n- **守衛**：只驗所有權（`get_current_parent` + BACKEND-422 的擁有者檢查，他人 / 不存在同一 404），**不**套用 `get_owned_student_for_write` / `for_write`：取消是保護性操作，與刪除常用接送人一致；暫停 / 退班學生的 active 授權在收尾時已被取消，仍為 active 的（過去日期）授權家長可以取消。\n\n**驗收標準**\n- 成功；422；401（無 cookie / 員工 cookie）；IDOR：他人小孩或他人資源與不存在 id 回相同 404；業務錯誤碼如 red_cases。",
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/parent/pickup.py",
       "source_ref": "BE:api/parent_portal/pickup.py::cancel_authorization",
@@ -12017,7 +12017,8 @@
           "test_parent_pickup_auth_cancel_422：path 'abc' → 422",
           "test_parent_pickup_auth_cancel_401：無 cookie → 401",
           "test_parent_pickup_auth_cancel_idor：他人授權 → 404 pickup_authorization_not_found，body 與 uuid4() 相同",
-          "test_parent_pickup_auth_cancel_409：completed → 409 authorization_not_active"
+          "test_parent_pickup_auth_cancel_409：completed → 409 authorization_not_active",
+          "test_parent_pickup_auth_cancel_suspended_student_allowed：學生 status='suspended'、其過去日期仍為 active 的授權 → 200 status == 'cancelled'（不回 student_not_active；取消是保護性操作，不套用寫入守衛）"
         ],
         "run": "just test-int apps/api/tests/integration/api/parent/test_pickup_endpoints.py -k \"test_parent_pickup_auth_cancel_\"",
         "notes": "家長端無權限碼，403 以 IDOR 404 取代（業務上的 403 pickup_not_allowed 另測）。"
