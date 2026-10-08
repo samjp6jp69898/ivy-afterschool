@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 445,
-  "last_updated": "2026-10-08T01:36:19Z",
+  "version": 446,
+  "last_updated": "2026-10-08T01:41:10Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -15492,6 +15492,41 @@
         ],
         "run": "just test apps/api/tests/unit/core/test_settings_registry.py -k \"test_homework_window_\"",
         "notes": "只改顯示文字；後台系統設定頁（FRONTEND-056 / 057）由 registry 的 JSON schema 渲染，不需改前端。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-559",
+      "title": "修正 ExamService.get_exam_summary：各科統計只計目前應考名單（未填 = 名單內沒有分數也沒標缺考的格子）",
+      "description": "修正 `apps/api/app/services/exam_service.py` 的 `get_exam_summary`（BACKEND-463；函式介面與 `ExamSummaryOut` 不變）的統計範圍。使用者裁定：「未填」只算目前應考名單內、沒有分數也沒標缺考的格子。\n```python\ndef get_exam_summary(session: Session, exam_id: UUID) -> ExamSummaryOut: ...\n```\n- 每科統計只計**目前應考名單**內的學生（與 `resolve_exam_roster` / `_student_in_roster` 相同條件：active、未封存、符合考試的 class_id / grade_level）：\n  - `scored_count`：名單內 score 非 null 的格子數；`absent_count`：名單內 is_absent 的格子數。\n  - `missing_count`：名單內沒有成績列，或成績列 score 為 null 且 is_absent 為 false（清空過的格子）的學生數。\n  - `average`（四捨五入 2 位，沒有分數 → None）、`max`、`min`：只計名單內有分數者。\n  - 因此每科 `scored_count + absent_count + missing_count == roster_count`。\n- 名單外學生（考後退班、範圍變更後不在名單）的成績列照樣保留，成績格以 in_roster=false 顯示（BACKEND-459），但不列入 summary 的任何統計，也不抵掉未填數。\n- 查詢數固定：名單人數一次 + 各科統計單一 GROUP BY（join students 套名單條件），不逐科、不逐人查詢。\n- 前端依賴：FRONTEND-234 發布確認的未填格數（各科 missing_count 加總）、FRONTEND-239 各科平均表、FRONTEND-233 移除科目確認框的筆數（scored_count）。\n\n**驗收標準**\n- 清空過的格子算未填；名單外學生的成績列不列入任何統計、不抵掉未填；缺考不算未填、不計入平均。\n- 每科 scored_count + absent_count + missing_count == roster_count。\n- 查詢數不隨科目數與名單人數增加。\n- BACKEND-463 既有的 summary 測試與 BACKEND-477 端點測試維持通過。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/services/exam_service.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "BACKEND-463"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/services/test_exam_service.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_exam_summary_roster_cleared_cell_is_missing：名單 3 人；數學 A 90、B 有成績列但 score null 且 is_absent false（清空過的格子）、C 沒有成績列 → scored_count 1、absent_count 0、missing_count 2、average == Decimal('90.00')",
+          "test_exam_summary_roster_excludes_out_of_roster：名單 2 人（A 數學 70、B 未登分）+ 學生 D 不在名單（另一班）但有數學成績列 100 → roster_count 2、scored_count 1、missing_count 1、average == Decimal('70.00')、max == Decimal('70')（D 的成績不列入統計，也不抵掉 B 的未填）",
+          "test_exam_summary_roster_absent_not_missing：名單 3 人；數學 A 缺考、B 60、C 未登分 → absent_count 1、scored_count 1、missing_count 1，且 scored_count + absent_count + missing_count == roster_count",
+          "test_exam_summary_roster_query_count_is_constant：一科、名單 2 人與三科、名單 6 人各呼叫一次 get_exam_summary → 兩次執行的 SQL 語句數相同（沿用 test_student_exam_history_query_count_is_constant 的 before_cursor_execute 計數寫法）"
+        ],
+        "run": "just test-int apps/api/tests/integration/services/test_exam_service.py -k \"test_exam_summary_\"",
+        "notes": "tdd.run 同時選到 BACKEND-463 的 test_exam_summary_stats / rounding / empty_subject（同一函式的回歸）。另跑 just test-int apps/api/tests/integration/api/admin/test_exams_endpoints.py -k \"test_admin_exam_summary_\" 確認端點回應不變。"
       },
       "review": {
         "status": "pending",

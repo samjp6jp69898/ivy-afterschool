@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 164,
-  "last_updated": "2026-10-08T01:39:08Z",
+  "version": 165,
+  "last_updated": "2026-10-08T01:41:10Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -5020,7 +5020,7 @@
     {
       "id": "FRONTEND-231",
       "title": "實作 views/ExamsView.vue：考試列表",
-      "description": "建立 `apps/web/src/views/ExamsView.vue`（路由 `/exams`，`exams:read`）。新做（domain_spec §4）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exams.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試列表（篩選、草稿 / 已發布）、建立 / 編輯考試 dialog（含初始科目與滿分、已發布時只可改名稱日期備註）、只有 exams:read 時的唯讀樣式、空清單。\n\n**內容**\n- `PageHeader`「考試」；`AdminListToolbar`：搜尋（名稱）、狀態（草稿 / 已發布）、考試類型（lookups examTypeOptions）、班級、年級、日期區間（預設近 90 天到未來 30 天）。`usePagedList`（syncQuery）+ `listExams`，依 exam_date desc。\n- 表格：考試日期（formatDateWithWeekday）、名稱、類型、對象（年級與 / 或班級：「三年級」「低年級A班」「低年級A班・二年級」）、科目數、應考人數（roster_count）、狀態 tag（EXAM_STATUS_META；已發布附 formatDateTime(published_at)）。點列 → `/exams/{id}`。\n- 有 `exams:write`：「建立考試」→ `ExamFormDialog`（FRONTEND-232），建立成功導到 `/exams/{id}?tab=scores`；草稿列 ⋮「刪除」（`useConfirmDelete`，訊息「刪除後已輸入的成績會一併刪除，確定要刪除「{name}」嗎？」）。\n- 空清單：「還沒有考試紀錄」（有寫入權限附建立按鈕）。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/ExamsView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/views/ExamsView.vue`（路由 `/exams`，`exams:read`）。新做（domain_spec §4）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exams.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試列表（篩選、草稿 / 已發布）、建立 / 編輯考試 dialog（含初始科目與滿分、已發布時只可改名稱日期備註）、只有 exams:read 時的唯讀樣式、空清單。\n\n**內容**\n- `PageHeader`「考試」；`AdminListToolbar`：搜尋（名稱）、狀態（草稿 / 已發布）、考試類型（lookups examTypeOptions）、班級（lookups classOptions 目前學年度；只比對考試設定的班級，以年級為對象的考試不會出現在班級篩選結果）、年級；日期區間放 `extra-filters` slot（顯示 YYYY/MM/DD，預設近 90 天到未來 30 天，可清除 = 不限日期，快捷「預設區間」「本學年度」「上學年度」）。`usePagedList`（syncQuery）+ `listExams`，依 exam_date desc。\n- 表格：考試日期（formatDateWithWeekday；不是今年的考試前面加灰色小字年份）、名稱、類型、對象（年級與 / 或班級：「三年級」「低年級A班」「低年級A班・二年級」）、科目數（0 顯示 warning 色「未設定」）、應考人數（roster_count）、狀態 tag（EXAM_STATUS_META；已發布附 formatDateTime(published_at)）。整列可點 → `/exams/{id}`；名稱是 router-link（鍵盤可聚焦、可在新分頁開）。不提供欄位排序。\n- 有 `exams:write`：「建立考試」→ `ExamFormDialog`（FRONTEND-232），建立成功導到 `/exams/{id}?tab=scores`；草稿列 ⋮「刪除」（`useConfirmDelete`，訊息「刪除後已輸入的成績會一併刪除，確定要刪除「{name}」嗎？」）；已發布列沒有 ⋮。操作欄寬度要放得下 44×44 的 ⋮ 鈕（設計稿 72px），且該欄不套 el-table cell 的 ellipsis（按鈕右側不可多出「···」）。列表沒有編輯入口：編輯考試在考試頁 header「編輯資訊」（FRONTEND-234）。\n- 空清單：篩選維持預設時 EmptyState「還沒有考試紀錄」+ 說明「預設只顯示近 90 天到未來 30 天的考試，更早的考試請調整日期區間」（有寫入權限附「建立考試」）；改過篩選時表格內 inline「沒有符合條件的考試」+「試著調整搜尋文字、篩選條件或日期區間」。載入失敗：EmptyState error「無法載入考試」+「重試」。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/ExamsView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/ExamsView.vue",
       "source_ref": null,
@@ -5049,7 +5049,8 @@
           "ExamsView renders target and status：回 [{name:'第一次段考',exam_type:{name:'段考'},exam_date:'2026-10-15',grade_level:2,class:{name:'低年級A班'},subjects:[{},{}],roster_count:18,status:'published',published_at:'2026-10-16T02:00:00Z'}] → 列文字含 '10/15（四）'、'第一次段考'、'段考'、'低年級A班・二年級'、'2'、'18'、'已發布'",
           "ExamsView navigates to detail on row click：點該列 → router path '/exams/e1'",
           "ExamsView create redirects to scores tab：exams:write → 建立考試成功（回 id 'e9'）→ router fullPath '/exams/e9?tab=scores'",
-          "ExamsView delete only for drafts with permission：draft 列 ⋮ 有 '刪除'，published 列沒有；permissions ['exams:read'] → 沒有 '建立考試' 與 ⋮"
+          "ExamsView delete only for drafts with permission：draft 列 ⋮ 有 '刪除'，published 列沒有；permissions ['exams:read'] → 沒有 '建立考試' 與 ⋮",
+          "ExamsView empty states：預設篩選下 GET /admin/exams 回 {items:[],total:0} → 文字含 '還沒有考試紀錄' 與 '預設只顯示近 90 天到未來 30 天的考試'；在搜尋框輸入 '期末' 並按 Enter 後回空 → 文字含 '沒有符合條件的考試'、不含 '還沒有考試紀錄'"
         ],
         "run": "just web-test src/views/ExamsView.spec.ts -t \"ExamsView\"",
         "notes": ""
@@ -5063,7 +5064,7 @@
     {
       "id": "FRONTEND-232",
       "title": "實作 components/exams/ExamFormDialog.vue：建立 / 編輯考試（類型、日期、年級或班級、初始科目）",
-      "description": "建立 `apps/web/src/components/exams/ExamFormDialog.vue`（domain_spec M8：grade_level 與 class_id 至少一個，決定應考學生名單；已發布只可改 name / exam_date / note）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exams.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試列表（篩選、草稿 / 已發布）、建立 / 編輯考試 dialog（含初始科目與滿分、已發布時只可改名稱日期備註）、只有 exams:read 時的唯讀樣式、空清單。\n\n**props / emits**：`modelValue`、`exam?: Exam`；emits `update:modelValue`、`saved(exam: Exam)`。\n**欄位**\n- 名稱（必填 ≤50，例如「第一次段考」）、考試類型（lookups examTypeOptions，必填）、考試日期（必填）。\n- 應考對象：年級（GRADE_OPTIONS，可清除）與班級（lookups classOptions 當前學年度，可清除），至少一項（「請選擇年級或班級」）；兩者皆選時提示「只包含該班中該年級的學生」。\n- 備註（≤200）。\n- 建立時另有「科目」區：lookups subjectOptions 的 checkbox（預設全部勾選）與各自滿分（預設 100，>0 且 ≤1000）。\n**送出**\n- 建立：`createExam` → 若有勾選科目再 `setExamSubjects(id, items)`（sort_order 依科目排序）→ emit saved（第二步失敗時仍 emit saved 並 ElMessage.warning('考試已建立，但科目設定失敗，請到「科目設定」分頁重試')）。\n- 編輯：只送變更欄位；`exam.status === 'published'` 時類型、年級、班級 disabled 並提示「已發布的考試只能修改名稱、日期與備註」。\n- 錯誤：`invalid_exam_type` / `invalid_class` / `grade_not_in_class` → 對應欄位顯示後端 message；`exam_published` 顯示 message。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/exams/ExamFormDialog.vue`（domain_spec M8：grade_level 與 class_id 至少一個，決定應考學生名單；已發布只可改 name / exam_date / note）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exams.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試列表（篩選、草稿 / 已發布）、建立 / 編輯考試 dialog（含初始科目與滿分、已發布時只可改名稱日期備註）、只有 exams:read 時的唯讀樣式、空清單。\n\n**props / emits**：`modelValue`、`exam?: Exam`；emits `update:modelValue`、`saved(exam: Exam)`。建立入口是考試列表的「建立考試」（FRONTEND-231）；編輯入口只在考試頁 header「編輯資訊」（FRONTEND-234），列表沒有編輯入口。外觀為 FormDialog lg（800px），標題「建立考試」/「編輯考試」，送出鈕「建立」/「儲存」（編輯沒有變更時停用）。\n**欄位**\n- 名稱（必填 ≤50，例如「第一次段考」）、考試類型（lookups examTypeOptions，必填）、考試日期（必填）。\n- 應考對象：年級（GRADE_OPTIONS，可清除）與班級（lookups classOptions 當前學年度，可清除），至少一項（「請選擇年級或班級」）；兩者皆選時提示「只包含該班中該年級的學生」。\n- 備註（≤200；後端上限 500，前端以 200 為上限）。\n- 建立時另有「科目」區：lookups subjectOptions 的 checkbox（預設全部勾選）與各自滿分（預設 100，>0、≤1000、最多一位小數），區塊右上「全選」（部分勾選時半選），取消勾選的科目滿分停用；沒有任何啟用科目時顯示「尚未建立任何科目。可以先建立考試，之後再到考試頁的「科目設定」新增。」。\n**送出**\n- 建立：`createExam` → 若有勾選科目再 `setExamSubjects(id, items)`（sort_order 依科目排序）→ emit saved（第二步失敗時仍 emit saved 並 ElMessage.warning('考試已建立，但科目設定失敗，請到「科目設定」分頁重試')）。\n- 編輯：只送變更欄位；`exam.status === 'published'` 時類型、年級、班級 disabled 並提示「已發布的考試只能修改名稱、日期與備註」；草稿改了年級或班級時提示「變更應考對象後，已有成績但不在新名單的學生，成績會保留並標示「已不在名單」。」；編輯沒有科目區（科目在考試頁「科目設定」分頁調整）。\n- 錯誤：`invalid_exam_type` / `invalid_class` / `grade_not_in_class` → 對應欄位顯示後端 message；`exam_published` 在 dialog 頂端紅色 alert 顯示 message，dialog 不關。成功時 ElMessage.success（建立「已建立考試」、編輯「已更新」）。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/exams/ExamFormDialog.vue",
       "source_ref": null,
@@ -5088,7 +5089,8 @@
           "ExamFormDialog requires grade or class：兩者皆未選點送出 → 文字含 '請選擇年級或班級'，無請求",
           "ExamFormDialog warns when subject step fails：POST 成功、PUT subjects 回 500 → body 含 '考試已建立，但科目設定失敗'，仍 emit saved",
           "ExamFormDialog published exam limits fields：exam.status 'published' → 類型、年級、班級 disabled，文字含 '已發布的考試只能修改名稱、日期與備註'；改日期為 2026-10-16 → PATCH body 深等於 {exam_date:'2026-10-16'}",
-          "ExamFormDialog maps grade class mismatch：POST 回 422 {error:{code:'grade_not_in_class',message:'此班級沒有該年級'}} → 年級欄下文字 '此班級沒有該年級'"
+          "ExamFormDialog maps grade class mismatch：POST 回 422 {error:{code:'grade_not_in_class',message:'此班級沒有該年級'}} → 年級欄下文字 '此班級沒有該年級'",
+          "ExamFormDialog scope change hint and published conflict：exam 為草稿（grade_level 3、class null）→ 班級選 '中年級A班' → 文字含 '成績會保留並標示「已不在名單」'；送出 PATCH 回 409 {error:{code:'exam_published',message:'考試已發布，名單與類型不可修改，請先取消發布'}} → dialog 內文字含該 message，emitted('saved') 為 undefined"
         ],
         "run": "just web-test src/components/exams/ExamFormDialog.spec.ts -t \"ExamFormDialog\"",
         "notes": ""
@@ -5102,7 +5104,7 @@
     {
       "id": "FRONTEND-233",
       "title": "實作 components/exams/ExamSubjectsEditor.vue：考試科目與滿分設定",
-      "description": "建立 `apps/web/src/components/exams/ExamSubjectsEditor.vue`（`PUT /exams/{id}/subjects` 整批取代；移除科目會刪除該科成績；BACKEND-472）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exam-detail.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試 header（狀態、發布 / 取消發布 / 編輯 / 刪除依權限）、成績輸入格（學生 × 科目，格子五種狀態：未填 / 編輯中 / 儲存中 / 已儲存 / 錯誤，缺考勾選、超出滿分錯誤、已不在名單的學生）、已發布後修改的重新通知選擇、各科平均表、科目設定（草稿可改 / 已發布唯讀）、只有 exams:read 時唯讀、無科目時的引導、載入中。\n\n**props / emits**：`exam: Exam`、`scoredCounts: Record<string, number>`（subject_id → 已輸入分數數，取自 summary）、`canWrite: boolean`；emits `saved(exam)`。\n- 清單：科目（lookups subjectOptions；已選的不可重複）、滿分（el-input-number，>0、≤1000、最多一位小數）、上移 / 下移按鈕；「新增科目」；移除。\n- `exam.status === 'published'` 或 `!canWrite`：唯讀，提示「已發布的考試不可修改科目」（published 時）。\n- 有變更時才可「儲存」；儲存前若移除了 `scoredCounts > 0` 的科目 → 確認「移除「{subject}」會刪除已輸入的 {n} 筆成績，確定嗎？」。\n- 送出 `setExamSubjects(id, items)`（sort_order 依畫面順序 1..n）→ emit saved。錯誤：`full_score_below_existing` →「滿分不可低於已輸入的最高分」標在該列；`exam_published` 顯示 message。\n- 無科目：「尚未設定科目，請新增後才能輸入成績」。\n\n**驗收標準**\n- 送出 items 與順序；移除有成績的科目需確認；已發布唯讀；滿分錯誤。",
+      "description": "建立 `apps/web/src/components/exams/ExamSubjectsEditor.vue`（`PUT /exams/{id}/subjects` 整批取代；移除科目會刪除該科成績；BACKEND-472）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exam-detail.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試 header（狀態、發布 / 取消發布 / 編輯 / 刪除依權限）、成績輸入格（學生 × 科目，格子五種狀態：未填 / 編輯中 / 儲存中 / 已儲存 / 錯誤，缺考勾選、超出滿分錯誤、已不在名單的學生）、已發布後修改的重新通知選擇、各科平均表、科目設定（草稿可改 / 已發布唯讀）、只有 exams:read 時唯讀、無科目時的引導、載入中。\n\n**props / emits**：`exam: Exam`、`scoredCounts: Record<string, number>`（subject_id → 已輸入分數數，取自 summary）、`canWrite: boolean`；emits `saved(exam)`、`conflict`（409 `exam_published`，由 view 重新載入考試）。\n- 清單：上方灰字「科目順序就是成績表與家長端的顯示順序；移除科目會一併刪除該科已輸入的成績。」；每列 = 順序、科目（lookups subjectOptions；其他列已選的 disabled；不在 subjectOptions 的既有科目以「{name}（已停用）」顯示並加「已停用」tag）、滿分（el-input-number，>0、≤1000、最多一位小數）、已輸入成績數（scoredCounts，「{n} 筆」，0 顯示「—」）、「上移」「下移」「移除」。下方「新增科目」+「{n} / 20」，右側「還原變更」（有變更才出現）與「儲存」。\n- 科目數 1~20（`PUT /exams/{id}/subjects` items 1~20）：已有 20 列或沒有可再選的科目時「新增科目」停用；全部移除時顯示「考試至少要有一個科目：請新增科目，或按「還原變更」」且「儲存」停用。\n- `exam.status === 'published'` 或 `!canWrite`：唯讀，提示「已發布的考試不可修改科目」（published 時）。\n- 有變更時才可「儲存」；儲存前若移除了 `scoredCounts > 0` 的科目 → 確認「移除「{subject}」會刪除已輸入的 {n} 筆成績，確定嗎？」（移除多科時逐行列出，按鈕「移除並儲存」/「取消」）。\n- 送出 `setExamSubjects(id, items)`（sort_order 依畫面順序 1..n）→ ElMessage.success('已儲存科目設定') → emit saved。錯誤：`full_score_below_existing`（details `{subject_id, max_score}`）→「滿分不可低於已輸入的最高分（目前最高 {max_score} 分）」標在該列（列 class `is-error-full`）；`exam_published` → 頂端紅色 alert 顯示 message 並 emit `conflict`；`invalid_subject`（422，details `subject_ids`，科目在參考資料被停用）→ 頂端紅色 alert 顯示 message，對應列 class `is-error-subject` 並說明「此科目已在參考資料停用，移除後才能儲存（會一併刪除該科成績）」。\n- 無科目：「尚未設定科目，請新增後才能輸入成績」。\n\n**驗收標準**\n- 送出 items 與順序；移除有成績的科目需確認；已發布唯讀；滿分錯誤標在該列並附目前最高分。\n- 不可存空清單、最多 20 科；`exam_published` 與 `invalid_subject` 的錯誤顯示。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/exams/ExamSubjectsEditor.vue",
       "source_ref": null,
@@ -5113,7 +5115,7 @@
         "FRONTEND-083"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "scoredCounts 取自 summary 的 scored_count（BACKEND-559 後只計目前應考名單）；移除科目時，名單外學生的該科成績也會一併刪除，但不在確認框的筆數內。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/components/exams/ExamSubjectsEditor.spec.ts",
@@ -5124,8 +5126,10 @@
           "ExamSubjectsEditor saves reordered subjects：exam.subjects [國語 100, 數學 100] → 數學列點 '上移'、國語滿分改 120 → 點 '儲存' → PUT /admin/exams/e1/subjects body 深等於 {items:[{subject_id:'sub2',full_score:100,sort_order:1},{subject_id:'sub1',full_score:120,sort_order:2}]}",
           "ExamSubjectsEditor confirms removal of scored subject：scoredCounts {sub1:18} → 移除國語後儲存 → body 含 '移除「國語」會刪除已輸入的 18 筆成績'；取消 → 無請求",
           "ExamSubjectsEditor readonly when published：exam.status 'published' → 文字含 '已發布的考試不可修改科目'，沒有 '新增科目' 與 '儲存'",
-          "ExamSubjectsEditor shows full score conflict：PUT 回 409 full_score_below_existing → 文字含 '滿分不可低於已輸入的最高分'",
-          "ExamSubjectsEditor empty guidance：exam.subjects [] → 文字含 '尚未設定科目，請新增後才能輸入成績'"
+          "ExamSubjectsEditor shows full score conflict：PUT 回 409 {error:{code:'full_score_below_existing',message:'滿分不可低於已登記的最高分',details:{subject_id:'sub1',max_score:95}}} → 國語列文字含 '滿分不可低於已輸入的最高分（目前最高 95 分）'，且該列 class 含 is-error-full",
+          "ExamSubjectsEditor empty guidance：exam.subjects [] → 文字含 '尚未設定科目，請新增後才能輸入成績'",
+          "ExamSubjectsEditor blocks empty list and caps at twenty：exam.subjects [國語 100] → 移除國語 → 文字含 '考試至少要有一個科目'，'儲存' disabled、點擊無請求；exam.subjects 20 科 → '新增科目' disabled、文字含 '20 / 20'",
+          "ExamSubjectsEditor conflict and invalid subject：PUT 回 409 {error:{code:'exam_published',message:'考試已發布，請先取消發布再修改'}} → 文字含該 message、emitted('conflict') 長度 1、emitted('saved') 為 undefined；另一次 subjectOptions 不含 sub5、exam.subjects 含社會 → 社會列含 '已停用'，國語滿分改 120 後儲存、PUT 回 422 {error:{code:'invalid_subject',message:'科目不存在或已停用',details:{subject_ids:['sub5']}}} → 文字含 '科目不存在或已停用'，社會列 class 含 is-error-subject"
         ],
         "run": "just web-test src/components/exams/ExamSubjectsEditor.spec.ts -t \"ExamSubjectsEditor\"",
         "notes": ""
@@ -5139,7 +5143,7 @@
     {
       "id": "FRONTEND-234",
       "title": "實作 views/ExamDetailView.vue：考試詳情（成績輸入、各科平均、科目設定、發布 / 取消發布）",
-      "description": "建立 `apps/web/src/views/ExamDetailView.vue`（路由 `/exams/:id`，`exams:read`）。新做（domain_spec §4、M8）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exam-detail.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試 header（狀態、發布 / 取消發布 / 編輯 / 刪除依權限）、成績輸入格（學生 × 科目，格子五種狀態：未填 / 編輯中 / 儲存中 / 已儲存 / 錯誤，缺考勾選、超出滿分錯誤、已不在名單的學生）、已發布後修改的重新通知選擇、各科平均表、科目設定（草稿可改 / 已發布唯讀）、只有 exams:read 時唯讀、無科目時的引導、載入中。\n\n**內容**\n- 載入 `getExam(id)`；404 → EmptyState「找不到此考試」+「回考試列表」。\n- header：名稱、類型、日期、對象、應考人數、狀態 tag；已發布「{published_by_name} 於 {formatDateTime(published_at)} 發布」。\n- 動作：\n  - 「編輯資訊」（exams:write）→ `ExamFormDialog`（FRONTEND-232）。\n  - 「發布」（exams:publish，draft）→ 先 `fetchExamSummary` 計算未填格數（各科 missing_count 加總）→ 確認「發布後家長即可查看成績並收到通知。{missing > 0 ? '尚有 {missing} 格未填，家長會看到「未填」。' : ''}確定發布嗎？」→ `publishExam`；`exam_has_no_subjects` →「請先設定科目」並切到科目分頁。\n  - 「取消發布」（exams:publish，published）→ 確認「取消發布後家長將看不到此次成績，已送出的通知不會收回。」→ `unpublishExam`。\n  - 「刪除」（exams:write，draft）→ useConfirmDelete → 成功導回 `/exams`。\n- 狀態競爭：取消發布回 409 `exam_not_published`、發布回 409 `exam_already_published`（他人已先操作）→ `ElMessage.warning('考試狀態已變更，已重新載入')` 並重新載入 exam 與成績格。\n- 分頁（存 `route.query.tab`，預設 scores）：成績輸入（`ScoreGrid` FRONTEND-235）、各科平均（`ExamSummaryTable` FRONTEND-239）、科目設定（`ExamSubjectsEditor` FRONTEND-233）。\n- 成績有未儲存或儲存失敗的格子時離開路由 → `confirmDiscardChanges`（FRONTEND-046）。\n- 發布 / 取消發布 / 科目變更後重新載入 exam 與成績格。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/ExamDetailView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/views/ExamDetailView.vue`（路由 `/exams/:id`，`exams:read`）。新做（domain_spec §4、M8）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exam-detail.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試 header（狀態、發布 / 取消發布 / 編輯 / 刪除依權限）、成績輸入格（學生 × 科目，格子五種狀態：未填 / 編輯中 / 儲存中 / 已儲存 / 錯誤，缺考勾選、超出滿分錯誤、已不在名單的學生）、已發布後修改的重新通知選擇、各科平均表、科目設定（草稿可改 / 已發布唯讀）、只有 exams:read 時唯讀、無科目時的引導、載入中。\n\n**內容**\n- 載入 `getExam(id)`；404 → EmptyState（Document icon）「找不到此考試」+ 說明「這場考試可能已被刪除，或網址不正確」+「回考試列表」；其他錯誤 → EmptyState error「無法載入考試」+「重試」；載入中 skeleton。\n- header：上方返回連結「考試列表」（→ `/exams`）；PageHeader 標題 = 名稱，副標「{類型}・{formatDateWithWeekday(exam_date)}・{對象}・應考 {roster_count} 人」；下方狀態列：草稿 tag +「尚未發布，家長看不到這次成績」/ 已發布 tag +「{published_by_name} 於 {formatDateTime(published_at)} 發布・修改分數會記錄於稽核紀錄」，有備註時同列「備註：{note}」（過長省略、title 顯示全文）。沒有 exams:write 也沒有 exams:publish 時右側顯示「你只有檢視權限」；缺權限的動作鈕隱藏（不是 disabled）。\n- 動作：\n  - 「編輯資訊」（exams:write）→ `ExamFormDialog`（FRONTEND-232）；儲存後重新載入 exam 與成績格（年級 / 班級變更會改變應考名單）。\n  - 「發布」（exams:publish，draft）→ 先 `await scoreGrid.flush()` 送出成績格未儲存的格子（成績格未掛載時略過）；flush 後 `failedCount > 0` → `ElMessage.warning('有 {n} 格成績尚未儲存成功，請先重試後再發布')` 並停止（不打 summary、不發布）→ `fetchExamSummary` 計算未填格數（各科 missing_count 加總）→ 確認（標題「發布成績」）「發布後家長即可查看成績並收到通知。{missing > 0 ? '尚有 {missing} 格未填，家長會看到「未登記」。' : ''}確定發布嗎？」（「未登記」與家長端 ExamScoreTable 一致）→ `publishExam` → `ElMessage.success('已發布，家長會收到成績通知')`；`exam_has_no_subjects` →「請先設定科目」並切到科目分頁。\n  - 「取消發布」（exams:publish，published）→ 確認「取消發布後家長將看不到此次成績，已送出的通知不會收回。」（按鈕「取消發布」/「返回」）→ 成績格先 flush，仍有未儲存格 → `confirmDiscardChanges`，選「繼續編輯」就停止 → `unpublishExam` → `ElMessage.success('已取消發布')`。\n  - 「刪除」（exams:write，draft）→ useConfirmDelete → 成功導回 `/exams`。\n- 狀態競爭：取消發布回 409 `exam_not_published`、發布回 409 `exam_already_published`（他人已先操作）→ `ElMessage.warning('考試狀態已變更，已重新載入')` 並重新載入 exam 與成績格。\n- 分頁（存 `route.query.tab`，預設 scores）：成績輸入（`ScoreGrid` FRONTEND-235）、各科平均（`ExamSummaryTable` FRONTEND-239）、科目設定（`ExamSubjectsEditor` FRONTEND-233）。\n- 離開路由前（返回連結、側欄、瀏覽器上一頁）：成績格有未儲存 / 儲存中 / 失敗的格子時先 `await scoreGrid.flush()`（不開 RenotifyChoiceDialog），flush 後 `hasUnsaved` 仍為 true → `confirmDiscardChanges`（FRONTEND-046），選「繼續編輯」留在本頁。\n- 發布 / 取消發布 / 編輯資訊 / 科目變更（ExamSubjectsEditor `saved` 或 `conflict`）後重新載入 exam 與成績格（`scoreGrid.reload()`），ExamSummaryTable 的 refreshKey +1；切到「各科平均」分頁時 refreshKey 也 +1。重新載入成績格前先 flush，仍有未儲存格 → `confirmDiscardChanges`，選「繼續編輯」則不重新載入成績格。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/ExamDetailView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/ExamDetailView.vue",
       "source_ref": null,
@@ -5157,7 +5161,7 @@
         "FRONTEND-044"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "",
+      "risk_notes": "發布確認的未填格數（各科 missing_count 加總）依賴 BACKEND-559：未填只計目前應考名單內沒有分數也沒標缺考的格子；559 完成前，清空過的格子與名單外學生的成績列會讓未填數偏少。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/views/ExamDetailView.spec.ts",
@@ -5165,13 +5169,15 @@
           "vitest"
         ],
         "red_cases": [
-          "ExamDetailView publishes with missing count warning：exams:publish、draft → 點 '發布'；GET /admin/exams/e1/summary 回 subjects missing_count [2,1] → body 含 '尚有 3 格未填'；確認 → POST /admin/exams/e1/publish，header 顯示 '已發布'",
+          "ExamDetailView publishes with missing count warning：exams:publish、draft → 點 '發布'；GET /admin/exams/e1/summary 回 subjects missing_count [2,1] → body 含 '尚有 3 格未填，家長會看到「未登記」。'；確認 → POST /admin/exams/e1/publish，header 顯示 '已發布'",
           "ExamDetailView unpublish confirmation：published → 點 '取消發布' → body 含 '取消發布後家長將看不到此次成績，已送出的通知不會收回。'；確認 → POST .../unpublish",
           "ExamDetailView no subjects publish error switches tab：publish 回 422 exam_has_no_subjects → body 含 '請先設定科目'，router query.tab === 'subjects'",
-          "ExamDetailView permission based actions：permissions ['exams:read'] → 沒有 '編輯資訊'、'發布'、'刪除'；有 exams:write 無 exams:publish → 有 '編輯資訊' 無 '發布'",
+          "ExamDetailView permission based actions：permissions ['exams:read'] → 沒有 '編輯資訊'、'發布'、'刪除'，文字含 '你只有檢視權限'；有 exams:write 無 exams:publish → 有 '編輯資訊' 無 '發布'，不含 '你只有檢視權限'",
           "ExamDetailView not found：GET /admin/exams/zz 回 404 → 文字含 '找不到此考試'",
-          "ExamDetailView guards leaving with unsaved cells：ScoreGrid 回報有未儲存格 → router.push('/exams') 時 body 出現 '尚未儲存的變更將會遺失'，點 '繼續編輯' 後仍在 /exams/e1",
-          "ExamDetailView reloads on status conflict：published 頁面點 '取消發布' 確認 → POST .../unpublish 回 409 {error:{code:'exam_not_published',message:'考試尚未發布'}} → body 含 '考試狀態已變更，已重新載入'，GET /admin/exams/e1 請求數 +1"
+          "ExamDetailView guards leaving with unsaved cells：ScoreGrid stub 的 flush() resolve 後 hasUnsaved 仍為 true → router.push('/exams') → flush 呼叫 1 次、body 出現 '尚未儲存的變更將會遺失'，點 '繼續編輯' 後仍在 /exams/e1；另一次 flush 後 hasUnsaved 為 false → 直接到 /exams、不出現確認框",
+          "ExamDetailView reloads on status conflict：published 頁面點 '取消發布' 確認 → POST .../unpublish 回 409 {error:{code:'exam_not_published',message:'考試尚未發布'}} → body 含 '考試狀態已變更，已重新載入'，GET /admin/exams/e1 請求數 +1",
+          "ExamDetailView blocks publish when cells failed：exams:publish、draft，ScoreGrid stub 的 flush() 後 failedCount 為 2 → 點 '發布' → body 含 '有 2 格成績尚未儲存成功，請先重試後再發布'，GET /admin/exams/e1/summary 與 POST /admin/exams/e1/publish 請求數皆 0",
+          "ExamDetailView reloads after editing info：ExamFormDialog emit saved → GET /admin/exams/e1 請求數 +1，ScoreGrid stub 的 reload() 呼叫 1 次"
         ],
         "run": "just web-test src/views/ExamDetailView.spec.ts -t \"ExamDetailView\"",
         "notes": ""
@@ -5185,7 +5191,7 @@
     {
       "id": "FRONTEND-235",
       "title": "實作 components/exams/ScoreGrid.vue：學生 × 科目成績輸入格（鍵盤導覽、逐格自動儲存）",
-      "description": "建立 `apps/web/src/components/exams/ScoreGrid.vue`（domain_spec M8：後台以「學生 × 科目」格狀表格輸入，逐格自動儲存）。鍵盤導覽參考 ivy `FE:src/composables/useGridKeyboardNav.ts::useGridKeyboardNav`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exam-detail.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試 header（狀態、發布 / 取消發布 / 編輯 / 刪除依權限）、成績輸入格（學生 × 科目，格子五種狀態：未填 / 編輯中 / 儲存中 / 已儲存 / 錯誤，缺考勾選、超出滿分錯誤、已不在名單的學生）、已發布後修改的重新通知選擇、各科平均表、科目設定（草稿可改 / 已發布唯讀）、只有 exams:read 時唯讀、無科目時的引導、載入中。\n\n**props / emits / expose**：`examId: string`、`canWrite: boolean`；emits `dirty-change(hasUnsaved: boolean)`；expose `hasUnsaved`、`flush(): Promise<void>`。\n**內容**\n- 載入 `fetchScoreGrid(examId)`；列 = students（依班級、學號），欄 = subjects（依 sort_order，表頭「{subject_name}（滿分 {full_score}）」）；左側固定「學號 / 姓名 / 班級」。`in_roster === false` 的學生列淡化並標「已不在名單」（仍可編輯既有分數）。\n- 每格 `ScoreCell`（FRONTEND-236），狀態由 `useScoreAutosave`（FRONTEND-237）提供。\n- 鍵盤：Enter / ↓ 往下一列同科、↑ 上一列、Tab / → 右一格（在輸入框游標位於結尾時）、Shift+Tab / ← 左一格；Esc 還原該格輸入。\n- 工具列：儲存狀態摘要（「所有變更已儲存」/「儲存中…」/「{n} 格儲存失敗（重試）」）、`exam.status === 'published'` 時「修改後通知家長：{開 / 關 / 尚未選擇}」切換（FRONTEND-238）。\n- RenotifyChoiceDialog 以 Esc / X 關閉（未選擇）後，格子維持未儲存、工具列顯示「尚未選擇」；之後再有格子變更觸發自動儲存且仍 `awaitingNotifyChoice` 時重新開啟 dialog；使用者也可直接在工具列切換選擇（選擇後立即 flush）。\n- `!canWrite`：所有格唯讀。\n- 無科目：EmptyState「尚未設定科目」+「前往科目設定」（`router.replace({query: {tab: 'subjects'}})`）；無學生：「此考試沒有應考學生，請確認年級或班級設定」。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/components/exams/ScoreGrid.vue`（domain_spec M8：後台以「學生 × 科目」格狀表格輸入，逐格自動儲存）。鍵盤導覽參考 ivy `FE:src/composables/useGridKeyboardNav.ts::useGridKeyboardNav`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exam-detail.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試 header（狀態、發布 / 取消發布 / 編輯 / 刪除依權限）、成績輸入格（學生 × 科目，格子五種狀態：未填 / 編輯中 / 儲存中 / 已儲存 / 錯誤，缺考勾選、超出滿分錯誤、已不在名單的學生）、已發布後修改的重新通知選擇、各科平均表、科目設定（草稿可改 / 已發布唯讀）、只有 exams:read 時唯讀、無科目時的引導、載入中。\n\n**props / emits / expose**：`examId: string`、`canWrite: boolean`；emits `dirty-change(hasUnsaved: boolean)`；expose `hasUnsaved`、`failedCount`、`flush(): Promise<void>`（送出未儲存的格子並等請求結束，不開 RenotifyChoiceDialog）、`reload(): Promise<void>`（重新 `fetchScoreGrid`）。\n**內容**\n- 載入 `fetchScoreGrid(examId)`；列 = students（依班級、學號），欄 = subjects（依 sort_order，表頭「{subject_name}（滿分 {full_score}）」）；左側固定「學號 / 姓名 / 班級」，表頭固定，表格高度填滿內容區剩餘高度（只捲表格本體）；科目欄最小寬 140，表頭的「（滿分 {full_score}）」換到第二行灰字。列高 ≥ 48px，點格子任何位置（不是輸入框或「缺」本身）都聚焦該格輸入框。`in_roster === false` 的學生列淡化並標「已不在名單」（仍可編輯既有分數；只淡化儲存格內容，固定欄底色保持不透明）。\n- 每格 `ScoreCell`（FRONTEND-236），狀態由 `useScoreAutosave`（FRONTEND-237）提供。\n- 鍵盤：Enter / ↓ 往下一列同科、Shift+Enter / ↑ 上一列；Tab 右一格（最後一科換到下一列第一科）、Shift+Tab 左一格（第一科換到上一列最後一科），表格最後一格的 Tab 與第一格的 Shift+Tab 交給瀏覽器（離開表格）；→ / ← 只在輸入框游標位於結尾 / 開頭時換格；到表格邊界停在原格。移入的格子全選內容；缺考格（輸入框停用）改聚焦該格的「缺」勾選。被左側固定欄遮住的格子要捲到可見（捲動容器 scroll-padding-left = 固定欄總寬）。工具列灰字提示「Enter 下一位　Tab 下一科　Esc 還原　輸入「缺」標記缺考」。\n- Esc 還原該格尚未送出的輸入：ScoreCell（FRONTEND-236）沒有 reset 介面，ScoreGrid 遞增該格的 `key` 重建 ScoreCell（輸入框回到 props 值）並聚焦同一格；重建前先標記該格，忽略卸載時 blur 觸發的 change。\n- 工具列（只有 canWrite 才顯示）：儲存狀態摘要（「所有變更已儲存」/「{n} 格尚未儲存」/「儲存中…」/「{n} 格儲存失敗」+「重試」）、`exam.status === 'published'` 時「修改後通知家長：{開 / 關 / 尚未選擇}」切換（FRONTEND-238）。\n- RenotifyChoiceDialog 以 Esc / X 關閉（未選擇）後，格子維持未儲存、工具列顯示「尚未選擇」；之後再有格子變更觸發自動儲存且仍 `awaitingNotifyChoice` 時重新開啟 dialog；使用者也可直接在工具列切換選擇（選擇後立即 flush）。view 呼叫的 `flush()`（離開、發布、重新載入前）不開 dialog。\n- `!canWrite`：沒有工具列，所有格唯讀（ScoreCell readonly）。\n- 無科目：EmptyState「尚未設定科目」；canWrite 時說明「設定考試科目與滿分後才能輸入成績」+「前往科目設定」（`router.replace({query: {tab: 'subjects'}})`），唯讀時說明「有成績編輯權限的人設定科目後，這裡才會出現成績表」、沒有按鈕；無學生：「此考試沒有應考學生，請確認年級或班級設定」。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/exams/ScoreGrid.vue",
       "source_ref": "FE:src/composables/useGridKeyboardNav.ts::useGridKeyboardNav",
@@ -5199,7 +5205,7 @@
         "FRONTEND-042"
       ],
       "suggested_model": "opus-5",
-      "risk_notes": "",
+      "risk_notes": "「缺」勾選沿用 component-exams.html 的 small checkbox（約 24px 高，低於 44px 觸控建議）；平板上可在輸入框輸入「缺」或「-」標記缺考，要放大需改元件稿與 FRONTEND-236。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/components/exams/ScoreGrid.spec.ts",
@@ -5211,9 +5217,12 @@
           "ScoreGrid enter moves to next row same subject：聚焦王小明國語格按 Enter → document.activeElement 為林小華國語格的 input",
           "ScoreGrid autosaves edited cell：王小明數學輸入 88 → 800ms 後 PUT /admin/exams/e1/scores body.cells 深等於 [{student_id:'s1',subject_id:'sub2',score:88,is_absent:false}]、notify_parents false；成功後工具列文字 '所有變更已儲存'",
           "ScoreGrid readonly without write permission：canWrite false → 所有 input 為 readonly 或 disabled，沒有通知切換",
-          "ScoreGrid empty states：subjects [] → 文字含 '尚未設定科目'，點 '前往科目設定' → query.tab === 'subjects'；students [] → '此考試沒有應考學生，請確認年級或班級設定'",
+          "ScoreGrid empty states：canWrite true、subjects [] → 文字含 '尚未設定科目'，點 '前往科目設定' → query.tab === 'subjects'；canWrite false、subjects [] → 文字含 '有成績編輯權限的人設定科目後'、沒有 '前往科目設定'；students [] → '此考試沒有應考學生，請確認年級或班級設定'",
           "ScoreGrid reports unsaved state：輸入後尚未送出 → emitted('dirty-change') 最後一筆 [true]；儲存成功 → [false]",
-          "ScoreGrid reopens renotify dialog after dismiss：exam.status 'published'、notifyParents null，王小明數學輸入 88 → dialog 開啟；按 Esc → dialog 關閉、沒有 PUT、工具列含 '尚未選擇'；再把林小華數學輸入 70 → dialog 再次開啟"
+          "ScoreGrid reopens renotify dialog after dismiss：exam.status 'published'、notifyParents null，王小明數學輸入 88 → dialog 開啟；按 Esc → dialog 關閉、沒有 PUT、工具列含 '尚未選擇'；再把林小華數學輸入 70 → dialog 再次開啟",
+          "ScoreGrid keyboard wraps rows and respects caret：聚焦王小明最後一科的 input 按 Tab → activeElement 為林小華第一科的 input；再按 Shift+Enter → 王小明第一科；在值為 '95' 的 input 游標位於開頭時按 → → activeElement 不變，游標移到結尾再按 → → 右一格；另一組資料陳小美國語缺考（input disabled）時從上一列國語按 Enter → activeElement 為陳小美國語的「缺」checkbox input",
+          "ScoreGrid escape reverts typing：王小明國語（95）輸入 '70' 不 blur 按 Esc → 該格 input 值為 '95'、activeElement 仍為該格 input、沒有 PUT、emitted('dirty-change') 沒有 [true]",
+          "ScoreGrid exposes failure count：PUT networkError 後 vm.failedCount === 1、vm.hasUnsaved === true；點工具列 '重試' 且回 200 → vm.failedCount === 0"
         ],
         "run": "just web-test src/components/exams/ScoreGrid.spec.ts -t \"ScoreGrid\"",
         "notes": ""
@@ -5267,7 +5276,7 @@
     {
       "id": "FRONTEND-237",
       "title": "實作 composables/useScoreAutosave.ts：成績格變更佇列、防抖批次 upsert、逐格狀態與重試",
-      "description": "建立 `apps/web/src/composables/useScoreAutosave.ts`（domain_spec M8：逐格自動儲存（批次 upsert）；api_index §11：每次只送有變動的格子）。\n\n**介面**\n```ts\nexport function useScoreAutosave(opts: {\n  examId: Ref<string>\n  initial: Ref<ScoreCell[]>\n  notifyParents: Ref<boolean | null>     // 已發布考試：null = 尚未選擇（此時暫不送出，等待選擇）；草稿固定 false\n  debounceMs?: number                    // 預設 800\n}): {\n  cellValue(studentId, subjectId): { score: number | null; is_absent: boolean }\n  cellState(studentId, subjectId): 'idle' | 'dirty' | 'saving' | 'saved' | 'error'\n  cellError(studentId, subjectId): string | undefined\n  edit(studentId, subjectId, v: { score: number | null; is_absent: boolean }): void\n  flush(): Promise<void>; retryFailed(): Promise<void>\n  hasUnsaved: ComputedRef<boolean>; failedCount: ComputedRef<number>; saving: ComputedRef<boolean>\n  awaitingNotifyChoice: ComputedRef<boolean>\n}\n```\n- `edit` → 標 dirty、重設 debounce；debounce 到期送出所有 dirty 格（一次 `saveScores`，最多 2000 格，超過分批）。\n- 同一時間只有一個 PUT 進行中；進行中又有新編輯 → 結束後再送新的 dirty（同格以最新值為準）。送出中的格子若在回應前又被編輯，回應後維持 dirty。\n- 成功：送出的格子（且未再被編輯）標 saved（1 秒後轉 idle），並更新基準值。\n- 422 `invalid_score_cells`：details 中的格子標 error（訊息對照：score_out_of_range「分數超出 0~滿分」、student_not_in_roster「學生不在應考名單」、subject_not_in_exam「此科目不在考試中」、未知 code 顯示 code），其餘送出的格子視為未寫入、維持 dirty 後重送一次。\n- 網路錯誤 / 5xx：送出的格子全部標 error「儲存失敗，請重試」；`retryFailed` 重新送出。\n- `notifyParents === null`（已發布且尚未選擇）時不送出，`awaitingNotifyChoice` 為 true（由 FRONTEND-238 要求使用者選擇）；選擇後立即 flush。\n- 離開頁面前 `flush()`；`hasUnsaved` = dirty / saving / error 任一。\n\n**驗收標準**：每一條對應下列 red_case（fake timers）。",
+      "description": "建立 `apps/web/src/composables/useScoreAutosave.ts`（domain_spec M8：逐格自動儲存（批次 upsert）；api_index §11：每次只送有變動的格子）。\n\n**介面**\n```ts\nexport function useScoreAutosave(opts: {\n  examId: Ref<string>\n  initial: Ref<ScoreCell[]>\n  notifyParents: Ref<boolean | null>     // 已發布考試：null = 尚未選擇（此時暫不送出，等待選擇）；草稿固定 false\n  debounceMs?: number                    // 預設 800\n}): {\n  cellValue(studentId, subjectId): { score: number | null; is_absent: boolean }\n  cellState(studentId, subjectId): 'idle' | 'dirty' | 'saving' | 'saved' | 'error'\n  cellError(studentId, subjectId): string | undefined\n  edit(studentId, subjectId, v: { score: number | null; is_absent: boolean }): void\n  flush(): Promise<void>; retryFailed(): Promise<void>\n  hasUnsaved: ComputedRef<boolean>; failedCount: ComputedRef<number>; saving: ComputedRef<boolean>\n  awaitingNotifyChoice: ComputedRef<boolean>\n}\n```\n- `edit` → 標 dirty、重設 debounce；debounce 到期送出所有 dirty 格（一次 `saveScores`，最多 2000 格，超過分批）。\n- 同一時間只有一個 PUT 進行中；進行中又有新編輯 → 結束後再送新的 dirty（同格以最新值為準）。送出中的格子若在回應前又被編輯，回應後維持 dirty。\n- 成功：送出的格子（且未再被編輯）標 saved（1 秒後轉 idle），並更新基準值。\n- 422 `invalid_score_cells`：details 中的格子標 error（訊息對照：score_out_of_range「分數超出 0~滿分」、student_not_in_exam「學生不在應考名單」、subject_not_in_exam「此科目不在考試中」、未知 code 顯示 code），其餘送出的格子視為未寫入、維持 dirty 後重送一次。\n- 網路錯誤 / 5xx：送出的格子全部標 error「儲存失敗，請重試」；`retryFailed` 重新送出。\n- `notifyParents === null`（已發布且尚未選擇）時不送出，`awaitingNotifyChoice` 為 true（由 FRONTEND-238 要求使用者選擇）；選擇後立即 flush。\n- 離開頁面前 `flush()`；`hasUnsaved` = dirty / saving / error 任一。\n\n**驗收標準**：每一條對應下列 red_case（fake timers）。",
       "granularity_unit": "composable",
       "target_path": "apps/web/src/composables/useScoreAutosave.ts",
       "source_ref": null,
@@ -5278,7 +5287,7 @@
         "FRONTEND-009"
       ],
       "suggested_model": "fable-5",
-      "risk_notes": "並發與順序：同一格在請求進行中再次被編輯，回應不得把較新的值標為已儲存或覆蓋基準；序列化 PUT 並以每格版本號比對。",
+      "risk_notes": "並發與順序：同一格在請求進行中再次被編輯，回應不得把較新的值標為已儲存或覆蓋基準；序列化 PUT 並以每格版本號比對。\nexam_scores.note 後端支援、家長端顯示，後台無輸入；237 送出不帶 note 會把既有 note 洗成 NULL，待使用者裁定。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/composables/useScoreAutosave.spec.ts",
@@ -5291,7 +5300,8 @@
           "useScoreAutosave marks invalid cells from details：PUT 回 422 invalid_score_cells details [{student_id:'s1',subject_id:'sub1',code:'score_out_of_range'}]（同批還有 s2）→ cellState(s1,sub1) 'error'、cellError === '分數超出 0~滿分'；s2 被重送一次（第二個 PUT 只含 s2）",
           "useScoreAutosave marks network failures and retries：PUT networkError → failedCount === 2；retryFailed() 且回 200 → failedCount 0、兩格 state 'saved'",
           "useScoreAutosave waits for notify choice on published exam：notifyParents null → edit 後 2 秒無請求、awaitingNotifyChoice true；設 notifyParents = true → 立即送出且 body.notify_parents === true",
-          "useScoreAutosave saved returns to idle and hasUnsaved：成功後 cellState 'saved'，1 秒後 'idle'；全部完成後 hasUnsaved === false"
+          "useScoreAutosave saved returns to idle and hasUnsaved：成功後 cellState 'saved'，1 秒後 'idle'；全部完成後 hasUnsaved === false",
+          "useScoreAutosave maps cell error codes：PUT 回 422 invalid_score_cells details [{student_id:'s1',subject_id:'sub1',code:'student_not_in_exam'},{student_id:'s2',subject_id:'sub1',code:'subject_not_in_exam'},{student_id:'s3',subject_id:'sub1',code:'absent_with_score'}] → cellError 依序為 '學生不在應考名單'、'此科目不在考試中'、'absent_with_score'"
         ],
         "run": "just web-test src/composables/useScoreAutosave.spec.ts -t \"useScoreAutosave\"",
         "notes": ""
@@ -5341,7 +5351,7 @@
     {
       "id": "FRONTEND-239",
       "title": "實作 components/exams/ExamSummaryTable.vue：各科平均、最高、最低與填寫狀況",
-      "description": "建立 `apps/web/src/components/exams/ExamSummaryTable.vue`（domain_spec M8：後台可看單次考試各科平均，不做排名）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exam-detail.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試 header（狀態、發布 / 取消發布 / 編輯 / 刪除依權限）、成績輸入格（學生 × 科目，格子五種狀態：未填 / 編輯中 / 儲存中 / 已儲存 / 錯誤，缺考勾選、超出滿分錯誤、已不在名單的學生）、已發布後修改的重新通知選擇、各科平均表、科目設定（草稿可改 / 已發布唯讀）、只有 exams:read 時唯讀、無科目時的引導、載入中。\n\n**props**：`examId: string`、`refreshKey: number`（變更時重新載入）。\n- 載入 `fetchExamSummary(examId)`；表頭「應考 {roster_count} 人」。\n- 欄位：科目、滿分、平均（一位小數；null 顯示「—」）、最高、最低、已填（scored_count）、缺考（absent_count）、未填（missing_count，> 0 時 warning 色）。\n- 平均欄附「平均得分率」小字 = average / full_score（整數百分比）。\n- 無科目：「尚未設定科目」。\n\n**驗收標準**\n- 數值格式與 null 顯示；得分率；未填警示。",
+      "description": "建立 `apps/web/src/components/exams/ExamSummaryTable.vue`（domain_spec M8：後台可看單次考試各科平均，不做排名）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-exam-detail.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：考試 header（狀態、發布 / 取消發布 / 編輯 / 刪除依權限）、成績輸入格（學生 × 科目，格子五種狀態：未填 / 編輯中 / 儲存中 / 已儲存 / 錯誤，缺考勾選、超出滿分錯誤、已不在名單的學生）、已發布後修改的重新通知選擇、各科平均表、科目設定（草稿可改 / 已發布唯讀）、只有 exams:read 時唯讀、無科目時的引導、載入中。\n\n**props**：`examId: string`、`refreshKey: number`（變更時重新載入）。\n- 載入 `fetchExamSummary(examId)`；上方「應考 {roster_count} 人」+ 灰字「平均只計有分數的學生，缺考與未填不計入；不做排名」。載入中 skeleton；失敗 EmptyState error「無法載入各科平均」+「重試」。\n- 欄位：科目、滿分、平均（一位小數；null 顯示「—」）、最高、最低、已填（scored_count）、缺考（absent_count）、未填（missing_count = 目前應考名單內沒有分數也沒標缺考的格子，BACKEND-559；> 0 時 warning 色）。各計數與平均都只計目前應考名單，所以每科 已填 + 缺考 + 未填 = 應考人數。\n- 平均欄附「平均得分率」小字 = average / full_score（整數百分比）。\n- 無科目：「尚未設定科目」。\n\n**驗收標準**\n- 數值格式與 null 顯示；得分率；未填警示。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/exams/ExamSummaryTable.vue",
       "source_ref": null,
@@ -5351,7 +5361,7 @@
         "FRONTEND-230"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "未填與各計數以 BACKEND-559 的名單內統計為準；559 完成前，清空過的格子與名單外學生的成績列會讓未填數偏少、已填 + 缺考 + 未填可能不等於應考人數。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/components/exams/ExamSummaryTable.spec.ts",
@@ -5361,7 +5371,8 @@
         "red_cases": [
           "ExamSummaryTable renders statistics：GET /admin/exams/e1/summary 回 {roster_count:18,subjects:[{subject_name:'數學',full_score:100,average:82.444,max:100,min:45,scored_count:16,absent_count:1,missing_count:1}]} → 文字含 '應考 18 人'、'82.4'、'82%'、'100'、'45'，未填格 class 含 is-warning",
           "ExamSummaryTable shows dash for null averages：average null、max null → 對應儲存格文字 '—'",
-          "ExamSummaryTable reloads on refresh key：refreshKey 由 0 改 1 → GET summary 請求數 2；subjects [] → 文字含 '尚未設定科目'"
+          "ExamSummaryTable reloads on refresh key：refreshKey 由 0 改 1 → GET summary 請求數 2；subjects [] → 文字含 '尚未設定科目'",
+          "ExamSummaryTable error and retry：GET /admin/exams/e1/summary 回 500 → 文字含 '無法載入各科平均'，點 '重試' → GET summary 請求數 2"
         ],
         "run": "just web-test src/components/exams/ExamSummaryTable.spec.ts -t \"ExamSummaryTable\"",
         "notes": ""
