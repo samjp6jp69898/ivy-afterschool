@@ -501,6 +501,46 @@ describe('GuardianManager', () => {
     expect(dialog.text()).not.toContain('陳小美')
   })
 
+  it('GuardianManager keeps clicked student through regenerate confirm', async () => {
+    mock.onGet(LIST_URL).reply(200, [BOUND, CODE_ISSUED])
+    mock.onGet('/admin/students/s2/guardians').reply(200, [])
+    mock.onPost('/admin/guardians/g2/binding-code').reply(200, { ...ISSUED, guardian_id: 'g2' })
+    const wrapper = await mountManager()
+
+    await clickIn(card(wrapper, '林美麗'), '重新產生綁定碼')
+    // 確認框開著時切到另一位學生（例如瀏覽器上一頁改了 query.student）
+    await wrapper.setProps({ studentId: 's2', studentName: '陳小美' })
+    await settle()
+    await clickInMessageBox('重新產生')
+
+    expect(mock.history.post.map((c) => c.url)).toEqual(['/admin/guardians/g2/binding-code'])
+    const dialog = dialogByTitle('家長綁定碼')
+    expect(dialog.text()).toContain('請 林美麗 在 LINE 開啟家長端，輸入此綁定碼即可綁定 王小明。')
+    expect(dialog.text()).not.toContain('陳小美')
+  })
+
+  it('GuardianManager keeps clicked student for guardian form', async () => {
+    mock.onGet(LIST_URL).reply(200, [BOUND])
+    mock.onGet('/admin/students/s2/guardians').reply(200, [])
+    mock.onPost(LIST_URL).reply(201, { ...UNBOUND, id: 'g9', name: '王小美', relation: 'other' })
+    const wrapper = await mountManager()
+
+    await clickIn(wrapper.find('.guardian-toolbar'), '新增監護人')
+    // 表單開著時切到另一位學生
+    await wrapper.setProps({ studentId: 's2', studentName: '陳小美' })
+    await settle()
+    const dialog = dialogByTitle('新增監護人')
+    // 王小明已有主要聯絡人：仍以點擊當下的學生提示
+    await formItemIn(dialog, '主要聯絡人').find('.el-switch').trigger('click')
+    await settle()
+    expect(dialog.text()).toContain('將取代原本的主要聯絡人')
+    await formItemIn(dialog, '姓名').find('input').setValue('王小美')
+    await chooseOption(formItemIn(dialog, '關係'), '其他')
+    await clickIn(dialog, '儲存')
+
+    expect(mock.history.post.map((c) => c.url)).toEqual([LIST_URL])
+  })
+
   it('GuardianManager shows initial guardians before loading latest', async () => {
     const { release } = deferredList([BOUND, UNBOUND])
     const wrapper = await mountManager({ props: { initial: [UNBOUND] } })
