@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 168,
-  "last_updated": "2026-10-08T04:57:41Z",
+  "version": 169,
+  "last_updated": "2026-10-08T05:01:46Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -575,7 +575,7 @@
     {
       "id": "FRONTEND-026",
       "title": "建立 router/index.ts：hash router、掛 authGuard、頁面標題",
-      "description": "建立 `apps/web/src/router/index.ts`：`createRouter({ history: createWebHashHistory(), routes })`（FRONTEND-024），`router.beforeEach(authGuard)`（FRONTEND-025），`router.afterEach(to => document.title = \\`${to.meta.title} - 安親班管理系統\\`)`。以 `export function createAdminRouter(history: RouterHistory = createWebHashHistory()): Router` 建立並回傳（bootstrap FRONTEND-028 與測試都經此建立，測試傳 memory history）；**不建立 module-level 的 router 單例**：`createWebHashHistory()` 一建立就對 window 掛 popstate 監聽，多一個沒掛到 app 的 router 會在上一頁 / 下一頁時重複執行 authGuard（多打一次 /auth/me）。另匯出 `APP_TITLE = '安親班管理系統'`；`afterEach` 在導航失敗（`failure` 有值）時不改標題，meta.title 缺漏時只顯示 APP_TITLE。移植 ivy `FE:src/router/index.ts` 的 `router.beforeEach` 寫法；**去掉** route loading bar、chunk self-heal、Sentry。\n- 測試策略：本 task 的測試一律 `vi.mock('@/router/viewLoaders')` 回傳 stub 元件（不載入真實 view），因此不需等 view task 完成即可轉綠，view 完成後也不受其內部依賴影響。\n\n**驗收標準**\n- 未登入導向 /login；登入後可進有權限的頁；document.title 更新。\n- 未知路徑顯示 404 頁。",
+      "description": "建立 `apps/web/src/router/index.ts`：`createRouter({ history: createWebHashHistory(), routes })`（FRONTEND-024），`router.beforeEach(authGuard)`（FRONTEND-025），`router.afterEach(to => document.title = \\`${to.meta.title} - 安親班管理系統\\`)`。以 `export function createAdminRouter(history: RouterHistory = createWebHashHistory()): Router` 建立並回傳（bootstrap FRONTEND-028 與測試都經此建立，測試傳 memory history）；**不建立 module-level 的 router 單例**：`createWebHashHistory()` 一建立就對 window 掛 popstate 監聽，多一個沒掛到 app 的 router 會在上一頁 / 下一頁時重複執行 guard 與導向，且兩個 history 同時改寫 location（auth store 的 `restore()` 以 status 去重、並行共用同一個 promise，/auth/me 不會因此多打）。另匯出 `APP_TITLE = '安親班管理系統'`；`afterEach` 在導航失敗（`failure` 有值）時不改標題，meta.title 缺漏時只顯示 APP_TITLE。移植 ivy `FE:src/router/index.ts` 的 `router.beforeEach` 寫法；**去掉** route loading bar、chunk self-heal、Sentry。\n- 測試策略：本 task 的測試一律 `vi.mock('@/router/viewLoaders')` 回傳 stub 元件（不載入真實 view），因此不需等 view task 完成即可轉綠，view 完成後也不受其內部依賴影響。\n\n**驗收標準**\n- 未登入導向 /login；登入後可進有權限的頁；document.title 更新。\n- 未知路徑顯示 404 頁。",
       "granularity_unit": "config",
       "target_path": "apps/web/src/router/index.ts",
       "source_ref": "FE:src/router/index.ts::router",
@@ -585,7 +585,7 @@
         "FRONTEND-025"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "review-r9-f 打回（只缺測試，實作不用改）：description 的「afterEach 在導航失敗時不改標題」「meta.title 缺漏時只顯示 APP_TITLE」沒有對應測試，突變拿掉 `if (failure) return` 或拿掉 APP_TITLE 回退時 spec 仍全綠。請新增 red_case 並寫測試：(1)「admin router keeps title on failed navigation：已登入進 /students 後把 document.title 設為哨兵值；再 push('/students')（NAVIGATION_DUPLICATED，回傳的 failure 有值）→ title 不變；再加一個對 /classes 回 false 的 beforeEach 後 push('/classes')（NAVIGATION_ABORTED）→ title 不變且 currentRoute 仍是 /students」；(2)「admin router falls back to app title without meta.title：router.addRoute 一條只有 authOnly、沒有 title 的路由並 push → document.title === APP_TITLE」。確認 tdd.run 選得到。另請把 description 中「多打一次 /auth/me」改為準確敘述：auth store 的 restore() 會去重，第二個 router 的代價是 guard / 導向重複執行與兩個 history 同時改寫 location。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/router/index.spec.ts",
@@ -595,7 +595,9 @@
         "red_cases": [
           "admin router redirects anonymous navigation to login：createAdminRouter(createMemoryHistory())、GET /admin/auth/me 401 → push('/students') 後 currentRoute.path === '/login'、query.redirect === '/students'",
           "admin router updates document title：已登入（students:read）→ push('/students') 後 document.title === '學生工作台 - 安親班管理系統'",
-          "admin router resolves unknown path to not found：已登入 → push('/no-such-page') 後 currentRoute.name === 'not-found'"
+          "admin router resolves unknown path to not found：已登入 → push('/no-such-page') 後 currentRoute.name === 'not-found'",
+          "admin router keeps title on failed navigation：已登入進 /students 後把 document.title 設為哨兵值；再 push('/students')（NAVIGATION_DUPLICATED，回傳的 failure 有值）→ title 不變；再加一個對 /classes 回 false 的 beforeEach 後 push('/classes')（NAVIGATION_ABORTED）→ title 不變且 currentRoute 仍是 /students",
+          "admin router falls back to app title without meta.title：router.addRoute 一條只有 authOnly、沒有 title 的路由並 push → document.title === APP_TITLE"
         ],
         "run": "just web-test src/router/index.spec.ts -t \"admin router\"",
         "notes": ""
