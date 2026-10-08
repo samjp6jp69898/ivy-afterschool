@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="FRONTEND-200,FRONTEND-201,FRONTEND-202">
 <meta name="preview-route" content="/pickup/authorizations">
-<meta name="preview-updated" content="2026-10-07">
+<meta name="preview-updated" content="2026-10-08">
 
 <title>設計稿：代理接送核驗</title>
 
@@ -25,21 +25,29 @@ html, body { height: 100%; margin: 0; }
 #app { display: flex; flex-direction: column; height: 100%; }
 body { font-family: var(--el-font-family); background: var(--el-fill-color); color: var(--el-text-color-primary); }
 
+/* 稿件狀態列固定一行（放不下時列內橫向捲動），讓平板框在 1024×768 視窗有最多高度 */
 .preview-bar {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; flex-shrink: 0;
   padding: 6px 16px; font-size: 12px;
   color: var(--el-color-info-dark-2);
   background: var(--el-color-info-light-9);
   border-bottom: 1px dashed var(--el-border-color);
 }
-.preview-bar__spacer { flex: 1; }
+.preview-bar > * { flex-shrink: 0; }
+.preview-bar__spacer { flex: 1 0 8px; }
 .preview-bar code { font-size: 12px; }
+.preview-bar__tasks { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .control-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 16px; font-size: 12px; color: var(--el-text-color-secondary); background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-lighter); }
 .control-bar .el-button + .el-button { margin-left: 0; }
 .control-bar code { font-size: 12px; color: var(--el-text-color-regular); }
 .text-secondary { color: var(--el-text-color-secondary); font-size: 13px; }
 .el-button > span > .el-icon { margin-right: 4px; }
-.stage { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+.stage { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; }
+/* 1024×768 視窗剛好容納平板框：框寬不超過可視寬度；高度不足時縮成可用高度（接近實機扣掉瀏覽器列後的高度） */
+.stage > .device-frame { flex: 0 1 auto; min-height: 0; max-width: 100%; }
+.stage > .device-frame.is-portrait { flex-shrink: 0; }
+@media (max-width: 1056px) { .stage { padding-left: 0; padding-right: 0; } }
+@media (max-height: 900px) { .stage { padding-top: 0; padding-bottom: 0; } }
 
 /* ==================== ADMIN SHELL CSS START（各頁稿逐字複製這一段） ==================== */
 /* 裝置框：只存在於設計稿，模擬桌機 / 平板 1024×768 / 手機 390×844 */
@@ -120,7 +128,7 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
 .pa-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .pa-toolbar .el-button + .el-button { margin-left: 0; }
 .pa-date { width: 170px; }
-.pa-search { width: 270px; }
+.pa-search { width: 280px; }
 .pa-spacer { flex: 1; }
 .pa-chips .el-radio-button__inner { display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; font-size: 14px; font-variant-numeric: tabular-nums; }
 .pa-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 12px; }
@@ -189,10 +197,11 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
     <el-tag :type="meta.status === 'approved' ? 'success' : 'warning'" size="small" effect="dark" disable-transitions>
       {{ meta.status === 'approved' ? '已核可' : '待核可' }}
     </el-tag>
-    <span>{{ meta.tasks }}</span>
-    <span><code>{{ meta.route }}</code></span>
+    <el-button size="small" text type="primary" @click="notesOpen = true">
+      設計說明 / 待裁定（{{ openQuestions.length }}）
+    </el-button>
     <span>以身分檢視</span>
-    <el-select v-model="viewAs" size="small" style="width: 200px">
+    <el-select v-model="viewAs" size="small" style="width: 170px">
       <el-option v-for="(r, key) in roles" :key="key" :label="r.label" :value="key"></el-option>
     </el-select>
     <span>裝置</span>
@@ -200,13 +209,15 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
       <el-radio-button value="tablet">平板 1024</el-radio-button>
       <el-radio-button value="desktop">桌機</el-radio-button>
     </el-radio-group>
-    <span class="preview-bar__spacer"></span>
-    <span>更新 {{ meta.updated }}</span>
-    <el-button size="small" text type="primary" @click="notesOpen = true">
-      設計說明 / 待裁定（{{ openQuestions.length }}）
+    <el-button size="small" text @click="controlsOpen = !controlsOpen">
+      稿件控制<el-icon><icon-arrow-up v-if="controlsOpen"></icon-arrow-up><icon-arrow-down v-else></icon-arrow-down></el-icon>
     </el-button>
+    <span class="preview-bar__spacer"></span>
+    <span class="preview-bar__tasks" :title="meta.tasks">{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span>更新 {{ meta.updated }}</span>
   </div>
-  <div class="control-bar">
+  <div v-show="controlsOpen" class="control-bar">
     <span>稿件控制：</span>
     <span>資料</span>
     <el-radio-group v-model="dataState" size="small">
@@ -242,7 +253,7 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
         <div class="pa-toolbar">
           <el-date-picker v-model="date" class="pa-date touch" type="date" value-format="YYYY-MM-DD" format="YYYY/MM/DD"
                           :clearable="false" :disabled-date="outOfRange" size="large" aria-label="日期"></el-date-picker>
-          <el-input v-model="keyword" class="pa-search touch" size="large" placeholder="搜尋代理人、電話、學生、末四碼" clearable
+          <el-input v-model="keyword" class="pa-search touch" size="large" placeholder="代理人、電話、學生、末四碼" clearable
                     aria-label="搜尋代理人、電話、學生、末四碼">
             <template #prefix><el-icon><icon-search></icon-search></el-icon></template>
           </el-input>
@@ -856,6 +867,8 @@ const app = createApp({
       route: readMeta('preview-route'), updated: readMeta('preview-updated'),
     }
     const viewAs = ref('director')
+    // 稿件控制列：視窗矮（例如 1024×768）時預設收起，讓平板框有最多高度
+    const controlsOpen = ref(window.innerHeight >= 900)
     const perms = computed(() => ROLES[viewAs.value].permissions)
     const can = (code) => perms.value.includes(code)
     const user = computed(() => SHELL_USERS[viewAs.value] ?? { display_name: '王助教', role: '自訂角色' })
@@ -868,10 +881,10 @@ const app = createApp({
     }
 
     const decisions = [
-      '版面（平板 1024×768，外框側欄預設收合）：不放 PageHeader（頁名「代理接送核驗」在外框頂欄，同 POS；見待裁定 1）。第一列 44px 工具列：日期、搜尋、右側「只顯示：{學生}」+「清除」（從 POS 學生卡過來時）、缺 pickup:operate 時「僅檢視」tag；第二列狀態篩選；下方卡片清單。',
+      '版面（平板 1024×768，外框側欄預設收合）：不放 PageHeader（頁名「代理接送核驗」只在外框頂欄，同 POS 與已核可的今日出勤 / 作業看板）。第一列 44px 工具列：日期、搜尋、右側「只顯示：{學生}」+「清除」（從 POS 學生卡過來時）、缺 pickup:operate 時「僅檢視」tag；第二列狀態篩選；下方卡片清單。',
       '日期：預設今天，可選今天往前 30 天，不可選未來、不可清空（YYYY/MM/DD）。非今天時篩選列下方 info「檢視 10/06（二）的紀錄：僅供查詢，不能核驗」，不訂閱即時更新、卡片沒有「核驗」。',
       '狀態篩選：44px 分段按鈕「全部 n / 有效 n / 已接送 n / 已取消 n / 已過期 n」，依 effective_status 計數；數字是該日（有「只顯示」時為該生）全部授權，不受搜尋與目前選的狀態影響。單選、預設全部，只做前端過濾。今天的清單不會有「已過期」（那是過去日期仍為 active 的授權），仍保留這一項讓篩選列固定。',
-      '搜尋：代理人姓名、電話、學生姓名、末四碼，去空白與「-」後比對、不分大小寫；即時過濾。',
+      '搜尋：寬 280px、前置搜尋 icon，placeholder「代理人、電話、學生、末四碼」（完整顯示不截斷；aria-label「搜尋代理人、電話、學生、末四碼」）；去空白與「-」後比對、不分大小寫；即時過濾。',
       '卡片清單：兩欄 grid（每張最小 400px，平板 / 桌機都是兩欄）；有效排前，其餘依核驗時間（沒有則建立時間）新到舊。',
       'AuthorizationCard（FRONTEND-202）：左側 64px 圓角照片；沒有照片或照片載入失敗顯示 monogram（代理人姓名最後一字，主色淡底）。主體：代理人姓名 18px 粗體 + 狀態 tag（有效 success / 已接送 / 已取消 / 已過期 info）；電話；「學生 王小明・中年級班」；「末四碼 4821」+ 有效時的錯誤標示——鎖定 → 紅色「已鎖定」（取代「已錯誤 5 次」）、否則錯誤次數 > 0 → 黃色「已錯誤 n 次」；已接送 →「{方式}・{核驗人}・{HH:MM}」。右側「核驗」（primary、44px，只有 pickup:operate 且今天且有效）。非有效卡片淡灰底、姓名轉次要色；有效但已鎖定的卡片框線轉淡紅。',
       '核驗 dialog（FRONTEND-201，FormDialog md 560）：標題「核驗代理接送：{代理人}」。上方淡灰摘要：學生（班級）、代理人・電話、末四碼、錯誤次數（「尚無錯誤（連續錯誤 5 次會鎖定）」/ 黃字「已錯誤 n 次，還可嘗試 m 次」/ 紅字「已錯誤 5 次，已鎖定」）。下方 48px 高分頁：接送碼（預設）/ 目視核對 / 主管強制完成（只有 pickup:override 才有這個分頁）。footer 送出鈕隨分頁為「核驗接送碼」/「已核對，完成交付」/「強制完成」。',
@@ -886,14 +899,9 @@ const app = createApp({
       '空與錯誤：今天沒有授權 → EmptyState「今天沒有代理接送授權」+「家長在家長端建立代理接送授權後，會即時出現在這裡」；過去日期沒有 →「10/05（一）沒有代理接送授權」；篩選後沒有 → inline「沒有符合條件的授權」+「清除篩選」；載入中 → 4 張骨架卡、計數顯示「—」；載入失敗 → EmptyState error「無法載入代理接送授權」+「重試」。',
       '即時：今天的清單收 pickup.authorization_updated 原地更新（家長新增 / 取消授權、其他員工核驗或連錯鎖定）；斷線時外框顯示橫幅（page-admin-shell 已核可），本頁不另做連線標示。',
       '員工端看不到常用接送人的「關係」與授權家長（StaffAuthorization 沒有這兩個欄位），卡片與 dialog 都不顯示，不另向後端要欄位。',
+      '觸控尺寸：頁面本身的工具列、狀態分段篩選、卡片「核驗」鈕 ≥ 44px，接送碼格 52×60、dialog 分頁 48px、成功 / 鎖定畫面的「關閉」44px。外框的「展開側欄」按鈕（48×32）沿用已核可的 page-admin-shell，不在本頁改；dialog footer 的取消 / 送出鈕與輸入框沿用 FormDialog 元件稿預設高度，與已核可的今日出勤 / 作業看板一致。',
     ]
-    const openQuestions = [
-      {
-        question: '兩張平板頁（接送 POS、代理接送核驗）頂部要不要用 PageHeader 再顯示一次頁名？FRONTEND-189 / 200 寫了 PageHeader，但已核可的今日出勤 / 作業看板都沒放。',
-        optionA: '（推薦，稿照此畫）不放 PageHeader：頁名只在外框頂欄，內容第一列直接是 44px 工具列，省下垂直空間給三欄與清單；核可後把 FRONTEND-189 / 200 的 PageHeader 字樣與對 FRONTEND-039 的依賴拿掉。',
-        optionB: '照 task 放 PageHeader：標題「接送」/「代理接送核驗」+ 日期副標，計數與按鈕放 actions；頁名在頂欄與內容區各出現一次。',
-      },
-    ]
+    const openQuestions = []
 
     // ---- 稿件控制 ----
     const dataState = ref('data')
@@ -1070,7 +1078,7 @@ const app = createApp({
     })
 
     return {
-      meta, decisions, openQuestions, roles: ROLES, viewAs, perms, user, device, onNavigate, notesOpen: ref(false),
+      meta, decisions, openQuestions, roles: ROLES, viewAs, controlsOpen, perms, user, device, onNavigate, notesOpen: ref(false),
       canOperate, canOverride, dataState, wsStatus, failNext, routeMode, routeText,
       date, isToday, dateLabel, outOfRange, studentFilter, studentFilterName, scopeItems, statusFilter, keyword, chips,
       visibleItems, canVerify, emptyTitle, clearFilters, clearStudentFilter, simNewAuth, simCancelAuth,

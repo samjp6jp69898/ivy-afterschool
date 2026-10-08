@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="FRONTEND-189,FRONTEND-190,FRONTEND-191,FRONTEND-192,FRONTEND-193,FRONTEND-194,FRONTEND-195,FRONTEND-197,FRONTEND-198,FRONTEND-199">
 <meta name="preview-route" content="/pickup">
-<meta name="preview-updated" content="2026-10-07">
+<meta name="preview-updated" content="2026-10-08">
 
 <title>設計稿：接送 POS</title>
 
@@ -25,21 +25,29 @@ html, body { height: 100%; margin: 0; }
 #app { display: flex; flex-direction: column; height: 100%; }
 body { font-family: var(--el-font-family); background: var(--el-fill-color); color: var(--el-text-color-primary); }
 
+/* 稿件狀態列固定一行（放不下時列內橫向捲動），讓平板框在 1024×768 視窗有最多高度 */
 .preview-bar {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; flex-shrink: 0;
   padding: 6px 16px; font-size: 12px;
   color: var(--el-color-info-dark-2);
   background: var(--el-color-info-light-9);
   border-bottom: 1px dashed var(--el-border-color);
 }
-.preview-bar__spacer { flex: 1; }
+.preview-bar > * { flex-shrink: 0; }
+.preview-bar__spacer { flex: 1 0 8px; }
 .preview-bar code { font-size: 12px; }
+.preview-bar__tasks { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .control-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 16px; font-size: 12px; color: var(--el-text-color-secondary); background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-lighter); }
 .control-bar .el-button + .el-button { margin-left: 0; }
 .control-bar code { font-size: 12px; color: var(--el-text-color-regular); }
 .text-secondary { color: var(--el-text-color-secondary); font-size: 13px; }
 .el-button > span > .el-icon { margin-right: 4px; }
-.stage { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+.stage { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; }
+/* 1024×768 視窗剛好容納平板框：框寬不超過可視寬度；高度不足時縮成可用高度（接近實機扣掉瀏覽器列後的高度） */
+.stage > .device-frame { flex: 0 1 auto; min-height: 0; max-width: 100%; }
+.stage > .device-frame.is-portrait { flex-shrink: 0; }
+@media (max-width: 1056px) { .stage { padding-left: 0; padding-right: 0; } }
+@media (max-height: 900px) { .stage { padding-top: 0; padding-bottom: 0; } }
 
 /* ==================== ADMIN SHELL CSS START（各頁稿逐字複製這一段） ==================== */
 /* 裝置框：只存在於設計稿，模擬桌機 / 平板 1024×768 / 手機 390×844 */
@@ -142,22 +150,23 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
 .pos { display: flex; flex-direction: column; min-height: 0; margin: -16px; height: calc(100% + 32px); }
 .device-frame.is-desktop .pos { margin: -20px; height: calc(100% + 40px); }
 .touch.el-button, .touch .el-input__wrapper { min-height: 44px; }
-.touch.el-button { padding-left: 12px; padding-right: 12px; }
+.touch.el-button { padding-left: 10px; padding-right: 10px; }
 
 /* 頂部列 */
 .pos-top { flex-shrink: 0; background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-light); }
-.pos-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px; }
+/* 平板 1024 寬度下所有狀態（載入中 / 失敗、斷線、兩位數計數）都維持一列；只有寬度 < 900 才換行 */
+.pos-toolbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 10px 12px; }
 .pos-toolbar .el-button + .el-button { margin-left: 0; }
 .pos-date { font-size: 15px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .pos-counts { display: flex; align-items: center; gap: 4px; }
-.pos-count { font-variant-numeric: tabular-nums; }
+.pos-count.el-tag { padding: 0 7px; font-variant-numeric: tabular-nums; }
 .pos-spacer { flex: 1; }
 /* 固定寬度：「即時」與「重新連線中」切換時工具列不跳動、不換行 */
-.pos-conn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 104px; height: 32px; padding: 0 12px; border-radius: 999px; font-size: 13px; white-space: nowrap; }
+.pos-conn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 92px; height: 32px; padding: 0 8px; border-radius: 999px; font-size: 12px; white-space: nowrap; }
 .pos-conn.is-open { color: var(--el-color-success-dark-2); background: var(--el-color-success-light-9); }
 .pos-conn.is-reconnecting { color: var(--el-color-warning-dark-2); background: var(--el-color-warning-light-9); }
 .pos-conn__dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-.pos-hint { margin: 0 16px 10px; width: auto; }
+.pos-hint { margin: 0 12px 10px; width: auto; }
 .pos-error { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; background: var(--el-bg-color-page); }
 
 /* 三欄 */
@@ -257,7 +266,7 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
 .queue-card.is-staging { border-color: var(--el-color-primary-light-5); border-style: dashed; }
 .queue-card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .queue-card__who { min-width: 0; }
-.queue-card__name { font-size: 20px; font-weight: 600; line-height: 1.3; }
+.queue-card__name { min-width: 0; font-size: 20px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
 .queue-card__meta { margin-top: 2px; font-size: 13px; color: var(--el-text-color-secondary); font-variant-numeric: tabular-nums; }
 .queue-card__tags { display: flex; gap: 4px; flex-shrink: 0; }
 .queue-card__staging-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
@@ -304,9 +313,9 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
 .dlg-summary dd { margin: 0; color: var(--el-text-color-primary); white-space: pre-wrap; overflow-wrap: anywhere; }
 .dlg-summary .el-tag { margin-right: 6px; vertical-align: 1px; }
 .dlg-note { margin: -8px 0 14px; font-size: 13px; color: var(--el-text-color-secondary); }
-.dlg-quick { display: flex; gap: 8px; margin-top: 8px; }
+.dlg-quick { display: flex; flex-basis: 100%; gap: 8px; margin-top: 8px; }
 .dlg-quick .el-button { height: 44px; min-width: 72px; margin-left: 0; }
-.dlg-hint { display: flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 13px; color: var(--el-text-color-secondary); }
+.dlg-hint { display: flex; flex-basis: 100%; align-items: center; gap: 4px; margin-top: 6px; font-size: 13px; color: var(--el-text-color-secondary); }
 .dlg-check.el-checkbox { height: 44px; }
 .dlg-readonly { display: flex; align-items: center; width: 100%; min-height: 44px; padding: 0 12px; border-radius: var(--el-border-radius-base); color: var(--el-text-color-primary); background: var(--el-fill-color-light); }
 .dlg-note-box { display: flex; gap: 6px; padding: 10px 12px; border-radius: 6px; font-size: 13px; line-height: 1.6; color: var(--el-text-color-regular); background: var(--el-fill-color-light); }
@@ -335,25 +344,28 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
     <el-tag :type="meta.status === 'approved' ? 'success' : 'warning'" size="small" effect="dark" disable-transitions>
       {{ meta.status === 'approved' ? '已核可' : '待核可' }}
     </el-tag>
-    <span>{{ meta.tasks }}</span>
-    <span><code>{{ meta.route }}</code></span>
+    <el-button size="small" text type="primary" @click="notesOpen = true">
+      設計說明 / 待裁定（{{ openQuestions.length }}）
+    </el-button>
     <span>以身分檢視</span>
-    <el-select v-model="viewAs" size="small" style="width: 200px">
+    <el-select v-model="viewAs" size="small" style="width: 170px">
       <el-option v-for="(r, key) in roles" :key="key" :label="r.label" :value="key"></el-option>
     </el-select>
     <span>裝置</span>
     <el-radio-group v-model="device" size="small">
       <el-radio-button value="tablet">平板 1024</el-radio-button>
-      <el-radio-button value="portrait">平板直向 768（&lt; 900）</el-radio-button>
+      <el-radio-button value="portrait">直向 768</el-radio-button>
       <el-radio-button value="desktop">桌機</el-radio-button>
     </el-radio-group>
-    <span class="preview-bar__spacer"></span>
-    <span>更新 {{ meta.updated }}</span>
-    <el-button size="small" text type="primary" @click="notesOpen = true">
-      設計說明 / 待裁定（{{ openQuestions.length }}）
+    <el-button size="small" text @click="controlsOpen = !controlsOpen">
+      稿件控制<el-icon><icon-arrow-up v-if="controlsOpen"></icon-arrow-up><icon-arrow-down v-else></icon-arrow-down></el-icon>
     </el-button>
+    <span class="preview-bar__spacer"></span>
+    <span class="preview-bar__tasks" :title="meta.tasks">{{ meta.tasks }}</span>
+    <span><code>{{ meta.route }}</code></span>
+    <span>更新 {{ meta.updated }}</span>
   </div>
-  <div class="control-bar">
+  <div v-show="controlsOpen" class="control-bar">
     <span>稿件控制：</span>
     <span>資料</span>
     <el-radio-group v-model="dataState" size="small">
@@ -502,7 +514,7 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
         <dt>學生</dt><dd>{{ replyDlg.req.student.name }}（{{ replyDlg.req.student.class_name }}）</dd>
         <dt>家長抵達</dt><dd>{{ arrivalSummary(replyDlg.req) }}</dd>
         <dt>目前作業</dt>
-        <dd><el-tag v-if="hwMeta(replyDlg.req.current_homework_status)" :type="hwMeta(replyDlg.req.current_homework_status).tone" size="small" effect="plain" disable-transitions>{{ hwMeta(replyDlg.req.current_homework_status).label }}</el-tag><span v-if="replyDlg.req.current_ready_eta">作業預計 {{ replyDlg.req.current_ready_eta }} 完成</span><span v-else class="text-secondary">尚未設定作業預計完成時間</span></dd>
+        <dd><el-tag v-if="hwMeta(replyDlg.req.current_homework_status)" :type="hwMeta(replyDlg.req.current_homework_status).tone" size="small" effect="plain" disable-transitions>{{ hwMeta(replyDlg.req.current_homework_status).label }}</el-tag><span v-if="replyDlg.req.current_ready_eta">作業預計 {{ replyDlg.req.current_ready_eta }} 完成</span><span v-else-if="replyDlg.req.current_homework_status !== 'done'" class="text-secondary">尚未設定作業預計完成時間</span></dd>
         <dt>目前回覆</dt>
         <dd><template v-if="replyDlg.req.reply_message">{{ replyDlg.req.reply_message }}<span class="text-secondary">（{{ replySourceText(replyDlg.req) }}）</span></template><span v-else class="text-secondary">尚未回覆</span></dd>
       </dl>
@@ -571,20 +583,15 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
           </div>
         </div>
       </el-radio-group>
-      <el-form v-if="!completeDlg.loadingGuardians && completeDlg.choice" class="pick-extra" label-position="top">
-        <el-form-item v-if="completeDlg.choice.startsWith('g:')" label="備註（選填）">
-          <el-input v-model="completeDlg.note" type="textarea" :rows="2" maxlength="200" show-word-limit placeholder="例如：由爸爸接走"></el-input>
+      <div v-if="!completeDlg.loadingGuardians && completeDlg.choice && completeDlg.choice.startsWith('a:')" class="dlg-note-box pick-extra">
+        <el-icon><icon-info-filled></icon-info-filled></el-icon>
+        <span>按「前往核驗」到代理接送核驗頁，核對接送碼或代理人身分後完成交付。<template v-if="choiceAuthLocked">此授權的接送碼已鎖定，需由主任強制完成。</template></span>
+      </div>
+      <el-form v-if="!completeDlg.loadingGuardians && completeDlg.choice === 'override'" class="pick-extra" label-position="top">
+        <el-form-item label="備註" required :error="completeDlg.noteError">
+          <el-input v-model="completeDlg.note" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="例如：阿嬤臨時來接，已電話向媽媽確認"></el-input>
         </el-form-item>
-        <div v-else-if="completeDlg.choice.startsWith('a:')" class="dlg-note-box">
-          <el-icon><icon-info-filled></icon-info-filled></el-icon>
-          <span>按「前往核驗」到代理接送核驗頁，核對接送碼或代理人身分後完成交付。<template v-if="choiceAuthLocked">此授權的接送碼已鎖定，需由主任強制完成。</template></span>
-        </div>
-        <template v-else>
-          <el-form-item label="備註" required :error="completeDlg.noteError">
-            <el-input v-model="completeDlg.note" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="例如：阿嬤臨時來接，已電話向媽媽確認"></el-input>
-          </el-form-item>
-          <div class="dlg-audit"><el-icon><icon-document></icon-document></el-icon>會記錄於稽核紀錄</div>
-        </template>
+        <div class="dlg-audit"><el-icon><icon-document></icon-document></el-icon>會記錄於稽核紀錄</div>
       </el-form>
     </template>
   </form-dialog>
@@ -1297,15 +1304,13 @@ const QueueCard = {
 
         <template v-else-if="item.phase === 'active'">
           <div class="queue-card__top">
-            <div class="queue-card__who">
-              <div class="queue-card__name">{{ r.student.name }}</div>
-              <div class="queue-card__meta">{{ r.student.class_name }}・{{ sourceLabel }}・{{ r.requested_by_name }}・{{ fmt(r.created_at) }}</div>
-            </div>
+            <div class="queue-card__name">{{ r.student.name }}</div>
             <div class="queue-card__tags">
               <el-tag v-if="r.needs_reply" type="danger" effect="dark" disable-transitions>待回覆</el-tag>
               <el-tag :type="st.tone" disable-transitions>{{ st.label }}</el-tag>
             </div>
           </div>
+          <div class="queue-card__meta">{{ r.student.class_name }}・{{ sourceLabel }}・{{ r.requested_by_name }}・{{ fmt(r.created_at) }}</div>
           <div v-if="r.status === 'arrived'" class="queue-card__when">
             <span class="queue-card__waited">{{ waitedText }}</span>
             <span class="queue-card__sub">{{ fmt(r.arrived_at) }} 到達</span>
@@ -1344,12 +1349,10 @@ const QueueCard = {
 
         <template v-else>
           <div class="queue-card__top">
-            <div class="queue-card__who">
-              <div class="queue-card__name">{{ r.student.name }}</div>
-              <div class="queue-card__meta">{{ r.student.class_name }}・{{ sourceLabel }}</div>
-            </div>
+            <div class="queue-card__name">{{ r.student.name }}</div>
             <el-tag :type="st.tone" disable-transitions>{{ st.label }}</el-tag>
           </div>
+          <div class="queue-card__meta">{{ r.student.class_name }}・{{ sourceLabel }}</div>
           <div class="queue-card__closed">{{ closedText }}</div>
         </template>
       </div>
@@ -1590,6 +1593,8 @@ const app = createApp({
       route: readMeta('preview-route'), updated: readMeta('preview-updated'),
     }
     const viewAs = ref('director')
+    // 稿件控制列：視窗矮（例如 1024×768）時預設收起，讓平板框有最多高度
+    const controlsOpen = ref(window.innerHeight >= 900)
     const perms = computed(() => ROLES[viewAs.value].permissions)
     const can = (code) => perms.value.includes(code)
     const user = computed(() => SHELL_USERS[viewAs.value] ?? { display_name: '王助教', role: '自訂角色' })
@@ -1607,10 +1612,10 @@ const app = createApp({
     }
 
     const decisions = [
-      '版面（平板 1024×768，外框側欄預設收合）：不放 PageHeader（頁名「接送」在外框頂欄，同已核可的今日出勤 / 作業看板；見待裁定 1）。內容區第一列是 44px 工具列，下方三欄 POS 貼齊內容區四邊、三欄各自捲動：左班級欄 148px、中學生卡、右佇列 320px（桌機 160 / 340）。',
-      '工具列：今天日期「10/07（三）」（formatDateWithWeekday）+ 四個計數 chip「待回覆 n」（danger）「等待確認 n」（warning）「已確認 n」（info）「家長已到 n」（danger）；數字為 0 時改中性灰（plain），避免整排紅色。chip 只是計數、不可點。右側依序：連線狀態、提示音切換、「代理接送核驗」（連到 /pickup/authorizations）、「代建接送請求」（primary，只有 pickup:operate）。缺 pickup:operate 時日期旁加「僅檢視」tag。',
-      '連線狀態膠囊：open 綠點「即時」；其他黃點「重新連線中」，tooltip「即時連線中斷，畫面每 15 秒自動更新」。斷線超過 5 秒時外框另有整寬橫幅（page-admin-shell 已核可）。膠囊固定寬 104px、不放完整句子，斷線時工具列在平板寬度不會換行、三欄高度不跳動。',
-      '提示音：44px 按鈕「提示音：開」（鈴鐺）/「提示音：關」（靜音 icon、warning plain，提醒現在不會響），存 localStorage pickup.chimeMuted。第一次進頁還沒 unlock 時，工具列下方 info 條「點一下畫面以啟用提示音」，頁面任一處 pointerdown 後消失。家長到達：雙音 + 語音「{班級} {姓名} 家長到了」；新請求：單音；同一請求只播一次。全域通知 store 另會跳 ElNotification「{姓名} 家長已抵達」（FRONTEND-034 既有行為，本頁不另做）。',
+      '版面（平板 1024×768，外框側欄預設收合）：不放 PageHeader（頁名「接送」只在外框頂欄，同已核可的今日出勤 / 作業看板）。內容區第一列是 44px 工具列，下方三欄 POS 貼齊內容區四邊、三欄各自捲動：左班級欄 148px、中學生卡、右佇列 320px（桌機 160 / 340）。',
+      '工具列：今天日期「10/07（三）」（formatDateWithWeekday）+ 四個計數 chip「待回覆 n」（danger）「等待確認 n」（warning）「已確認 n」（info）「家長已到 n」（danger）；數字為 0 時改中性灰（plain），避免整排紅色；載入中 / 載入失敗時數字顯示「–」。chip 只是計數、不可點。右側依序：連線狀態、提示音切換、「代理接送核驗」（連到 /pickup/authorizations）、「代建接送請求」（primary，只有 pickup:operate）。缺 pickup:operate 時日期旁加「僅檢視」tag。平板 1024 寬度下任何狀態（載入中 / 失敗、斷線、兩位數計數）工具列都維持一列，只有寬度 < 900 才換行。',
+      '連線狀態膠囊：open 綠點「即時」；其他黃點「重新連線中」，tooltip「即時連線中斷，畫面每 15 秒自動更新」。斷線超過 5 秒時外框另有整寬橫幅（page-admin-shell 已核可）。膠囊固定寬 92px、不放完整句子，斷線時工具列不換行、三欄高度不跳動。',
+      '提示音：44px 按鈕「提示音：開」（鈴鐺）/「提示音：關」（靜音 icon、warning plain，提醒現在不會響），存 localStorage pickup.chimeMuted。第一次進頁還沒 unlock 時，工具列下方 info 條「點一下畫面以啟用提示音」，頁面任一處 pointerdown 後消失。家長到達：雙音 + 語音「{班級} {姓名} 家長到了」；新請求：單音；同一請求只播一次。',
       '班級欄（FRONTEND-191）：第一項「全部班級」，其後各班，未分班放最後。每項 ≥ 56px、兩行：班名 15px 粗體／「{n} 人」+ 右側徽章——有家長已到 → 紅底白字「{n} 已到」，否則有進行中請求 → 黃底「{n} 接送中」，都沒有不顯示。選中項主色框 + 淡主色底（aria-current="true"），↑↓ 鍵切換。預設全部班級，選取寫入 route.query.class；只影響中欄，右欄佇列永遠是全部。',
       '中欄頂部固定一列：「{班級}（{n} 人）」+ 44px 搜尋框（姓名或學號）。搜尋框放在被它過濾的中欄頂部，不放在班級欄（148px 放不下、也比較看得出它只過濾學生卡）。全部班級時依班級分組並加組標題「{班級}（{n}）」。卡片 grid 每張最小 148px（平板一列 3 張、桌機 4 張），組內依狀態權重再依學號排序。',
       '學生卡（FRONTEND-193）七種狀態：左側 4px 狀態色條 + 狀態 tag（POS_STATUS_META）——家長已到（danger，整卡淡紅底）、接送中（warning）、在班等待（success）、尚未到班（info）、已離班 / 請假 / 缺席（info，整卡淡灰底、姓名轉次要色）。卡片由上而下：姓名 20px 粗體、學號；狀態 tag（請假時「請假（病假）」，假別由 leave_type 代碼查 LEAVE_TYPE_META）+ 請求小字；預計抵達「預計 17:30 到」；作業 tag +「17:30 可接送」；代理授權數 > 0 時「代理 n」（證件 icon，不用 emoji）。',
@@ -1619,27 +1624,23 @@ const app = createApp({
       '學生卡 ⋮（44×44，只有 pickup:operate，選單至少一項才出現）：「代建接送請求…」（在班等待 / 尚未到班，開代建 dialog 並預選該生）、「查看代理授權」（有代理授權時，導到 /pickup/authorizations?student_id=）、已離班顯示停用說明「今天已離班」。',
       '右欄佇列（FRONTEND-194）：「進行中（n）」，n = 倒數中 + 進行中；有 pickup:operate 且有進行中卡時，標題右側灰字「左滑卡片可取消」提示手勢。順序：倒數卡 → 家長已到（到達早者先）→ 其餘依家長預計抵達（未填排後）、發起時間。進行中為空：「目前沒有接送請求」（有 operate 時副標「點中間的學生卡即可代建」）。下方「今日已結束（n）」整列按鈕（44px）預設收合、0 筆時不出現；同一學生已有倒數或進行中請求時，不列他稍早已結束的紀錄。',
       '倒數卡外觀完全照已核可的 component-pickup-countdown：虛線主色框、「n 秒後送出」15px 主色、44px「取消」直接取消（不需左滑）、底部 6px CountdownBar；倒數到 0 才送出 POST，卡片原地轉成一般佇列卡。',
-      '進行中佇列卡（FRONTEND-195）：第一列姓名 20px + 右側 tag。狀態 tag 用 POS 用語——pending「等待確認」（warning）、acknowledged「已確認」（info）、arrived「家長已到」（danger）；needs_reply 時最前面多一個紅色實心「待回覆」。第二列「{班級}・{來源}・{發起人}・{發起時間}」。第三列：未到 →「預計 17:30 到」+「約 20 分後 / 已過 5 分 / 現在」；家長已到 →「已等 n 分」（17px 粗體）+「{HH:MM} 到達」；「我已經到了」捷徑建立的請求沒有預計抵達那一行。第四列「作業」+ 作業 tag +「作業預計 17:30 完成」。回覆框（淡灰底）：小標「系統自動回覆」或「{員工} 回覆」+ 訊息（保留換行）；沒有回覆「尚未回覆」。',
+      '進行中佇列卡（FRONTEND-195）：第一列姓名 20px + 右側 tag。狀態 tag 用 POS 用語——pending「等待確認」（warning）、acknowledged「已確認」（info）、arrived「家長已到」（danger）；needs_reply 時最前面多一個紅色實心「待回覆」。第二列（整列寬，不和右側 tag 搶寬度，姓名不會被折斷）「{班級}・{來源}・{發起人}・{發起時間}」。第三列：未到 →「預計 17:30 到」+「約 20 分後 / 已過 5 分 / 現在」；家長已到 →「已等 n 分」（17px 粗體）+「{HH:MM} 到達」；「我已經到了」捷徑建立的請求沒有預計抵達那一行。第四列「作業」+ 作業 tag +「作業預計 17:30 完成」。回覆框（淡灰底）：小標「系統自動回覆」或「{員工} 回覆」+ 訊息（保留換行）；沒有回覆「尚未回覆」。',
       '等候急迫色（FRONTEND-184）：已等 3~7 分 → 卡片 warning 框（2px 視覺）、等候文字 warning 深色；8 分以上 → danger 框 + 淡紅底、等候文字紅色；未滿 3 分只有 tag。文字「已等 n 分」一直都在，顏色不是唯一線索；時間每 30 秒前進，卡片會自己升級。',
       '佇列卡按鈕（只有 pickup:operate，44px、等寬）：pending →「回覆時間」「確認」，needs_reply 時「回覆時間」是 primary，否則「確認」是 primary；acknowledged →「修改回覆」+「完成交付」（primary）；arrived →「完成交付」（primary、佔 2/3 寬、放左邊）+「修改回覆」。送出中按鈕 loading / 停用。',
       '左滑取消：只有 pickup:operate 的進行中卡。左滑超過 84px 的 45% 鬆手後停在開啟、露出右側 84px 紅色「取消」，未達門檻回彈；鬆手不會直接取消，要再點「取消」→ ElMessageBox.prompt 標題「取消接送請求」、說明「取消原因（選填，家長發起的請求會通知家長）」、按鈕「取消請求」/「返回」，成功後卡片移到今日已結束。拖曳時不會誤觸卡內按鈕；往右拖可收合。',
       '已結束卡（唯讀、不可左滑、淡灰底、姓名 16px）：已接走 →「{接走人} 接走・{方式}・{經手員工}・{HH:MM}」；已取消 →「已取消・{原因}」（沒有原因只寫「已取消」）；已逾時 →「逾時未完成」。',
-      '回覆 dialog（FRONTEND-197，FormDialog md 560）：標題「回覆預計可接送時間：{姓名}」。上方淡灰摘要：學生（班級）、家長抵達（預計時間與相對時間 / 已到與等候分鐘 / 未指定）、目前作業與作業預計完成、目前回覆與來源。「預計可接送時間」el-time-select（5 分一格、從現在進位到 5 分、到 21:00），預設 reply_ready_eta → current_ready_eta → 空；下方快捷「+10 分 / +20 分 / +30 分」（44px）與固定提示「將同步更新作業看板的預計可接送時間」。「給家長的訊息」≤200，placeholder 隨選的時間顯示「預計 HH:MM 可接送」（留空由後端組字），staff 回覆過時帶入原訊息。pending 時有「同時確認此請求」（預設勾），送出鈕隨之為「回覆並確認」/「送出回覆」。員工代建的請求在摘要下加灰字「員工代建的請求，回覆不會通知家長。」',
+      '回覆 dialog（FRONTEND-197，FormDialog md 560）：標題「回覆預計可接送時間：{姓名}」。上方淡灰摘要：學生（班級）、家長抵達（預計時間與相對時間 / 已到與等候分鐘 / 未指定）、目前作業與作業預計完成、目前回覆與來源。「預計可接送時間」el-time-select（5 分一格、從現在進位到 5 分、到 21:00），預設 reply_ready_eta → current_ready_eta → 空；下方一列快捷「+10 分 / +20 分 / +30 分」（44px），再下一列固定提示「將同步更新作業看板的預計可接送時間」；摘要的「目前作業」在作業已完成時不顯示「尚未設定作業預計完成時間」。「給家長的訊息」≤200，placeholder 隨選的時間顯示「預計 HH:MM 可接送」（留空由後端組字），staff 回覆過時帶入原訊息。pending 時有「同時確認此請求」（預設勾），送出鈕隨之為「回覆並確認」/「送出回覆」。員工代建的請求在摘要下加灰字「員工代建的請求，回覆不會通知家長。」',
       '回覆 dialog 錯誤：兩欄都空 → 時間欄下方「請填寫預計時間或訊息」；回覆成功但確認失敗 → 上方 warning「已回覆，但確認失敗：{message}」，表單鎖住、dialog 不關，送出鈕改「重試確認」（只重送確認）；其他錯誤 → 上方 error alert；409 / 404 由 board 提示並關閉 dialog。',
-      '完成交付 dialog（FRONTEND-198，FormDialog md 560）：標題「完成交付：{姓名}」，開啟時載入監護人（3 列骨架）。選項是 ≥ 56px 的框線 radio 卡，分三組：「監護人」（「{姓名}（{關係}）」+ 電話；未授權者停用並標「未授權接送」；只有一位可接送時預選）、「代理接送（今日授權）」（「代理：陳阿姨（0912-000-456）」+「末四碼 4821」，鎖定加紅色「已鎖定」）、「其他」（主管確認交付，只有 pickup:override）。選監護人 → 備註（選填）；選代理 → 說明「按「前往核驗」到代理接送核驗頁…」，送出鈕變「前往核驗」，導到 /pickup/authorizations?verify={id}；選主管確認交付 → 備註必填 +「會記錄於稽核紀錄」。',
+      '完成交付 dialog（FRONTEND-198，FormDialog md 560）：標題「完成交付：{姓名}」，開啟時載入監護人（3 列骨架）。選項是 ≥ 56px 的框線 radio 卡，分三組：「監護人」（「{姓名}（{關係}）」+ 電話；未授權者停用並標「未授權接送」；只有一位可接送時預選）、「代理接送（今日授權）」（「代理：陳阿姨（0912-000-456）」+「末四碼 4821」，鎖定加紅色「已鎖定」）、「其他」（主管確認交付，只有 pickup:override）。選監護人 → 不需備註（後端不保存監護人交付的備註，body 只有 method + guardian_id）；選代理 → 說明「按「前往核驗」到代理接送核驗頁…」，送出鈕變「前往核驗」，導到 /pickup/authorizations?verify={id}；選主管確認交付 → 備註必填 +「會記錄於稽核紀錄」。',
       '完成交付錯誤 / 無人可選：guardian_cannot_pickup → 上方 error「此監護人未被授權接送」並重新載入監護人；invalid_guardian →「監護人資料已變更，請重新選擇」；沒有可接送監護人、沒有代理授權、也沒有 pickup:override → 上方 warning「沒有可接送的監護人，請聯絡主任處理」，送出停用（主任身分則可選主管確認交付）。',
       '代建 dialog（FRONTEND-199，FormDialog sm 420）：標題「代建接送請求」。學生：從學生卡 ⋮ 進入時唯讀顯示「王小明（S11301・中年級班）」；從工具列進入用已核可的 StudentSelect，選了班級時只查該班（placeholder「輸入學號或姓名（中年級班）」）。「家長預計抵達時間（選填）」el-time-select（5 分一格、最早為現在 −5 分、placeholder「不指定」）。下方淡灰說明「員工代建的請求不會通知家長；系統會依作業進度自動產生回覆供參考。」送出鈕「建立請求」。錯誤：未選學生 → 欄位下「請選擇學生」；pickup_request_exists →「此學生今天已有進行中的接送請求」；student_not_available / not_service_day / expected_arrival_in_past → 顯示後端 message。',
       '唯讀（只有 pickup:read）：沒有「代建接送請求」、學生卡沒有 ⋮、點在班等待不會倒數、佇列卡沒有任何按鈕也不能左滑、沒有「左滑卡片可取消」；計數、連線、提示音、「代理接送核驗」連結、點接送中學生卡定位請求都保留。',
       '三態與錯誤：載入中 → 班級欄 5 條骨架、中欄 9 張骨架卡、佇列 3 張骨架卡，計數顯示「—」；載入失敗 → 三欄位置改為 EmptyState error「無法載入接送資料」+「重試」；中欄空 → 有搜尋「找不到符合的學生」、選了班級「此班級今天沒有學生」、全部班級「目前沒有在學學生」；佇列空 → 見上。',
       '寬度 < 900（平板直向）：右欄收成底部抽屜，中欄右下角浮動按鈕「佇列（n）」（有家長已到時右上角紅色數字徽章）；抽屜高約 70%，點遮罩或「收合」關閉；點接送中學生卡會先打開抽屜再定位閃爍。',
+      '觸控尺寸：頁面本身的工具列、學生卡、佇列卡按鈕、浮動佇列鈕 ≥ 44px，班級欄 ≥ 56px，完成交付的選項卡 ≥ 56px。外框的「展開側欄」按鈕（48×32）沿用已核可的 page-admin-shell，不在本頁改；dialog 內的取消 / 送出鈕、時間下拉與輸入框沿用 FormDialog 元件稿預設高度，與已核可的今日出勤 / 作業看板一致。',
+      '家長到達時三個回饋同時出現：佇列卡移到最前並閃爍、提示音（未靜音時）、全域通知 store 的 ElNotification「{姓名} 家長已抵達」（FRONTEND-034 對所有後台頁都會跳，本頁不另外抑制）。needs_reply 由後端計算，員工代建的請求在自動回覆沒有預計時間時也會是 true，同樣顯示「待回覆」並計入計數。',
     ]
-    const openQuestions = [
-      {
-        question: '兩張平板頁（接送 POS、代理接送核驗）頂部要不要用 PageHeader 再顯示一次頁名？FRONTEND-189 / 200 寫了 PageHeader，但已核可的今日出勤 / 作業看板都沒放。',
-        optionA: '（推薦，稿照此畫）不放 PageHeader：頁名只在外框頂欄，內容第一列直接是 44px 工具列，省下垂直空間給三欄與清單；核可後把 FRONTEND-189 / 200 的 PageHeader 字樣與對 FRONTEND-039 的依賴拿掉。',
-        optionB: '照 task 放 PageHeader：標題「接送」/「代理接送核驗」+ 日期副標，計數與按鈕放 actions；頁名在頂欄與內容區各出現一次。',
-      },
-    ]
+    const openQuestions = []
 
     // ---- 稿件控制 ----
     const dataState = ref('data')
@@ -1711,7 +1712,7 @@ const app = createApp({
       const c = ready.value ? counts.value : null
       const mk = (key, label, tone) => {
         const v = c ? c[key] : null
-        return { key, label, value: c ? v : '—', type: v ? tone : 'info', effect: v ? 'light' : 'plain' }
+        return { key, label, value: c ? v : '–', type: v ? tone : 'info', effect: v ? 'light' : 'plain' }
       }
       return [mk('needs_reply', '待回覆', 'danger'), mk('pending', '等待確認', 'warning'), mk('acknowledged', '已確認', 'info'), mk('arrived', '家長已到', 'danger')]
     })
@@ -2027,7 +2028,7 @@ const app = createApp({
     })
     const completeSubmitText = computed(() => (completeDlg.choice && completeDlg.choice.startsWith('a:') ? '前往核驗' : '完成交付'))
     const completeSubmitDisabled = computed(() => completeDlg.loadingGuardians || !completeDlg.choice || noEligible.value)
-    const completeDirty = computed(() => completeDlg.open && !!completeDlg.note.trim())
+    const completeDirty = computed(() => completeDlg.open && completeDlg.choice === 'override' && !!completeDlg.note.trim())
     watch(() => completeDlg.note, () => { completeDlg.noteError = '' })
     watch(() => completeDlg.choice, () => { completeDlg.noteError = '' })
     const submitComplete = () => {
@@ -2100,7 +2101,7 @@ const app = createApp({
     }
 
     return {
-      meta, decisions, openQuestions, roles: ROLES, viewAs, perms, user, device, isNarrow, onNavigate, goAuthorizations, notesOpen: ref(false),
+      meta, decisions, openQuestions, roles: ROLES, viewAs, controlsOpen, perms, user, device, isNarrow, onNavigate, goAuthorizations, notesOpen: ref(false),
       canOperate, canOverride, dataState, wsStatus, guardianMode, failMode, failModes, ready, routeText,
       now, todayLabel, unlocked, muted, unlock, toggleMute,
       counts, countChips, railItems, railKey, railClassId, query, groupByClass, gridTitle, gridGroups, gridEmptyText,
