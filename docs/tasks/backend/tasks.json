@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 447,
-  "last_updated": "2026-10-08T05:07:46Z",
+  "version": 448,
+  "last_updated": "2026-10-08T05:12:52Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -15434,7 +15434,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/services/parent_scope.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-180"
@@ -15460,9 +15460,9 @@
         "notes": "新測試一律以 test_parent_scope_for_write_ 為前綴，讓 tdd.run 三個檔都選得到。pickup 常用接送人新增與代理授權建立也用 get_owned_student_for_write，請在 test_pickup_endpoints.py 各補一個暫停學生 409 的案例（同前綴）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-b2",
+        "notes": "通過。tdd.run 以 --collect-only 與 red_cases 逐名比對 7/7（三個檔都選到）、實跑 7 passed；test_parent_scope.py + test_pickup_endpoints.py + test_leaves_endpoints.py 整檔 95 passed，家長端其餘 7 個 endpoint 檔與 test_leave_service / test_parent_children_service / test_guardian_service / services/pickup 的 requests、persons、authorizations 共 294 passed（以上是共用 DB 的 system_settings 種子被他人清空之前的結果，之後 apps/api 無異動；清空後兩條會 update system_settings 的既有測試因為影響 0 列而紅，屬環境問題，已回報協調者）。82916c0 測試先於 4d4438d 實作，實作只動 parent_scope.py。以 ast 比對 test_assert_owns_student_for_write_withdrawn 修改前後：只移除「suspended 不算退班，寫入仍允許」那一段（註解、改狀態、flush 與最後一行 assert），其餘不變。404 優先於 409：服務層與接送請求、請假的 endpoint 測試都斷言他人的暫停學生與不存在 id 回同一個 404。讀取不受影響：以探針（員工經 PATCH /api/admin/students/{id} 走 update_student 與 close_out 把學生改為暫停 / 退班）實打 10 個讀取 endpoint（children 列表與單筆、today、leaves、attendance、homework、exams、pickup-persons、pickup-authorizations、pickup/requests/today）皆 200，列表仍含該學生。獨立突變（單一 flock、trap 還原、apply 與還原後都刪 .pyc、逐位元組比對、git diff 為空）皆轉紅：只擋 withdrawn、suspended 用退班訊息、讀取也擋、先查狀態再查所有權、狀態碼改 400、寫入全擋、deps 的 get_owned_student_for_write 不帶 for_write、create_leave 不帶 for_write、create_request 不帶 for_write。lint / typecheck 乾淨；測試後以 owner 唯讀查殘列皆 0。【家長端寫入類 endpoint 盤點（探針實測，供協調者決定是否另開 task，不擋本 task）】經 for_write 守衛、暫停 / 退班皆 409 student_not_active：POST /leaves、POST /pickup/requests（含 arrived 捷徑）、POST /children/{id}/pickup-persons、POST /children/{id}/pickup-authorizations。只驗所有權、沒有學生狀態守衛：(1) POST /leaves/{id}/attachments → 201，暫停 / 退班學生仍可對收尾後仍為 active 的歷史請假（被截到昨天的那筆）補上附件，是實際可成功的寫入；(2) DELETE /pickup-persons/{id} → 204，可封存常用接送人；(3) POST /leaves/{id}/cancel → 收尾後已無可取消的日子，進行中被截短的回 409 leave_already_ended、未來的回 409 leave_not_active；(4) POST /pickup-authorizations/{id}/regenerate-code → BACKEND-523 自帶只擋 withdrawn 的檢查：退班回 409 student_not_active；暫停時今天與之後的授權已被收尾取消，回 409 authorization_not_active，過去日期的回 409 authorization_expired（實作者的觀察屬實，錯誤碼與其他寫入不一致但不會成功）；(5) POST /pickup/requests/{id}/arrived 與 /cancel → 收尾已取消進行中的請求，回 409 invalid_pickup_status。帳號層級、與學生無關：POST /notifications/{id}/read、/notifications/read-all、PUT /notification-preferences、auth 的 liff-login / bind / refresh / logout。POST /pickup-authorizations/{id}/cancel 尚未實作（BACKEND-449 pending），實作時要決定是否套用守衛。殘留（不擋）：api/deps.py 的 get_owned_student_for_write docstring 仍寫「另對 withdrawn 學生 409」，未提到暫停。"
       }
     },
     {
@@ -15472,7 +15472,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/settings_registry.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-379",
@@ -15494,9 +15494,9 @@
         "notes": "只改顯示文字；後台系統設定頁（FRONTEND-056 / 057）由 registry 的 JSON schema 渲染，不需改前端。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-b2",
+        "notes": "通過。tdd.run 以 --collect-only 與 red_cases 逐名比對 2/2、實跑 2 passed；test_settings_registry.py 整檔 30 passed、test_settings_seed_consistency.py 整檔 5 passed（後者是共用 DB 的 system_settings 種子被他人清空之前的結果，之後 apps/api 無異動）。009b750 測試先於 8732ac3 實作。diff 只把 HomeworkWindow.past_days 的 title 改為「作業可新增的過去天數」、description 改為「可新增作業、設定整體狀態與預計可接送時間的過去天數（既有項目的修改與刪除不受限）」（與 task 規格逐字相同，與 domain_spec M2 的 homework.window 說明一致），並把同一個 Field 拆成多行；ge=0 / le=365、future_days 的 ge=0 / le=60 與文字、REGISTRY 預設 30 / 7 皆未變；測試只同步 field_titles_exact 的 past_days 標題並新增兩條。獨立突變（單一 flock、trap 還原、apply 與還原後都刪 .pyc，含同長度的「新增→編輯」與 365→366、30→31，逐位元組比對、git diff 為空）皆轉紅：標題改回舊文字、description 缺少「不受限」一句、past_days 上限 366、預設 31、future_days 標題變動。lint / typecheck 乾淨。殘留（不擋）：docs/mockups/page-settings-system.html 的假資料仍是舊標題與說明（實際頁面由 JSON schema 渲染，不受影響）；done 的 BACKEND-106 description 仍列舊標題（依 README，done 的 task 不回改，由本 task 記錄改寫範圍）。"
       }
     },
     {
