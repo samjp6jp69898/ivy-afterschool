@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 162,
-  "last_updated": "2026-10-08T01:32:08Z",
+  "version": 163,
+  "last_updated": "2026-10-08T01:38:43Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -579,13 +579,13 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/router/index.ts",
       "source_ref": "FE:src/router/index.ts::router",
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-frontend-r9a",
       "depends_on": [
         "FRONTEND-025"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "review-r9-f 打回（只缺測試，實作不用改）：description 的「afterEach 在導航失敗時不改標題」「meta.title 缺漏時只顯示 APP_TITLE」沒有對應測試，突變拿掉 `if (failure) return` 或拿掉 APP_TITLE 回退時 spec 仍全綠。請新增 red_case 並寫測試：(1)「admin router keeps title on failed navigation：已登入進 /students 後把 document.title 設為哨兵值；再 push('/students')（NAVIGATION_DUPLICATED，回傳的 failure 有值）→ title 不變；再加一個對 /classes 回 false 的 beforeEach 後 push('/classes')（NAVIGATION_ABORTED）→ title 不變且 currentRoute 仍是 /students」；(2)「admin router falls back to app title without meta.title：router.addRoute 一條只有 authOnly、沒有 title 的路由並 push → document.title === APP_TITLE」。確認 tdd.run 選得到。另請把 description 中「多打一次 /auth/me」改為準確敘述：auth store 的 restore() 會去重，第二個 router 的代價是 guard / 導向重複執行與兩個 history 同時改寫 location。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/router/index.spec.ts",
@@ -601,9 +601,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r9-f",
+        "notes": "concern（打回，只缺測試、實作不用改）：3 條 red_case 對應 3 個測試，另有 logged-in through / 強制改密碼每次導航 / 預設 hash history 3 條，tdd.run 6/6 全綠；commit 37fa297（測試）→ 110aeba（實作），只動 router/index.ts 與 index.spec.ts、沒有動 viewLoaders.ts；b3b3431 補的 description 是最終規格寫法；lint 乾淨、vue-tsc exit 0。reviewer 核對：(1) 不建 module-level 單例的理由成立——vue-router 5.3.1 `createWebHashHistory → createWebHistory → useHistoryListeners` 在 history 建立當下就 `window.addEventListener('popstate' / 'pagehide')`（dist/vue-router.js 76-77、159、213 行）；探針（未留檔）建立兩個 hash router 後派發 popstate，authGuard 被呼叫 2 次（兩個 router 都導航到 /classes），只留一個時 1 次。但「多打一次 /auth/me」這句不準確：auth store 的 restore() 以 status 去重、並行時共用同一個 promise，第二個 router 不會多打 /auth/me；實際代價是 guard 與導向重複執行、兩個 history 同時改寫 location。(2) authGuard 有掛：突變拿掉 beforeEach → 4 條測試紅；標題不加後綴 → 3 條紅；預設拒絕 / 未登入導向 / 強制改密碼每次導航都攔由 spec 覆蓋。(3) hash history 往返探針：push('/students?class_id=c1&page=2#sec') 未登入 → location.hash 為 `#/login?redirect=/students?class_id=c1%26page=2%23sec`、query.redirect 解回原字串；登入後 landingPath 回同一 fullPath、push 後 hash 為 `#/students?class_id=c1&page=2#sec`；已登入從書籤重訪該 /login URL 也直接導回原頁。(4) afterEach 標題規則探針：重複導航（failure type 16）與被第二個 guard 中止的導航都不改標題；沒有 meta.title 的 authOnly 路由 → document.title === APP_TITLE。打回原因：description 明寫的兩條行為「導航失敗（failure 有值）不改標題」「meta.title 缺漏只顯示 APP_TITLE」沒有任何對應測試——突變拿掉 `if (failure) return`、拿掉 APP_TITLE 回退，spec 6/6 仍全綠。補法見 risk_notes。"
       }
     },
     {
@@ -1541,7 +1541,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/staffUsers.ts",
       "source_ref": "FE:src/api/auth.ts::createUser",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9a",
       "depends_on": [
         "FRONTEND-020",
@@ -1573,9 +1573,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-f",
+        "notes": "pass：5 條 red_case 對應 5 個測試，另有 gets and updates、encodes ids 2 條，tdd.run 7/7 全綠；commit a90ca4b（測試）→ 184c09e（實作）；lint 乾淨、vue-tsc exit 0。型別逐欄位對照 schemas/staff_users.py：StaffUserOut（phone / email / last_login_at nullable，role 為 RoleBrief {id, code, name} = api/auth 的 StaffRole，extra / revoked / effective_permissions 皆 string[]）、StaffUserCreateIn（phone / email 可省略或 null，extra / revoked 為必填陣列）、StaffUserUpdateIn（無 username；nullable_fields phone / email 對應 TS 的 `string | null`）、StaffUserCreatedOut / TempPasswordOut / StaffOptionOut 一致；與 BACKEND-087 / 093~098 / 521 / 522 / 528、api_index §4 的路徑、方法、回應一致（reset / deactivate / activate 無 body，測試斷言 data 為 undefined；options 走 /admin/staff-users/options 且不帶 params）。路徑 id 一律 encodeURIComponent（`u/1`、`u 1` 驗證）。temp_password 原樣回傳，測試斷言 console 五個 level 未被呼叫、localStorage / sessionStorage 為空（api client 不記 log、不落 storage；UI 端的一次性顯示由帳號頁 task 負責）。突變（皆轉紅後還原）：id 不編碼 → encodes ids 紅；create 回傳遮罩後的 temp_password → create returns temp password 紅；options 改打列表路徑 → lists staff options 紅。殘留：無。"
       }
     },
     {
@@ -3239,7 +3239,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/attendance.ts",
       "source_ref": "FE:src/api/studentAttendance.ts::getDailyAttendance",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9c",
       "depends_on": [
         "FRONTEND-020",
@@ -3279,9 +3279,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-f",
+        "notes": "pass：13 條 red_case 對應 13 個測試（名稱逐條相同），tdd.run 13/13 全綠；commit 50074ce（測試）→ 9f02178（實作）；435cb16 的 description / red_cases 改寫是最終規格寫法（nullable 欄位、虛擬列、空白備註不送、totals 語意），無歷史敘述；lint 乾淨、vue-tsc exit 0。型別逐欄位對照 schemas/attendance.py：AttendanceRowOut（id / class_id / class_name / check_in_at / check_in_source / check_out_at / check_out_source（含 pickup）/ leave / note / updated_at 皆 nullable）、DailyAttendanceOut / DailySummaryOut、BatchCheckInOut / BatchSkipOut、AttendanceAmendIn（status 不含 leave → AmendableAttendanceStatus；check_in_at / check_out_at / note 可 null，後端以 model_fields_set 區分省略與 null；reason 必填）、MonthDayOut（weekday 0 = 週一）/ MonthlyStatsOut / MonthlyStudentRowOut / MonthlyAttendanceOut 一致。實作者的規格偏離經後端原始碼核實：check_in / check_out / mark_absent 以 `note=func.coalesce(note, StudentAttendance.note)` 寫入（attendance_service.py 646 / 713 / 822 行），送空字串會把既有備註蓋成空白，空白備註不送正確；月報 totals 為 `sum(r.stats.service_days for r in rows)`（524-525 行，BACKEND-312「totals 為全部學生 stats 加總」），service_days 是應出勤人次而非營業日數，描述正確。探針（未留檔）：匯出遇 404 的 JSON blob 錯誤被 adminHttp 正規化成 ApiError(404, class_not_found)，text/html 500 → http_500；非空白備註原樣送出、不裁切前後空白。突變（皆轉紅後還原）：空白備註照送 → blank note is omitted 紅；匯出不設 responseType blob → export returns blob response 紅；id 不編碼 → encodes ids 紅；改判剔除 null 欄位 → amend sends explicit null 紅。殘留（不打回）：noteBody 以 trim 判斷是否送出，但送出的是原字串（含前後空白），後端 Note 不 strip、會原樣保存——是否裁切屬 UI 層決定。"
       }
     },
     {
@@ -3291,7 +3291,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/leaves.ts",
       "source_ref": "FE:src/api/studentLeaves.ts::listStudentLeaves",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9c",
       "depends_on": [
         "FRONTEND-020",
@@ -3322,9 +3322,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-f",
+        "notes": "pass：8 條 red_case 對應 8 個測試，tdd.run 8/8 全綠；commit 6cbe5a1（測試）→ 03bbcca（實作）；435cb16 的改寫是最終規格寫法；lint 乾淨、vue-tsc exit 0。型別逐欄位對照 schemas/leaves.py：LeaveOut（reason / created_by_name / cancelled_at / cancelled_by_type / cancelled_by_name nullable，student.class_name nullable，attachments 只有 metadata）、LeaveListQuery 7 個篩選 + page / page_size、LeaveCreateIn（reason 可省略或 null，後端空白轉 None）、LeaveCancelIn（scope 預設 remaining）、AttachmentUrlOut {url, expires_in} 一致。取消語意經 leave_service.py 449-462 行核實：`scope == 'all' or start_date >= today` → 整筆 cancelled；否則 truncated（end_date 縮為昨天、status 仍 active），與 description / 測試斷言一致。附件網址每次重新請求（adminHttp 無快取層）；路徑 id 一律 encodeURIComponent。突變（皆轉紅後還原）：預設 scope 改 all → cancel sends scope 紅；附件 id 不編碼 → encodes ids 紅；加入附件網址快取（查表 + 寫入）→ attachment url is never cached 紅。殘留：無。"
       }
     },
     {
@@ -4082,7 +4082,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/api/pickupRequests.ts",
       "source_ref": "FE:src/api/dismissalCalls.ts::createDismissalCall",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9c",
       "depends_on": [
         "FRONTEND-020",
@@ -4118,9 +4118,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-f",
+        "notes": "pass：10 條 red_case 對應 10 個測試，tdd.run 10/10 全綠；commit 32beadd（測試）→ 99f89cc（實作）；435cb16 的改寫是最終規格寫法；lint 乾淨、vue-tsc exit 0。型別逐欄位對照 schemas/pickup.py：PickupRequestOut（全部欄位含 nullable 一致；requested_by_type 的 parent|staff 與 ActorCreatedByType 同值域；completion_method 含 code / visual_match）、PickupQueueOut / PickupQueueCountsOut、RosterStudentOut（leave_type 為 Literal 代碼 sick|personal|other，service 只在 status == 'leave' 時帶，pickup/requests.py 244 行）、RosterOpenRequestOut（後端宣告為全部 RequestStatus，但 service 只放 `status.in_(OPEN_STATUSES)` 的請求（198-204 行），TS 收斂成 PickupOpenStatus 正確）、RosterClassOut（class_id null = 未分班）、StaffPickupRequestCreateIn、PickupReplyIn（至少一個）、PickupCompleteIn（model_validator：guardian 必須有 guardian_id、override 必須有 note → TS 聯集 `{method:'guardian'; guardian_id} | {method:'override'; note}` 與後端條件必填一致）、PickupCancelIn（reason 可省略；service 以 data.reason 原樣寫入 cancel_reason，空白原因不送讓欄位保持 null）。沒給日期 / 參數時請求不帶 date / class_id（以 adminHttp.getUri 驗證）；路徑 id 一律 encodeURIComponent；409 / 422 / 403 的 details 皆有逐欄位斷言。探針（未留檔）：reply 傳入 undefined 欄位時 JSON 不含該鍵。突變（皆轉紅後還原）：空白原因照送 → blank reason is omitted 紅；acknowledge 帶 {} body → acknowledge posts without body 紅；queue 沒給日期自補 → default to today 紅；id 不編碼 → encodes ids 紅。殘留：無。"
       }
     },
     {
