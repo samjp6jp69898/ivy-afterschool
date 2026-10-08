@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 446,
-  "last_updated": "2026-10-08T01:41:10Z",
+  "version": 447,
+  "last_updated": "2026-10-08T05:07:46Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -9841,7 +9841,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/homework.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-377",
@@ -9868,9 +9868,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-a",
+        "notes": "review-r9-a pass：tdd.run 6 passed（5 條 red_cases + guard_registered）；整檔 40 passed。紅燈 9108a38 早於實作 451408c。handler 只做 homework:write 守衛 → create_item → commit → 201 HomeworkMutationOut（service 輸出，沒有第二份進度組裝）；錯誤碼照 service：409 student_not_active、422 invalid_subject / invalid_service_date（window 由 377 service 檢查，endpoint 未另加）、404 student_not_found。突變：守衛改 HOMEWORK_READ → 4 條轉紅；拿掉 commit → success 轉紅；status_code 拿掉（200）→ success 轉紅。探針：service_date 明天（window 內）→ 201 且 progress 同日；不存在科目 → 422 invalid_subject 無寫入。lint / typecheck 乾淨。"
       }
     },
     {
@@ -9880,7 +9880,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/homework.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-378",
@@ -9907,9 +9907,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-a",
+        "notes": "review-r9-a pass：tdd.run 6 passed（5 條 red_cases + guard_registered）；整檔 40 passed。紅燈 e846b31 早於實作 29b7e1f。/items/batch 註冊在 /items/{item_id} 之前；handler → batch_create_items → commit → 201 HomeworkBatchOut；422 student_not_in_class（details student_ids）/ no_students、404 class_not_found（封存與不存在）皆照 service。突變：守衛改 HOMEWORK_READ → 4 條轉紅；拿掉 commit → success 轉紅；status_code 改 200 → success 轉紅。探針：service_date 超出 window → 422 invalid_service_date 整批無寫入；student_ids 子集 → created 2、依班內順序、未指定者無項目、進度列為該日 not_started。lint / typecheck 乾淨。"
       }
     },
     {
@@ -9919,7 +9919,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/homework.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-379",
@@ -9946,9 +9946,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-a",
+        "notes": "review-r9-a pass：tdd.run 6 passed（5 條 red_cases + guard_registered）；整檔 40 passed。紅燈 66759b7 早於實作 801912a。handler → update_item → commit → HomeworkMutationOut；404 homework_item_not_found、422 invalid_subject 照 service；subject_id 給 null 清除、部分更新驗到。依使用者裁定 window 只限制新增：endpoint 與 379 service 皆未檢查，探針以 2026-07-01（window 外）的項目 PATCH status → 200 且該日進度重算為 in_progress。突變：守衛改 HOMEWORK_READ → 4 條轉紅；拿掉 commit → success 轉紅。殘留（不打回）：red_cases 沒有釘住「window 外項目可修改」的測試，之後若有人在 endpoint 或 service 加回檢查不會轉紅（domain_spec M2 homework.window 已寫明不受限）。lint / typecheck 乾淨。"
       }
     },
     {
@@ -9958,7 +9958,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/homework.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-380",
@@ -9985,9 +9985,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-a",
+        "notes": "review-r9-a pass：tdd.run 6 passed（5 條 red_cases + guard_registered）；整檔 40 passed。紅燈 78600f9 早於實作 4590640。handler → delete_item → commit → HomeworkMutationOut（item null、progress 重算）；404 照 service；endpoint 未加 window 檢查，探針以 window 外日期的項目 DELETE → 200、剩餘項目全 done → 該日 done 且非今天不發 homework.done。突變：守衛改 HOMEWORK_READ → 4 條轉紅；拿掉 commit → success 轉紅。殘留同 388：沒有測試釘住「window 外項目可刪除」。lint / typecheck 乾淨。"
       }
     },
     {
@@ -11511,7 +11511,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/pickup_authorizations.py::admin_verify",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-426",
@@ -11541,9 +11541,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-a",
+        "notes": "review-r9-a pass：tdd.run 8 passed（7 條 red_cases + guard_registered 全被 -k 選到，含 r9b 移交的 after_regenerate）；整檔 65 passed。紅燈 cfe65ac 早於實作 fb4bfd9，當下 pickup.py 尚無 /verify。handler 依規格：verify_code → 一律先 db.commit() → result 回 200、locked 409 pickup_code_locked、否則 400 pickup_code_mismatch（details remaining_attempts）；404 / 非 active / 非今天 / 已鎖定由 service 在寫入前拋，不需 commit。突變：commit 只在成功時做 → mismatch_persists / lock_on_fifth / after_regenerate 轉紅；拿掉 commit → 4 條轉紅；鎖定改回 400 → lock_on_fifth 轉紅；守衛改 PICKUP_READ → 5 條轉紅。探針：committing session + 另一條 app_backend 連線觀察，4 次錯碼 code_attempts 逐次 1~4、第 5 次 409 且 (5, locked, active) 真正落地，之後正確碼仍 409；錯碼 / 正確碼 / 連字號寫法 / 鎖定警告皆不出現在 caplog DEBUG、回應與 audit（鎖定 warning 只含授權 id 與次數）；cancelled → 409 authorization_not_active、明天的授權 → 409 authorization_not_today 且不累計。lint / typecheck 乾淨；探針殘列清除後全部 0。"
       }
     },
     {
@@ -11553,7 +11553,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/pickup_authorizations.py::admin_confirm_visual_match",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-011",
@@ -11581,9 +11581,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-a",
+        "notes": "review-r9-a pass：tdd.run 6 passed（5 條 red_cases + guard_registered）；整檔 65 passed。紅燈 e04c991 早於實作 da46709。pickup:operate 守衛、body 可省略、get_request_meta 注入 → confirm_visual_match → commit → AuthorizationCompleteOut；有 / 無照片都可核銷，audit after 含 has_photo 與 note。突變：守衛改 PICKUP_READ → 4 條轉紅；拿掉 commit → success 轉紅；meta 改成假的 RequestMeta(ip=None) → success 轉紅（audit ip 以 TestClient(client=('203.0.113.5',…)) 驗為真實來源）。探針：明天的授權 → 409 authorization_not_today、cancelled → 409 authorization_not_active，兩者皆無 audit 列。lint / typecheck 乾淨。"
       }
     },
     {
@@ -11593,7 +11593,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/pickup.py",
       "source_ref": "BE:api/pickup_authorizations.py::admin_override",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9a",
       "depends_on": [
         "BACKEND-428",
@@ -11621,9 +11621,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-a",
+        "notes": "review-r9-a pass：tdd.run 6 passed（5 條 red_cases + guard_registered）；整檔 65 passed。紅燈 b14d623 早於實作 91a3e1e。守衛掛在路由（PickupOverride）：只有 pickup:operate → 403 permission_denied（required pickup:override）且授權 / audit 零寫入；只有 pickup:override → 200 釘住守衛不是 operate；service 內再檢查屬縱深防禦。突變：守衛改 PICKUP_OPERATE → success（override_only 員工）轉紅；改 PICKUP_READ → 4 條轉紅；拿掉 commit → success 轉紅；meta 改假 → success 轉紅（audit ip 為真實來源）。探針：只有 pickup:override 的員工對已鎖定授權強制完成 → 200、不解鎖不重設（code_attempts 5、locked）、audit 1 筆、proxy 請求 completed、家長 pickup.completed 1 則；cancelled → 409 authorization_not_active 無 audit。lint / typecheck 乾淨。"
       }
     },
     {
