@@ -12,10 +12,10 @@
      preview-route  : 對應的家長端路由 path；元件稿寫 component:<相對路徑>
      preview-updated: 最後更新日期 YYYY-MM-DD
      ============================================================ -->
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-154">
 <meta name="preview-route" content="/exams/:examId">
-<meta name="preview-updated" content="2026-10-07">
+<meta name="preview-updated" content="2026-10-08">
 
 <title>設計稿：家長端 成績明細（ExamDetailView）</title>
 <script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
@@ -632,7 +632,7 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
 .page-stack { display: flex; flex-direction: column; gap: 12px; padding-top: 8px; }
 .ed-head__name { margin: 0; color: var(--m3-on-surface); overflow-wrap: anywhere; }
 .ed-head__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; color: var(--m3-on-surface-variant); font-variant-numeric: tabular-nums; }
-.ed-head__note { margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--m3-outline-variant); color: var(--m3-on-surface-variant); white-space: pre-line; overflow-wrap: anywhere; }
+.ed-head .ed-head__note { margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--m3-outline-variant); color: var(--m3-on-surface-variant); white-space: pre-line; overflow-wrap: anywhere; }
 
 /* ---- 稿件框架補充 ---- */
 .notes__check { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }

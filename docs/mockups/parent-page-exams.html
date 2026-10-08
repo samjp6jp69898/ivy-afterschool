@@ -12,10 +12,10 @@
      preview-route  : 對應的家長端路由 path；元件稿寫 component:<相對路徑>
      preview-updated: 最後更新日期 YYYY-MM-DD
      ============================================================ -->
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-153">
 <meta name="preview-route" content="/exams">
-<meta name="preview-updated" content="2026-10-07">
+<meta name="preview-updated" content="2026-10-08">
 
 <title>設計稿：家長端 成績列表（ExamsView）</title>
 <script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
@@ -1510,7 +1510,15 @@ const PAGE_SIZE = 20
 
 /** 模擬 GET /parent/children/{id}/exams（只有已公布、依考試日期新到舊） */
 const E = (o) => ({ published_at: '2026-10-16T08:00:00Z', ...o })
-const addDaysISO = (s, n) => { const d = parseDate(s); d.setUTCDate(d.getUTCDate() + n); return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}` }
+/** 往前推 n 天，落在週六日時改為前一個週五（示範資料的考試日都在上課日） */
+const addDaysISO = (s, n) => {
+  const d = parseDate(s)
+  d.setUTCDate(d.getUTCDate() + n)
+  const wd = d.getUTCDay()
+  if (wd === 6) d.setUTCDate(d.getUTCDate() - 1)
+  if (wd === 0) d.setUTCDate(d.getUTCDate() - 2)
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`
+}
 const EXAMS = {
   s1: [
     E({ exam_id: 'e1', name: '第一次段考', exam_type_name: '段考', exam_date: '2026-10-14', subject_count: 5 }),

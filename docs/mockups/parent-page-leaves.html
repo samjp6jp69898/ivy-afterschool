@@ -14,10 +14,10 @@
      本稿同時是 PARENT-137 LeaveDetailSheet 的元件稿（task description 允許併入），
      元件規格見下方 CSS / JS 標示「PARENT-137」的區段與右側面板「元件規格」一節。
      ============================================================ -->
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="PARENT-137,PARENT-138">
 <meta name="preview-route" content="/leaves">
-<meta name="preview-updated" content="2026-10-07">
+<meta name="preview-updated" content="2026-10-08">
 
 <title>設計稿：家長端 請假（LeavesView + LeaveDetailSheet）</title>
 <script src="https://unpkg.com/vue@3.5.43/dist/vue.global.prod.js"></script>
@@ -770,11 +770,21 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
 .lv-alert { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-radius: var(--m3-shape-medium); background: var(--m3-error-container); color: var(--m3-on-error-container); }
 .lv-progress { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: var(--m3-shape-medium); background: var(--m3-secondary-container); color: var(--m3-on-secondary-container); }
 .lv-confirm-target { margin: 0; padding: 8px 12px; border-radius: var(--m3-shape-small); background: var(--m3-surface-container-highest); color: var(--m3-on-surface); }
+/* 申請 sheet：LeaveForm 的按鈕列固定在 sheet 可視區底部（外觀同 ParentBottomSheet footer），初始畫面就看得到「送出請假」，表單內容在它上方捲動。
+   實作由 LeavesView 包住 LeaveForm 的元素 + scoped :deep() 樣式達成，不改 LeaveForm 的介面。z-index 高於 M3TextField 的浮動標籤（2）。 */
+.sheet:has(.lv-form-wrap) .sheet__body { padding-bottom: 0; }
+.lv-form-wrap .lf-actions {
+  position: sticky; bottom: 0; z-index: 3; margin: 0 -24px; padding: 16px 24px calc(16px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--m3-outline-variant); background: var(--m3-surface-container-low);
+}
+/* 附件 url 為 null（後端簽名失敗）：不可點的磚（PARENT-135） */
+.att-tile--unavailable { cursor: default; }
+.att-tile--unavailable .material-symbols-rounded { color: var(--m3-on-surface-variant); }
 
 /* ---- 稿件框架補充 ---- */
 .notes__check { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
 .notes__sub { margin: 16px 0 6px; font-weight: 600; font-size: 13px; }
-.notes__spec { margin: 0 0 8px; padding: 8px 10px; border-radius: 4px; background: var(--preview-bar-bg); font: 12px/18px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+.notes__spec { max-width: 100%; margin: 0 0 8px; padding: 8px 10px; border-radius: 4px; background: var(--preview-bar-bg); font: 12px/18px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>
 </head>
 
@@ -837,7 +847,9 @@ textarea.m3-tf__input { display: block; height: auto; padding: 16px; resize: non
               <span class="m3-spinner" aria-hidden="true"></span><span>請假已建立，正在上傳附件（{{ uploadStep.current }}/{{ uploadStep.total }}）…</span>
             </div>
           </div>
-          <leave-form :key="formSeq" :today="TODAY" :limits="limits" :submitting="submitting" :initial="formInitial" @submit="onSubmit" @cancel="formOpen = false"></leave-form>
+          <div class="lv-form-wrap">
+            <leave-form :key="formSeq" :today="TODAY" :limits="limits" :submitting="submitting" :initial="formInitial" @submit="onSubmit" @cancel="formOpen = false"></leave-form>
+          </div>
         </parent-bottom-sheet>
 
         <!-- PARENT-137 LeaveDetailSheet（元件；頁面只負責資料與上傳 / 取消流程） -->
@@ -1907,6 +1919,17 @@ const LeaveAttachmentList = {
     <p v-else-if="editable" class="att-help m3-body-small">已達 {{ max }} 個附件上限</p>
   </div>`,
 }
+/* 依 PARENT-135 description：附件 url 為 null（後端簽名失敗，BACKEND-341 / 348 / 357）時改為不可點的磚——
+   類型圖示（圖片 image_not_supported、PDF picture_as_pdf，皆 on-surface-variant）+「暫時無法開啟」，沒有連結、state layer 與 open_in_new 徽章；
+   role="img" + aria-label「附件 n：圖片 / PDF 文件 {大小}，暫時無法開啟」。稿內就地擴充元件稿的複本。 */
+{
+  const anchor = '<a class="att-tile m3-state" :href="a.url"'
+  if (!LeaveAttachmentList.template.includes(anchor)) throw new Error('LeaveAttachmentList template 與元件稿不符')
+  LeaveAttachmentList.template = LeaveAttachmentList.template.replace(anchor,
+    '<span v-if="!a.url" class="att-tile att-tile--unavailable" role="img" :aria-label="\'附件 \' + (i + 1) + \'：\' + (isImage(a) ? \'圖片 \' : \'PDF 文件 \') + fmtSize(a.size_bytes) + \'，暫時無法開啟\'">'
+    + '<m3-icon :name="isImage(a) ? \'image_not_supported\' : \'picture_as_pdf\'" :size="32"></m3-icon><span class="att-tile__caption m3-label-small" aria-hidden="true">暫時無法開啟</span></span>\n        '
+    + '<a v-else class="att-tile m3-state" :href="a.url"')
+}
 
 /* ---- 複製自 parent-component-confirm-dialog.html ---- */
 /** PARENT-026 ConfirmDialog（forceFocus 只為稿件示範鍵盤焦點，實作沒有這個 prop） */
@@ -2090,7 +2113,7 @@ function seedData() {
     L({ id: 'l3', leave_type: 'personal', leave_type_label: '事假', start_date: '2026-09-30', end_date: '2026-10-03', reason: '家庭旅遊', created_at: '2026-09-25T12:05:00Z', can_cancel: true }),
     L({ id: 'l4', start_date: '2026-09-22', end_date: '2026-09-22', reason: '腸胃炎', created_at: '2026-09-22T00:20:00Z', attachments: [ATT('img', '藥袋', 845000)] }),
     L({ id: 'l5', leave_type: 'personal', leave_type_label: '事假', start_date: '2026-09-16', end_date: '2026-09-18', reason: '回南部參加婚禮\n週五晚上回台北', status: 'cancelled', created_at: '2026-09-10T11:00:00Z', cancelled_at: '2026-09-15T01:20:00Z' }),
-    L({ id: 'l6', start_date: '2026-09-08', end_date: '2026-09-09', reason: '流感，醫生建議在家休息', created_at: '2026-09-08T00:10:00Z', attachments: [ATT('img', '診斷證明', 2048000), ATT('pdf', '', 512000), ATT('img', '收據', 734003)] }),
+    L({ id: 'l6', start_date: '2026-09-08', end_date: '2026-09-09', reason: '流感，醫生建議在家休息', created_at: '2026-09-08T00:10:00Z', attachments: [ATT('img', '診斷證明', 2048000), { ...ATT('pdf', '', 512000), url: null }, ATT('img', '收據', 734003)] }),
   ]
   const s3 = Array.from({ length: 25 }, (_, i) => {
     const [t, lbl] = [['sick', '病假'], ['personal', '事假'], ['other', '其他']][i % 3]
@@ -2214,7 +2237,7 @@ function pageSetup({ snack }) {
     if (sim.create === 'overlap') return { code: 'leave_overlap', details: hit ? { start_date: hit.start_date, end_date: hit.end_date } : { start_date: '2026-10-05', end_date: '2026-10-07' } }
     if (sim.create === 'window') return { code: 'leave_date_out_of_window', details: { past_days: 30, future_days: 60 } }
     if (sim.create === 'noservice') return { code: 'no_service_days_in_range' }
-    return { code: 'student_not_active', message: '此學生已退班，無法進行此操作' }
+    return { code: 'student_not_active', message: '此學生目前暫停，無法進行此操作' }
   }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
   async function onSubmit(p) {
@@ -2382,7 +2405,7 @@ function pageSetup({ snack }) {
     { value: 'overlap', label: '409 期間重疊' },
     { value: 'window', label: '422 超出日期範圍' },
     { value: 'noservice', label: '422 沒有上課日' },
-    { value: 'other', label: '其他錯誤（顯示後端 message）' },
+    { value: 'other', label: '409 student_not_active（顯示後端 message）' },
   ]
   const uploadOptions = [
     { value: 'ok', label: '全部成功' },
@@ -2393,7 +2416,7 @@ function pageSetup({ snack }) {
     { id: 'l2', label: '已排定：可整筆取消、附件 2/3 可補上傳' },
     { id: 'l3', label: '請假中：可取消剩餘日子（含說明）' },
     { id: 'l4', label: '已結束：無取消鈕、仍可補附件' },
-    { id: 'l6', label: '已結束：附件已滿 3/3' },
+    { id: 'l6', label: '已結束：附件已滿 3/3（其中 1 個網址暫時失效）' },
     { id: 'l5', label: '已取消：無按鈕、附件唯讀' },
     { id: 'l1', label: '安親班代為登記（事由未填寫）' },
   ]
@@ -2442,7 +2465,7 @@ function pageSetup({ snack }) {
     '外框：PARENT-025 ParentBottomSheet，標題「請假詳情」，高度自適應（內容超過時只有內容區捲動）。稿內以虛線框標出元件範圍（勾選右側「標出 LeaveDetailSheet 元件範圍」）。',
     '頂部摘要：左側 40px 假別圖示（同 LeaveListItem：病假 sick、事假 event_busy、其他 event_note）；第一行 假別 title-medium（與列表同字級，sheet 標題已是 title-large）+ 右側狀態 StatusPill（規則與 tone 同 PARENT-136：已取消 / 已結束 neutral、已排定 info、請假中 warning）；第二行 期間與天數「10/05（一）～10/07（三）· 共 3 天」（含首尾日曆天；單日「10/12（一）· 共 1 天」）。下方 1px 分隔線。',
     '明細 dl（標籤欄 72px、body-medium、列間 1px 分隔線）：小孩（studentName）/ 事由（null →「未填寫」，on-surface-variant；保留換行）/ 申請者（parent「家長申請」、staff「安親班代為登記」）/ 申請時間（YYYY/MM/DD HH:mm，台北）/ 取消時間（cancelled_at 有值才顯示）。',
-    '附件：小標「附件」+ PARENT-135 LeaveAttachmentList，max / maxMb 取自 limits，upload 原樣往上 emit，uploading 時新增磚轉圈。editable 只傳「status === active」（已結束但仍 active 的請假也能補附件，例如事後補診斷證明），數量上限交給 LeaveAttachmentList 以 max 判斷：未滿 → 新增磚 +「還可新增 n 個…」；已滿 → 不能新增、顯示「已達 3 個附件上限」。已取消 → 唯讀（沒有附件時「沒有附件」）。註：task description 字面是「editable = active 且附件數 < 上限」，照字面已滿時會變成唯讀、看不到「已達上限」說明，兩者能否新增的結果相同（red case 不受影響）；核可後把 description 改成本條。不提供刪除附件。',
+    '附件：小標「附件」+ PARENT-135 LeaveAttachmentList，max / maxMb 取自 limits，upload 原樣往上 emit，uploading 時新增磚轉圈。editable 只傳「status === active」（已結束但仍 active 的請假也能補附件，例如事後補診斷證明），數量上限交給 LeaveAttachmentList 以 max 判斷：未滿 → 新增磚 +「還可新增 n 個…」；已滿 → 不能新增、顯示「已達 3 個附件上限」。已取消 → 唯讀（沒有附件時「沒有附件」）。附件 url 為 null（後端簽名失敗）時那一格不可點、顯示「暫時無法開啟」（PARENT-135）。不提供刪除附件。',
     '取消：can_cancel 為 true 才有 footer（上方分隔線）。start_date ≥ today → outlined 全寬「取消請假」；start_date < today → 按鈕上方 info 圖示小字「將取消今天（10/02）起的請假，之前的日子仍保留為請假」+「取消剩餘日子」。點擊 emit cancel(leave)；確認對話框與 API 呼叫屬於頁面。',
     '已取消的請假：摘要圖示改 surface-container-high、假別與期間改 on-surface-variant（同列表的淡化方式），沒有 footer。',
     '移植 ivy LeaveDetailSheet 的 sheet + 附件版面；去掉 timeline 審核進度、review_note、刪除附件與 urlResolver（後端已回短效 url）。',
@@ -2452,9 +2475,9 @@ function pageSetup({ snack }) {
     '版面：ChildContextHeader →「申請請假」filled 全寬按鈕（add 圖示，頁面主要動作，取代 ivy LeaveHero 上的按鈕；不做學期統計）→ 小標「請假紀錄」+ 右側「共 N 筆」→ outlined 卡內 ul 清單（PARENT-136 LeaveListItem，today = 台北今日）→「載入更多」。頂部列「請假」+ 返回鍵，底部導覽停在「更多」；整頁內容包在 PullToRefresh 內，頁面自帶左右 16px、底部 24px 內距。',
     '清單狀態：首次載入 → 卡內 SkeletonBlock row × 3；空 → 卡內 ParentEmptyState（event_busy）「還沒有請假紀錄」/「需要請假時按「申請請假」」；失敗 → 小標與卡片換成 ParentEmptyState error「請假紀錄載入失敗」+「重試」（「申請請假」按鈕照常可用）。切換小孩：關閉詳情、重置分頁、顯示骨架，以請求序號丟棄過期回應。PullToRefresh 重抓第一頁，失敗保留內容並顯示 error snackbar「更新失敗，請稍後再試」。',
     '載入更多：items.length < total 時清單下方 outlined 全寬「載入更多」，載入中按鈕轉圈；回來的資料以 id 去重後附加（新建立的請假插在最前面後，伺服器分頁會往前位移一筆）；失敗 error snackbar「載入更多失敗，請稍後再試」，按鈕保留可重按。',
-    '申請：ParentBottomSheet「申請請假」（fullHeight）＋ PARENT-134 LeaveForm（假別 / 日期 / 事由 / 附件與按鈕列照元件稿）。表單上方先放一列「為 {小孩姓名} 申請請假」（表單沒有選小孩欄位，多孩家庭避免請錯人）。送出中 sheet 暫時不可關閉（dismissible=false，沒有關閉鈕、scrim / Esc / 下拉都不關），建立成功後依序上傳附件，表單上方顯示「請假已建立，正在上傳附件（1/2）…」。',
+    '申請：ParentBottomSheet「申請請假」（fullHeight）＋ PARENT-134 LeaveForm（假別 / 日期 / 事由 / 附件與按鈕列照元件稿）。表單上方先放一列「為 {小孩姓名} 申請請假」（表單沒有選小孩欄位，多孩家庭避免請錯人）。送出中 sheet 暫時不可關閉（dismissible=false，沒有關閉鈕、scrim / Esc / 下拉都不關），建立成功後依序上傳附件，表單上方顯示「請假已建立，正在上傳附件（1/2）…」。表單的按鈕列固定在 sheet 可視區底部（sticky，外觀同 ParentBottomSheet footer：上方 1px 分隔線、surface-container-low 底、padding 16px 24px + safe-area），初始畫面就看得到「送出請假」，表單內容在它上方捲動；由 LeavesView 包住 LeaveForm 的元素 + scoped :deep() 樣式達成，不改 LeaveForm 介面。',
     '申請結果：全部成功 → 關閉 sheet、snackbar「請假已送出」；有附件失敗 → 關閉 sheet、error snackbar「請假已送出，但有 n 個附件上傳失敗，可在請假詳情重新上傳」+ 動作「查看」（開該筆詳情補上傳，8 秒）；新請假插到清單最前面（attachments 只含上傳成功者）、共 N 筆 +1。',
-    '建立錯誤：表單保持開啟，錯誤以 error-container 橫幅（error 圖示、role=alert）顯示在表單上方，並把 sheet 內容捲回頂端（送出鈕在表單最下方，不捲回去看不到錯誤）；文案照 task：leave_overlap「這段期間已有請假（{details.start_date}～{details.end_date}）」、leave_date_out_of_window「請假日期需在今天前 {leave_past_days} 天到後 {leave_future_days} 天內」、no_service_days_in_range「選擇的日期都不是上課日」、其他 → 後端 error.message。再次送出時先清除。',
+    '建立錯誤：表單保持開啟，錯誤以 error-container 橫幅（error 圖示、role=alert）顯示在表單上方，並把 sheet 內容捲回頂端（送出鈕在表單最下方，不捲回去看不到錯誤）；文案照 task：leave_overlap「這段期間已有請假（{details.start_date}～{details.end_date}）」、leave_date_out_of_window「請假日期需在今天前 {leave_past_days} 天到後 {leave_future_days} 天內」、no_service_days_in_range「選擇的日期都不是上課日」、其他（含 student_not_active「此學生目前暫停，無法進行此操作」/「此學生已退班，無法進行此操作」）→ 後端 error.message，不自動重試。再次送出時先清除。',
     '取消（列或詳情）：PARENT-026 ConfirmDialog，destructive、cancelLabel「先不要」，說明下方附一列目標「王小明 · 病假 10/05（一）～10/07（三）」（從列表按取消時才知道是哪一筆）。start_date ≥ today：「取消這筆請假？」/「整筆請假將取消，出勤恢復為預計到班」/ 確認「取消請假」；否則「取消剩餘日子？」/「今天起的請假會取消，之前的日子保留」/ 確認「取消剩餘日子」。送出中確認鈕 loading；成功 → 以回應取代該筆、snackbar「已取消請假」，從詳情取消時詳情 sheet 保持開啟並顯示更新後的狀態（按鈕消失）；leave_already_ended / leave_not_active → 關閉對話框、error snackbar「這筆請假已無法取消」並重抓第一頁。',
     '補上傳（詳情）：uploadLeaveAttachment 期間附件新增磚轉圈；成功把附件加進該筆（列表附件數同步）；413「檔案超過 {leave_max_attachment_mb} MB」、415「檔案格式不支援」、attachment_limit_reached「每筆請假最多 {leave_max_attachments} 個附件」以 error snackbar 顯示（層級在 sheet 之上）。所有數字取自掛載時 getParentLimits()，傳給 LeaveForm / LeaveDetailSheet。',
     '層級：sheet 10、ConfirmDialog 15（疊在詳情 sheet 上）、snackbar 20（照 kickoff）；稿內共用樣式的數值已在本稿覆寫成實作值。移植 ivy LeavesView 的列表 + 表單 sheet + 取消確認流程；去掉跨小孩混合列表、LeaveHero 學期統計、刪除附件、審核狀態、離線佇列。',
