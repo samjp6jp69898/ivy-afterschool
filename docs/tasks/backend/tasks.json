@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 441,
-  "last_updated": "2026-10-08T01:33:22Z",
+  "version": 442,
+  "last_updated": "2026-10-08T01:34:34Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -15333,7 +15333,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/api/parent/leaves.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-357"
@@ -15355,9 +15355,9 @@
         "notes": "新測試一律以 test_parent_leave_assembler_shared_ 為前綴。行為不變的證據：重構前後 test_leaves_endpoints.py 與 test_leave_service.py 整檔結果記在回報。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-b2",
+        "notes": "通過。tdd.run 以 --collect-only 與 red_cases 逐名比對 3/3、實跑 3 passed；test_leaves_endpoints.py + test_leave_service.py 整檔 76 passed（71 條加上之後 BACKEND-552 的 4 條與 BACKEND-557 的 1 條）。獨立重建重構前狀態：把 leaves.py 暫時換成 651e281^ 的版本（單一 flock、trap 還原、逐位元組比對備份、git diff 為空），同兩檔整檔只有本 task 的兩條紅測試失敗（no_private_copy、create_and_cancel_use_it），其餘 74 條與特徵測試 create_response_unchanged 皆綠。建立請假的 201 回應在重構前後都逐欄等於 parent_leave_out 對同一筆請假的輸出（attachments 為 []、can_cancel True、leave_type_label），可知回應不變。7e52fb8 測試先於 651e281 重構；554 只動 leaves.py、test_leaves_endpoints.py、tasks.json，leave_service.py 自 BACKEND-357 後沒有改動，test_leave_service.py 只有 BACKEND-552 的新增。get_storage 是 lru_cache 單例且 R2 設定為必填，建立請假注入它沒有新的失敗模式。獨立突變皆轉紅：私有複本放回模組層級（ast 守衛）；建立仍呼叫共用函式但用自己的值蓋掉輸出（ast 守衛會過，create_and_cancel_use_it 轉紅）；建立不 commit；建立回應的 can_cancel 錯誤。SQL 計數（以 pytest plugin 只計測試本體）：建立請求比重構前恆多 1 句，即對剛建立請假的 attachments 做一次 lazy SELECT（結果必為空），沒有迴圈，不是 N+1。lint / typecheck 乾淨；測試後以 owner 唯讀查 students / staff_users / 非系統 roles / parent_accounts / guardians / student_leaves / 附件 / 出勤 / notifications / audit_logs 皆為 0。殘留（不擋）：建立請假多一次附件 SELECT（可在 service 以 set_committed_value 設空集合省去，效益極小）；ast 守衛只認模組層級的 def，以指派、lambda 或 async def 形式放回的私有複本不會被它擋下，但會被 create_and_cancel_use_it 擋下。"
       }
     },
     {
