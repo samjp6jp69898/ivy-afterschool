@@ -54,7 +54,7 @@ code { font-size: 13px; }
   <h1>設計稿總覽</h1>
   <p class="lead">後台與家長端每張設計稿的狀態，待核可的稿集中在最上方。出稿、核可、改稿時同步更新（待核可與已核可分兩區，各自依檔名排序）（流程見 <code>.claude/skills/ui-design-preview/SKILL.md</code>）。</p>
 
-  <h2>待核可（9）</h2>
+  <h2>待核可（7）</h2>
   <p class="lead">這一區的稿需要你核可後才會進入實作。點稿名打開，右上「設計說明 / 待裁定」可看設計決策與待裁定題；稿已照推薦選項畫。</p>
   <div class="card">
     <table>
@@ -82,22 +82,6 @@ code { font-size: 13px; }
           <td class="tasks">FRONTEND-261, FRONTEND-262</td>
           <td class="route"><code>/</code></td>
           <td class="note">無待裁定（未到 / 缺席卡改為 &gt; 0 才上色、應到卡加 hint「不含請假」等小幅調整列在設計說明）</td>
-          <td><span class="status status--draft">待核可</span></td>
-          <td>2026-10-07</td>
-        </tr>
-        <tr>
-          <td><a href="page-exam-detail.html">page-exam-detail.html</a></td>
-          <td class="tasks">FRONTEND-233, FRONTEND-234, FRONTEND-235, FRONTEND-239</td>
-          <td class="route"><code>/exams/:id</code></td>
-          <td class="note">2 題：1. 發布時成績格還有未儲存 / 儲存失敗的格子怎麼處理（推薦 A：先送出，仍有失敗就不發布）；2. 「未填」怎麼算（推薦 A：只算名單內沒有分數也沒標缺考的格子，需開新 BACKEND task 修正 summary）</td>
-          <td><span class="status status--draft">待核可</span></td>
-          <td>2026-10-07</td>
-        </tr>
-        <tr>
-          <td><a href="page-exams.html">page-exams.html</a></td>
-          <td class="tasks">FRONTEND-231, FRONTEND-232</td>
-          <td class="route"><code>/exams</code></td>
-          <td class="note">無待裁定</td>
           <td><span class="status status--draft">待核可</span></td>
           <td>2026-10-07</td>
         </tr>
@@ -145,7 +129,7 @@ code { font-size: 13px; }
     </table>
   </div>
 
-  <h2>已核可（51）</h2>
+  <h2>已核可（53）</h2>
   <div class="card">
     <table>
       <thead>
@@ -244,6 +228,20 @@ code { font-size: 13px; }
           <td class="route"><code>/forbidden、/:pathMatch(.*)*</code></td>
           <td><span class="status status--approved">已核可</span></td>
           <td>2026-10-04</td>
+        </tr>
+        <tr>
+          <td><a href="page-exam-detail.html">page-exam-detail.html</a></td>
+          <td class="tasks">FRONTEND-233, FRONTEND-234, FRONTEND-235, FRONTEND-239</td>
+          <td class="route"><code>/exams/:id</code></td>
+          <td><span class="status status--approved">已核可</span></td>
+          <td>2026-10-08</td>
+        </tr>
+        <tr>
+          <td><a href="page-exams.html">page-exams.html</a></td>
+          <td class="tasks">FRONTEND-231, FRONTEND-232</td>
+          <td class="route"><code>/exams</code></td>
+          <td><span class="status status--approved">已核可</span></td>
+          <td>2026-10-08</td>
         </tr>
         <tr>
           <td><a href="page-homework-board.html">page-homework-board.html</a></td>

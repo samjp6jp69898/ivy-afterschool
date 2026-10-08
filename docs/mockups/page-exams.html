@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="FRONTEND-231,FRONTEND-232">
 <meta name="preview-route" content="/exams">
-<meta name="preview-updated" content="2026-10-07">
+<meta name="preview-updated" content="2026-10-08">
 
 <title>設計稿：考試列表</title>
 
@@ -183,6 +183,8 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
 .exam-warn { color: var(--el-color-warning-dark-2); }
 .exam-status { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .exam-status__time { font-size: 12px; color: var(--el-text-color-secondary); font-variant-numeric: tabular-nums; }
+/* 操作欄：72px 寬（扣掉 cell 左右 12px 剛好放得下 44px 的 ⋮ 鈕），不套 el-table cell 預設的 ellipsis */
+.exam-table .exam-ops-col .cell { overflow: visible; text-overflow: clip; }
 .exam-more.el-button { width: 44px; height: 44px; margin: -8px 0; }
 .el-dropdown-menu__item.danger-item, .el-dropdown-menu__item.danger-item:not(.is-disabled):hover { color: var(--el-color-danger); }
 </style>
@@ -308,7 +310,7 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
                 </div>
               </template>
             </el-table-column>
-            <el-table-column v-if="can('exams:write')" label="" width="64" align="center" fixed="right">
+            <el-table-column v-if="can('exams:write')" label="" width="72" align="center" fixed="right" class-name="exam-ops-col">
               <template #default="{ row }">
                 <span v-if="row.status === 'draft'" @click.stop>
                   <el-dropdown trigger="click" @command="(cmd) => onCommand(cmd, row)">
@@ -1187,7 +1189,7 @@ const app = createApp({
       '篩選：搜尋「考試名稱」、狀態（草稿 / 已發布）、考試類型（examTypeOptions）、班級（目前學年度 classOptions）、年級（一~六年級）；日期區間放 extra-filters slot（顯示 YYYY/MM/DD，預設近 90 天到未來 30 天，今天 10/07 時為 2026/07/09～2026/11/06；快捷「預設區間」「本學年度」「上學年度」；可清除，清除 = 不限日期）。班級篩選只比對考試設定的班級，以年級為對象的考試不會出現在班級篩選結果。',
       '表格欄位：考試日期（formatDateWithWeekday「10/15（四）」；不是今年的考試前面加灰色小字年份「2025」）、名稱（主色連結，過長 tooltip）、類型、對象（「三年級」「低年級A班」「低年級A班・二年級」，過長 tooltip）、科目數（0 顯示橘字「未設定」）、應考人數（roster_count，0 為橘字）、狀態（草稿灰 tag / 已發布綠 tag，已發布下一行灰字發布時間「2026/10/06 18:20」）、⋮。依考試日期新到舊（後端排序），不提供欄位排序。',
       '整列可點 → /exams/{id}；名稱是 router-link（鍵盤 Tab 聚焦後 Enter 進入、可在新分頁開）。列高 ≥ 48px，平板可直接點列。',
-      '⋮（44×44，只有 exams:write 且草稿列才有）→「刪除」（紅字）→ useConfirmDelete「刪除後已輸入的成績會一併刪除，確定要刪除「{name}」嗎？」→「已刪除」並重新載入；409 exam_published（期間被別人發布）→ ElMessage.error 顯示後端訊息。已發布列不顯示 ⋮（要先到考試頁取消發布）。點 ⋮ 不會觸發整列導頁。',
+      '⋮（44×44，只有 exams:write 且草稿列才有；操作欄寬 72px、該欄不套 ellipsis，按鈕右側不會多出「···」）→「刪除」（紅字）→ useConfirmDelete「刪除後已輸入的成績會一併刪除，確定要刪除「{name}」嗎？」→「已刪除」並重新載入；409 exam_published（期間被別人發布）→ ElMessage.error 顯示後端訊息。已發布列不顯示 ⋮（要先到考試頁取消發布）。點 ⋮ 不會觸發整列導頁。',
       '空清單：篩選維持預設時 EmptyState「還沒有考試紀錄」+ 說明「預設只顯示近 90 天到未來 30 天的考試，更早的考試請調整日期區間」+（exams:write）「建立考試」；改過篩選時表格內 inline「沒有符合條件的考試」+「試著調整搜尋文字、篩選條件或日期區間」。載入中：表格 v-loading；載入失敗：EmptyState error「無法載入考試」+「重試」取代表格。',
       '只有 exams:read：沒有「建立考試」、整個 ⋮ 欄移除、空清單不附建立按鈕，其他照常（仍可點進考試頁看成績）。課輔老師（exams:write，無 exams:publish）在本頁與主任相同，差別只在考試頁的發布按鈕。',
       'ExamFormDialog（FormDialog lg 800，標題「建立考試」/「編輯考試」，送出鈕「建立」/「儲存」，編輯沒有變更時停用）：第一列 名稱（必填 ≤50 字計數）、考試類型（必填）、考試日期（必填，YYYY/MM/DD）；「應考對象 *」小標 + 灰字「年級與班級至少選一項，決定應考學生名單」，下面年級、班級兩個可清除下拉（placeholder「不限」），兩者皆空送出時兩框紅色並在下方顯示「請選擇年級或班級」，兩者皆選時灰字「只包含該班中該年級的學生」；備註（≤200 字計數）。',

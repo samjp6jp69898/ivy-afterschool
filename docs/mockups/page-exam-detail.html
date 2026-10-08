@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="FRONTEND-233,FRONTEND-234,FRONTEND-235,FRONTEND-239">
 <meta name="preview-route" content="/exams/:id">
-<meta name="preview-updated" content="2026-10-07">
+<meta name="preview-updated" content="2026-10-08">
 
 <title>設計稿：考試詳情（成績輸入 / 各科平均 / 科目設定）</title>
 
@@ -1259,20 +1259,22 @@ const EXAM_E1 = () => ({
 })
 const SERVER = reactive({ exam: EXAM_E1(), students: STUDENT_FIXTURE.map((s) => ({ ...s })), cells: seedCells() })
 const keyOf = (sid, subid) => `${sid}:${subid}`
-/** GET /admin/exams/e1/summary：未填 = 目前名單內、沒有分數也沒標缺考的格子（待裁定 2 推薦 A） */
+/** GET /admin/exams/e1/summary（BACKEND-559）：各科統計只計目前應考名單；未填 = 名單內沒有分數也沒標缺考的格子
+    （清空過的也算）；名單外學生的成績保留在成績格但不列入統計，所以 已填 + 缺考 + 未填 = 應考人數 */
 const serverSummary = () => {
   const roster = SERVER.students.filter((s) => s.in_roster)
   return {
     exam_id: SERVER.exam.id,
     roster_count: roster.length,
     subjects: SERVER.exam.subjects.map((sub) => {
-      const vals = SERVER.students.map((st) => SERVER.cells[keyOf(st.id, sub.subject_id)]).filter(Boolean)
+      const vals = roster.map((st) => SERVER.cells[keyOf(st.id, sub.subject_id)]).filter(Boolean)
       const scores = vals.filter((v) => v.score !== null).map((v) => v.score)
+      const absent = vals.filter((v) => v.is_absent).length
       return {
         subject_id: sub.subject_id, subject_name: sub.subject_name, full_score: sub.full_score,
         scored_count: scores.length,
-        absent_count: vals.filter((v) => v.is_absent).length,
-        missing_count: roster.filter((st) => { const v = SERVER.cells[keyOf(st.id, sub.subject_id)]; return !v || (v.score === null && !v.is_absent) }).length,
+        absent_count: absent,
+        missing_count: roster.length - scores.length - absent,
         average: scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 100) / 100 : null,
         max: scores.length ? Math.max(...scores) : null,
         min: scores.length ? Math.min(...scores) : null,
@@ -1890,7 +1892,7 @@ const app = createApp({
       if (busy.value) return
       busy.value = 'publish'
       try {
-        // 待裁定 1（稿照推薦 A）：先送出；送出後仍有儲存失敗的格子就不發布
+        // 先送出成績格未儲存的格子；送出後仍有儲存失敗的格子就不發布
         if (grid.value) {
           await grid.value.flush()
           if (grid.value.failedCount > 0) {
@@ -1981,7 +1983,7 @@ const app = createApp({
     const decisions = [
       '版面：上方「‹ 考試列表」返回連結；PageHeader 標題 = 考試名稱，副標「段考・10/01（四）・三年級・應考 32 人」，下方一行狀態：草稿灰 tag +「尚未發布，家長看不到這次成績」/ 已發布綠 tag +「{published_by_name} 於 {YYYY/MM/DD HH:mm} 發布・修改分數會記錄於稽核紀錄」，有備註時同一行接「備註：…」（過長省略、滑過看全文）。下方白底面板是 el-tabs：成績輸入 / 各科平均 / 科目設定（?tab=scores|summary|subjects，預設 scores；分頁 lazy 載入，切走不卸載，未儲存的格子不會因為切分頁消失）。',
       'header 動作（缺權限隱藏，不是 disabled；按鈕 44px 高）：草稿 =「刪除」（紅框，exams:write）、「編輯資訊」（exams:write）、「發布」（主色，exams:publish）；已發布 =「編輯資訊」、「取消發布」（exams:publish）。只有 exams:read：右側灰字鎖頭「你只有檢視權限」。課輔老師（有 exams:write、沒有 exams:publish）看不到發布 / 取消發布。',
-      '發布：先 GET summary 加總各科 missing_count → 確認框「發布成績」：「發布後家長即可查看成績並收到通知。尚有 {n} 格未填，家長會看到「未登記」。確定發布嗎？」（n = 0 時省略中間那句；「未登記」與家長端 ExamScoreTable 的顯示一致）→ POST publish → success「已發布，家長會收到成績通知」並重新載入考試與成績格。422 exam_has_no_subjects → warning「請先設定科目」並切到科目設定；409 exam_already_published → warning「考試狀態已變更，已重新載入」並重新載入。按發布時成績格還有未儲存 / 失敗的格子見待裁定 1（稿照推薦 A）。',
+      '發布：先 GET summary 加總各科 missing_count → 確認框「發布成績」：「發布後家長即可查看成績並收到通知。尚有 {n} 格未填，家長會看到「未登記」。確定發布嗎？」（n = 0 時省略中間那句；「未登記」與家長端 ExamScoreTable 的顯示一致）→ POST publish → success「已發布，家長會收到成績通知」並重新載入考試與成績格。422 exam_has_no_subjects → warning「請先設定科目」並切到科目設定；409 exam_already_published → warning「考試狀態已變更，已重新載入」並重新載入。按「發布」時先送出成績格未儲存的格子；送出後仍有儲存失敗的格子就不發布，warning「有 n 格成績尚未儲存成功，請先重試後再發布」（不打 summary、不發布）。',
       '取消發布：確認框「取消發布後家長將看不到此次成績，已送出的通知不會收回。」（按鈕「取消發布」/「返回」）→ POST unpublish →「已取消發布」並重新載入；409 exam_not_published 同樣 warning「考試狀態已變更，已重新載入」並重新載入。刪除（只有草稿）：useConfirmDelete「刪除後已輸入的成績會一併刪除，確定要刪除「{name}」嗎？」→「已刪除」並導回 /exams。「編輯資訊」開 ExamFormDialog（外觀見 page-exams.html），儲存後重新載入考試與成績格（年級 / 班級變更會影響名單）。',
       '成績輸入格（ScoreGrid）：表頭固定，表格高度 = 內容區剩餘高度（頁面本身不捲，只捲表格本體）；學號、姓名、班級三欄固定在左，科目欄橫向捲動；科目欄寬至少 140，表頭「國語」下一行灰字「（滿分 100）」；列依班級、學號（後端排序）；列高 ≥ 48px，點格子內任何位置都聚焦該格輸入框。每格是已核可的 ScoreCell（component-exams.html）：未填 / 編輯中（橘角標）/ 儲存中（轉圈）/ 已儲存（綠勾 1 秒淡出）/ 錯誤（紅框 + 提示）、「缺」勾選、超出滿分即時紅框，外觀一律照元件稿（控制列「示範五種格子狀態」可一次看到）。',
       '已不在名單的學生（考後退班但已有成績）：整列內容淡化 + 姓名下「已不在名單」灰 tag，仍可編輯；只淡化儲存格內容，固定欄底色保持不透明，橫向捲動時不會透出後面的格子。',
@@ -1990,25 +1992,14 @@ const app = createApp({
       '自動儲存（useScoreAutosave）：停 800ms 後一次 PUT 所有變更的格子（控制列「最後送出」可看 body；草稿 notify_parents 固定 false）；同時只有一個請求，送出中又改的格子回應後維持未儲存再送；422 invalid_score_cells 指出的格子標錯（分數超出 0~滿分 / 學生不在應考名單 / 此科目不在考試中），同批其他格重送一次；網路錯誤或 5xx 整批標「儲存失敗，請重試」，按工具列「重試」重送。',
       '只有 exams:read：沒有工具列，格子為唯讀文字（缺考橘字「缺考」、未填「—」）；科目設定為唯讀表；各科平均照常。沒有 ws 頻道：多人同時輸入同一場考試時看不到彼此剛輸入的分數（重新整理才看到），同一格由後寫入者生效。',
       '成績格空狀態：沒有科目 → EmptyState「尚未設定科目」+「設定考試科目與滿分後才能輸入成績」+「前往科目設定」（只有 exams:write；唯讀身分說明改為「有成績編輯權限的人設定科目後，這裡才會出現成績表」、沒有按鈕）；沒有應考學生 → 表格內「此考試沒有應考學生，請確認年級或班級設定」；載入中 skeleton；載入失敗 EmptyState error「無法載入成績」+「重試」。',
-      '各科平均（ExamSummaryTable）：上方「應考 32 人」+ 灰字「平均只計有分數的學生，缺考與未填不計入；不做排名」；欄位：科目、滿分、平均（一位小數，下一行灰字「得分率 82%」；沒有分數「—」）、最高、最低、已填、缺考、未填（> 0 橘色粗體）。每次切到這個分頁、以及發布 / 取消發布 / 科目變更後重新載入（refreshKey）。沒有科目「尚未設定科目」；載入中 skeleton；載入失敗 error + 重試。',
-      '科目設定（ExamSubjectsEditor，草稿且有 exams:write 才可編輯）：上方灰字「科目順序就是成績表與家長端的顯示順序；移除科目會一併刪除該科已輸入的成績。」；每列 = 順序、科目下拉（其他列已選的 disabled）、滿分（>0、≤1000、最多一位小數）、已輸入成績數（「31 筆」）、「上移」「下移」「移除」（文字按鈕 44px 高）；下方「新增科目」+「n / 20」，右側「還原變更」（有變更才出現）與「儲存」（有變更才可按）。儲存前若移除了已有成績的科目 → 確認框「移除「國語」會刪除已輸入的 31 筆成績，確定嗎？」（多科逐行列出，按鈕「移除並儲存」）；成功「已儲存科目設定」並重新載入考試與成績格。',
+      '各科平均（ExamSummaryTable）：上方「應考 32 人」+ 灰字「平均只計有分數的學生，缺考與未填不計入；不做排名」；欄位：科目、滿分、平均（一位小數，下一行灰字「得分率 82%」；沒有分數「—」）、最高、最低、已填、缺考、未填（> 0 橘色粗體）。未填 = 目前應考名單內沒有分數也沒標缺考的格子（清空過的也算）；已填、缺考、平均、最高、最低也只計目前名單（名單外學生的成績保留在成績格但不列入統計），所以每科 已填 + 缺考 + 未填 = 應考人數（BACKEND-559）。每次切到這個分頁、以及發布 / 取消發布 / 科目變更後重新載入（refreshKey）。沒有科目「尚未設定科目」；載入中 skeleton；載入失敗 error + 重試。',
+      '科目設定（ExamSubjectsEditor，草稿且有 exams:write 才可編輯）：上方灰字「科目順序就是成績表與家長端的顯示順序；移除科目會一併刪除該科已輸入的成績。」；每列 = 順序、科目下拉（其他列已選的 disabled）、滿分（>0、≤1000、最多一位小數）、已輸入成績數（「30 筆」）、「上移」「下移」「移除」（文字按鈕 44px 高）；下方「新增科目」+「n / 20」，右側「還原變更」（有變更才出現）與「儲存」（有變更才可按）。儲存前若移除了已有成績的科目 → 確認框「移除「國語」會刪除已輸入的 30 筆成績，確定嗎？」（多科逐行列出，按鈕「移除並儲存」）；成功「已儲存科目設定」並重新載入考試與成績格。',
       '科目設定錯誤：409 full_score_below_existing → 該列滿分紅框 +「滿分不可低於已輸入的最高分（目前最高 95 分）」（用 details.max_score，例如把國語滿分改成 90 儲存）；409 exam_published → 紅色 alert 顯示後端 message 並重新載入（變成唯讀）；422 invalid_subject（科目在參考資料被停用，控制列可勾）→ 紅色 alert + 該列「已停用」紅框 tag 與說明，移除該科才能儲存。全部移除時顯示「考試至少要有一個科目：請新增科目，或按「還原變更」」且不能儲存（後端 items 1~20）。已發布：info「已發布的考試不可修改科目」+ 唯讀表；沒有任何科目：「尚未設定科目，請新增後才能輸入成績」。',
-      '離開保護：成績格有未儲存 / 儲存中 / 失敗的格子時離開（返回連結、側欄、瀏覽器上一頁）→ 先嘗試送出，仍未完成 → confirmDiscardChanges（「放棄變更」/「繼續編輯」）。會重新載入成績格的動作（取消發布、編輯資訊、科目儲存）同樣先送出，送不出去時先確認；發布見待裁定 1。',
+      '離開保護：成績格有未儲存 / 儲存中 / 失敗的格子時離開（返回連結、側欄、瀏覽器上一頁）→ 先嘗試送出，仍未完成 → confirmDiscardChanges（「放棄變更」/「繼續編輯」）。會重新載入成績格的動作（取消發布、編輯資訊、科目儲存）同樣先送出，送不出去時先確認；發布時的處理見發布那一條。',
       '找不到（404）：EmptyState（document icon）「找不到此考試」+「這場考試可能已被刪除，或網址不正確」+「回考試列表」。頁面載入中 skeleton；載入失敗 EmptyState error「無法載入考試」+「重試」。',
       '平板 1024：本頁不設 meta.tablet，側欄展開時內容寬約 770px，可見約 3 科、其餘橫向捲動；收合側欄後約可見 5 科。header 按鈕、分頁標籤、工具列控制項 44px；「缺」勾選沿用元件稿尺寸，平板上也可以直接輸入「缺」或「-」。',
     ]
-    const openQuestions = [
-      {
-        question: '按「發布」時，成績格還有未儲存或儲存失敗的格子怎麼處理？（task 沒有規定）',
-        optionA: '先送出未儲存的格子；送出後仍有儲存失敗的格子就不發布，提示「有 n 格成績尚未儲存成功，請先重試後再發布」（推薦，稿已照此畫：控制列選「網路錯誤」後改一格再立刻按發布可看）',
-        optionB: '先送出未儲存的格子；失敗的格子不擋發布，確認框多一行「有 n 格儲存失敗，不會包含在這次發布中」',
-      },
-      {
-        question: '「未填」怎麼算？後端 summary 目前是「名單人數 − 有成績列的人數」：清空過的格子仍有成績列（分數與缺考皆空）而不算未填，名單外學生的成績列還會抵掉未填數，發布確認的未填格數可能偏少。',
-        optionA: '只算目前名單內、既沒有分數也沒標缺考的格子（清空過的也算未填、名單外學生不影響）；需開新 BACKEND task 修正 get_exam_summary 的 missing_count（推薦，稿的數字照此計算）',
-        optionB: '維持後端現行算法、不改後端；各科平均表的已填 + 缺考 + 未填可能不等於應考人數',
-      },
-    ]
+    const openQuestions = []
 
     return {
       meta, decisions, openQuestions, roles: ROLES, viewAs, perms, can, user, device, notesOpen: ref(false),
