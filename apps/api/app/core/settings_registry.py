@@ -167,7 +167,10 @@ class HomeworkWindow(_SettingModel):
     model_config = ConfigDict(title="作業日期範圍")
 
     past_days: int = Field(
-        ge=0, le=365, title="作業可編輯的過去天數", description="可新增或編輯今天以前幾天的作業"
+        ge=0,
+        le=365,
+        title="作業可新增的過去天數",
+        description="可新增作業、設定整體狀態與預計可接送時間的過去天數（既有項目的修改與刪除不受限）",
     )
     future_days: int = Field(
         ge=0, le=60, title="作業可預先新增的天數", description="可預先新增今天以後幾天的作業"
