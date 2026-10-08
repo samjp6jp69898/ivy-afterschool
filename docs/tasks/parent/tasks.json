@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 118,
-  "last_updated": "2026-10-08T01:26:13Z",
+  "version": 119,
+  "last_updated": "2026-10-08T01:38:50Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -222,7 +222,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/auth.ts",
       "source_ref": "FE:src/parent/api/auth.ts::liffLogin",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-053",
@@ -253,9 +253,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-p",
+        "notes": "9 條 red_case 皆有同名測試且斷言具體行為（liff-login / bind 的 JSON body 深等於 {id_token} / {code}、回傳深等於、needs_binding 的 name_hint、400 binding_code_expired 與 500 原樣、三個端點 401 時 parentRefreshHttp 沒有任何請求、logout 不帶 body 且 resolve undefined）。實跑 tdd.run 9/9 綠，vitest JSON 報告的名稱與 red_cases 逐條比對一致。1313eef（只有 spec）先於 a553c8a（只有實作）。web-lint 乾淨、web-typecheck 全專案 exit 0。LiffLoginResult 與 bind 回傳的 parent 和 app/schemas/auth.py 的 LiffLoginOut / ParentAuthOut 逐欄一致（Pydantic schema 對 TS compiler API 的腳本比對），請求欄位對照 LiffLoginIn / BindIn。id_token 只放在請求 body，家長端沒有任何 console 輸出或 storage 寫入 token。突變：body 鍵改名、logout 回傳 data、從 http.ts 的 noRefreshPaths 拿掉 logout，各有測試轉紅。殘留：無。"
       }
     },
     {
@@ -342,7 +342,7 @@
       "granularity_unit": "store",
       "target_path": "apps/web/src/parent/stores/children.ts",
       "source_ref": "FE:src/parent/stores/children.ts::useChildrenStore",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "PARENT-006",
@@ -382,9 +382,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-p",
+        "notes": "20 條 red_case 皆有同名測試且斷言具體行為（items / loaded / loading / error / selectedId 與 localStorage 的值）。實跑 tdd.run 20/20 綠，名稱逐條比對一致。02405a1（spec）先於 1660d49（實作）；0e40aa9 的三條（過期的失敗回應、loading 持續到最新請求、seed 複製陣列）在實作之後補上，依 testing_conventions §1 以突變證明會紅：拿掉失敗回應的版本檢查、拿掉 finally 的版本檢查、seed 不複製陣列，各自恰好讓對應那條轉紅。其他突變：拿掉共用進行中的請求、seed 不丟棄進行中的載入、localStorage 寫入不防錯，皆有測試轉紅。實作符合 description：非 force 共用 pending、force 以 requestVersion 取代、成功清 error、失敗保留 items、seed 複製並丟棄進行中的載入、ensureSelected 遇空清單移除 key、clear 全部重設；localStorage 的讀寫（含存取 localStorage 本身）都在 try 內。持久化內容只有選中小孩的 id（parent_selected_child_v1），沒有姓名或其他個資。web-lint 乾淨、typecheck 無錯。殘留：被 force 取代的 load() promise 在舊請求結束時就 resolve（此時 loading 仍為 true），呼叫端要看 store 狀態而不是 await 的時點（此行為由 red_case 固定）。"
       }
     },
     {
@@ -1394,7 +1394,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/ChildContextHeader.vue",
       "source_ref": "FE:src/parent/components/ChildContextHeader.vue::variant",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "PARENT-006",
@@ -1435,9 +1435,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-p",
+        "notes": "17 條 red_case 皆有同名測試且斷言具體行為（身分卡文字與各欄、null 欄位省略、單一小孩為 div 不可點、多位為 button[aria-haspopup=dialog] 含 expand_more 與視覺隱藏文字、sheet 列出全部並標 aria-current / is-selected / check、點其他小孩 emit select 並關閉、點目前小孩只關閉、縮到一位時關閉且之後不自己重開、照片失敗以網址記錄並在新網址重試、罕用字首字、attrs 綁身分卡且沒有 warn、暫停膠囊只出現在暫停的小孩、?raw 版面規則）。tdd.run 17/17 綠、名稱逐條比對一致。635fcd8、bb2c782、2066dad（spec）先於 540d222（實作）。對照已核可稿 parent-component-child-context-header.html：decisions 10 條逐條符合；元件 template 結構與稿相同，scoped CSS 與稿的 .cch / .cch-option 規則逐條相同（稿的 m3-state 改為元件內的 ::before state layer）；首字用 Array.from、失敗以網址記錄是依 description（稿用 slice 與 id）。暫停學生依稿 decision 10 只顯示 StatusPill（後端擋暫停由 BACKEND-557 處理）。expand_more、check 在字型子集內。突變：點目前小孩也 emit、拿掉縮到一位時的關閉、失敗改以 id 記錄、首字用 [0]、膠囊不限暫停，各有測試轉紅。web-lint 乾淨、typecheck 無錯。殘留：無。"
       }
     },
     {
@@ -2206,7 +2206,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/PickupPersonListItem.vue",
       "source_ref": "FE:src/parent/views/PickupView.vue::openEditPerson",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "PARENT-016",
@@ -2236,9 +2236,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-p",
+        "notes": "9 條 red_case 皆有同名測試且斷言具體行為（姓名與「關係 · 電話」、img 的 src / alt=\"\" / loading=lazy、頭像 aria-hidden、整列只有一顆 standard 刪除鈕且 aria-label 為「刪除 {name}」、點刪除 emit delete(person)、點列 / 文字 / 頭像不 emit、無照片與 error 時退回首字、換網址重試、罕用字首字、電話原樣且沒有連結、?raw 版面規則）。tdd.run 9/9 綠、名稱逐條比對一致。63bdcbc（spec）先於 88a7eb5（實作）。對照已核可稿 parent-component-pickup-person-list-item.html：decisions 7 條逐條符合，template 結構與 .ppl CSS 與稿逐條相同，刪除鈕為 on-surface-variant 色、48px 觸控區（M3IconButton standard）。突變：首字用 [0]、拿掉 loading=lazy、整列點擊 emit，各有測試轉紅。web-lint 乾淨、typecheck 無錯。殘留：①delete 圖示不在 icons.css 的字型子集內，真實瀏覽器顯示成亂碼（risk_notes 已記，由 PARENT-193 補字型子集，不因此打回）；②失效網址只記最近一個：A 失敗 → B 失敗 → 回到 A 會再試一次（稿 decision 2 為換網址即重設，影響只是一次多餘的請求）。"
       }
     },
     {
@@ -2585,7 +2585,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/leaves.ts",
       "source_ref": "FE:src/parent/api/leaves.ts::uploadLeaveAttachment",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "BACKEND-355",
@@ -2622,9 +2622,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-p",
+        "notes": "13 條 red_case 皆有同名測試且斷言具體行為（分頁 params、reason 為空字串 / 純空白 / undefined 時 body 沒有 reason 鍵、欄位原樣送出、multipart 只有 file 欄位且 Content-Type 不含 JSON、401 refresh 後兩次都是含檔案的 FormData、413 / 415 / 409 / 404 原樣、取消不帶 body、附件 url:null 在列表 / 取消 / 上傳回應原樣、路徑 id 編碼且 UUID 不變）。tdd.run 13/13 綠、名稱逐條比對一致。253f94e（規格）→ 77d6ef9（spec）→ 84665f1（實作）。ParentLeave 13 欄、LeaveAttachment（url 為 string | null）、Page<ParentLeave> 與 ParentLeaveOut / ParentLeaveAttachmentOut 逐欄一致，請求對照 ParentLeaveCreateIn 與 cancel / upload handler。突變：reason 不 trim、leavePath 不編碼（leaves.spec 與 pathEncoding.spec 都轉紅）、file 欄位改名、取消帶 {}，各有測試轉紅。per-request multipart 標頭與 FRONTEND-294 的 interceptor 互為備援：只拿掉其中一個時測試全綠（等價突變），兩個同時拿掉時 3 條上傳測試轉紅，測試仍守住整體行為。web-lint 乾淨、typecheck 無錯。殘留：depends_on 未列實際使用的 FRONTEND-006 buildFormData（已 done）。"
       }
     },
     {
@@ -3469,7 +3469,7 @@
       "granularity_unit": "api_client",
       "target_path": "apps/web/src/parent/api/exams.ts",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "PARENT-006",
@@ -3496,9 +3496,9 @@
         "notes": "新增 pathEncoding.spec.ts 一個檔案集中驗證所有函式；各 client 既有 spec 不改。新建立的 client（PARENT-007 / 133）由各自 task 的實作者從一開始就編碼，不在本 task 的修改範圍；007 沒有路徑 id，133 的函式納入本檔的行為測試與掃描。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-p",
+        "notes": "4 條 red_case 皆有同名測試且斷言具體行為：16 個把 id 放進路徑的函式（含 leaves 3 個）傳入 '../../me?x=1#y' 時，URL 該段恰為 encodeURIComponent 後的值、沒有 ? 與 #、層數不變；傳 UUID 時 URL 與修正前逐字相同；靜態掃描八個 client 檔並確認檔案都有讀到；掃描函式自測。tdd.run 4/4 綠、名稱逐條比對一致。a99c3ae（spec）先於 a04c79f（只改七個 client 的 .ts），既有 7 個 spec 未修改、33 條全綠。反例驗證：在 parent/api 暫時新增一個 ${id} 未編碼的 client，掃描那條轉紅（./reviewR9pProbe.ts: ['id']，已刪除）；把 homework.ts 改回未編碼，行為與掃描兩條都轉紅。web-lint 乾淨、typecheck 無錯。殘留（不擋，建議另開 task 一併處理後台）：①encodeURIComponent 不編碼 '.'，id 恰為 '..' 或 '.' 時仍是 dot-segment；vue-router 會把 #/exams/%2E%2E 解析成 examId '..'，getChildExam(c, '..') 經瀏覽器 URL 正規化後打到 /api/parent/children/c/，不是考試詳情（只限 GET、本人權限）。要讓路徑 helper 拒絕 '.' / '..'（或 view 先驗 UUID）才擋得住，後台 api client 有同樣情況。②靜態掃描只看 template literal：字串串接（'/parent/x/' + id）、用串接組成的 *Path helper、${encodeURIComponent(a) + fn(b)} 都不會被擋；目前程式碼沒有這些寫法。"
       }
     },
     {
