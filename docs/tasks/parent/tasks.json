@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 122,
-  "last_updated": "2026-10-08T01:43:19Z",
+  "version": 123,
+  "last_updated": "2026-10-08T01:47:37Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -1960,7 +1960,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/PickupReplyMessage.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r9b",
       "depends_on": [
         "FRONTEND-003",
@@ -1988,9 +1988,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-q",
+        "notes": "6 條 red_case 皆有同名測試（vitest verbose 名稱逐條比對一致）且斷言具體行為；tdd.run 23/23 綠；f0eb3c0（spec，元件尚不存在）先於 7ceaca4（實作）。實作 commit 內 spec 改兩處：v-html 斷言改只看 <template> 到 <style 之間（script 說明註解含該字，原斷言會誤紅；XSS 另由「無 b / a 元素、文字為字面」的 DOM 斷言把關）、blocks 輔助補型別；皆未放寬。型別 import 自 parent/api/pickupRequests，與 ParentPickupRequestOut 一致；後端 reply_ready_eta 以 format_hm 輸出 HH:MM，自動回覆與員工只給 ETA 時訊息首行都是「預計 HH:MM 可接送」，與省略重複行的比對一致。對照已核可稿 parent-component-pickup-reply-message.html：decisions 10 條逐條符合（1、8、9、10 為 DOM 斷言；2~7 為 DOM + ?raw）；與稿的差異是空白訊息視同無訊息、compact 取第一個非空行，屬合理強化且有測試。反例：<b> / <a> / <img onerror> 只顯示字面且不執行；auto / staff / null 來源；replied_at 跨午夜（UTC 16:30 → 00:30）；compact 首行為空行。突變：泡泡改 v-html、來源對調、空白訊息當有訊息、compact 不跳空行、拿掉 reduced-motion 區塊、不省略重複行，各有測試轉紅。真實 Chromium（390 寬暫時 harness）實測：區塊順序、ETA 24px 與 primary 時間、泡泡圓角 4/16/16/16 與長網址換行無水平溢出、compact 單行省略、等待進度條動畫且 reduced-motion 下靜止為 100% 寬 0.38、轉圈 16px、深色主題 token 正確。web-lint 乾淨、web-typecheck 0 錯。殘留：①.prm-time 的 body-small 字級沒有 DOM 斷言（實作與稿一致、實測正確）；②smart_toy、hourglass_top 字形已由 PARENT-193（dec5029，審查中）補進子集，實測可正常渲染。"
       }
     },
     {
@@ -2000,7 +2000,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/pickup/PickupProgressSteps.vue",
       "source_ref": "FE:src/parent/views/PickupNoticeView.vue::steps",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r9b",
       "depends_on": [
         "FRONTEND-003",
@@ -2028,9 +2028,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-q",
+        "notes": "6 條 red_case 皆有同名測試且斷言具體（名稱逐條比對一致）；tdd.run 22/22 綠；99e0365（spec）先於 92b19df（實作），實作 commit 未改 spec。型別 import 自 parent/api/pickupRequests，開放狀態取 shared/types/api 的 PICKUP_OPEN_STATUSES。對照已核可稿 parent-component-pickup-progress-steps.html：decisions 8 條逐條符合（3、4、6 為 DOM 斷言；1、2、5、8 為 DOM + ?raw；7 為移植說明）；與稿的差異是 cancelled_at 缺漏時顯示「已取消」不帶「（—）」，有測試。反例：pending 直接 arrived、completed 但沒按我到了（第 3 步完成、不顯示時間）、到達後才取消（前三步維持完成）、completed 無接走人、終態沒有目前步驟與提示、時間跨午夜。突變：取消時間缺漏仍帶（—）、取消漏掉時間、completed 不算已到達、老師已確認不看 arrived_at、終態仍有目前步驟，各有測試轉紅。真實 Chromium 實測：完成標記 primary、目前步驟 10px 實心點與 500 字重、提示 primary 色、連接線在下一步完成時轉 primary、終態未完成步驟的標記與文字 opacity 0.38、結束列 surface-container-high 圓角 12px、視覺隱藏狀態文字 1×1。元件沒有動畫，reduced-motion 無影響。web-lint 乾淨、typecheck 0 錯。殘留：①步驟名稱 / 提示 / 時間的字級 class 沒有 DOM 斷言（與稿一致、實測正確）；②API 沒有 acknowledged_at，取消或逾時前老師若已確認，「老師已確認」仍顯示未完成（稿同此設計）；③cancel、timer_off 字形已由 PARENT-193（審查中）補進子集，實測可正常渲染。"
       }
     },
     {
@@ -2523,7 +2523,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/attendance/AttendanceCalendar.vue",
       "source_ref": "FE:src/parent/views/AttendanceView.vue::calendarDays",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r9b",
       "depends_on": [
         "FRONTEND-005",
@@ -2551,9 +2551,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-q",
+        "notes": "6 條 red_case 皆有同名測試且斷言具體（名稱逐條比對一致）；tdd.run 26/26 綠；46c6bf5（spec）先於 0b1f2a1（實作）。實作 commit 內 spec 修兩處測試端錯誤：toISOString 檢查先去掉註解（說明註解寫「不用 toISOString().slice」會誤紅，Date.UTC 斷言與 TZ stub 的行為測試仍在）、「月外日期不畫缺席」的計數限縮到 .att-cal__grid（圖例色塊依稿也帶 att-day--absent，原斷言必紅）；皆未放寬。型別 import 自 parent/api/attendance，標籤取 FRONTEND-005 statusLabels。對照已核可稿 parent-component-attendance-calendar.html：decisions 10 條逐條符合（4、5、9 為 DOM 斷言；1、2、3、6、7、8、10 為 DOM + ?raw）；圖例加 role=group 屬合理強化。反例：月初週日 / 週六、閏年二月、跨年、TZ 為 Pacific/Kiritimati 與 Pacific/Pago_Pago、月外日期、格式錯誤的月份、休息日帶出勤狀態、請假 other / null、今天在別的月份。突變：拿掉 is-today、選中改 secondary 底、拿掉今天外框、今天且選中少一圈、aria-pressed 只在選中時帶、請假改 secondary、今天的 expected 算未登記、UTC 建構配本地 getter、拿掉 focus ring，各有測試轉紅（本地建構配本地 getter 是等價突變，不算缺口）。真實 Chromium 實測（390 寬、M3Card padding sm）：7 欄、格 44×52、今天 2px primary 內框 + 粗體、選中 primary 實心 + on-primary 蓋過狀態底色、今天且選中雙環、請假 tertiary / 已離班 secondary / 未登記 surface-container-high、Tab 焦點 2px on-surface 外框與 0.12 state layer、Enter / Space 都 emit select、深色主題 token 正確。web-lint 乾淨、typecheck 0 錯。殘留：①格寬由宿主決定，360 寬時 39.7px（低於 44，高 52），由 PARENT-132 版面處理；②remove 字形已由 PARENT-193（審查中）補進子集，實測可正常渲染。"
       }
     },
     {
@@ -2922,7 +2922,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/exams/ExamListItem.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r9b",
       "depends_on": [
         "FRONTEND-003",
@@ -2946,9 +2946,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-q",
+        "notes": "2 條 red_case 皆有同名測試且斷言具體（名稱逐條比對一致）；tdd.run 12/12 綠；9ca3e36（spec）先於 2d7c3cd（實作），實作 commit 未改 spec。型別 import 自 parent/api/exams，與 ParentExamListItemOut 一致。exam_id 以 encodeURIComponent 編成單一路徑段（稿未編碼，依家長端路徑 id 一律編碼的要求強化，有測試）。對照已核可稿 parent-component-exam-list-item.html：decisions 7 條逐條符合（1、5 為 DOM 斷言；2、3、4 為 DOM + ?raw；6 只有 ?raw，已在真實瀏覽器實測；7 屬 ExamsView）。突變：拿掉 exam_id 編碼、顯示公布日期、RouterLink 改純 a，各有測試轉紅。真實 Chromium 實測：Tab 焦點 2px primary 內縮外框 + 0.12 state layer、Enter 導向 #/exams/e1、點 id 為 a/b?c 的列導向 #/exams/a%2Fb%3Fc、長名稱兩行截斷且無水平溢出、類型標籤上限 96px 省略、分隔線從第二列起。web-lint 乾淨、typecheck 0 錯。殘留：實際列高為單行名稱 76px、兩行 100px（min-height 72，與稿同一組 CSS）；parent-page-exams 稿 decision 4 寫骨架與列「同為 72px」，PARENT-153 做骨架時以實測為準。"
       }
     },
     {
@@ -2958,7 +2958,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/parent/components/exams/ExamScoreTable.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-parent-r9b",
       "depends_on": [
         "PARENT-001",
@@ -2982,9 +2982,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-q",
+        "notes": "3 條 red_case 皆有同名測試且斷言具體（名稱逐條比對一致）；tdd.run 14/14 綠；790282c（spec）先於 eeb5501（實作）。實作 commit 內 spec 只在缺考測試補「不加圖示」斷言（更嚴，突變可證）。型別取自 parent/api/exams 的 ParentExamDetail，與 ParentExamSubjectScoreOut 一致（分數以 JSON number 輸出）。對照已核可稿 parent-component-exam-score-table.html：decisions 6 條逐條符合（3、5、6 為 DOM 斷言；1、2、4 為 DOM + ?raw）；與稿的差異是非有限分數（NaN / Infinity / undefined）也顯示「未登記」，屬合理強化。反例：缺考且留有舊分數 → 缺考、87.96 → 88、66.66 → 66.7、滿分 99.5、subjects 在空與非空之間切換。突變：分數判斷先於缺考、缺考顯示未登記、缺考加圖示、一律 toFixed(1)、加總分列，各有測試轉紅。真實 Chromium 實測：欄寬 200 / 84 / 72、分數與滿分靠右、表頭 40px、caption 1×1、缺考 error 色、未登記 on-surface-variant 400 字重、備註保留換行、空狀態不渲染 table。web-lint 乾淨、typecheck 0 錯。殘留：後端 score 為 Numeric(6,2)，依 description 與稿四捨五入到一位（59.95 顯示 60）；若要避免及格線附近被誤讀需另改規格，不擋本 task。"
       }
     },
     {
