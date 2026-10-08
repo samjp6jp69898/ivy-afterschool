@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 159,
-  "last_updated": "2026-10-07T11:27:38Z",
+  "version": 160,
+  "last_updated": "2026-10-08T01:26:13Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -644,7 +644,7 @@
     {
       "id": "FRONTEND-028",
       "title": "實作 bootstrap.ts 與 main.ts：建立後台 app、注入 http handler、掛載",
-      "description": "建立 `apps/web/src/bootstrap.ts`：\n```ts\nexport function createAdminApp(opts?: { history?: RouterHistory }): { app: App; router: Router; pinia: Pinia }\n```\n- `createApp(App)`、`createPinia()`、`createAdminRouter(opts.history)`（FRONTEND-026）。\n- `setAdminHttpHandlers`（FRONTEND-020）：\n  - `refresh`：`const user = await authApi.refresh(); useAuthStore().setUser(user)`（refresh 回來的權限可能已變更）。\n  - `authFailure`：`useAuthStore().reset()`；目前路由非 public 時 `router.replace({ path: '/login', query: { redirect: currentRoute.fullPath } })`。\n  - `passwordChangeRequired`：`router.replace('/change-password')`。\n- `app.config.errorHandler`：未捕捉錯誤以 `ElMessage.error(errorMessage(err, '發生未預期的錯誤'))` 顯示（`isCanceled` 略過）。\n`apps/web/src/main.ts` 取代 INFRA-005 的佔位：`import 'element-plus/dist/index.css'`、`createAdminApp().app.mount('#app')`。\n- 測試策略：本 task 的測試一律 `vi.mock('@/router/viewLoaders')` 回傳 stub 元件（不載入真實 view），因此不需等 view task 完成即可轉綠，view 完成後也不受其內部依賴影響。\n\n**驗收標準**\n- authFailure 會清空登入狀態並導向 /login 帶 redirect。\n- refresh handler 呼叫 refresh endpoint 並更新 store 的權限。\n- passwordChangeRequired 導向 /change-password。",
+      "description": "建立 `apps/web/src/bootstrap.ts`：\n```ts\nexport function createAdminApp(opts?: { history?: RouterHistory }): { app: App; router: Router; pinia: Pinia }\n```\n- `createApp(App)`、`createPinia()`、`createAdminRouter(opts.history)`（FRONTEND-026）。\n- `setAdminHttpHandlers`（FRONTEND-020）：\n  - `refresh`：`const user = await authApi.refresh(); useAuthStore().setUser(user)`（refresh 回來的權限可能已變更）。\n  - `authFailure`：`useAuthStore().reset()`；目前路由非 public 時 `router.replace({ path: '/login', query: { redirect: currentRoute.fullPath } })`。\n  - `passwordChangeRequired`：`router.replace('/change-password')`。\n- `app.config.errorHandler`：未捕捉錯誤以 `ElMessage.error(errorMessage(err, '發生未預期的錯誤'))` 顯示（`isCanceled` 略過）。\n`apps/web/src/main.ts` 取代 INFRA-005 的佔位：`import 'element-plus/dist/index.css'`、`import '@/styles/base.css'`（在 element-plus 樣式之後）、`createAdminApp().app.mount('#app')`。\n- 新增 `apps/web/src/styles/base.css`（全域基底樣式；已核可設計稿 page-login / page-error / page-change-password / page-admin-shell 都假設有，沒有的話整頁置中的頁面會多出 body 預設的 8px 邊與捲軸）：`body { margin: 0 }`、`*, *::before, *::after { box-sizing: border-box }`、`body` 的字型 / 文字色 / 背景用 Element Plus 變數（`var(--el-font-family)`、`var(--el-text-color-primary)`、`var(--el-bg-color-page)`）。\n- 測試策略：本 task 的測試一律 `vi.mock('@/router/viewLoaders')` 回傳 stub 元件（不載入真實 view），因此不需等 view task 完成即可轉綠，view 完成後也不受其內部依賴影響。\n\n**驗收標準**\n- authFailure 會清空登入狀態並導向 /login 帶 redirect。\n- refresh handler 呼叫 refresh endpoint 並更新 store 的權限。\n- passwordChangeRequired 導向 /change-password。",
       "granularity_unit": "config",
       "target_path": "apps/web/src/bootstrap.ts",
       "source_ref": null,
@@ -665,7 +665,8 @@
         "red_cases": [
           "createAdminApp auth failure resets store and redirects：createAdminApp({history: createMemoryHistory()})、已登入停在 /students → 觸發 GET /admin/classes 401 且 POST /admin/auth/refresh 401 → useAuthStore().status === 'anonymous'、router.currentRoute.value.fullPath === '/login?redirect=/students'",
           "createAdminApp refresh handler updates permissions：GET /admin/students 第一次 401、POST /admin/auth/refresh 回 user.permissions ['students:read','students:write']、重試 200 → 完成後 useAuthStore().hasPermission('students:write') === true",
-          "createAdminApp password change required redirects：GET /admin/students 回 403 password_change_required → router.currentRoute.value.path === '/change-password'"
+          "createAdminApp password change required redirects：GET /admin/students 回 403 password_change_required → router.currentRoute.value.path === '/change-password'",
+          "createAdminApp loads global base styles：以 readFileSync 讀 src/styles/base.css 與 src/main.ts，base.css 含 body margin 0 與全域 border-box 規則；main.ts 在 'element-plus/dist/index.css' 之後匯入 '@/styles/base.css'（拿掉任一條 → 轉紅）"
         ],
         "run": "just web-test src/bootstrap.spec.ts -t \"createAdminApp\"",
         "notes": ""

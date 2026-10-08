@@ -33,6 +33,7 @@
 - happy-dom 不計算版面：版面相關的 decision（固定 footer、只有 body 捲動等）用 class / 結構斷言加 `?raw` 讀原始碼斷言樣式規則，並在回報說明；必要時用 Playwright 在真實 Chromium 量測。
 - vitest 對 `*.css?raw` 回傳空字串（`.vue?raw` 正常），斷言 CSS 檔內容要用 `readFileSync` 搭配上面的 `resolve(dirname(fileURLToPath(import.meta.url)), ...)` 讀真實檔案。
 - happy-dom 不實作「在欄位按 Enter 隱式送出表單」，在測試裡按 Enter 驗不出任何東西。瀏覽器的隱式送出是對預設送出鈕派發 click，所以測試改用對送出鈕呼叫 `element.click()` 模擬這條路徑。
+- 要靠點送出鈕觸發 `submit` 的測試，`<form>` 必須掛在 `document` 上（`mount(..., { attachTo: document.body })`），否則 happy-dom 不會送出；Element Plus 的 popover / tooltip 以 `setTimeout` 開關，斷言前要推進 fake timers。
 
 ## 3. 測試分層
 

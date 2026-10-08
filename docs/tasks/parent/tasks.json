@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 117,
-  "last_updated": "2026-10-07T11:02:48Z",
+  "version": 118,
+  "last_updated": "2026-10-08T01:26:13Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -3494,6 +3494,41 @@
         ],
         "run": "just web-test src/parent/api/pathEncoding.spec.ts -t \"parent api path encoding\"",
         "notes": "新增 pathEncoding.spec.ts 一個檔案集中驗證所有函式；各 client 既有 spec 不改。新建立的 client（PARENT-007 / 133）由各自 task 的實作者從一開始就編碼，不在本 task 的修改範圍；007 沒有路徑 id，133 的函式納入本檔的行為測試與掃描。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "PARENT-193",
+      "title": "家長端圖示字型子集補齊缺字，並加掃描 spec 防止再漂移",
+      "description": "`apps/web/src/parent/styles/icons.css` 的自架 Material Symbols Rounded 子集（`apps/web/src/parent/assets/fonts/material-symbols-rounded-subset.woff2`，PARENT-014）只含 34 個圖示；家長端元件與已核可設計稿用到的圖示有缺。實測 PARENT-100 的 `delete` 在 390×844 顯示成被 1em 夾盒裁掉的亂碼（`expand_more`、`check` 正常）。已知缺：`delete`、`add_a_photo`、`chat`、`warning`、`link`、`hourglass_top`、`smart_toy`、`cancel`、`timer_off`、`remove`；已核可的家長端設計稿（`docs/mockups/parent-*.html`，含本輪新稿）另有用到的也要涵蓋。\n\n**做法**：①掃描 `apps/web/src/parent/` 原始碼（M3Icon 的 `name` / `icon` 屬性、字串常數與對照表，例如 `parent/utils/notificationEventIcon.ts`）與 `docs/mockups/parent-*.html` 用到的 Material Symbols 名稱，求聯集；②依 `icons.css` 檔頭註解的方式重抓子集（Google Fonts CSS API 帶 `icon_names=<逗號分隔、字母序清單>`，FILL 軸保留 0..1，以桌機 Chrome User-Agent 請求，下載 fonts.gstatic.com 的 woff2）；下載的檔案一律先放在自己 scratchpad 的獨立空目錄，驗證檔頭 magic 為 `wOF2` 與大小合理後才複製進 repo，不要從該目錄執行任何東西；③更新 `icons.css` 檔頭「子集涵蓋的圖示」清單（字母序）；④新增 spec 驗證：src/parent 與已核可家長端稿用到的圖示名稱都在該清單內、清單字母序且不重複、woff2 檔頭有效且小於 60 KB。字型確實包含新增 glyph 這一點用 fontTools 或 headless Chromium 渲染驗證，結果記在回報（不納入 spec）。純資源與測試，不改任何元件行為。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "granularity_unit": "config",
+      "target_path": "apps/web/src/parent/styles/icons.css",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-parent-r9",
+      "depends_on": [
+        "PARENT-014"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/web/src/parent/styles/icons.spec.ts",
+        "markers": [
+          "vitest"
+        ],
+        "red_cases": [
+          "parent icons subset covers every icon used in src/parent：掃描 src/parent 下 .vue / .ts（排除 spec）出現的 Material Symbols 名稱（M3Icon 的 name / icon 屬性與字串常數對照表），每個名稱都在 icons.css 檔頭「子集涵蓋的圖示」清單內；缺任何一個 → 失敗並列出缺的名稱",
+          "parent icons subset covers every icon used by approved parent mockups：掃描 docs/mockups/parent-*.html 用到的 Material Symbols 名稱，皆在清單內",
+          "parent icons subset list is sorted and unique：清單為字母序、無重複項",
+          "parent icons subset woff2 has a valid header：woff2 檔頭 magic 為 wOF2，檔案大小小於 60 KB"
+        ],
+        "run": "just web-test src/parent/styles/icons.spec.ts -t \"parent icons subset\"",
+        "notes": "spec 讀 css / html 一律用 readFileSync + resolve(dirname(fileURLToPath(import.meta.url)), ...)（vitest 對 *.css?raw 回傳空字串）。字型內容驗證（新增 glyph 真的存在）用 fontTools 或 headless Chromium 在 390×844 渲染確認，並記在回報。"
       },
       "review": {
         "status": "pending",
