@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 126,
-  "last_updated": "2026-10-08T08:32:10Z",
+  "version": 127,
+  "last_updated": "2026-10-08T08:33:08Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -3553,7 +3553,7 @@
         "PARENT-014"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "掃描器只認 icons.spec.ts 註解列出的寫法：動態拼接的圖示名稱（例如 `${kind}_off`）或由 API 回傳的名稱掃不到，新增這類寫法時要補掃描規則或改成可掃描的寫法。待核可的家長端頁面稿（child-hub、attendance、exams、exam-detail、leaves、pickup）用到的圖示已納入字型，但 spec 只檢查已核可稿：這六張核可後若又新增圖示，spec 會轉紅，需重取子集（步驟見 icons.css 檔頭）。\n【review-r9-p 打回】icons.spec.ts 的 tableName 規則（`[A-Z][A-Z0-9_]*ICONS?[A-Z0-9_]*`）要求 ICON 前至少一個字元，以 ICON 開頭的全大寫常數（ICONS、ICON_MAP）不會被當成對照表。既有的 components/bind/BindCodeErrorNotice.vue `const ICONS: Record<Tone, string> = { error: 'error', warning: 'hourglass_top', info: 'info' }` 因此沒被掃描：把其中一個值改成清單外的名稱（例如 help_center），spec 仍全綠。驗收：ICONS、ICON_MAP 這類名稱（含 `: Record<...>` 型別註記）也要被當成對照表；掃描器自測補這兩種寫法；把 BindCodeErrorNotice 的 ICONS 換成清單外的圖示時，「covers every icon used in src/parent」必須轉紅。",
+      "risk_notes": "圖示掃描 spec（`icons.spec.ts`）只認註解列出的寫法：M3Icon 的 name / icon 屬性、字串常數、以 ICON / ICONS 為名（含 `_MAP`、`_BY_XXX` 後綴與型別註記、`Object.freeze` 包裝）的對照表、`icons` / `iconMap` / `xxxIcons` 與少數同一行圖示變數。仍掃不到：動態拼接的名稱（例如 `${kind}_off`）、由 API 回傳的名稱、跨行函式或 computed 內回傳的名稱、`new Map([...])` 對照表、Options API 的方法簡寫（稿裡的 `resolvedIcon()`）、跨行的型別註記；新增這類寫法時要補掃描規則或改成可掃描的寫法。子集以 `icons.css` 檔頭清單為準：新增圖示必須同步更新清單並重取字型子集（步驟見檔頭；Google Fonts API 對不存在的圖示名稱也回 200，要以真實瀏覽器渲染驗證）。spec 只檢查 `src/parent` 與已核可的家長端稿；新稿核可後若新增圖示，spec 會轉紅，需重取子集。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/styles/icons.spec.ts",
