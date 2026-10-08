@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 163,
-  "last_updated": "2026-10-08T01:38:43Z",
+  "version": 164,
+  "last_updated": "2026-10-08T01:39:08Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -1746,7 +1746,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/SettingCard.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-055",
@@ -1775,9 +1775,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-u",
+        "notes": "pass：稿 page-settings-system.html（approved，preview-tasks 含本 task）decision 4~7 逐條對照，皆有 DOM 斷言：標題 label（16px / 600，?raw）、有變更時 warning「未儲存」、副標「最後更新：{時間}・{更新者}」或「使用預設值」；footer 靠右（?raw）「還原」「儲存」，無變更時 disabled；只有 settings:read 時輸入全 disabled、沒有 footer、顯示「你只有檢視權限」；儲存中「儲存」轉圈、「還原」disabled、表單整張 disabled；成功時 ElMessage「已儲存「{label}」」、副標更新、以回傳值重設基準並以 :key 重建表單（清除 secret 後回到「未設定」）；422 invalid_setting_value 的 loc 以「.」串成欄位路徑並去掉「Value error, 」前綴，loc 為空時列在頂端「部分欄位不正確」alert（全部對得到欄位時為「請修正標示紅字的欄位後再儲存」），其他錯誤 ElMessage；secretFields 只取 is_secret 時的 string / nullable string；expose isDirty / reset。tdd.run 13 passed，8 條 red_case 以 vitest verbose 名稱清單逐條比對全部選到；7a1e2eb 測試先於 9928c7d 實作；web-lint 乾淨、web-typecheck exit 0。突變：不去前綴、儲存後不重建表單、不先 validate、儲存中不唯讀、不放「請修正標示紅字…」、不判斷 secret 欄位、讀權限當寫權限、標題字級改 15px，均轉紅。探針：同一欄位連續兩次 422 都會再顯示。殘留（不擋）：元件只在建立時讀 setting.value 與更新者，父層之後換一份新的 setting 物件（同 key）時，卡片仍顯示舊值與舊副標（探針確認）；稿與 FRONTEND-058 description 目前都只在初次載入 / 重試時建立卡片，不會觸發，但 058 日後若重新抓取設定，要以 :key（例如 key + updated_at）重建卡片。副標 12px 灰字未斷言（純外觀，與稿 CSS 相同）。"
       }
     },
     {
@@ -1827,7 +1827,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/reference/SubjectTable.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-051",
@@ -1855,9 +1855,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-u",
+        "notes": "pass：稿 page-settings-reference.html（approved，preview-tasks 含本 task）decision 2、3、6、7、9~12 逐條對照，皆有 DOM 斷言：工具列左側用途說明、右側「新增科目」（只有 settings:write）；表格欄位名稱 / 排序（靠右，is-right）/ 狀態（綠「啟用」、灰線框「停用」）/ 操作（編輯、紅字刪除，缺寫入權限時整欄移除）；依排序再依名稱排列，停用列套 ref-row-inactive；dialog 為 FormDialog sm 420，名稱必填 ≤20 計數、排序 ≥0 整數且新增時預設為目前最大值 + 1、「數字小的排前面」、啟用 switch 說明；422 對應欄位，409 名稱重複顯示在名稱欄位下且 dialog 不關；刪除確認文字，deactivated / deleted 兩種訊息並重新載入；空清單附新增鈕（唯讀時無）、v-loading、載入失敗時 EmptyState error + 重試；寫入成功後 invalidate('subjects')（064e9de 為最終規格寫法，FRONTEND-063 description 已同步寫明本頁不重複呼叫）。tdd.run 12 passed，5 條 red_case 全部選到；694ce0d 測試先於 99851a8 實作；lint / typecheck 乾淨。突變：不 invalidate、409 不對應名稱欄、deactivated 訊息改成已刪除、只依名稱排序、成功後不關 dialog，均轉紅。殘留（不擋）：(1) 059~062 四張表格各自內建載入 / dialog / 422 / 409 / 刪除 / invalidate，科目與考試類型的元件幾乎逐行相同（實作者曾請示抽 composable 未獲回覆）。目前沒有可構造的錯誤行為，但日後修改要四處同步，建議另開 task 抽共用；(2) 刪除回 404（已被他人刪除）只顯示訊息、不重新載入，表格仍留著該列（探針確認，規格未要求）；(3) 初次載入中「新增科目」仍可按，此時新增的預設排序是 1 而不是最大值 + 1（稿在載入中停用該按鈕；探針確認，時間窗極短）；(4) invalidate 與 409 欄位顯示有測試與突變驗證，但未列入 red_cases；停用列灰字顏色未斷言（純外觀，與稿 CSS 相同）。"
       }
     },
     {
@@ -1867,7 +1867,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/reference/ExamTypeTable.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-051",
@@ -1894,9 +1894,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-u",
+        "notes": "pass：與 059 同一份稿與版面（decision 3、7、9~12），皆有 DOM 斷言：名稱 / 排序 / 狀態 / 操作，依排序再依名稱；dialog 標題「新增考試類型」「編輯考試類型」，新增時預設排序為最大值 + 1；PATCH body {name, sort_order, is_active}；422 對應名稱欄，409 顯示在名稱欄位下且 dialog 不關；deactivated / deleted 兩種刪除訊息並重新載入；唯讀時沒有新增鈕與操作欄；空清單與載入失敗重試；寫入成功後 invalidate('examTypes')。tdd.run 8 passed，4 條 red_case 全部選到；b99f989 測試先於 1c9b412 實作；lint / typecheck 乾淨。突變：不 invalidate、422 不對應欄位、409 不對應名稱欄，均轉紅。殘留（不擋）：元件與 SubjectTable 逐行相同（只差名稱與說明文字），見 059 的殘留 (1)~(3)；本 spec 沒有名稱必填的前端檢查測試（059 對同一段程式有測試）。"
       }
     },
     {
@@ -1906,7 +1906,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/reference/SchoolTable.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-051",
@@ -1933,9 +1933,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-u",
+        "notes": "pass：稿 decision 4、7、9~12 逐條對照，皆有 DOM 斷言：名稱 / 簡稱（空白顯示「—」）/ 狀態 / 操作，依名稱排序，停用列變灰；dialog 名稱必填 ≤50，簡稱 ≤20 計數並附「學生列表與家長端顯示用；空白時顯示完整名稱」，簡稱空白送 null；409 顯示在名稱欄位下且 dialog 不關；deleted / deactivated 兩種刪除訊息並重新載入；唯讀時沒有新增鈕與操作欄；空清單與載入失敗重試；寫入成功後 invalidate('schools')。tdd.run 7 passed，4 條 red_case 全部選到；4fc7807 測試先於 7dfcd58 實作；lint / typecheck 乾淨。突變：簡稱空白送空字串、不 invalidate、空白簡稱不顯示「—」，均轉紅。殘留（不擋）：同 059 的殘留 (1)~(3)；本 spec 沒有 422 欄位對應測試（程式與 059 / 060 相同，兩者都有測試）。"
       }
     },
     {
@@ -1945,7 +1945,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/reference/ClosedDayTable.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-051",
@@ -1973,9 +1973,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-u",
+        "notes": "pass：稿 decision 5、8~11 逐條對照，皆有 DOM 斷言（fake Date 固定台北 2026-10-02）：日期欄為灰色小字年份 + formatDateWithWeekday，原因空白顯示「—」；預設 date_from = 今天、date_to = +365 天，勾「顯示過去日期」往前一年重新載入，提示文字跟著改；依日期升冪由近到遠，過去的列套 ref-row-past 並加「已過」tag；新增 dialog 頂端 info alert、日期必填「請選擇日期」；編輯時日期 disabled 並附「日期不可修改；要改日期請刪除後重新新增」，PATCH 只送 reason；原因 ≤100、空白送 null；409 closed_day_exists 顯示在日期欄位下且 dialog 不關；刪除確認「確定要刪除休息日「10/10（六） 國慶日」嗎？」，成功顯示「已刪除」並重新載入；空清單依是否顯示過去日期換說明；唯讀時沒有新增鈕與操作欄；載入失敗重試；不呼叫 lookups invalidate。tdd.run 11 passed，5 條 red_case 全部選到；99089bb 測試先於 9f0630c 實作；lint / typecheck 乾淨。突變：date_to 改 +366、PATCH 帶 date、409 不對應日期欄、勾選過去日期不重新載入、不依日期排序、過去列不加 class，均轉紅。殘留（不擋）：同 059 的殘留 (1)、(2)；新增超出目前範圍的日期（例如一年後）成功後，重新載入看不到該筆，屬範圍設計。"
       }
     },
     {
@@ -2218,7 +2218,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/settings/RoleDetailPanel.vue",
       "source_ref": "FE:src/components/settings/roles/RoleDetailPanel.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-068",
@@ -2245,9 +2245,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-u",
+        "notes": "pass：稿 page-settings-roles.html（approved，preview-tasks 含本 task）RoleDetailPanel 相關 decision 逐條對照，皆有 DOM 斷言：標題列名稱 18px（?raw）、「系統角色」tag、有變更時「未儲存」、副標「N 位員工使用・N 項權限」，右側為「刪除角色」（只有非系統角色且有 roles:write）或「你只有檢視權限」；代碼唯讀等寬字（?raw）、名稱必填 1~50、說明 200 字、PermissionPicker（grantable = auth.permissions）；footer 左側提示佔滿（?raw flex: 1），「儲存」無變更時 disabled，只送有變更的欄位；admin 角色頂端 info alert、全部 disabled、沒有按鈕；缺 roles:write 時全部 disabled；cannot_grant_permissions（中文標籤以「、」串接）與 last_role_manager / last_staff_manager 顯示在表單頂端可關閉的紅色 alert（同 070 已由使用者確認的呈現），其他錯誤 ElMessage；刪除確認「確定要刪除角色「{name}」嗎？」，staff_count > 0 時 disabled + tooltip，409 role_in_use 改寫為含停用帳號人數的訊息（details 沒有人數時沿用後端訊息，探針確認），成功 emit deleted；切換 role 時重設表單；expose isDirty。tdd.run 13 passed，6 條 red_case 全部選到；f6ddc4b 測試先於 d4353fc 實作；lint / typecheck 乾淨。突變：送出全部欄位、cannot_grant 改 ElMessage、last manager 改 ElMessage、不改寫 role_in_use、系統角色也顯示刪除、admin 可編輯、不監看 role 切換，均轉紅。殘留（不擋）：(1) 只改名稱頭尾空白時 isDirty 為 true、「儲存」可按，但去空白後沒有變更就直接 return，沒有請求也沒有提示，「未儲存」tag 仍在（探針確認；071 切換角色時也會因此跳出未儲存確認）；(2) cannot_grant 的標籤組字與 RoleCreateDialog（070）重複，可日後抽共用函式；(3) 父層換一份新的 role 物件（例如重新載入清單）時會重設表單，未儲存的編輯會被蓋掉（071 依規格只在 saved / deleted 後重新載入，影響有限）。"
       }
     },
     {
