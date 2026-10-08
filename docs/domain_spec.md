@@ -42,7 +42,7 @@
 | `leave.window` | 家長可申請請假的日期範圍（今天前 N 天 ~ 後 M 天，預設 30 / 60）、每筆附件數上限（預設 3）、單檔大小上限 MB（預設 10） |
 | `pickup.authorization` | 代理接送授權最多可提前幾天（預設 14）、同一學生同一天 active 授權上限（預設 3） |
 | `pickup.persons` | 每位學生常用接送人上限（預設 10） |
-| `homework.window` | 作業可新增 / 編輯的日期範圍（今天前 N 天 ~ 後 M 天，預設 30 / 7） |
+| `homework.window` | 可新增作業項目、設定當日整體狀態與預計可接送時間的日期範圍（今天前 N 天 ~ 後 M 天，預設 30 / 7）；既有項目的修改與刪除不受此限 |
 | `line.messaging` | channel access token、channel secret（secret，加密） |
 
 固定的業務規則（不開放後台調整）：員工密碼至少 10 碼且含英文與數字；家長預計抵達時間最多可早於現在 5 分鐘；綁定碼效期 7 天；接送碼連錯 5 次鎖定。
@@ -68,7 +68,7 @@
 **guardians**：`student_id`、`parent_account_id`（nullable，綁定後填入）、`name`、`relation`（`father` / `mother` / `grandparent` / `other`）、`phone`、`is_primary bool`、`can_pickup bool`、`receives_notifications bool`、`archived_at`。同一學生只能有一位 `is_primary`。
 **parent_binding_codes**：`guardian_id`、`code_hash`、`expires_at`（預設 7 天）、`used_at`、`created_by`。綁定碼 8 碼英數，產生後只顯示一次（移植 `BE:models/parent_binding.py`）。
 
-家長可見範圍：`guardians.parent_account_id = 自己` 且 guardian / student 未封存的學生（移植 `BE:api/parent_portal/_shared.py::_get_parent_student_ids` / `_assert_student_owned`）。
+家長可見範圍：`guardians.parent_account_id = 自己` 且 guardian / student 未封存的學生（移植 `BE:api/parent_portal/_shared.py::_get_parent_student_ids` / `_assert_student_owned`）。退班與暫停的學生家長仍可讀取歷史，但家長端寫入類操作（送出接送請求、請假、新增常用接送人、建立代理授權）一律 409 `student_not_active`。
 
 ### M4 出勤
 

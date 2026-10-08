@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 438,
-  "last_updated": "2026-10-07T10:51:07Z",
+  "version": 439,
+  "last_updated": "2026-10-08T01:24:06Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -15420,6 +15420,76 @@
         ],
         "run": "just test-int apps/api/tests/integration/services/test_student_service.py -k \"test_close_out_\"",
         "notes": "殘列筆數檢查可用測試外的手動比對（前後各以 owner 查一次）記錄在回報；若改寫成自動檢查，放在同一測試的 teardown 斷言。 殘列筆數以 owner 唯讀連線在測試外前後各查一次（staff_users、非系統 roles）記錄在回報；改用 seed 角色後測試不再往 roles 寫列，owner 清理清單也移除了會誤刪 seed 角色的 roles 項目。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-557",
+      "title": "家長端寫入守衛：暫停（suspended）學生一律 409 student_not_active（assert_parent_owns_student 的 for_write）",
+      "description": "BACKEND-180 `assert_parent_owns_student(..., for_write=True)`（`apps/api/app/services/parent_scope.py`，dependency `get_owned_student_for_write` 包它）目前只對 `withdrawn` 回 409 `student_not_active`；暫停（`suspended`）的學生家長仍能送出接送請求、請假、新增常用接送人與建立代理授權，首頁還顯示「尚未到班」。使用者裁定：暫停學生也要擋。\n\n**行為**：`for_write=True` 且學生狀態不是 `active` 時一律 409 `student_not_active`，錯誤碼相同、訊息依狀態區分——`withdrawn` 維持「此學生已退班，無法進行此操作」，`suspended` 為「此學生目前暫停，無法進行此操作」。讀取（`for_write=False`）不受影響：暫停與退班的學生家長仍可讀歷史。所有使用 `get_owned_student_for_write` 或 `assert_parent_owns_student(for_write=True)` 的家長端寫入（`pickup/requests.py` create_request、`leave_service.create_leave`、`api/parent/pickup.py` 的新增常用接送人與建立代理授權）自動套用，不改其他程式。不存在 / 不屬於自己 / 封存仍是同一 404（IDOR 防護不變，且 404 優先於 409）。\n\n**驗收標準**：每一條對應下列 red_case；`test_parent_scope.py`、`test_pickup_endpoints.py`、`test_leaves_endpoints.py`（指定路徑）整檔全綠；家長端前端遇到 `student_not_active` 顯示後端訊息（PARENT-097 / 138 之後處理，不在本 task）。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/services/parent_scope.py",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9b",
+      "depends_on": [
+        "BACKEND-180"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/services/test_parent_scope.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_parent_scope_for_write_blocks_suspended：學生 status='suspended'、屬於該家長 → assert_parent_owns_student(for_write=True) 拋 AppError code 'student_not_active'、status 409、訊息含「暫停」；for_write=False 回傳該學生（可讀歷史）",
+          "test_parent_scope_for_write_withdrawn_message_unchanged：學生 status='withdrawn' → for_write=True 仍拋 409 student_not_active，訊息為「此學生已退班，無法進行此操作」；for_write=False 回傳該學生",
+          "test_parent_scope_for_write_active_passes_and_idor_first：active 學生 for_write=True 回傳該學生；他人的 suspended 學生 for_write=True 回 404（不是 409，IDOR 優先且不洩漏狀態）",
+          "test_parent_scope_for_write_pickup_request_suspended_409：暫停學生的家長 POST /api/parent/pickup/requests → 409 student_not_active，DB 沒有新增 pickup_requests 列（放在 api/parent/test_pickup_endpoints.py）",
+          "test_parent_scope_for_write_leave_create_suspended_409：暫停學生的家長 POST /api/parent/leaves → 409 student_not_active，DB 沒有新增 student_leaves 列（放在 api/parent/test_leaves_endpoints.py）"
+        ],
+        "run": "just test-int apps/api/tests/integration/services/test_parent_scope.py apps/api/tests/integration/api/parent/test_pickup_endpoints.py apps/api/tests/integration/api/parent/test_leaves_endpoints.py -k \"test_parent_scope_for_write_\"",
+        "notes": "新測試一律以 test_parent_scope_for_write_ 為前綴，讓 tdd.run 三個檔都選得到。pickup 常用接送人新增與代理授權建立也用 get_owned_student_for_write，請在 test_pickup_endpoints.py 各補一個暫停學生 409 的案例（同前綴）。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
+      }
+    },
+    {
+      "id": "BACKEND-558",
+      "title": "homework.window 的顯示文字改為只描述「新增」（使用者裁定：修改與刪除既有作業項目不受日期窗限制）",
+      "description": "使用者裁定：`homework.window` 只限制新增作業項目（含整班批次）、設定當日整體狀態與預計可接送時間；既有項目的修改與刪除（BACKEND-379 / 380）不受限。domain_spec 已改寫。`apps/api/app/core/settings_registry.py` 的 `HomeworkWindow` 欄位顯示文字（系統設定頁會顯示）仍寫「可新增或編輯」，改為：\n- `past_days`：title「作業可新增的過去天數」，description「可新增作業、設定整體狀態與預計可接送時間的過去天數（既有項目的修改與刪除不受限）」；\n- `future_days` 的 title 與 description 不變。\n只改顯示文字，不改驗證範圍、預設值與任何行為；`tests/unit/core/test_settings_registry.py` 中對 past_days title 的既有斷言同步更新。\n\n**驗收標準**：每一條對應下列 red_case；`test_settings_registry.py` 與 `test_settings_seed_consistency.py`（指定路徑）整檔全綠。",
+      "granularity_unit": "method",
+      "target_path": "apps/api/app/core/settings_registry.py",
+      "source_ref": null,
+      "status": "in_progress",
+      "assignee_session": "impl-backend-r9b",
+      "depends_on": [
+        "BACKEND-379",
+        "BACKEND-380"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/unit/core/test_settings_registry.py",
+        "markers": [
+          "unit"
+        ],
+        "red_cases": [
+          "test_homework_window_labels_describe_creation_only：HomeworkWindow 的 JSON schema 中 past_days 的 title 為「作業可新增的過去天數」、description 含「既有項目的修改與刪除不受限」；future_days 的 title 與 description 維持原樣",
+          "test_homework_window_behavior_unchanged：HomeworkWindow(past_days=30, future_days=7) 驗證範圍不變（past_days 0~365、future_days 0~60，超出範圍 ValidationError），預設值仍為 30 / 7"
+        ],
+        "run": "just test apps/api/tests/unit/core/test_settings_registry.py -k \"test_homework_window_\"",
+        "notes": "只改顯示文字；後台系統設定頁（FRONTEND-056 / 057）由 registry 的 JSON schema 渲染，不需改前端。"
       },
       "review": {
         "status": "pending",
