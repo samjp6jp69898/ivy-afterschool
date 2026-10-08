@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 123,
-  "last_updated": "2026-10-08T01:47:37Z",
+  "version": 124,
+  "last_updated": "2026-10-08T05:09:00Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -3547,13 +3547,13 @@
       "granularity_unit": "config",
       "target_path": "apps/web/src/parent/styles/icons.css",
       "source_ref": null,
-      "status": "in_review",
+      "status": "in_progress",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "PARENT-014"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "掃描器只認 icons.spec.ts 註解列出的寫法：動態拼接的圖示名稱（例如 `${kind}_off`）或由 API 回傳的名稱掃不到，新增這類寫法時要補掃描規則或改成可掃描的寫法。待核可的家長端頁面稿（child-hub、attendance、exams、exam-detail、leaves、pickup）用到的圖示已納入字型，但 spec 只檢查已核可稿：這六張核可後若又新增圖示，spec 會轉紅，需重取子集（步驟見 icons.css 檔頭）。",
+      "risk_notes": "掃描器只認 icons.spec.ts 註解列出的寫法：動態拼接的圖示名稱（例如 `${kind}_off`）或由 API 回傳的名稱掃不到，新增這類寫法時要補掃描規則或改成可掃描的寫法。待核可的家長端頁面稿（child-hub、attendance、exams、exam-detail、leaves、pickup）用到的圖示已納入字型，但 spec 只檢查已核可稿：這六張核可後若又新增圖示，spec 會轉紅，需重取子集（步驟見 icons.css 檔頭）。\n【review-r9-p 打回】icons.spec.ts 的 tableName 規則（`[A-Z][A-Z0-9_]*ICONS?[A-Z0-9_]*`）要求 ICON 前至少一個字元，以 ICON 開頭的全大寫常數（ICONS、ICON_MAP）不會被當成對照表。既有的 components/bind/BindCodeErrorNotice.vue `const ICONS: Record<Tone, string> = { error: 'error', warning: 'hourglass_top', info: 'info' }` 因此沒被掃描：把其中一個值改成清單外的名稱（例如 help_center），spec 仍全綠。驗收：ICONS、ICON_MAP 這類名稱（含 `: Record<...>` 型別註記）也要被當成對照表；掃描器自測補這兩種寫法；把 BindCodeErrorNotice 的 ICONS 換成清單外的圖示時，「covers every icon used in src/parent」必須轉紅。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/styles/icons.spec.ts",
@@ -3571,9 +3571,9 @@
         "notes": "spec 讀 css / html 一律用 readFileSync + resolve(dirname(fileURLToPath(import.meta.url)), ...)（vitest 對 *.css?raw 回傳空字串）。字型內容驗證（新增 glyph 真的存在）用 fontTools 或 headless Chromium 在 390×844 渲染確認，並記在回報。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "concern",
+        "reviewer": "review-r9-p",
+        "notes": "打回（1 項，必修）。字型本身驗證通過：檔頭 wOF2、flavor TrueType、length 欄位 = 檔案大小 12740、16 個 table（GSUB / OS/2 / STAT / avar / cmap / fvar / gasp / glyf / loca / gvar / head / hhea / hmtx / maxp / name / post，都是一般可變字型的 table）、沒有 metadata 與 private 區塊、目錄後沒有多餘 byte；以 Node 內建 brotli 解壓後解析 cmap + GSUB（LigatureSubst，含 Extension），清單 75 個名稱各自對應到 ligature glyph（75 個不同 glyph），fvar 只有 FILL 0..1；name 表為 Google 的 Material Symbols Rounded 24pt 2.973，沒有奇怪內容。真實 Chromium 390×844：字型載入成功（沒被 OTS 拒絕），75 個名稱在 1em 夾盒內都不溢出，負向對照（not_a_real_icon、favorite、lock、help_center）都溢出；FILL 0 / 1 截圖不同；舊字型對同一份清單壞 41 個（恰為新增的那些），截圖確認 delete 由亂碼變成垃圾桶。spec 與 red_cases 5/5 逐名對應、tdd.run 全綠；666afdc（spec）先於 dec5029（實作），353f0c2 在實作後補的兩條掃描器自測以突變證明會紅（讓名稱含 Icon 的元件物件被當成變數、讓 CSS 的 __icon: 被當成鍵）。突變：src 加清單外的 M3Icon name、加清單外的 XXX_ICONS 對照表、清單缺 delete、清單亂序、清單重複、woff2 截斷 256 bytes，都轉紅。HEAD（2ea5ec4，六張家長端稿已核可）重跑 spec 全綠；34 張已核可家長端稿實際掛載後畫面上的 64 個圖示都在清單內，不需重取子集。web-lint 乾淨、web-typecheck 全專案 exit 0。打回原因：tableName 規則 `[A-Z][A-Z0-9_]*ICONS?…` 要求 ICON 前至少一個字元，以 ICON 開頭的全大寫常數（ICONS、ICON_MAP）不會被當成對照表。既有的 components/bind/BindCodeErrorNotice.vue 第 43 行 `const ICONS: Record<Tone, string> = { error: 'error', warning: 'hourglass_top', info: 'info' }` 因此完全沒被掃描：把 info 改成清單外的 help_center，spec 仍全綠（這三個名稱目前因其他檔案而在清單內，所以現在沒有缺字）。這正是本 task 要防的漂移，而且屬於掃描器註解第 4 條自己列出的寫法。殘留（不擋）：設計稿裡 Options API 的方法簡寫（各元件稿的 `resolvedIcon() { return this.icon || (... ? 'error' : 'inbox') }`）與跨行的 computed 不會被掃到；目前只有 inbox 屬於這種情形，且已由 src/parent 的 ParentEmptyState 掃到，建議在 risk_notes 的限制說明補上這類寫法。PARENT-100 的 risk_notes 移除站得住：delete 在新字型中確實有 ligature glyph，真實 Chromium 渲染為垃圾桶圖示，原風險已不成立。"
       }
     }
   ]
