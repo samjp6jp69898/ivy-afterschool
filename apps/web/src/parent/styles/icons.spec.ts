@@ -214,6 +214,18 @@ describe('parent icons subset', () => {
       'directions_walk',
       'how_to_reg',
     ])
+    // 5. 同一行宣告、名稱為 icon / iconName / iconOf / iconFor / xxxIcon 的變數：只取結果值
+    expect(names(`const iconName = computed(() => props.icon || (props.variant === 'error' ? 'error' : 'inbox'))`)).toEqual([
+      'error',
+      'inbox',
+    ])
+    expect(names(`const leadingIcon = computed(() => (isSelected.value ? 'check' : props.icon))`)).toEqual(['check'])
+    expect(names(`const icon = ok ? 'check_circle' : 'error'`)).toEqual(['check_circle', 'error'])
+    expect(names(`const statusIconName = ok ? 'check_circle' : 'error'`)).toEqual(['check_circle', 'error'])
+    expect(names(`const iconFor = (kind) => TABLE[kind] ?? 'help'`)).toEqual(['help'])
+    expect(names(`const iconOf = (event) => (TABLE.find(([p]) => event.startsWith(p)) || [null, 'notifications'])[1]`)).toEqual([
+      'notifications',
+    ])
     // 6. 檔名含 icon 的 .ts 工具檔：fallback 也算
     expect(names(`export const f = (e: string) => table.find(([p]) => e.startsWith(p))?.[1] ?? 'notifications'`, 'notificationEventIcon.ts')).toEqual(['notifications'])
     expect(names(`export const f = () => 'notifications'`, 'other.ts')).toEqual([])
