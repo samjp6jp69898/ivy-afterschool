@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 444,
-  "last_updated": "2026-10-08T01:35:32Z",
+  "version": 445,
+  "last_updated": "2026-10-08T01:36:19Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -5610,7 +5610,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::update_student",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-152",
@@ -5637,9 +5637,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-c",
+        "notes": "pass（review-r9-c）。整檔 apps/api/tests/integration/api/admin/test_students_endpoints.py 68/68 綠；--collect-only 帶 / 不帶 -k 比對，red_cases 全部選到（另含 guard_registered 路由稽核）；commit 順序測試 → 實作 → tasks（測試 commit 當下 handler / schema 不存在，紅燈原因是功能不存在）；students.py / schemas/students.py / 測試檔 lint 與 typecheck 乾淨；規格先行 commit 6dc0bf8 的 description 只寫最終規格、與 domain_spec §2 學生 API 條目一致。 獨立突變：改回直接回 update_student 的結果（不以 get_student 重組）→ update_photo_url 轉紅（photo_url 變 None）；拿掉 db.commit() → update_success 轉紅（重讀 DB 看不到）；權限碼改 students:read → update_403 轉紅。HTTP 層探針：有照片 + 敏感欄位 + 監護人的學生 PATCH 後整個回應與 GET 詳情逐欄相等（photo_url 為 FakeStorage 簽名 URL、sensitive 明文只在持 students:sensitive 時出現）；無 sensitive 權限對不存在學生寫敏感欄位回 403、有權限回 404（不洩漏存在與否）；改到封存班 422 invalid_class 後 DB 仍是前一次成功的班級。殘留（不打回）：每次 PATCH 會組兩次詳情（update_student 自己的回傳被丟棄，再以 get_student 重組），多一次監護人查詢，可觀測成本極小。"
       }
     },
     {
@@ -5723,7 +5723,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:api/students.py::bulk_graduate_students",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-157",
@@ -5752,9 +5752,9 @@
         "notes": "PromoteGradeIn 的 model_validator 在 dry_run=false 缺 expected_total 時拋 ValueError → 422 validation_error；response_model 為 PromotionPreviewOut | PromotionResultOut 的 union，依 dry_run 回其一。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-c",
+        "notes": "pass（review-r9-c）。整檔 apps/api/tests/integration/api/admin/test_students_endpoints.py 68/68 綠；--collect-only 帶 / 不帶 -k 比對，red_cases 全部選到（另含 guard_registered 路由稽核）；commit 順序測試 → 實作 → tasks（測試 commit 當下 handler / schema 不存在，紅燈原因是功能不存在）；students.py / schemas/students.py / 測試檔 lint 與 typecheck 乾淨；規格先行 commit 6dc0bf8 的 description 只寫最終規格、與 domain_spec §2 學生 API 條目一致。 獨立突變：拿掉 PromoteGradeIn 的 expected_total 必填驗證 → promote_422 轉紅（handler 的 assert 變成 500）；拿掉執行路徑 db.commit() → promote_execute 轉紅。HTTP 層探針：expected_total 100001 → 422、100000 → 409 preview_stale、預覽不寫稽核且 already_promoted 維持 false；409 / 422 的 details（日期、UUID）正確序列化。殘留（不打回）：(1) handler 以 assert 依賴 schema 驗證器保證 expected_total 存在，驗證器若被移除會變 500 而非 422，可改成明確拋 422；(2) 對 /students/promote-grade 送未定義的 GET 會落到 /{student_id} 的 GET 而回 422（而非 405），只影響未定義的方法組合，已定義的 POST 路由不受影響。"
       }
     },
     {
@@ -5764,7 +5764,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": "BE:utils/excel_io.py::parse_excel",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-155",
@@ -5793,9 +5793,9 @@
         "notes": "multipart：file 經 File()、academic_year 經 Form(ge=100, le=200)、dry_run 經 Form() 預設 true；缺欄位 / 型別錯由 FastAPI 轉成 422 validation_error。read_validated_upload 分塊讀取並在超過 5 MiB 當下 413，之後才交給 service（突變：繞過它直接讀整檔 → PNG 變 422 import_invalid_file、413 案例轉紅）。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-c",
+        "notes": "pass（review-r9-c）。整檔 apps/api/tests/integration/api/admin/test_students_endpoints.py 68/68 綠；--collect-only 帶 / 不帶 -k 比對，red_cases 全部選到（另含 guard_registered 路由稽核）；commit 順序測試 → 實作 → tasks（測試 commit 當下 handler / schema 不存在，紅燈原因是功能不存在）；students.py / schemas/students.py / 測試檔 lint 與 typecheck 乾淨；規格先行 commit 6dc0bf8 的 description 只寫最終規格、與 domain_spec §2 學生 API 條目一致。 獨立突變：繞過 read_validated_upload 直接讀整檔 → import_413 與 import_business 轉紅（413 / 415 退化成 422 import_invalid_file）；拿掉執行路徑 db.commit() → import_execute 轉紅。HTTP 層探針（34 項）：BACKEND-155 測試檔的 25 種構造檔（寬列、命名空間前綴、深巢狀、長屬性 / 長文字、UTF-16 / UTF-32、styles / sharedStrings 炸彈、路徑繞過、過多 entry、宣告大小造假、加密 entry、重複 entry、bzip2、截斷等）經 endpoint 皆 422 import_invalid_file（或 415）且無 500；工作表 XML 塞 40 MB 空白（zip 目錄層擋）與 10 MB 空白（XML 文字長度層擋）皆 422；MIME / 副檔名不受信任（xlsx 內容宣稱 PNG 照常預覽、PNG 內容宣稱 xlsx → 415）；剛好 5 MiB 不是 413、多 1 byte 413；501 列 → 422 import_too_many_rows。殘留（不打回）：(1) 應用層 413 在 Starlette 收完該 multipart part 後才判定（超過 1 MiB 的 part 由 Starlette 暫存到磁碟），總量由部署邊界 nginx client_max_body_size 20m 限制，應用層沒有 body 大小中介層——與 164 照片上傳同一模式、屬跨 task 現況；(2) 待使用者裁定：BACKEND-155 preview 對「退班 + 入學日晚於今天」判 valid、execute 才 409 import_conflict。"
       }
     },
     {
@@ -14571,7 +14571,7 @@
       "granularity_unit": "endpoint",
       "target_path": "apps/api/app/api/admin/students.py",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-backend-r9c",
       "depends_on": [
         "BACKEND-532",
@@ -14598,9 +14598,9 @@
         "notes": "無 query / body 參數，422 不適用；以路由順序與 405 案例取代。Cache-Control: no-store 由 SecurityMiddleware 對 /api/ 全域加上，handler 自設那行與中介層重複、測試無法區分（拿掉不轉紅）；保留以符合 description 與出勤匯出的寫法。"
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-c",
+        "notes": "pass（review-r9-c）。整檔 apps/api/tests/integration/api/admin/test_students_endpoints.py 68/68 綠；--collect-only 帶 / 不帶 -k 比對，red_cases 全部選到（另含 guard_registered 路由稽核）；commit 順序測試 → 實作 → tasks（測試 commit 當下 handler / schema 不存在，紅燈原因是功能不存在）；students.py / schemas/students.py / 測試檔 lint 與 typecheck 乾淨；規格先行 commit 6dc0bf8 的 description 只寫最終規格、與 domain_spec §2 學生 API 條目一致。 獨立突變：把 /import-template handler 搬到 /{student_id} 之後宣告 → import_template_success / route_order / 403 轉紅（被 UUID 驗證吞成 422）。回應本文為 build_import_template() 常數、檔名固定且 percent-encoding、無 query / body 參數、students:write 守衛、405 案例。殘留（不打回）：(1) Cache-Control: no-store 由 SecurityMiddleware 全域加上，handler 自設那行拿掉不轉紅（已知、依 description 保留）；(2) 每次請求重新產生 workbook，內容為常數可快取，成本極小。"
       }
     },
     {
