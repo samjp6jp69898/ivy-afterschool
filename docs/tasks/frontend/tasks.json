@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 165,
-  "last_updated": "2026-10-08T01:41:10Z",
+  "version": 166,
+  "last_updated": "2026-10-08T01:44:16Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -3525,7 +3525,7 @@
     {
       "id": "FRONTEND-127",
       "title": "實作 views/AttendanceMonthlyView.vue：月出勤報表與匯出",
-      "description": "建立 `apps/web/src/views/AttendanceMonthlyView.vue`（路由 `/attendance/monthly`，`attendance:read`）。移植 ivy `FE:src/views/StudentAttendanceView.vue` 的 fetchMonthly + downloadFile 匯出流程；**去掉** 圖表、學期。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-attendance-monthly.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：月份與班級篩選、日期 × 學生格狀表（狀態符號與顏色、非營業日灰底、今天標示）、每生統計欄與合計列、匯出按鈕、空清單、載入中。\n\n**內容**\n- `PageHeader`「月出勤報表」；篩選：月份（el-date-picker type month，預設 `monthOf(todayTaipei())`，存 query.month）、班級（lookups classOptions，存 query.class_id，預設全部）。\n- 資料 `fetchMonthlyAttendance` → `MonthlyAttendanceGrid`（FRONTEND-128）。\n- 頂部合計：營業日數、出席人次、缺席人次、請假人次、未登記人次（totals）。\n- 「匯出 Excel」：`exportMonthlyAttendance` → `saveBlobResponse(res, '出勤月報_{class_name|全部}_{month}.xlsx')`（FRONTEND-007）；匯出中 loading；失敗 `errorMessage`（blob JSON 錯誤已由 FRONTEND-001 正規化）。\n- 空清單：「此月份沒有出勤資料」。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/AttendanceMonthlyView.vue')`。\n\n**驗收標準**\n- 預設月份與 query 同步；合計顯示；匯出以後端檔名下載；空狀態。",
+      "description": "建立 `apps/web/src/views/AttendanceMonthlyView.vue`（路由 `/attendance/monthly`，`attendance:read`）。移植 ivy `FE:src/views/StudentAttendanceView.vue` 的 fetchMonthly + downloadFile 匯出流程；**去掉** 圖表、學期、連缺告警、出席率卡與前端姓名搜尋。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-attendance-monthly.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：月份與班級篩選、日期 × 學生格狀表（狀態符號與顏色、非營業日灰底、今天標示）、每生統計欄與合計列、匯出按鈕、空清單、載入中。\n\n**內容**（外觀以設計稿 `docs/mockups/page-attendance-monthly.html` 的 decisions 為準）\n- `PageHeader`「月出勤報表」，副標「每位學生每天的出勤狀態與本月統計」；actions「匯出 Excel」。整頁只需 `attendance:read`（月報與匯出同權限），頁內沒有其他權限差異。\n- 篩選列沿用 AdminListToolbar 的版面樣式（本頁沒有關鍵字搜尋，不使用該元件）：月份（el-date-picker type month，顯示「YYYY 年 M 月」，預設 `monthOf(todayTaipei())`，不可清空，今天所在月份之後的月份 disabled，存 `query.month`）、班級（「全部」+ lookups classOptions，存 `query.class_id`，預設全部）；右側「共 N 位學生」。改任一篩選立即重抓，重抓期間保留舊表格並蓋 loading。\n- 資料 `fetchMonthlyAttendance({month, class_id?})` → `MonthlyAttendanceGrid`（FRONTEND-128）；選了班級時傳 `hideClassColumn`。\n- 本月合計列（表格上方；`totals` 是全部學生 stats 的加總）：「營業日 {N} 天」（N = `days` 中 `is_service_day` 為 true 的天數；看今天所在月份時接「（統計到 {MM/DD}，已過 {M} 天）」，M = 不晚於今天的營業日數）、「應出勤 {totals.service_days} 人次」（旁邊 ? tooltip「每位學生在本月（到今天為止、入班日之後）的營業日數加總；出席 + 缺席 + 請假 + 未登記 = 應出勤」）、「出席 {attended} 人次」（success）、「缺席 {absent} 人次」（> 0 danger）、「請假 {leave} 人次」、「未登記 {unrecorded} 人次」（> 0 warning）。`totals.service_days` 是應出勤人次，不可當成營業日數顯示。\n- 「匯出 Excel」：`exportMonthlyAttendance({month, class_id?})` → `saveBlobResponse(res, '出勤月報_{class_name|全部}_{month}.xlsx')`（FRONTEND-007，以 Content-Disposition 檔名為準）；匯出中按鈕 loading、文字「匯出中…」；成功不另跳訊息；失敗 `ElMessage.error(errorMessage(err, '匯出失敗，請稍後再試'))`（blob JSON 錯誤已由 FRONTEND-001 正規化）。首次載入、載入失敗、重抓中或沒有學生時按鈕 disabled。\n- 首次載入：合計列與表格位置顯示 skeleton。空清單（`students` 為空）：EmptyState（Calendar icon）「此月份沒有出勤資料」+「{班級名稱|全部班級}在 {YYYY 年 M 月}沒有學生與出勤紀錄」，不顯示合計列與表格。載入失敗：EmptyState error「無法載入出勤月報」+「重試」。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/AttendanceMonthlyView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/AttendanceMonthlyView.vue",
       "source_ref": "FE:src/views/StudentAttendanceView.vue::default",
@@ -3537,7 +3537,8 @@
         "FRONTEND-007",
         "FRONTEND-083",
         "FRONTEND-024",
-        "FRONTEND-039"
+        "FRONTEND-039",
+        "FRONTEND-042"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -3549,10 +3550,11 @@
         ],
         "red_cases": [
           "AttendanceMonthlyView loads current month by default：fake now 2026-10-02 → GET /admin/attendance/monthly params 深等於 {month:'2026-10'}；改班級 c1 → 最後一次 params {month:'2026-10',class_id:'c1'} 且 router query.class_id === 'c1'",
-          "AttendanceMonthlyView renders totals：totals {service_days:21,attended:350,absent:6,leave:12,unrecorded:4} → 文字含 '營業日 21'、'出席 350'、'缺席 6'、'請假 12'、'未登記 4'",
+          "AttendanceMonthlyView renders totals：fake now 2026-10-02、initialRoute '/attendance/monthly?month=2026-09'、回 days 為 2026-09 的 30 天（is_service_day 為 true 的 21 天）、totals {service_days:420,attended:398,absent:6,leave:12,unrecorded:4} → 文字含 '營業日 21'、'應出勤 420'、'出席 398'、'缺席 6'、'請假 12'、'未登記 4'，不含 '已過'",
+          "AttendanceMonthlyView shows elapsed service days for current month：fake now 2026-10-02、回 days 為 2026-10 的 31 天（週一到週五 is_service_day 為 true，共 22 天）→ 文字含 '營業日 22 天' 與 '統計到 10/02，已過 2 天'",
           "AttendanceMonthlyView exports with server filename：點 '匯出 Excel' → GET /admin/attendance/monthly/export responseType 'blob'；攔截 anchor click 的 download === '出勤月報_全部_2026-09.xlsx'（取自 Content-Disposition）",
           "AttendanceMonthlyView shows export error message：export 回 404 json blob {error:{code:'class_not_found',message:'找不到班級'}} → body 含 '找不到班級'",
-          "AttendanceMonthlyView empty state：students [] → 文字含 '此月份沒有出勤資料'"
+          "AttendanceMonthlyView empty state：students [] → 文字含 '此月份沒有出勤資料'，'匯出 Excel' 按鈕 disabled"
         ],
         "run": "just web-test src/views/AttendanceMonthlyView.spec.ts -t \"AttendanceMonthlyView\"",
         "notes": ""
@@ -3566,7 +3568,7 @@
     {
       "id": "FRONTEND-128",
       "title": "實作 components/attendance/MonthlyAttendanceGrid.vue：日期 × 學生出勤格狀表",
-      "description": "建立 `apps/web/src/components/attendance/MonthlyAttendanceGrid.vue`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-attendance-monthly.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：月份與班級篩選、日期 × 學生格狀表（狀態符號與顏色、非營業日灰底、今天標示）、每生統計欄與合計列、匯出按鈕、空清單、載入中。\n\n**props**：`data: MonthlyAttendance`、`today: string`（預設 todayTaipei）。\n- el-table：固定左欄「學號」「姓名」「班級」，中間每日一欄（表頭「{日}\\n{週}」），右側固定欄「出席 / 缺席 / 請假 / 未登記」（stats）。\n- 儲存格符號：present「●」、left「✓」、absent「✕」、leave「假」、expected「○」（營業日但未登記）、null 且非營業日 → 灰底空白、null 且營業日（尚未到或無紀錄）→「—」。顏色依 ATTENDANCE_STATUS_META tone。\n- 今天的欄位表頭加底色；未來日期欄淡化。\n- 圖例列說明符號意義。\n- 大量資料：學生數 > 60 時啟用虛擬捲動或固定高度 + 捲動（不一次渲染超過必要列）。\n\n**驗收標準**\n- 符號對應、非營業日樣式、今天標示、統計欄正確。",
+      "description": "建立 `apps/web/src/components/attendance/MonthlyAttendanceGrid.vue`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-attendance-monthly.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：月份與班級篩選、日期 × 學生格狀表（狀態符號與顏色、非營業日灰底、今天標示）、每生統計欄與合計列、匯出按鈕、空清單、載入中。\n\n**props**：`data: MonthlyAttendance`、`today?: string`（預設 todayTaipei）、`hideClassColumn?: boolean`（view 選了班級時為 true）、`loading?: boolean`（重抓時 v-loading）。外觀以設計稿 `docs/mockups/page-attendance-monthly.html` 的 decisions 為準。\n- 圖例列（表格正上方）：● 已到班、✓ 已離班、✕ 缺席、假 請假、○ 預計到班（未點名）、— 無紀錄 / 尚未到、灰色方塊 非營業日、淡藍方塊 今天。\n- el-table（border、size small）：固定左欄「學號」（76）、「姓名」（80，過長 tooltip）、「班級」（96，null 顯示「未分班」；`hideClassColumn` 時不渲染）；中間每日一欄（32px，表頭兩行「{日}」/「{週}」，週取 `weekday`，0 = 週一）；右側固定欄「出席 / 缺席 / 請假 / 未登記」（各 64，取 `stats`）。\n- 表格一律固定高度（max-height 撐滿可視區）+ 捲動：表頭、左右固定欄與合計列在捲動時不動；學生數多（> 60）時沿用同一做法，不做虛擬捲動。\n- 儲存格符號：present「●」、left「✓」、absent「✕」、leave「假」（淡灰底小方塊）、expected「○」（營業日但未登記）、null 且非營業日 → 灰底空白、null 且營業日（尚未到或無紀錄）→「—」。顏色依 ATTENDANCE_STATUS_META tone，「—」為淡灰。儲存格 title「{MM/DD}（{週}）{姓名}：{狀態}」（null 為「無紀錄」，未來日期為「尚未到」）。\n- 每日欄的 class：一律 `mg-day`；非營業日加 `is-closed`（整欄含表頭灰底）；今天加 `is-today`（表頭主色淡底 + 主色粗體 + 底線、整欄淡底）；晚於今天加 `is-future`（內容 40% 透明）。\n- 統計欄：數值 0 淡灰、缺席 > 0 danger 粗體、未登記 > 0 warning 粗體。四個統計欄可點表頭排序（前端依 `stats` 值升冪 / 降冪 / 取消）；其他欄不排序，預設維持後端順序（學號）。\n- 合計列（show-summary，固定在表格底部）：學號欄「合計」；每日欄 = 當天 present + left 人數（只算不晚於 today 的營業日，其餘空白）；統計欄 = `data.totals`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/attendance/MonthlyAttendanceGrid.vue",
       "source_ref": null,
@@ -3587,7 +3589,10 @@
         "red_cases": [
           "MonthlyAttendanceGrid maps statuses to symbols：days 3 天（第 3 天非營業日）、學生 statuses ['present','absent',null] → 該列儲存格文字依序 ['●','✕','']，第 3 格 class 含 is-closed",
           "MonthlyAttendanceGrid distinguishes unrecorded service day：營業日 status null → '—'；status 'expected' → '○'；'leave' → '假'；'left' → '✓'",
-          "MonthlyAttendanceGrid highlights today column and stats：today '2026-10-02' → 表頭 '2' 欄 class 含 is-today；stats {attended:18,absent:1,leave:2,unrecorded:0} → 該列右側文字含 '18'、'1'、'2'、'0'"
+          "MonthlyAttendanceGrid highlights today column and stats：today '2026-10-02' → 表頭 '2' 欄 class 含 is-today；stats {attended:18,absent:1,leave:2,unrecorded:0} → 該列右側文字含 '18'、'1'、'2'、'0'",
+          "MonthlyAttendanceGrid summary row counts attended per day：today '2026-10-05'、days 2026-10-01~2026-10-03（第 3 天非營業日）、3 位學生第 1 天 statuses 依序 'present'、'left'、'absent'、totals.attended 330 → 合計列學號欄 '合計'、第 1 天欄 '2'、第 3 天欄空白、出席欄 '330'",
+          "MonthlyAttendanceGrid sorts by stats columns：3 位學生 stats.absent 依序 [0,3,1] → 點「缺席」表頭一次後各列 absent 依序 [0,1,3]，再點一次為 [3,1,0]",
+          "MonthlyAttendanceGrid hides class column when requested：hideClassColumn true → 表頭沒有 '班級'；false → 有 '班級'，class_name null 的列顯示 '未分班'"
         ],
         "run": "just web-test src/components/attendance/MonthlyAttendanceGrid.spec.ts -t \"MonthlyAttendanceGrid\"",
         "notes": ""
@@ -3601,7 +3606,7 @@
     {
       "id": "FRONTEND-129",
       "title": "實作 views/LeavesView.vue：請假列表（篩選、代登記、取消、附件）",
-      "description": "建立 `apps/web/src/views/LeavesView.vue`（路由 `/leaves`，`leaves:read`）。移植 ivy `FE:src/views/StudentLeavesListView.vue` 的篩選 + 表格 + 學生連結；**去掉** 學期班級標籤（classroomTerm）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-leaves.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：請假列表（篩選：學生 / 班級 / 狀態 / 假別 / 建立者 / 日期區間）、代登記 dialog（含期間重疊錯誤）、取消 dialog（剩餘日子 / 整筆兩種範圍與說明）、附件檢視（圖片預覽 / PDF 另開）、只有 leaves:read 時的唯讀樣式、空清單。\n\n**內容**\n- `PageHeader`「請假」；`AdminListToolbar`：學生（`StudentSelect` FRONTEND-096，可清除）、班級、狀態（生效中 / 已取消，預設生效中）、假別、建立者（家長 / 員工）、日期區間（預設今天起 30 天：date_from = todayTaipei，date_to = +30）。`usePagedList`（syncQuery）+ `listLeaves`。\n- 表格：學生（姓名 + 學號，連結 `/students?student={id}`）、班級、假別 tag（LEAVE_TYPE_META）、期間（start~end，同日只顯示一天；含今天時加「進行中」tag）、原因、建立者（「家長：{created_by_name}」/「員工：{name}」）+ formatDateTime(created_at)、狀態（已取消顯示「{cancelled_by_name} 於 {formatDateTime(cancelled_at)} 取消」）、附件（數量 → 展開 `LeaveAttachmentList` FRONTEND-132）。\n- 有 `leaves:write`：「代登記請假」→ `LeaveFormDialog`（FRONTEND-130）；active 且 `end_date >= todayTaipei()` 的列有「取消」，active 且已結束（`end_date < todayTaipei()`）的列有「整筆取消」（事後更正，出勤自動還原）；兩者都開 `LeaveCancelDialog`（FRONTEND-131）。\n- 即時：`notification.created` 的 `leave.created` / `leave.cancelled` 不另外訂閱，頁面提供「重新整理」按鈕。\n- 空清單：「這段期間沒有請假紀錄」。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/LeavesView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "建立 `apps/web/src/views/LeavesView.vue`（路由 `/leaves`，`leaves:read`）。移植 ivy `FE:src/views/StudentLeavesListView.vue` 的篩選 + 表格 + 學生連結；**去掉** 學期班級標籤（classroomTerm）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-leaves.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：請假列表（篩選：學生 / 班級 / 狀態 / 假別 / 建立者 / 日期區間）、代登記 dialog（含期間重疊錯誤）、取消 dialog（剩餘日子 / 整筆兩種範圍與說明）、附件檢視（圖片預覽 / PDF 另開）、只有 leaves:read 時的唯讀樣式、空清單。\n\n**內容**（外觀以設計稿 `docs/mockups/page-leaves.html` 的 decisions 為準）\n- `PageHeader`「請假」，副標「家長在 LINE 送出即生效；員工可代登記與取消」；actions「重新整理」（重抓目前條件，請求中 loading）與 primary「代登記請假」（權限見下）。\n- 篩選列沿用 AdminListToolbar 的版面樣式，但**不使用 AdminListToolbar 元件**（它固定渲染關鍵字搜尋框，而 `GET /admin/leaves` 沒有關鍵字參數）：學生（`StudentSelect` FRONTEND-096，可清除，寬 220；沒有 `students:read` 時不顯示）、班級（「全部」+ lookups classOptions）、狀態（生效中 / 已取消，沒有「全部」，預設生效中）、假別（全部 / 病假 / 事假 / 其他）、建立者（全部 / 家長 / 員工）、日期區間（el-date-picker daterange；預設今天起 30 天：date_from = todayTaipei，date_to = +30；可清除 = 不限日期；快捷「今天起 30 天」「本月」「上個月」「過去 90 天」）、「重設」文字鈕（篩選與預設相同時 disabled）；右側「共 N 筆」。`usePagedList`（syncQuery，page_size 20）+ `listLeaves`；任何篩選變更回到第 1 頁。\n- 表格（依開始日新到舊，後端排序，不提供欄位排序；欄寬讓 1280 視窗下約 900px 的表格可視寬不需橫向捲動，較窄時中間欄橫向捲動、學生與操作欄固定）：\n  - 學生（140，fixed left）：姓名（有 `students:read` 時為連結 `/students?student={id}`，否則純文字）+ 下一行「{學號}・{班級名稱|未分班}」（過長省略）。\n  - 假別（72）：tag（LEAVE_TYPE_META）。\n  - 期間（180）：start~end（同日只顯示一天）；active 且含今天時下一行「進行中」tag。\n  - 原因（min 110，吃剩餘寬度）：單行省略 + tooltip；null「—」。\n  - 建立者（128）：「家長：{created_by_name}」/「員工：{created_by_name}」（過長省略）+ 下一行 formatDateTime(created_at)。\n  - 取消紀錄（170）：只在本頁資料含 cancelled 列（沒有資料時依狀態篩選為已取消）時出現，cancelled 列顯示「{家長|員工}：{cancelled_by_name} 於 {formatDateTime(cancelled_at)} 取消」。不另設狀態欄（狀態篩選只有兩個值，同頁狀態相同）。\n  - 附件（88）：有附件時為「{n} 個」按鈕（迴紋針 + 箭頭，aria-expanded）切換該列展開，展開區為 `LeaveAttachmentList`（FRONTEND-132）；沒有附件顯示「—」。展開用 el-table expand（type=\"expand\" 欄寬 1 並隱藏預設箭頭，只由附件按鈕觸發）；展開區內容固定在表格可視寬度內（表格 body 捲動容器 `container-type: inline-size`，內容 `position: sticky; left: 0; width: 100cqw`），表格橫向捲動時不會被推出畫面。\n  - 操作（84，fixed right）：只在有 `leaves:write` 且本頁有 active 列（沒有資料時依狀態篩選為生效中）時出現；active 且 `end_date >= todayTaipei()` →「取消」；active 且已結束（`end_date < todayTaipei()`）→「整筆取消」（事後更正，出勤自動還原）；cancelled 列 →「—」；兩者都開 `LeaveCancelDialog`（FRONTEND-131）。\n- 權限：有 `leaves:write` 且有 `students:read` 才顯示「代登記請假」→ `LeaveFormDialog`（FRONTEND-130；它的 StudentSelect 需要 `students:read`）；列表已用學生篩選時，以該生為 `presetStudent`。只有 `leaves:read`：沒有代登記、沒有操作欄，附件照常可看。\n- 即時：`notification.created` 的 `leave.created` / `leave.cancelled` 不另外訂閱，靠「重新整理」。代登記或取消成功後重新整理列表；LeaveCancelDialog emit `failed` 時，於該 dialog 關閉後重新整理列表。\n- 三態：載入中表格 v-loading；空清單表格內 inline EmptyState「這段期間沒有請假紀錄」（清除日期區間時為「沒有符合條件的請假紀錄」）+「試著調整日期區間或篩選條件」；載入失敗 EmptyState error「無法載入請假紀錄」+「重試」取代表格。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/LeavesView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/LeavesView.vue",
       "source_ref": "FE:src/views/StudentLeavesListView.vue::default",
@@ -3616,7 +3621,8 @@
         "FRONTEND-132",
         "FRONTEND-024",
         "FRONTEND-039",
-        "FRONTEND-041"
+        "FRONTEND-042",
+        "FRONTEND-083"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -3628,10 +3634,13 @@
         ],
         "red_cases": [
           "LeavesView loads active leaves for next 30 days：fake now 2026-10-02 → 第一次 GET /admin/leaves params 深等於 {status:'active',date_from:'2026-10-02',date_to:'2026-11-01',page:1,page_size:20}",
-          "LeavesView renders creator and in-progress tag：回 [{student:{name:'王小明',student_no:'S1001'},leave_type:'sick',leave_type_label:'病假',start_date:'2026-10-01',end_date:'2026-10-03',created_by_type:'parent',created_by_name:'王大明',status:'active'}] → 文字含 '病假'、'2026-10-01~2026-10-03'、'進行中'、'家長：王大明'",
+          "LeavesView renders creator and in-progress tag：回 [{student:{name:'王小明',student_no:'S1001',class_name:null},leave_type:'sick',leave_type_label:'病假',start_date:'2026-10-01',end_date:'2026-10-03',created_by_type:'parent',created_by_name:'王大明',status:'active'}] → 文字含 '病假'、'2026-10-01~2026-10-03'、'進行中'、'家長：王大明'、'S1001・未分班'；表頭沒有 '狀態' 與 '班級'",
           "LeavesView shows cancel actions per leave state with permission：fake now 2026-10-02、leaves:write → end_date 2026-10-03 的 active 列有 '取消'；end_date 2026-09-30 的 active 列有 '整筆取消'（點擊開啟 dialog 且文字含 '已結束的請假只能整筆取消'）；cancelled 列兩者皆無；permissions ['leaves:read'] → 沒有 '代登記請假'、'取消'、'整筆取消'",
-          "LeavesView shows cancelled info：status cancelled、cancelled_by_name '林行政'、cancelled_at '2026-10-01T02:00:00Z' → 文字含 '林行政 於 2026/10/01 10:00 取消'",
-          "LeavesView empty state：回 {items:[],total:0} → 文字含 '這段期間沒有請假紀錄'"
+          "LeavesView shows cancelled info：status cancelled、cancelled_by_type 'staff'、cancelled_by_name '林行政'、cancelled_at '2026-10-01T02:00:00Z' → 表頭有 '取消紀錄'、文字含 '員工：林行政 於 2026/10/01 10:00 取消'；回應只有 active 列時表頭沒有 '取消紀錄'",
+          "LeavesView empty state：回 {items:[],total:0} → 文字含 '這段期間沒有請假紀錄'",
+          "LeavesView hides create without students:read：permissions ['leaves:read','leaves:write'] → 沒有 '代登記請假'、沒有學生篩選；permissions 再加 'students:read' → 有 '代登記請假'",
+          "LeavesView toggles attachment row：attachments 2 筆的列 → 點 '2 個' 後出現 LeaveAttachmentList（文字含 '附件 1'）且該按鈕 aria-expanded 為 'true'；再點一次 → 不含 '附件 1'",
+          "LeavesView presets filtered student in create dialog：學生篩選選 s1（王小明）後點 '代登記請假' → LeaveFormDialog 的 props.presetStudent.id === 's1'"
         ],
         "run": "just web-test src/views/LeavesView.spec.ts -t \"LeavesView\"",
         "notes": ""
@@ -3645,7 +3654,7 @@
     {
       "id": "FRONTEND-130",
       "title": "實作 components/leaves/LeaveFormDialog.vue：員工代登記請假",
-      "description": "建立 `apps/web/src/components/leaves/LeaveFormDialog.vue`（BACKEND-352：同一學生 active 請假不可重疊；送出即生效並把期間出勤改為請假）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-leaves.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：請假列表（篩選：學生 / 班級 / 狀態 / 假別 / 建立者 / 日期區間）、代登記 dialog（含期間重疊錯誤）、取消 dialog（剩餘日子 / 整筆兩種範圍與說明）、附件檢視（圖片預覽 / PDF 另開）、只有 leaves:read 時的唯讀樣式、空清單。\n\n**props / emits**：`modelValue`、`presetStudent?: {id, name, student_no, class_name}`；emits `update:modelValue`、`created(leave: Leave)`。\n- 欄位：學生（`StudentSelect`，presetStudent 時預選）、假別（病假 / 事假 / 其他，必填）、期間（el-date-picker daterange；開始不可早於今天 −30 天，結束不可早於開始；單日請假開始 = 結束）、原因（≤200）。\n- 送出前提示「送出後立即生效，期間內的出勤會改為請假，並通知班級負責老師」。\n- `createLeave` → 成功 ElMessage.success('已登記請假') 並 emit created。\n- 錯誤：`leave_overlap` →「與既有請假（{details.start_date}~{details.end_date}）重疊」；`no_service_days_in_range` →「所選期間沒有營業日」；`student_not_active` →「此學生不是在學狀態」；422 欄位對應。\n\n**驗收標準**\n- body 正確；重疊與無營業日錯誤訊息；日期限制。",
+      "description": "建立 `apps/web/src/components/leaves/LeaveFormDialog.vue`（BACKEND-352：同一學生 active 請假不可重疊；送出即生效並把期間出勤改為請假）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-leaves.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：請假列表（篩選：學生 / 班級 / 狀態 / 假別 / 建立者 / 日期區間）、代登記 dialog（含期間重疊錯誤）、取消 dialog（剩餘日子 / 整筆兩種範圍與說明）、附件檢視（圖片預覽 / PDF 另開）、只有 leaves:read 時的唯讀樣式、空清單。\n\n**props / emits**：`modelValue`、`presetStudent?: {id, name, student_no, class_name}`；emits `update:modelValue`、`created(leave: Leave)`。外觀以設計稿 `docs/mockups/page-leaves.html` 的 decisions 為準。\n- `FormDialog`（FRONTEND-040）md，標題「代登記請假」，送出鈕「送出」；有輸入後關閉需確認（dirty）。\n- 欄位（label 在上）：學生（`StudentSelect`；presetStudent 時預選並作為 initialOption）→ 假別（病假 / 事假 / 其他三段按鈕，必填、沒有預設值）→ 請假期間（el-date-picker daterange「開始日 ~ 結束日」；`todayTaipei() − 30` 天以前 disabled；快捷「今天」「明天」；下方提示「單日請假：開始與結束選同一天。最早可選 {date}（30 天前）」）→ 原因（選填，≤200 字計數，placeholder「例如：發燒看醫生」）。\n- 表單下方 info alert「送出後立即生效，期間內的出勤會改為請假，並通知班級負責老師」。\n- 前端驗證（不送請求，錯誤顯示在對應欄位下方）：「請選擇學生」「請選擇假別」「請選擇請假期間」；`end_date − start_date > 60` 天 →「單筆請假最長 61 天」（同後端上限）。\n- `createLeave({student_id, leave_type, start_date, end_date, reason?})`：原因去頭尾空白後為空時不帶 reason；成功 ElMessage.success('已登記請假')、emit created、關閉。\n- 錯誤（顯示在對應欄位下方）：`leave_overlap` → 期間欄「與既有請假（{details.start_date}~{details.end_date}）重疊」（同一天只顯示一天）；`no_service_days_in_range` → 期間欄「所選期間沒有營業日」；`student_not_active` → 學生欄「此學生不是在學狀態」；422 `validation_error` 以 `validationFieldErrors` 對到欄位。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/leaves/LeaveFormDialog.vue",
       "source_ref": null,
@@ -3668,7 +3677,10 @@
           "LeaveFormDialog creates leave：presetStudent s1、假別 '事假'、期間 2026-10-05~2026-10-06、原因 '家庭旅遊' → POST /admin/leaves body 深等於 {student_id:'s1',leave_type:'personal',start_date:'2026-10-05',end_date:'2026-10-06',reason:'家庭旅遊'}，emitted('created') 長度 1",
           "LeaveFormDialog shows overlap range：POST 回 409 leave_overlap details {start_date:'2026-10-06',end_date:'2026-10-07'} → 文字含 '與既有請假（2026-10-06~2026-10-07）重疊'",
           "LeaveFormDialog shows no service day error：回 422 no_service_days_in_range → 文字含 '所選期間沒有營業日'",
-          "LeaveFormDialog requires student and type：未選學生與假別點送出 → 文字含 '請選擇學生' 與 '請選擇假別'，無請求"
+          "LeaveFormDialog requires student and type：未選學生、假別與期間點送出 → 文字含 '請選擇學生'、'請選擇假別'、'請選擇請假期間'，無請求",
+          "LeaveFormDialog rejects range over 61 days：期間 2026-10-05~2026-12-05 → 文字含 '單筆請假最長 61 天'，無請求",
+          "LeaveFormDialog omits blank reason：原因只輸入空白 → POST body 沒有 reason 鍵",
+          "LeaveFormDialog shows student not active：POST 回 409 student_not_active → 文字含 '此學生不是在學狀態'"
         ],
         "run": "just web-test src/components/leaves/LeaveFormDialog.spec.ts -t \"LeaveFormDialog\"",
         "notes": ""
@@ -3682,7 +3694,7 @@
     {
       "id": "FRONTEND-131",
       "title": "實作 components/leaves/LeaveCancelDialog.vue：取消請假（剩餘日子 / 整筆）",
-      "description": "建立 `apps/web/src/components/leaves/LeaveCancelDialog.vue`（domain_spec M5、BACKEND-353：remaining 對未開始的請假 = 整筆取消、已開始 = end_date 改為昨天；all = 整筆取消，已登記到班 / 離班的出勤不動）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-leaves.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：請假列表（篩選：學生 / 班級 / 狀態 / 假別 / 建立者 / 日期區間）、代登記 dialog（含期間重疊錯誤）、取消 dialog（剩餘日子 / 整筆兩種範圍與說明）、附件檢視（圖片預覽 / PDF 另開）、只有 leaves:read 時的唯讀樣式、空清單。\n\n**props / emits**：`modelValue`、`leave: Leave`、`today?: string`（預設 todayTaipei）；emits `update:modelValue`、`cancelled(leave: Leave)`。\n**內容**\n- 摘要：學生、假別、期間。\n- 依日期判斷：\n  - 尚未開始（start_date > today）：只顯示說明「將取消整筆請假」，送出 scope `remaining`。\n  - 已開始（start_date ≤ today ≤ end_date）：radio 兩個選項——「取消今天起的請假（{today}~{end_date}）」（預設，scope remaining，說明「今天起的出勤會恢復為預計到班；{start_date}~{昨天} 保留為請假」，start_date 為今天時說明改為「將取消整筆請假」）與「整筆取消（{start_date}~{end_date}）」（scope all，說明「已過去的日子也會改回，已登記到班或離班的紀錄不受影響」）。\n  - 已結束（end_date < today）：只顯示說明「已結束的請假只能整筆取消（事後更正）；期間內登記為請假的出勤會自動還原，已登記到班或離班的紀錄不受影響」，送出 scope `all`（不送 remaining，避免 409 leave_already_ended）。\n- 送出 `cancelLeave(id, scope)` → ElMessage.success('已取消請假') → emit cancelled。\n- 錯誤 `leave_not_active` / `leave_already_ended` 顯示後端 message。\n\n**驗收標準**\n- 未開始 / 已開始 / 已結束三種畫面與 scope；說明文字的日期正確。",
+      "description": "建立 `apps/web/src/components/leaves/LeaveCancelDialog.vue`（domain_spec M5、BACKEND-353：remaining 對未開始的請假 = 整筆取消、已開始 = end_date 改為昨天；all = 整筆取消，已登記到班 / 離班的出勤不動）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-leaves.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：請假列表（篩選：學生 / 班級 / 狀態 / 假別 / 建立者 / 日期區間）、代登記 dialog（含期間重疊錯誤）、取消 dialog（剩餘日子 / 整筆兩種範圍與說明）、附件檢視（圖片預覽 / PDF 另開）、只有 leaves:read 時的唯讀樣式、空清單。\n\n**props / emits**：`modelValue`、`leave: Leave`、`today?: string`（預設 todayTaipei）；emits `update:modelValue`、`cancelled(leave: Leave)`、`failed(code: string)`、`closed`（轉發 FormDialog 關閉動畫結束的 closed）。外觀以設計稿 `docs/mockups/page-leaves.html` 的 decisions 為準。\n**內容**\n- `FormDialog` md：標題「取消請假」（已結束時「整筆取消請假」）；取消鈕「返回」；送出鈕「取消請假」（送出的 scope 為 all 時「整筆取消」）；不自動聚焦。\n- 上方灰底摘要：「{姓名}（{學號}・{班級名稱|未分班}）」+ 假別 tag + 期間。日期區間一律同一天只顯示一天。\n- 依日期判斷：\n  - 尚未開始或今天才開始（start_date ≥ today）：只顯示「將取消整筆請假」，沒有選項，送出 scope `remaining`（今天才開始的請假 remaining 與 all 結果相同）。\n  - 已開始（start_date < today ≤ end_date）：兩個帶框 radio——「取消今天起的請假（{today}~{end_date}）」（預設，scope remaining，說明「今天起的出勤會恢復為預計到班；{start_date}~{昨天} 保留為請假」）與「整筆取消（{start_date}~{end_date}）」（scope all，說明「已過去的日子也會改回，已登記到班或離班的紀錄不受影響」）。\n  - 已結束（end_date < today）：只顯示「已結束的請假只能整筆取消（事後更正）；期間內登記為請假的出勤會自動還原，已登記到班或離班的紀錄不受影響」，送出 scope `all`（不送 remaining，避免 409 leave_already_ended）。\n- 底部灰字（鈴鐺 icon）「取消後會通知班級負責老師」。\n- 送出 `cancelLeave(id, scope)` → ElMessage.success('已取消請假') → emit cancelled → 關閉。\n- 錯誤 `leave_not_active` / `leave_already_ended`：dialog 頂部 el-alert error 顯示後端 message，dialog 保持開啟，emit `failed(code)`（LeavesView 於 dialog 關閉後重新整理列表）。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/leaves/LeaveCancelDialog.vue",
       "source_ref": null,
@@ -3705,8 +3717,10 @@
           "LeaveCancelDialog future leave cancels whole leave：today '2026-10-02'、leave 2026-10-05~2026-10-06 → 文字含 '將取消整筆請假'，沒有 radio；送出 → POST /admin/leaves/l1/cancel body 深等於 {scope:'remaining'}",
           "LeaveCancelDialog started leave defaults to remaining：leave 2026-09-30~2026-10-04 → 預設選中 '取消今天起的請假（2026-10-02~2026-10-04）'，說明含 '2026-09-30~2026-10-01 保留為請假'；送出 body {scope:'remaining'}",
           "LeaveCancelDialog started leave can cancel all：選 '整筆取消（2026-09-30~2026-10-04）' → 送出 body 深等於 {scope:'all'}，emitted('cancelled') 長度 1",
-          "LeaveCancelDialog surfaces ended error：回 409 {error:{code:'leave_already_ended',message:'請假已結束，無法取消剩餘日子'}} → body 含該訊息",
-          "LeaveCancelDialog ended leave only allows cancel all：today '2026-10-02'、leave 2026-09-28~2026-09-30 → 文字含 '已結束的請假只能整筆取消'，沒有 radio；送出 → POST /admin/leaves/l1/cancel body 深等於 {scope:'all'}"
+          "LeaveCancelDialog surfaces ended error：回 409 {error:{code:'leave_already_ended',message:'請假已結束，無法取消剩餘日子'}} → body 含該訊息，emitted('failed') 深等於 [['leave_already_ended']]，dialog 仍開啟",
+          "LeaveCancelDialog ended leave only allows cancel all：today '2026-10-02'、leave 2026-09-28~2026-09-30 → 文字含 '已結束的請假只能整筆取消'，沒有 radio；送出 → POST /admin/leaves/l1/cancel body 深等於 {scope:'all'}",
+          "LeaveCancelDialog leave starting today has no options：today '2026-10-02'、leave 2026-10-02~2026-10-04 → 文字含 '將取消整筆請假'，沒有 radio；送出 body 深等於 {scope:'remaining'}",
+          "LeaveCancelDialog shows single day ranges：today '2026-10-02'、leave 2026-10-01~2026-10-03 → 說明含 '2026-10-01 保留為請假'，不含 '2026-10-01~2026-10-01'"
         ],
         "run": "just web-test src/components/leaves/LeaveCancelDialog.spec.ts -t \"LeaveCancelDialog\"",
         "notes": ""
@@ -3720,7 +3734,7 @@
     {
       "id": "FRONTEND-132",
       "title": "實作 components/leaves/LeaveAttachmentList.vue：請假附件檢視（短效 URL，圖片預覽 / PDF 另開）",
-      "description": "建立 `apps/web/src/components/leaves/LeaveAttachmentList.vue`（附件存私有 bucket，後端簽發短效 URL，BACKEND-354）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-leaves.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：請假列表（篩選：學生 / 班級 / 狀態 / 假別 / 建立者 / 日期區間）、代登記 dialog（含期間重疊錯誤）、取消 dialog（剩餘日子 / 整筆兩種範圍與說明）、附件檢視（圖片預覽 / PDF 另開）、只有 leaves:read 時的唯讀樣式、空清單。\n\n**props**：`leaveId: string`、`attachments: {id, mime_type, size_bytes, created_at}[]`。\n- 每個附件一列：類型 icon（圖片 / PDF）、大小（KB / MB，一位小數）、上傳時間。\n- 點擊 → `fetchLeaveAttachmentUrl(leaveId, id)`（每次點都重新取，不快取）→ 圖片：el-image-viewer 預覽；PDF / 其他：`window.open(url, '_blank', 'noopener')`。取得中該列 loading；失敗 ElMessage.error(errorMessage(err, '無法開啟附件'))。\n- 空陣列：「沒有附件」。\n\n**驗收標準**\n- 大小格式；每次點擊都重新取 URL；圖片預覽 vs PDF 另開；失敗提示。",
+      "description": "建立 `apps/web/src/components/leaves/LeaveAttachmentList.vue`（附件存私有 bucket，後端簽發短效 URL，BACKEND-354）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-leaves.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：請假列表（篩選：學生 / 班級 / 狀態 / 假別 / 建立者 / 日期區間）、代登記 dialog（含期間重疊錯誤）、取消 dialog（剩餘日子 / 整筆兩種範圍與說明）、附件檢視（圖片預覽 / PDF 另開）、只有 leaves:read 時的唯讀樣式、空清單。\n\n**props**：`leaveId: string`、`attachments: {id, mime_type, size_bytes, created_at}[]`。外觀以設計稿 `docs/mockups/page-leaves.html` 的 decisions 為準。\n- 每個附件一個按鈕（高 ≥ 52px、寬 300，橫向排列可換行）：類型 icon（圖片 Picture；PDF Document、danger 色）+「附件 {序號}・{類型}」（image/jpeg「圖片（JPG）」、image/png「圖片（PNG）」、image/webp「圖片（WEBP）」、image/heic「圖片（HEIC）」、application/pdf「PDF 文件」、其他「檔案」；附件沒有使用者檔名）+ 下一行「{大小}・{formatDateTime(created_at)} 上傳」+ 右側動作「預覽」（JPG / PNG / WEBP）或「另開」（其他）。大小：≥ 1 MB 以 MB、否則以 KB，一位小數，1024 為底。\n- 點擊 → `fetchLeaveAttachmentUrl(leaveId, id)`（每次點都重新取，不快取）→ image/jpeg、image/png、image/webp：el-image-viewer 預覽；application/pdf、image/heic（多數瀏覽器無法在頁內顯示）與其他：`window.open(url, '_blank', 'noopener')`。取得中該列 icon 轉圈、動作文字「取得中…」、aria-busy，重複點擊忽略，其他列仍可點；失敗 ElMessage.error(errorMessage(err, '無法開啟附件'))。\n- 空陣列：「沒有附件」。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/leaves/LeaveAttachmentList.vue",
       "source_ref": null,
@@ -3738,10 +3752,11 @@
           "vitest"
         ],
         "red_cases": [
-          "LeaveAttachmentList formats size and type：attachments [{mime_type:'image/jpeg',size_bytes:524288},{mime_type:'application/pdf',size_bytes:2621440}] → 文字含 '512.0 KB' 與 '2.5 MB'",
+          "LeaveAttachmentList formats size and type：attachments [{mime_type:'image/jpeg',size_bytes:524288},{mime_type:'application/pdf',size_bytes:2621440}] → 文字含 '512.0 KB'、'2.5 MB'、'附件 1・圖片（JPG）'、'附件 2・PDF 文件'",
           "LeaveAttachmentList opens pdf in new tab with fresh url each time：stub window.open → 點 PDF 列兩次 → GET /admin/leaves/l1/attachments/a2 請求數 2，window.open 第一個參數為 mock 回傳的 url",
           "LeaveAttachmentList previews image：點圖片列 → GET 回 {url:'https://storage/a1.jpg',expires_in:300} → 出現 .el-image-viewer__wrapper 且其 img src === 'https://storage/a1.jpg'",
-          "LeaveAttachmentList shows error and empty state：GET 回 404 → body 含後端 message；attachments [] → 文字含 '沒有附件'"
+          "LeaveAttachmentList shows error and empty state：GET 回 404 → body 含後端 message；attachments [] → 文字含 '沒有附件'",
+          "LeaveAttachmentList opens heic in new tab：attachments [{id:'a3',mime_type:'image/heic',size_bytes:3565158}] → 點擊後 window.open 第一個參數為 mock 回傳的 url，沒有 .el-image-viewer__wrapper"
         ],
         "run": "just web-test src/components/leaves/LeaveAttachmentList.spec.ts -t \"LeaveAttachmentList\"",
         "notes": ""
@@ -5456,7 +5471,7 @@
     {
       "id": "FRONTEND-261",
       "title": "實作 views/DashboardView.vue：今日儀表板",
-      "description": "建立 `apps/web/src/views/DashboardView.vue`（路由 `/`，`dashboard:read`；domain_spec M11：今日應到 / 已到 / 未到 / 請假 / 缺席人數、待回覆接送請求數、作業完成率、近期請假清單，單一 endpoint 聚合）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-dashboard.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：營業日（出勤、接送、作業、近期請假四區）、非營業日、各卡片依權限是否可點、載入中、載入失敗。\n\n**內容**\n- `PageHeader`「今日儀表板」，副標 `formatDateWithWeekday(date)`；「重新整理」按鈕與「{n} 秒前更新」。\n- 非營業日：el-alert info「今天不是營業日」，下方仍顯示近期請假。\n- 出勤區（`StatCard` ×5）：應到 expected_total、已到 arrived（hint「在班 {present}・已離班 {left}」）、未到 not_arrived（warning）、請假 leave、缺席 absent（danger）。有 `attendance:read` 時卡片 `to` 為 `/attendance`（未到卡帶 `?status=expected` 不實作篩選 query 時僅導頁）。\n- 接送區：進行中 open、待回覆 needs_reply（> 0 danger）、家長已到 arrived（> 0 danger）、今日已完成 completed；有 `pickup:read` 時 `to` 為 `/pickup`。\n- 作業區：完成率 el-progress（後端 BACKEND-490 的 completion_rate 已是 0~100、1 位小數，顯示 `Math.round(completion_rate)`%，例如 57.1 → 57%；不可再乘 100。完成時順手把 FRONTEND-260 `api/dashboard.ts` 的 completion_rate 註解改為「0~100，1 位小數」、`dashboard.spec.ts` fixture 0.571 改為 57.1）+ 已完成 / 進行中 / 尚未開始；有 `homework:read` 時可點至 `/homework`。\n- 近期請假：`RecentLeavesList`（FRONTEND-262）。\n- 自動更新：頁面可見時每 60 秒重抓（`document.hidden` 時暫停，回到可見立即重抓一次）；無 ws。\n- 載入失敗：EmptyState error + 重試；已有資料時失敗只顯示 ElMessage 並保留舊資料。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/DashboardView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case（fake timers）。",
+      "description": "建立 `apps/web/src/views/DashboardView.vue`（路由 `/`，`dashboard:read`；domain_spec M11：今日應到 / 已到 / 未到 / 請假 / 缺席人數、待回覆接送請求數、作業完成率、近期請假清單，單一 endpoint 聚合）。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-dashboard.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：營業日（出勤、接送、作業、近期請假四區）、非營業日、各卡片依權限是否可點、載入中、載入失敗。\n\n**內容**（外觀以設計稿 `docs/mockups/page-dashboard.html` 的 decisions 為準）\n- `PageHeader`「今日儀表板」，副標 `formatDateWithWeekday(date)`（資料載入前不顯示）；actions：更新時間文字 +「重新整理」（請求中 loading）。更新時間文字每秒更新：距上次成功更新 < 5 秒「剛剛更新」、< 60 秒「{n} 秒前更新」、其餘「{m} 分鐘前更新」。\n- 版面由上而下：出勤（5 張 StatCard 一列）→ 接送（4 張）與作業進度並排（2 : 1；視窗寬 < 1200px 時改上下）→ 近期請假。區塊標題 14px 粗體次要色。\n- 非營業日：PageHeader 下方 el-alert info「今天不是營業日」+ 說明「出勤、接送與作業統計只在營業日顯示；近期請假照常列出。」，隱藏出勤 / 接送 / 作業三區，只顯示近期請假。\n- 出勤區（`StatCard` ×5）：應到 expected_total（hint「不含請假」）、已到 arrived（hint「在班 {present}・已離班 {left}」）、未到 not_arrived（> 0 warning，否則 info）、請假 leave、缺席 absent（> 0 danger，否則 info）。有 `attendance:read` 時五張卡 `to` 為 `/attendance`（未到卡也只導頁）；沒有時為靜態卡。\n- 接送區：進行中 open、待回覆 needs_reply（> 0 danger）、家長已到 arrived（> 0 danger）、今日已完成 completed；有 `pickup:read` 時 `to` 為 `/pickup`。\n- 作業區：沿用 StatCard 外框 / 標籤列箭頭 / hover 的卡（標籤「作業完成率」；有 `homework:read` 時整張卡為連結 `/homework`，role=link、Enter 觸發；沒有時為靜態卡）：數值 `Math.round(completion_rate)`%（後端 BACKEND-490 的 completion_rate 已是 0~100、1 位小數，例如 57.1 → 57%；不可再乘 100。完成時順手把 FRONTEND-260 `api/dashboard.ts` 的 completion_rate 註解改為「0~100，1 位小數」、`dashboard.spec.ts` fixture 0.571 改為 57.1）+ el-progress（stroke 10、不顯示文字、100% 時 success）+ 已完成 / 進行中 / 尚未開始計數（色點依 HOMEWORK_OVERALL_STATUS_META）+ 灰字「以今天到班的 {total} 位學生計算」；`homework.total` 為 0 時數值顯示「—」+「今天還沒有學生到班」，不顯示 0%。\n- 近期請假：`RecentLeavesList`（FRONTEND-262），區塊標題旁灰字「今天起 7 天內」。\n- 自動更新：頁面可見時每 60 秒重抓（`document.hidden` 時暫停，回到可見立即重抓一次並重新計時）；無 ws。\n- 載入：首次載入時 StatCard `loading`、作業卡 skeleton、RecentLeavesList `loading`；首次載入失敗：EmptyState error「無法載入今日儀表板」+「重試」取代內容；已有資料時失敗只顯示 ElMessage.error(errorMessage(err, '無法更新儀表板')) 並保留舊資料（更新時間文字繼續累加）。\n- 路由接線：完成時把 `apps/web/src/router/viewLoaders.ts`（FRONTEND-024）中本頁的 loader 由 PlaceholderView 改為 `() => import('@/views/DashboardView.vue')`。\n\n**驗收標準**：每一條對應下列 red_case（fake timers）。",
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/DashboardView.vue",
       "source_ref": null,
@@ -5480,11 +5495,14 @@
           "vitest"
         ],
         "red_cases": [
-          "DashboardView renders attendance pickup and homework：回上例資料 → 文字含 '應到' 與 '80'、'未到' 與 '4'、'在班 60・已離班 10'、'待回覆' 與 '1'、'57%'",
+          "DashboardView renders attendance pickup and homework：回上例資料 → 文字含 '應到' 與 '80'、'不含請假'、'未到' 與 '4'、'在班 60・已離班 10'、'待回覆' 與 '1'、'57%'",
           "DashboardView links depend on permissions：permissions ['dashboard:read','pickup:read'] → 點 '待回覆' 卡導到 '/pickup'；點 '應到' 卡 router path 仍為 '/'（無 attendance:read 不可點）",
           "DashboardView auto refresh pauses when hidden：60 秒後 GET 請求數 2；設 document.hidden=true 並觸發 visibilitychange → 再過 120 秒仍為 2；設回可見 → 立即 3",
-          "DashboardView non service day banner：is_service_day false → 文字含 '今天不是營業日'",
-          "DashboardView keeps data on refresh failure：第二次 GET 回 500 → 畫面仍顯示 '80'，body 含錯誤訊息"
+          "DashboardView non service day banner：is_service_day false → 文字含 '今天不是營業日' 與 '近期請假'，不含 '待回覆' 與 '作業完成率'",
+          "DashboardView keeps data on refresh failure：第二次 GET 回 500 → 畫面仍顯示 '80'，body 含錯誤訊息",
+          "DashboardView colors counts only when positive：not_arrived 0、absent 0 → '未到'、'缺席' 卡根元素 class 含 'tone-info'；not_arrived 4、absent 1 → 分別含 'tone-warning'、'tone-danger'",
+          "DashboardView homework placeholder without arrivals：homework {total:0,done:0,in_progress:0,not_started:0,completion_rate:0} → 文字含 '今天還沒有學生到班'，不含 '0%'",
+          "DashboardView updated time text：載入後文字含 '剛剛更新'；推進 30 秒 → 含 '30 秒前更新'；設 document.hidden=true 並觸發 visibilitychange 後再推進 60 秒 → 含 '1 分鐘前更新'"
         ],
         "run": "just web-test src/views/DashboardView.spec.ts -t \"DashboardView\"",
         "notes": ""
@@ -5498,7 +5516,7 @@
     {
       "id": "FRONTEND-262",
       "title": "實作 components/dashboard/RecentLeavesList.vue：儀表板近期請假清單",
-      "description": "建立 `apps/web/src/components/dashboard/RecentLeavesList.vue`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-dashboard.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：營業日（出勤、接送、作業、近期請假四區）、非營業日、各卡片依權限是否可點、載入中、載入失敗。\n\n**props**：`items: DashboardToday['recent_leaves']`。\n- 每列：學生姓名、班級、假別、期間（同日只顯示一天；含今天加「今天」tag）、建立者（家長 / 員工）+ 相對時間（formatDateTime(created_at)）。\n- 最多顯示 8 筆；有 `leaves:read` 時底部「查看全部請假」→ `/leaves`；點學生（有 students:read）→ `/students?student={student_id}`。\n- 空清單：「近期沒有請假」。\n\n**驗收標準**\n- 列內容、今天標示、上限 8 筆、連結依權限、空狀態。",
+      "description": "建立 `apps/web/src/components/dashboard/RecentLeavesList.vue`。\n\n**設計稿關卡**：實作前需通過設計稿關卡（`.claude/skills/ui-design-preview`），稿檔名 `docs/mockups/page-dashboard.html`（`preview-tasks` 需列入本 task id），`preview-status` 為 `approved` 才可進 `in_progress`。稿需呈現：營業日（出勤、接送、作業、近期請假四區）、非營業日、各卡片依權限是否可點、載入中、載入失敗。\n\n**props**：`items: DashboardToday['recent_leaves']`、`loading?: boolean`（true 時顯示 3 列 skeleton）。權限以 `usePermission()`、今天以 `todayTaipei()` 判斷。外觀以設計稿 `docs/mockups/page-dashboard.html` 的 decisions 為準。\n- 白底清單，每列（高 ≥ 48px）：學生姓名（有 `students:read` 時為連結 → `/students?student={student_id}`，否則純文字）+ 班級灰字（null「未分班」）、假別（中性 info tag 顯示 `leave_type_label`；回應沒有假別代碼，不依 LEAVE_TYPE_META 上色）、期間（同日只顯示一天；含今天加「今天」tag）、「家長申請 / 員工代登記・{formatDateTime(created_at)}」。\n- 最多顯示 8 筆；有 `leaves:read` 時底部右側「查看全部請假」→ `/leaves`（空清單時也顯示）；不顯示剩餘筆數（後端最多回 10 筆）。\n- 空清單：inline EmptyState「近期沒有請假」。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/dashboard/RecentLeavesList.vue",
       "source_ref": null,
@@ -5507,7 +5525,8 @@
       "depends_on": [
         "FRONTEND-260",
         "FRONTEND-023",
-        "FRONTEND-003"
+        "FRONTEND-003",
+        "FRONTEND-042"
       ],
       "suggested_model": "sonnet-5",
       "risk_notes": "",
@@ -5518,9 +5537,11 @@
           "vitest"
         ],
         "red_cases": [
-          "RecentLeavesList renders rows with today tag：fake now 2026-10-02、items [{student_name:'王小明',class_name:'低年級A班',leave_type_label:'病假',start_date:'2026-10-02',end_date:'2026-10-02',created_by_type:'parent'}] → 文字含 '王小明'、'病假'、'2026-10-02'（單日）、'今天'、'家長'",
+          "RecentLeavesList renders rows with today tag：fake now 2026-10-02、items [{student_name:'王小明',class_name:'低年級A班',leave_type_label:'病假',start_date:'2026-10-02',end_date:'2026-10-02',created_by_type:'parent'}] → 文字含 '王小明'、'病假'、'2026-10-02'（單日）、'今天'、'家長申請'",
           "RecentLeavesList limits to eight and links by permission：items 10 筆 → 只渲染 8 列；permissions 含 leaves:read → 有 '查看全部請假'，點擊導到 '/leaves'；無 → 沒有該連結",
-          "RecentLeavesList empty state：items [] → 文字含 '近期沒有請假'"
+          "RecentLeavesList empty state：items [] → 文字含 '近期沒有請假'",
+          "RecentLeavesList links student by permission：permissions 含 students:read → 點 '王小明' 導到 '/students?student=s1'；沒有 students:read → 點 '王小明' router path 不變",
+          "RecentLeavesList shows loading skeleton：loading true → 有 .el-skeleton，沒有清單列，也不含 '近期沒有請假'"
         ],
         "run": "just web-test src/components/dashboard/RecentLeavesList.spec.ts -t \"RecentLeavesList\"",
         "notes": ""

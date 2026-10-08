@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="FRONTEND-129,FRONTEND-130,FRONTEND-131,FRONTEND-132">
 <meta name="preview-route" content="/leaves">
-<meta name="preview-updated" content="2026-10-07">
+<meta name="preview-updated" content="2026-10-08">
 
 <title>設計稿：請假</title>
 
@@ -151,19 +151,24 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
 
 /* ==================== 請假列表（FRONTEND-129） ==================== */
 .panel { background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter); border-radius: 8px; padding: 16px; }
-.lv-student { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.4; }
+.lv-student { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; line-height: 1.4; }
 .lv-student .el-button { height: auto; padding: 0; font-weight: 600; }
 .lv-student__name { font-weight: 600; color: var(--el-text-color-primary); }
 .lv-sub { font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); font-variant-numeric: tabular-nums; }
+.lv-ellipsis { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lv-none { color: var(--el-text-color-placeholder); }
 .lv-period { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.lv-period .el-tag { margin-left: 6px; }
-.lv-status-note { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); }
+.lv-period-tag { margin-top: 2px; }
+.lv-cancel-note { font-size: 13px; line-height: 1.5; color: var(--el-text-color-regular); font-variant-numeric: tabular-nums; }
 .lv-att-toggle .lv-att-chev { margin-left: 2px; transition: transform 0.2s ease; }
 .lv-att-toggle.is-open .lv-att-chev { transform: rotate(180deg); }
 .leave-table .leave-expand-col > .cell { display: none; }
 .leave-table td.leave-expand-col, .leave-table th.leave-expand-col { border-right: none; }
-.leave-table .el-table__expanded-cell { padding: 12px 16px 16px; background: var(--el-fill-color-lighter); }
+/* 展開列：內容固定在表格的可視寬度內（sticky + 容器寬），表格橫向捲動時不會被推出畫面。
+   表格 body 的捲動容器設為 inline-size 容器，100cqw = 可視寬；不支援容器單位的瀏覽器退回整列寬。 */
+.leave-table .el-table__body-wrapper .el-scrollbar__wrap { container-type: inline-size; }
+.leave-table td.el-table__expanded-cell { padding: 0; background: var(--el-fill-color-lighter); }
+.lv-expand { position: sticky; left: 0; box-sizing: border-box; width: 100%; width: 100cqw; padding: 12px 16px 16px; }
 .lv-pager { display: flex; justify-content: flex-end; margin-top: 12px; }
 .lv-reset { margin-left: -4px; }
 @media (prefers-reduced-motion: reduce) { .lv-att-toggle .lv-att-chev { transition: none; } }
@@ -266,11 +271,6 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
       <el-option label="404 attachment_not_found" value="attachment_not_found"></el-option>
       <el-option label="502 storage_unavailable" value="storage_unavailable"></el-option>
     </el-select>
-    <span>今天才開始的請假（待裁定 1）</span>
-    <el-radio-group v-model="startTodayMode" size="small">
-      <el-radio-button value="B">B 推薦</el-radio-button>
-      <el-radio-button value="A">A 照 task</el-radio-button>
-    </el-radio-group>
     <span class="last-request">GET <span class="mono">/admin/leaves?{{ queryString }}</span></span>
     <span v-if="lastRequest" class="last-request">最後送出：<span class="mono">{{ lastRequest }}</span></span>
     <span class="last-request">提示：日期區間選「過去 90 天」可看已結束的請假（整筆取消）；狀態選「已取消」看取消資訊。</span>
@@ -343,44 +343,42 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
         <template v-else>
           <el-table class="leave-table" v-loading="listState === 'loading' || refreshing" :data="rows" row-key="id"
                     :expand-row-keys="expanded" style="width: 100%">
-            <el-table-column label="學生" width="120" fixed="left">
+            <el-table-column label="學生" width="140" fixed="left">
               <template #default="{ row }">
                 <div class="lv-student">
                   <el-button v-if="can('students:read')" link type="primary" @click="goStudent(row)">{{ row.student.name }}</el-button>
                   <span v-else class="lv-student__name">{{ row.student.name }}</span>
-                  <span class="lv-sub">{{ row.student.student_no }}</span>
+                  <span class="lv-sub lv-ellipsis" :title="studentSub(row)">{{ studentSub(row) }}</span>
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="班級" width="100" show-overflow-tooltip>
-              <template #default="{ row }"><span :class="{ 'lv-none': !row.student.class_name }">{{ row.student.class_name || '未分班' }}</span></template>
-            </el-table-column>
-            <el-table-column label="假別" width="76">
+            <el-table-column label="假別" width="72">
               <template #default="{ row }">
                 <el-tag :type="LEAVE_TYPE_META[row.leave_type].tone" disable-transitions>{{ row.leave_type_label }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="期間" width="236">
+            <el-table-column label="期間" width="180">
               <template #default="{ row }">
-                <span class="lv-period">{{ fmtRange(row.start_date, row.end_date) }}<el-tag v-if="isOngoing(row)" type="primary" effect="plain" size="small" disable-transitions>進行中</el-tag></span>
+                <div class="lv-period">{{ fmtRange(row.start_date, row.end_date) }}</div>
+                <el-tag v-if="isOngoing(row)" class="lv-period-tag" type="primary" effect="plain" size="small" disable-transitions>進行中</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="原因" min-width="150" show-overflow-tooltip>
+            <el-table-column label="原因" min-width="110" show-overflow-tooltip>
               <template #default="{ row }"><span :class="{ 'lv-none': !row.reason }">{{ row.reason || '—' }}</span></template>
             </el-table-column>
-            <el-table-column label="建立者" width="150">
+            <el-table-column label="建立者" width="128">
               <template #default="{ row }">
-                <div>{{ actorLabel(row.created_by_type, row.created_by_name) }}</div>
+                <div class="lv-ellipsis" :title="actorLabel(row.created_by_type, row.created_by_name)">{{ actorLabel(row.created_by_type, row.created_by_name) }}</div>
                 <div class="lv-sub">{{ fmtDateTime(row.created_at) }}</div>
               </template>
             </el-table-column>
-            <el-table-column label="狀態" width="170">
+            <el-table-column v-if="hasCancelled" label="取消紀錄" width="170">
               <template #default="{ row }">
-                <el-tag :type="LEAVE_STATUS_META[row.status].tone" disable-transitions>{{ LEAVE_STATUS_META[row.status].label }}</el-tag>
-                <div v-if="row.status === 'cancelled'" class="lv-status-note">{{ cancelledNote(row) }}</div>
+                <div v-if="row.status === 'cancelled'" class="lv-cancel-note">{{ cancelledNote(row) }}</div>
+                <span v-else class="lv-none">—</span>
               </template>
             </el-table-column>
-            <el-table-column label="附件" width="104">
+            <el-table-column label="附件" width="88">
               <template #default="{ row }">
                 <el-button v-if="row.attachments.length" class="lv-att-toggle" :class="{ 'is-open': expanded.includes(row.id) }" link type="primary"
                            :aria-expanded="expanded.includes(row.id) ? 'true' : 'false'" @click="toggleAttachments(row)">
@@ -391,11 +389,13 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
             </el-table-column>
             <el-table-column type="expand" width="1" class-name="leave-expand-col">
               <template #default="{ row }">
-                <leave-attachment-list :leave-id="row.id" :attachments="row.attachments" :sim="attachmentSim"
-                                       @request="(r) => lastRequest = r"></leave-attachment-list>
+                <div class="lv-expand">
+                  <leave-attachment-list :leave-id="row.id" :attachments="row.attachments" :sim="attachmentSim"
+                                         @request="(r) => lastRequest = r"></leave-attachment-list>
+                </div>
               </template>
             </el-table-column>
-            <el-table-column v-if="can('leaves:write')" label="操作" width="96" fixed="right">
+            <el-table-column v-if="can('leaves:write') && hasActive" label="操作" width="84" fixed="right">
               <template #default="{ row }">
                 <template v-if="row.status === 'active'">
                   <el-button v-if="row.end_date >= TODAY" link type="danger" @click="openCancel(row)">取消</el-button>
@@ -420,7 +420,7 @@ body { font-family: var(--el-font-family); background: var(--el-fill-color); col
       <leave-form-dialog v-if="formOpen" :key="formKey" v-model="formOpen" :preset-student="presetStudent" :sim="createSim"
                          @created="onCreated" @request="(r) => lastRequest = r"></leave-form-dialog>
       <leave-cancel-dialog v-if="cancelTarget" :key="cancelKey" v-model="cancelOpen" :leave="cancelTarget" :sim="cancelSim"
-                           :start-today-mode="startTodayMode" @cancelled="onCancelled" @failed="needsReload = true"
+                           @cancelled="onCancelled" @failed="needsReload = true"
                            @closed="onCancelClosed" @request="(r) => lastRequest = r"></leave-cancel-dialog>
     </admin-shell>
 
@@ -1130,22 +1130,21 @@ const LeaveFormDialog = {
 }
 
 /* ==================== LeaveCancelDialog（FRONTEND-131） ====================
-   sim / startTodayMode（待裁定 1 的對照）與 request emit 只用於稿裡；實作沒有。 */
+   sim 與 request emit 只用於稿裡模擬後端；實作沒有。 */
 const LeaveCancelDialog = {
   props: {
     modelValue: Boolean,
     leave: { type: Object, required: true },
     today: { type: String, default: TODAY },
     sim: { type: String, default: 'ok' },
-    startTodayMode: { type: String, default: 'B' },
   },
   emits: ['update:modelValue', 'cancelled', 'failed', 'closed', 'request'],
   setup(props, { emit }) {
+    // 今天才開始（start_date = 今天）的請假視同尚未開始：remaining 與 all 結果相同，都是整筆取消
     const phase = computed(() => {
       const { start_date: s, end_date: e } = props.leave
       if (e < props.today) return 'ended'
-      if (s > props.today) return 'future'
-      if (s === props.today && props.startTodayMode === 'B') return 'future'
+      if (s >= props.today) return 'future'
       return 'started'
     })
     const scope = ref('remaining')
@@ -1154,9 +1153,7 @@ const LeaveCancelDialog = {
     const yesterday = addDays(props.today, -1)
     const remainingRange = computed(() => fmtRange(props.today, props.leave.end_date))
     const wholeRange = computed(() => fmtRange(props.leave.start_date, props.leave.end_date))
-    const remainingDesc = computed(() => (props.leave.start_date === props.today
-      ? '將取消整筆請假'
-      : `今天起的出勤會恢復為預計到班；${fmtRange(props.leave.start_date, yesterday)} 保留為請假`))
+    const remainingDesc = computed(() => `今天起的出勤會恢復為預計到班；${fmtRange(props.leave.start_date, yesterday)} 保留為請假`)
     const submitScope = computed(() => (phase.value === 'ended' ? 'all' : phase.value === 'future' ? 'remaining' : scope.value))
     const title = computed(() => (phase.value === 'ended' ? '整筆取消請假' : '取消請假'))
     const submitText = computed(() => (submitScope.value === 'all' ? '整筆取消' : '取消請假'))
@@ -1234,7 +1231,6 @@ const app = createApp({
     const createSim = ref('ok')
     const cancelSim = ref('ok')
     const attachmentSim = ref('ok')
-    const startTodayMode = ref('B')
     const lastRequest = ref('')
 
     // ---- 篩選（usePagedList，syncQuery）----
@@ -1285,6 +1281,11 @@ const app = createApp({
     })
     const isOngoing = (l) => l.status === 'active' && l.start_date <= TODAY && TODAY <= l.end_date
     const cancelledNote = (l) => `${l.cancelled_by_name ? actorLabel(l.cancelled_by_type, l.cancelled_by_name) + ' ' : ''}於 ${fmtDateTime(l.cancelled_at)} 取消`
+    const studentSub = (l) => `${l.student.student_no}・${l.student.class_name || '未分班'}`
+    // 欄位依本頁資料決定：有已取消的列才出現「取消紀錄」，有生效中的列（且有 leaves:write）才出現「操作」
+    // （沒有資料時依狀態篩選決定，表頭不會在載入前後跳動）
+    const hasCancelled = computed(() => rows.value.some((l) => l.status === 'cancelled') || (!rows.value.length && filters.status === 'cancelled'))
+    const hasActive = computed(() => rows.value.some((l) => l.status === 'active') || (!rows.value.length && filters.status === 'active'))
     const goStudent = (row) => ElMessage.info(`（稿）router.push('/students?student=${row.student.id}')`)
 
     // ---- 附件展開 ----
@@ -1314,32 +1315,26 @@ const app = createApp({
       '版面：PageHeader「請假」+ 副標「家長在 LINE 送出即生效；員工可代登記與取消」，右側「重新整理」（重抓目前條件，轉圈中停用）與 primary「代登記請假」。下方白底面板：篩選列 → 表格 → 分頁（每頁 20 筆）。不訂閱 ws（leave.created / leave.cancelled 只走站內通知），靠「重新整理」。',
       '篩選列沿用 AdminListToolbar 的版面樣式，但不使用該元件：它固定有關鍵字搜尋框，而 GET /admin/leaves 沒有關鍵字參數（學生改用 StudentSelect 遠端搜尋）。順序：學生（StudentSelect，可清除，寬 220）→ 班級 → 狀態（生效中 / 已取消，沒有「全部」，預設生效中）→ 假別 → 建立者（家長 / 員工）→ 日期 →「重設」文字鈕（與預設相同時停用）→ 右側「共 N 筆」。下拉除狀態外第一項都是「全部」。',
       '日期區間預設今天起 30 天（2026-10-07 ~ 2026-11-06），以「與請假期間有交集」篩選；可清除 = 不限日期（看某位學生的全部紀錄）；快捷「今天起 30 天」「本月」「上個月」「過去 90 天」。任何篩選變更回到第 1 頁；篩選與頁碼同步到網址（usePagedList syncQuery）。',
-      '表格欄位：學生（固定在左；姓名粗體、下一行學號；有 students:read 時姓名是連結 → /students?student={id}）、班級（null 顯示淡灰「未分班」）、假別 tag（LEAVE_TYPE_META：病假橘、事假 / 其他灰）、期間（2026-10-06~2026-10-08，同一天只顯示一天；生效中且含今天時後接藍色線框「進行中」）、原因（單行省略，hover 看全文；null「—」）、建立者（「家長：陳爸爸」/「員工：林行政」+ 下一行 2026/10/06 07:45）、狀態（生效中 / 已取消 tag；已取消下一行「員工：林行政 於 2026/10/01 10:00 取消」）、附件、操作（固定在右）。依開始日新到舊（後端排序），不提供欄位排序；寬度不夠時中間欄橫向捲動。',
-      '附件欄：有附件時顯示迴紋針 +「2 個」+ 向下箭頭的文字按鈕，點擊展開 / 收合該列（箭頭轉向、aria-expanded），展開區放 LeaveAttachmentList；沒有附件顯示「—」。展開用 el-table 的 expand（預設箭頭欄隱藏，只由附件欄按鈕觸發）。',
-      '操作欄只在有 leaves:write 時出現：生效中且 end_date ≥ 今天 →「取消」；生效中且已結束（end_date < 今天）→「整筆取消」（事後更正）；已取消 →「—」。兩者都開 LeaveCancelDialog。只有 leaves:read（課輔老師）：沒有「代登記請假」、整個操作欄移除，附件照常可看。',
+      '表格欄位與寬度（1280 寬視窗的表格可視寬約 904px，主要欄位不需橫向捲動）：學生 140（固定在左；姓名粗體，有 students:read 時是連結 → /students?student={id}；下一行灰字「學號・班級」，沒有班級為「未分班」，過長省略）、假別 72（tag，LEAVE_TYPE_META：病假橘、事假 / 其他灰）、期間 180（2026-10-06~2026-10-08，同一天只顯示一天；生效中且含今天時下一行藍色線框「進行中」）、原因（min 110，吃剩餘寬度，單行省略、hover 看全文；null「—」）、建立者 128（「家長：陳爸爸」/「員工：林行政」過長省略 + 下一行 2026/10/06 07:45）、取消紀錄 170（只在本頁有已取消的列時出現：「員工：林行政 於 2026/10/01 10:00 取消」）、附件 88、操作 84（固定在右）。不另設「狀態」欄：狀態篩選只有生效中 / 已取消兩個值、沒有「全部」，同頁的狀態都一樣。依開始日新到舊（後端排序），不提供欄位排序；平板等較窄寬度時中間欄橫向捲動，學生與操作欄固定。',
+      '附件欄：有附件時顯示迴紋針 +「2 個」+ 向下箭頭的文字按鈕，點擊展開 / 收合該列（箭頭轉向、aria-expanded），展開區放 LeaveAttachmentList；沒有附件顯示「—」。展開用 el-table 的 expand（預設箭頭欄隱藏，只由附件欄按鈕觸發）。展開區內容固定在表格可視寬度內：表格 body 的捲動容器設 container-type: inline-size，內容 position: sticky、left: 0、寬 100cqw，表格橫向捲動時不會被推出畫面。',
+      '操作欄只在有 leaves:write、且本頁有生效中的列時出現（篩選「已取消」時整欄不出現）：生效中且 end_date ≥ 今天 →「取消」；生效中且已結束（end_date < 今天）→「整筆取消」（事後更正）；已取消的列 →「—」。兩者都開 LeaveCancelDialog。只有 leaves:read（課輔老師）：沒有「代登記請假」、整個操作欄移除，附件照常可看。',
       '沒有 students:read 的自訂角色：學生篩選不出現、學生姓名不做連結；StudentSelect 需要 GET /admin/students（students:read），所以「代登記請假」也不出現（避免開出一個搜不到學生的表單）。',
       'LeaveFormDialog（FormDialog md 560，標題「代登記請假」，送出鈕「送出」）：學生（StudentSelect；列表已用學生篩選時預帶該生）→ 假別（病假 / 事假 / 其他三段按鈕，必填、沒有預設）→ 請假期間（daterange「開始日 ~ 結束日」，30 天前以前 disabled，快捷「今天」「明天」，下方灰字「單日請假：開始與結束選同一天。最早可選 {date}（30 天前）」）→ 原因（選填，≤ 200 字計數，placeholder「例如：發燒看醫生」）；表單下方 info alert「送出後立即生效，期間內的出勤會改為請假，並通知班級負責老師」。有輸入後關閉要確認（dirty）。',
       'LeaveFormDialog 驗證與錯誤（錯誤顯示在對應欄位下方）：沒選「請選擇學生」「請選擇假別」「請選擇請假期間」，期間超過 61 天「單筆請假最長 61 天」（同後端上限），以上都不送請求；409 leave_overlap → 期間欄「與既有請假（{details.start_date}~{details.end_date}）重疊」；422 no_service_days_in_range → 期間欄「所選期間沒有營業日」；409 student_not_active → 學生欄「此學生不是在學狀態」；其他 422 依 validationFieldErrors 對到欄位。原因空白時 body 不帶 reason。成功 ElMessage.success「已登記請假」、關閉並重新整理列表。',
-      'LeaveCancelDialog（FormDialog md，取消鈕「返回」；送出鈕「取消請假」，整筆取消時為「整筆取消」；標題「取消請假」，已結束時「整筆取消請假」）：上方灰底摘要「姓名（學號・班級）」+ 假別 tag + 期間。尚未開始 → 只顯示「將取消整筆請假」（scope remaining）；已開始 → 兩個帶框選項，預設「取消今天起的請假（{today}~{end}）」+ 說明「今天起的出勤會恢復為預計到班；{start}~{昨天} 保留為請假」，另一個「整筆取消（{start}~{end}）」+ 說明「已過去的日子也會改回，已登記到班或離班的紀錄不受影響」；已結束 → 只顯示「已結束的請假只能整筆取消（事後更正）；期間內登記為請假的出勤會自動還原，已登記到班或離班的紀錄不受影響」（scope all）。底部鈴鐺灰字「取消後會通知班級負責老師」。區間同一天只顯示一天。',
+      'LeaveCancelDialog（FormDialog md，取消鈕「返回」；送出鈕「取消請假」，整筆取消時為「整筆取消」；標題「取消請假」，已結束時「整筆取消請假」）：上方灰底摘要「姓名（學號・班級）」+ 假別 tag + 期間。尚未開始或今天才開始（start_date ≥ 今天）→ 只顯示「將取消整筆請假」（scope remaining）；已開始（start_date < 今天 ≤ end_date）→ 兩個帶框選項，預設「取消今天起的請假（{today}~{end}）」+ 說明「今天起的出勤會恢復為預計到班；{start}~{昨天} 保留為請假」，另一個「整筆取消（{start}~{end}）」+ 說明「已過去的日子也會改回，已登記到班或離班的紀錄不受影響」；已結束 → 只顯示「已結束的請假只能整筆取消（事後更正）；期間內登記為請假的出勤會自動還原，已登記到班或離班的紀錄不受影響」（scope all）。底部鈴鐺灰字「取消後會通知班級負責老師」。區間同一天只顯示一天。',
       'LeaveCancelDialog 錯誤：409 leave_not_active / leave_already_ended → dialog 頂部紅色 alert 顯示後端訊息（例：「這筆請假已取消」），dialog 保持開啟；發生過錯誤的話關閉後列表自動重新整理（狀態可能已被別人改變）。成功 ElMessage.success「已取消請假」、關閉並重新整理（取消剩餘日子後 end_date 變成昨天，預設日期區間下該列會從清單消失）。',
-      '今天才開始的請假（start_date = 今天）：後端 remaining 與 all 結果相同（都是整筆取消），稿照推薦視同尚未開始、只顯示「將取消整筆請假」（待裁定 1；控制列可切 A 對照）。',
+      '今天才開始的請假（start_date = 今天）視同尚未開始：後端 remaining 與 all 的結果相同（都是整筆取消），所以不出現兩個選項，只顯示「將取消整筆請假」並送 scope remaining。',
       'LeaveAttachmentList：每個附件一個按鈕（寬 300、高 ≥ 52，橫向排列可換行）：左側類型 icon（圖片藍、PDF 紅色文件）+「附件 1・圖片（JPG）」+ 下一行「512.0 KB・2026/10/06 07:46 上傳」（KB / MB 一位小數，1024 為底）+ 右側動作「預覽」或「另開」。附件沒有使用者檔名（後端只存物件路徑），所以用序號與類型稱呼。',
       'LeaveAttachmentList 開啟：每次點擊都重新呼叫 fetchLeaveAttachmentUrl（不快取）；取得中該列 icon 轉圈、動作文字「取得中…」、aria-busy，其他列仍可點。JPG / PNG / WEBP 以 el-image-viewer 預覽（點遮罩或 Esc 關閉）；PDF 與 HEIC（多數瀏覽器無法在頁內顯示 HEIC）以 window.open(url, \'_blank\', \'noopener\') 另開。失敗 ElMessage.error 顯示後端訊息（「找不到附件」「檔案儲存服務暫時無法使用，請稍後再試」），沒有訊息時「無法開啟附件」。空陣列顯示「沒有附件」。',
       '三態 + 錯誤：載入中 → 表格 v-loading；空清單 → 表格內 inline EmptyState「這段期間沒有請假紀錄」+「試著調整日期區間或篩選條件」（清除日期區間時標題改為「沒有符合條件的請假紀錄」）；載入失敗 → EmptyState error「無法載入請假紀錄」+「重試」取代表格。',
     ]
-    const openQuestions = [
-      {
-        question: '請假「今天才開始」時（start_date = 今天），取消 dialog 要怎麼呈現？兩個選項送出後的結果完全相同（後端都會整筆取消）。',
-        optionA: '照 task：顯示兩個選項，第一項說明改為「將取消整筆請假」，第二項「整筆取消」照常',
-        optionB: '視同尚未開始：不出現選項，只顯示「將取消整筆請假」（推薦，稿已照此畫；控制列可切 A 對照）',
-      },
-    ]
+    const openQuestions = []
 
     return {
       meta, decisions, openQuestions, roles: ROLES, viewAs, perms, can, user, device, onNavigate, notesOpen: ref(false),
-      listState, createSim, cancelSim, attachmentSim, startTodayMode, lastRequest,
+      listState, createSim, cancelSim, attachmentSim, lastRequest,
       filters, page, isFiltered, queryString, refreshing, onFilter, onStudentFilter, resetFilters, refresh, retry, rangeShortcuts,
-      rows, isOngoing, cancelledNote, goStudent, expanded, toggleAttachments,
+      rows, isOngoing, cancelledNote, studentSub, hasCancelled, hasActive, goStudent, expanded, toggleAttachments,
       canCreate, formOpen, formKey, presetStudent, openCreate, onCreated,
       cancelTarget, cancelOpen, cancelKey, needsReload, openCancel, onCancelled, onCancelClosed,
       classes: CLASSES, ALL, TODAY, LEAVE_TYPE_META, LEAVE_STATUS_META, SAMPLE_ATTACHMENTS, fmtRange, fmtDateTime, actorLabel,

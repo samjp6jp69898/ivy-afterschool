@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 
-<meta name="preview-status" content="draft">
+<meta name="preview-status" content="approved">
 <meta name="preview-tasks" content="FRONTEND-127,FRONTEND-128">
 <meta name="preview-route" content="/attendance/monthly">
-<meta name="preview-updated" content="2026-10-07">
+<meta name="preview-updated" content="2026-10-08">
 
 <title>設計稿：月出勤報表</title>
 
@@ -901,19 +901,13 @@ const app = createApp({
       '儲存格符號：present ●、left ✓、absent ✕、leave「假」（淡灰底小方塊，與 ✓ 區隔）、expected ○（營業日但未點名）、營業日無紀錄或尚未到 —、非營業日整欄灰底空白（is-closed，表頭同灰、日期轉淡）。顏色依 ATTENDANCE_STATUS_META 的 tone：● 綠、✓ 灰、✕ 紅、假 灰、○ 橘；— 為淡灰。滑鼠停留顯示「10/03（六）王小明：已離班」。',
       '今天欄（is-today）：表頭主色淡底 + 主色粗體字 + 底線，整欄淡藍底；未來日期整欄內容 40% 透明度（is-future）。看過去月份時沒有今天欄、也沒有淡化欄。',
       '每生統計欄：數值 0 顯示淡灰、缺席 > 0 紅色粗體、未登記 > 0 橘色粗體，其餘一般色。合計列固定在表格底部：學號欄「合計」、每日欄 = 當天出席人數（● + ✓，只算不晚於今天的營業日）、四個統計欄 = totals。',
-      '排序：預設依學號（後端順序）；四個統計欄可點表頭做前端排序（升冪 / 降冪 / 取消），例如找出本月缺席最多的學生（待裁定 1，稿已照推薦畫）。',
+      '排序：預設依學號（後端順序）；四個統計欄（出席 / 缺席 / 請假 / 未登記）可點表頭做前端排序（升冪 / 降冪 / 取消），例如找出本月缺席最多的學生；其他欄不排序。',
       '圖例列放在表格正上方（屬於 MonthlyAttendanceGrid）：● 已到班、✓ 已離班、✕ 缺席、假 請假、○ 預計到班（未點名）、— 無紀錄 / 尚未到、灰色方塊 非營業日、淡藍方塊 今天。',
       '匯出：帶目前的 month 與 class_id 呼叫 exportMonthlyAttendance（blob），以 Content-Disposition 檔名下載（出勤月報_{班級名稱|全部}_{YYYY-MM}.xlsx）；匯出中按鈕轉圈、文字「匯出中…」並停用；成功不另跳訊息（瀏覽器下載列即回饋）；失敗以 ElMessage.error 顯示後端訊息（例：「找不到班級」），沒有後端訊息時「匯出失敗，請稍後再試」。載入中、載入失敗、重抓中或沒有學生時按鈕停用。',
       '三態 + 錯誤：首次載入 → 合計列與表格位置顯示 skeleton；空清單（students 為空）→ EmptyState（日曆 icon）「此月份沒有出勤資料」+「{班級|全部班級}在 {YYYY 年 M 月}沒有學生與出勤紀錄」，不顯示合計列與圖例；載入失敗 → EmptyState error「無法載入出勤月報」+「重試」。',
       '不移植 ivy 月分析的出席率圖表、學期選擇、連缺告警卡與點名完成率（task 已排除，後端也沒有這些欄位），也不加前端姓名搜尋；學生姓名不做連結（task 未要求）。',
     ]
-    const openQuestions = [
-      {
-        question: '每生統計欄（出席 / 缺席 / 請假 / 未登記）要不要能點表頭排序？（task 未要求，屬前端小功能；用途例如找出本月缺席最多的學生）',
-        optionA: '可排序：四個統計欄點表頭做前端升冪 / 降冪排序，預設仍依學號（推薦，稿已照此畫）',
-        optionB: '不排序：固定依學號，與 task 原文一致',
-      },
-    ]
+    const openQuestions = []
 
     return {
       meta, decisions, openQuestions, roles: ROLES, viewAs, perms, can, user, device, onNavigate, notesOpen: ref(false),
