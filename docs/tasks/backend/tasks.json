@@ -1,7 +1,7 @@
 {
   "area": "backend",
-  "version": 442,
-  "last_updated": "2026-10-08T01:34:34Z",
+  "version": 443,
+  "last_updated": "2026-10-08T01:34:38Z",
   "tasks": [
     {
       "id": "BACKEND-001",
@@ -15472,7 +15472,7 @@
       "granularity_unit": "method",
       "target_path": "apps/api/app/core/settings_registry.py",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-backend-r9b",
       "depends_on": [
         "BACKEND-379",
