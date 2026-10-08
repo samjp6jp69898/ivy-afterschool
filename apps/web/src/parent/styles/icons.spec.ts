@@ -228,4 +228,40 @@ describe('parent icons subset', () => {
     expect(names(`/* icon: 'ghost' */\n// icon="ghost"\nconst status = 'cancelled'\nemit('update:modelValue')`)).toEqual([])
     expect(names('<!-- <M3Icon name="ghost" /> --><button class="m3-icon-button" type="button"></button>')).toEqual([])
   })
+
+  it('parent icons subset scanner recognizes icon table names', () => {
+    const names = (source: string): string[] => [...iconNamesIn(source)].sort()
+
+    // 全大寫常數：ICON 可以在開頭（ICONS、ICON_MAP），型別註記可有可無
+    expect(names(`const ICONS: Record<Tone, string> = { error: 'error', warning: 'hourglass_top', info: 'info' }`)).toEqual([
+      'error',
+      'hourglass_top',
+      'info',
+    ])
+    expect(names(`const ICON_MAP = { sick: 'sick', other: 'event_note' }`)).toEqual(['event_note', 'sick'])
+    expect(names(`const ICON_MAP: Record<string, () => string> = { done: 'check' }`)).toEqual(['check'])
+    expect(names(`export const FOO_ICONS = { a: 'add' }`)).toEqual(['add'])
+    expect(names(`const XXX_ICON_MAP = { a: 'remove' }`)).toEqual(['remove'])
+    expect(names(`const TONE_ICON = { a: 'info' }`)).toEqual(['info'])
+    expect(names(`const KIND_TO_ICON = { a: 'link' }`)).toEqual(['link'])
+    expect(names(`const ICON_BY_KIND = { a: 'pin' }`)).toEqual(['pin'])
+    expect(names(`const ICONS_BY_STATUS = { a: 'today' }`)).toEqual(['today'])
+    // 多行物件、Object.freeze 包裝、camelCase 名稱
+    expect(names(`const ICONS = {\n  error: 'error',\n  info: 'info',\n}`)).toEqual(['error', 'info'])
+    expect(names(`const ICONS = Object.freeze({ a: 'help' })`)).toEqual(['help'])
+    expect(names(`const icons = { a: 'edit' }`)).toEqual(['edit'])
+    expect(names(`const iconMap = { a: 'close' }`)).toEqual(['close'])
+    expect(names(`const statusIcons = { a: 'schedule' }`)).toEqual(['schedule'])
+    expect(names(`const eventIconMap: Record<string, string> = { a: 'send' }`)).toEqual(['send'])
+    // 圖示的其他屬性（尺寸、顏色、class）不是圖示名稱對照表：裡面的 'small'、'green' 不算
+    expect(names(`const ICON_SIZES = { sm: 'small', lg: 'large' }`)).toEqual([])
+    expect(names(`const ICON_COLORS = { ok: 'green' }`)).toEqual([])
+    expect(names(`const FOO_ICON_SIZES = { sm: 'small' }`)).toEqual([])
+    expect(names(`const ICON_SIZE = { sm: 'small' }`)).toEqual([])
+    expect(names(`const iconSizes = { sm: 'small' }`)).toEqual([])
+    expect(names(`const iconSize = 'small'`)).toEqual([])
+    expect(names(`const iconColor = dark ? 'primary' : 'secondary'`)).toEqual([])
+    // 不是物件 / 陣列字面值的右式不掃（避免把函式呼叫裡的字串當圖示）
+    expect(names(`const ICONS = buildIcons('legacy')`)).toEqual([])
+  })
 })
