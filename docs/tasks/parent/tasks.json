@@ -1,7 +1,7 @@
 {
   "area": "parent",
-  "version": 119,
-  "last_updated": "2026-10-08T01:38:50Z",
+  "version": 120,
+  "last_updated": "2026-10-08T01:40:10Z",
   "tasks": [
     {
       "id": "PARENT-001",
@@ -2214,7 +2214,7 @@
         "INFRA-012"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "圖示 `delete` 不在 `parent/styles/icons.css` 的自架字型子集內：390×844 的 headless Chromium 實測，刪除鈕的 ligature 沒有生效，顯示成被 1em 夾盒裁掉的字母（亂碼）；需重取字型子集並更新 icons.css 的圖示清單後才會正確顯示。happy-dom 單元測試驗不出字型，所以測試只斷言圖示名稱為 delete。",
+      "risk_notes": "",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/components/pickup/PickupPersonListItem.spec.ts",
@@ -3504,17 +3504,17 @@
     {
       "id": "PARENT-193",
       "title": "家長端圖示字型子集補齊缺字，並加掃描 spec 防止再漂移",
-      "description": "`apps/web/src/parent/styles/icons.css` 的自架 Material Symbols Rounded 子集（`apps/web/src/parent/assets/fonts/material-symbols-rounded-subset.woff2`，PARENT-014）只含 34 個圖示；家長端元件與已核可設計稿用到的圖示有缺。實測 PARENT-100 的 `delete` 在 390×844 顯示成被 1em 夾盒裁掉的亂碼（`expand_more`、`check` 正常）。已知缺：`delete`、`add_a_photo`、`chat`、`warning`、`link`、`hourglass_top`、`smart_toy`、`cancel`、`timer_off`、`remove`；已核可的家長端設計稿（`docs/mockups/parent-*.html`，含本輪新稿）另有用到的也要涵蓋。\n\n**做法**：①掃描 `apps/web/src/parent/` 原始碼（M3Icon 的 `name` / `icon` 屬性、字串常數與對照表，例如 `parent/utils/notificationEventIcon.ts`）與 `docs/mockups/parent-*.html` 用到的 Material Symbols 名稱，求聯集；②依 `icons.css` 檔頭註解的方式重抓子集（Google Fonts CSS API 帶 `icon_names=<逗號分隔、字母序清單>`，FILL 軸保留 0..1，以桌機 Chrome User-Agent 請求，下載 fonts.gstatic.com 的 woff2）；下載的檔案一律先放在自己 scratchpad 的獨立空目錄，驗證檔頭 magic 為 `wOF2` 與大小合理後才複製進 repo，不要從該目錄執行任何東西；③更新 `icons.css` 檔頭「子集涵蓋的圖示」清單（字母序）；④新增 spec 驗證：src/parent 與已核可家長端稿用到的圖示名稱都在該清單內、清單字母序且不重複、woff2 檔頭有效且小於 60 KB。字型確實包含新增 glyph 這一點用 fontTools 或 headless Chromium 渲染驗證，結果記在回報（不納入 spec）。純資源與測試，不改任何元件行為。\n\n**驗收標準**：每一條對應下列 red_case。",
+      "description": "`apps/web/src/parent/styles/icons.css` 的自架 Material Symbols Rounded 子集（`apps/web/src/parent/assets/fonts/material-symbols-rounded-subset.woff2`，PARENT-014）只含 34 個圖示；家長端元件與已核可設計稿用到的圖示有缺。實測 PARENT-100 的 `delete` 在 390×844 顯示成被 1em 夾盒裁掉的亂碼（`expand_more`、`check` 正常）。已知缺：`delete`、`add_a_photo`、`chat`、`warning`、`link`、`hourglass_top`、`smart_toy`、`cancel`、`timer_off`、`remove`；已核可的家長端設計稿（`docs/mockups/parent-*.html`，含本輪新稿）另有用到的也要涵蓋。\n\n**做法**：①掃描 `apps/web/src/parent/` 原始碼（M3Icon 的 `name` / `icon` 屬性、字串常數與對照表，例如 `parent/utils/notificationEventIcon.ts`）與 `docs/mockups/parent-*.html` 用到的 Material Symbols 名稱，求聯集；②依 `icons.css` 檔頭註解的方式重抓子集（Google Fonts CSS API 帶 `icon_names=<逗號分隔、字母序清單>`，FILL 軸保留 0..1，以桌機 Chrome User-Agent 請求，下載 fonts.gstatic.com 的 woff2）；下載的檔案一律先放在自己 scratchpad 的獨立空目錄，驗證檔頭 magic 為 `wOF2` 與大小合理後才複製進 repo，不要從該目錄執行任何東西；③更新 `icons.css` 檔頭「子集涵蓋的圖示」清單（字母序）；④新增 spec 驗證：src/parent 與已核可家長端稿用到的圖示名稱都在該清單內、清單字母序且不重複、woff2 檔頭有效且小於 60 KB。字型確實包含新增 glyph 這一點用 fontTools 或 headless Chromium 渲染驗證，結果記在回報（不納入 spec）。純資源與測試，不改任何元件行為。\n\n**結果**：子集涵蓋 75 個圖示（src/parent、已核可稿與目前待核可的家長端頁面稿用到的聯集），woff2 約 12 KB。Google Fonts API 不驗證 `icon_names`（寫錯名稱也回 200，只是字型裡沒有該圖示），所以換字型後要用 headless Chromium 渲染清單內每個名稱，確認 ligature 有生效（1em 夾盒的 scrollWidth 不大於 clientWidth），並以不存在的名稱做負向對照。icons.spec.ts 的掃描只認檔頭註解列出的寫法：M3Icon 的 name、名稱以 icon 結尾的屬性、`icon:` 鍵、`XXX_ICONS` 常數對照表、icon… / xxxIcon 同行變數、檔名含 icon 的 .ts 工具檔、material-symbols-rounded 文字；三元運算子只取結果值，不取比較用的字串。\n\n**驗收標準**：每一條對應下列 red_case。",
       "granularity_unit": "config",
       "target_path": "apps/web/src/parent/styles/icons.css",
       "source_ref": null,
-      "status": "in_progress",
+      "status": "in_review",
       "assignee_session": "impl-parent-r9",
       "depends_on": [
         "PARENT-014"
       ],
       "suggested_model": "sonnet-5",
-      "risk_notes": "",
+      "risk_notes": "掃描器只認 icons.spec.ts 註解列出的寫法：動態拼接的圖示名稱（例如 `${kind}_off`）或由 API 回傳的名稱掃不到，新增這類寫法時要補掃描規則或改成可掃描的寫法。待核可的家長端頁面稿（child-hub、attendance、exams、exam-detail、leaves、pickup）用到的圖示已納入字型，但 spec 只檢查已核可稿：這六張核可後若又新增圖示，spec 會轉紅，需重取子集（步驟見 icons.css 檔頭）。",
       "open_design_questions": [],
       "tdd": {
         "test_path": "apps/web/src/parent/styles/icons.spec.ts",
@@ -3525,7 +3525,8 @@
           "parent icons subset covers every icon used in src/parent：掃描 src/parent 下 .vue / .ts（排除 spec）出現的 Material Symbols 名稱（M3Icon 的 name / icon 屬性與字串常數對照表），每個名稱都在 icons.css 檔頭「子集涵蓋的圖示」清單內；缺任何一個 → 失敗並列出缺的名稱",
           "parent icons subset covers every icon used by approved parent mockups：掃描 docs/mockups/parent-*.html 用到的 Material Symbols 名稱，皆在清單內",
           "parent icons subset list is sorted and unique：清單為字母序、無重複項",
-          "parent icons subset woff2 has a valid header：woff2 檔頭 magic 為 wOF2，檔案大小小於 60 KB"
+          "parent icons subset woff2 has a valid header：woff2 檔頭 magic 為 wOF2，檔案大小小於 60 KB",
+          "parent icons subset scanner extracts icon names from markup and tables：掃描函式對 M3Icon 的 name（靜態、綁定、三元運算子只取結果值）、名稱以 icon 結尾的屬性、icon: 鍵、XXX_ICONS 常數對照表（物件與 tuple 陣列）、檔名含 icon 的 .ts 工具檔 fallback、material-symbols-rounded 文字都回傳正確名稱；比較用字串（=== 'cancelled'）、註解、名稱含 Icon 的元件物件（M3IconButton）與 CSS 規則不算圖示"
         ],
         "run": "just web-test src/parent/styles/icons.spec.ts -t \"parent icons subset\"",
         "notes": "spec 讀 css / html 一律用 readFileSync + resolve(dirname(fileURLToPath(import.meta.url)), ...)（vitest 對 *.css?raw 回傳空字串）。字型內容驗證（新增 glyph 真的存在）用 fontTools 或 headless Chromium 在 390×844 渲染確認，並記在回報。"
