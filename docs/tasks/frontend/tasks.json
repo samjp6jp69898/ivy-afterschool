@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 170,
-  "last_updated": "2026-10-08T05:02:42Z",
+  "version": 171,
+  "last_updated": "2026-10-08T05:03:12Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -2855,7 +2855,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/student/GuardianManager.vue",
       "source_ref": "FE:src/components/student/GuardianManager.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9b",
       "depends_on": [
         "FRONTEND-082",
@@ -2889,9 +2889,9 @@
         "notes": ""
       },
       "review": {
-        "status": "concern",
+        "status": "pass",
         "reviewer": "review-r9-u",
-        "notes": "concern（複審打回）：原三個打回項已修正：刪除回 404 / 409 會重新載入（暫時探針驗證 404、409 都重新載入，500 不重新載入）；產生綁定碼請求進行中切換學生、回應晚到時以原學生呈現（原探針通過，切換兩次亦同）；產生 / 解除綁定的 404 分支已有測試。description / red_cases 為最終規格寫法，新增 4 條 red_case 以 verbose 名稱清單比對皆被 tdd.run 選到，tdd.run 25 passed；risk_notes 的原打回紀錄未被改動。突變：刪除不重新載入、只認 409、只認 404、dialog 改用目前 props 的學生、等請求回來才記學生姓名、產生 / 解除綁定錯誤不重新載入，均轉紅（「刪除遇任何錯誤都重新載入」測試仍全綠，只是多一次 GET，不擋）。web-lint 兩檔乾淨；web-typecheck 的 2 個錯誤都在其他 agent 未提交的 SettingCard.spec.ts、router/index.ts，本 task 檔案無錯誤。打回原因（新反例，與原第 2 項同類）：code_issued 列點「重新產生綁定碼」後，確認框開著時學生被切換（例如瀏覽器上一頁或觸控板滑動改了 query.student），再按「重新產生」，綁定碼 dialog 顯示「請 林美麗 … 輸入此綁定碼即可綁定 陳小美」，但這組碼屬於王小明的監護人林美麗。原因是學生姓名在確認框之後才取值。其他已驗證通過的反例：連點兩次只送 1 次 POST；切換兩次讓三個清單回應倒序到達，只顯示最後一位；請求中切換兩次後晚到的回應仍顯示原學生，清單是最後一位；dialog 開著時切換學生會清掉綁定碼；刪除 404 後重新載入失敗，保留原清單並顯示兩則錯誤；解除綁定確認框開著時切換學生，仍解除確認框所指的監護人（確認文字已寫明原學生）。"
+        "notes": "pass（第二次複審）：打回項已修正。產生 / 重新產生綁定碼與解除綁定在點擊當下固定學生姓名；新增 / 編輯表單在開啟當下固定 studentId 與「已有其他主要聯絡人」。description（22bd9a8）為最終規格寫法，新增 2 條 red_case（keeps clicked student through regenerate confirm、keeps clicked student for guardian form）；tdd.run 27 passed，12 條 red_case 以 vitest verbose 名稱清單逐條比對全部選到。8f05b56 只新增測試（+40 / -0，未放寬既有斷言），60328f0 只改元件；web-lint 兩檔乾淨、web-typecheck exit 0。突變（在 git 鎖內備份 → 改壞 → 跑 → 還原，cmp 一致）：姓名改回確認框之後才取值（原 bug）、dialog 讀目前 props 的學生、表單讀目前 studentId、主要聯絡人提示改讀目前清單、姓名改在回應後才取值，均轉紅。暫時探針全部通過：重新產生確認框開著時切換學生，仍打 g2 並顯示原學生；取消後切換、再對新學生的監護人重新產生，顯示新學生；解除綁定確認框開著時切換，仍解除點擊的監護人，確認文字為原學生；編輯表單開著時切換，仍 PATCH 點擊的監護人；切換後才開新增表單、或關閉再開，都送到新學生，主要聯絡人提示依新學生；請求進行中切換兩次，晚到的綁定碼仍顯示原學生；連點只送一次；dialog 開著時切換學生會清掉綁定碼。殘留（不擋）：(1) 拿掉 openForm 裡的 formStudentId 更新，測試仍全綠：「切換學生後才開表單」這條路徑沒有測試（目前實作正確，探針確認），建議補一條；(2) 沒有 initial、清單還在載入時就開新增表單，主要聯絡人取代提示以開啟當下的空清單計算，載入完成後也不會出現（087 一律傳 initial，實際整合下不會發生）；(3) GuardianFormDialog（092）遇 409 / 404 不 emit 事件，本元件無從重新載入（範圍外，前次已列）。"
       }
     },
     {
