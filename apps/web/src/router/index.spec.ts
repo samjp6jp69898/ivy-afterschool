@@ -1,7 +1,13 @@
 import type MockAdapter from 'axios-mock-adapter'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createMemoryHistory, type Router } from 'vue-router'
+import {
+  createMemoryHistory,
+  isNavigationFailure,
+  NavigationFailureType,
+  type RouteMeta,
+  type Router,
+} from 'vue-router'
 import type { StaffMe } from '@/api/auth'
 import { adminHttp, resetAdminHttpHandlers, setAdminHttpHandlers } from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
@@ -164,6 +170,50 @@ describe('admin router', () => {
     useAuthStore().setUser(makeUser(['students:read'], { must_change_password: false }))
     await router.push('/students')
     expect(router.currentRoute.value.path).toBe('/students')
+  })
+
+  it('admin router keeps title on failed navigation', async () => {
+    loginAs(['students:read', 'classes:read'])
+    const router = memoryRouter()
+    await router.push('/students')
+    expect(document.title).toBe(`學生工作台 - ${APP_TITLE}`)
+
+    // 重複導航（NAVIGATION_DUPLICATED）：畫面沒換，標題也不換
+    document.title = '哨兵標題'
+    const duplicated = await router.push('/students')
+    expect(isNavigationFailure(duplicated, NavigationFailureType.duplicated)).toBe(true)
+    expect(document.title).toBe('哨兵標題')
+
+    // 被後掛的 guard 中止（NAVIGATION_ABORTED）：仍停在 /students，標題不換
+    router.beforeEach((to) => to.path !== '/classes')
+    const aborted = await router.push('/classes')
+    expect(isNavigationFailure(aborted, NavigationFailureType.aborted)).toBe(true)
+    expect(router.currentRoute.value.path).toBe('/students')
+    expect(document.title).toBe('哨兵標題')
+
+    // 正常導航恢復更新
+    await router.push('/')
+    expect(router.currentRoute.value.path).toBe('/students')
+    await router.push('/change-password')
+    expect(document.title).toBe(`修改密碼 - ${APP_TITLE}`)
+  })
+
+  it('admin router falls back to app title without meta.title', async () => {
+    loginAs([])
+    const router = memoryRouter()
+    router.addRoute({
+      path: '/untitled',
+      name: 'untitled',
+      component: { render: () => null },
+      // 路由表的 RouteMeta 要求 title；這裡刻意模擬漏設
+      meta: { authOnly: true } as unknown as RouteMeta,
+    })
+
+    await router.push('/untitled')
+
+    expect(router.currentRoute.value.name).toBe('untitled')
+    expect(document.title).toBe(APP_TITLE)
+    expect(document.title).not.toContain('undefined')
   })
 
   it('admin router uses hash history by default', () => {
