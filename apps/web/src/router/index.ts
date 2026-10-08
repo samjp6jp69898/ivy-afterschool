@@ -1,7 +1,8 @@
 // FRONTEND-026：後台 router。移植 ivy FE:src/router/index.ts 的 `router.beforeEach(authGuard)` 寫法；
 // 去掉 route loading bar、chunk self-heal、Sentry。
 // 不建立 module-level 的 router 單例：createWebHashHistory() 一建立就對 window 掛 popstate 監聽，
-// 多一個沒掛到 app 的 router 會在上一頁 / 下一頁時重複執行 authGuard（多打一次 /auth/me）。
+// 多一個沒掛到 app 的 router 會在上一頁 / 下一頁時重複執行 guard 與導向，且兩個 history 同時改寫 location
+// （auth store 的 restore() 以 status 去重，/auth/me 不會因此多打）。
 // bootstrap（FRONTEND-028）與測試都經 createAdminRouter 建立，測試傳 memory history。
 import { createRouter, createWebHashHistory, type Router, type RouterHistory } from 'vue-router'
 import { authGuard } from '@/router/authGuard'
