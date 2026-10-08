@@ -1,7 +1,7 @@
 {
   "area": "frontend",
-  "version": 166,
-  "last_updated": "2026-10-08T01:44:16Z",
+  "version": 167,
+  "last_updated": "2026-10-08T01:50:27Z",
   "tasks": [
     {
       "id": "FRONTEND-001",
@@ -757,7 +757,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/layout/AdminSidebar.vue",
       "source_ref": "FE:src/components/layout/AdminSidebar.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9d",
       "depends_on": [
         "FRONTEND-030",
@@ -785,9 +785,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-v",
+        "notes": "通過。稿 page-admin-shell（approved，preview-tasks 含本 task）。tdd.run 15 綠，8 條 red_case 依 verbose 名稱一對一選到；TDD 順序 ab6138a → 58cdfee、92599c3（實作 commit 內 spec 只把 isVisible 改讀 v-show 的 inline style，斷言不變）。突變皆轉紅：拿掉權限過濾（5 條）、最長前綴改第一個符合（2 條）、抽屜模式不忽略 collapsed（1 條）。選單來自 visibleNavigation，與 domain_spec §4 路由 / 權限一致；drawer prop 規格（140c81f、f87e6a7）為最終寫法並已同步 FRONTEND-029。真實 Chromium 抽查：寬 220 / 收合 64、品牌列 56、項目 44、收合列 44、收合時群組標題為 1px 分隔線（margin 8px 12px）、hover 出 tooltip、抽屜填滿 240 且沒有收合鈕，與稿一致。lint（13 檔）與 web-typecheck（0 錯誤）乾淨。殘留：①導頁被取消或 lazy chunk 載入失敗時，el-menu 仍高亮被點的項目（探針：route=/students、高亮「請假」）；目前沒有會取消導頁的 route-leave guard、側欄項目都有權限，不會觸發，日後加入時要在 onSelect 或 AdminLayout 重新同步高亮；②收合鈕箭頭方向、群組標題 12px 灰字沒有測試斷言（程式與稿一致，真實瀏覽器已確認）；③App 缺全域 base 樣式已併入 FRONTEND-028。"
       }
     },
     {
@@ -909,7 +909,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/layout/NotificationBell.vue",
       "source_ref": "FE:src/components/layout/AdminNotificationBell.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9d",
       "depends_on": [
         "FRONTEND-034",
@@ -932,9 +932,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-v",
+        "notes": "通過。稿 page-admin-shell（approved）。tdd.run 10 綠，3 條 red_case 一對一；TDD 順序 d9cd1c3 → 29fd69a、20c84cc、03518c8（spec 改以觸發鈕 aria-expanded 判斷開關、以 fake timers 推進 popover 的 setTimeout，斷言不變）。突變皆轉紅：不呼叫 markRead（3 條）、每次開啟都重新載入（2 條）、點通知不導頁（2 條）、點通知不關 popover（2 條）、未讀 0 仍顯示徽章（3 條）；:max=\"99\" 與 Element Plus 預設相同，為已知等價突變。導頁目標：元件沒有檢查，也不需要——deep_link 由後端 inbox_service 依 event 從常數表 DEEP_LINKS 計算，不來自 payload；vue-router hash history 只產生同文件網址，探針把 https://evil.example、//evil.example、javascript:alert(1)、/\\evil.example 交給元件與 createAdminRouter，都只變成站內路徑（例 #/https://evil.example），location.origin 不變。markRead 樂觀更新、失敗還原未讀且不阻擋導頁已測。真實 Chromium 抽查：鈴 44×44、紅色徽章 99+ / 3 貼在 icon 右上（距按鈕左 19px、上緣與 icon 對齊）、點擊開 360 寬靠右無箭頭 popover、點外面關閉、點通知關閉並導到 /pickup、徽章 3→2。lint（13 檔）與 web-typecheck（0 錯誤）乾淨。殘留：若日後 deep_link 改由 payload 或使用者輸入提供，需加站內路徑檢查；徽章位置與點外面關閉只在真實瀏覽器驗證。"
       }
     },
     {
@@ -1353,7 +1353,7 @@
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/LoginView.vue",
       "source_ref": "FE:src/views/LoginView.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9d",
       "depends_on": [
         "FRONTEND-022",
@@ -1382,9 +1382,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-v",
+        "notes": "通過。稿 page-login（approved）。tdd.run 20 綠，7 條 red_case 一對一；TDD 順序 cca5f1e → 687d461（實作 commit 只補「直接派發 submit 不重送」斷言）。落點直接用 FRONTEND-025 的 landingPath，沒有自行重做 safeRedirect / firstAllowedPath。突變皆轉紅：landingPath 改直接用 redirect 字串、帳密錯誤不清空密碼、must_change_password 不導改密碼、拿掉送出中防重送。反例探針 39 項全過：//evil.example、/\\evil.example、\\\\evil.example、https:// 與 HTTPS://、javascript: 與 JavaScript:、前綴空白 / tab、/<tab>/、/ /、/<換行>/、%2F%2F、/%2F%2F、/%2f%2f、/%5C、/%5C%5C、/homework/../..//evil、%2E%2E、/homework@evil、空字串、陣列 query，以及導向迴圈 /login、/login?redirect=//evil、/forbidden、/change-password、無權限的 /leaves、/settings/roles、/，全部落在 firstAllowedPath；有權限的 /homework 正常採用；must_change_password 優先於 redirect。帳密：密碼不 trim、console 各層級沒有密碼、local / sessionStorage 為空。真實 Chromium：Enter 隱式送出（空白 → 兩欄錯誤並聚焦帳號；填好 → 只送出一次）、卡片 400 / 圓角 12 / 內距 28 28 24（390 寬 24 20 20、名稱 20px）、Logo 64、名稱 22px / 600、送出鈕滿寬高 44，與稿一致。lint（13 檔）與 web-typecheck（0 錯誤）乾淨。殘留：①未列舉的 ApiError 顯示後端 / http 層正規化訊息（例「伺服器暫時無法回應（503）」），「登入失敗，請稍後再試」只用於非 ApiError 例外，與 description「too_many_attempts 等顯示後端 message」一致；②spec 沒有斷言密碼不 trim、router.replace、show-password（探針與真實瀏覽器已驗）。"
       }
     },
     {
@@ -1394,7 +1394,7 @@
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/ChangePasswordView.vue",
       "source_ref": "FE:src/views/ChangePasswordView.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9d",
       "depends_on": [
         "FRONTEND-022",
@@ -1420,9 +1420,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-v",
+        "notes": "通過。稿 page-change-password（approved）。tdd.run 20 綠，5 條 red_case 一對一；TDD 順序 ee4b62f → 20e879a（實作 commit 補 form 掛 document、9 / 10 碼邊界、直接派發 submit 不重送三處，皆為加強）。突變皆轉紅：強制模式不顯示登出、長度規則 10 → 9、成功後無可用頁面不導 /forbidden、新舊相同不擋、拿掉送出中防重送。前端規則與後端 validate_password_strength 一致（ASCII 英文字母、數字 0-9、至少 10）；current_password_incorrect / password_unchanged / weak_password（reasons 以「、」串接，缺漏用後端 message）對應到欄位；auth.logout 吞錯後一定導 /login；密碼不 log、不寫 storage。真實 Chromium：強制模式只有「登出」「更新密碼」與警示文案、規則清單紅綠、blur 後才比對確認、Enter 送出一次並導 /attendance 且顯示「密碼已更新」、卡片 440、標題 20px、手機內距 24 20 20。lint（13 檔）與 web-typecheck（0 錯誤）乾淨。殘留：①長度以 JS UTF-16 .length 計、後端以 code point 計，含 emoji 等 astral 字元時前端可能顯示符合而後端回 weak_password（訊息顯示在欄位下，以後端為準）；②稿 decision「更新密碼按鈕撐滿剩餘寬度」與稿 CSS（spacer 與按鈕各 flex:1，實際各分一半）不一致，實作與稿 CSS 一致；③送出中「登出」停用沒有斷言。"
       }
     },
     {
@@ -1432,7 +1432,7 @@
       "granularity_unit": "view",
       "target_path": "apps/web/src/views/ErrorView.vue",
       "source_ref": "FE:src/views/ErrorStateView.vue::default",
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9d",
       "depends_on": [
         "FRONTEND-025",
@@ -1455,9 +1455,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-v",
+        "notes": "通過。稿 page-error（approved）。tdd.run 9 綠，3 條 red_case 一對一；TDD 順序 2e781ca → 3af357f。突變皆轉紅：未登入回首頁改走 firstAllowedPath、router.replace 改 push。403 路由為 authOnly（未登入看不到，不洩漏路由）；404 未登入只導 /login；已登入但沒有可用頁面時按鈕停用並顯示提示；from 以文字插值顯示、不做連結。真實 Chromium：icon 72 圓形、標題 20px / 600、按鈕 120×40、水平置中，404 撐滿灰底、403 回首頁導 /homework。lint（13 檔）與 web-typecheck（0 錯誤）乾淨。殘留：from 原樣顯示，構造的連結可讓「嘗試前往：」後面出現任意文字（只對已登入員工、以純文字呈現，風險低；可考慮只顯示以 / 開頭的值）；icon 種類只以 class 斷言。"
       }
     },
     {
@@ -5405,7 +5405,7 @@
       "granularity_unit": "component",
       "target_path": "apps/web/src/components/student/StudentExamHistoryTab.vue",
       "source_ref": null,
-      "status": "in_review",
+      "status": "done",
       "assignee_session": "impl-frontend-r9d",
       "depends_on": [
         "FRONTEND-230",
@@ -5429,9 +5429,9 @@
         "notes": ""
       },
       "review": {
-        "status": "pending",
-        "reviewer": null,
-        "notes": ""
+        "status": "pass",
+        "reviewer": "review-r9-v",
+        "notes": "通過。稿 page-students（approved，preview-tasks 含本 task，decision 10）。tdd.run 11 綠，4 條 red_case 一對一；TDD 順序 27fdef6 → d9d8356。使用 FRONTEND-230 的 fetchStudentExamHistory（路徑 encodeURIComponent），不排名；有資料 / 空 / 載入中 / 錯誤重試四態；類型篩選只在有資料時出現、切換學生重設篩選，並以序號丟棄過期回應。突變皆轉紅：拿掉過期回應保護、缺考與未填判斷順序對調。分頁是否出現依 exams:read 由 FRONTEND-087 負責（087 description 已寫明）。lint（13 檔）與 web-typecheck（0 錯誤）乾淨。殘留：缺考橘字、未填灰字與卡片樣式以 ?raw 斷言。"
       }
     },
     {
