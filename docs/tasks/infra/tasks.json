@@ -1,7 +1,7 @@
 {
   "area": "infra",
-  "version": 131,
-  "last_updated": "2026-10-05",
+  "version": 132,
+  "last_updated": "2026-10-08T08:29:47Z",
   "tasks": [
     {
       "id": "INFRA-001",
@@ -1986,6 +1986,41 @@
         "status": "pass",
         "reviewer": "review-r8-infra",
         "notes": "2 條 red_case 皆有對應且斷言具體（resolver 單行含 ipv4=off/ipv6=on + 負例；docker nginx -T 輸出 resolver 行含 ipv4=off）。-k nginx_resolver 2 passed、-k nginx 15 passed，collect-only 選得到兩條；測試 commit 5085adf 先於實作 20ff6ff；lint 乾淨；容器/network 無殘留。探針改 IPv6 network + 後端 listen [::]:8080 不削弱偵測：用戶端經 published port 以 IPv4 連入，對照組 0.0.0.0/0 仍涵蓋並看到 6.6.6.6，未信任組 203.0.113.0/24 不涵蓋。殘留：test_nginx_resolver_ipv6_only_loaded 的 -T 僅證明語法保留參數，未實證 DNS 行為（由上述探針間接覆蓋）；Railway healthcheck IPv6 仍待部署實測。"
+      }
+    },
+    {
+      "id": "INFRA-054",
+      "title": "committing_db_session：cleanup_tables 不得 cascade 到 seed 表（system_settings 參照 staff_users）",
+      "description": "`apps/api/tests/integration/conftest.py` 的 `committing_db_session`（INFRA-010）在 teardown 以 owner 連線執行 `truncate <tables> restart identity cascade`。`CASCADE` 會連帶清空所有以 FK 參照所列表的表，與 FK 的 ON DELETE 規則無關；現行 seed 表保護（`_SEED_TABLES` = roles / system_settings / subjects / exam_types）只比對 marker 直接列出的表名，擋不住 cascade 的間接目標。實例：`@pytest.mark.cleanup_tables(\"pickup_authorizations\", \"staff_users\")` 讓 teardown 把 `system_settings`（`updated_by` → `staff_users`，ON DELETE SET NULL）整表清空，DB-038 種子 11 列消失，其他測試的 `update system_settings` 影響 0 列而退回 registry 預設值，造成假紅燈與假綠燈（需 `just db-reset --yes` 才能補回）。\n\n**行為**：在 yield session 之前（原有的 marker 與直接列 seed 表檢查之後），以 owner 連線唯讀查 `pg_constraint`（`contype = 'f'`），算出 marker 所列表的 cascade 閉包（遞迴納入所有以 FK 參照閉包內任一表的表）；閉包含 seed 表任一個時 `pytest.fail(\"cleanup_tables 會 cascade 到 seed 表：<被列的表> → <seed 表>\")`，不建立 session、不 truncate。閉包計算與 seed 偵測寫成可單獨測試的函式（放 `apps/api/tests/support/` 下新檔，例如 `cascade.py`：`cascade_closure(tables)`、`find_seed_cascades(tables, seed_tables)`，`seed_tables` 預設為 `_SEED_TABLES`，測試可傳入探針表），conftest 呼叫它。INFRA-010 的既有行為（無 marker、直接列 seed 表、remote URL、DB 未啟動、非 app_backend 等）不變；不改 truncate 語法（業務表之間的 FK 需要 CASCADE），不新增 env 變數。\n\n完成後在 `docs/testing_conventions.md` 的 committing 測試一節補一句：cleanup_tables 的表若會 cascade 到 seed 表（例如 `staff_users`）會被 fixture 擋下，員工殘列改用 owner 依 id 的 DELETE 清除。並以 owner 唯讀確認目前所有測試檔的 `cleanup_tables` 列出的表都不會 cascade 到 seed 表（結果寫在回報）。\n\n**驗收標準**：每一條對應下列 red_case；`test_db_fixtures.py` 整檔（指定路徑）全綠。",
+      "granularity_unit": "test",
+      "target_path": "apps/api/tests/integration/conftest.py",
+      "source_ref": null,
+      "status": "pending",
+      "assignee_session": null,
+      "depends_on": [
+        "INFRA-010"
+      ],
+      "suggested_model": "sonnet-5",
+      "risk_notes": "reviewer 的探針與突變不得使用 TRUNCATE，也不要標 cleanup_tables 列 staff_users；殘列檢查一律納入 system_settings（11）、roles（4）、subjects（5）、exam_types（3）的種子筆數。",
+      "open_design_questions": [],
+      "tdd": {
+        "test_path": "apps/api/tests/integration/infra/test_db_fixtures.py",
+        "markers": [
+          "integration"
+        ],
+        "red_cases": [
+          "test_db_fixtures_refuses_cleanup_that_cascades_to_seed_table：pytester 執行標 cleanup_tables('staff_users') 的測試 → errors=1（setup 階段失敗），輸出含 'cleanup_tables 會 cascade 到 seed 表' 與 'system_settings'，且 system_settings 筆數前後相同（owner 唯讀比對）",
+          "test_db_fixtures_allows_cleanup_without_seed_cascade：pytester 執行標 cleanup_tables('class_staff', 'student_attendances') 的測試 → passed=1，輸出不含 'cascade 到 seed 表'，system_settings 筆數前後相同",
+          "test_db_fixtures_cascade_closure_follows_references：用 owner 連線在 infra_probe 建 a、b（參照 a）、c（參照 b）三表 → cascade_closure(['infra_probe.a']) == {'infra_probe.a','infra_probe.b','infra_probe.c'}；cascade_closure(['infra_probe.c']) == {'infra_probe.c'}",
+          "test_db_fixtures_seed_cascade_detection_uses_closure：find_seed_cascades(['infra_probe.a'], seed_tables={'infra_probe.c'}) 回傳含 ('infra_probe.a','infra_probe.c')；seed_tables={'infra_probe.x'}（不在閉包內）→ 回傳空"
+        ],
+        "run": "just test-int apps/api/tests/integration/infra/test_db_fixtures.py -k \"test_db_fixtures_\"",
+        "notes": "沿用同檔 pytester 的 project fixture 與 _write / _run / _output 寫法；探針表建在 infra_probe schema（既有 session fixture 已建立 infra_probe 與授權），測試結束要清掉自己建的表。"
+      },
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "notes": ""
       }
     }
   ]
