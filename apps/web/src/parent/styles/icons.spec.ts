@@ -219,6 +219,11 @@ describe('parent icons subset', () => {
     expect(names(`export const f = () => 'notifications'`, 'other.ts')).toEqual([])
     // 7. 直接用 material-symbols-rounded 渲染
     expect(names('<span class="material-symbols-rounded">delete</span>')).toEqual(['delete'])
+    // 名稱含 Icon 的元件物件（M3Icon、M3IconButton）與 CSS 規則不是對照表：裡面的 'click'、'standard'、'liga' 不算圖示
+    expect(
+      names(`const M3IconButton = { props: { variant: { type: String, default: 'standard' } }, template: '<button @click="$emit(\\'click\\')">' }`),
+    ).toEqual([])
+    expect(names(`.m3-nav-tab__icon::before { content: ''; font-feature-settings: 'liga'; }`)).toEqual([])
     // 一般字串、註解與狀態值不算圖示
     expect(names(`/* icon: 'ghost' */\n// icon="ghost"\nconst status = 'cancelled'\nemit('update:modelValue')`)).toEqual([])
     expect(names('<!-- <M3Icon name="ghost" /> --><button class="m3-icon-button" type="button"></button>')).toEqual([])
